@@ -14,8 +14,20 @@ The primary play target is an iPhone in Chrome/Safari. Desktop support is useful
 - Three.js
 - JavaScript or TypeScript
 - Mobile-first touch UI
-- GitHub Pages deployment
+- GitHub Pages deployment from GitHub Actions
 - PR-based development through Codex
+
+## Deployment rule
+
+The repo should automatically deploy the latest working `main` branch to GitHub Pages.
+
+Required behavior:
+
+- pull requests run build checks
+- merges/commits to `main` run the deploy workflow
+- the Vite `dist/` output is published to GitHub Pages
+- deployment must not require manual file copying
+- Codex should preserve automatic deployment in every PR
 
 ## Primary device target
 
@@ -120,7 +132,7 @@ Must include:
 - interact message: "The gate is locked."
 - CSS that disables page scrolling, long-press selection, and unwanted touch callouts during gameplay
 - working build script
-- keep GitHub Pages deployment working
+- automatic GitHub Pages deployment workflow for Vite
 
 Do not add enemies, combat, inventory, or magic yet.
 
@@ -227,6 +239,7 @@ Later production assets:
 - Do not copy King's Field assets, names, UI, enemies, music, layout, or lore.
 - Prioritize movement, collision, mobile controls, atmosphere, and pacing first.
 - Prefer simple working systems over ambitious broken systems.
+- Preserve automatic GitHub Pages deployment.
 
 ## First playable success state
 
