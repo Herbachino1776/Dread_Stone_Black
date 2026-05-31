@@ -27,7 +27,7 @@ Each PR should:
 - have a clear single purpose
 - build successfully
 - preserve mobile browser playability
-- preserve GitHub Pages deployment
+- preserve automatic GitHub Pages deployment
 - avoid unnecessary systems
 - keep code readable
 - include useful comments where the logic may confuse a beginner
@@ -68,13 +68,16 @@ public/
 docs/
   GAME_PLAN.md
   CODEX_GROUNDING.md
+.github/
+  workflows/
+    deploy-pages.yml
 ```
 
 This structure can be adjusted if there is a better clean Vite/Three.js pattern.
 
 ## First PR scope
 
-The first PR must only build the mobile foundation.
+The first PR must only build the mobile foundation and automatic Pages deployment.
 
 Required:
 
@@ -97,6 +100,7 @@ Required:
 - locked gate placeholder
 - interact message: "The gate is locked."
 - CSS/JS protections against page scrolling, text selection, long-press callouts, and accidental browser gestures during gameplay where practical
+- automatic GitHub Pages deployment workflow for Vite
 
 Do not add:
 
@@ -228,9 +232,31 @@ Use CSS such as `touch-action: none`, `user-select: none`, and related mobile-sa
 
 ## GitHub Pages
 
-This repo is intended for GitHub Actions Pages deployment.
+This repo must use automatic GitHub Pages deployment from GitHub Actions.
 
-Do not break existing Pages setup. If no workflow exists yet, add a simple GitHub Pages deploy workflow for Vite only if appropriate.
+Required deployment behavior:
+
+- pull requests run `npm run build` as a check
+- commits/merges to `main` build the Vite app
+- the Vite `dist/` output is uploaded as a Pages artifact
+- GitHub Pages publishes from that artifact
+- no manual copying of built files into the repo
+
+Recommended workflow file:
+
+```text
+.github/workflows/deploy-pages.yml
+```
+
+Recommended Actions pattern:
+
+- `actions/checkout`
+- `actions/setup-node`
+- `npm ci`
+- `npm run build`
+- `actions/configure-pages`
+- `actions/upload-pages-artifact` with `path: dist`
+- `actions/deploy-pages`
 
 Build output should be `dist/`.
 
@@ -243,6 +269,7 @@ Every PR description should include:
 - how to test locally
 - how to test on phone/browser
 - whether `npm run build` passes
+- whether Pages deployment was preserved or added
 
 ## Project danger zones
 
@@ -256,6 +283,7 @@ Avoid these early:
 - creating a complex inventory too early
 - using 3D character animation before billboard enemies are tested
 - hiding important controls behind tiny desktop-style UI
+- breaking automatic Pages deployment
 
 ## North star
 
