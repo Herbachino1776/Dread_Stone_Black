@@ -46,6 +46,7 @@ export class Game {
           <div class="stat"><span>MAGIC</span><strong>3</strong></div>
         </section>
         <p class="message-box" data-hud="message">The air is cold and still.</p>
+        <p class="debug-readout" data-hud="debug" aria-label="Debug player position">POS 0.0, 0.0 · YAW 0°</p>
         <div class="control-zones">
           <div class="move-zone" data-control="move" aria-label="Move">
             <div class="move-ring"><div class="move-knob" data-control="move-knob"></div></div>
@@ -69,6 +70,7 @@ export class Game {
       this.interactions.interact();
     }
 
+    this.hud.updateDebug(this.player);
     this.renderer.render(this.scene, this.camera);
   }
 
