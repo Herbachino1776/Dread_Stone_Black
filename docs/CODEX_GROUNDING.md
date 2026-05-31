@@ -4,11 +4,19 @@
 
 Repo: Herbachino1776/Dread_Stone_Black
 
-Dread Stone Black is a browser-playable first-person dungeon crawler vertical slice built with Vite and Three.js.
+Dread Stone Black is a mobile-first first-person dungeon crawler vertical slice built with Vite and Three.js.
 
 The target is a King's Field-like feel: slow, dark, lonely, hostile, cryptic, and exploration-heavy.
 
 This project must use original content. Do not copy King's Field names, UI, maps, enemy designs, music, items, or lore.
+
+## Primary platform
+
+The primary target is iPhone browser play, especially Chrome/Safari.
+
+Desktop support is useful for development and testing, but it is secondary. Do not build desktop-first and patch mobile later.
+
+Every major system should be designed with phone play in mind from the start.
 
 ## Current development approach
 
@@ -18,7 +26,7 @@ Each PR should:
 
 - have a clear single purpose
 - build successfully
-- preserve browser playability
+- preserve mobile browser playability
 - preserve GitHub Pages deployment
 - avoid unnecessary systems
 - keep code readable
@@ -32,6 +40,7 @@ Use:
 - Three.js
 - plain JavaScript or TypeScript
 - modular source files under `src/`
+- mobile-first HTML/CSS overlay for HUD and controls
 - static assets under `public/` or `src/assets/`, whichever best fits Vite conventions
 
 Preferred starting structure:
@@ -42,12 +51,14 @@ src/
   game/
     Game.js
     PlayerController.js
+    MobileControls.js
     DungeonScene.js
     Collision.js
     Interactions.js
     Hud.js
   styles/
     hud.css
+    controls.css
 public/
   assets/
     weapons/
@@ -63,7 +74,7 @@ This structure can be adjusted if there is a better clean Vite/Three.js pattern.
 
 ## First PR scope
 
-The first PR must only build the foundation.
+The first PR must only build the mobile foundation.
 
 Required:
 
@@ -71,15 +82,21 @@ Required:
 - `npm run dev`
 - `npm run build`
 - first-person camera
-- keyboard movement
+- mobile-first canvas sizing
+- touch movement controls
+- touch turn/look controls
+- optional keyboard controls for desktop testing
+- slow movement
 - slow turning
 - wall collision
 - one stone room and one corridor
 - fog/darkness
 - basic sword overlay placeholder
-- bottom HUD with HP, MP, POWER, MAGIC
+- bottom/mobile HUD with HP, MP, POWER, MAGIC
+- large touch interact button
 - locked gate placeholder
 - interact message: "The gate is locked."
+- CSS/JS protections against page scrolling, text selection, long-press callouts, and accidental browser gestures during gameplay where practical
 
 Do not add:
 
@@ -93,19 +110,39 @@ Do not add:
 - large dungeon
 - 3D weapon models
 
+## Mobile control requirements
+
+The first playable build must not require a keyboard.
+
+Recommended first-pass controls:
+
+- left thumb zone or virtual stick: move forward/back and strafe
+- right thumb zone or left/right buttons: turn/look
+- large Interact button
+- Attack and Spell buttons can be visible but disabled/reserved, or omitted until later PRs
+
+Controls must be large enough for a phone screen.
+
+Avoid tiny UI targets.
+
+Avoid placing important controls under the iPhone home indicator or notch/safe area.
+
+Use CSS safe-area variables where appropriate:
+
+- `env(safe-area-inset-top)`
+- `env(safe-area-inset-bottom)`
+- `env(safe-area-inset-left)`
+- `env(safe-area-inset-right)`
+
 ## Gameplay feel
 
 Movement should be deliberate and slow.
 
-Recommended first-pass controls:
-
-- W/S: move forward/back
-- A/D: strafe or turn, whichever is easiest for first pass
-- Arrow Left/Right or Q/E: turn
-- E: interact
-- Space or mouse click: reserved for later attack
-
 The player should not move like a modern shooter. Keep the turn speed and walk speed restrained.
+
+Touch controls should feel heavy, readable, and simple.
+
+Avoid twitchy camera movement.
 
 ## Visual style
 
@@ -120,7 +157,7 @@ Final direction:
 - fog doing major atmosphere work
 - simple first-person sword overlay
 - billboard enemies later
-- practical retro HUD
+- practical mobile HUD
 
 Do not chase cinematic polish before the game loop works.
 
@@ -144,7 +181,7 @@ Interaction can start with a simple forward ray/check.
 For PR 1:
 
 - the locked gate should detect the player looking/standing near it
-- pressing E should show: "The gate is locked."
+- tapping the Interact button should show: "The gate is locked."
 
 No inventory needed yet.
 
@@ -159,8 +196,11 @@ Must show:
 - POWER
 - MAGIC
 - message area
+- large touch Interact button
 
 Do not overdesign the HUD yet.
+
+The HUD must be readable on a phone screen.
 
 ## Asset rules
 
@@ -173,6 +213,18 @@ A sword overlay can start as:
 - basic transparent PNG placeholder
 
 Do not block PR 1 on custom art.
+
+## Mobile browser rules
+
+The game should prevent common mobile browser problems during play:
+
+- page scroll while dragging controls
+- text selection
+- long-press callout menu
+- unwanted double-tap zoom where practical
+- canvas or HUD layout breaking on viewport changes
+
+Use CSS such as `touch-action: none`, `user-select: none`, and related mobile-safe rules where appropriate.
 
 ## GitHub Pages
 
@@ -189,6 +241,7 @@ Every PR description should include:
 - what was added
 - what was intentionally not added
 - how to test locally
+- how to test on phone/browser
 - whether `npm run build` passes
 
 ## Project danger zones
@@ -196,17 +249,18 @@ Every PR description should include:
 Avoid these early:
 
 - building the whole game in one PR
-- adding many systems before collision/movement feel good
+- adding many systems before collision/movement feel good on phone
 - relying on large external engines/libraries without need
 - making a modern fast FPS
 - copying copyrighted game assets or layouts
 - creating a complex inventory too early
 - using 3D character animation before billboard enemies are tested
+- hiding important controls behind tiny desktop-style UI
 
 ## North star
 
 First success:
 
-A player can open the browser game, walk through a dark stone room, see a sword and HUD, reach a locked gate, press interact, and receive the message: "The gate is locked."
+A player opens the game on an iPhone browser, moves with touch controls, turns/looks with touch controls, sees a sword and HUD, reaches a locked gate, taps interact, and receives the message: "The gate is locked."
 
 That is the foundation for the whole vertical slice.
