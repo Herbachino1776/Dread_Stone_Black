@@ -92,3 +92,20 @@
   border-radius: 4px;
   background: linear-gradient(90deg, #4b2b17, #c99b55, #4b2b17);
 }
+
+.debug-readout {
+  position: absolute;
+  left: calc(env(safe-area-inset-left) + 14px);
+  top: calc(env(safe-area-inset-top) + 76px);
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid rgba(225, 190, 116, 0.35);
+  border-radius: 8px;
+  background: rgba(12, 9, 7, 0.48);
+  color: rgba(255, 231, 177, 0.78);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(0.62rem, 2.4vw, 0.76rem);
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  text-shadow: 0 1px 3px #000;
+}
