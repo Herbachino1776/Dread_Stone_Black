@@ -46,6 +46,7 @@ export class Game {
           <div class="stat"><span>MAGIC</span><strong>3</strong></div>
         </section>
         <p class="message-box" data-hud="message">The air is cold and still.</p>
+        <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
         <p class="debug-readout" data-hud="debug" aria-label="Debug player position">POS 0.0, 0.0 · YAW 0°</p>
         <div class="control-zones">
           <div class="move-zone" data-control="move" aria-label="Move">
@@ -65,6 +66,8 @@ export class Game {
   update() {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
     this.player.update(deltaSeconds, this.controls);
+    this.dungeon.update(deltaSeconds);
+    this.interactions.updateHint();
 
     if (this.controls.consumeInteract()) {
       this.interactions.interact();

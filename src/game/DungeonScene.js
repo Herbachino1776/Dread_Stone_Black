@@ -63,13 +63,21 @@ export class DungeonScene {
     this.scene.fog = new THREE.Fog(0x17120f, 9, 27);
 
     this.gate = null;
+    this.gateOpen = false;
+    this.gateOpening = false;
     this.gateTarget = new THREE.Vector3(0, 1.3, -16.7);
+    this.key = null;
+    this.keyTarget = new THREE.Vector3(-3.7, 0.82, 2.55);
+    this.lever = null;
+    this.leverUsed = false;
+    this.leverTarget = new THREE.Vector3(5.35, 1.15, -2.4);
+    this.gateBlocker = { minX: -1.45, maxX: 1.45, minZ: -17.55, maxZ: -16.95 };
     this.collision = new CollisionWorld({
       walkableRects: [
         { minX: -5.6, maxX: 5.6, minZ: -5.6, maxZ: 5.6 },
         { minX: -1.35, maxX: 1.35, minZ: -17.2, maxZ: -5.6 },
       ],
-      blockerRects: [{ minX: -1.45, maxX: 1.45, minZ: -17.55, maxZ: -16.95 }],
+      blockerRects: [this.gateBlocker],
     });
   }
 
@@ -79,8 +87,68 @@ export class DungeonScene {
     this.addCorridor();
     this.addPathCues();
     this.addTorches();
+    this.addKeyPickup();
+    this.addLever();
     this.addGate();
     return this.scene;
+  }
+
+  update(deltaSeconds) {
+    if (this.key) {
+      this.key.rotation.y += deltaSeconds * 1.7;
+      this.key.position.y = this.keyTarget.y + Math.sin(performance.now() * 0.003) * 0.035;
+    }
+
+    if (this.gateOpening && this.gate) {
+      this.gate.position.y = Math.min(this.gate.position.y + deltaSeconds * 1.35, 2.45);
+
+      if (this.gate.position.y >= 2.45) {
+        this.gateOpening = false;
+      }
+    }
+  }
+
+  collectKey() {
+    if (!this.key) return false;
+
+    this.scene.remove(this.key);
+    this.key.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+    });
+    this.key = null;
+    return true;
+  }
+
+  openGate() {
+    if (this.gateOpen) return false;
+
+    this.gateOpen = true;
+    this.gateOpening = true;
+    this.collision.removeBlocker(this.gateBlocker);
+
+    if (this.gate) {
+      this.gate.children.forEach((child) => {
+        if (child.material?.emissive) {
+          child.material.emissive.setHex(0x332617);
+          child.material.emissiveIntensity = 0.45;
+        }
+      });
+    }
+
+    return true;
+  }
+
+  useLever() {
+    if (this.leverUsed) return false;
+
+    this.leverUsed = true;
+    if (this.lever) {
+      const handle = this.lever.getObjectByName('lever-handle');
+      if (handle) {
+        handle.rotation.z = -0.95;
+      }
+    }
+    return true;
   }
 
   addLights() {
@@ -196,6 +264,66 @@ export class DungeonScene {
     flame.position.set(0, 0.22, 0.72);
     group.add(flame);
 
+    this.scene.add(group);
+  }
+
+  addKeyPickup() {
+    const pedestalMat = new THREE.MeshStandardMaterial({ color: 0x2f2924, roughness: 0.88, metalness: 0.05 });
+    const keyMat = new THREE.MeshStandardMaterial({ color: 0xd7b76a, roughness: 0.42, metalness: 0.72, emissive: 0x3a2406, emissiveIntensity: 0.34 });
+
+    const group = new THREE.Group();
+    group.position.copy(this.keyTarget);
+
+    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.44, 0.58, 8), pedestalMat);
+    pedestal.position.y = -0.32;
+    group.add(pedestal);
+
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.08, 0.08), keyMat);
+    shaft.position.x = 0.08;
+    group.add(shaft);
+
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.035, 8, 16), keyMat);
+    ring.rotation.y = Math.PI / 2;
+    ring.position.x = -0.36;
+    group.add(ring);
+
+    [0.25, 0.43].forEach((x, index) => {
+      const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18 + index * 0.08, 0.08), keyMat);
+      tooth.position.set(x, -0.11 - index * 0.02, 0);
+      group.add(tooth);
+    });
+
+    const glow = new THREE.PointLight(0xf3c76f, 1.7, 4.5, 1.8);
+    glow.position.set(0, 0.3, 0);
+    group.add(glow);
+
+    this.key = group;
+    this.scene.add(group);
+  }
+
+  addLever() {
+    const group = new THREE.Group();
+    group.position.copy(this.leverTarget);
+    group.rotation.y = -Math.PI / 2;
+
+    const plateMat = new THREE.MeshStandardMaterial({ color: 0x3c332a, roughness: 0.68, metalness: 0.45 });
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0x9b6b3a, roughness: 0.62, metalness: 0.25, emissive: 0x1f1207, emissiveIntensity: 0.22 });
+
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.72, 0.5), plateMat);
+    group.add(plate);
+
+    const pivot = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.12, 12), handleMat);
+    pivot.rotation.z = Math.PI / 2;
+    pivot.position.x = -0.12;
+    group.add(pivot);
+
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.58, 0.12), handleMat);
+    handle.name = 'lever-handle';
+    handle.position.set(-0.15, 0.18, 0);
+    handle.rotation.z = 0.45;
+    group.add(handle);
+
+    this.lever = group;
     this.scene.add(group);
   }
 

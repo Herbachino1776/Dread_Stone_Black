@@ -109,3 +109,29 @@
   pointer-events: none;
   text-shadow: 0 1px 3px #000;
 }
+
+.interaction-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 224px);
+  width: min(88vw, 420px);
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid rgba(227, 199, 124, 0.58);
+  border-radius: 999px;
+  background: rgba(12, 9, 7, 0.72);
+  color: #ffe8ae;
+  font-size: clamp(0.82rem, 3.4vw, 0.96rem);
+  line-height: 1.25;
+  text-align: center;
+  text-shadow: 0 2px 4px #000;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.interaction-hint.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
