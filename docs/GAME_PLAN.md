@@ -2,17 +2,39 @@
 
 ## Core pitch
 
-Dread Stone Black is a browser-playable first-person dungeon crawler inspired by the slow, hostile, lonely feel of old first-person action RPG dungeon games.
+Dread Stone Black is a mobile-first first-person dungeon crawler inspired by the slow, hostile, lonely feel of old first-person action RPG dungeon games.
 
 It should feel like a King's Field-like vertical slice, but all names, maps, enemies, UI, lore, art, and assets must be original.
+
+The primary play target is an iPhone in Chrome/Safari. Desktop support is useful for development, but mobile playability must be designed from the start.
 
 ## Target stack
 
 - Vite
 - Three.js
 - JavaScript or TypeScript
+- Mobile-first touch UI
 - GitHub Pages deployment
 - PR-based development through Codex
+
+## Primary device target
+
+Design first for phone portrait play unless a specific PR says otherwise.
+
+Mobile requirements:
+
+- playable on iPhone Chrome/Safari
+- no required keyboard or mouse
+- touch movement controls
+- touch turn/look controls
+- large attack/interact buttons
+- HUD readable on a phone screen
+- safe-area aware layout for notches/home indicator
+- no accidental page scrolling while playing
+- no long-press text selection/callouts during gameplay
+- canvas resizes correctly on orientation/viewport changes
+
+Desktop controls may exist as a secondary testing path.
 
 ## Vertical slice goal
 
@@ -20,11 +42,12 @@ Build a 10-15 minute playable sample dungeon.
 
 The slice should prove:
 
-- first-person movement
+- mobile first-person movement
+- mobile camera/turn controls
 - wall collision
 - dark dungeon atmosphere
 - sword overlay
-- basic HUD
+- touch-friendly HUD
 - locked gate interaction
 - key pickup
 - simple enemy combat
@@ -45,10 +68,10 @@ Final slice target:
 - slow movement
 - first-person sword overlay
 - billboard enemies at first
-- simple bottom HUD
+- simple mobile HUD
 - original occult/dark fantasy atmosphere
 
-Avoid over-polished AAA visuals. The target is a believable small-team retro 3D browser game.
+Avoid over-polished AAA visuals. The target is a believable small-team retro 3D mobile browser game.
 
 ## Player feel
 
@@ -63,6 +86,8 @@ The player should feel:
 
 Movement should be deliberate. Combat should be simple, tense, and spacing-based.
 
+Touch controls should feel heavy and readable, not twitchy.
+
 ## First dungeon concept
 
 Working dungeon: The Black Reliquary.
@@ -71,48 +96,54 @@ Player starts in a dark stone entry chamber. A locked iron gate blocks the deepe
 
 ## PR milestones
 
-### PR 1 - Project foundation
+### PR 1 - Mobile project foundation
 
-Goal: make the game load and feel like the start of a dungeon crawler.
+Goal: make the game load on phone and feel like the start of a mobile dungeon crawler.
 
 Must include:
 
 - Vite + Three.js setup
 - clean project structure
 - first-person camera
-- keyboard movement
-- slow turning
+- mobile-first canvas sizing
+- touch movement controls
+- touch turn/look controls
+- optional keyboard controls for desktop testing
+- slow movement and slow turning
 - wall collision
 - one room and one corridor
 - fog/darkness
 - sword overlay placeholder
-- bottom HUD: HP, MP, POWER, MAGIC
+- bottom/mobile HUD: HP, MP, POWER, MAGIC
+- large touch interact button
 - locked gate placeholder
 - interact message: "The gate is locked."
+- CSS that disables page scrolling, long-press selection, and unwanted touch callouts during gameplay
 - working build script
 - keep GitHub Pages deployment working
 
 Do not add enemies, combat, inventory, or magic yet.
 
-### PR 2 - Interaction loop
+### PR 2 - Mobile interaction loop
 
-Goal: make the dungeon respond to the player.
+Goal: make the dungeon respond to touch controls.
 
 Must include:
 
-- interact key
+- touch interact button
 - message box system
 - key pickup
 - locked gate opens after key
 - lever or switch
 - simple item pickup feedback
 
-### PR 3 - Combat prototype
+### PR 3 - Mobile combat prototype
 
-Goal: make one enemy fight work.
+Goal: make one enemy fight work on phone.
 
 Must include:
 
+- large touch attack button
 - sword attack animation
 - POWER cost/recovery
 - attack range check
@@ -128,6 +159,7 @@ Goal: add one simple spell and basic consumable logic.
 
 Must include:
 
+- large touch spell button
 - MP usage
 - one projectile spell
 - one potion pickup
@@ -147,20 +179,22 @@ Must include:
 - key/gate progression
 - final room encounter
 - end-of-slice message
+- phone readability pass for layout and pacing
 
 ### PR 6 - Atmosphere pass
 
-Goal: make the slice feel intentional.
+Goal: make the slice feel intentional on mobile.
 
 Must include:
 
 - improved textures
-- improved HUD styling
+- improved mobile HUD styling
 - torch/flicker props
 - ambient audio
 - footstep audio
 - enemy audio
 - tuned fog and lighting
+- performance check on phone-sized viewport
 
 ## Asset plan
 
@@ -168,7 +202,7 @@ Use placeholders first.
 
 Later production assets:
 
-- sword overlay PNG
+- sword overlay PNG sized for phone view
 - wall textures
 - floor textures
 - ceiling textures
@@ -177,7 +211,8 @@ Later production assets:
 - lever prop
 - enemy billboard sprites
 - spell effect sprite
-- HUD frame art
+- mobile HUD frame art
+- touch button icons
 - item icons
 - ambient audio
 - attack/hit sounds
@@ -186,14 +221,15 @@ Later production assets:
 
 - Keep PRs small.
 - Every PR must build.
-- Every PR must be playable in browser.
+- Every PR must be playable on a phone browser.
+- Desktop controls are secondary.
 - Do not jump to complex RPG systems early.
 - Do not copy King's Field assets, names, UI, enemies, music, layout, or lore.
-- Prioritize movement, collision, atmosphere, and pacing first.
+- Prioritize movement, collision, mobile controls, atmosphere, and pacing first.
 - Prefer simple working systems over ambitious broken systems.
 
 ## First playable success state
 
 The first real success is simple:
 
-The player loads the game, walks through a dark stone room, sees a sword and HUD, reaches a locked gate, presses interact, and gets the message: "The gate is locked."
+The player opens the game on an iPhone browser, moves with touch controls, looks/turns with touch controls, sees a sword and HUD, reaches a locked gate, taps interact, and gets the message: "The gate is locked."
