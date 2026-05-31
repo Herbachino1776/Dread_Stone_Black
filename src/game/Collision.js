@@ -19,6 +19,10 @@ export class CollisionWorld {
     this.playerRadius = playerRadius;
   }
 
+  removeBlocker(blockerRect) {
+    this.blockerRects = this.blockerRects.filter((rect) => rect !== blockerRect);
+  }
+
   canStandAt(position) {
     const testPoint = { x: position.x, z: position.z };
     const inWalkableSpace = this.walkableRects.some((rect) => pointInRect(testPoint, rect));
