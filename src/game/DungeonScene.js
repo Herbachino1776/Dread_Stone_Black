@@ -71,6 +71,8 @@ export class DungeonScene {
     this.lever = null;
     this.leverUsed = false;
     this.leverTarget = new THREE.Vector3(5.35, 1.15, -2.4);
+    this.enemySpawn = new THREE.Vector3(0, 0, -14.6);
+    this.enemy = null;
     this.gateBlocker = { minX: -1.45, maxX: 1.45, minZ: -17.55, maxZ: -16.95 };
     this.collision = new CollisionWorld({
       walkableRects: [
@@ -90,6 +92,7 @@ export class DungeonScene {
     this.addKeyPickup();
     this.addLever();
     this.addGate();
+    this.addEnemy();
     return this.scene;
   }
 
@@ -104,6 +107,14 @@ export class DungeonScene {
 
       if (this.gate.position.y >= 2.45) {
         this.gateOpening = false;
+      }
+    }
+
+    if (this.enemy?.hitFlashTimer > 0) {
+      this.enemy.hitFlashTimer -= deltaSeconds;
+      if (this.enemy.hitFlashTimer <= 0 && !this.enemy.dead) {
+        this.enemy.bodyMat.color.setHex(0x6f2f28);
+        this.enemy.headMat.color.setHex(0x3f322b);
       }
     }
   }
@@ -325,6 +336,95 @@ export class DungeonScene {
 
     this.lever = group;
     this.scene.add(group);
+  }
+
+
+  addEnemy() {
+    const group = new THREE.Group();
+    group.position.copy(this.enemySpawn);
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x6f2f28, roughness: 0.86, metalness: 0.02, emissive: 0x1d0705, emissiveIntensity: 0.2 });
+    const headMat = new THREE.MeshStandardMaterial({ color: 0x3f322b, roughness: 0.9, metalness: 0.02, emissive: 0x1a0b08, emissiveIntensity: 0.28 });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffc16b });
+
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.35, 6), bodyMat);
+    body.name = 'enemy-body';
+    body.position.y = 0.88;
+    group.add(body);
+
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.38, 0.42), headMat);
+    head.position.y = 1.66;
+    group.add(head);
+
+    [-0.13, 0.13].forEach((x) => {
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.035), eyeMat);
+      eye.position.set(x, 1.7, 0.22);
+      group.add(eye);
+    });
+
+    const clawMat = new THREE.MeshStandardMaterial({ color: 0x1f1916, roughness: 0.72, metalness: 0.08 });
+    [-0.42, 0.42].forEach((x) => {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.62, 0.14), clawMat);
+      arm.position.set(x, 0.92, 0.05);
+      arm.rotation.z = x < 0 ? -0.28 : 0.28;
+      group.add(arm);
+    });
+
+    const wakeGlow = new THREE.PointLight(0xb5452f, 1.25, 3.8, 1.6);
+    wakeGlow.position.set(0, 1.25, 0);
+    group.add(wakeGlow);
+
+    this.enemy = {
+      group,
+      bodyMat,
+      headMat,
+      hp: 3,
+      maxHp: 3,
+      dead: false,
+      hitFlashTimer: 0,
+    };
+    this.scene.add(group);
+  }
+
+  damageEnemy(amount, pushDirection) {
+    if (!this.enemy || this.enemy.dead) return false;
+
+    this.enemy.hp = Math.max(0, this.enemy.hp - amount);
+    this.enemy.hitFlashTimer = 0.22;
+    this.enemy.bodyMat.color.setHex(0xd8b06a);
+    this.enemy.headMat.color.setHex(0xffd38a);
+
+    const knockback = pushDirection.clone();
+    knockback.y = 0;
+    if (knockback.lengthSq() > 0) {
+      const next = this.enemy.group.position.clone().add(knockback.normalize().multiplyScalar(0.34));
+      if (this.collision.canStandAt(next)) {
+        this.enemy.group.position.copy(next);
+      }
+    }
+
+    if (this.enemy.hp <= 0) {
+      this.enemy.dead = true;
+      this.scene.remove(this.enemy.group);
+      return true;
+    }
+
+    return false;
+  }
+
+  resetEnemy() {
+    if (!this.enemy) return;
+
+    this.enemy.hp = this.enemy.maxHp;
+    this.enemy.dead = false;
+    this.enemy.hitFlashTimer = 0;
+    this.enemy.group.position.copy(this.enemySpawn);
+    this.enemy.bodyMat.color.setHex(0x6f2f28);
+    this.enemy.headMat.color.setHex(0x3f322b);
+
+    if (!this.enemy.group.parent) {
+      this.scene.add(this.enemy.group);
+    }
   }
 
   addGate() {

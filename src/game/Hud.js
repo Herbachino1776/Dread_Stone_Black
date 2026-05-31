@@ -6,8 +6,33 @@ export class Hud {
     this.messageEl = root.querySelector('[data-hud="message"]');
     this.hintEl = root.querySelector('[data-hud="hint"]');
     this.debugEl = root.querySelector('[data-hud="debug"]');
+    this.hpEl = root.querySelector('[data-stat="hp"]');
+    this.powerEl = root.querySelector('[data-stat="power"]');
+    this.swordEl = root.querySelector('[data-weapon="sword"]');
+    this.damageEl = root.querySelector('[data-hud="damage"]');
     this.timeoutId = null;
     this.debugFrameSkip = 0;
+  }
+
+  updateStats({ hp, power }) {
+    if (this.hpEl) this.hpEl.textContent = Math.ceil(hp);
+    if (this.powerEl) this.powerEl.textContent = Math.floor(power);
+  }
+
+  playSwordAttack() {
+    if (!this.swordEl) return;
+
+    this.swordEl.classList.remove('is-attacking');
+    void this.swordEl.offsetWidth;
+    this.swordEl.classList.add('is-attacking');
+  }
+
+  flashDamage() {
+    if (!this.damageEl) return;
+
+    this.damageEl.classList.remove('is-flashing');
+    void this.damageEl.offsetWidth;
+    this.damageEl.classList.add('is-flashing');
   }
 
   updateDebug(player) {
