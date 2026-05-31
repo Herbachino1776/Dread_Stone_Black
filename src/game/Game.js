@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Combat } from './Combat.js';
 import { DungeonScene } from './DungeonScene.js';
 import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
@@ -27,6 +28,7 @@ export class Game {
     this.hud = new Hud(this.app);
     this.controls = new MobileControls(this.app);
     this.interactions = new Interactions({ player: this.player, dungeon: this.dungeon, hud: this.hud });
+    this.combat = new Combat({ player: this.player, dungeon: this.dungeon, hud: this.hud, controls: this.controls });
 
     this.preventMobilePageGestures();
     window.addEventListener('resize', () => this.resize());
@@ -40,9 +42,9 @@ export class Game {
       <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
       <div class="game-overlay" aria-label="Game HUD and touch controls">
         <section class="hud-panel" aria-label="Player status">
-          <div class="stat"><span>HP</span><strong>100</strong></div>
+          <div class="stat"><span>HP</span><strong data-stat="hp">100</strong></div>
           <div class="stat"><span>MP</span><strong>24</strong></div>
-          <div class="stat"><span>POWER</span><strong>10</strong></div>
+          <div class="stat"><span>POWER</span><strong data-stat="power">10</strong></div>
           <div class="stat"><span>MAGIC</span><strong>3</strong></div>
         </section>
         <p class="message-box" data-hud="message">The air is cold and still.</p>
@@ -56,17 +58,22 @@ export class Game {
           <div class="look-zone" data-control="look" aria-label="Turn view">
             <span>DRAG TO TURN</span>
           </div>
+          <button class="attack-button" data-action="attack" type="button">ATTACK</button>
           <button class="interact-button" data-action="interact" type="button">INTERACT</button>
         </div>
-        <div class="sword-placeholder" aria-hidden="true"></div>
+        <div class="damage-flash" data-hud="damage" aria-hidden="true"></div>
+        <div class="sword-placeholder" data-weapon="sword" aria-hidden="true"></div>
       </div>
     `;
   }
 
   update() {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
-    this.player.update(deltaSeconds, this.controls);
+    if (!this.combat.isPlayerDead) {
+      this.player.update(deltaSeconds, this.controls);
+    }
     this.dungeon.update(deltaSeconds);
+    this.combat.update(deltaSeconds);
     this.interactions.updateHint();
 
     if (this.controls.consumeInteract()) {

@@ -53,7 +53,7 @@
 .look-zone {
   position: absolute;
   right: calc(env(safe-area-inset-right) + 8px);
-  bottom: calc(env(safe-area-inset-bottom) + 138px);
+  bottom: calc(env(safe-area-inset-bottom) + 204px);
   width: min(48vw, 220px);
   height: min(32vh, 210px);
   display: grid;
@@ -96,6 +96,44 @@
   }
 
   .look-zone {
-    bottom: calc(env(safe-area-inset-bottom) + 126px);
+    bottom: calc(env(safe-area-inset-bottom) + 198px);
+  }
+}
+
+.attack-button {
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 18px);
+  bottom: calc(env(safe-area-inset-bottom) + 108px);
+  min-width: 148px;
+  min-height: 82px;
+  border: 2px solid rgba(255, 208, 128, 0.9);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(116, 38, 28, 0.98), rgba(42, 14, 12, 0.98));
+  color: #fff2c7;
+  font: inherit;
+  font-size: 1.12rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-shadow: 0 2px 4px #000;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.52), inset 0 0 18px rgba(255, 208, 128, 0.12);
+}
+
+.attack-button,
+.attack-button:active {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.attack-button:active {
+  transform: translateY(2px) scale(0.98);
+  background: linear-gradient(180deg, rgba(146, 50, 35, 1), rgba(58, 18, 14, 1));
+}
+
+@media (max-height: 680px) {
+  .attack-button {
+    right: calc(env(safe-area-inset-right) + 160px);
+    bottom: calc(env(safe-area-inset-bottom) + 20px);
+    min-width: 126px;
+    min-height: 76px;
   }
 }

@@ -4,8 +4,10 @@ export class PlayerController {
   constructor(camera, collisionWorld) {
     this.camera = camera;
     this.collisionWorld = collisionWorld;
-    this.position = new THREE.Vector3(0, 1.55, 3.2);
-    this.yaw = Math.PI;
+    this.spawnPosition = new THREE.Vector3(0, 1.55, 3.2);
+    this.spawnYaw = Math.PI;
+    this.position = this.spawnPosition.clone();
+    this.yaw = this.spawnYaw;
     this.walkSpeed = 1.85;
     this.strafeSpeed = 1.45;
     this.turnSpeed = 0.0018;
@@ -56,6 +58,12 @@ export class PlayerController {
 
   getLookDirection() {
     return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).normalize();
+  }
+
+  reset() {
+    this.position.copy(this.spawnPosition);
+    this.yaw = this.spawnYaw;
+    this.syncCamera();
   }
 
   syncCamera() {

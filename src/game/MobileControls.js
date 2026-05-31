@@ -4,6 +4,7 @@ export class MobileControls {
     this.move = { x: 0, y: 0 };
     this.look = { x: 0 };
     this.interactPressed = false;
+    this.attackPressed = false;
 
     this.movePointerId = null;
     this.lookPointerId = null;
@@ -13,6 +14,7 @@ export class MobileControls {
     this.moveKnob = root.querySelector('[data-control="move-knob"]');
     this.lookZone = root.querySelector('[data-control="look"]');
     this.interactButton = root.querySelector('[data-action="interact"]');
+    this.attackButton = root.querySelector('[data-action="attack"]');
 
     this.bindEvents();
   }
@@ -31,6 +33,11 @@ export class MobileControls {
     this.interactButton.addEventListener('pointerdown', (event) => {
       event.preventDefault();
       this.interactPressed = true;
+    });
+
+    this.attackButton.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      this.queueAttack();
     });
   }
 
@@ -92,6 +99,16 @@ export class MobileControls {
   consumeInteract() {
     const wasPressed = this.interactPressed;
     this.interactPressed = false;
+    return wasPressed;
+  }
+
+  queueAttack() {
+    this.attackPressed = true;
+  }
+
+  consumeAttack() {
+    const wasPressed = this.attackPressed;
+    this.attackPressed = false;
     return wasPressed;
   }
 
