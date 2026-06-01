@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-rows: auto minmax(218px, 1fr) auto auto;
+  grid-template-rows: auto minmax(278px, 1fr) auto;
   gap: clamp(8px, 1.5vh, 14px);
   max-width: 520px;
   margin: 0 auto;
@@ -170,35 +170,48 @@
   pointer-events: none;
 }
 
-.message-strip {
-  position: relative;
-  z-index: 3;
-  padding: 7px 10px 9px;
-  border: 1px solid rgba(202, 165, 92, 0.6);
-  border-radius: 16px;
-  background:
-    linear-gradient(90deg, rgba(73, 50, 28, 0.88), rgba(8, 8, 9, 0.93) 18% 82%, rgba(73, 50, 28, 0.88)),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 10px);
-  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.72), 0 7px 18px rgba(0, 0, 0, 0.38);
-}
-
-.message-box {
-  min-height: 34px;
+/* The old reserved message strip was removed so its ~60px row now belongs to the viewport. */
+.message-toast {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(74px, 16vh, 122px);
+  z-index: 4;
+  max-width: min(86%, 390px);
   margin: 0;
+  padding: 7px 12px 8px;
+  border: 1px solid rgba(227, 199, 124, 0.58);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(73, 50, 28, 0.82), rgba(8, 8, 9, 0.88) 18% 82%, rgba(73, 50, 28, 0.82)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 10px);
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.72), 0 6px 16px rgba(0, 0, 0, 0.4);
   color: #f5e7bf;
-  font-size: clamp(0.82rem, 3.3vw, 1rem);
-  font-weight: 650;
-  line-height: 1.25;
+  font-size: clamp(0.72rem, 2.8vw, 0.9rem);
+  font-weight: 700;
+  line-height: 1.2;
   text-align: center;
   text-shadow: 0 2px 4px #000;
   pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  transition: opacity 420ms ease, transform 420ms ease;
+}
+
+.message-toast.is-visible {
+  opacity: 0.94;
+  transform: translate(-50%, 0);
+}
+
+.message-toast.is-subtle {
+  opacity: 0.58;
 }
 
 .interaction-hint {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 8px);
-  width: min(92vw, 430px);
+  top: 10px;
+  z-index: 4;
+  width: min(88%, 430px);
   margin: 0;
   padding: 8px 12px;
   border: 1px solid rgba(227, 199, 124, 0.66);
@@ -211,7 +224,7 @@
   text-shadow: 0 2px 4px #000;
   pointer-events: none;
   opacity: 0;
-  transform: translate(-50%, 8px);
+  transform: translate(-50%, -6px);
   transition: opacity 140ms ease, transform 140ms ease;
 }
 
@@ -304,7 +317,7 @@
 
 @media (max-height: 700px) {
   .reliquary-shell {
-    grid-template-rows: auto minmax(170px, 1fr) auto auto;
+    grid-template-rows: auto minmax(224px, 1fr) auto;
     gap: 6px;
   }
 

@@ -58,17 +58,14 @@ export class Game {
           <div class="viewport-ornament viewport-ornament-top" aria-hidden="true">✦</div>
           <div class="viewport-stage" data-game="viewport">
             <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
+            <p class="message-toast is-visible is-subtle" data-hud="message" aria-live="polite">The air is cold and still.</p>
+            <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
             <div class="first-person-arms" data-arms-overlay aria-hidden="true">
               <div class="first-person-arms__layer" data-arms-layer="base"></div>
             </div>
             <div class="damage-flash" data-hud="damage" aria-hidden="true"></div>
           </div>
           <div class="viewport-ornament viewport-ornament-bottom" aria-hidden="true">◆</div>
-        </section>
-
-        <section class="message-strip" aria-label="Messages">
-          <p class="message-box" data-hud="message">The air is cold and still.</p>
-          <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
         </section>
 
         <section class="control-deck" aria-label="Touch controls">
