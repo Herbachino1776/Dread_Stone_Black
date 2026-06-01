@@ -8,63 +8,30 @@ const TEST_MODEL_URL = './assets/models/dread_stone_black_test_model_01.glb';
 const TEST_MODEL_POSITION = new THREE.Vector3(3.65, 0, -2.45);
 const TEST_MODEL_ROTATION_Y = -Math.PI / 5;
 
-function makeStoneTexture({ base = '#4b4841', mortar = '#1c1a18', accent = '#6a6252', rows = 8, columns = 8 }) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const context = canvas.getContext('2d');
+const TEXTURE_PATHS = {
+  wall: './assets/textures/wall_black_stone_01.png',
+  floor: './assets/textures/floor_worn_stone_01.png',
+  ceiling: './assets/textures/ceiling_dark_stone_01.png',
+  gate: './assets/textures/metal_gate_rusted_01.png',
+};
 
-  context.fillStyle = base;
-  context.fillRect(0, 0, canvas.width, canvas.height);
-
-  const blockWidth = canvas.width / columns;
-  const blockHeight = canvas.height / rows;
-
-  for (let y = 0; y < rows; y += 1) {
-    for (let x = 0; x < columns; x += 1) {
-      const stagger = y % 2 === 0 ? 0 : blockWidth / 2;
-      const shade = (x * 17 + y * 23) % 37;
-      context.fillStyle = shade % 3 === 0 ? accent : base;
-      context.globalAlpha = 0.16 + (shade % 5) * 0.03;
-      context.fillRect(x * blockWidth - stagger + 2, y * blockHeight + 2, blockWidth - 4, blockHeight - 4);
-    }
-  }
-
-  context.globalAlpha = 1;
-  context.strokeStyle = mortar;
-  context.lineWidth = 3;
-
-  for (let y = 0; y <= rows; y += 1) {
-    context.beginPath();
-    context.moveTo(0, y * blockHeight);
-    context.lineTo(canvas.width, y * blockHeight);
-    context.stroke();
-  }
-
-  for (let y = 0; y < rows; y += 1) {
-    const stagger = y % 2 === 0 ? 0 : blockWidth / 2;
-    for (let x = -1; x <= columns; x += 1) {
-      context.beginPath();
-      context.moveTo(x * blockWidth + stagger, y * blockHeight);
-      context.lineTo(x * blockWidth + stagger, (y + 1) * blockHeight);
-      context.stroke();
-    }
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  return texture;
-}
+const TEXTURE_REPEATS = {
+  roomWall: [3, 1.35],
+  corridorWall: [1, 3.35],
+  roomFloor: [4, 4],
+  corridorFloor: [1.35, 5],
+  roomCeiling: [3, 3],
+  corridorCeiling: [1.15, 4.2],
+  gateBars: [0.8, 3.4],
+  gateBeams: [3.4, 0.7],
+};
 
 export class DungeonScene {
   constructor() {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x17120f);
     this.scene.fog = new THREE.Fog(0x17120f, 9, 27);
+    this.textureLoader = new THREE.TextureLoader();
 
     this.gate = null;
     this.gateOpen = false;
@@ -193,15 +160,23 @@ export class DungeonScene {
     this.scene.add(testPropGlow);
   }
 
-  makeStoneMaterial({ color = 0x5a554d, textureOptions, repeat = [2, 2] } = {}) {
-    const texture = makeStoneTexture(textureOptions ?? {});
+  loadRepeatingTexture(path, repeat) {
+    const texture = this.textureLoader.load(path);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(repeat[0], repeat[1]);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return texture;
+  }
 
+  makeTexturedMaterial({ path, repeat, color = 0xffffff, roughness = 0.92, metalness = 0.02, emissive, emissiveIntensity } = {}) {
     return new THREE.MeshStandardMaterial({
       color,
-      map: texture,
-      roughness: 0.94,
-      metalness: 0.01,
+      map: this.loadRepeatingTexture(path, repeat),
+      roughness,
+      metalness,
+      ...(emissive !== undefined ? { emissive, emissiveIntensity } : {}),
     });
   }
 
@@ -215,9 +190,9 @@ export class DungeonScene {
   }
 
   addRoom() {
-    const wallMat = this.makeStoneMaterial({ color: 0x6a6254, textureOptions: { base: '#60594d', accent: '#8a7b63', rows: 7, columns: 8 }, repeat: [2.5, 1.5] });
-    const floorMat = this.makeStoneMaterial({ color: 0x514d45, textureOptions: { base: '#504a41', accent: '#736a5b', rows: 8, columns: 8 }, repeat: [3, 3] });
-    const ceilingMat = this.makeStoneMaterial({ color: 0x403b35, textureOptions: { base: '#403a33', accent: '#5a5145', rows: 6, columns: 7 }, repeat: [2, 2] });
+    const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: TEXTURE_REPEATS.roomWall, color: 0x8f887d, roughness: 0.96, metalness: 0.01 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: TEXTURE_REPEATS.roomFloor, color: 0x777269, roughness: 0.98, metalness: 0.0 });
+    const ceilingMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.ceiling, repeat: TEXTURE_REPEATS.roomCeiling, color: 0x6d675f, roughness: 0.98, metalness: 0.0 });
 
     this.addBox({ size: new THREE.Vector3(12, 0.18, 12), position: new THREE.Vector3(0, FLOOR_Y - 0.09, 0), material: floorMat });
     this.addBox({ size: new THREE.Vector3(12, 0.18, 12), position: new THREE.Vector3(0, WALL_HEIGHT, 0), material: ceilingMat });
@@ -231,9 +206,9 @@ export class DungeonScene {
   }
 
   addCorridor() {
-    const wallMat = this.makeStoneMaterial({ color: 0x5e574b, textureOptions: { base: '#554e44', accent: '#7b705d', rows: 8, columns: 4 }, repeat: [1.2, 3] });
-    const floorMat = this.makeStoneMaterial({ color: 0x4d483f, textureOptions: { base: '#49433b', accent: '#6f6554', rows: 10, columns: 3 }, repeat: [1, 4] });
-    const ceilingMat = this.makeStoneMaterial({ color: 0x3a352f, textureOptions: { base: '#3b362f', accent: '#554d41', rows: 6, columns: 3 }, repeat: [1, 3] });
+    const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: TEXTURE_REPEATS.corridorWall, color: 0x898176, roughness: 0.96, metalness: 0.01 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: TEXTURE_REPEATS.corridorFloor, color: 0x716b62, roughness: 0.98, metalness: 0.0 });
+    const ceilingMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.ceiling, repeat: TEXTURE_REPEATS.corridorCeiling, color: 0x625d55, roughness: 0.98, metalness: 0.0 });
 
     this.addBox({ size: new THREE.Vector3(3.1, 0.18, 12), position: new THREE.Vector3(0, FLOOR_Y - 0.09, -11.6), material: floorMat });
     this.addBox({ size: new THREE.Vector3(3.1, 0.18, 12), position: new THREE.Vector3(0, WALL_HEIGHT, -11.6), material: ceilingMat });
@@ -462,20 +437,21 @@ export class DungeonScene {
 
   addGate() {
     const gateGroup = new THREE.Group();
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0x5a5148, roughness: 0.58, metalness: 0.62, emissive: 0x15100c, emissiveIntensity: 0.25 });
+    const barMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: TEXTURE_REPEATS.gateBars, color: 0xb8aa96, roughness: 0.72, metalness: 0.48, emissive: 0x1d130b, emissiveIntensity: 0.2 });
+    const beamMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: TEXTURE_REPEATS.gateBeams, color: 0xb8aa96, roughness: 0.72, metalness: 0.48, emissive: 0x1d130b, emissiveIntensity: 0.2 });
     const markerMat = new THREE.MeshBasicMaterial({ color: 0xd5a159, transparent: true, opacity: 0.82 });
 
     for (let x = -1.05; x <= 1.05; x += 0.42) {
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.45, 0.18), metalMat);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.45, 0.18), barMat);
       bar.position.set(x, 1.25, -17.25);
       gateGroup.add(bar);
     }
 
-    const top = new THREE.Mesh(new THREE.BoxGeometry(2.75, 0.18, 0.2), metalMat);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(2.75, 0.18, 0.2), beamMat);
     top.position.set(0, 2.4, -17.25);
     gateGroup.add(top);
 
-    const middle = new THREE.Mesh(new THREE.BoxGeometry(2.75, 0.16, 0.2), metalMat);
+    const middle = new THREE.Mesh(new THREE.BoxGeometry(2.75, 0.16, 0.2), beamMat);
     middle.position.set(0, 1.35, -17.25);
     gateGroup.add(middle);
 
