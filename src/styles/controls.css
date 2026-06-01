@@ -2,11 +2,11 @@
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(112px, 1fr) minmax(108px, 0.78fr) minmax(112px, 1fr);
+  grid-template-columns: minmax(100px, 1fr) minmax(108px, 0.78fr) minmax(100px, 1fr);
   align-items: center;
-  gap: clamp(6px, 2vw, 12px);
-  min-height: clamp(148px, 22vh, 190px);
-  padding: 14px 10px 12px;
+  gap: clamp(8px, 2.4vw, 14px);
+  min-height: clamp(132px, 19vh, 166px);
+  padding: 10px 10px 10px;
   border: 2px solid rgba(203, 165, 88, 0.66);
   border-radius: 28px 28px 24px 24px;
   background:
@@ -64,7 +64,7 @@
   display: grid;
   place-items: center;
   min-width: 0;
-  min-height: 126px;
+  min-height: 116px;
   color: rgba(238, 222, 180, 0.8);
   font-size: clamp(0.62rem, 2.3vw, 0.72rem);
   font-weight: 900;
@@ -79,8 +79,8 @@
 
 .stick-ring {
   position: relative;
-  width: clamp(96px, 27vw, 124px);
-  height: clamp(96px, 27vw, 124px);
+  width: clamp(84px, 23vw, 108px);
+  height: clamp(84px, 23vw, 108px);
   border: 2px solid rgba(215, 181, 101, 0.74);
   border-radius: 999px;
   background:
@@ -113,9 +113,9 @@
   left: 50%;
   top: 50%;
   z-index: 2;
-  width: clamp(44px, 12.5vw, 56px);
-  height: clamp(44px, 12.5vw, 56px);
-  margin: clamp(-28px, -6.25vw, -22px) 0 0 clamp(-28px, -6.25vw, -22px);
+  width: clamp(38px, 10.5vw, 48px);
+  height: clamp(38px, 10.5vw, 48px);
+  margin: clamp(-24px, -5.25vw, -19px) 0 0 clamp(-24px, -5.25vw, -19px);
   border: 1px solid rgba(255, 229, 157, 0.7);
   border-radius: 999px;
   background:
@@ -214,8 +214,8 @@
 
 @media (max-width: 380px) {
   .control-deck {
-    grid-template-columns: minmax(96px, 1fr) minmax(84px, 0.72fr) minmax(96px, 1fr);
-    gap: 4px;
+    grid-template-columns: minmax(88px, 1fr) minmax(84px, 0.72fr) minmax(88px, 1fr);
+    gap: 5px;
     padding-inline: 8px;
   }
 
@@ -226,12 +226,12 @@
 
 @media (max-height: 700px) {
   .control-deck {
-    min-height: 132px;
+    min-height: 122px;
     padding-block: 8px;
   }
 
   .stick-zone {
-    min-height: 112px;
+    min-height: 100px;
   }
 
   .action-cluster {
