@@ -5,8 +5,18 @@ import { loadDungeonModel } from './ModelLoader.js';
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
 const TEST_MODEL_URL = './assets/models/dread_stone_black_test_model_01.glb';
-const TEST_MODEL_POSITION = new THREE.Vector3(3.65, 0, -2.45);
+const TEST_MODEL_POSITION = new THREE.Vector3(3.65, FLOOR_Y, -2.45);
 const TEST_MODEL_ROTATION_Y = -Math.PI / 5;
+const TEST_MODEL_PATROL_POINTS = [
+  new THREE.Vector3(3.65, FLOOR_Y, -2.45),
+  new THREE.Vector3(2.15, FLOOR_Y, -4.25),
+  new THREE.Vector3(-1.9, FLOOR_Y, -4.15),
+  new THREE.Vector3(-3.75, FLOOR_Y, -1.05),
+  new THREE.Vector3(-1.45, FLOOR_Y, 2.85),
+  new THREE.Vector3(2.95, FLOOR_Y, 2.3),
+];
+const TEST_MODEL_PATROL_SPEED = 0.62;
+const TEST_MODEL_TURN_SPEED = 4.4;
 
 const TEXTURE_PATHS = {
   wall: './assets/textures/wall_black_stone_01.png',
@@ -29,8 +39,8 @@ const TEXTURE_REPEATS = {
 export class DungeonScene {
   constructor() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x17120f);
-    this.scene.fog = new THREE.Fog(0x17120f, 9, 27);
+    this.scene.background = new THREE.Color(0x090807);
+    this.scene.fog = new THREE.Fog(0x080706, 6.5, 20);
     this.textureLoader = new THREE.TextureLoader();
     this.textureCheckRig = null;
 
@@ -46,6 +56,11 @@ export class DungeonScene {
     this.enemySpawn = new THREE.Vector3(0, 0, -14.6);
     this.enemy = null;
     this.testModelProp = null;
+    this.testModelPatrolIndex = 0;
+    this.testModelMoveTarget = 1;
+    this.testModelGlow = null;
+    this.torchLights = [];
+    this.lightTime = 0;
     this.gateBlocker = { minX: -1.45, maxX: 1.45, minZ: -17.55, maxZ: -16.95 };
     this.collision = new CollisionWorld({
       walkableRects: [
@@ -84,6 +99,10 @@ export class DungeonScene {
         this.gateOpening = false;
       }
     }
+
+    this.lightTime += deltaSeconds;
+    this.updateTorchFlicker();
+    this.updateTestModelPatrol(deltaSeconds);
 
     if (this.enemy?.hitFlashTimer > 0) {
       this.enemy.hitFlashTimer -= deltaSeconds;
@@ -138,27 +157,28 @@ export class DungeonScene {
   }
 
   addLights() {
-    const ambient = new THREE.HemisphereLight(0x8d98aa, 0x2c1c12, 1.62);
+    const ambient = new THREE.HemisphereLight(0x687184, 0x150d09, 0.72);
     this.scene.add(ambient);
 
-    const roomFill = new THREE.DirectionalLight(0xffe2ad, 0.82);
+    const roomFill = new THREE.DirectionalLight(0xd9b17b, 0.28);
     roomFill.position.set(2.5, 5, 4);
     this.scene.add(roomFill);
 
-    const entryTorchGlow = new THREE.PointLight(0xffb45a, 6.5, 15, 1.15);
+    const entryTorchGlow = new THREE.PointLight(0xff9d46, 2.15, 10.5, 1.35);
     entryTorchGlow.position.set(-4.7, 2.05, 2.25);
     this.scene.add(entryTorchGlow);
 
-    const corridorGlow = new THREE.PointLight(0xffd08a, 5.4, 18, 1.2);
+    const corridorGlow = new THREE.PointLight(0xffb66a, 1.85, 12.5, 1.38);
     corridorGlow.position.set(0, 2.15, -9.6);
     this.scene.add(corridorGlow);
 
-    const gateGlow = new THREE.PointLight(0xf0b16a, 3.3, 10, 1.25);
+    const gateGlow = new THREE.PointLight(0xd08a4d, 1.1, 7.5, 1.45);
     gateGlow.position.set(0, 1.85, -15.5);
     this.scene.add(gateGlow);
 
-    const testPropGlow = new THREE.PointLight(0xffd2a0, 2.6, 5.5, 1.7);
-    testPropGlow.position.copy(TEST_MODEL_POSITION).add(new THREE.Vector3(0, 1.45, 0.25));
+    const testPropGlow = new THREE.PointLight(0xb9794f, 0.55, 4.25, 1.85);
+    testPropGlow.position.copy(TEST_MODEL_POSITION).add(new THREE.Vector3(0, 1.35, 0.2));
+    this.testModelGlow = testPropGlow;
     this.scene.add(testPropGlow);
   }
 
@@ -254,7 +274,7 @@ export class DungeonScene {
 
     const bracketMat = new THREE.MeshStandardMaterial({ color: 0x2b2118, roughness: 0.75, metalness: 0.45 });
     const woodMat = new THREE.MeshStandardMaterial({ color: 0x6b3419, roughness: 0.9 });
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb13d });
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xd77724 });
 
     const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.48), bracketMat);
     bracket.position.z = 0.2;
@@ -268,6 +288,17 @@ export class DungeonScene {
     const flame = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.48, 7), flameMat);
     flame.position.set(0, 0.22, 0.72);
     group.add(flame);
+
+    const glow = new THREE.PointLight(0xff8f32, 1.45, 5.25, 1.55);
+    glow.position.copy(flame.position);
+    group.add(glow);
+    this.torchLights.push({
+      light: glow,
+      flame,
+      baseIntensity: glow.intensity,
+      baseDistance: glow.distance,
+      phase: this.torchLights.length * 1.93,
+    });
 
     this.scene.add(group);
   }
@@ -368,22 +399,74 @@ export class DungeonScene {
   }
 
 
+  updateTorchFlicker() {
+    this.torchLights.forEach(({ light, flame, baseIntensity, baseDistance, phase }) => {
+      const slowPulse = Math.sin(this.lightTime * 7.5 + phase) * 0.11;
+      const fastPulse = Math.sin(this.lightTime * 18.0 + phase * 2.7) * 0.055;
+      const emberPulse = Math.sin(this.lightTime * 31.0 + phase * 0.6) * 0.025;
+      const flicker = THREE.MathUtils.clamp(1 + slowPulse + fastPulse + emberPulse, 0.78, 1.18);
+
+      light.intensity = baseIntensity * flicker;
+      light.distance = baseDistance * THREE.MathUtils.clamp(0.96 + (flicker - 1) * 0.35, 0.9, 1.05);
+      flame.scale.setScalar(THREE.MathUtils.clamp(0.94 + (flicker - 1) * 0.28, 0.9, 1.05));
+    });
+  }
+
+  updateTestModelPatrol(deltaSeconds) {
+    if (!this.testModelProp || TEST_MODEL_PATROL_POINTS.length < 2) return;
+
+    const target = TEST_MODEL_PATROL_POINTS[this.testModelMoveTarget];
+    const current = this.testModelProp.position;
+    const toTarget = target.clone().sub(current);
+    toTarget.y = 0;
+    const distance = toTarget.length();
+
+    if (distance < 0.08) {
+      this.testModelPatrolIndex = this.testModelMoveTarget;
+      this.testModelMoveTarget = (this.testModelMoveTarget + 1) % TEST_MODEL_PATROL_POINTS.length;
+      return;
+    }
+
+    const direction = toTarget.normalize();
+    const stepDistance = Math.min(distance, TEST_MODEL_PATROL_SPEED * deltaSeconds);
+    const next = current.clone().add(direction.multiplyScalar(stepDistance));
+    next.y = FLOOR_Y;
+
+    if (this.collision.canStandAt(next)) {
+      current.copy(next);
+    } else {
+      this.testModelMoveTarget = (this.testModelMoveTarget + 1) % TEST_MODEL_PATROL_POINTS.length;
+    }
+
+    const desiredYaw = Math.atan2(direction.x, direction.z);
+    this.testModelProp.rotation.y = THREE.MathUtils.damp(this.testModelProp.rotation.y, desiredYaw, TEST_MODEL_TURN_SPEED, deltaSeconds);
+
+    if (this.testModelGlow) {
+      this.testModelGlow.position.copy(this.testModelProp.position).add(new THREE.Vector3(0, 1.35, 0.2));
+    }
+  }
+
+
   addTestModelProp() {
     // Normalize the uploaded prop to player/enemy scale while ModelLoader keeps it grounded on the floor.
     loadDungeonModel({ url: TEST_MODEL_URL, targetHeight: 1.8, maxWidth: 1.65 })
       .then(({ root, scale }) => {
-        root.name = 'dread-stone-black-test-model-01';
-        root.position.add(TEST_MODEL_POSITION);
-        root.rotation.y = TEST_MODEL_ROTATION_Y;
-        root.userData = {
-          ...root.userData,
+        root.name = 'dread-stone-black-test-model-01-model';
+
+        const patrolRig = new THREE.Group();
+        patrolRig.name = 'dread-stone-black-test-model-01';
+        patrolRig.position.copy(TEST_MODEL_POSITION);
+        patrolRig.rotation.y = TEST_MODEL_ROTATION_Y;
+        patrolRig.userData = {
           assetUrl: TEST_MODEL_URL,
           normalizedScale: scale,
-          placement: 'entry room near the lever wall and key/gate approach',
+          placement: 'slow grounded patrol loop inside the entry chamber',
+          patrolSpeed: TEST_MODEL_PATROL_SPEED,
         };
+        patrolRig.add(root);
 
-        this.testModelProp = root;
-        this.scene.add(root);
+        this.testModelProp = patrolRig;
+        this.scene.add(patrolRig);
       })
       .catch((error) => {
         console.warn(`Optional test GLB failed to load from ${TEST_MODEL_URL}. The dungeon remains playable.`, error);
