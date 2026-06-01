@@ -58,7 +58,6 @@ export class Game {
           <div class="viewport-ornament viewport-ornament-top" aria-hidden="true">✦</div>
           <div class="viewport-stage" data-game="viewport">
             <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
-            <p class="message-toast is-visible is-subtle" data-hud="message" aria-live="polite">The air is cold and still.</p>
             <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
             <div class="first-person-arms" data-arms-overlay aria-hidden="true">
               <div class="first-person-arms__layer" data-arms-layer="base"></div>

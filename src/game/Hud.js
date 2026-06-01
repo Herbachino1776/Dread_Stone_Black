@@ -3,13 +3,11 @@ import * as THREE from 'three';
 export class Hud {
   constructor(root) {
     this.root = root;
-    this.messageEl = root.querySelector('[data-hud="message"]');
     this.hintEl = root.querySelector('[data-hud="hint"]');
     this.debugEl = root.querySelector('[data-hud="debug"]');
     this.hpEl = root.querySelector('[data-stat="hp"]');
     this.powerEl = root.querySelector('[data-stat="power"]');
     this.damageEl = root.querySelector('[data-hud="damage"]');
-    this.timeoutId = null;
     this.debugFrameSkip = 0;
   }
 
@@ -48,15 +46,7 @@ export class Hud {
   }
 
   showMessage(message) {
-    if (!this.messageEl) return;
-
-    this.messageEl.textContent = message;
-    this.messageEl.classList.add('is-visible');
-    this.messageEl.classList.remove('is-subtle');
-    window.clearTimeout(this.timeoutId);
-    this.timeoutId = window.setTimeout(() => {
-      this.messageEl.textContent = 'The air is cold and still.';
-      this.messageEl.classList.add('is-subtle');
-    }, 3200);
+    // Gameplay message calls intentionally stay non-visual while the message panel is removed.
+    if (message) console.debug(`[Dread Stone Black] ${message}`);
   }
 }
