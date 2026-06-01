@@ -79,8 +79,8 @@ export class Game {
           </div>
 
           <div class="action-cluster" aria-label="Action buttons">
-            <button class="attack-button action-button" data-action="attack" type="button">ATTACK</button>
-            <button class="interact-button action-button" data-action="interact" type="button">INTERACT</button>
+            <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact">X</button>
+            <button class="attack-button action-button" data-action="attack" type="button" aria-label="Attack">A</button>
           </div>
 
           <div class="stick-zone look-zone" data-control="look" aria-label="Look">
