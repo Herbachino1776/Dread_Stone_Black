@@ -48,10 +48,15 @@ export class Hud {
   }
 
   showMessage(message) {
+    if (!this.messageEl) return;
+
     this.messageEl.textContent = message;
+    this.messageEl.classList.add('is-visible');
+    this.messageEl.classList.remove('is-subtle');
     window.clearTimeout(this.timeoutId);
     this.timeoutId = window.setTimeout(() => {
       this.messageEl.textContent = 'The air is cold and still.';
+      this.messageEl.classList.add('is-subtle');
     }, 3200);
   }
 }
