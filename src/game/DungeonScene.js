@@ -16,6 +16,7 @@ const TEST_MODEL_PATROL_POINTS = [
   new THREE.Vector3(2.95, FLOOR_Y, 2.3),
 ];
 const TEST_MODEL_PATROL_SPEED = 0.62;
+const ROOM_DOORWAY_Z = -4.35;
 const TEST_MODEL_TURN_SPEED = 4.4;
 
 const TEXTURE_PATHS = {
@@ -32,6 +33,12 @@ const TEXTURE_REPEATS = {
   corridorFloor: [1.5, 6],
   roomCeiling: [6, 6],
   corridorCeiling: [1.5, 6],
+  branchWall: [3, 1.35],
+  branchFloor: [4, 4],
+  branchCeiling: [4, 4],
+  longWall: [6, 1.35],
+  returnFloor: [1.5, 8],
+  returnCeiling: [1.5, 8],
   gateBars: [0.45, 2.5],
   gateBeams: [2.75, 0.45],
 };
@@ -53,7 +60,13 @@ export class DungeonScene {
     this.lever = null;
     this.leverUsed = false;
     this.leverTarget = new THREE.Vector3(5.35, 1.15, -2.4);
-    this.enemySpawn = new THREE.Vector3(0, 0, -14.6);
+    this.shortcutTarget = new THREE.Vector3(-5.75, 1.12, ROOM_DOORWAY_Z);
+    this.secretTarget = new THREE.Vector3(8.2, 1.12, -24.25);
+    this.shortcutDoor = null;
+    this.shortcutOpen = false;
+    this.secretWall = null;
+    this.secretRevealed = false;
+    this.enemySpawn = new THREE.Vector3(5.9, 0, -20.55);
     this.enemy = null;
     this.testModelProp = null;
     this.testModelPatrolIndex = 0;
@@ -62,12 +75,19 @@ export class DungeonScene {
     this.torchLights = [];
     this.lightTime = 0;
     this.gateBlocker = { minX: -1.45, maxX: 1.45, minZ: -17.55, maxZ: -16.95 };
+    this.shortcutBlocker = { minX: -6.15, maxX: -4.65, minZ: -5.12, maxZ: -3.58 };
+    this.secretWallBlocker = { minX: 7.05, maxX: 9.35, minZ: -24.65, maxZ: -23.82 };
     this.collision = new CollisionWorld({
       walkableRects: [
         { minX: -5.6, maxX: 5.6, minZ: -5.6, maxZ: 5.6 },
         { minX: -1.35, maxX: 1.35, minZ: -17.2, maxZ: -5.6 },
+        { minX: -1.35, maxX: 1.35, minZ: -22.2, maxZ: -17.2 },
+        { minX: -4.75, maxX: 4.75, minZ: -22.2, maxZ: -19.35 },
+        { minX: 4.75, maxX: 9.6, minZ: -24.25, maxZ: -17.85 },
+        { minX: -7.85, maxX: -4.75, minZ: -22.2, maxZ: -3.35 },
+        { minX: 7.05, maxX: 9.35, minZ: -27.1, maxZ: -24.25 },
       ],
-      blockerRects: [this.gateBlocker],
+      blockerRects: [this.gateBlocker, this.shortcutBlocker, this.secretWallBlocker],
     });
   }
 
@@ -75,6 +95,7 @@ export class DungeonScene {
     this.addLights();
     this.addRoom();
     this.addCorridor();
+    this.addDungeonExpansion();
     this.addPathCues();
     this.addTorches();
     this.addKeyPickup();
@@ -138,6 +159,35 @@ export class DungeonScene {
           child.material.emissiveIntensity = 0.45;
         }
       });
+    }
+
+    return true;
+  }
+
+  openShortcutDoor() {
+    if (this.shortcutOpen) return false;
+
+    this.shortcutOpen = true;
+    this.collision.removeBlocker(this.shortcutBlocker);
+
+    if (this.shortcutDoor) {
+      this.shortcutDoor.rotation.y = -Math.PI / 2;
+      this.shortcutDoor.position.x = -6.42;
+      this.shortcutDoor.position.z = ROOM_DOORWAY_Z - 0.62;
+    }
+
+    return true;
+  }
+
+  revealSecret() {
+    if (this.secretRevealed) return false;
+
+    this.secretRevealed = true;
+    this.collision.removeBlocker(this.secretWallBlocker);
+
+    if (this.secretWall) {
+      this.secretWall.position.y = -0.35;
+      this.secretWall.rotation.x = -0.08;
     }
 
     return true;
@@ -226,7 +276,9 @@ export class DungeonScene {
     this.addBox({ size: new THREE.Vector3(12, 0.18, 12), position: new THREE.Vector3(0, FLOOR_Y - 0.09, 0), material: floorMat, name: 'room-floor-floor_worn_stone_01' });
     this.addBox({ size: new THREE.Vector3(12, 0.18, 12), position: new THREE.Vector3(0, WALL_HEIGHT, 0), material: ceilingMat, name: 'room-ceiling-ceiling_dark_stone_01' });
     this.addBox({ size: new THREE.Vector3(12, WALL_HEIGHT, 0.4), position: new THREE.Vector3(0, WALL_HEIGHT / 2, 6), material: wallMat });
-    this.addBox({ size: new THREE.Vector3(0.4, WALL_HEIGHT, 12), position: new THREE.Vector3(-6, WALL_HEIGHT / 2, 0), material: wallMat });
+    // West wall leaves a barred shortcut slit that only opens from the return passage.
+    this.addBox({ size: new THREE.Vector3(0.4, WALL_HEIGHT, 9.7), position: new THREE.Vector3(-6, WALL_HEIGHT / 2, 1.15), material: wallMat });
+    this.addBox({ size: new THREE.Vector3(0.4, WALL_HEIGHT, 0.95), position: new THREE.Vector3(-6, WALL_HEIGHT / 2, -5.52), material: wallMat });
     this.addBox({ size: new THREE.Vector3(0.4, WALL_HEIGHT, 12), position: new THREE.Vector3(6, WALL_HEIGHT / 2, 0), material: wallMat });
 
     // Back wall is split to leave a readable corridor opening.
@@ -243,6 +295,55 @@ export class DungeonScene {
     this.addBox({ size: new THREE.Vector3(3.1, 0.18, 12), position: new THREE.Vector3(0, WALL_HEIGHT, -11.6), material: ceilingMat, name: 'corridor-ceiling-ceiling_dark_stone_01' });
     this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 12), position: new THREE.Vector3(-1.7, WALL_HEIGHT / 2, -11.6), material: wallMat });
     this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 12), position: new THREE.Vector3(1.7, WALL_HEIGHT / 2, -11.6), material: wallMat });
+  }
+
+  addDungeonExpansion() {
+    const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: TEXTURE_REPEATS.branchWall, color: 0xffffff, roughness: 0.94, metalness: 0.01 });
+    const longWallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: TEXTURE_REPEATS.longWall, color: 0xffffff, roughness: 0.94, metalness: 0.01 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: TEXTURE_REPEATS.branchFloor, color: 0xffffff, roughness: 0.92, metalness: 0.0, emissive: 0x0c0906, emissiveIntensity: 0.08 });
+    const returnFloorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: TEXTURE_REPEATS.returnFloor, color: 0xffffff, roughness: 0.92, metalness: 0.0, emissive: 0x0c0906, emissiveIntensity: 0.08 });
+    const ceilingMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.ceiling, repeat: TEXTURE_REPEATS.branchCeiling, color: 0xf2eee6, roughness: 0.96, metalness: 0.0 });
+    const returnCeilingMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.ceiling, repeat: TEXTURE_REPEATS.returnCeiling, color: 0xf2eee6, roughness: 0.96, metalness: 0.0 });
+    const doorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: TEXTURE_REPEATS.gateBeams, color: 0xd6c1a2, roughness: 0.76, metalness: 0.36, emissive: 0x21140a, emissiveIntensity: 0.16 });
+
+    // Space 1: a tight vestibule immediately beyond the locked gate.
+    this.addBox({ size: new THREE.Vector3(3.1, 0.18, 5.25), position: new THREE.Vector3(0, FLOOR_Y - 0.09, -19.72), material: floorMat, name: 'post-gate-vestibule-floor_worn_stone_01' });
+    this.addBox({ size: new THREE.Vector3(3.1, 0.18, 5.25), position: new THREE.Vector3(0, WALL_HEIGHT, -19.72), material: ceilingMat, name: 'post-gate-vestibule-ceiling_dark_stone_01' });
+    this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 2.65), position: new THREE.Vector3(-1.7, WALL_HEIGHT / 2, -18.55), material: wallMat });
+    this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 2.65), position: new THREE.Vector3(1.7, WALL_HEIGHT / 2, -18.55), material: wallMat });
+
+    // Space 2: a cross passage that turns east into the encounter chamber and west into the return shortcut.
+    this.addBox({ size: new THREE.Vector3(9.85, 0.18, 3.05), position: new THREE.Vector3(0, FLOOR_Y - 0.09, -20.8), material: floorMat, name: 'cross-passage-floor_worn_stone_01' });
+    this.addBox({ size: new THREE.Vector3(9.85, 0.18, 3.05), position: new THREE.Vector3(0, WALL_HEIGHT, -20.8), material: ceilingMat, name: 'cross-passage-ceiling_dark_stone_01' });
+    this.addBox({ size: new THREE.Vector3(3.1, WALL_HEIGHT, 0.35), position: new THREE.Vector3(-3.25, WALL_HEIGHT / 2, -18.95), material: wallMat });
+    this.addBox({ size: new THREE.Vector3(3.1, WALL_HEIGHT, 0.35), position: new THREE.Vector3(3.25, WALL_HEIGHT / 2, -18.95), material: wallMat });
+    this.addBox({ size: new THREE.Vector3(9.85, WALL_HEIGHT, 0.35), position: new THREE.Vector3(0, WALL_HEIGHT / 2, -22.55), material: wallMat });
+
+    // Space 3: a small east crypt chamber for the first enemy encounter.
+    this.addBox({ size: new THREE.Vector3(5.15, 0.18, 6.55), position: new THREE.Vector3(7.18, FLOOR_Y - 0.09, -21.05), material: floorMat, name: 'east-crypt-floor_worn_stone_01' });
+    this.addBox({ size: new THREE.Vector3(5.15, 0.18, 6.55), position: new THREE.Vector3(7.18, WALL_HEIGHT, -21.05), material: ceilingMat, name: 'east-crypt-ceiling_dark_stone_01' });
+    this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 6.55), position: new THREE.Vector3(9.85, WALL_HEIGHT / 2, -21.05), material: longWallMat });
+    this.addBox({ size: new THREE.Vector3(3.85, WALL_HEIGHT, 0.35), position: new THREE.Vector3(7.78, WALL_HEIGHT / 2, -17.6), material: wallMat });
+    this.addBox({ size: new THREE.Vector3(2.05, WALL_HEIGHT, 0.35), position: new THREE.Vector3(5.78, WALL_HEIGHT / 2, -24.5), material: wallMat });
+    this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 1.85), position: new THREE.Vector3(4.55, WALL_HEIGHT / 2, -18.55), material: wallMat });
+    this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 1.85), position: new THREE.Vector3(4.55, WALL_HEIGHT / 2, -23.15), material: wallMat });
+
+    // A compact hidden alcove behind a false north wall.
+    this.addBox({ size: new THREE.Vector3(2.55, 0.18, 2.9), position: new THREE.Vector3(8.2, FLOOR_Y - 0.09, -25.68), material: floorMat, name: 'hidden-alcove-floor_worn_stone_01' });
+    this.addBox({ size: new THREE.Vector3(2.55, 0.18, 2.9), position: new THREE.Vector3(8.2, WALL_HEIGHT, -25.68), material: ceilingMat, name: 'hidden-alcove-ceiling_dark_stone_01' });
+    this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 2.9), position: new THREE.Vector3(6.83, WALL_HEIGHT / 2, -25.68), material: wallMat });
+    this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 2.9), position: new THREE.Vector3(9.57, WALL_HEIGHT / 2, -25.68), material: wallMat });
+    this.addBox({ size: new THREE.Vector3(2.75, WALL_HEIGHT, 0.35), position: new THREE.Vector3(8.2, WALL_HEIGHT / 2, -27.25), material: wallMat });
+    this.secretWall = this.addBox({ size: new THREE.Vector3(2.35, WALL_HEIGHT, 0.32), position: new THREE.Vector3(8.2, WALL_HEIGHT / 2, -24.38), material: wallMat, name: 'secret-cracked-wall' });
+
+    // West return passage: a readable loop back to the entry chamber after the gate is conquered.
+    this.addBox({ size: new THREE.Vector3(3.25, 0.18, 18.95), position: new THREE.Vector3(-6.3, FLOOR_Y - 0.09, -12.72), material: returnFloorMat, name: 'west-return-floor_worn_stone_01' });
+    this.addBox({ size: new THREE.Vector3(3.25, 0.18, 18.95), position: new THREE.Vector3(-6.3, WALL_HEIGHT, -12.72), material: returnCeilingMat, name: 'west-return-ceiling_dark_stone_01' });
+    this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 18.95), position: new THREE.Vector3(-8.05, WALL_HEIGHT / 2, -12.72), material: longWallMat });
+    this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 13.85), position: new THREE.Vector3(-4.55, WALL_HEIGHT / 2, -13.82), material: longWallMat });
+    this.addBox({ size: new THREE.Vector3(3.25, WALL_HEIGHT, 0.35), position: new THREE.Vector3(-6.3, WALL_HEIGHT / 2, -3.12), material: wallMat });
+
+    this.shortcutDoor = this.addBox({ size: new THREE.Vector3(0.22, 2.35, 1.28), position: new THREE.Vector3(-5.82, 1.18, ROOM_DOORWAY_Z), material: doorMat, name: 'entry-return-shortcut-door' });
   }
 
   addPathCues() {
@@ -265,6 +366,8 @@ export class DungeonScene {
   addTorches() {
     this.addTorch(new THREE.Vector3(-5.78, 1.55, 2.25), Math.PI / 2);
     this.addTorch(new THREE.Vector3(1.45, 1.55, -10.3), -Math.PI / 2);
+    this.addTorch(new THREE.Vector3(4.65, 1.5, -18.55), Math.PI / 2);
+    this.addTorch(new THREE.Vector3(-7.88, 1.5, -14.4), Math.PI / 2);
   }
 
   addTorch(position, rotationY) {

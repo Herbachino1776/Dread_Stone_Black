@@ -47,6 +47,20 @@ export class Interactions {
       };
     }
 
+    if (this.isFacingShortcutDoor()) {
+      return {
+        hint: this.getShortcutHint(),
+        use: () => this.useShortcutDoor(),
+      };
+    }
+
+    if (this.isFacingSecretWall()) {
+      return {
+        hint: this.dungeon.secretRevealed ? 'The hidden alcove yawns open.' : 'Tap INTERACT to press the cracked black stones.',
+        use: () => this.useSecretWall(),
+      };
+    }
+
     if (this.isFacingGate()) {
       if (this.dungeon.gateOpen) {
         return {
@@ -84,6 +98,30 @@ export class Interactions {
     }
   }
 
+  useShortcutDoor() {
+    if (this.dungeon.shortcutOpen) {
+      this.hud.showMessage('The shortcut door hangs open to the starting chamber.');
+      return;
+    }
+
+    if (this.player.position.x > -5.65) {
+      this.hud.showMessage('Iron hooks bar this door from the far side.');
+      return;
+    }
+
+    if (this.dungeon.openShortcutDoor()) {
+      this.hud.showMessage('You lift the hooks. A shortcut opens back to the first chamber.');
+    }
+  }
+
+  useSecretWall() {
+    if (this.dungeon.revealSecret()) {
+      this.hud.showMessage('The cracked wall sinks with a dry scrape, exposing a candleless alcove.');
+    } else {
+      this.hud.showMessage('The alcove is empty, but the stones whisper back.');
+    }
+  }
+
   useLever() {
     if (this.dungeon.useLever()) {
       this.hud.showMessage('The switch snaps down. Stone rumbles somewhere nearby.');
@@ -98,6 +136,20 @@ export class Interactions {
 
   isNearLever() {
     return this.isCloseEnough(this.dungeon.leverTarget, LEVER_RANGE) && this.isMostlyFacing(this.dungeon.leverTarget, 0.15);
+  }
+
+  getShortcutHint() {
+    if (this.dungeon.shortcutOpen) return 'The shortcut returns to the starting room.';
+    if (this.player.position.x > -5.65) return 'A barred door waits beyond the western wall.';
+    return 'Tap INTERACT to unbar the shortcut door.';
+  }
+
+  isFacingShortcutDoor() {
+    return this.isCloseEnough(this.dungeon.shortcutTarget, 2.2) && this.isMostlyFacing(this.dungeon.shortcutTarget, 0.18);
+  }
+
+  isFacingSecretWall() {
+    return this.isCloseEnough(this.dungeon.secretTarget, 2.05) && this.isMostlyFacing(this.dungeon.secretTarget, 0.2);
   }
 
   isFacingGate() {
