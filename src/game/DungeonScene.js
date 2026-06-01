@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 import { CollisionWorld } from './Collision.js';
+import { loadDungeonModel } from './ModelLoader.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
+const TEST_MODEL_URL = './assets/models/dread_stone_black_test_model_01.glb';
+const TEST_MODEL_POSITION = new THREE.Vector3(3.65, 0, -2.45);
+const TEST_MODEL_ROTATION_Y = -Math.PI / 5;
 
 function makeStoneTexture({ base = '#4b4841', mortar = '#1c1a18', accent = '#6a6252', rows = 8, columns = 8 }) {
   const canvas = document.createElement('canvas');
@@ -73,6 +77,7 @@ export class DungeonScene {
     this.leverTarget = new THREE.Vector3(5.35, 1.15, -2.4);
     this.enemySpawn = new THREE.Vector3(0, 0, -14.6);
     this.enemy = null;
+    this.testModelProp = null;
     this.gateBlocker = { minX: -1.45, maxX: 1.45, minZ: -17.55, maxZ: -16.95 };
     this.collision = new CollisionWorld({
       walkableRects: [
@@ -93,6 +98,7 @@ export class DungeonScene {
     this.addLever();
     this.addGate();
     this.addEnemy();
+    this.addTestModelProp();
     return this.scene;
   }
 
@@ -181,6 +187,10 @@ export class DungeonScene {
     const gateGlow = new THREE.PointLight(0xf0b16a, 3.3, 10, 1.25);
     gateGlow.position.set(0, 1.85, -15.5);
     this.scene.add(gateGlow);
+
+    const testPropGlow = new THREE.PointLight(0xffd2a0, 2.6, 5.5, 1.7);
+    testPropGlow.position.copy(TEST_MODEL_POSITION).add(new THREE.Vector3(0, 1.45, 0.25));
+    this.scene.add(testPropGlow);
   }
 
   makeStoneMaterial({ color = 0x5a554d, textureOptions, repeat = [2, 2] } = {}) {
@@ -336,6 +346,28 @@ export class DungeonScene {
 
     this.lever = group;
     this.scene.add(group);
+  }
+
+
+  addTestModelProp() {
+    loadDungeonModel({ url: TEST_MODEL_URL, targetHeight: 0.9, maxWidth: 1.05 })
+      .then(({ root, scale }) => {
+        root.name = 'dread-stone-black-test-model-01';
+        root.position.add(TEST_MODEL_POSITION);
+        root.rotation.y = TEST_MODEL_ROTATION_Y;
+        root.userData = {
+          ...root.userData,
+          assetUrl: TEST_MODEL_URL,
+          normalizedScale: scale,
+          placement: 'entry room near the lever wall and key/gate approach',
+        };
+
+        this.testModelProp = root;
+        this.scene.add(root);
+      })
+      .catch((error) => {
+        console.warn(`Optional test GLB failed to load from ${TEST_MODEL_URL}. The dungeon remains playable.`, error);
+      });
   }
 
 
