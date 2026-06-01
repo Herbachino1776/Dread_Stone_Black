@@ -63,22 +63,22 @@ export class Combat {
 
   tryPlayerAttack() {
     if (this.attackCooldown > 0) {
-      this.hud.showMessage('Let the blade settle.');
+      this.hud.showMessage('Let your arms settle.');
       return;
     }
 
     if (this.power < ATTACK_POWER_COST) {
-      this.hud.showMessage('You need POWER to swing. Step back and breathe.');
+      this.hud.showMessage('You need POWER to strike. Step back and breathe.');
       return;
     }
 
     this.power -= ATTACK_POWER_COST;
     this.attackCooldown = ATTACK_COOLDOWN;
-    this.hud.playSwordAttack();
+    this.hud.playAttack();
 
     const enemy = this.dungeon.enemy;
     if (!enemy || enemy.dead) {
-      this.hud.showMessage('Your sword cuts only stale air.');
+      this.hud.showMessage('Your hands cut only stale air.');
       return;
     }
 
@@ -89,9 +89,9 @@ export class Combat {
 
     if (distance <= ATTACK_RANGE && inFront) {
       const defeated = this.dungeon.damageEnemy(ATTACK_DAMAGE, this.player.getLookDirection());
-      this.hud.showMessage(defeated ? 'The gate wretch collapses into dust.' : 'Your sword bites the gate wretch.');
+      this.hud.showMessage(defeated ? 'The gate wretch collapses into dust.' : 'Your strike bites the gate wretch.');
     } else {
-      this.hud.showMessage('The swing falls short. Keep your spacing.');
+      this.hud.showMessage('The strike falls short. Keep your spacing.');
     }
   }
 

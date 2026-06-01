@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Combat } from './Combat.js';
 import { DungeonScene } from './DungeonScene.js';
+import { FirstPersonArmsOverlay } from './FirstPersonArmsOverlay.js';
 import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
 import { MobileControls } from './MobileControls.js';
@@ -29,6 +30,7 @@ export class Game {
     this.scene = this.dungeon.build();
     this.player = new PlayerController(this.camera, this.dungeon.collision);
     this.hud = new Hud(this.app);
+    this.armsOverlay = new FirstPersonArmsOverlay(this.app);
     this.controls = new MobileControls(this.app);
     this.interactions = new Interactions({ player: this.player, dungeon: this.dungeon, hud: this.hud });
     this.combat = new Combat({ player: this.player, dungeon: this.dungeon, hud: this.hud, controls: this.controls });
@@ -56,8 +58,10 @@ export class Game {
           <div class="viewport-ornament viewport-ornament-top" aria-hidden="true">✦</div>
           <div class="viewport-stage" data-game="viewport">
             <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
+            <div class="first-person-arms" data-arms-overlay aria-hidden="true">
+              <div class="first-person-arms__layer" data-arms-layer="base"></div>
+            </div>
             <div class="damage-flash" data-hud="damage" aria-hidden="true"></div>
-            <div class="sword-placeholder" data-weapon="sword" aria-hidden="true"></div>
           </div>
           <div class="viewport-ornament viewport-ornament-bottom" aria-hidden="true">◆</div>
         </section>
@@ -105,6 +109,7 @@ export class Game {
     }
     this.dungeon.update(deltaSeconds);
     this.combat.update(deltaSeconds);
+    this.armsOverlay.update(deltaSeconds);
     this.interactions.updateHint();
 
     if (this.controls.consumeInteract()) {

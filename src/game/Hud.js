@@ -8,7 +8,6 @@ export class Hud {
     this.debugEl = root.querySelector('[data-hud="debug"]');
     this.hpEl = root.querySelector('[data-stat="hp"]');
     this.powerEl = root.querySelector('[data-stat="power"]');
-    this.swordEl = root.querySelector('[data-weapon="sword"]');
     this.damageEl = root.querySelector('[data-hud="damage"]');
     this.timeoutId = null;
     this.debugFrameSkip = 0;
@@ -19,12 +18,8 @@ export class Hud {
     if (this.powerEl) this.powerEl.textContent = Math.floor(power);
   }
 
-  playSwordAttack() {
-    if (!this.swordEl) return;
-
-    this.swordEl.classList.remove('is-attacking');
-    void this.swordEl.offsetWidth;
-    this.swordEl.classList.add('is-attacking');
+  playAttack() {
+    // First-person weapon/arms attack strips can hook in here later without changing combat input.
   }
 
   flashDamage() {
