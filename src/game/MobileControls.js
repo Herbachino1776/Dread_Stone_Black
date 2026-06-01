@@ -5,6 +5,7 @@ export class MobileControls {
     this.look = { x: 0, y: 0 };
     this.interactPressed = false;
     this.attackPressed = false;
+    this.lookVerticalDeadzone = 0.24;
 
     this.movePointerId = null;
     this.lookPointerId = null;
@@ -83,7 +84,7 @@ export class MobileControls {
 
     const stick = this.getStickVector(event, this.lookCenter, this.lookZone);
     this.look.x = stick.x;
-    this.look.y = -stick.y;
+    this.look.y = this.applyLookVerticalDeadzone(-stick.y);
     this.lookKnob.style.transform = `translate(${stick.knobX}px, ${stick.knobY}px)`;
   }
 
@@ -93,6 +94,10 @@ export class MobileControls {
     this.lookPointerId = null;
     this.look = { x: 0, y: 0 };
     this.lookKnob.style.transform = 'translate(0, 0)';
+  }
+
+  applyLookVerticalDeadzone(value) {
+    return Math.abs(value) >= this.lookVerticalDeadzone ? value : 0;
   }
 
   getZoneCenter(zone) {

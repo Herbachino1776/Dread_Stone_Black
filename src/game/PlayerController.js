@@ -12,7 +12,7 @@ export class PlayerController {
     this.strafeSpeed = 1.45;
     this.turnSpeed = 0.0018;
     this.lookYawSpeed = 1.9;
-    this.lookPitchSpeed = 1.35;
+    this.lookPitchSpeed = 0.76;
     this.maxPitch = THREE.MathUtils.degToRad(35);
     this.pitch = 0;
     this.keyboard = new Set();
@@ -47,7 +47,7 @@ export class PlayerController {
     } else {
       this.yaw -= look.x * this.lookYawSpeed * deltaSeconds;
       this.pitch = THREE.MathUtils.clamp(
-        this.pitch - look.y * this.lookPitchSpeed * deltaSeconds,
+        this.pitch + look.y * this.lookPitchSpeed * deltaSeconds,
         -this.maxPitch,
         this.maxPitch,
       );
