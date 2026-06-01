@@ -28,7 +28,8 @@ export class PlayerController {
     const moveY = controls.move.y || keyboardMove.y;
 
     const forward = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    // Keep positive X input as camera-relative right for both the touch stick and keyboard strafing.
+    const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
     const movement = new THREE.Vector3();
 
     movement.addScaledVector(forward, moveY * this.walkSpeed * deltaSeconds);
