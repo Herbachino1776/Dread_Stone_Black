@@ -11,6 +11,10 @@ export class PlayerController {
     this.walkSpeed = 1.85;
     this.strafeSpeed = 1.45;
     this.turnSpeed = 0.0018;
+    this.lookYawSpeed = 1.9;
+    this.lookPitchSpeed = 1.35;
+    this.maxPitch = THREE.MathUtils.degToRad(35);
+    this.pitch = 0;
     this.keyboard = new Set();
 
     this.bindKeyboard();
@@ -37,10 +41,22 @@ export class PlayerController {
 
     this.position = this.collisionWorld.moveWithCollision(this.position, movement);
 
-    this.yaw -= controls.consumeLookDelta() * this.turnSpeed;
+    const look = controls.consumeLookDelta();
+    if (typeof look === 'number') {
+      this.yaw -= look * this.turnSpeed;
+    } else {
+      this.yaw -= look.x * this.lookYawSpeed * deltaSeconds;
+      this.pitch = THREE.MathUtils.clamp(
+        this.pitch - look.y * this.lookPitchSpeed * deltaSeconds,
+        -this.maxPitch,
+        this.maxPitch,
+      );
+    }
 
     if (this.keyboard.has('ArrowLeft')) this.yaw += 1.25 * deltaSeconds;
     if (this.keyboard.has('ArrowRight')) this.yaw -= 1.25 * deltaSeconds;
+    if (this.keyboard.has('PageUp')) this.pitch = THREE.MathUtils.clamp(this.pitch - 1.1 * deltaSeconds, -this.maxPitch, this.maxPitch);
+    if (this.keyboard.has('PageDown')) this.pitch = THREE.MathUtils.clamp(this.pitch + 1.1 * deltaSeconds, -this.maxPitch, this.maxPitch);
 
     this.syncCamera();
   }
@@ -64,11 +80,12 @@ export class PlayerController {
   reset() {
     this.position.copy(this.spawnPosition);
     this.yaw = this.spawnYaw;
+    this.pitch = 0;
     this.syncCamera();
   }
 
   syncCamera() {
     this.camera.position.copy(this.position);
-    this.camera.rotation.set(0, this.yaw + Math.PI, 0, 'YXZ');
+    this.camera.rotation.set(this.pitch, this.yaw + Math.PI, 0, 'YXZ');
   }
 }

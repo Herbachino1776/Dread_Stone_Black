@@ -41,7 +41,8 @@ export class Hud {
     if (this.debugFrameSkip !== 0 || !this.debugEl) return;
 
     const yawDegrees = Math.round(THREE.MathUtils.radToDeg(player.yaw));
-    this.debugEl.textContent = `POS ${player.position.x.toFixed(1)}, ${player.position.z.toFixed(1)} · YAW ${yawDegrees}°`;
+    const pitchDegrees = Math.round(THREE.MathUtils.radToDeg(player.pitch));
+    this.debugEl.textContent = `POS ${player.position.x.toFixed(1)}, ${player.position.z.toFixed(1)} · YAW ${yawDegrees}° · PITCH ${pitchDegrees}°`;
   }
 
   showHint(message) {
