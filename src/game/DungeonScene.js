@@ -350,7 +350,8 @@ export class DungeonScene {
 
 
   addTestModelProp() {
-    loadDungeonModel({ url: TEST_MODEL_URL, targetHeight: 0.9, maxWidth: 1.05 })
+    // Normalize the uploaded prop to player/enemy scale while ModelLoader keeps it grounded on the floor.
+    loadDungeonModel({ url: TEST_MODEL_URL, targetHeight: 1.8, maxWidth: 1.65 })
       .then(({ root, scale }) => {
         root.name = 'dread-stone-black-test-model-01';
         root.position.add(TEST_MODEL_POSITION);
