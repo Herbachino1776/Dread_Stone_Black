@@ -2,17 +2,19 @@ export class MobileControls {
   constructor(root) {
     this.root = root;
     this.move = { x: 0, y: 0 };
-    this.look = { x: 0 };
+    this.look = { x: 0, y: 0 };
     this.interactPressed = false;
     this.attackPressed = false;
 
     this.movePointerId = null;
     this.lookPointerId = null;
-    this.moveOrigin = { x: 0, y: 0 };
+    this.moveCenter = { x: 0, y: 0 };
+    this.lookCenter = { x: 0, y: 0 };
 
     this.moveZone = root.querySelector('[data-control="move"]');
     this.moveKnob = root.querySelector('[data-control="move-knob"]');
     this.lookZone = root.querySelector('[data-control="look"]');
+    this.lookKnob = root.querySelector('[data-control="look-knob"]');
     this.interactButton = root.querySelector('[data-action="interact"]');
     this.attackButton = root.querySelector('[data-action="attack"]');
 
@@ -44,7 +46,7 @@ export class MobileControls {
   startMove(event) {
     event.preventDefault();
     this.movePointerId = event.pointerId;
-    this.moveOrigin = { x: event.clientX, y: event.clientY };
+    this.moveCenter = this.getZoneCenter(this.moveZone);
     this.moveZone.setPointerCapture(event.pointerId);
     this.updateMove(event);
   }
@@ -53,17 +55,10 @@ export class MobileControls {
     if (event.pointerId !== this.movePointerId) return;
     event.preventDefault();
 
-    const maxDistance = 46;
-    const dx = event.clientX - this.moveOrigin.x;
-    const dy = event.clientY - this.moveOrigin.y;
-    const distance = Math.min(maxDistance, Math.hypot(dx, dy));
-    const angle = Math.atan2(dy, dx);
-    const knobX = Math.cos(angle) * distance;
-    const knobY = Math.sin(angle) * distance;
-
-    this.move.x = knobX / maxDistance;
-    this.move.y = -knobY / maxDistance;
-    this.moveKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
+    const stick = this.getStickVector(event, this.moveCenter, this.moveZone);
+    this.move.x = stick.x;
+    this.move.y = -stick.y;
+    this.moveKnob.style.transform = `translate(${stick.knobX}px, ${stick.knobY}px)`;
   }
 
   endMove(event) {
@@ -77,23 +72,53 @@ export class MobileControls {
   startLook(event) {
     event.preventDefault();
     this.lookPointerId = event.pointerId;
-    this.lastLookX = event.clientX;
+    this.lookCenter = this.getZoneCenter(this.lookZone);
     this.lookZone.setPointerCapture(event.pointerId);
+    this.updateLook(event);
   }
 
   updateLook(event) {
     if (event.pointerId !== this.lookPointerId) return;
     event.preventDefault();
-    const dx = event.clientX - this.lastLookX;
-    this.lastLookX = event.clientX;
-    this.look.x = dx;
+
+    const stick = this.getStickVector(event, this.lookCenter, this.lookZone);
+    this.look.x = stick.x;
+    this.look.y = -stick.y;
+    this.lookKnob.style.transform = `translate(${stick.knobX}px, ${stick.knobY}px)`;
   }
 
   endLook(event) {
     if (event.pointerId !== this.lookPointerId) return;
     event.preventDefault();
     this.lookPointerId = null;
-    this.look.x = 0;
+    this.look = { x: 0, y: 0 };
+    this.lookKnob.style.transform = 'translate(0, 0)';
+  }
+
+  getZoneCenter(zone) {
+    const rect = zone.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+  }
+
+  getStickVector(event, center, zone) {
+    const maxDistance = Math.min(50, Math.max(36, zone.clientWidth * 0.28));
+    const dx = event.clientX - center.x;
+    const dy = event.clientY - center.y;
+    const rawDistance = Math.hypot(dx, dy);
+    const distance = Math.min(maxDistance, rawDistance);
+    const angle = Math.atan2(dy, dx);
+    const knobX = rawDistance > 0 ? Math.cos(angle) * distance : 0;
+    const knobY = rawDistance > 0 ? Math.sin(angle) * distance : 0;
+
+    return {
+      x: knobX / maxDistance,
+      y: knobY / maxDistance,
+      knobX,
+      knobY,
+    };
   }
 
   consumeInteract() {
@@ -113,8 +138,6 @@ export class MobileControls {
   }
 
   consumeLookDelta() {
-    const delta = this.look.x;
-    this.look.x = 0;
-    return delta;
+    return { x: this.look.x, y: this.look.y };
   }
 }
