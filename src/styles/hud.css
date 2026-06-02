@@ -199,10 +199,10 @@
 
 .first-person-arms {
   position: absolute;
-  --arms-overlay-bottom: clamp(18px, 5.5vh, 46px);
-  --arms-overlay-height: min(78%, 500px);
-  --arms-layer-width: min(112%, 590px);
-  --arms-layer-bottom-offset: clamp(-44px, -7vw, -16px);
+  --arms-overlay-bottom: 0px;
+  --arms-overlay-height: min(68%, 420px);
+  --arms-layer-width: min(106%, 560px);
+  --arms-layer-bottom-offset: clamp(-92px, -15vw, -34px);
   inset: auto 0 var(--arms-overlay-bottom);
   z-index: 2;
   display: flex;
