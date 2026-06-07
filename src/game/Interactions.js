@@ -1,7 +1,7 @@
 const INTERACT_RANGE = 2.65;
 const KEY_RANGE = 2.25;
 const LEVER_RANGE = 2.2;
-const INDOOR_EXIT_RANGE = 3.1;
+const INDOOR_EXIT_RANGE = 3.6;
 
 export class Interactions {
   constructor({ player, dungeon, hud }) {
@@ -61,6 +61,14 @@ export class Interactions {
       };
     }
 
+    const inspectInteraction = this.getNearbyInspectInteraction();
+    if (inspectInteraction) {
+      return {
+        hint: inspectInteraction.hint,
+        use: () => this.useInspectInteraction(inspectInteraction),
+      };
+    }
+
     if (this.isNearLever()) {
       return {
         hint: this.dungeon.leverUsed ? 'The wall switch rests in its lowered notch.' : 'Tap INTERACT to pull the wall switch.',
@@ -79,20 +87,6 @@ export class Interactions {
       return {
         hint: this.dungeon.secretRevealed ? 'The hidden alcove yawns open.' : 'Tap INTERACT to press the cracked black stones.',
         use: () => this.useSecretWall(),
-      };
-    }
-
-    if (this.isFacingGate()) {
-      if (this.dungeon.gateOpen) {
-        return {
-          hint: 'The open gate breathes cold air from below.',
-          use: () => this.hud.showMessage('The gate stands open.'),
-        };
-      }
-
-      return {
-        hint: this.hasKey ? 'Tap INTERACT to unlock the iron gate.' : 'Tap INTERACT to test the iron gate.',
-        use: () => this.useGate(),
       };
     }
 
@@ -115,7 +109,7 @@ export class Interactions {
   }
 
   useIndoorExit() {
-    this.setTemporaryHint('Cold field air seeps down the entry stair...', 900);
+    this.setTemporaryHint('Cold field air seeps down the stair.', 900);
     window.setTimeout(() => {
       window.location.assign(`${window.location.pathname}?area=field&from=dungeon`);
     }, 160);
@@ -126,6 +120,12 @@ export class Interactions {
     this.feedbackHint = message;
     this.feedbackUntil = Date.now() + durationMs;
     this.hud.showHint(message);
+  }
+
+  useInspectInteraction(interaction) {
+    this.setTemporaryHint(interaction.message, 1200);
+    this.hud.showMessage(interaction.message);
+    return false;
   }
 
   pickUpKey() {
@@ -199,7 +199,16 @@ export class Interactions {
   }
 
   isNearLever() {
-    return this.isCloseEnough(this.dungeon.leverTarget, LEVER_RANGE) && this.isMostlyFacing(this.dungeon.leverTarget, 0.15);
+    return Boolean(this.dungeon.leverTarget) && this.isCloseEnough(this.dungeon.leverTarget, LEVER_RANGE) && this.isMostlyFacing(this.dungeon.leverTarget, 0.15);
+  }
+
+  getNearbyInspectInteraction() {
+    if (!this.dungeon.inspectInteractions?.length) return null;
+
+    return this.dungeon.inspectInteractions
+      .map((interaction) => ({ interaction, distance: this.horizontalDistanceTo(interaction.target) }))
+      .filter(({ interaction, distance }) => distance <= (interaction.range ?? INTERACT_RANGE))
+      .sort((a, b) => a.distance - b.distance)[0]?.interaction ?? null;
   }
 
   getShortcutHint() {
@@ -209,11 +218,11 @@ export class Interactions {
   }
 
   isFacingShortcutDoor() {
-    return this.isCloseEnough(this.dungeon.shortcutTarget, 2.2) && this.isMostlyFacing(this.dungeon.shortcutTarget, 0.18);
+    return Boolean(this.dungeon.shortcutTarget) && this.isCloseEnough(this.dungeon.shortcutTarget, 2.2) && this.isMostlyFacing(this.dungeon.shortcutTarget, 0.18);
   }
 
   isFacingSecretWall() {
-    return this.isCloseEnough(this.dungeon.secretTarget, 2.05) && this.isMostlyFacing(this.dungeon.secretTarget, 0.2);
+    return Boolean(this.dungeon.secretTarget) && this.isCloseEnough(this.dungeon.secretTarget, 2.05) && this.isMostlyFacing(this.dungeon.secretTarget, 0.2);
   }
 
   isFacingGate() {
