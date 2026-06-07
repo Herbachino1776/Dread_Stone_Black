@@ -5,6 +5,16 @@ import { loadDungeonModel } from './ModelLoader.js';
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
 const TEST_MODEL_URL = './assets/models/dread_stone_black_test_model_01.glb';
+const RAM_MAN_NPC_URL = './assets/npcs/ram_man_friendly_01_optimized.glb';
+const RAM_MAN_NPC_POSITION = new THREE.Vector3(4.15, FLOOR_Y, 2.15);
+const RAM_MAN_NPC_PATROL_POINTS = [
+  new THREE.Vector3(4.15, FLOOR_Y, 2.15),
+  new THREE.Vector3(4.75, FLOOR_Y, 0.75),
+  new THREE.Vector3(3.55, FLOOR_Y, -1.35),
+  new THREE.Vector3(2.55, FLOOR_Y, 0.55),
+];
+const RAM_MAN_NPC_PATROL_SPEED = 0.34;
+const RAM_MAN_NPC_TURN_SPEED = 3.2;
 const TEST_MODEL_POSITION = new THREE.Vector3(3.65, FLOOR_Y, -2.45);
 const TEST_MODEL_ROTATION_Y = -Math.PI / 5;
 const TEST_MODEL_PATROL_POINTS = [
@@ -68,6 +78,9 @@ export class DungeonScene {
     this.secretRevealed = false;
     this.enemySpawn = new THREE.Vector3(5.9, 0, -20.55);
     this.enemy = null;
+    this.ramManNpc = null;
+    this.ramManNpcPatrolIndex = 0;
+    this.ramManNpcMoveTarget = 1;
     this.testModelProp = null;
     this.testModelPatrolIndex = 0;
     this.testModelMoveTarget = 1;
@@ -102,6 +115,7 @@ export class DungeonScene {
     this.addLever();
     this.addGate();
     this.addEnemy();
+    this.addRamManNpc();
     this.addTestModelProp();
     this.addTextureVerificationMode();
     return this.scene;
@@ -123,6 +137,7 @@ export class DungeonScene {
 
     this.lightTime += deltaSeconds;
     this.updateTorchFlicker();
+    this.updateRamManNpcPatrol(deltaSeconds);
     this.updateTestModelPatrol(deltaSeconds);
 
     if (this.enemy?.hitFlashTimer > 0) {
@@ -513,6 +528,65 @@ export class DungeonScene {
       light.distance = baseDistance * THREE.MathUtils.clamp(0.96 + (flicker - 1) * 0.35, 0.9, 1.05);
       flame.scale.setScalar(THREE.MathUtils.clamp(0.94 + (flicker - 1) * 0.28, 0.9, 1.05));
     });
+  }
+
+
+  updateRamManNpcPatrol(deltaSeconds) {
+    if (!this.ramManNpc || RAM_MAN_NPC_PATROL_POINTS.length < 2) return;
+
+    const target = RAM_MAN_NPC_PATROL_POINTS[this.ramManNpcMoveTarget];
+    const current = this.ramManNpc.position;
+    const toTarget = target.clone().sub(current);
+    toTarget.y = 0;
+    const distance = toTarget.length();
+
+    if (distance < 0.08) {
+      this.ramManNpcPatrolIndex = this.ramManNpcMoveTarget;
+      this.ramManNpcMoveTarget = (this.ramManNpcMoveTarget + 1) % RAM_MAN_NPC_PATROL_POINTS.length;
+      return;
+    }
+
+    const direction = toTarget.normalize();
+    const stepDistance = Math.min(distance, RAM_MAN_NPC_PATROL_SPEED * deltaSeconds);
+    const next = current.clone().add(direction.clone().multiplyScalar(stepDistance));
+    next.y = FLOOR_Y;
+
+    if (this.collision.canStandAt(next)) {
+      current.copy(next);
+    } else {
+      this.ramManNpcMoveTarget = (this.ramManNpcMoveTarget + 1) % RAM_MAN_NPC_PATROL_POINTS.length;
+    }
+
+    const desiredYaw = Math.atan2(direction.x, direction.z);
+    this.ramManNpc.rotation.y = THREE.MathUtils.damp(this.ramManNpc.rotation.y, desiredYaw, RAM_MAN_NPC_TURN_SPEED, deltaSeconds);
+  }
+
+  addRamManNpc() {
+    // Friendly ambience-only NPC: no collision blocker, no enemy registration, no combat hooks.
+    loadDungeonModel({ url: RAM_MAN_NPC_URL, targetHeight: 1.72, maxWidth: 1.15 })
+      .then(({ root, scale }) => {
+        root.name = 'ram-man-friendly-01-model';
+
+        const patrolRig = new THREE.Group();
+        patrolRig.name = 'ram-man-friendly-01';
+        patrolRig.position.copy(RAM_MAN_NPC_POSITION);
+        patrolRig.userData = {
+          assetUrl: RAM_MAN_NPC_URL,
+          normalizedScale: scale,
+          friendly: true,
+          collision: 'none - visual roaming NPC only',
+          placement: 'opening chamber east side, clear of the center path to the gate',
+          patrolSpeed: RAM_MAN_NPC_PATROL_SPEED,
+          patrolPoints: RAM_MAN_NPC_PATROL_POINTS.map((point) => ({ x: point.x, y: point.y, z: point.z })),
+        };
+        patrolRig.add(root);
+
+        this.ramManNpc = patrolRig;
+        this.scene.add(patrolRig);
+      })
+      .catch((error) => {
+        console.warn(`Friendly Ram Man GLB failed to load from ${RAM_MAN_NPC_URL}. The dungeon remains playable.`, error);
+      });
   }
 
   updateTestModelPatrol(deltaSeconds) {
