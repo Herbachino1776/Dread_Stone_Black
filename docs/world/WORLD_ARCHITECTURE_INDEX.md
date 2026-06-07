@@ -149,12 +149,12 @@ docs/world/
   overworld/
     reliquary_field_v01.md
   crypts/
-    crypt_a_baby_labyrinth_v01.md
+    south_reliquary_crypt_baby_labyrinth_v01.md
   temples/
     temple_of_black_grass_v01.md
   addendums/
     reliquary_field_addendum_001.md
-    crypt_a_addendum_001.md
+    south_reliquary_crypt_addendum_001.md
 ```
 
 ---
@@ -163,7 +163,8 @@ docs/world/
 
 | File | Status | Purpose |
 |---|---:|---|
-| `docs/world/overworld/reliquary_field_v01.md` | v0.1 draft | 800 x 800 tomb-field master plan plus 400 x 400 first playable slice |
+| `docs/world/overworld/reliquary_field_v01.md` | v0.1 implemented slice | 800 x 800 tomb-field master plan plus 400 x 400 first playable slice |
+| `docs/world/crypts/south_reliquary_crypt_baby_labyrinth_v01.md` | v0.1 draft | First compact 72 x 70 baby labyrinth under the South Reliquary Crypt entrance |
 
 ---
 
@@ -224,13 +225,11 @@ Do not add without explicit approval:
 
 ## 10. Current Architecture Priority
 
-The immediate world priority is the tomb-field direction:
+The immediate world priority is now the first field-to-labyrinth loop:
 
-- long-term 800 x 800 overworld field
-- first implemented 400 x 400 playable slice
-- visible crypt entrances
-- small baby labyrinths connected to crypts
-- dungeon-textured exterior tomb architecture
-- sunrise/fog readability
-- simple but intentional traversal routes
-- guardian placement using idle/walk animation only
+- Reliquary Field 400 x 400 playable slice is implemented enough for now
+- South Reliquary Crypt baby labyrinth is the next build target
+- labyrinth scope should stay compact: 72 x 70 units, 5 rooms, 1 loop, 1 guardian chamber, 1 return route
+- use existing dungeon textures only
+- keep mobile readability and forgiving interaction ranges
+- guardian placement may use idle/walk only if the current GLB pipeline is stable
