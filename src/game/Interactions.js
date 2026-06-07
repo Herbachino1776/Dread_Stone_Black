@@ -1,7 +1,6 @@
 const INTERACT_RANGE = 2.65;
 const KEY_RANGE = 2.25;
 const LEVER_RANGE = 2.2;
-const CRYPT_RANGE = 8.5;
 const INDOOR_EXIT_RANGE = 3.1;
 
 export class Interactions {
@@ -47,13 +46,11 @@ export class Interactions {
       };
     }
 
-    const outdoorCrypt = this.getNearbyOutdoorCrypt();
-    if (outdoorCrypt) {
+    const outdoorInteraction = this.getNearbyOutdoorInteraction();
+    if (outdoorInteraction) {
       return {
-        hint: outdoorCrypt.functional
-          ? `Tap INTERACT to test ${outdoorCrypt.label}'s black mouth.`
-          : `${outdoorCrypt.label} is sealed by a dead stone slab.`,
-        use: () => this.useOutdoorCrypt(outdoorCrypt),
+        hint: outdoorInteraction.hint,
+        use: () => this.useOutdoorInteraction(outdoorInteraction),
       };
     }
 
@@ -102,17 +99,18 @@ export class Interactions {
     return null;
   }
 
-  useOutdoorCrypt(crypt) {
-    if (crypt.functional) {
-      this.setTemporaryHint('You descend through Crypt A into the Black Reliquary...', 900);
+  useOutdoorInteraction(interaction) {
+    this.setTemporaryHint(interaction.message, 1200);
+
+    if (interaction.functional) {
+      this.hud.showMessage(interaction.message);
       window.setTimeout(() => {
         window.location.assign(`${window.location.pathname}?area=dungeon`);
-      }, 160);
+      }, 220);
       return false;
     }
 
-    this.setTemporaryHint(`${crypt.label} gives only a dead stone knock.`, 1400);
-    this.hud.showMessage('The sealed tomb does not move. Fog gathers in its cracks.');
+    this.hud.showMessage(interaction.message);
     return false;
   }
 
@@ -182,13 +180,13 @@ export class Interactions {
     }
   }
 
-  getNearbyOutdoorCrypt() {
+  getNearbyOutdoorInteraction() {
     if (!this.dungeon.outdoorInteractions?.length) return null;
 
     return this.dungeon.outdoorInteractions
-      .map((crypt) => ({ crypt, distance: this.horizontalDistanceTo(crypt.target) }))
-      .filter(({ distance }) => distance <= CRYPT_RANGE)
-      .sort((a, b) => a.distance - b.distance)[0]?.crypt ?? null;
+      .map((interaction) => ({ interaction, distance: this.horizontalDistanceTo(interaction.target) }))
+      .filter(({ interaction, distance }) => distance <= (interaction.range ?? 4))
+      .sort((a, b) => a.distance - b.distance)[0]?.interaction ?? null;
   }
 
   getNearbyIndoorExit() {

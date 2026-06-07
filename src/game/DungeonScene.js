@@ -48,20 +48,48 @@ const TEXTURE_PATHS = {
 };
 
 const FIELD_SIZE = 400;
-const FIELD_HALF_SIZE = FIELD_SIZE / 2;
-const FIELD_SEGMENTS = 96;
 const FIELD_GRASS_REPEAT = [50, 50];
-const OUTDOOR_DAWN_SKY_COLOR = 0x5f6d7a;
-const OUTDOOR_DAWN_FOG_COLOR = 0x6b747c;
-const FIELD_PLAYER_START = new THREE.Vector3(0, 1.55, 170);
-const FIELD_PLAYER_YAW = Math.PI;
-const FIELD_CRYPT_A_RETURN_START = new THREE.Vector3(-95, 1.55, -30);
+const OUTDOOR_DAWN_SKY_COLOR = 0x64727d;
+const OUTDOOR_DAWN_FOG_COLOR = 0x717a80;
+const FIELD_PLAYER_START = new THREE.Vector3(0, 1.55, -175);
+const FIELD_PLAYER_YAW = 0;
+const FIELD_CRYPT_A_RETURN_START = new THREE.Vector3(-60, 1.55, -112);
 const FIELD_CRYPT_A_RETURN_YAW = 0;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
-const CRYPT_ENTRANCES = [
-  { id: 'crypt_entrance_a', label: 'Crypt A', position: new THREE.Vector3(-95, FLOOR_Y, -40), yaw: Math.PI / 2, functional: true },
-  { id: 'crypt_entrance_b', label: 'Crypt B', position: new THREE.Vector3(115, FLOOR_Y, -95), yaw: -Math.PI / 2, functional: false },
-  { id: 'crypt_entrance_c', label: 'Crypt C', position: new THREE.Vector3(0, FLOOR_Y, -175), yaw: Math.PI, functional: false },
+const OUTDOOR_INTERACTION_RANGE = 4.25;
+const RELIQUARY_FIELD_COLLIDERS = [
+  // Invisible 400 x 400 slice boundaries from the Reliquary Field v0.1 blueprint.
+  { id: 'BOUND02', minX: -205, maxX: 205, minZ: -205, maxZ: -199 },
+  { id: 'BOUND01', minX: -205, maxX: 205, minZ: 199, maxZ: 205 },
+  { id: 'BOUND03', minX: -205, maxX: -199, minZ: -205, maxZ: 205 },
+  { id: 'BOUND04', minX: 199, maxX: 205, minZ: -205, maxZ: 205 },
+
+  // Broken Shrine slabs and pillars.
+  { id: 'S01_A', minX: -9, maxX: 9, minZ: -9, maxZ: 9 },
+  { id: 'S01_B', minX: -6, maxX: 6, minZ: 4.25, maxZ: 5.75 },
+  { id: 'S01_C', minX: -8, maxX: -6, minZ: -1, maxZ: 1 },
+  { id: 'S01_D', minX: 6, maxX: 8, minZ: -2, maxZ: 0 },
+
+  // South Reliquary Crypt exterior shell.
+  { id: 'C01_A', minX: -74, maxX: -46, minZ: -107, maxZ: -83 },
+  { id: 'C01_B', minX: -73.5, maxX: -70.5, minZ: -106, maxZ: -84 },
+  { id: 'C01_C', minX: -49.5, maxX: -46.5, minZ: -106, maxZ: -84 },
+  { id: 'C01_D', minX: -73.5, maxX: -46.5, minZ: -85.5, maxZ: -82.5 },
+  { id: 'C01_E', minX: -74, maxX: -46, minZ: -97.5, maxZ: -92.5 },
+
+  // Sunken Central Tomb exterior shell and sealed gate.
+  { id: 'C03_A', minX: 17, maxX: 53, minZ: 126, maxZ: 154 },
+  { id: 'C03_B', minX: 18, maxX: 52, minZ: 150, maxZ: 154 },
+  { id: 'C03_C', minX: 29, maxX: 41, minZ: 127.5, maxZ: 128.5 },
+  { id: 'C03_D', minX: 15, maxX: 19, minZ: 128, maxZ: 152 },
+  { id: 'C03_E', minX: 51, maxX: 55, minZ: 128, maxZ: 152 },
+
+  // Standing stones and low ruin walls.
+  { id: 'STONE01', minX: 113.5, maxX: 116.5, minZ: -71, maxZ: -69 },
+  { id: 'STONE02', minX: 121, maxX: 123, minZ: -65, maxZ: -63 },
+  { id: 'STONE03', minX: 107, maxX: 109, minZ: -59, maxZ: -57 },
+  { id: 'RUIN01', minX: -144, maxX: -116, minZ: 18.5, maxZ: 21.5 },
+  { id: 'RUIN02', minX: 73, maxX: 97, minZ: 53.5, maxZ: 56.5 },
 ];
 
 const TEXTURE_REPEATS = {
@@ -177,8 +205,7 @@ export class DungeonScene {
     this.addOutdoorLights();
     this.addOutdoorTerrain();
     this.addOutdoorBoundary();
-    this.addCentralLandmark();
-    CRYPT_ENTRANCES.forEach((crypt) => this.addCryptEntrance(crypt));
+    this.addReliquaryFieldStructures();
   }
 
   update(deltaSeconds) {
@@ -273,19 +300,7 @@ export class DungeonScene {
   }
 
   createOutdoorBlockers() {
-    const blockers = [];
-    const wallThickness = 5;
-    blockers.push({ minX: -FIELD_HALF_SIZE - wallThickness, maxX: FIELD_HALF_SIZE + wallThickness, minZ: -FIELD_HALF_SIZE - wallThickness, maxZ: -FIELD_HALF_SIZE + 2 });
-    blockers.push({ minX: -FIELD_HALF_SIZE - wallThickness, maxX: FIELD_HALF_SIZE + wallThickness, minZ: FIELD_HALF_SIZE - 2, maxZ: FIELD_HALF_SIZE + wallThickness });
-    blockers.push({ minX: -FIELD_HALF_SIZE - wallThickness, maxX: -FIELD_HALF_SIZE + 2, minZ: -FIELD_HALF_SIZE - wallThickness, maxZ: FIELD_HALF_SIZE + wallThickness });
-    blockers.push({ minX: FIELD_HALF_SIZE - 2, maxX: FIELD_HALF_SIZE + wallThickness, minZ: -FIELD_HALF_SIZE - wallThickness, maxZ: FIELD_HALF_SIZE + wallThickness });
-
-    CRYPT_ENTRANCES.forEach(({ position }) => {
-      blockers.push({ minX: position.x - 5.6, maxX: position.x + 5.6, minZ: position.z - 3.8, maxZ: position.z + 3.8 });
-    });
-
-    blockers.push({ minX: -2.2, maxX: 2.2, minZ: -29, maxZ: -21.5 });
-    return blockers;
+    return RELIQUARY_FIELD_COLLIDERS.map(({ minX, maxX, minZ, maxZ }) => ({ minX, maxX, minZ, maxZ }));
   }
 
   addOutdoorLights() {
@@ -320,13 +335,6 @@ export class DungeonScene {
     this.scene.add(tombMouthFill);
   }
 
-  getOutdoorTerrainHeight(x, z) {
-    const ridge = Math.sin(x * 0.035) * 0.34 + Math.cos(z * 0.031) * 0.28;
-    const lowRoll = Math.sin((x + z) * 0.014) * 0.42 + Math.cos((x - z) * 0.018) * 0.22;
-    const depression = -0.34 * Math.exp(-((x * x) + ((z + 40) * (z + 40))) / 9500);
-    return THREE.MathUtils.clamp(0.58 + ridge + lowRoll + depression, 0.08, 1.22);
-  }
-
   addOutdoorTerrain() {
     const grassMaterial = this.makeTexturedMaterial({
       path: TEXTURE_PATHS.fieldGrass,
@@ -335,140 +343,160 @@ export class DungeonScene {
       roughness: 0.98,
       metalness: 0.0,
       emissive: 0x20232a,
-      emissiveIntensity: 0.1,
+      emissiveIntensity: 0.08,
     });
-    const geometry = new THREE.PlaneGeometry(FIELD_SIZE, FIELD_SIZE, FIELD_SEGMENTS, FIELD_SEGMENTS);
+    const geometry = new THREE.PlaneGeometry(FIELD_SIZE, FIELD_SIZE);
     geometry.rotateX(-Math.PI / 2);
 
-    const position = geometry.attributes.position;
-    for (let index = 0; index < position.count; index += 1) {
-      const x = position.getX(index);
-      const z = position.getZ(index);
-      position.setY(index, this.getOutdoorTerrainHeight(x, z) - 0.58);
-    }
-    position.needsUpdate = true;
-    geometry.computeVertexNormals();
-
     const terrain = new THREE.Mesh(geometry, grassMaterial);
-    terrain.name = 'outdoor-tomb-field-400x400-dead-grass-repeat-50x50';
+    terrain.name = 'TERRAIN01-reliquary-field-400x400-dead-grass-repeat-50x50';
     terrain.receiveShadow = true;
     terrain.userData = {
+      blueprint: 'docs/world/overworld/reliquary_field_v01.md',
       implementedFieldSize: FIELD_SIZE,
       longTermBlueprintSize: 800,
       textureRepeat: FIELD_GRASS_REPEAT,
-      collisionNote: 'Visual terrain undulates; player collision stays on a stable flat 400x400 walkable rectangle for this first outdoor slice.',
+      collisionNote: 'Flat first-slice terrain plane; boundaries and landmark blockers define navigation.',
     };
     this.scene.add(terrain);
   }
 
   addOutdoorBoundary() {
-    const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [24, 1.15], color: 0x817b70, roughness: 0.96, metalness: 0.0 });
-    const moundMat = new THREE.MeshStandardMaterial({ color: 0x383226, roughness: 1.0, metalness: 0.0 });
-    const wallHeight = 4.4;
-    const wallThickness = 4.5;
+    const boundaryMaterial = new THREE.MeshBasicMaterial({ visible: false });
+    const boundarySpecs = [
+      { id: 'BOUND01', size: new THREE.Vector3(400, 3, 2), position: new THREE.Vector3(0, 1.5, 200) },
+      { id: 'BOUND02', size: new THREE.Vector3(400, 3, 2), position: new THREE.Vector3(0, 1.5, -200) },
+      { id: 'BOUND03', size: new THREE.Vector3(2, 3, 400), position: new THREE.Vector3(-200, 1.5, 0) },
+      { id: 'BOUND04', size: new THREE.Vector3(2, 3, 400), position: new THREE.Vector3(200, 1.5, 0) },
+    ];
 
-    [
-      { size: new THREE.Vector3(FIELD_SIZE + wallThickness * 2, wallHeight, wallThickness), position: new THREE.Vector3(0, wallHeight / 2 - 0.55, -FIELD_HALF_SIZE) },
-      { size: new THREE.Vector3(FIELD_SIZE + wallThickness * 2, wallHeight, wallThickness), position: new THREE.Vector3(0, wallHeight / 2 - 0.55, FIELD_HALF_SIZE) },
-      { size: new THREE.Vector3(wallThickness, wallHeight, FIELD_SIZE + wallThickness * 2), position: new THREE.Vector3(-FIELD_HALF_SIZE, wallHeight / 2 - 0.55, 0) },
-      { size: new THREE.Vector3(wallThickness, wallHeight, FIELD_SIZE + wallThickness * 2), position: new THREE.Vector3(FIELD_HALF_SIZE, wallHeight / 2 - 0.55, 0) },
-    ].forEach((wall, index) => {
-      const boundary = this.addBox({ ...wall, material: wallMat, name: `outdoor-hard-boundary-${index + 1}` });
-      boundary.castShadow = true;
+    boundarySpecs.forEach((boundary) => {
+      const mesh = this.addBox({ ...boundary, material: boundaryMaterial, name: `${boundary.id}-invisible-solid-slice-boundary` });
+      mesh.userData.collision = 'solid invisible boundary';
     });
-
-    const fogBank = new THREE.Mesh(new THREE.BoxGeometry(FIELD_SIZE + 12, 2.2, FIELD_SIZE + 12), moundMat);
-    fogBank.name = 'outdoor-boundary-low-fog-sill';
-    fogBank.position.set(0, -1.8, 0);
-    this.scene.add(fogBank);
   }
 
-  addCentralLandmark() {
-    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.2, 1.8], color: 0x9a9587, roughness: 0.97, metalness: 0.0 });
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x433b30, roughness: 1.0 });
+  addReliquaryFieldStructures() {
+    this.addBrokenShrine();
+    this.addSouthReliquaryCrypt();
+    this.addSunkenCentralTomb();
+    this.addStandingStoneCluster();
+    this.addLowRuinWalls();
+  }
+
+  addBrokenShrine() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.4, 1.8], color: 0x9a9587, roughness: 0.97, metalness: 0.0 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [2.4, 2.4], color: 0x8f8779, roughness: 0.96, metalness: 0.0 });
     const group = new THREE.Group();
-    group.name = 'outdoor-central-landmark-standing-stone';
-    group.position.set(0, this.getOutdoorTerrainHeight(0, -25) - 0.2, -25);
+    group.name = 'S01-Broken-Shrine';
 
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 5.4, 0.75, 9), baseMat);
-    base.position.y = 0.15;
-    group.add(base);
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(18, 0.5, 18), position: new THREE.Vector3(0, 0.25, 0), material: floorMat, name: 'S01_A-broken-shrine-base-floor_worn_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(12, 6, 1.5), position: new THREE.Vector3(0, 3, 5), material: stoneMat, name: 'S01_B-shrine-rear-slab-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(2, 5, 2), position: new THREE.Vector3(-7, 2.5, 0), material: stoneMat, name: 'S01_C-shrine-left-broken-pillar-wall_black_stone_01', rotation: new THREE.Euler(0, 0.06, -0.03) }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(2, 3.5, 2), position: new THREE.Vector3(7, 1.75, -1), material: stoneMat, name: 'S01_D-shrine-right-broken-pillar-wall_black_stone_01', rotation: new THREE.Euler(0, -0.08, 0.04) }));
 
-    const marker = new THREE.Mesh(new THREE.BoxGeometry(2.2, 7.4, 1.35), stoneMat);
-    marker.position.y = 4.05;
-    marker.rotation.z = 0.08;
-    marker.rotation.y = -0.25;
-    group.add(marker);
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'INT03',
+      label: 'Broken Shrine',
+      target: new THREE.Vector3(0, 1, -8),
+      range: OUTDOOR_INTERACTION_RANGE,
+      hint: 'Tap INTERACT to inspect the broken shrine.',
+      message: 'The stone is warm where the sun has not touched it.',
+      functional: false,
+    });
+  }
 
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(4.8, 1.1, 1.75), stoneMat);
-    cap.position.y = 7.95;
-    cap.rotation.z = -0.11;
-    group.add(cap);
+  addSouthReliquaryCrypt() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.2, 1.7], color: 0x8e8a7f, roughness: 0.96, metalness: 0.0 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [3.2, 2.6], color: 0x918a7d, roughness: 0.94, metalness: 0.0 });
+    const voidMat = new THREE.MeshBasicMaterial({ color: 0x030303 });
+    const group = new THREE.Group();
+    group.name = 'C01-South-Reliquary-Crypt-exterior';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(28, 0.5, 24), position: new THREE.Vector3(-60, 0.25, -95), material: floorMat, name: 'C01_A-crypt-platform-floor_worn_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(3, 6, 22), position: new THREE.Vector3(-72, 3, -95), material: stoneMat, name: 'C01_B-crypt-left-wall-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(3, 6, 22), position: new THREE.Vector3(-48, 3, -95), material: stoneMat, name: 'C01_C-crypt-right-wall-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(27, 6, 3), position: new THREE.Vector3(-60, 3, -84), material: stoneMat, name: 'C01_D-crypt-rear-wall-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(28, 2, 5), position: new THREE.Vector3(-60, 6.5, -95), material: stoneMat, name: 'C01_E-crypt-lintel-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(10, 4.5, 0.2), position: new THREE.Vector3(-60, 2.25, -106), material: voidMat, name: 'C01_G-dark-entrance-plane' }));
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'INT01',
+      label: 'South Reliquary Crypt',
+      target: new THREE.Vector3(-60, 1, -107),
+      range: OUTDOOR_INTERACTION_RANGE,
+      hint: 'Tap INTERACT to enter the South Reliquary Crypt.',
+      message: 'The crypt air moves inward.',
+      functional: true,
+    });
+  }
+
+  addSunkenCentralTomb() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.6, 2.0], color: 0x8d897f, roughness: 0.96, metalness: 0.0 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [4.0, 3.0], color: 0x8f887b, roughness: 0.95, metalness: 0.0 });
+    const gateMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: [1.2, 1.8], color: 0x97836e, roughness: 0.82, metalness: 0.42, emissive: 0x18110d, emissiveIntensity: 0.16 });
+    const group = new THREE.Group();
+    group.name = 'C03-Sunken-Central-Tomb-exterior-shell';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(36, 0.4, 28), position: new THREE.Vector3(35, 0.2, 140), material: floorMat, name: 'C03_A-sunken-tomb-platform-floor_worn_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(34, 8, 4), position: new THREE.Vector3(35, 4, 152), material: stoneMat, name: 'C03_B-sunken-tomb-rear-wall-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(12, 5, 1), position: new THREE.Vector3(35, 2.5, 128), material: gateMat, name: 'C03_C-sealed-gate-metal_gate_rusted_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4, 5, 24), position: new THREE.Vector3(17, 2.5, 140), material: stoneMat, name: 'C03_D-left-tomb-block-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4, 5, 24), position: new THREE.Vector3(53, 2.5, 140), material: stoneMat, name: 'C03_E-right-tomb-block-wall_black_stone_01' }));
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'INT02',
+      label: 'Sunken Central Tomb Gate',
+      target: new THREE.Vector3(35, 1, 124),
+      range: OUTDOOR_INTERACTION_RANGE,
+      hint: 'Tap INTERACT to inspect the sealed Sunken Central Tomb gate.',
+      message: 'The rusted gate will not yield.',
+      functional: false,
+    });
+  }
+
+  addStandingStoneCluster() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [0.8, 1.4], color: 0x8c8a82, roughness: 0.98, metalness: 0.0 });
+    const group = new THREE.Group();
+    group.name = 'Standing-Stone-cluster-near-115--70';
+    const stones = [
+      { id: 'STONE01', size: new THREE.Vector3(3, 5, 2), position: new THREE.Vector3(115, 2.5, -70), rotation: new THREE.Euler(0, 0.18, -0.04) },
+      { id: 'STONE02', size: new THREE.Vector3(2, 3.5, 2), position: new THREE.Vector3(122, 1.75, -64), rotation: new THREE.Euler(0, -0.24, 0.05) },
+      { id: 'STONE03', size: new THREE.Vector3(2, 2.5, 2), position: new THREE.Vector3(108, 1.25, -58), rotation: new THREE.Euler(0, 0.1, -0.08) },
+    ];
+
+    stones.forEach((stone) => {
+      group.add(this.createBoxMesh({ ...stone, material: stoneMat, name: `${stone.id}-standing-stone-wall_black_stone_01` }));
+    });
 
     this.enableOutdoorReadableShadows(group);
     this.scene.add(group);
   }
 
-  addCryptEntrance({ id, label, position, yaw, functional }) {
+  addLowRuinWalls() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [3.0, 0.7], color: 0x858178, roughness: 0.97, metalness: 0.0 });
     const group = new THREE.Group();
-    group.name = id;
-    group.position.set(position.x, this.getOutdoorTerrainHeight(position.x, position.z) - 0.45, position.z);
-    group.rotation.y = yaw;
-
-    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.7, 1.5], color: 0x8e8a7f, roughness: 0.96, metalness: 0.0 });
-    const gateMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: [1.15, 1.65], color: 0x928472, roughness: 0.82, metalness: 0.42, emissive: 0x16110d, emissiveIntensity: 0.2 });
-    const stairMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [1.4, 0.42], color: 0x958f83, roughness: 0.94, metalness: 0.0 });
-    const earthMat = new THREE.MeshStandardMaterial({ color: 0x3d3528, roughness: 1.0, metalness: 0.0 });
-
-    const mound = new THREE.Mesh(new THREE.CylinderGeometry(13.5, 15.5, 1.7, 12), earthMat);
-    mound.scale.z = 0.65;
-    mound.position.y = 0.35;
-    group.add(mound);
-
-    const leftPillar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 5.2, 2.1), stoneMat);
-    leftPillar.position.set(-4.1, 2.7, 0.15);
-    group.add(leftPillar);
-
-    const rightPillar = leftPillar.clone();
-    rightPillar.position.x = 4.1;
-    group.add(rightPillar);
-
-    const lintel = new THREE.Mesh(new THREE.BoxGeometry(10.2, 1.8, 2.35), stoneMat);
-    lintel.position.set(0, 5.65, 0.05);
-    group.add(lintel);
-
-    const mouth = new THREE.Mesh(new THREE.BoxGeometry(5.8, 4.1, 1.25), gateMat);
-    mouth.position.set(0, 2.35, -0.45);
-    mouth.name = `${id}-dark-tomb-mouth`;
-    group.add(mouth);
-
-    [-1.85, 1.85].forEach((x) => {
-      const jambBand = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.45, 0.2), gateMat);
-      jambBand.position.set(x, 2.45, 0.3);
-      group.add(jambBand);
-    });
-
-    const thresholdBand = new THREE.Mesh(new THREE.BoxGeometry(5.85, 0.2, 0.28), gateMat);
-    thresholdBand.position.set(0, 0.66, 0.34);
-    group.add(thresholdBand);
-
-    for (let step = 0; step < 3; step += 1) {
-      const stair = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.28, 1.15), stairMat);
-      stair.position.set(0, 0.1 - step * 0.12, 2.0 + step * 1.05);
-      group.add(stair);
-    }
-
-    if (!functional) {
-      const seal = new THREE.Mesh(new THREE.BoxGeometry(5.1, 3.45, 0.36), gateMat);
-      seal.name = `${id}-sealed-slab`;
-      seal.position.set(0, 2.2, 0.24);
-      seal.rotation.z = id === 'crypt_entrance_b' ? 0.08 : -0.05;
-      group.add(seal);
-    }
-
-    this.outdoorInteractions.push({ id, label, target: position.clone().setY(1.5), functional });
+    group.name = 'Reliquary-Field-low-ruin-walls';
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(28, 2, 3), position: new THREE.Vector3(-130, 1, 20), material: stoneMat, name: 'RUIN01-low-ruin-wall-west-wall_black_stone_01', rotation: new THREE.Euler(0, 0.08, 0) }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(24, 2, 3), position: new THREE.Vector3(85, 1, 55), material: stoneMat, name: 'RUIN02-low-ruin-wall-east-wall_black_stone_01', rotation: new THREE.Euler(0, -0.1, 0) }));
     this.enableOutdoorReadableShadows(group);
     this.scene.add(group);
+  }
+
+  createBoxMesh({ size, position, material, name, rotation }) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), material);
+    if (name) mesh.name = name;
+    mesh.position.copy(position);
+    if (rotation) mesh.rotation.copy(rotation);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
   }
 
   enableOutdoorReadableShadows(root) {
