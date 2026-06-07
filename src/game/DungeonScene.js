@@ -30,6 +30,8 @@ const FIELD_SIZE = 400;
 const FIELD_HALF_SIZE = FIELD_SIZE / 2;
 const FIELD_SEGMENTS = 96;
 const FIELD_GRASS_REPEAT = [50, 50];
+const OUTDOOR_DAWN_SKY_COLOR = 0x5f6d7a;
+const OUTDOOR_DAWN_FOG_COLOR = 0x6b747c;
 const FIELD_PLAYER_START = new THREE.Vector3(0, 1.55, 170);
 const FIELD_PLAYER_YAW = Math.PI;
 const FIELD_CRYPT_A_RETURN_START = new THREE.Vector3(-95, 1.55, -30);
@@ -149,8 +151,8 @@ export class DungeonScene {
   }
 
   buildOutdoorField() {
-    this.scene.background = new THREE.Color(0x1b1a17);
-    this.scene.fog = new THREE.Fog(0x24211d, 55, 185);
+    this.scene.background = new THREE.Color(OUTDOOR_DAWN_SKY_COLOR);
+    this.scene.fog = new THREE.Fog(OUTDOOR_DAWN_FOG_COLOR, 38, 215);
     this.addOutdoorLights();
     this.addOutdoorTerrain();
     this.addOutdoorBoundary();
@@ -266,16 +268,35 @@ export class DungeonScene {
   }
 
   addOutdoorLights() {
-    const ambient = new THREE.HemisphereLight(0x667080, 0x15100b, 0.58);
-    this.scene.add(ambient);
+    const coldDawnFill = new THREE.HemisphereLight(0x9aa9bb, 0x3d352d, 0.92);
+    coldDawnFill.name = 'outdoor-cold-blue-gray-dawn-ambient-fill';
+    this.scene.add(coldDawnFill);
 
-    const cloudedMoon = new THREE.DirectionalLight(0x9ba1a6, 0.36);
-    cloudedMoon.position.set(-35, 70, 45);
-    this.scene.add(cloudedMoon);
+    const sunrise = new THREE.DirectionalLight(0xffd79a, 1.08);
+    sunrise.name = 'outdoor-low-east-southeast-pale-gold-sunrise';
+    sunrise.position.set(135, 28, 95);
+    sunrise.target.position.set(-35, 0, -55);
+    sunrise.castShadow = true;
+    sunrise.shadow.mapSize.set(1024, 1024);
+    sunrise.shadow.camera.left = -120;
+    sunrise.shadow.camera.right = 120;
+    sunrise.shadow.camera.top = 120;
+    sunrise.shadow.camera.bottom = -120;
+    sunrise.shadow.camera.near = 10;
+    sunrise.shadow.camera.far = 260;
+    sunrise.shadow.bias = -0.00025;
+    this.scene.add(sunrise);
+    this.scene.add(sunrise.target);
 
-    const tombFill = new THREE.PointLight(0x5b4630, 1.45, 38, 1.8);
-    tombFill.position.set(0, 3, -25);
-    this.scene.add(tombFill);
+    const horizonBounce = new THREE.DirectionalLight(0xb9c7d8, 0.22);
+    horizonBounce.name = 'outdoor-soft-cool-horizon-readable-fill';
+    horizonBounce.position.set(-80, 18, -110);
+    this.scene.add(horizonBounce);
+
+    const tombMouthFill = new THREE.PointLight(0xc0a47c, 0.95, 46, 1.75);
+    tombMouthFill.name = 'outdoor-muted-warm-crypt-threshold-fill';
+    tombMouthFill.position.set(0, 3.2, -25);
+    this.scene.add(tombMouthFill);
   }
 
   getOutdoorTerrainHeight(x, z) {
@@ -289,11 +310,11 @@ export class DungeonScene {
     const grassMaterial = this.makeTexturedMaterial({
       path: TEXTURE_PATHS.fieldGrass,
       repeat: FIELD_GRASS_REPEAT,
-      color: 0x8d8770,
+      color: 0xb0aa91,
       roughness: 0.98,
       metalness: 0.0,
-      emissive: 0x161208,
-      emissiveIntensity: 0.07,
+      emissive: 0x20232a,
+      emissiveIntensity: 0.1,
     });
     const geometry = new THREE.PlaneGeometry(FIELD_SIZE, FIELD_SIZE, FIELD_SEGMENTS, FIELD_SEGMENTS);
     geometry.rotateX(-Math.PI / 2);
@@ -320,8 +341,8 @@ export class DungeonScene {
   }
 
   addOutdoorBoundary() {
-    const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [24, 1.15], color: 0x635d52, roughness: 0.96, metalness: 0.0 });
-    const moundMat = new THREE.MeshStandardMaterial({ color: 0x262016, roughness: 1.0, metalness: 0.0 });
+    const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [24, 1.15], color: 0x817b70, roughness: 0.96, metalness: 0.0 });
+    const moundMat = new THREE.MeshStandardMaterial({ color: 0x383226, roughness: 1.0, metalness: 0.0 });
     const wallHeight = 4.4;
     const wallThickness = 4.5;
 
@@ -330,7 +351,10 @@ export class DungeonScene {
       { size: new THREE.Vector3(FIELD_SIZE + wallThickness * 2, wallHeight, wallThickness), position: new THREE.Vector3(0, wallHeight / 2 - 0.55, FIELD_HALF_SIZE) },
       { size: new THREE.Vector3(wallThickness, wallHeight, FIELD_SIZE + wallThickness * 2), position: new THREE.Vector3(-FIELD_HALF_SIZE, wallHeight / 2 - 0.55, 0) },
       { size: new THREE.Vector3(wallThickness, wallHeight, FIELD_SIZE + wallThickness * 2), position: new THREE.Vector3(FIELD_HALF_SIZE, wallHeight / 2 - 0.55, 0) },
-    ].forEach((wall, index) => this.addBox({ ...wall, material: wallMat, name: `outdoor-hard-boundary-${index + 1}` }));
+    ].forEach((wall, index) => {
+      const boundary = this.addBox({ ...wall, material: wallMat, name: `outdoor-hard-boundary-${index + 1}` });
+      boundary.castShadow = true;
+    });
 
     const fogBank = new THREE.Mesh(new THREE.BoxGeometry(FIELD_SIZE + 12, 2.2, FIELD_SIZE + 12), moundMat);
     fogBank.name = 'outdoor-boundary-low-fog-sill';
@@ -339,8 +363,8 @@ export class DungeonScene {
   }
 
   addCentralLandmark() {
-    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.2, 1.8], color: 0x807a6d, roughness: 0.97, metalness: 0.0 });
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x2e281f, roughness: 1.0 });
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.2, 1.8], color: 0x9a9587, roughness: 0.97, metalness: 0.0 });
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x433b30, roughness: 1.0 });
     const group = new THREE.Group();
     group.name = 'outdoor-central-landmark-standing-stone';
     group.position.set(0, this.getOutdoorTerrainHeight(0, -25) - 0.2, -25);
@@ -360,6 +384,7 @@ export class DungeonScene {
     cap.rotation.z = -0.11;
     group.add(cap);
 
+    this.enableOutdoorReadableShadows(group);
     this.scene.add(group);
   }
 
@@ -369,10 +394,10 @@ export class DungeonScene {
     group.position.set(position.x, this.getOutdoorTerrainHeight(position.x, position.z) - 0.45, position.z);
     group.rotation.y = yaw;
 
-    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.7, 1.5], color: 0x5d5a52, roughness: 0.96, metalness: 0.0 });
-    const gateMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: [1.15, 1.65], color: 0x7a6d5c, roughness: 0.82, metalness: 0.42, emissive: 0x050303, emissiveIntensity: 0.35 });
-    const stairMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [1.4, 0.42], color: 0x7b756a, roughness: 0.94, metalness: 0.0 });
-    const earthMat = new THREE.MeshStandardMaterial({ color: 0x2d2519, roughness: 1.0, metalness: 0.0 });
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.7, 1.5], color: 0x8e8a7f, roughness: 0.96, metalness: 0.0 });
+    const gateMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: [1.15, 1.65], color: 0x928472, roughness: 0.82, metalness: 0.42, emissive: 0x16110d, emissiveIntensity: 0.2 });
+    const stairMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [1.4, 0.42], color: 0x958f83, roughness: 0.94, metalness: 0.0 });
+    const earthMat = new THREE.MeshStandardMaterial({ color: 0x3d3528, roughness: 1.0, metalness: 0.0 });
 
     const mound = new THREE.Mesh(new THREE.CylinderGeometry(13.5, 15.5, 1.7, 12), earthMat);
     mound.scale.z = 0.65;
@@ -421,7 +446,16 @@ export class DungeonScene {
     }
 
     this.outdoorInteractions.push({ id, label, target: position.clone().setY(1.5), functional });
+    this.enableOutdoorReadableShadows(group);
     this.scene.add(group);
+  }
+
+  enableOutdoorReadableShadows(root) {
+    root.traverse((child) => {
+      if (!child.isMesh) return;
+      child.castShadow = true;
+      child.receiveShadow = true;
+    });
   }
 
   addLights() {
