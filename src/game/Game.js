@@ -21,6 +21,8 @@ export class Game {
     this.viewport = this.app.querySelector('[data-game="viewport"]');
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const { width, height } = this.getViewportSize();
     this.renderer.setSize(width, height, false);
