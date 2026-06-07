@@ -4,7 +4,6 @@ import { loadDungeonModel } from './ModelLoader.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
-const TEST_MODEL_URL = './assets/models/dread_stone_black_test_model_01.glb';
 const RAM_MAN_NPC_IDLE_URL = './assets/npcs/ram_man/ram_man_friendly_idle_01.glb';
 const RAM_MAN_NPC_WALK_URL = './assets/npcs/ram_man/ram_man_friendly_walk_01.glb';
 const RAM_MAN_NPC_POSITION = new THREE.Vector3(4.15, FLOOR_Y, 2.15);
@@ -17,19 +16,7 @@ const RAM_MAN_NPC_PATROL_POINTS = [
 const RAM_MAN_NPC_PATROL_SPEED = 0.34;
 const RAM_MAN_NPC_TURN_SPEED = 3.2;
 const RAM_MAN_NPC_PATROL_PAUSE_SECONDS = 0.9;
-const TEST_MODEL_POSITION = new THREE.Vector3(3.65, FLOOR_Y, -2.45);
-const TEST_MODEL_ROTATION_Y = -Math.PI / 5;
-const TEST_MODEL_PATROL_POINTS = [
-  new THREE.Vector3(3.65, FLOOR_Y, -2.45),
-  new THREE.Vector3(2.15, FLOOR_Y, -4.25),
-  new THREE.Vector3(-1.9, FLOOR_Y, -4.15),
-  new THREE.Vector3(-3.75, FLOOR_Y, -1.05),
-  new THREE.Vector3(-1.45, FLOOR_Y, 2.85),
-  new THREE.Vector3(2.95, FLOOR_Y, 2.3),
-];
-const TEST_MODEL_PATROL_SPEED = 0.62;
 const ROOM_DOORWAY_Z = -4.35;
-const TEST_MODEL_TURN_SPEED = 4.4;
 
 const TEXTURE_PATHS = {
   wall: './assets/textures/wall_black_stone_01.png',
@@ -78,17 +65,11 @@ export class DungeonScene {
     this.shortcutOpen = false;
     this.secretWall = null;
     this.secretRevealed = false;
-    this.enemySpawn = new THREE.Vector3(5.9, 0, -20.55);
-    this.enemy = null;
     this.ramManNpc = null;
     this.ramManNpcPatrolIndex = 0;
     this.ramManNpcMoveTarget = 1;
     this.ramManNpcPauseTimer = 0;
     this.ramManNpcAnimation = null;
-    this.testModelProp = null;
-    this.testModelPatrolIndex = 0;
-    this.testModelMoveTarget = 1;
-    this.testModelGlow = null;
     this.torchLights = [];
     this.lightTime = 0;
     this.gateBlocker = { minX: -1.45, maxX: 1.45, minZ: -17.55, maxZ: -16.95 };
@@ -118,9 +99,7 @@ export class DungeonScene {
     this.addKeyPickup();
     this.addLever();
     this.addGate();
-    this.addEnemy();
     this.addRamManNpc();
-    this.addTestModelProp();
     this.addTextureVerificationMode();
     return this.scene;
   }
@@ -142,15 +121,6 @@ export class DungeonScene {
     this.lightTime += deltaSeconds;
     this.updateTorchFlicker();
     this.updateRamManNpcPatrol(deltaSeconds);
-    this.updateTestModelPatrol(deltaSeconds);
-
-    if (this.enemy?.hitFlashTimer > 0) {
-      this.enemy.hitFlashTimer -= deltaSeconds;
-      if (this.enemy.hitFlashTimer <= 0 && !this.enemy.dead) {
-        this.enemy.bodyMat.color.setHex(0x6f2f28);
-        this.enemy.headMat.color.setHex(0x3f322b);
-      }
-    }
   }
 
   collectKey() {
@@ -244,11 +214,6 @@ export class DungeonScene {
     const gateGlow = new THREE.PointLight(0xd08a4d, 1.1, 7.5, 1.45);
     gateGlow.position.set(0, 1.85, -15.5);
     this.scene.add(gateGlow);
-
-    const testPropGlow = new THREE.PointLight(0xb9794f, 0.55, 4.25, 1.85);
-    testPropGlow.position.copy(TEST_MODEL_POSITION).add(new THREE.Vector3(0, 1.35, 0.2));
-    this.testModelGlow = testPropGlow;
-    this.scene.add(testPropGlow);
   }
 
   loadRepeatingTexture(path, repeat) {
@@ -698,155 +663,6 @@ export class DungeonScene {
       });
   }
 
-  updateTestModelPatrol(deltaSeconds) {
-    if (!this.testModelProp || TEST_MODEL_PATROL_POINTS.length < 2) return;
-
-    const target = TEST_MODEL_PATROL_POINTS[this.testModelMoveTarget];
-    const current = this.testModelProp.position;
-    const toTarget = target.clone().sub(current);
-    toTarget.y = 0;
-    const distance = toTarget.length();
-
-    if (distance < 0.08) {
-      this.testModelPatrolIndex = this.testModelMoveTarget;
-      this.testModelMoveTarget = (this.testModelMoveTarget + 1) % TEST_MODEL_PATROL_POINTS.length;
-      return;
-    }
-
-    const direction = toTarget.normalize();
-    const stepDistance = Math.min(distance, TEST_MODEL_PATROL_SPEED * deltaSeconds);
-    const next = current.clone().add(direction.multiplyScalar(stepDistance));
-    next.y = FLOOR_Y;
-
-    if (this.collision.canStandAt(next)) {
-      current.copy(next);
-    } else {
-      this.testModelMoveTarget = (this.testModelMoveTarget + 1) % TEST_MODEL_PATROL_POINTS.length;
-    }
-
-    const desiredYaw = Math.atan2(direction.x, direction.z);
-    this.testModelProp.rotation.y = THREE.MathUtils.damp(this.testModelProp.rotation.y, desiredYaw, TEST_MODEL_TURN_SPEED, deltaSeconds);
-
-    if (this.testModelGlow) {
-      this.testModelGlow.position.copy(this.testModelProp.position).add(new THREE.Vector3(0, 1.35, 0.2));
-    }
-  }
-
-
-  addTestModelProp() {
-    // Normalize the uploaded prop to player/enemy scale while ModelLoader keeps it grounded on the floor.
-    loadDungeonModel({ url: TEST_MODEL_URL, targetHeight: 1.8, maxWidth: 1.65 })
-      .then(({ root, scale }) => {
-        root.name = 'dread-stone-black-test-model-01-model';
-
-        const patrolRig = new THREE.Group();
-        patrolRig.name = 'dread-stone-black-test-model-01';
-        patrolRig.position.copy(TEST_MODEL_POSITION);
-        patrolRig.rotation.y = TEST_MODEL_ROTATION_Y;
-        patrolRig.userData = {
-          assetUrl: TEST_MODEL_URL,
-          normalizedScale: scale,
-          placement: 'slow grounded patrol loop inside the entry chamber',
-          patrolSpeed: TEST_MODEL_PATROL_SPEED,
-        };
-        patrolRig.add(root);
-
-        this.testModelProp = patrolRig;
-        this.scene.add(patrolRig);
-      })
-      .catch((error) => {
-        console.warn(`Optional test GLB failed to load from ${TEST_MODEL_URL}. The dungeon remains playable.`, error);
-      });
-  }
-
-
-  addEnemy() {
-    const group = new THREE.Group();
-    group.position.copy(this.enemySpawn);
-
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x6f2f28, roughness: 0.86, metalness: 0.02, emissive: 0x1d0705, emissiveIntensity: 0.2 });
-    const headMat = new THREE.MeshStandardMaterial({ color: 0x3f322b, roughness: 0.9, metalness: 0.02, emissive: 0x1a0b08, emissiveIntensity: 0.28 });
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffc16b });
-
-    const body = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.35, 6), bodyMat);
-    body.name = 'enemy-body';
-    body.position.y = 0.88;
-    group.add(body);
-
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.38, 0.42), headMat);
-    head.position.y = 1.66;
-    group.add(head);
-
-    [-0.13, 0.13].forEach((x) => {
-      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.035), eyeMat);
-      eye.position.set(x, 1.7, 0.22);
-      group.add(eye);
-    });
-
-    const clawMat = new THREE.MeshStandardMaterial({ color: 0x1f1916, roughness: 0.72, metalness: 0.08 });
-    [-0.42, 0.42].forEach((x) => {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.62, 0.14), clawMat);
-      arm.position.set(x, 0.92, 0.05);
-      arm.rotation.z = x < 0 ? -0.28 : 0.28;
-      group.add(arm);
-    });
-
-    const wakeGlow = new THREE.PointLight(0xb5452f, 1.25, 3.8, 1.6);
-    wakeGlow.position.set(0, 1.25, 0);
-    group.add(wakeGlow);
-
-    this.enemy = {
-      group,
-      bodyMat,
-      headMat,
-      hp: 3,
-      maxHp: 3,
-      dead: false,
-      hitFlashTimer: 0,
-    };
-    this.scene.add(group);
-  }
-
-  damageEnemy(amount, pushDirection) {
-    if (!this.enemy || this.enemy.dead) return false;
-
-    this.enemy.hp = Math.max(0, this.enemy.hp - amount);
-    this.enemy.hitFlashTimer = 0.22;
-    this.enemy.bodyMat.color.setHex(0xd8b06a);
-    this.enemy.headMat.color.setHex(0xffd38a);
-
-    const knockback = pushDirection.clone();
-    knockback.y = 0;
-    if (knockback.lengthSq() > 0) {
-      const next = this.enemy.group.position.clone().add(knockback.normalize().multiplyScalar(0.34));
-      if (this.collision.canStandAt(next)) {
-        this.enemy.group.position.copy(next);
-      }
-    }
-
-    if (this.enemy.hp <= 0) {
-      this.enemy.dead = true;
-      this.scene.remove(this.enemy.group);
-      return true;
-    }
-
-    return false;
-  }
-
-  resetEnemy() {
-    if (!this.enemy) return;
-
-    this.enemy.hp = this.enemy.maxHp;
-    this.enemy.dead = false;
-    this.enemy.hitFlashTimer = 0;
-    this.enemy.group.position.copy(this.enemySpawn);
-    this.enemy.bodyMat.color.setHex(0x6f2f28);
-    this.enemy.headMat.color.setHex(0x3f322b);
-
-    if (!this.enemy.group.parent) {
-      this.scene.add(this.enemy.group);
-    }
-  }
 
   addGate() {
     const gateGroup = new THREE.Group();

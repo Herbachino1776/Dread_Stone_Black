@@ -1,23 +1,14 @@
-# 3D Model Assets
+# Shared 3D model assets
 
-Upload GLB/GLTF model assets here.
+Upload shared GLB/GLTF model assets here only when they are not a creature, NPC, weapon, texture, or UI asset with a more specific folder.
 
-Recommended path pattern:
+Recommended naming:
 
 ```text
 public/assets/models/<asset_name>.glb
 ```
 
-First uploaded test model target:
-
-```text
-public/assets/models/dread_stone_black_test_model_01.glb
-```
-
 Notes:
 
 - Prefer `.glb` for game-ready single-file 3D assets.
-- Keep mobile performance in mind.
-- Generated meshes should be optimized/decimated before heavy use.
-- Set origin and scale in Blender when possible.
-- Use these assets through Three.js `GLTFLoader`.
+- Keep creature and NPC animation sets in `public/assets/npcs/` or `public/assets/enemies/` so their idle/walk clips stay grouped by character.
