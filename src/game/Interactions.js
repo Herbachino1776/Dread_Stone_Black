@@ -1,7 +1,8 @@
 const INTERACT_RANGE = 2.65;
 const KEY_RANGE = 2.25;
 const LEVER_RANGE = 2.2;
-const CRYPT_RANGE = 6.8;
+const CRYPT_RANGE = 8.5;
+const INDOOR_EXIT_RANGE = 3.1;
 
 export class Interactions {
   constructor({ player, dungeon, hud }) {
@@ -10,10 +11,14 @@ export class Interactions {
     this.hud = hud;
     this.hasKey = false;
     this.currentHint = '';
+    this.feedbackHint = '';
+    this.feedbackUntil = 0;
   }
 
   updateHint() {
-    const hint = this.getNearbyInteraction()?.hint ?? '';
+    const hint = Date.now() < this.feedbackUntil
+      ? this.feedbackHint
+      : this.getNearbyInteraction()?.hint ?? '';
 
     if (hint !== this.currentHint) {
       this.currentHint = hint;
@@ -29,11 +34,19 @@ export class Interactions {
       return;
     }
 
-    interaction.use();
-    this.updateHint();
+    const shouldRefreshHint = interaction.use() !== false;
+    if (shouldRefreshHint) this.updateHint();
   }
 
   getNearbyInteraction() {
+    const indoorExit = this.getNearbyIndoorExit();
+    if (indoorExit) {
+      return {
+        hint: 'Tap INTERACT to climb back to the tomb-field.',
+        use: () => this.useIndoorExit(),
+      };
+    }
+
     const outdoorCrypt = this.getNearbyOutdoorCrypt();
     if (outdoorCrypt) {
       return {
@@ -91,11 +104,30 @@ export class Interactions {
 
   useOutdoorCrypt(crypt) {
     if (crypt.functional) {
-      this.hud.showMessage('The first crypt mouth is cold and open. Its interior is deferred for the next labyrinth pass.');
-      return;
+      this.setTemporaryHint('You descend through Crypt A into the Black Reliquary...', 900);
+      window.setTimeout(() => {
+        window.location.assign(`${window.location.pathname}?area=dungeon`);
+      }, 160);
+      return false;
     }
 
+    this.setTemporaryHint(`${crypt.label} gives only a dead stone knock.`, 1400);
     this.hud.showMessage('The sealed tomb does not move. Fog gathers in its cracks.');
+    return false;
+  }
+
+  useIndoorExit() {
+    this.setTemporaryHint('Cold field air seeps down the entry stair...', 900);
+    window.setTimeout(() => {
+      window.location.assign(`${window.location.pathname}?area=field&from=dungeon`);
+    }, 160);
+    return false;
+  }
+
+  setTemporaryHint(message, durationMs) {
+    this.feedbackHint = message;
+    this.feedbackUntil = Date.now() + durationMs;
+    this.hud.showHint(message);
   }
 
   pickUpKey() {
@@ -153,9 +185,15 @@ export class Interactions {
   getNearbyOutdoorCrypt() {
     if (!this.dungeon.outdoorInteractions?.length) return null;
 
-    return this.dungeon.outdoorInteractions.find((crypt) => (
-      this.isCloseEnough(crypt.target, CRYPT_RANGE) && this.isMostlyFacing(crypt.target, -0.05)
-    )) ?? null;
+    return this.dungeon.outdoorInteractions
+      .map((crypt) => ({ crypt, distance: this.horizontalDistanceTo(crypt.target) }))
+      .filter(({ distance }) => distance <= CRYPT_RANGE)
+      .sort((a, b) => a.distance - b.distance)[0]?.crypt ?? null;
+  }
+
+  getNearbyIndoorExit() {
+    if (this.dungeon.area !== 'dungeon') return null;
+    return this.isCloseEnough(this.dungeon.indoorExitTarget, INDOOR_EXIT_RANGE);
   }
 
   isNearKey() {
@@ -185,9 +223,13 @@ export class Interactions {
   }
 
   isCloseEnough(target, range) {
+    return this.horizontalDistanceTo(target) <= range;
+  }
+
+  horizontalDistanceTo(target) {
     const toTarget = target.clone().sub(this.player.position);
     toTarget.y = 0;
-    return toTarget.length() <= range;
+    return toTarget.length();
   }
 
   isMostlyFacing(target, requiredFacingAmount) {

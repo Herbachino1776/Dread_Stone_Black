@@ -26,10 +26,15 @@ export class Game {
     this.renderer.setSize(width, height, false);
 
     this.camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 260);
-    const requestedArea = new URLSearchParams(window.location.search).get('area');
-    this.dungeon = new DungeonScene({ area: requestedArea === 'dungeon' ? 'dungeon' : 'field' });
+    const query = new URLSearchParams(window.location.search);
+    const requestedArea = query.get('area');
+    const fieldSpawn = query.get('from') === 'dungeon' ? 'cryptAExit' : 'start';
+    this.dungeon = new DungeonScene({ area: requestedArea === 'dungeon' ? 'dungeon' : 'field', fieldSpawn });
     this.scene = this.dungeon.build();
-    this.player = new PlayerController(this.camera, this.dungeon.collision, this.dungeon.playerSpawn);
+    this.player = new PlayerController(this.camera, this.dungeon.collision, {
+      ...this.dungeon.playerSpawn,
+      movementMultiplier: this.dungeon.area === 'field' ? PlayerController.OUTDOOR_MOVEMENT_MULTIPLIER : 1,
+    });
     this.hud = new Hud(this.app);
     this.armsOverlay = new FirstPersonArmsOverlay(this.app);
     this.controls = new MobileControls(this.app);

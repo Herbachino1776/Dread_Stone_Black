@@ -1,15 +1,26 @@
 import * as THREE from 'three';
 
+const INDOOR_WALK_SPEED = 1.85;
+const INDOOR_STRAFE_SPEED = 1.45;
+const OUTDOOR_MOVEMENT_MULTIPLIER = 5;
+
 export class PlayerController {
-  constructor(camera, collisionWorld, { spawnPosition = new THREE.Vector3(0, 1.55, 3.2), spawnYaw = Math.PI } = {}) {
+  constructor(camera, collisionWorld, {
+    spawnPosition = new THREE.Vector3(0, 1.55, 3.2),
+    spawnYaw = Math.PI,
+    movementMultiplier = 1,
+  } = {}) {
     this.camera = camera;
     this.collisionWorld = collisionWorld;
     this.spawnPosition = spawnPosition.clone();
     this.spawnYaw = spawnYaw;
     this.position = this.spawnPosition.clone();
     this.yaw = this.spawnYaw;
-    this.walkSpeed = 1.85;
-    this.strafeSpeed = 1.45;
+    this.baseWalkSpeed = INDOOR_WALK_SPEED;
+    this.baseStrafeSpeed = INDOOR_STRAFE_SPEED;
+    this.movementMultiplier = movementMultiplier;
+    this.walkSpeed = this.baseWalkSpeed * this.movementMultiplier;
+    this.strafeSpeed = this.baseStrafeSpeed * this.movementMultiplier;
     this.turnSpeed = 0.0018;
     this.lookYawSpeed = 1.9;
     this.lookPitchSpeed = 0.76;
@@ -19,6 +30,10 @@ export class PlayerController {
 
     this.bindKeyboard();
     this.syncCamera();
+  }
+
+  static get OUTDOOR_MOVEMENT_MULTIPLIER() {
+    return OUTDOOR_MOVEMENT_MULTIPLIER;
   }
 
   bindKeyboard() {
