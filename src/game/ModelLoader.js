@@ -12,11 +12,11 @@ function prepareMaterials(root) {
 
     if (!child.material) {
       child.material = new THREE.MeshStandardMaterial({
-        color: 0x8a7661,
+        color: 0xa38a70,
         roughness: 0.88,
         metalness: 0.05,
-        emissive: 0x120c08,
-        emissiveIntensity: 0.18,
+        emissive: 0x24170f,
+        emissiveIntensity: 0.26,
       });
       return;
     }
@@ -28,8 +28,8 @@ function prepareMaterials(root) {
       }
 
       if ('emissive' in material && material.emissive instanceof THREE.Color) {
-        material.emissive.lerp(new THREE.Color(0x1f160f), 0.35);
-        material.emissiveIntensity = Math.max(material.emissiveIntensity ?? 0, 0.12);
+        material.emissive.lerp(new THREE.Color(0x3a281b), 0.42);
+        material.emissiveIntensity = Math.max(material.emissiveIntensity ?? 0, 0.22);
       }
     });
   });
