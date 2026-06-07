@@ -5,7 +5,8 @@ import { loadDungeonModel } from './ModelLoader.js';
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
 const TEST_MODEL_URL = './assets/models/dread_stone_black_test_model_01.glb';
-const RAM_MAN_NPC_URL = './assets/npcs/ram_man_friendly_01_optimized.glb';
+const RAM_MAN_NPC_IDLE_URL = './assets/npcs/ram_man/ram_man_friendly_idle_01.glb';
+const RAM_MAN_NPC_WALK_URL = './assets/npcs/ram_man/ram_man_friendly_walk_01.glb';
 const RAM_MAN_NPC_POSITION = new THREE.Vector3(4.15, FLOOR_Y, 2.15);
 const RAM_MAN_NPC_PATROL_POINTS = [
   new THREE.Vector3(4.15, FLOOR_Y, 2.15),
@@ -15,6 +16,7 @@ const RAM_MAN_NPC_PATROL_POINTS = [
 ];
 const RAM_MAN_NPC_PATROL_SPEED = 0.34;
 const RAM_MAN_NPC_TURN_SPEED = 3.2;
+const RAM_MAN_NPC_PATROL_PAUSE_SECONDS = 0.9;
 const TEST_MODEL_POSITION = new THREE.Vector3(3.65, FLOOR_Y, -2.45);
 const TEST_MODEL_ROTATION_Y = -Math.PI / 5;
 const TEST_MODEL_PATROL_POINTS = [
@@ -81,6 +83,8 @@ export class DungeonScene {
     this.ramManNpc = null;
     this.ramManNpcPatrolIndex = 0;
     this.ramManNpcMoveTarget = 1;
+    this.ramManNpcPauseTimer = 0;
+    this.ramManNpcAnimation = null;
     this.testModelProp = null;
     this.testModelPatrolIndex = 0;
     this.testModelMoveTarget = 1;
@@ -532,7 +536,18 @@ export class DungeonScene {
 
 
   updateRamManNpcPatrol(deltaSeconds) {
-    if (!this.ramManNpc || RAM_MAN_NPC_PATROL_POINTS.length < 2) return;
+    this.ramManNpcAnimation?.mixers.forEach((mixer) => mixer.update(deltaSeconds));
+
+    if (!this.ramManNpc || RAM_MAN_NPC_PATROL_POINTS.length < 2) {
+      this.setRamManNpcAnimation('idle');
+      return;
+    }
+
+    if (this.ramManNpcPauseTimer > 0) {
+      this.ramManNpcPauseTimer = Math.max(0, this.ramManNpcPauseTimer - deltaSeconds);
+      this.setRamManNpcAnimation('idle');
+      return;
+    }
 
     const target = RAM_MAN_NPC_PATROL_POINTS[this.ramManNpcMoveTarget];
     const current = this.ramManNpc.position;
@@ -543,6 +558,8 @@ export class DungeonScene {
     if (distance < 0.08) {
       this.ramManNpcPatrolIndex = this.ramManNpcMoveTarget;
       this.ramManNpcMoveTarget = (this.ramManNpcMoveTarget + 1) % RAM_MAN_NPC_PATROL_POINTS.length;
+      this.ramManNpcPauseTimer = RAM_MAN_NPC_PATROL_PAUSE_SECONDS;
+      this.setRamManNpcAnimation('idle');
       return;
     }
 
@@ -553,39 +570,131 @@ export class DungeonScene {
 
     if (this.collision.canStandAt(next)) {
       current.copy(next);
+      this.setRamManNpcAnimation(stepDistance > 0.001 ? 'walk' : 'idle');
     } else {
       this.ramManNpcMoveTarget = (this.ramManNpcMoveTarget + 1) % RAM_MAN_NPC_PATROL_POINTS.length;
+      this.ramManNpcPauseTimer = RAM_MAN_NPC_PATROL_PAUSE_SECONDS;
+      this.setRamManNpcAnimation('idle');
     }
 
     const desiredYaw = Math.atan2(direction.x, direction.z);
     this.ramManNpc.rotation.y = THREE.MathUtils.damp(this.ramManNpc.rotation.y, desiredYaw, RAM_MAN_NPC_TURN_SPEED, deltaSeconds);
   }
 
+  setRamManNpcAnimation(state) {
+    const animation = this.ramManNpcAnimation;
+    if (!animation || animation.state === state) return;
+
+    const nextTrack = animation.tracks[state];
+    const previousTrack = animation.tracks[animation.state];
+    if (!nextTrack) return;
+
+    Object.entries(animation.tracks).forEach(([trackState, track]) => {
+      track.root.visible = trackState === state;
+    });
+
+    nextTrack.action?.reset().fadeIn(0.16).play();
+    if (previousTrack?.action && previousTrack !== nextTrack) {
+      previousTrack.action.fadeOut(0.16);
+    }
+
+    animation.state = state;
+  }
+
+  createRamManNpcAnimationTrack({ state, root, gltf, scale }) {
+    const mixer = new THREE.AnimationMixer(root);
+    const clips = gltf.animations ?? [];
+    const clip = clips.find((candidate) => candidate.name.toLowerCase().includes(state)) ?? clips[0];
+
+    if (!clip) {
+      console.warn(`Friendly Ram Man ${state} GLB loaded without animation clips.`);
+      return { root, mixer, action: null, clip: null, clipNames: [], clipSummaries: [] };
+    }
+
+    const action = mixer.clipAction(clip);
+    action.setLoop(THREE.LoopRepeat, Infinity);
+    action.clampWhenFinished = false;
+    action.enabled = true;
+
+    return {
+      root,
+      mixer,
+      action,
+      clip,
+      scale,
+      clipNames: clips.map((candidate) => candidate.name || '(unnamed clip)'),
+      clipSummaries: clips.map((candidate) => ({
+        name: candidate.name || '(unnamed clip)',
+        durationSeconds: Number(candidate.duration.toFixed(3)),
+        trackCount: candidate.tracks.length,
+      })),
+    };
+  }
+
   addRamManNpc() {
     // Friendly ambience-only NPC: no collision blocker, no enemy registration, no combat hooks.
-    loadDungeonModel({ url: RAM_MAN_NPC_URL, targetHeight: 1.72, maxWidth: 1.15 })
-      .then(({ root, scale }) => {
-        root.name = 'ram-man-friendly-01-model';
+    Promise.all([
+      loadDungeonModel({ url: RAM_MAN_NPC_IDLE_URL, targetHeight: 1.72, maxWidth: 1.15 }),
+      loadDungeonModel({ url: RAM_MAN_NPC_WALK_URL, targetHeight: 1.72, maxWidth: 1.15 }),
+    ])
+      .then(([idleModel, walkModel]) => {
+        idleModel.root.name = 'ram-man-friendly-idle-01-model';
+        walkModel.root.name = 'ram-man-friendly-walk-01-model';
+        walkModel.root.visible = false;
+
+        const idleTrack = this.createRamManNpcAnimationTrack({ state: 'idle', ...idleModel });
+        const walkTrack = this.createRamManNpcAnimationTrack({ state: 'walk', ...walkModel });
 
         const patrolRig = new THREE.Group();
         patrolRig.name = 'ram-man-friendly-01';
         patrolRig.position.copy(RAM_MAN_NPC_POSITION);
         patrolRig.userData = {
-          assetUrl: RAM_MAN_NPC_URL,
-          normalizedScale: scale,
+          assetUrls: {
+            idle: RAM_MAN_NPC_IDLE_URL,
+            walk: RAM_MAN_NPC_WALK_URL,
+          },
+          animationClips: {
+            idle: idleTrack.clipNames,
+            walk: walkTrack.clipNames,
+          },
+          animationClipDetails: {
+            idle: idleTrack.clipSummaries,
+            walk: walkTrack.clipSummaries,
+          },
+          normalizedScale: {
+            idle: idleModel.scale,
+            walk: walkModel.scale,
+          },
           friendly: true,
           collision: 'none - visual roaming NPC only',
+          combat: 'none - not registered as an enemy or target',
           placement: 'opening chamber east side, clear of the center path to the gate',
           patrolSpeed: RAM_MAN_NPC_PATROL_SPEED,
+          patrolPauseSeconds: RAM_MAN_NPC_PATROL_PAUSE_SECONDS,
           patrolPoints: RAM_MAN_NPC_PATROL_POINTS.map((point) => ({ x: point.x, y: point.y, z: point.z })),
         };
-        patrolRig.add(root);
+        patrolRig.add(idleModel.root, walkModel.root);
 
         this.ramManNpc = patrolRig;
+        this.ramManNpcAnimation = {
+          state: null,
+          mixers: [idleTrack.mixer, walkTrack.mixer],
+          tracks: {
+            idle: idleTrack,
+            walk: walkTrack,
+          },
+        };
+        this.setRamManNpcAnimation('idle');
         this.scene.add(patrolRig);
+
+        console.info('Friendly Ram Man animation clips detected:', patrolRig.userData.animationClipDetails);
       })
       .catch((error) => {
-        console.warn(`Friendly Ram Man GLB failed to load from ${RAM_MAN_NPC_URL}. The dungeon remains playable.`, error);
+        this.ramManNpcAnimation = null;
+        console.warn(
+          `Friendly Ram Man animated GLBs failed to load from ${RAM_MAN_NPC_IDLE_URL} or ${RAM_MAN_NPC_WALK_URL}. The dungeon remains playable.`,
+          error,
+        );
       });
   }
 
