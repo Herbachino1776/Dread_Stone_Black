@@ -6,22 +6,21 @@ const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
 const RAM_MAN_NPC_IDLE_URL = './assets/npcs/ram_man/ram_man_friendly_idle_01.glb';
 const RAM_MAN_NPC_WALK_URL = './assets/npcs/ram_man/ram_man_friendly_walk_01.glb';
-const RAM_MAN_NPC_POSITION = new THREE.Vector3(4.15, FLOOR_Y, 2.15);
+const RAM_MAN_NPC_POSITION = new THREE.Vector3(0, FLOOR_Y, 14);
 const RAM_MAN_NPC_PATROL_POINTS = [
-  new THREE.Vector3(4.15, FLOOR_Y, 2.15),
-  new THREE.Vector3(4.75, FLOOR_Y, 0.75),
-  new THREE.Vector3(3.55, FLOOR_Y, -1.35),
-  new THREE.Vector3(2.55, FLOOR_Y, 0.55),
+  new THREE.Vector3(-7, FLOOR_Y, 10),
+  new THREE.Vector3(7, FLOOR_Y, 10),
+  new THREE.Vector3(5, FLOOR_Y, 19),
+  new THREE.Vector3(-5, FLOOR_Y, 19),
 ];
 const RAM_MAN_NPC_PATROL_SPEED = 0.34;
 const RAM_MAN_NPC_TURN_SPEED = 3.2;
 const RAM_MAN_NPC_PATROL_PAUSE_SECONDS = 0.9;
 const ROOM_DOORWAY_Z = -4.35;
-
 const INDOOR_BACKGROUND_COLOR = 0x171311;
 const INDOOR_FOG_COLOR = 0x2b241d;
-const INDOOR_FOG_NEAR = 11;
-const INDOOR_FOG_FAR = 36;
+const INDOOR_FOG_NEAR = 9;
+const INDOOR_FOG_FAR = 42;
 const INDOOR_AMBIENT_SKY_COLOR = 0xb8b0a3;
 const INDOOR_AMBIENT_GROUND_COLOR = 0x51463c;
 const INDOOR_AMBIENT_INTENSITY = 1.42;
@@ -120,21 +119,21 @@ export class DungeonScene {
     this.textureCheckRig = null;
     this.playerSpawn = this.area === 'field'
       ? this.getFieldPlayerSpawn()
-      : { spawnPosition: new THREE.Vector3(0, 1.55, 3.2), spawnYaw: Math.PI };
+      : { spawnPosition: new THREE.Vector3(0, 1.55, -30), spawnYaw: 0 };
     this.outdoorInteractions = [];
 
     this.gate = null;
     this.gateOpen = false;
     this.gateOpening = false;
-    this.gateTarget = new THREE.Vector3(0, 1.3, -16.7);
+    this.gateTarget = new THREE.Vector3(11, 1.2, -8);
     this.key = null;
-    this.keyTarget = new THREE.Vector3(-3.7, 0.82, 2.55);
+    this.keyTarget = new THREE.Vector3(999, 999, 999);
     this.lever = null;
     this.leverUsed = false;
-    this.leverTarget = new THREE.Vector3(5.35, 1.15, -2.4);
-    this.shortcutTarget = new THREE.Vector3(-5.75, 1.12, ROOM_DOORWAY_Z);
-    this.indoorExitTarget = new THREE.Vector3(0, 1.45, 5.35);
-    this.secretTarget = new THREE.Vector3(8.2, 1.12, -24.25);
+    this.leverTarget = null;
+    this.shortcutTarget = null;
+    this.indoorExitTarget = new THREE.Vector3(0, 1.2, -32);
+    this.secretTarget = null;
     this.shortcutDoor = null;
     this.shortcutOpen = false;
     this.secretWall = null;
@@ -146,24 +145,51 @@ export class DungeonScene {
     this.ramManNpcAnimation = null;
     this.torchLights = [];
     this.lightTime = 0;
-    this.gateBlocker = { minX: -1.45, maxX: 1.45, minZ: -17.55, maxZ: -16.95 };
-    this.shortcutBlocker = { minX: -6.15, maxX: -4.65, minZ: -5.12, maxZ: -3.58 };
-    this.secretWallBlocker = { minX: 7.05, maxX: 9.35, minZ: -24.65, maxZ: -23.82 };
+    this.gateBlocker = { minX: 10.72, maxX: 11.28, minZ: -10.85, maxZ: -5.15 };
     const indoorWalkableRects = [
-      { minX: -5.6, maxX: 5.6, minZ: -5.6, maxZ: 5.6 },
-      { minX: -1.35, maxX: 1.35, minZ: -17.2, maxZ: -5.6 },
-      { minX: -1.35, maxX: 1.35, minZ: -22.2, maxZ: -17.2 },
-      { minX: -4.75, maxX: 4.75, minZ: -22.2, maxZ: -19.35 },
-      { minX: 4.75, maxX: 9.6, minZ: -24.25, maxZ: -17.85 },
-      { minX: -7.85, maxX: -4.75, minZ: -22.2, maxZ: -3.35 },
-      { minX: 7.05, maxX: 9.35, minZ: -27.1, maxZ: -24.25 },
+      { id: 'R01', minX: -4, maxX: 4, minZ: -34, maxZ: -16 },
+      { id: 'R02', minX: -11, maxX: 11, minZ: -18, maxZ: -6 },
+      { id: 'R03', minX: -30, maxX: -14, minZ: -16, maxZ: 0 },
+      { id: 'R04', minX: 14, maxX: 30, minZ: -16, maxZ: 0 },
+      { id: 'R05', minX: -15, maxX: 15, minZ: 2, maxZ: 26 },
+      { id: 'R06', minX: -7, maxX: 7, minZ: 25, maxZ: 35 },
+      { id: 'C01', minX: -22, maxX: -14, minZ: -2, maxZ: 20 },
+      { id: 'C02', minX: 14, maxX: 22, minZ: -2, maxZ: 20 },
+      { id: 'D03', minX: -14, maxX: -11, minZ: -11.8, maxZ: -8.2 },
+      { id: 'D04', minX: 11, maxX: 14, minZ: -11.8, maxZ: -8.2 },
+      { id: 'D05', minX: -2.2, maxX: 2.2, minZ: -6, maxZ: 2 },
+      { id: 'D07', minX: -15, maxX: -12, minZ: 6.2, maxZ: 9.8 },
+      { id: 'D09', minX: 12, maxX: 15, minZ: 6.2, maxZ: 9.8 },
+    ];
+    this.inspectInteractions = [
+      {
+        id: 'INT02',
+        target: new THREE.Vector3(-22, 1.2, -14),
+        range: 3.0,
+        hint: 'Tap INTERACT to inspect the shrine slab.',
+        message: 'The slab is carved with a door that was never meant to open.',
+      },
+      {
+        id: 'INT03',
+        target: this.gateTarget,
+        range: 3.1,
+        hint: 'Tap INTERACT to test the east grate.',
+        message: 'The rusted grate gives a little, then holds.',
+      },
+      {
+        id: 'INT04',
+        target: new THREE.Vector3(0, 1.2, 32),
+        range: 3.2,
+        hint: 'Tap INTERACT to inspect the reliquary block.',
+        message: 'Something black sleeps inside the stone.',
+      },
     ];
 
     this.collision = this.area === 'field'
       ? new CollisionWorld({ walkableRects: [FIELD_WALKABLE_RECT], blockerRects: this.createOutdoorBlockers(), playerRadius: 0.5 })
       : new CollisionWorld({
         walkableRects: indoorWalkableRects,
-        blockerRects: [this.gateBlocker, this.shortcutBlocker, this.secretWallBlocker],
+        blockerRects: [this.gateBlocker],
       });
   }
 
@@ -188,14 +214,9 @@ export class DungeonScene {
 
   buildIndoorDungeon() {
     this.addLights();
-    this.addRoom();
-    this.addCorridor();
-    this.addDungeonExpansion();
-    this.addPathCues();
+    this.addBabyLabyrinthInterior();
+    this.addBabyLabyrinthStaging();
     this.addTorches();
-    this.addKeyPickup();
-    this.addLever();
-    this.addGate();
     this.addRamManNpc();
   }
 
@@ -518,21 +539,25 @@ export class DungeonScene {
     roomFill.position.set(2.5, 5, 4);
     this.scene.add(roomFill);
 
-    const entryTorchGlow = new THREE.PointLight(0xffad63, 3.0, 15.5, 1.22);
-    entryTorchGlow.position.set(-4.7, 2.05, 2.25);
+    const entryTorchGlow = new THREE.PointLight(0xffad63, 2.35, 17, 1.22);
+    entryTorchGlow.name = 'R01-entry-corridor-readable-warm-fill';
+    entryTorchGlow.position.set(0, 2.05, -27);
     this.scene.add(entryTorchGlow);
 
-    const corridorGlow = new THREE.PointLight(0xffbd78, 2.7, 18, 1.24);
-    corridorGlow.position.set(0, 2.15, -9.6);
-    this.scene.add(corridorGlow);
+    const splitGlow = new THREE.PointLight(0xffbd78, 2.5, 20, 1.24);
+    splitGlow.name = 'R02-split-hall-readable-warm-fill';
+    splitGlow.position.set(0, 2.15, -12);
+    this.scene.add(splitGlow);
 
-    const gateGlow = new THREE.PointLight(0xffae67, 2.05, 12.5, 1.3);
-    gateGlow.position.set(0, 1.85, -15.5);
-    this.scene.add(gateGlow);
+    const guardianGlow = new THREE.PointLight(0xffae67, 3.1, 24, 1.3);
+    guardianGlow.name = 'R05-guardian-chamber-dirty-warm-fill';
+    guardianGlow.position.set(0, 2.35, 14);
+    this.scene.add(guardianGlow);
 
-    const creatureFill = new THREE.PointLight(0xc8ad8b, 1.15, 9.5, 1.45);
-    creatureFill.position.set(RAM_MAN_NPC_POSITION.x, 1.8, RAM_MAN_NPC_POSITION.z);
-    this.scene.add(creatureFill);
+    const reliquaryGlow = new THREE.PointLight(0x9fb7d6, 1.65, 15, 1.38);
+    reliquaryGlow.name = 'R06-reliquary-alcove-dim-cold-fill';
+    reliquaryGlow.position.set(0, 1.85, 32);
+    this.scene.add(reliquaryGlow);
   }
 
   loadRepeatingTexture(path, repeat) {
@@ -569,6 +594,135 @@ export class DungeonScene {
     mesh.receiveShadow = true;
     this.scene.add(mesh);
     return mesh;
+  }
+
+
+  addBabyLabyrinthInterior() {
+    const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: TEXTURE_REPEATS.longWall, color: 0xffffff, roughness: 0.94, metalness: 0.01, emissive: INDOOR_STONE_EMISSIVE, emissiveIntensity: INDOOR_STONE_EMISSIVE_INTENSITY });
+
+    const zones = [
+      { id: 'R01', center: new THREE.Vector3(0, 0, -25), width: 8, depth: 18, repeat: [2, 5] },
+      { id: 'R02', center: new THREE.Vector3(0, 0, -12), width: 22, depth: 12, repeat: [6, 3] },
+      { id: 'R03', center: new THREE.Vector3(-22, 0, -8), width: 16, depth: 16, repeat: [4, 4] },
+      { id: 'R04', center: new THREE.Vector3(22, 0, -8), width: 16, depth: 16, repeat: [4, 4] },
+      { id: 'R05', center: new THREE.Vector3(0, 0, 14), width: 30, depth: 24, repeat: [8, 6] },
+      { id: 'R06', center: new THREE.Vector3(0, 0, 30), width: 14, depth: 10, repeat: [4, 3] },
+      { id: 'C01', center: new THREE.Vector3(-18, 0, 8), width: 8, depth: 24, repeat: [2, 6] },
+      { id: 'C02', center: new THREE.Vector3(18, 0, 8), width: 8, depth: 24, repeat: [2, 6] },
+    ];
+
+    zones.forEach((zone) => {
+      const zoneFloorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: zone.repeat, color: 0xffffff, roughness: 0.9, metalness: 0.0, emissive: INDOOR_FLOOR_EMISSIVE, emissiveIntensity: INDOOR_FLOOR_EMISSIVE_INTENSITY });
+      const zoneCeilingMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.ceiling, repeat: zone.repeat, color: 0xffffff, roughness: 0.95, metalness: 0.0, emissive: INDOOR_CEILING_EMISSIVE, emissiveIntensity: INDOOR_CEILING_EMISSIVE_INTENSITY });
+      this.addBox({ size: new THREE.Vector3(zone.width, 0.18, zone.depth), position: new THREE.Vector3(zone.center.x, FLOOR_Y - 0.09, zone.center.z), material: zoneFloorMat, name: `FLOOR-${zone.id}-floor_worn_stone_01` });
+      this.addBox({ size: new THREE.Vector3(zone.width, 0.18, zone.depth), position: new THREE.Vector3(zone.center.x, WALL_HEIGHT, zone.center.z), material: zoneCeilingMat, name: `CEIL-${zone.id}-ceiling_dark_stone_01` });
+    });
+
+    const walls = [
+      // R01 entry corridor with an open field-return threshold and open north split-hall connection.
+      { id: 'R01_W', size: [0.35, WALL_HEIGHT, 18], pos: [-4, WALL_HEIGHT / 2, -25] },
+      { id: 'R01_E', size: [0.35, WALL_HEIGHT, 18], pos: [4, WALL_HEIGHT / 2, -25] },
+      { id: 'R01_S_W', size: [2, WALL_HEIGHT, 0.35], pos: [-3, WALL_HEIGHT / 2, -34] },
+      { id: 'R01_S_E', size: [2, WALL_HEIGHT, 0.35], pos: [3, WALL_HEIGHT / 2, -34] },
+
+      // R02 split hall. West/east gaps create the clear first branch; north gap leads to guardian chamber.
+      { id: 'R02_S_W', size: [7, WALL_HEIGHT, 0.35], pos: [-7.5, WALL_HEIGHT / 2, -18] },
+      { id: 'R02_S_E', size: [7, WALL_HEIGHT, 0.35], pos: [7.5, WALL_HEIGHT / 2, -18] },
+      { id: 'R02_W_S', size: [0.35, WALL_HEIGHT, 3.2], pos: [-11, WALL_HEIGHT / 2, -15.4] },
+      { id: 'R02_W_N', size: [0.35, WALL_HEIGHT, 4.8], pos: [-11, WALL_HEIGHT / 2, -8.4] },
+      { id: 'R02_E_S', size: [0.35, WALL_HEIGHT, 3.2], pos: [11, WALL_HEIGHT / 2, -15.4] },
+      { id: 'R02_E_N', size: [0.35, WALL_HEIGHT, 4.8], pos: [11, WALL_HEIGHT / 2, -8.4] },
+      { id: 'R02_N_W', size: [8.8, WALL_HEIGHT, 0.35], pos: [-6.6, WALL_HEIGHT / 2, -6] },
+      { id: 'R02_N_E', size: [8.8, WALL_HEIGHT, 0.35], pos: [6.6, WALL_HEIGHT / 2, -6] },
+
+      // R03 west shrine chamber, with east doorway from split hall and north loop exit.
+      { id: 'R03_W', size: [0.35, WALL_HEIGHT, 16], pos: [-30, WALL_HEIGHT / 2, -8] },
+      { id: 'R03_S', size: [16, WALL_HEIGHT, 0.35], pos: [-22, WALL_HEIGHT / 2, -16] },
+      { id: 'R03_N_W', size: [6.2, WALL_HEIGHT, 0.35], pos: [-26.9, WALL_HEIGHT / 2, 0] },
+      { id: 'R03_N_E', size: [6.2, WALL_HEIGHT, 0.35], pos: [-17.1, WALL_HEIGHT / 2, 0] },
+
+      // R04 east chamber, with grate at west doorway and north loop exit.
+      { id: 'R04_E', size: [0.35, WALL_HEIGHT, 16], pos: [30, WALL_HEIGHT / 2, -8] },
+      { id: 'R04_S', size: [16, WALL_HEIGHT, 0.35], pos: [22, WALL_HEIGHT / 2, -16] },
+      { id: 'R04_N_W', size: [6.2, WALL_HEIGHT, 0.35], pos: [17.1, WALL_HEIGHT / 2, 0] },
+      { id: 'R04_N_E', size: [6.2, WALL_HEIGHT, 0.35], pos: [26.9, WALL_HEIGHT / 2, 0] },
+
+      // Loop corridors keep the baby labyrinth compact while reconnecting to the main room.
+      { id: 'C01_W', size: [0.35, WALL_HEIGHT, 22], pos: [-22, WALL_HEIGHT / 2, 9] },
+      { id: 'C01_E_S', size: [0.35, WALL_HEIGHT, 8.2], pos: [-14, WALL_HEIGHT / 2, 2.1] },
+      { id: 'C01_E_N', size: [0.35, WALL_HEIGHT, 10.2], pos: [-14, WALL_HEIGHT / 2, 14.9] },
+      { id: 'C02_E', size: [0.35, WALL_HEIGHT, 22], pos: [22, WALL_HEIGHT / 2, 9] },
+      { id: 'C02_W_S', size: [0.35, WALL_HEIGHT, 8.2], pos: [14, WALL_HEIGHT / 2, 2.1] },
+      { id: 'C02_W_N', size: [0.35, WALL_HEIGHT, 10.2], pos: [14, WALL_HEIGHT / 2, 14.9] },
+
+      // R05 guardian chamber. South wall is split for the split-hall doorway; side gaps accept the loops; north opens to alcove.
+      { id: 'R05_S_W', size: [12.8, WALL_HEIGHT, 0.35], pos: [-8.6, WALL_HEIGHT / 2, 2] },
+      { id: 'R05_S_E', size: [12.8, WALL_HEIGHT, 0.35], pos: [8.6, WALL_HEIGHT / 2, 2] },
+      { id: 'R05_W_S', size: [0.35, WALL_HEIGHT, 4.2], pos: [-15, WALL_HEIGHT / 2, 4.1] },
+      { id: 'R05_W_N', size: [0.35, WALL_HEIGHT, 16.2], pos: [-15, WALL_HEIGHT / 2, 17.9] },
+      { id: 'R05_E_S', size: [0.35, WALL_HEIGHT, 4.2], pos: [15, WALL_HEIGHT / 2, 4.1] },
+      { id: 'R05_E_N', size: [0.35, WALL_HEIGHT, 16.2], pos: [15, WALL_HEIGHT / 2, 17.9] },
+      { id: 'R05_N_W', size: [13, WALL_HEIGHT, 0.35], pos: [-8.5, WALL_HEIGHT / 2, 26] },
+      { id: 'R05_N_E', size: [13, WALL_HEIGHT, 0.35], pos: [8.5, WALL_HEIGHT / 2, 26] },
+
+      // R06 reliquary alcove.
+      { id: 'R06_W', size: [0.35, WALL_HEIGHT, 10], pos: [-7, WALL_HEIGHT / 2, 30] },
+      { id: 'R06_E', size: [0.35, WALL_HEIGHT, 10], pos: [7, WALL_HEIGHT / 2, 30] },
+      { id: 'R06_N', size: [14, WALL_HEIGHT, 0.35], pos: [0, WALL_HEIGHT / 2, 35] },
+    ];
+
+    walls.forEach((wall) => {
+      this.addBox({ size: new THREE.Vector3(...wall.size), position: new THREE.Vector3(...wall.pos), material: wallMat, name: `${wall.id}-WALL_PERIM-wall_black_stone_01` });
+    });
+
+    const thresholdMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [1, 1], color: 0xb7a07f, roughness: 0.91, metalness: 0.0, emissive: 0x2b1c10, emissiveIntensity: 0.18 });
+    this.addBox({ size: new THREE.Vector3(4, 0.08, 1.2), position: new THREE.Vector3(0, FLOOR_Y + 0.02, -32), material: thresholdMat, name: 'INT01-D01-field-return-threshold-floor_worn_stone_01' });
+
+    this.addEastGrate();
+  }
+
+  addBabyLabyrinthStaging() {
+    const slabMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.2, 1.4], color: 0xa99d89, roughness: 0.96, metalness: 0.0, emissive: 0x1f1711, emissiveIntensity: 0.14 });
+    const relicMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.4, 0.8], color: 0x6d6255, roughness: 0.98, metalness: 0.0, emissive: 0x080606, emissiveIntensity: 0.22 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [1.4, 1], color: 0x9e927f, roughness: 0.95, metalness: 0.0 });
+
+    this.addBox({ size: new THREE.Vector3(7, 3.2, 0.45), position: new THREE.Vector3(-22, 1.6, -14.5), material: slabMat, name: 'SLAB01-R03-west-shrine-slab-wall_black_stone_01' });
+    this.addBox({ size: new THREE.Vector3(5, 1.5, 2), position: new THREE.Vector3(0, 0.75, 32), material: relicMat, name: 'RELIC01-R06-reliquary-block-wall_black_stone_01' });
+    this.addBox({ size: new THREE.Vector3(7, 0.28, 4), position: new THREE.Vector3(0, 0.14, 32), material: floorMat, name: 'RELIC01-low-alcove-dais-floor_worn_stone_01' });
+
+    const guardianDaisMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [2.5, 2.5], color: 0x8b7a67, roughness: 0.94, metalness: 0.0, emissive: 0x1b120b, emissiveIntensity: 0.16 });
+    this.addBox({ size: new THREE.Vector3(9, 0.22, 7), position: new THREE.Vector3(0, 0.11, 14), material: guardianDaisMat, name: 'R05-guardian-chamber-central-dais-floor_worn_stone_01' });
+  }
+
+  addEastGrate() {
+    const gateGroup = new THREE.Group();
+    gateGroup.name = 'GATE01-R04-east-grate-metal_gate_rusted_01';
+    const barMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: TEXTURE_REPEATS.gateBars, color: 0xffffff, roughness: 0.72, metalness: 0.48, emissive: 0x26160f, emissiveIntensity: 0.28 });
+    const beamMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: TEXTURE_REPEATS.gateBeams, color: 0xffffff, roughness: 0.72, metalness: 0.48, emissive: 0x26160f, emissiveIntensity: 0.28 });
+
+    for (let z = -10.35; z <= -5.65; z += 0.72) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.7, 0.16), barMat);
+      bar.name = 'GATE01-vertical-rusted-bar';
+      bar.position.set(11, 1.35, z);
+      gateGroup.add(bar);
+    }
+
+    [-10.75, -5.25].forEach((z) => {
+      const upright = new THREE.Mesh(new THREE.BoxGeometry(0.32, 2.85, 0.18), beamMat);
+      upright.name = 'GATE01-rusted-side-upright';
+      upright.position.set(11, 1.42, z);
+      gateGroup.add(upright);
+    });
+
+    [0.35, 1.45, 2.55].forEach((y) => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 5.5), beamMat);
+      rail.name = 'GATE01-rusted-cross-rail';
+      rail.position.set(11, y, -8);
+      gateGroup.add(rail);
+    });
+
+    this.gate = gateGroup;
+    this.scene.add(gateGroup);
   }
 
   addRoom() {
@@ -668,10 +822,12 @@ export class DungeonScene {
   }
 
   addTorches() {
-    this.addTorch(new THREE.Vector3(-5.78, 1.55, 2.25), Math.PI / 2);
-    this.addTorch(new THREE.Vector3(1.45, 1.55, -10.3), -Math.PI / 2);
-    this.addTorch(new THREE.Vector3(4.65, 1.5, -18.55), Math.PI / 2);
-    this.addTorch(new THREE.Vector3(-7.88, 1.5, -14.4), Math.PI / 2);
+    this.addTorch(new THREE.Vector3(-3.82, 1.55, -27), Math.PI / 2);
+    this.addTorch(new THREE.Vector3(3.82, 1.55, -13), -Math.PI / 2);
+    this.addTorch(new THREE.Vector3(-28.2, 1.5, -9), Math.PI / 2);
+    this.addTorch(new THREE.Vector3(13.8, 1.5, 9), -Math.PI / 2);
+    this.addTorch(new THREE.Vector3(-13.8, 1.5, 10), Math.PI / 2);
+    this.addTorch(new THREE.Vector3(6.6, 1.55, 30), -Math.PI / 2);
   }
 
   addTorch(position, rotationY) {
@@ -953,7 +1109,7 @@ export class DungeonScene {
           friendly: true,
           collision: 'none - visual roaming NPC only',
           combat: 'none - not registered as an enemy or target',
-          placement: 'opening chamber east side, clear of the center path to the gate',
+          placement: 'R05 guardian chamber around X 0, Z 14, clear of the reliquary route',
           patrolSpeed: RAM_MAN_NPC_PATROL_SPEED,
           patrolPauseSeconds: RAM_MAN_NPC_PATROL_PAUSE_SECONDS,
           patrolPoints: RAM_MAN_NPC_PATROL_POINTS.map((point) => ({ x: point.x, y: point.y, z: point.z })),
