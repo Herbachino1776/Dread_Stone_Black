@@ -32,6 +32,8 @@ const FIELD_SEGMENTS = 96;
 const FIELD_GRASS_REPEAT = [50, 50];
 const FIELD_PLAYER_START = new THREE.Vector3(0, 1.55, 170);
 const FIELD_PLAYER_YAW = Math.PI;
+const FIELD_CRYPT_A_RETURN_START = new THREE.Vector3(-95, 1.55, -30);
+const FIELD_CRYPT_A_RETURN_YAW = 0;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const CRYPT_ENTRANCES = [
   { id: 'crypt_entrance_a', label: 'Crypt A', position: new THREE.Vector3(-95, FLOOR_Y, -40), yaw: Math.PI / 2, functional: true },
@@ -57,15 +59,16 @@ const TEXTURE_REPEATS = {
 };
 
 export class DungeonScene {
-  constructor({ area = 'field' } = {}) {
+  constructor({ area = 'field', fieldSpawn = 'start' } = {}) {
     this.area = area;
+    this.fieldSpawn = fieldSpawn;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x090807);
     this.scene.fog = new THREE.Fog(0x080706, 6.5, 20);
     this.textureLoader = new THREE.TextureLoader();
     this.textureCheckRig = null;
     this.playerSpawn = this.area === 'field'
-      ? { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW }
+      ? this.getFieldPlayerSpawn()
       : { spawnPosition: new THREE.Vector3(0, 1.55, 3.2), spawnYaw: Math.PI };
     this.outdoorInteractions = [];
 
@@ -79,6 +82,7 @@ export class DungeonScene {
     this.leverUsed = false;
     this.leverTarget = new THREE.Vector3(5.35, 1.15, -2.4);
     this.shortcutTarget = new THREE.Vector3(-5.75, 1.12, ROOM_DOORWAY_Z);
+    this.indoorExitTarget = new THREE.Vector3(0, 1.45, 5.35);
     this.secretTarget = new THREE.Vector3(8.2, 1.12, -24.25);
     this.shortcutDoor = null;
     this.shortcutOpen = false;
@@ -110,6 +114,14 @@ export class DungeonScene {
         walkableRects: indoorWalkableRects,
         blockerRects: [this.gateBlocker, this.shortcutBlocker, this.secretWallBlocker],
       });
+  }
+
+  getFieldPlayerSpawn() {
+    if (this.fieldSpawn === 'cryptAExit') {
+      return { spawnPosition: FIELD_CRYPT_A_RETURN_START, spawnYaw: FIELD_CRYPT_A_RETURN_YAW };
+    }
+
+    return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
   }
 
   build() {
@@ -357,8 +369,9 @@ export class DungeonScene {
     group.position.set(position.x, this.getOutdoorTerrainHeight(position.x, position.z) - 0.45, position.z);
     group.rotation.y = yaw;
 
-    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.4, 1.3], color: 0x5d5a52, roughness: 0.96, metalness: 0.0 });
-    const slabMat = new THREE.MeshStandardMaterial({ color: 0x24211e, roughness: 0.95, metalness: 0.03, emissive: 0x030202, emissiveIntensity: 0.55 });
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.7, 1.5], color: 0x5d5a52, roughness: 0.96, metalness: 0.0 });
+    const gateMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: [1.15, 1.65], color: 0x7a6d5c, roughness: 0.82, metalness: 0.42, emissive: 0x050303, emissiveIntensity: 0.35 });
+    const stairMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [1.4, 0.42], color: 0x7b756a, roughness: 0.94, metalness: 0.0 });
     const earthMat = new THREE.MeshStandardMaterial({ color: 0x2d2519, roughness: 1.0, metalness: 0.0 });
 
     const mound = new THREE.Mesh(new THREE.CylinderGeometry(13.5, 15.5, 1.7, 12), earthMat);
@@ -378,12 +391,21 @@ export class DungeonScene {
     lintel.position.set(0, 5.65, 0.05);
     group.add(lintel);
 
-    const mouth = new THREE.Mesh(new THREE.BoxGeometry(5.8, 4.1, 1.25), slabMat);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(5.8, 4.1, 1.25), gateMat);
     mouth.position.set(0, 2.35, -0.45);
     mouth.name = `${id}-dark-tomb-mouth`;
     group.add(mouth);
 
-    const stairMat = new THREE.MeshStandardMaterial({ color: 0x34302a, roughness: 0.94, metalness: 0.0 });
+    [-1.85, 1.85].forEach((x) => {
+      const jambBand = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.45, 0.2), gateMat);
+      jambBand.position.set(x, 2.45, 0.3);
+      group.add(jambBand);
+    });
+
+    const thresholdBand = new THREE.Mesh(new THREE.BoxGeometry(5.85, 0.2, 0.28), gateMat);
+    thresholdBand.position.set(0, 0.66, 0.34);
+    group.add(thresholdBand);
+
     for (let step = 0; step < 3; step += 1) {
       const stair = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.28, 1.15), stairMat);
       stair.position.set(0, 0.1 - step * 0.12, 2.0 + step * 1.05);
@@ -391,7 +413,7 @@ export class DungeonScene {
     }
 
     if (!functional) {
-      const seal = new THREE.Mesh(new THREE.BoxGeometry(5.1, 3.45, 0.36), stoneMat);
+      const seal = new THREE.Mesh(new THREE.BoxGeometry(5.1, 3.45, 0.36), gateMat);
       seal.name = `${id}-sealed-slab`;
       seal.position.set(0, 2.2, 0.24);
       seal.rotation.z = id === 'crypt_entrance_b' ? 0.08 : -0.05;
@@ -465,6 +487,7 @@ export class DungeonScene {
     const ceilingMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.ceiling, repeat: TEXTURE_REPEATS.roomCeiling, color: 0xf2eee6, roughness: 0.96, metalness: 0.0 });
 
     this.addBox({ size: new THREE.Vector3(12, 0.18, 12), position: new THREE.Vector3(0, FLOOR_Y - 0.09, 0), material: floorMat, name: 'room-floor-floor_worn_stone_01' });
+    this.addBox({ size: new THREE.Vector3(3.9, 0.08, 1.0), position: new THREE.Vector3(0, FLOOR_Y + 0.02, 5.38), material: floorMat, name: 'field-return-threshold-floor_worn_stone_01' });
     this.addBox({ size: new THREE.Vector3(12, 0.18, 12), position: new THREE.Vector3(0, WALL_HEIGHT, 0), material: ceilingMat, name: 'room-ceiling-ceiling_dark_stone_01' });
     this.addBox({ size: new THREE.Vector3(12, WALL_HEIGHT, 0.4), position: new THREE.Vector3(0, WALL_HEIGHT / 2, 6), material: wallMat });
     // West wall leaves a barred shortcut slit that only opens from the return passage.
