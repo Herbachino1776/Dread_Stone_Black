@@ -1,6 +1,7 @@
 const INTERACT_RANGE = 2.65;
 const KEY_RANGE = 2.25;
 const LEVER_RANGE = 2.2;
+const CRYPT_RANGE = 6.8;
 
 export class Interactions {
   constructor({ player, dungeon, hud }) {
@@ -33,6 +34,16 @@ export class Interactions {
   }
 
   getNearbyInteraction() {
+    const outdoorCrypt = this.getNearbyOutdoorCrypt();
+    if (outdoorCrypt) {
+      return {
+        hint: outdoorCrypt.functional
+          ? `Tap INTERACT to test ${outdoorCrypt.label}'s black mouth.`
+          : `${outdoorCrypt.label} is sealed by a dead stone slab.`,
+        use: () => this.useOutdoorCrypt(outdoorCrypt),
+      };
+    }
+
     if (this.isNearKey()) {
       return {
         hint: 'Tap INTERACT to take the tarnished key.',
@@ -76,6 +87,15 @@ export class Interactions {
     }
 
     return null;
+  }
+
+  useOutdoorCrypt(crypt) {
+    if (crypt.functional) {
+      this.hud.showMessage('The first crypt mouth is cold and open. Its interior is deferred for the next labyrinth pass.');
+      return;
+    }
+
+    this.hud.showMessage('The sealed tomb does not move. Fog gathers in its cracks.');
   }
 
   pickUpKey() {
@@ -128,6 +148,14 @@ export class Interactions {
     } else {
       this.hud.showMessage('The switch is already lowered.');
     }
+  }
+
+  getNearbyOutdoorCrypt() {
+    if (!this.dungeon.outdoorInteractions?.length) return null;
+
+    return this.dungeon.outdoorInteractions.find((crypt) => (
+      this.isCloseEnough(crypt.target, CRYPT_RANGE) && this.isMostlyFacing(crypt.target, -0.05)
+    )) ?? null;
   }
 
   isNearKey() {

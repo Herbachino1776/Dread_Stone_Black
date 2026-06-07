@@ -25,10 +25,11 @@ export class Game {
     const { width, height } = this.getViewportSize();
     this.renderer.setSize(width, height, false);
 
-    this.camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 28);
-    this.dungeon = new DungeonScene();
+    this.camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 260);
+    const requestedArea = new URLSearchParams(window.location.search).get('area');
+    this.dungeon = new DungeonScene({ area: requestedArea === 'dungeon' ? 'dungeon' : 'field' });
     this.scene = this.dungeon.build();
-    this.player = new PlayerController(this.camera, this.dungeon.collision);
+    this.player = new PlayerController(this.camera, this.dungeon.collision, this.dungeon.playerSpawn);
     this.hud = new Hud(this.app);
     this.armsOverlay = new FirstPersonArmsOverlay(this.app);
     this.controls = new MobileControls(this.app);

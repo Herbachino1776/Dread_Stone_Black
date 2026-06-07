@@ -23,7 +23,21 @@ const TEXTURE_PATHS = {
   floor: './assets/textures/floor_worn_stone_01.png',
   ceiling: './assets/textures/ceiling_dark_stone_01.png',
   gate: './assets/textures/metal_gate_rusted_01.png',
+  fieldGrass: './assets/textures/outdoor/field_dead_grass_01.png',
 };
+
+const FIELD_SIZE = 400;
+const FIELD_HALF_SIZE = FIELD_SIZE / 2;
+const FIELD_SEGMENTS = 96;
+const FIELD_GRASS_REPEAT = [50, 50];
+const FIELD_PLAYER_START = new THREE.Vector3(0, 1.55, 170);
+const FIELD_PLAYER_YAW = Math.PI;
+const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
+const CRYPT_ENTRANCES = [
+  { id: 'crypt_entrance_a', label: 'Crypt A', position: new THREE.Vector3(-95, FLOOR_Y, -40), yaw: Math.PI / 2, functional: true },
+  { id: 'crypt_entrance_b', label: 'Crypt B', position: new THREE.Vector3(115, FLOOR_Y, -95), yaw: -Math.PI / 2, functional: false },
+  { id: 'crypt_entrance_c', label: 'Crypt C', position: new THREE.Vector3(0, FLOOR_Y, -175), yaw: Math.PI, functional: false },
+];
 
 const TEXTURE_REPEATS = {
   roomWall: [4, 1.35],
@@ -43,12 +57,17 @@ const TEXTURE_REPEATS = {
 };
 
 export class DungeonScene {
-  constructor() {
+  constructor({ area = 'field' } = {}) {
+    this.area = area;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x090807);
     this.scene.fog = new THREE.Fog(0x080706, 6.5, 20);
     this.textureLoader = new THREE.TextureLoader();
     this.textureCheckRig = null;
+    this.playerSpawn = this.area === 'field'
+      ? { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW }
+      : { spawnPosition: new THREE.Vector3(0, 1.55, 3.2), spawnYaw: Math.PI };
+    this.outdoorInteractions = [];
 
     this.gate = null;
     this.gateOpen = false;
@@ -75,21 +94,36 @@ export class DungeonScene {
     this.gateBlocker = { minX: -1.45, maxX: 1.45, minZ: -17.55, maxZ: -16.95 };
     this.shortcutBlocker = { minX: -6.15, maxX: -4.65, minZ: -5.12, maxZ: -3.58 };
     this.secretWallBlocker = { minX: 7.05, maxX: 9.35, minZ: -24.65, maxZ: -23.82 };
-    this.collision = new CollisionWorld({
-      walkableRects: [
-        { minX: -5.6, maxX: 5.6, minZ: -5.6, maxZ: 5.6 },
-        { minX: -1.35, maxX: 1.35, minZ: -17.2, maxZ: -5.6 },
-        { minX: -1.35, maxX: 1.35, minZ: -22.2, maxZ: -17.2 },
-        { minX: -4.75, maxX: 4.75, minZ: -22.2, maxZ: -19.35 },
-        { minX: 4.75, maxX: 9.6, minZ: -24.25, maxZ: -17.85 },
-        { minX: -7.85, maxX: -4.75, minZ: -22.2, maxZ: -3.35 },
-        { minX: 7.05, maxX: 9.35, minZ: -27.1, maxZ: -24.25 },
-      ],
-      blockerRects: [this.gateBlocker, this.shortcutBlocker, this.secretWallBlocker],
-    });
+    const indoorWalkableRects = [
+      { minX: -5.6, maxX: 5.6, minZ: -5.6, maxZ: 5.6 },
+      { minX: -1.35, maxX: 1.35, minZ: -17.2, maxZ: -5.6 },
+      { minX: -1.35, maxX: 1.35, minZ: -22.2, maxZ: -17.2 },
+      { minX: -4.75, maxX: 4.75, minZ: -22.2, maxZ: -19.35 },
+      { minX: 4.75, maxX: 9.6, minZ: -24.25, maxZ: -17.85 },
+      { minX: -7.85, maxX: -4.75, minZ: -22.2, maxZ: -3.35 },
+      { minX: 7.05, maxX: 9.35, minZ: -27.1, maxZ: -24.25 },
+    ];
+
+    this.collision = this.area === 'field'
+      ? new CollisionWorld({ walkableRects: [FIELD_WALKABLE_RECT], blockerRects: this.createOutdoorBlockers(), playerRadius: 0.5 })
+      : new CollisionWorld({
+        walkableRects: indoorWalkableRects,
+        blockerRects: [this.gateBlocker, this.shortcutBlocker, this.secretWallBlocker],
+      });
   }
 
   build() {
+    if (this.area === 'field') {
+      this.buildOutdoorField();
+    } else {
+      this.buildIndoorDungeon();
+    }
+
+    this.addTextureVerificationMode();
+    return this.scene;
+  }
+
+  buildIndoorDungeon() {
     this.addLights();
     this.addRoom();
     this.addCorridor();
@@ -100,8 +134,16 @@ export class DungeonScene {
     this.addLever();
     this.addGate();
     this.addRamManNpc();
-    this.addTextureVerificationMode();
-    return this.scene;
+  }
+
+  buildOutdoorField() {
+    this.scene.background = new THREE.Color(0x1b1a17);
+    this.scene.fog = new THREE.Fog(0x24211d, 55, 185);
+    this.addOutdoorLights();
+    this.addOutdoorTerrain();
+    this.addOutdoorBoundary();
+    this.addCentralLandmark();
+    CRYPT_ENTRANCES.forEach((crypt) => this.addCryptEntrance(crypt));
   }
 
   update(deltaSeconds) {
@@ -193,6 +235,171 @@ export class DungeonScene {
       }
     }
     return true;
+  }
+
+  createOutdoorBlockers() {
+    const blockers = [];
+    const wallThickness = 5;
+    blockers.push({ minX: -FIELD_HALF_SIZE - wallThickness, maxX: FIELD_HALF_SIZE + wallThickness, minZ: -FIELD_HALF_SIZE - wallThickness, maxZ: -FIELD_HALF_SIZE + 2 });
+    blockers.push({ minX: -FIELD_HALF_SIZE - wallThickness, maxX: FIELD_HALF_SIZE + wallThickness, minZ: FIELD_HALF_SIZE - 2, maxZ: FIELD_HALF_SIZE + wallThickness });
+    blockers.push({ minX: -FIELD_HALF_SIZE - wallThickness, maxX: -FIELD_HALF_SIZE + 2, minZ: -FIELD_HALF_SIZE - wallThickness, maxZ: FIELD_HALF_SIZE + wallThickness });
+    blockers.push({ minX: FIELD_HALF_SIZE - 2, maxX: FIELD_HALF_SIZE + wallThickness, minZ: -FIELD_HALF_SIZE - wallThickness, maxZ: FIELD_HALF_SIZE + wallThickness });
+
+    CRYPT_ENTRANCES.forEach(({ position }) => {
+      blockers.push({ minX: position.x - 5.6, maxX: position.x + 5.6, minZ: position.z - 3.8, maxZ: position.z + 3.8 });
+    });
+
+    blockers.push({ minX: -2.2, maxX: 2.2, minZ: -29, maxZ: -21.5 });
+    return blockers;
+  }
+
+  addOutdoorLights() {
+    const ambient = new THREE.HemisphereLight(0x667080, 0x15100b, 0.58);
+    this.scene.add(ambient);
+
+    const cloudedMoon = new THREE.DirectionalLight(0x9ba1a6, 0.36);
+    cloudedMoon.position.set(-35, 70, 45);
+    this.scene.add(cloudedMoon);
+
+    const tombFill = new THREE.PointLight(0x5b4630, 1.45, 38, 1.8);
+    tombFill.position.set(0, 3, -25);
+    this.scene.add(tombFill);
+  }
+
+  getOutdoorTerrainHeight(x, z) {
+    const ridge = Math.sin(x * 0.035) * 0.34 + Math.cos(z * 0.031) * 0.28;
+    const lowRoll = Math.sin((x + z) * 0.014) * 0.42 + Math.cos((x - z) * 0.018) * 0.22;
+    const depression = -0.34 * Math.exp(-((x * x) + ((z + 40) * (z + 40))) / 9500);
+    return THREE.MathUtils.clamp(0.58 + ridge + lowRoll + depression, 0.08, 1.22);
+  }
+
+  addOutdoorTerrain() {
+    const grassMaterial = this.makeTexturedMaterial({
+      path: TEXTURE_PATHS.fieldGrass,
+      repeat: FIELD_GRASS_REPEAT,
+      color: 0x8d8770,
+      roughness: 0.98,
+      metalness: 0.0,
+      emissive: 0x161208,
+      emissiveIntensity: 0.07,
+    });
+    const geometry = new THREE.PlaneGeometry(FIELD_SIZE, FIELD_SIZE, FIELD_SEGMENTS, FIELD_SEGMENTS);
+    geometry.rotateX(-Math.PI / 2);
+
+    const position = geometry.attributes.position;
+    for (let index = 0; index < position.count; index += 1) {
+      const x = position.getX(index);
+      const z = position.getZ(index);
+      position.setY(index, this.getOutdoorTerrainHeight(x, z) - 0.58);
+    }
+    position.needsUpdate = true;
+    geometry.computeVertexNormals();
+
+    const terrain = new THREE.Mesh(geometry, grassMaterial);
+    terrain.name = 'outdoor-tomb-field-400x400-dead-grass-repeat-50x50';
+    terrain.receiveShadow = true;
+    terrain.userData = {
+      implementedFieldSize: FIELD_SIZE,
+      longTermBlueprintSize: 800,
+      textureRepeat: FIELD_GRASS_REPEAT,
+      collisionNote: 'Visual terrain undulates; player collision stays on a stable flat 400x400 walkable rectangle for this first outdoor slice.',
+    };
+    this.scene.add(terrain);
+  }
+
+  addOutdoorBoundary() {
+    const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [24, 1.15], color: 0x635d52, roughness: 0.96, metalness: 0.0 });
+    const moundMat = new THREE.MeshStandardMaterial({ color: 0x262016, roughness: 1.0, metalness: 0.0 });
+    const wallHeight = 4.4;
+    const wallThickness = 4.5;
+
+    [
+      { size: new THREE.Vector3(FIELD_SIZE + wallThickness * 2, wallHeight, wallThickness), position: new THREE.Vector3(0, wallHeight / 2 - 0.55, -FIELD_HALF_SIZE) },
+      { size: new THREE.Vector3(FIELD_SIZE + wallThickness * 2, wallHeight, wallThickness), position: new THREE.Vector3(0, wallHeight / 2 - 0.55, FIELD_HALF_SIZE) },
+      { size: new THREE.Vector3(wallThickness, wallHeight, FIELD_SIZE + wallThickness * 2), position: new THREE.Vector3(-FIELD_HALF_SIZE, wallHeight / 2 - 0.55, 0) },
+      { size: new THREE.Vector3(wallThickness, wallHeight, FIELD_SIZE + wallThickness * 2), position: new THREE.Vector3(FIELD_HALF_SIZE, wallHeight / 2 - 0.55, 0) },
+    ].forEach((wall, index) => this.addBox({ ...wall, material: wallMat, name: `outdoor-hard-boundary-${index + 1}` }));
+
+    const fogBank = new THREE.Mesh(new THREE.BoxGeometry(FIELD_SIZE + 12, 2.2, FIELD_SIZE + 12), moundMat);
+    fogBank.name = 'outdoor-boundary-low-fog-sill';
+    fogBank.position.set(0, -1.8, 0);
+    this.scene.add(fogBank);
+  }
+
+  addCentralLandmark() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.2, 1.8], color: 0x807a6d, roughness: 0.97, metalness: 0.0 });
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x2e281f, roughness: 1.0 });
+    const group = new THREE.Group();
+    group.name = 'outdoor-central-landmark-standing-stone';
+    group.position.set(0, this.getOutdoorTerrainHeight(0, -25) - 0.2, -25);
+
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 5.4, 0.75, 9), baseMat);
+    base.position.y = 0.15;
+    group.add(base);
+
+    const marker = new THREE.Mesh(new THREE.BoxGeometry(2.2, 7.4, 1.35), stoneMat);
+    marker.position.y = 4.05;
+    marker.rotation.z = 0.08;
+    marker.rotation.y = -0.25;
+    group.add(marker);
+
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(4.8, 1.1, 1.75), stoneMat);
+    cap.position.y = 7.95;
+    cap.rotation.z = -0.11;
+    group.add(cap);
+
+    this.scene.add(group);
+  }
+
+  addCryptEntrance({ id, label, position, yaw, functional }) {
+    const group = new THREE.Group();
+    group.name = id;
+    group.position.set(position.x, this.getOutdoorTerrainHeight(position.x, position.z) - 0.45, position.z);
+    group.rotation.y = yaw;
+
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.4, 1.3], color: 0x5d5a52, roughness: 0.96, metalness: 0.0 });
+    const slabMat = new THREE.MeshStandardMaterial({ color: 0x24211e, roughness: 0.95, metalness: 0.03, emissive: 0x030202, emissiveIntensity: 0.55 });
+    const earthMat = new THREE.MeshStandardMaterial({ color: 0x2d2519, roughness: 1.0, metalness: 0.0 });
+
+    const mound = new THREE.Mesh(new THREE.CylinderGeometry(13.5, 15.5, 1.7, 12), earthMat);
+    mound.scale.z = 0.65;
+    mound.position.y = 0.35;
+    group.add(mound);
+
+    const leftPillar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 5.2, 2.1), stoneMat);
+    leftPillar.position.set(-4.1, 2.7, 0.15);
+    group.add(leftPillar);
+
+    const rightPillar = leftPillar.clone();
+    rightPillar.position.x = 4.1;
+    group.add(rightPillar);
+
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(10.2, 1.8, 2.35), stoneMat);
+    lintel.position.set(0, 5.65, 0.05);
+    group.add(lintel);
+
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(5.8, 4.1, 1.25), slabMat);
+    mouth.position.set(0, 2.35, -0.45);
+    mouth.name = `${id}-dark-tomb-mouth`;
+    group.add(mouth);
+
+    const stairMat = new THREE.MeshStandardMaterial({ color: 0x34302a, roughness: 0.94, metalness: 0.0 });
+    for (let step = 0; step < 3; step += 1) {
+      const stair = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.28, 1.15), stairMat);
+      stair.position.set(0, 0.1 - step * 0.12, 2.0 + step * 1.05);
+      group.add(stair);
+    }
+
+    if (!functional) {
+      const seal = new THREE.Mesh(new THREE.BoxGeometry(5.1, 3.45, 0.36), stoneMat);
+      seal.name = `${id}-sealed-slab`;
+      seal.position.set(0, 2.2, 0.24);
+      seal.rotation.z = id === 'crypt_entrance_b' ? 0.08 : -0.05;
+      group.add(seal);
+    }
+
+    this.outdoorInteractions.push({ id, label, target: position.clone().setY(1.5), functional });
+    this.scene.add(group);
   }
 
   addLights() {

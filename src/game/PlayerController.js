@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 
 export class PlayerController {
-  constructor(camera, collisionWorld) {
+  constructor(camera, collisionWorld, { spawnPosition = new THREE.Vector3(0, 1.55, 3.2), spawnYaw = Math.PI } = {}) {
     this.camera = camera;
     this.collisionWorld = collisionWorld;
-    this.spawnPosition = new THREE.Vector3(0, 1.55, 3.2);
-    this.spawnYaw = Math.PI;
+    this.spawnPosition = spawnPosition.clone();
+    this.spawnYaw = spawnYaw;
     this.position = this.spawnPosition.clone();
     this.yaw = this.spawnYaw;
     this.walkSpeed = 1.85;
