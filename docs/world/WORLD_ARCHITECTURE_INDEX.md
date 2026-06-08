@@ -1,6 +1,6 @@
 # Dread Stone Black - World Architecture Index
 
-Version: v0.1  
+Version: v0.2
 Lane: Game World Architect  
 Purpose: Repo-facing index for buildable location blueprints.
 
@@ -35,8 +35,11 @@ Deployment lock-ins:
 
 Creature animation lock-in:
 
-- Current animated creature states are `idle` and `walk` only.
-- Do not require attack, hurt, death, stagger, or transition animations unless the user explicitly approves them.
+- Default new animated creature states are `idle` and `walk` only.
+- Ram Man proves the friendly animated NPC pipeline.
+- Sheep Demon proves the hostile animated enemy pipeline with multiple GLB animation states.
+- Hunyuan → texture optimization → Animate Anything → GLB animation → Three.js integration is a proven creature workflow.
+- Do not require new attack, hurt, death, stagger, or transition animations unless the user explicitly approves them.
 
 ---
 
@@ -163,8 +166,8 @@ docs/world/
 
 | File | Status | Purpose |
 |---|---:|---|
-| `docs/world/overworld/reliquary_field_v01.md` | v0.1 implemented slice | 800 x 800 tomb-field master plan plus 400 x 400 first playable slice |
-| `docs/world/crypts/south_reliquary_crypt_baby_labyrinth_v01.md` | v0.1 draft | First compact 72 x 70 baby labyrinth under the South Reliquary Crypt entrance |
+| `docs/world/overworld/reliquary_field_v01.md` | v0.1 built foundation | 800 x 800 tomb-field master plan plus implemented first playable slice |
+| `docs/world/crypts/south_reliquary_crypt_baby_labyrinth_v01.md` | v0.1 built foundation | First compact baby labyrinth under the South Reliquary Crypt entrance; use addendums for future changes |
 
 ---
 
@@ -225,11 +228,26 @@ Do not add without explicit approval:
 
 ## 10. Current Architecture Priority
 
-The immediate world priority is now the first field-to-labyrinth loop:
+The first field-to-labyrinth loop is built and should be treated as the current foundation:
 
-- Reliquary Field 400 x 400 playable slice is implemented enough for now
-- South Reliquary Crypt baby labyrinth is the next build target
-- labyrinth scope should stay compact: 72 x 70 units, 5 rooms, 1 loop, 1 guardian chamber, 1 return route
-- use existing dungeon textures only
-- keep mobile readability and forgiving interaction ranges
-- guardian placement may use idle/walk only if the current GLB pipeline is stable
+- Reliquary Field outdoor tomb-field exists as the first playable overworld space.
+- South Reliquary Crypt baby labyrinth exists under the field.
+- The field-to-crypt-to-return route is a working core structure.
+- Ram Man proves the friendly animated NPC pipeline.
+- Sheep Demon proves the hostile animated enemy pipeline and is a successful concept proof.
+- Do not restart either location as a fresh build target; extend them through addendums or connected blueprints.
+
+Active priority has shifted from proving spaces to making the world flow clear and purposeful.
+
+## 11. Next Useful Work
+
+Near-term Architect/Codex tasks should focus on:
+
+- first real player objective with a simple interactable and clear feedback
+- progression reason to enter the crypts from the field
+- field landmarks, pathing, silhouettes, and navigation clarity
+- next Architect-authored blueprint for another connected location
+- South Reliquary Crypt addendums for branches, gates, reliquary rewards, shortcuts, or encounter revisions
+- future combat, creature behavior, and animation polish after world structure advances
+
+Keep these tasks small, mobile-readable, and grounded in the built field-to-crypt loop.
