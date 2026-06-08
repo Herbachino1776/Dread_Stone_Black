@@ -437,6 +437,8 @@ export class DungeonScene {
     };
 
     return Object.freeze([
+      { ...anchor('sheep_initial_west_branch', 'sheep_demon', -30, -22, 3.8), initialWave: true },
+      { ...anchor('neck_initial_east_branch', 'neck_man', 30, -22, 3.8), initialWave: true },
       anchor('sheep_spawn_a', 'sheep_demon', -39, -18, 4.5),
       anchor('sheep_spawn_b', 'sheep_demon', -48, 54, 5.0),
       anchor('neck_spawn_a', 'neck_man', 22, 25, 5.5),
@@ -509,6 +511,7 @@ export class DungeonScene {
     this.lightTime += deltaSeconds;
     this.updateTorchFlicker();
     this.updateRamManNpcPatrol(deltaSeconds);
+    this.updateBlackGrassFactionEnemies(deltaSeconds, player);
     this.updateSheepDemonEnemy(deltaSeconds, player);
   }
 
@@ -1661,13 +1664,13 @@ export class DungeonScene {
     this.sheepDemonEnemy.load();
   }
 
-  updateSheepDemonEnemy(deltaSeconds, player) {
-    if (!player) return;
+  updateBlackGrassFactionEnemies(deltaSeconds, player) {
+    if (this.area !== 'black-grass-temple' || !this.blackGrassFactionManager || !player?.position) return;
+    this.blackGrassFactionManager.update(deltaSeconds, player.position);
+  }
 
-    if (this.area === 'black-grass-temple') {
-      this.blackGrassFactionManager?.update(deltaSeconds, player.position);
-      return;
-    }
+  updateSheepDemonEnemy(deltaSeconds, player) {
+    if (!player || this.area === 'black-grass-temple') return;
 
     if (this.sheepDemonEnemies?.length) {
       this.sheepDemonEnemies.forEach((enemy) => enemy.update(deltaSeconds, player.position));
