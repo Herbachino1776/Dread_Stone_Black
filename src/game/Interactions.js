@@ -1,7 +1,9 @@
-const INTERACT_RANGE = 2.65;
-const KEY_RANGE = 2.25;
-const LEVER_RANGE = 2.2;
-const INDOOR_EXIT_RANGE = 3.6;
+const INTERACT_RANGE = 3.0;
+const KEY_RANGE = 2.55;
+const LEVER_RANGE = 2.5;
+const INDOOR_EXIT_RANGE = 4.0;
+const SHORTCUT_DOOR_RANGE = 2.55;
+const SECRET_WALL_RANGE = 2.4;
 
 export class Interactions {
   constructor({ player, dungeon, hud, feedback = null }) {
@@ -256,11 +258,11 @@ export class Interactions {
   }
 
   isFacingShortcutDoor() {
-    return Boolean(this.dungeon.shortcutTarget) && this.isCloseEnough(this.dungeon.shortcutTarget, 2.2) && this.isMostlyFacing(this.dungeon.shortcutTarget, 0.18);
+    return Boolean(this.dungeon.shortcutTarget) && this.isCloseEnough(this.dungeon.shortcutTarget, SHORTCUT_DOOR_RANGE) && this.isMostlyFacing(this.dungeon.shortcutTarget, 0.18);
   }
 
   isFacingSecretWall() {
-    return Boolean(this.dungeon.secretTarget) && this.isCloseEnough(this.dungeon.secretTarget, 2.05) && this.isMostlyFacing(this.dungeon.secretTarget, 0.2);
+    return Boolean(this.dungeon.secretTarget) && this.isCloseEnough(this.dungeon.secretTarget, SECRET_WALL_RANGE) && this.isMostlyFacing(this.dungeon.secretTarget, 0.2);
   }
 
   isFacingGate() {

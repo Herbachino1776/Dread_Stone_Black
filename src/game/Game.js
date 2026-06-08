@@ -36,9 +36,18 @@ export class Game {
     this.gameState = new GameState();
     this.dungeon = new DungeonScene({ area: requestedArea === 'dungeon' ? 'dungeon' : 'field', fieldSpawn, gameState: this.gameState });
     this.scene = this.dungeon.build();
+    const movementProfile = this.dungeon.area === 'field'
+      ? {
+        moveSpeed: PlayerController.OUTDOOR_MOVE_SPEED,
+        strafeSpeed: PlayerController.OUTDOOR_STRAFE_SPEED,
+      }
+      : {
+        moveSpeed: PlayerController.DUNGEON_MOVE_SPEED,
+        strafeSpeed: PlayerController.DUNGEON_STRAFE_SPEED,
+      };
     this.player = new PlayerController(this.camera, this.dungeon.collision, {
       ...this.dungeon.playerSpawn,
-      movementMultiplier: this.dungeon.area === 'field' ? PlayerController.OUTDOOR_MOVEMENT_MULTIPLIER : 1,
+      ...movementProfile,
     });
     this.hud = new Hud(this.app);
     this.feedback = new Feedback(this.camera);
