@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CollisionWorld } from './Collision.js';
 import { loadDungeonModel } from './ModelLoader.js';
+import { BlackGrassTempleFactionManager } from './BlackGrassTempleFactions.js';
 import { SHEEP_DEMON_CONFIG, SheepDemonEnemy } from './SheepDemonEnemy.js';
 
 const WALL_HEIGHT = 3.2;
@@ -231,6 +232,7 @@ export class DungeonScene {
     this.ramManNpcPauseTimer = 0;
     this.ramManNpcAnimation = null;
     this.sheepDemonEnemy = null;
+    this.blackGrassFactionManager = null;
     this.torchLights = [];
     this.lightTime = 0;
     this.gateBlocker = { minX: 10.72, maxX: 11.28, minZ: -10.85, maxZ: -5.15 };
@@ -300,6 +302,7 @@ export class DungeonScene {
     this.indoorExitTarget = new THREE.Vector3(0, 1.2, -76);
     this.gateTarget = new THREE.Vector3(30, 1.2, -20);
     this.blackGrassEnemyConfigs = this.createBlackGrassEnemyConfigs();
+    this.blackGrassFactionSpawnAnchors = this.createBlackGrassFactionSpawnAnchors();
     this.inspectInteractions = [
       {
         id: 'BGT_INT03',
@@ -414,6 +417,33 @@ export class DungeonScene {
         ]),
       },
     }));
+  }
+
+
+  createBlackGrassFactionSpawnAnchors() {
+    const anchor = (id, preferredFaction, x, z, patrolSpread = 5.5) => {
+      const origin = new THREE.Vector3(x, 0, z);
+      return {
+        id,
+        preferredFaction,
+        position: origin,
+        patrolPoints: Object.freeze([
+          new THREE.Vector3(x - patrolSpread, 0, z - patrolSpread * 0.45),
+          new THREE.Vector3(x + patrolSpread * 0.7, 0, z - patrolSpread * 0.65),
+          new THREE.Vector3(x + patrolSpread, 0, z + patrolSpread * 0.5),
+          new THREE.Vector3(x - patrolSpread * 0.65, 0, z + patrolSpread * 0.72),
+        ]),
+      };
+    };
+
+    return Object.freeze([
+      anchor('sheep_spawn_a', 'sheep_demon', -39, -18, 4.5),
+      anchor('sheep_spawn_b', 'sheep_demon', -48, 54, 5.0),
+      anchor('neck_spawn_a', 'neck_man', 22, 25, 5.5),
+      anchor('neck_spawn_b', 'neck_man', 44, 50, 4.8),
+      anchor('neutral_spawn_a', 'neutral', -20, 28, 5.2),
+      anchor('neutral_spawn_b', 'neutral', 12, 66, 4.8),
+    ]);
   }
 
   getFieldPlayerSpawn() {
@@ -1019,17 +1049,24 @@ export class DungeonScene {
       marker.userData = { spawnId: id, active };
       this.scene.add(marker);
     });
+
+    const factionMarkerMat = new THREE.MeshBasicMaterial({ color: 0x2c6f9f, transparent: true, opacity: 0.42 });
+    this.blackGrassFactionSpawnAnchors.forEach((anchor) => {
+      const marker = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 0.85), factionMarkerMat);
+      marker.name = `BGT-${anchor.id}-${anchor.preferredFaction}-faction-spawn-anchor`;
+      marker.position.set(anchor.position.x, 0.09, anchor.position.z);
+      marker.userData = { spawnId: anchor.id, preferredFaction: anchor.preferredFaction, factionWarAnchor: true };
+      this.scene.add(marker);
+    });
   }
 
   addBlackGrassTempleEnemies() {
-    this.sheepDemonEnemies = this.blackGrassEnemyConfigs
-      .filter((spawn) => spawn.active)
-      .map((spawn) => {
-        const enemy = new SheepDemonEnemy({ scene: this.scene, collision: this.collision, config: spawn.config });
-        enemy.load();
-        return enemy;
-      });
-    this.sheepDemonEnemy = this.sheepDemonEnemies[0] ?? null;
+    this.blackGrassFactionManager = new BlackGrassTempleFactionManager({
+      scene: this.scene,
+      collision: this.collision,
+      anchors: this.blackGrassFactionSpawnAnchors,
+    });
+    this.blackGrassFactionManager.spawnInitialWave();
   }
 
   addLights() {
@@ -1627,6 +1664,11 @@ export class DungeonScene {
   updateSheepDemonEnemy(deltaSeconds, player) {
     if (!player) return;
 
+    if (this.area === 'black-grass-temple') {
+      this.blackGrassFactionManager?.update(deltaSeconds, player.position);
+      return;
+    }
+
     if (this.sheepDemonEnemies?.length) {
       this.sheepDemonEnemies.forEach((enemy) => enemy.update(deltaSeconds, player.position));
       return;
@@ -1637,6 +1679,10 @@ export class DungeonScene {
   }
 
   consumeEnemyContactDamage(playerPosition) {
+    if (this.area === 'black-grass-temple') {
+      return this.blackGrassFactionManager?.consumeEnemyContactDamage(playerPosition) ?? null;
+    }
+
     if (this.sheepDemonEnemies?.length) {
       for (const enemy of this.sheepDemonEnemies) {
         const hit = enemy.consumeContactDamage(playerPosition);
@@ -1649,6 +1695,10 @@ export class DungeonScene {
   }
 
   damageEnemyFromPlayerAttack(attack) {
+    if (this.area === 'black-grass-temple') {
+      return this.blackGrassFactionManager?.damageEnemyFromPlayerAttack(attack) ?? null;
+    }
+
     if (this.sheepDemonEnemies?.length) {
       for (const enemy of this.sheepDemonEnemies) {
         const hit = enemy.receivePlayerAttack(attack);
