@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+const MAX_COLLISION_STEP_DISTANCE = 0.12;
+
 function pointInRect(point, rect) {
   return point.x >= rect.minX && point.x <= rect.maxX && point.z >= rect.minZ && point.z <= rect.maxZ;
 }
@@ -35,6 +37,19 @@ export class CollisionWorld {
   }
 
   moveWithCollision(position, movement) {
+    const distance = movement.length();
+    const steps = Math.max(1, Math.ceil(distance / MAX_COLLISION_STEP_DISTANCE));
+    const stepMovement = movement.clone().multiplyScalar(1 / steps);
+    let next = position.clone();
+
+    for (let i = 0; i < steps; i += 1) {
+      next = this.moveSingleStepWithCollision(next, stepMovement);
+    }
+
+    return next;
+  }
+
+  moveSingleStepWithCollision(position, movement) {
     // Axis-separated movement gives simple sliding along walls without a physics engine.
     const next = position.clone();
     const xStep = next.clone();

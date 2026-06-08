@@ -1,14 +1,16 @@
 import * as THREE from 'three';
 
-const INDOOR_WALK_SPEED = 1.85;
-const INDOOR_STRAFE_SPEED = 1.45;
-const OUTDOOR_MOVEMENT_MULTIPLIER = 5;
+const DUNGEON_MOVE_SPEED = 3.7;
+const DUNGEON_STRAFE_SPEED = 2.9;
+const OUTDOOR_MOVE_SPEED = 9.25;
+const OUTDOOR_STRAFE_SPEED = 7.25;
 
 export class PlayerController {
   constructor(camera, collisionWorld, {
     spawnPosition = new THREE.Vector3(0, 1.55, 3.2),
     spawnYaw = Math.PI,
-    movementMultiplier = 1,
+    moveSpeed = DUNGEON_MOVE_SPEED,
+    strafeSpeed = DUNGEON_STRAFE_SPEED,
   } = {}) {
     this.camera = camera;
     this.collisionWorld = collisionWorld;
@@ -16,11 +18,8 @@ export class PlayerController {
     this.spawnYaw = spawnYaw;
     this.position = this.spawnPosition.clone();
     this.yaw = this.spawnYaw;
-    this.baseWalkSpeed = INDOOR_WALK_SPEED;
-    this.baseStrafeSpeed = INDOOR_STRAFE_SPEED;
-    this.movementMultiplier = movementMultiplier;
-    this.walkSpeed = this.baseWalkSpeed * this.movementMultiplier;
-    this.strafeSpeed = this.baseStrafeSpeed * this.movementMultiplier;
+    this.walkSpeed = moveSpeed;
+    this.strafeSpeed = strafeSpeed;
     this.turnSpeed = 0.0018;
     this.lookYawSpeed = 1.9;
     this.lookPitchSpeed = 0.76;
@@ -32,8 +31,20 @@ export class PlayerController {
     this.syncCamera();
   }
 
-  static get OUTDOOR_MOVEMENT_MULTIPLIER() {
-    return OUTDOOR_MOVEMENT_MULTIPLIER;
+  static get DUNGEON_MOVE_SPEED() {
+    return DUNGEON_MOVE_SPEED;
+  }
+
+  static get DUNGEON_STRAFE_SPEED() {
+    return DUNGEON_STRAFE_SPEED;
+  }
+
+  static get OUTDOOR_MOVE_SPEED() {
+    return OUTDOOR_MOVE_SPEED;
+  }
+
+  static get OUTDOOR_STRAFE_SPEED() {
+    return OUTDOOR_STRAFE_SPEED;
   }
 
   bindKeyboard() {
