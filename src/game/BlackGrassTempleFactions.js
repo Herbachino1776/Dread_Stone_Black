@@ -56,19 +56,19 @@ const FACTIONS = Object.freeze({
     attackDamage: 12,
     playerAttackDamage: 15,
     playerAttackRange: 2.85,
-    attackRange: 2.45,
-    attackCooldownSeconds: 1.65,
+    attackRange: 2.7,
+    attackCooldownSeconds: 1.12,
     attackDamageWindow: Object.freeze({ start: 0.36, end: 0.68 }),
     desiredCombatDistance: 3.05,
     tooCloseDistance: 1.65,
-    combatEngageDistance: 4.65,
+    combatEngageDistance: 6.2,
     circleSpeed: 0.58,
-    backstepSpeed: 1.05,
-    lungeSpeed: 2.25,
+    backstepSpeed: 1.45,
+    lungeSpeed: 2.75,
     defensiveManeuverChance: 0.28,
-    offensiveLungeChance: 0.4,
-    jumpAttackChance: 0.16,
-    jumpAttackCooldownSeconds: 7.5,
+    offensiveLungeChance: 0.56,
+    jumpAttackChance: 0.28,
+    jumpAttackCooldownSeconds: 4.8,
     enemyAttackAnimations: Object.freeze(['punch_left']),
   }),
   neck_man: Object.freeze({
@@ -102,17 +102,17 @@ const FACTIONS = Object.freeze({
     attackDamage: 10,
     playerAttackDamage: 15,
     playerAttackRange: 2.75,
-    attackRange: 2.2,
-    attackCooldownSeconds: 1.35,
+    attackRange: 2.45,
+    attackCooldownSeconds: 0.95,
     attackDamageWindow: Object.freeze({ start: 0.34, end: 0.64 }),
     desiredCombatDistance: 2.65,
     tooCloseDistance: 1.5,
-    combatEngageDistance: 4.45,
-    circleSpeed: 0.82,
-    backstepSpeed: 1.25,
-    lungeSpeed: 2.55,
-    defensiveManeuverChance: 0.38,
-    offensiveLungeChance: 0.32,
+    combatEngageDistance: 5.9,
+    circleSpeed: 1.05,
+    backstepSpeed: 1.45,
+    lungeSpeed: 3.05,
+    defensiveManeuverChance: 0.28,
+    offensiveLungeChance: 0.52,
     jumpAttackChance: 0,
     jumpAttackCooldownSeconds: 999,
     enemyAttackAnimations: Object.freeze(['punch_left', 'punch_right', 'cross_punch_left', 'kick_right']),
@@ -149,17 +149,28 @@ const FACTION_STATE_MACHINE = Object.freeze([
   'dead',
 ]);
 
-const RETARGET_INTERVAL_SECONDS = 0.65;
-const FAR_AWARENESS_RADIUS = 34;
-const SAME_ROOM_AWARENESS_RADIUS = 42;
-const ADJACENT_ROOM_AWARENESS_RADIUS = 36;
-const COMBAT_AWARENESS_RADIUS = 12;
-const DOORWAY_COMBAT_AWARENESS_RADIUS = 8;
-const MAX_FAR_ROOM_PATH_STEPS = 3;
-const SHORT_ROUTE_INVESTIGATION_RADIUS = 72;
-const MAX_SHORT_ROUTE_INVESTIGATION_STEPS = 2;
-const PLAYER_DETECTION_RADIUS = 18;
-const LOSE_PLAYER_RADIUS = 28;
+const RETARGET_INTERVAL_SECONDS = 0.38;
+const ACTION_BUBBLE_PREFERRED_MIN = 12;
+const ACTION_BUBBLE_PREFERRED_MAX = 28;
+const ACTION_BUBBLE_HARD_RADIUS = 48;
+const ACTION_BUBBLE_RECYCLE_RADIUS = 58;
+const MIN_PLAYER_SPAWN_DISTANCE = 10;
+const FAR_AWARENESS_RADIUS = 26;
+const SAME_ROOM_AWARENESS_RADIUS = 32;
+const ADJACENT_ROOM_AWARENESS_RADIUS = 30;
+const COMBAT_AWARENESS_RADIUS = 15;
+const DOORWAY_COMBAT_AWARENESS_RADIUS = 10;
+const MAX_FAR_ROOM_PATH_STEPS = 1;
+const SHORT_ROUTE_INVESTIGATION_RADIUS = 42;
+const MAX_SHORT_ROUTE_INVESTIGATION_STEPS = 1;
+const PLAYER_DETECTION_RADIUS = 13.5;
+const LOSE_PLAYER_RADIUS = 22;
+const PLAYER_REVENGE_SECONDS = 6;
+const PLAYER_NEAR_FIGHT_SECONDS = 2.25;
+const NO_OPPOSING_TARGET_PLAYER_SECONDS = 2.75;
+const NEARBY_COMBAT_TIMEOUT_SECONDS = 18;
+const FAR_IRRELEVANT_REDIRECT_SECONDS = 4;
+const FAR_IRRELEVANT_RECYCLE_SECONDS = 9;
 const RESPAWN_COOLDOWN_SECONDS = 10;
 const CORPSE_SECONDS = 5;
 const MAX_ACTIVE_BY_FACTION = Object.freeze({ sheep_demon: 2, neck_man: 2 });
@@ -366,6 +377,12 @@ class BlackGrassFactionEnemy {
     this.stuckElapsed = 0;
     this.unstuckTimer = 0;
     this.unstuckDirection = new THREE.Vector3();
+    this.directorTarget = null;
+    this.directorTargetReason = null;
+    this.noOpposingTargetElapsed = 0;
+    this.playerRevengeTimer = 0;
+    this.playerFightProximityElapsed = 0;
+    this.farIrrelevantElapsed = 0;
   }
 
   load() {
@@ -599,6 +616,7 @@ class BlackGrassFactionEnemy {
     this.attackCooldown = Math.max(0, this.attackCooldown - deltaSeconds);
     this.devCombatLogElapsed += deltaSeconds;
     this.jumpAttackCooldown = Math.max(0, this.jumpAttackCooldown - deltaSeconds);
+    this.playerRevengeTimer = Math.max(0, this.playerRevengeTimer - deltaSeconds);
     this.awarenessReactionDelay = Math.max(0, this.awarenessReactionDelay - deltaSeconds);
     if (!this.group || this.isRemoved) return;
 
@@ -614,6 +632,7 @@ class BlackGrassFactionEnemy {
       this.selectTarget(context);
     }
 
+    this.updateDirectorPressureTimers(deltaSeconds, context);
     this.pathRepathElapsed += deltaSeconds;
 
     if (this.unstuckTimer > 0) {
@@ -645,7 +664,7 @@ class BlackGrassFactionEnemy {
     }
 
     if (this.currentTarget?.type === 'enemy') {
-      this.updateEnemyTarget(deltaSeconds);
+      this.updateEnemyTarget(deltaSeconds, context);
       this.updateDevNavigationMarkers();
       return;
     }
@@ -656,18 +675,41 @@ class BlackGrassFactionEnemy {
       return;
     }
 
+    if (this.directorTarget) {
+      this.updateDirectorTarget(deltaSeconds);
+      this.updateDevNavigationMarkers();
+      return;
+    }
+
     this.updatePatrol(deltaSeconds);
     this.updateDevNavigationMarkers();
+  }
+
+  updateDirectorPressureTimers(deltaSeconds, context) {
+    const opposingEnemy = this.findNearestOpposingEnemy(context);
+    if (opposingEnemy) {
+      this.noOpposingTargetElapsed = 0;
+    } else {
+      this.noOpposingTargetElapsed += deltaSeconds;
+    }
+
+    const nearPlayer = context.playerPosition && horizontalDistance(this.group.position, context.playerPosition) <= PLAYER_DETECTION_RADIUS + 2;
+    const fightingOpposing = this.currentTarget?.type === 'enemy'
+      && ['combat_enter', 'combat_circle', 'combat_feint', 'combat_lunge', 'attack_enemy_faction', 'jump_attack_enemy_faction', 'defensive_backstep', 'defensive_strafe', 'recover'].includes(this.behaviorState);
+    this.playerFightProximityElapsed = nearPlayer && fightingOpposing
+      ? this.playerFightProximityElapsed + deltaSeconds
+      : Math.max(0, this.playerFightProximityElapsed - deltaSeconds * 1.5);
   }
 
   isTargetStillValid(context) {
     if (this.currentTarget?.type === 'enemy') {
       const enemy = this.currentTarget.enemy;
-      return enemy?.isAlive && this.getOpposingAwareness(enemy).tier !== 'none';
+      return enemy?.isAlive && this.getOpposingAwareness(enemy, context).tier !== 'none';
     }
     if (this.currentTarget?.type === 'player') {
       const enemyTarget = this.findNearestOpposingEnemy(context);
-      if (enemyTarget) return false;
+      const enemyIsImmediate = enemyTarget && ['melee', 'combat'].includes(this.awarenessTier);
+      if (enemyIsImmediate && this.playerRevengeTimer <= 0) return false;
       return context.playerPosition && horizontalDistance(this.group.position, context.playerPosition) <= LOSE_PLAYER_RADIUS;
     }
     return false;
@@ -676,9 +718,13 @@ class BlackGrassFactionEnemy {
   selectTarget(context) {
     const previousTargetId = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy?.id : null;
     const opposingEnemy = this.findNearestOpposingEnemy(context);
-    if (opposingEnemy) {
+    const shouldPressurePlayer = this.shouldTargetPlayer(context, opposingEnemy);
+    const opposingIsImmediatelyRelevant = opposingEnemy && ['melee', 'combat', 'same_room', 'adjacent_room'].includes(this.awarenessTier);
+
+    if (opposingEnemy && (!shouldPressurePlayer || opposingIsImmediatelyRelevant)) {
+      this.noOpposingTargetElapsed = 0;
       if (previousTargetId !== opposingEnemy.id) {
-        this.awarenessReactionDelay = 0.4 + Math.random() * 0.8;
+        this.awarenessReactionDelay = opposingIsImmediatelyRelevant ? 0.08 + Math.random() * 0.24 : 0.22 + Math.random() * 0.34;
         this.combatManeuverTimer = 0;
         this.logCombatEvent('target-acquired', { target: opposingEnemy, maneuver: this.awarenessTier, distance: horizontalDistance(this.group.position, opposingEnemy.group.position) });
       }
@@ -689,17 +735,30 @@ class BlackGrassFactionEnemy {
       return;
     }
 
-    if (context.playerPosition && horizontalDistance(this.group.position, context.playerPosition) <= PLAYER_DETECTION_RADIUS) {
+    if (shouldPressurePlayer) {
       this.currentTarget = { type: 'player' };
-      this.group.userData.targetType = 'player_fallback';
+      this.group.userData.targetType = this.playerRevengeTimer > 0 ? 'player_revenge' : 'player_fallback';
       this.group.userData.targetId = 'player';
+      this.logCombatEvent('player-targeted', { maneuver: this.group.userData.targetType, distance: horizontalDistance(this.group.position, context.playerPosition) });
       return;
     }
 
     this.currentTarget = null;
-    this.group.userData.targetType = 'patrol';
-    this.group.userData.targetId = null;
+    this.group.userData.targetType = this.directorTarget ? 'director_encounter_zone' : 'patrol';
+    this.group.userData.targetId = this.directorTargetReason ?? null;
     this.group.userData.awarenessTier = 'none';
+  }
+
+  shouldTargetPlayer(context, opposingEnemy) {
+    if (!context.playerPosition || !this.group) return false;
+    const playerDistance = horizontalDistance(this.group.position, context.playerPosition);
+    const opposingDistance = opposingEnemy?.group ? horizontalDistance(this.group.position, opposingEnemy.group.position) : Infinity;
+    const playerClose = playerDistance <= PLAYER_DETECTION_RADIUS;
+    const revenge = this.playerRevengeTimer > 0 && playerDistance <= LOSE_PLAYER_RADIUS;
+    const noOpposing = !opposingEnemy && this.noOpposingTargetElapsed >= NO_OPPOSING_TARGET_PLAYER_SECONDS && playerDistance <= LOSE_PLAYER_RADIUS;
+    const playerInterruptingFight = this.playerFightProximityElapsed >= PLAYER_NEAR_FIGHT_SECONDS && playerDistance <= PLAYER_DETECTION_RADIUS + 2;
+    const playerCloserThanStuckEnemy = opposingEnemy && playerDistance + 2 < opposingDistance && this.stuckElapsed > STUCK_SECONDS * 0.7 && playerDistance <= LOSE_PLAYER_RADIUS;
+    return revenge || playerClose || noOpposing || playerInterruptingFight || playerCloserThanStuckEnemy;
   }
 
   findNearestOpposingEnemy(context) {
@@ -708,7 +767,7 @@ class BlackGrassFactionEnemy {
     let nearestAwareness = null;
     context.enemies.forEach((enemy) => {
       if (enemy === this || enemy.species !== this.template.opposingFactionId || !enemy.isAlive || !enemy.group) return;
-      const awareness = this.getOpposingAwareness(enemy);
+      const awareness = this.getOpposingAwareness(enemy, context);
       if (awareness.tier === 'none' || awareness.distance >= nearestDistance) return;
       nearest = enemy;
       nearestDistance = awareness.distance;
@@ -720,7 +779,7 @@ class BlackGrassFactionEnemy {
     return nearest;
   }
 
-  getOpposingAwareness(enemy) {
+  getOpposingAwareness(enemy, context = null) {
     if (!this.group || !enemy?.group) return { tier: 'none', distance: Infinity, roomPath: [] };
     const distance = horizontalDistance(this.group.position, enemy.group.position);
     const visible = this.hasLineOfMovement(this.group.position, enemy.group.position);
@@ -731,7 +790,13 @@ class BlackGrassFactionEnemy {
     const roomSteps = roomPath.length > 1 ? roomPath.length - 1 : (sameRoom ? 0 : Infinity);
     const adjacentRoom = roomSteps === 1;
     const nearDoorway = adjacentRoom && distance <= DOORWAY_COMBAT_AWARENESS_RADIUS;
+    const selfNearPlayer = context?.playerPosition ? horizontalDistance(this.group.position, context.playerPosition) <= ACTION_BUBBLE_HARD_RADIUS : false;
+    const targetNearPlayer = context?.playerPosition ? horizontalDistance(enemy.group.position, context.playerPosition) <= ACTION_BUBBLE_HARD_RADIUS : false;
+    const inPlayerActionBubble = selfNearPlayer && targetNearPlayer;
 
+    if (inPlayerActionBubble && distance <= ACTION_BUBBLE_PREFERRED_MAX) {
+      return { tier: distance <= this.template.combatEngageDistance ? 'melee' : 'combat', distance, roomPath };
+    }
     if ((sameRoom && distance <= this.template.combatEngageDistance) || distance <= this.template.combatEngageDistance || nearDoorway) {
       return { tier: 'melee', distance, roomPath };
     }
@@ -753,14 +818,14 @@ class BlackGrassFactionEnemy {
     return { tier: 'none', distance, roomPath };
   }
 
-  updateEnemyTarget(deltaSeconds) {
+  updateEnemyTarget(deltaSeconds, context) {
     const target = this.currentTarget.enemy;
     if (!target?.isAlive || !target.group) {
       this.currentTarget = null;
       return;
     }
 
-    const awareness = this.getOpposingAwareness(target);
+    const awareness = this.getOpposingAwareness(target, context);
     this.awarenessTier = awareness.tier;
     this.group.userData.awarenessTier = awareness.tier;
     this.group.userData.roomPathToEnemy = awareness.roomPath;
@@ -880,7 +945,21 @@ class BlackGrassFactionEnemy {
       return;
     }
 
-    this.moveToPosition(playerPosition, this.template.walkSpeed, deltaSeconds, Math.max(0, distance - this.template.attackRange * 0.82), 'seek_player_fallback');
+    this.moveToPosition(playerPosition, this.template.seekSpeed * 0.88, deltaSeconds, Math.max(0, distance - this.template.attackRange * 0.82), 'seek_player_fallback');
+  }
+
+  updateDirectorTarget(deltaSeconds) {
+    const toTarget = this.directorTarget.clone().sub(this.group.position);
+    toTarget.y = 0;
+    const distance = toTarget.length();
+    if (distance < 1.2) {
+      this.directorTarget = null;
+      this.directorTargetReason = null;
+      this.setBehaviorState('patrol');
+      return;
+    }
+    const speed = distance > ACTION_BUBBLE_PREFERRED_MAX ? this.template.seekSpeed * 0.82 : this.template.walkSpeed * 0.95;
+    this.moveToPosition(this.directorTarget, speed, deltaSeconds, Math.max(0, distance - 0.9), 'investigate_enemy_faction');
   }
 
   updatePatrol(deltaSeconds) {
@@ -907,7 +986,7 @@ class BlackGrassFactionEnemy {
   beginAttack(state, { maneuver = null } = {}) {
     this.attackElapsed = 0;
     this.attackHasDamaged = false;
-    this.attackCooldown = this.template.attackCooldownSeconds * (0.85 + Math.random() * 0.35);
+    this.attackCooldown = this.template.attackCooldownSeconds * (0.8 + Math.random() * 0.35);
     this.combatManeuverTimer = 0;
     this.setBehaviorState(state, { force: true });
     this.logCombatEvent('attack-started', {
@@ -938,7 +1017,7 @@ class BlackGrassFactionEnemy {
       if (this.currentTarget?.type === 'player') {
         this.setBehaviorState('seek_player_fallback');
       } else {
-        this.recoverTimer = 0.22 + Math.random() * 0.28;
+        this.recoverTimer = 0.12 + Math.random() * 0.18;
         this.setBehaviorState('recover');
       }
     }
@@ -979,6 +1058,7 @@ class BlackGrassFactionEnemy {
     const distance = horizontalDistance(this.group.position, playerPosition);
     if (distance > this.template.attackRange) return null;
     this.attackHasDamaged = true;
+    this.logCombatEvent('damage-applied', { maneuver: 'player_hit', distance, damage: this.template.attackDamage }, { force: true });
     return {
       source: this.template.displayName,
       amount: this.template.attackDamage,
@@ -1269,7 +1349,9 @@ export class BlackGrassTempleFactionManager {
     this.spawnSerial = 0;
     this.respawnTimers = { sheep_demon: null, neck_man: null };
     this.devStatusElapsed = 0;
+    this.nearbyCombatQuietSeconds = 0;
     this.initialWaveSpawned = false;
+    this.encounterZones = this.createEncounterZones();
     this.maxActiveByFaction = MAX_ACTIVE_BY_FACTION;
     this.respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS;
     this.userData = {
@@ -1278,6 +1360,12 @@ export class BlackGrassTempleFactionManager {
       stateMachine: FACTION_STATE_MACHINE,
       targetPriority: ['nearest living opposing-faction enemy', 'player fallback', 'patrol target'],
       retargetIntervalSeconds: RETARGET_INTERVAL_SECONDS,
+      battleDirector: {
+        preferredActionDistance: [ACTION_BUBBLE_PREFERRED_MIN, ACTION_BUBBLE_PREFERRED_MAX],
+        hardFarDistance: ACTION_BUBBLE_HARD_RADIUS,
+        minimumSpawnDistance: MIN_PLAYER_SPAWN_DISTANCE,
+        quietCombatTimeoutSeconds: NEARBY_COMBAT_TIMEOUT_SECONDS,
+      },
       awareness: {
         farRadius: FAR_AWARENESS_RADIUS,
         sameRoomRadius: SAME_ROOM_AWARENESS_RADIUS,
@@ -1295,6 +1383,142 @@ export class BlackGrassTempleFactionManager {
     };
   }
 
+  createEncounterZones() {
+    const roomCenter = (roomId, fallback) => this.navigationGraph?.rooms?.[roomId]?.center?.clone?.() ?? fallback;
+    return Object.freeze([
+      { id: 'early_first_branch', label: 'early battle zone near first branch', roomIds: ['R02', 'R03'], center: new THREE.Vector3(0, 0, -47), sheepOffset: new THREE.Vector3(-5.5, 0, -1.5), neckOffset: new THREE.Vector3(5.5, 0, 1.5) },
+      { id: 'west_side_chamber', label: 'west side chamber skirmish zone', roomIds: ['R04', 'R07'], center: new THREE.Vector3(-32, 0, -10), sheepOffset: new THREE.Vector3(-3, 0, -3), neckOffset: new THREE.Vector3(3, 0, 3) },
+      { id: 'middle_grass_tavern', label: 'middle grass tavern zone', roomIds: ['R06', 'R08'], center: roomCenter('R08', new THREE.Vector3(0, 0, 28)), sheepOffset: new THREE.Vector3(-6, 0, -4), neckOffset: new THREE.Vector3(6, 0, 4) },
+      { id: 'central_reliquary', label: 'central reliquary zone', roomIds: ['R11', 'R12'], center: roomCenter('R11', new THREE.Vector3(0, 0, 62)), sheepOffset: new THREE.Vector3(-7, 0, -2), neckOffset: new THREE.Vector3(7, 0, 2) },
+      { id: 'east_side_chamber', label: 'east side chamber skirmish zone', roomIds: ['R05', 'R10'], center: new THREE.Vector3(34, 0, -12), sheepOffset: new THREE.Vector3(-3, 0, 3), neckOffset: new THREE.Vector3(3, 0, -3) },
+    ]);
+  }
+
+  chooseEncounterZone(playerPosition) {
+    if (!playerPosition) return this.encounterZones[0];
+    const playerRoom = this.findNearestNavigableRoom(playerPosition);
+    let best = this.encounterZones[0];
+    let bestScore = Infinity;
+    this.encounterZones.forEach((zone) => {
+      const directDistance = horizontalDistance(playerPosition, zone.center);
+      const roomSteps = playerRoom ? Math.min(...zone.roomIds.map((roomId) => {
+        const path = this.findRoomPath(playerRoom.id, roomId);
+        return path.length ? path.length - 1 : 99;
+      })) : 0;
+      const preferredPenalty = Math.abs(directDistance - ACTION_BUBBLE_PREFERRED_MAX);
+      const score = preferredPenalty + roomSteps * 9 + Math.max(0, directDistance - ACTION_BUBBLE_HARD_RADIUS) * 4;
+      if (score < bestScore) {
+        best = zone;
+        bestScore = score;
+      }
+    });
+    return best;
+  }
+
+  getEncounterPoint(zone, species) {
+    const offset = species === 'sheep_demon' ? zone.sheepOffset : zone.neckOffset;
+    const point = zone.center.clone().add(offset);
+    return this.collision?.canStandAt(point) ? point : zone.center.clone();
+  }
+
+  updateBattleDirector(deltaSeconds, playerPosition) {
+    const living = this.getLivingEnemies();
+    const zone = this.chooseEncounterZone(playerPosition);
+    const nearby = living.filter((enemy) => enemy.group && playerPosition && horizontalDistance(enemy.group.position, playerPosition) <= ACTION_BUBBLE_HARD_RADIUS);
+    const combatPairs = [];
+    nearby.forEach((enemy) => {
+      if (enemy.currentTarget?.type === 'enemy' && enemy.currentTarget.enemy?.isAlive) {
+        const target = enemy.currentTarget.enemy;
+        const pairId = [enemy.id, target.id].sort().join('>');
+        if (!combatPairs.some((pair) => pair.id === pairId)) {
+          combatPairs.push({ id: pairId, a: enemy.id, b: target.id, distance: horizontalDistance(enemy.group.position, target.group.position) });
+        }
+      }
+    });
+    const activeNearbyCombat = combatPairs.some((pair) => pair.distance <= COMBAT_AWARENESS_RADIUS + 2);
+    this.nearbyCombatQuietSeconds = activeNearbyCombat ? 0 : this.nearbyCombatQuietSeconds + deltaSeconds;
+
+    living.forEach((enemy) => {
+      if (!enemy.group || !playerPosition) return;
+      const playerDistance = horizontalDistance(enemy.group.position, playerPosition);
+      if (playerDistance > ACTION_BUBBLE_HARD_RADIUS || (!enemy.currentTarget && this.nearbyCombatQuietSeconds > FAR_IRRELEVANT_REDIRECT_SECONDS)) {
+        enemy.farIrrelevantElapsed += deltaSeconds;
+        enemy.directorTarget = this.getEncounterPoint(zone, enemy.species);
+        enemy.directorTargetReason = zone.id;
+        enemy.retargetElapsed = RETARGET_INTERVAL_SECONDS;
+      } else {
+        enemy.farIrrelevantElapsed = Math.max(0, enemy.farIrrelevantElapsed - deltaSeconds * 0.5);
+      }
+
+      if (playerDistance > ACTION_BUBBLE_RECYCLE_RADIUS && enemy.farIrrelevantElapsed > FAR_IRRELEVANT_RECYCLE_SECONDS && !this.hasLineOfMovement(playerPosition, enemy.group.position)) {
+        const anchor = this.chooseSpawnAnchor(enemy.species, 0, new Set(), { playerPosition, directorZone: zone });
+        enemy.group.position.copy(anchor.position);
+        enemy.spawnAnchor = anchor;
+        enemy.patrolPoints = anchor.patrolPoints;
+        enemy.directorTarget = this.getEncounterPoint(zone, enemy.species);
+        enemy.farIrrelevantElapsed = 0;
+        enemy.retargetElapsed = RETARGET_INTERVAL_SECONDS;
+        enemy.group.userData.recycledByBattleDirector = { zone: zone.id, reason: 'far_irrelevant', playerDistance: Number(playerDistance.toFixed(2)) };
+      }
+    });
+
+    const livingSheep = this.getLivingEnemies('sheep_demon').length;
+    const livingNeck = this.getLivingEnemies('neck_man').length;
+    if (playerPosition && this.nearbyCombatQuietSeconds > NEARBY_COMBAT_TIMEOUT_SECONDS) {
+      if (livingSheep < 1) this.spawnFaction('sheep_demon', 1, { playerPosition, directorZone: zone });
+      if (livingNeck < 1) this.spawnFaction('neck_man', 1, { playerPosition, directorZone: zone });
+      if (living.length < 3) {
+        this.spawnFaction(livingSheep <= livingNeck ? 'sheep_demon' : 'neck_man', 1, { playerPosition, directorZone: zone });
+      }
+      this.nearbyCombatQuietSeconds = NEARBY_COMBAT_TIMEOUT_SECONDS * 0.35;
+    }
+
+    return { zone, nearbyCount: nearby.length, combatPairs, quietSeconds: this.nearbyCombatQuietSeconds };
+  }
+
+  findNearestNavigableRoom(position) {
+    const rooms = Object.values(this.navigationGraph?.rooms ?? {});
+    const containing = rooms.find((room) => position.x >= room.minX && position.x <= room.maxX && position.z >= room.minZ && position.z <= room.maxZ);
+    if (containing) return containing;
+    return rooms.reduce((best, room) => {
+      const distance = horizontalDistance(position, room.center);
+      return !best || distance < best.distance ? { room, distance } : best;
+    }, null)?.room ?? null;
+  }
+
+  findRoomPath(startRoomId, targetRoomId) {
+    if (startRoomId === targetRoomId) return [startRoomId];
+    const queue = [[startRoomId]];
+    const visited = new Set([startRoomId]);
+    while (queue.length) {
+      const path = queue.shift();
+      const roomId = path[path.length - 1];
+      for (const link of this.navigationGraph?.links?.[roomId] ?? []) {
+        if (visited.has(link.to)) continue;
+        const nextPath = [...path, link.to];
+        if (link.to === targetRoomId) return nextPath;
+        visited.add(link.to);
+        queue.push(nextPath);
+      }
+    }
+    return [];
+  }
+
+  hasLineOfMovement(start, end) {
+    const delta = end.clone().sub(start);
+    delta.y = 0;
+    const distance = delta.length();
+    if (distance < 0.001) return true;
+    const direction = delta.multiplyScalar(1 / distance);
+    const steps = Math.max(2, Math.ceil(distance / 0.75));
+    for (let i = 1; i <= steps; i += 1) {
+      const probe = start.clone().add(direction.clone().multiplyScalar((distance * i) / steps));
+      probe.y = 0;
+      if (!this.collision?.canStandAt(probe)) return false;
+    }
+    return true;
+  }
+
   spawnInitialWave() {
     this.spawnFaction('sheep_demon', INITIAL_WAVE_BY_FACTION.sheep_demon, { initialWave: true });
     this.spawnFaction('neck_man', INITIAL_WAVE_BY_FACTION.neck_man, { initialWave: true });
@@ -1309,7 +1533,8 @@ export class BlackGrassTempleFactionManager {
   }
 
   update(deltaSeconds, playerPosition) {
-    const context = { enemies: this.enemies, playerPosition };
+    const director = this.updateBattleDirector(deltaSeconds, playerPosition);
+    const context = { enemies: this.enemies, playerPosition, director };
     this.enemies.forEach((enemy) => enemy.update(deltaSeconds, context));
     this.updateDevStatus(deltaSeconds);
 
@@ -1322,7 +1547,7 @@ export class BlackGrassTempleFactionManager {
       if (this.respawnTimers[species] !== null) {
         this.respawnTimers[species] -= deltaSeconds;
         if (this.respawnTimers[species] <= 0) {
-          this.spawnFaction(species, 2);
+          this.spawnFaction(species, 2, { playerPosition, directorZone: director.zone });
           this.respawnTimers[species] = null;
           this.forceRetargetOpposingFaction(species);
         }
@@ -1332,12 +1557,12 @@ export class BlackGrassTempleFactionManager {
     this.enemies = this.enemies.filter((enemy) => !enemy.isRemoved || enemy.isAlive);
   }
 
-  spawnFaction(species, requestedCount, { initialWave = false } = {}) {
+  spawnFaction(species, requestedCount, { initialWave = false, playerPosition = null, directorZone = null } = {}) {
     const livingCount = this.getLivingEnemies(species).length;
     const count = Math.max(0, Math.min(requestedCount, this.maxActiveByFaction[species] - livingCount));
     const usedAnchorIds = new Set();
     for (let i = 0; i < count; i += 1) {
-      const anchor = this.chooseSpawnAnchor(species, i, usedAnchorIds, { initialWave });
+      const anchor = this.chooseSpawnAnchor(species, i, usedAnchorIds, { initialWave, playerPosition, directorZone });
       usedAnchorIds.add(anchor.id);
       const enemy = new BlackGrassFactionEnemy({
         scene: this.scene,
@@ -1354,7 +1579,7 @@ export class BlackGrassTempleFactionManager {
     }
   }
 
-  chooseSpawnAnchor(species, offset = 0, excludedAnchorIds = new Set(), { initialWave = false } = {}) {
+  chooseSpawnAnchor(species, offset = 0, excludedAnchorIds = new Set(), { initialWave = false, playerPosition = null, directorZone = null } = {}) {
     const initialPool = this.anchors.filter((anchor) => anchor.initialWave && anchor.preferredFaction === species);
     const pool = initialWave && initialPool.length
       ? initialPool
@@ -1364,10 +1589,18 @@ export class BlackGrassTempleFactionManager {
     let bestScore = -Infinity;
     pool.forEach((anchor, index) => {
       const nearestOpposing = opposing.reduce((nearest, enemy) => Math.min(nearest, horizontalDistance(anchor.position, enemy.group.position)), Infinity);
+      const playerDistance = playerPosition ? horizontalDistance(anchor.position, playerPosition) : ACTION_BUBBLE_PREFERRED_MAX;
+      const zoneDistance = directorZone ? horizontalDistance(anchor.position, directorZone.center) : 0;
+      const tooClosePenalty = playerDistance < MIN_PLAYER_SPAWN_DISTANCE ? -500 : 0;
+      const tooFarPenalty = playerDistance > ACTION_BUBBLE_HARD_RADIUS ? -(playerDistance - ACTION_BUBBLE_HARD_RADIUS) * 4 : 0;
+      const preferredDistanceScore = playerPosition ? -Math.abs(playerDistance - ACTION_BUBBLE_PREFERRED_MAX) * 1.8 : 0;
+      const encounterScore = directorZone ? -zoneDistance * 2.4 : 0;
+      const opposingMeetScore = Number.isFinite(nearestOpposing) ? -Math.abs(nearestOpposing - 14) * 1.1 : 0;
       const factionBias = anchor.preferredFaction === species ? 12 : 0;
       const repeatBias = -Math.abs(index - offset) * 0.01;
       const duplicateWavePenalty = excludedAnchorIds.has(anchor.id) ? -1000 : 0;
-      const score = (Number.isFinite(nearestOpposing) ? nearestOpposing : 120) + factionBias + repeatBias + duplicateWavePenalty;
+      const losPenalty = playerPosition && this.hasLineOfMovement(playerPosition, anchor.position) && playerDistance < ACTION_BUBBLE_PREFERRED_MAX ? -35 : 0;
+      const score = factionBias + repeatBias + duplicateWavePenalty + preferredDistanceScore + encounterScore + opposingMeetScore + tooClosePenalty + tooFarPenalty + losPenalty;
       if (score > bestScore) {
         best = anchor;
         bestScore = score;
@@ -1388,6 +1621,10 @@ export class BlackGrassTempleFactionManager {
       livingSheep: countLiving('sheep_demon'),
       livingNeck: countLiving('neck_man'),
       respawnTimers: Object.fromEntries(Object.entries(this.respawnTimers).map(([species, timer]) => [species, timer === null ? null : Number(timer.toFixed(2))])),
+      battleDirector: {
+        quietSeconds: Number(this.nearbyCombatQuietSeconds.toFixed(2)),
+        encounterZones: this.encounterZones.map((zone) => zone.id),
+      },
       targets: this.enemies.map((enemy) => ({
         id: enemy.id,
         species: enemy.species,
@@ -1438,7 +1675,18 @@ export class BlackGrassTempleFactionManager {
   damageEnemyFromPlayerAttack(attack) {
     for (const enemy of this.enemies) {
       const hit = enemy.receivePlayerAttack(attack);
-      if (hit) return hit;
+      if (hit) {
+        enemy.playerRevengeTimer = PLAYER_REVENGE_SECONDS;
+        enemy.retargetElapsed = RETARGET_INTERVAL_SECONDS;
+        this.enemies.forEach((ally) => {
+          if (ally !== enemy && ally.species === enemy.species && ally.isAlive && ally.group && enemy.group && horizontalDistance(ally.group.position, enemy.group.position) <= PLAYER_DETECTION_RADIUS) {
+            ally.playerRevengeTimer = Math.max(ally.playerRevengeTimer, PLAYER_REVENGE_SECONDS * 0.55);
+            ally.retargetElapsed = RETARGET_INTERVAL_SECONDS;
+          }
+        });
+        enemy.logCombatEvent('damage-applied', { maneuver: 'player_attack', damage: hit.damage, targetHp: hit.remainingHealth, killed: hit.killed }, { force: true });
+        return hit;
+      }
     }
     return null;
   }
