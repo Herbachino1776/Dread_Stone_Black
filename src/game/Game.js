@@ -111,7 +111,7 @@ export class Game {
     if (!this.combat.isPlayerDead) {
       this.player.update(deltaSeconds, this.controls);
     }
-    this.dungeon.update(deltaSeconds);
+    this.dungeon.update(deltaSeconds, this.player);
     this.combat.update(deltaSeconds);
     this.armsOverlay.update(deltaSeconds);
     this.interactions.updateHint();

@@ -36,6 +36,11 @@ export class Combat {
       return;
     }
 
+    const contactHit = this.dungeon.consumeEnemyContactDamage?.(this.player.position);
+    if (contactHit) {
+      this.applyPlayerDamage(contactHit.amount, contactHit.source);
+    }
+
     if (this.controls.consumeAttack()) {
       this.tryPlayerAttack();
     }
@@ -44,6 +49,20 @@ export class Combat {
 
   recoverPower(deltaSeconds) {
     this.power = Math.min(this.maxPower, this.power + POWER_RECOVERY_RATE * deltaSeconds);
+  }
+
+  applyPlayerDamage(amount, source = 'the enemy') {
+    this.hp = Math.max(0, this.hp - amount);
+    this.hud.flashDamage();
+
+    if (this.hp <= 0) {
+      this.isPlayerDead = true;
+      this.deathResetTimer = 2.4;
+      this.hud.showMessage(`${source} knocks you back into blackness.`);
+      return;
+    }
+
+    this.hud.showMessage(`${source} burns your ribs. Back away.`);
   }
 
   tryPlayerAttack() {
@@ -61,9 +80,9 @@ export class Combat {
     this.attackCooldown = ATTACK_COOLDOWN;
     this.hud.playAttack();
 
-    // Ram Man is friendly and non-targetable in this pass, so the attack remains a
-    // first-person arms/power feedback test without damaging or aggroing any NPC.
-    this.hud.showMessage('Your hands cut only stale air. Ram Man keeps his distance.');
+    // This pass proves the Sheep Demon can threaten the player, but does not yet
+    // add player-to-enemy damage or attack/death animation states.
+    this.hud.showMessage('Your hands cut only stale air. Enemy damage waits for the combat animation pass.');
   }
 
   resetEncounter() {

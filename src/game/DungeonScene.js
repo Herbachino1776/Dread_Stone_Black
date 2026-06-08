@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CollisionWorld } from './Collision.js';
 import { loadDungeonModel } from './ModelLoader.js';
+import { SheepDemonEnemy } from './SheepDemonEnemy.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -215,6 +216,7 @@ export class DungeonScene {
     this.ramManNpcMoveTarget = 1;
     this.ramManNpcPauseTimer = 0;
     this.ramManNpcAnimation = null;
+    this.sheepDemonEnemy = null;
     this.torchLights = [];
     this.lightTime = 0;
     this.gateBlocker = { minX: 10.72, maxX: 11.28, minZ: -10.85, maxZ: -5.15 };
@@ -291,6 +293,7 @@ export class DungeonScene {
     this.addBabyLabyrinthStaging();
     this.addTorches();
     this.addRamManNpc();
+    this.addSheepDemonEnemy();
   }
 
   buildOutdoorField() {
@@ -302,7 +305,7 @@ export class DungeonScene {
     this.addReliquaryFieldStructures();
   }
 
-  update(deltaSeconds) {
+  update(deltaSeconds, player = null) {
     if (this.key) {
       this.key.rotation.y += deltaSeconds * 1.7;
       this.key.position.y = this.keyTarget.y + Math.sin(performance.now() * 0.003) * 0.035;
@@ -319,6 +322,7 @@ export class DungeonScene {
     this.lightTime += deltaSeconds;
     this.updateTorchFlicker();
     this.updateRamManNpcPatrol(deltaSeconds);
+    this.updateSheepDemonEnemy(deltaSeconds, player);
   }
 
   collectKey() {
@@ -1169,6 +1173,27 @@ export class DungeonScene {
       });
   }
 
+
+
+  addSheepDemonEnemy() {
+    if (this.area !== 'dungeon') return;
+
+    this.sheepDemonEnemy = new SheepDemonEnemy({
+      scene: this.scene,
+      collision: this.collision,
+    });
+    this.sheepDemonEnemy.load();
+  }
+
+  updateSheepDemonEnemy(deltaSeconds, player) {
+    if (!this.sheepDemonEnemy || !player) return;
+
+    this.sheepDemonEnemy.update(deltaSeconds, player.position);
+  }
+
+  consumeEnemyContactDamage(playerPosition) {
+    return this.sheepDemonEnemy?.consumeContactDamage(playerPosition) ?? null;
+  }
 
   addGate() {
     const gateGroup = new THREE.Group();
