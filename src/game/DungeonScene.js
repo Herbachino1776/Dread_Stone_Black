@@ -182,9 +182,10 @@ function babyLabyrinthWallBlockerRects() {
 }
 
 export class DungeonScene {
-  constructor({ area = 'field', fieldSpawn = 'start' } = {}) {
+  constructor({ area = 'field', fieldSpawn = 'start', gameState = null } = {}) {
     this.area = area;
     this.fieldSpawn = fieldSpawn;
+    this.gameState = gameState;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(INDOOR_BACKGROUND_COLOR);
     this.scene.fog = new THREE.Fog(INDOOR_FOG_COLOR, INDOOR_FOG_NEAR, INDOOR_FOG_FAR);
@@ -194,6 +195,10 @@ export class DungeonScene {
       ? this.getFieldPlayerSpawn()
       : { spawnPosition: new THREE.Vector3(0, 1.55, -30), spawnYaw: 0 };
     this.outdoorInteractions = [];
+    this.fieldShrineGroup = null;
+    this.fieldShrineAnswerLight = null;
+    this.reliquaryBlock = null;
+    this.reliquaryAwakeLight = null;
 
     this.gate = null;
     this.gateOpen = false;
@@ -255,8 +260,9 @@ export class DungeonScene {
         id: 'INT04',
         target: new THREE.Vector3(0, 1.2, 32),
         range: 3.2,
-        hint: 'Tap INTERACT to inspect the reliquary block.',
-        message: 'Something black sleeps inside the stone.',
+        hint: this.gameState?.hasSouthReliquaryFragment ? 'The black reliquary is awake.' : 'Tap INTERACT to wake the reliquary block.',
+        message: this.gameState?.hasSouthReliquaryFragment ? 'The black reliquary hums inside the stone.' : 'Something black sleeps inside the stone.',
+        type: 'southReliquary',
       },
     ];
 
@@ -323,6 +329,62 @@ export class DungeonScene {
     this.updateTorchFlicker();
     this.updateRamManNpcPatrol(deltaSeconds);
     this.updateSheepDemonEnemy(deltaSeconds, player);
+  }
+
+  activateSouthReliquary() {
+    const changed = this.gameState?.collectSouthReliquaryFragment() ?? false;
+    this.wakeReliquaryVisuals();
+
+    const reliquaryInteraction = this.inspectInteractions.find((interaction) => interaction.type === 'southReliquary');
+    if (reliquaryInteraction) {
+      reliquaryInteraction.hint = 'The black reliquary is awake.';
+      reliquaryInteraction.message = 'The black reliquary hums inside the stone.';
+    }
+
+    return changed;
+  }
+
+  wakeReliquaryVisuals() {
+    if (this.reliquaryBlock?.material) {
+      this.reliquaryBlock.material.color.setHex(0x8f7a5a);
+      this.reliquaryBlock.material.emissive.setHex(0x2f1f11);
+      this.reliquaryBlock.material.emissiveIntensity = 0.82;
+    }
+
+    if (!this.reliquaryAwakeLight) {
+      this.reliquaryAwakeLight = new THREE.PointLight(0xc98a3a, 1.8, 13, 1.35);
+      this.reliquaryAwakeLight.name = 'RELIC01-black-reliquary-awake-amber-light';
+      this.reliquaryAwakeLight.position.set(0, 1.45, 32);
+      this.scene.add(this.reliquaryAwakeLight);
+    }
+  }
+
+  awakenFieldShrine() {
+    const shrineInteraction = this.outdoorInteractions.find((interaction) => interaction.type === 'centralShrine');
+    if (shrineInteraction) {
+      shrineInteraction.hint = 'Tap INTERACT to touch the awakened shrine.';
+      shrineInteraction.message = 'The field answers.';
+    }
+
+    if (!this.fieldShrineGroup || this.fieldShrineAnswerLight) return;
+
+    this.fieldShrineAnswerLight = new THREE.PointLight(0xd7a13b, 1.9, 22, 1.35);
+    this.fieldShrineAnswerLight.name = 'S01-field-answer-warm-unlock-light';
+    this.fieldShrineAnswerLight.position.set(0, 2.1, -3.6);
+    this.fieldShrineGroup.add(this.fieldShrineAnswerLight);
+
+    this.fieldShrineGroup.traverse((child) => {
+      if (!child.material) return;
+      if (child.name.includes('answer-seam')) {
+        child.material.color.setHex(0xd4bb67);
+        child.material.emissive.setHex(0xb18226);
+        child.material.emissiveIntensity = 1.15;
+        child.material.opacity = 0.82;
+      } else if (child.material.emissive) {
+        child.material.emissive.setHex(0x241a0e);
+        child.material.emissiveIntensity = Math.max(child.material.emissiveIntensity ?? 0, 0.24);
+      }
+    });
   }
 
   collectKey() {
@@ -483,8 +545,25 @@ export class DungeonScene {
   }
 
   addBrokenShrine() {
-    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.4, 1.8], color: 0x9a9587, roughness: 0.97, metalness: 0.0 });
-    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [2.4, 2.4], color: 0x8f8779, roughness: 0.96, metalness: 0.0 });
+    const shrineAwake = Boolean(this.gameState?.hasSouthReliquaryFragment);
+    const stoneMat = this.makeTexturedMaterial({
+      path: TEXTURE_PATHS.wall,
+      repeat: [1.4, 1.8],
+      color: shrineAwake ? 0xb2a780 : 0x9a9587,
+      roughness: 0.97,
+      metalness: 0.0,
+      emissive: shrineAwake ? 0x3b2d12 : 0x000000,
+      emissiveIntensity: shrineAwake ? 0.36 : 0,
+    });
+    const floorMat = this.makeTexturedMaterial({
+      path: TEXTURE_PATHS.floor,
+      repeat: [2.4, 2.4],
+      color: shrineAwake ? 0xa99d7e : 0x8f8779,
+      roughness: 0.96,
+      metalness: 0.0,
+      emissive: shrineAwake ? 0x241a0e : 0x000000,
+      emissiveIntensity: shrineAwake ? 0.24 : 0,
+    });
     const group = new THREE.Group();
     group.name = 'S01-Broken-Shrine';
 
@@ -493,6 +572,25 @@ export class DungeonScene {
     group.add(this.createBoxMesh({ size: new THREE.Vector3(2, 5, 2), position: new THREE.Vector3(-7, 2.5, 0), material: stoneMat, name: 'S01_C-shrine-left-broken-pillar-wall_black_stone_01', rotation: new THREE.Euler(0, 0.06, -0.03) }));
     group.add(this.createBoxMesh({ size: new THREE.Vector3(2, 3.5, 2), position: new THREE.Vector3(7, 1.75, -1), material: stoneMat, name: 'S01_D-shrine-right-broken-pillar-wall_black_stone_01', rotation: new THREE.Euler(0, -0.08, 0.04) }));
 
+    const answerMat = new THREE.MeshStandardMaterial({
+      color: shrineAwake ? 0xd4bb67 : 0x2b2822,
+      roughness: 0.8,
+      metalness: 0.0,
+      emissive: shrineAwake ? 0xb18226 : 0x050403,
+      emissiveIntensity: shrineAwake ? 1.15 : 0.14,
+      transparent: true,
+      opacity: shrineAwake ? 0.82 : 0.32,
+    });
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(8.5, 0.14, 1.8), position: new THREE.Vector3(0, 0.64, -3.6), material: answerMat, name: 'S01_E-shrine-answer-seam-unlocked-glow' }));
+
+    if (shrineAwake) {
+      this.fieldShrineAnswerLight = new THREE.PointLight(0xd7a13b, 1.9, 22, 1.35);
+      this.fieldShrineAnswerLight.name = 'S01-field-answer-warm-unlock-light';
+      this.fieldShrineAnswerLight.position.set(0, 2.1, -3.6);
+      group.add(this.fieldShrineAnswerLight);
+    }
+
+    this.fieldShrineGroup = group;
     this.enableOutdoorReadableShadows(group);
     this.scene.add(group);
     this.outdoorInteractions.push({
@@ -500,9 +598,10 @@ export class DungeonScene {
       label: 'Broken Shrine',
       target: new THREE.Vector3(0, 1, -8),
       range: OUTDOOR_INTERACTION_RANGE,
-      hint: 'Tap INTERACT to inspect the broken shrine.',
-      message: 'The stone is warm where the sun has not touched it.',
+      hint: shrineAwake ? 'Tap INTERACT to touch the awakened shrine.' : 'Tap INTERACT to inspect the sealed shrine.',
+      message: shrineAwake ? 'The field answers.' : 'The shrine is cold. Something is missing.',
       functional: false,
+      type: 'centralShrine',
     });
   }
 
@@ -726,7 +825,14 @@ export class DungeonScene {
     const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [1.4, 1], color: 0x9e927f, roughness: 0.95, metalness: 0.0 });
 
     this.addBox({ size: new THREE.Vector3(7, 3.2, 0.45), position: new THREE.Vector3(-22, 1.6, -14.5), material: slabMat, name: 'SLAB01-R03-west-shrine-slab-wall_black_stone_01' });
-    this.addBox({ size: new THREE.Vector3(5, 1.5, 2), position: new THREE.Vector3(0, 0.75, 32), material: relicMat, name: 'RELIC01-R06-reliquary-block-wall_black_stone_01' });
+    if (this.gameState?.hasSouthReliquaryFragment) {
+      relicMat.color.setHex(0x8f7a5a);
+      relicMat.emissive.setHex(0x2f1f11);
+      relicMat.emissiveIntensity = 0.82;
+    }
+
+    this.reliquaryBlock = this.addBox({ size: new THREE.Vector3(5, 1.5, 2), position: new THREE.Vector3(0, 0.75, 32), material: relicMat, name: 'RELIC01-R06-reliquary-block-wall_black_stone_01' });
+    if (this.gameState?.hasSouthReliquaryFragment) this.wakeReliquaryVisuals();
     this.addBox({ size: new THREE.Vector3(7, 0.28, 4), position: new THREE.Vector3(0, 0.14, 32), material: floorMat, name: 'RELIC01-low-alcove-dais-floor_worn_stone_01' });
 
     const guardianDaisMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [2.5, 2.5], color: 0x8b7a67, roughness: 0.94, metalness: 0.0, emissive: 0x1b120b, emissiveIntensity: 0.16 });
