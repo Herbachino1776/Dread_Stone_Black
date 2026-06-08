@@ -108,6 +108,78 @@ const TEXTURE_REPEATS = {
   gateBeams: [2.75, 0.45],
 };
 
+
+const BABY_LABYRINTH_WALL_SEGMENTS = [
+  // R01 entry corridor with an open field-return threshold and open north split-hall connection.
+  { id: 'R01_W', size: [0.35, WALL_HEIGHT, 18], pos: [-4, WALL_HEIGHT / 2, -25] },
+  { id: 'R01_E', size: [0.35, WALL_HEIGHT, 18], pos: [4, WALL_HEIGHT / 2, -25] },
+  { id: 'R01_S_W', size: [2, WALL_HEIGHT, 0.35], pos: [-3, WALL_HEIGHT / 2, -34] },
+  { id: 'R01_S_E', size: [2, WALL_HEIGHT, 0.35], pos: [3, WALL_HEIGHT / 2, -34] },
+
+  // R02 split hall. West/east gaps are centered on D03/D04; north gap leads through D05.
+  { id: 'R02_S_W', size: [7, WALL_HEIGHT, 0.35], pos: [-7.5, WALL_HEIGHT / 2, -18] },
+  { id: 'R02_S_E', size: [7, WALL_HEIGHT, 0.35], pos: [7.5, WALL_HEIGHT / 2, -18] },
+  { id: 'R02_W_S', size: [0.35, WALL_HEIGHT, 4.2], pos: [-11, WALL_HEIGHT / 2, -13.9] },
+  { id: 'R02_W_N', size: [0.35, WALL_HEIGHT, 2.2], pos: [-11, WALL_HEIGHT / 2, -7.1] },
+  { id: 'R02_E_S', size: [0.35, WALL_HEIGHT, 4.2], pos: [11, WALL_HEIGHT / 2, -13.9] },
+  { id: 'R02_E_N', size: [0.35, WALL_HEIGHT, 2.2], pos: [11, WALL_HEIGHT / 2, -7.1] },
+  { id: 'R02_N_W', size: [8.8, WALL_HEIGHT, 0.35], pos: [-6.6, WALL_HEIGHT / 2, -6] },
+  { id: 'R02_N_E', size: [8.8, WALL_HEIGHT, 0.35], pos: [6.6, WALL_HEIGHT / 2, -6] },
+
+  // R03 west shrine chamber. East and north walls are split only at the intended D03/D06 openings.
+  { id: 'R03_W', size: [0.35, WALL_HEIGHT, 16], pos: [-30, WALL_HEIGHT / 2, -8] },
+  { id: 'R03_S', size: [16, WALL_HEIGHT, 0.35], pos: [-22, WALL_HEIGHT / 2, -16] },
+  { id: 'R03_E_S', size: [0.35, WALL_HEIGHT, 4.2], pos: [-14, WALL_HEIGHT / 2, -13.9] },
+  { id: 'R03_E_N', size: [0.35, WALL_HEIGHT, 8.2], pos: [-14, WALL_HEIGHT / 2, -4.1] },
+  { id: 'R03_N_W', size: [10.2, WALL_HEIGHT, 0.35], pos: [-24.9, WALL_HEIGHT / 2, 0] },
+  { id: 'R03_N_E', size: [2.2, WALL_HEIGHT, 0.35], pos: [-15.1, WALL_HEIGHT / 2, 0] },
+
+  // R04 east chamber. West and north walls are split only at the intended D04/D08 openings.
+  { id: 'R04_W_S', size: [0.35, WALL_HEIGHT, 4.2], pos: [14, WALL_HEIGHT / 2, -13.9] },
+  { id: 'R04_W_N', size: [0.35, WALL_HEIGHT, 8.2], pos: [14, WALL_HEIGHT / 2, -4.1] },
+  { id: 'R04_E', size: [0.35, WALL_HEIGHT, 16], pos: [30, WALL_HEIGHT / 2, -8] },
+  { id: 'R04_S', size: [16, WALL_HEIGHT, 0.35], pos: [22, WALL_HEIGHT / 2, -16] },
+  { id: 'R04_N_W', size: [2.2, WALL_HEIGHT, 0.35], pos: [15.1, WALL_HEIGHT / 2, 0] },
+  { id: 'R04_N_E', size: [10.2, WALL_HEIGHT, 0.35], pos: [24.9, WALL_HEIGHT / 2, 0] },
+
+  // D05 connector from split hall to guardian chamber; side walls close the void around the doorway run.
+  { id: 'D05_W', size: [0.35, WALL_HEIGHT, 8], pos: [-2.2, WALL_HEIGHT / 2, -2] },
+  { id: 'D05_E', size: [0.35, WALL_HEIGHT, 8], pos: [2.2, WALL_HEIGHT / 2, -2] },
+
+  // Loop corridors keep the baby labyrinth compact while reconnecting to the main room.
+  { id: 'C01_W', size: [0.35, WALL_HEIGHT, 20], pos: [-22, WALL_HEIGHT / 2, 10] },
+  { id: 'C01_E_S', size: [0.35, WALL_HEIGHT, 6.2], pos: [-14, WALL_HEIGHT / 2, 3.1] },
+  { id: 'C01_E_N', size: [0.35, WALL_HEIGHT, 10.2], pos: [-14, WALL_HEIGHT / 2, 14.9] },
+  { id: 'C02_E', size: [0.35, WALL_HEIGHT, 20], pos: [22, WALL_HEIGHT / 2, 10] },
+  { id: 'C02_W_S', size: [0.35, WALL_HEIGHT, 6.2], pos: [14, WALL_HEIGHT / 2, 3.1] },
+  { id: 'C02_W_N', size: [0.35, WALL_HEIGHT, 10.2], pos: [14, WALL_HEIGHT / 2, 14.9] },
+
+  // R05 guardian chamber. South wall is split for D05; side gaps accept the loops; north opens to alcove.
+  { id: 'R05_S_W', size: [12.8, WALL_HEIGHT, 0.35], pos: [-8.6, WALL_HEIGHT / 2, 2] },
+  { id: 'R05_S_E', size: [12.8, WALL_HEIGHT, 0.35], pos: [8.6, WALL_HEIGHT / 2, 2] },
+  { id: 'R05_W_S', size: [0.35, WALL_HEIGHT, 4.2], pos: [-15, WALL_HEIGHT / 2, 4.1] },
+  { id: 'R05_W_N', size: [0.35, WALL_HEIGHT, 16.2], pos: [-15, WALL_HEIGHT / 2, 17.9] },
+  { id: 'R05_E_S', size: [0.35, WALL_HEIGHT, 4.2], pos: [15, WALL_HEIGHT / 2, 4.1] },
+  { id: 'R05_E_N', size: [0.35, WALL_HEIGHT, 16.2], pos: [15, WALL_HEIGHT / 2, 17.9] },
+  { id: 'R05_N_W', size: [13, WALL_HEIGHT, 0.35], pos: [-8.5, WALL_HEIGHT / 2, 26] },
+  { id: 'R05_N_E', size: [13, WALL_HEIGHT, 0.35], pos: [8.5, WALL_HEIGHT / 2, 26] },
+
+  // R06 reliquary alcove.
+  { id: 'R06_W', size: [0.35, WALL_HEIGHT, 10], pos: [-7, WALL_HEIGHT / 2, 30] },
+  { id: 'R06_E', size: [0.35, WALL_HEIGHT, 10], pos: [7, WALL_HEIGHT / 2, 30] },
+  { id: 'R06_N', size: [14, WALL_HEIGHT, 0.35], pos: [0, WALL_HEIGHT / 2, 35] },
+];
+
+function babyLabyrinthWallBlockerRects() {
+  return BABY_LABYRINTH_WALL_SEGMENTS.map((wall) => ({
+    id: wall.id,
+    minX: wall.pos[0] - wall.size[0] / 2,
+    maxX: wall.pos[0] + wall.size[0] / 2,
+    minZ: wall.pos[2] - wall.size[2] / 2,
+    maxZ: wall.pos[2] + wall.size[2] / 2,
+  }));
+}
+
 export class DungeonScene {
   constructor({ area = 'field', fieldSpawn = 'start' } = {}) {
     this.area = area;
@@ -146,6 +218,7 @@ export class DungeonScene {
     this.torchLights = [];
     this.lightTime = 0;
     this.gateBlocker = { minX: 10.72, maxX: 11.28, minZ: -10.85, maxZ: -5.15 };
+    const indoorWallBlockers = babyLabyrinthWallBlockerRects();
     const indoorWalkableRects = [
       { id: 'R01', minX: -4, maxX: 4, minZ: -34, maxZ: -16 },
       { id: 'R02', minX: -11, maxX: 11, minZ: -18, maxZ: -6 },
@@ -153,8 +226,8 @@ export class DungeonScene {
       { id: 'R04', minX: 14, maxX: 30, minZ: -16, maxZ: 0 },
       { id: 'R05', minX: -15, maxX: 15, minZ: 2, maxZ: 26 },
       { id: 'R06', minX: -7, maxX: 7, minZ: 25, maxZ: 35 },
-      { id: 'C01', minX: -22, maxX: -14, minZ: -2, maxZ: 20 },
-      { id: 'C02', minX: 14, maxX: 22, minZ: -2, maxZ: 20 },
+      { id: 'C01', minX: -22, maxX: -15, minZ: 0, maxZ: 20 },
+      { id: 'C02', minX: 15, maxX: 22, minZ: 0, maxZ: 20 },
       { id: 'D03', minX: -14, maxX: -11, minZ: -11.8, maxZ: -8.2 },
       { id: 'D04', minX: 11, maxX: 14, minZ: -11.8, maxZ: -8.2 },
       { id: 'D05', minX: -2.2, maxX: 2.2, minZ: -6, maxZ: 2 },
@@ -189,7 +262,7 @@ export class DungeonScene {
       ? new CollisionWorld({ walkableRects: [FIELD_WALKABLE_RECT], blockerRects: this.createOutdoorBlockers(), playerRadius: 0.5 })
       : new CollisionWorld({
         walkableRects: indoorWalkableRects,
-        blockerRects: [this.gateBlocker],
+        blockerRects: [this.gateBlocker, ...indoorWallBlockers],
       });
   }
 
@@ -600,76 +673,33 @@ export class DungeonScene {
   addBabyLabyrinthInterior() {
     const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: TEXTURE_REPEATS.longWall, color: 0xffffff, roughness: 0.94, metalness: 0.01, emissive: INDOOR_STONE_EMISSIVE, emissiveIntensity: INDOOR_STONE_EMISSIVE_INTENSITY });
 
-    const zones = [
-      { id: 'R01', center: new THREE.Vector3(0, 0, -25), width: 8, depth: 18, repeat: [2, 5] },
-      { id: 'R02', center: new THREE.Vector3(0, 0, -12), width: 22, depth: 12, repeat: [6, 3] },
-      { id: 'R03', center: new THREE.Vector3(-22, 0, -8), width: 16, depth: 16, repeat: [4, 4] },
-      { id: 'R04', center: new THREE.Vector3(22, 0, -8), width: 16, depth: 16, repeat: [4, 4] },
-      { id: 'R05', center: new THREE.Vector3(0, 0, 14), width: 30, depth: 24, repeat: [8, 6] },
-      { id: 'R06', center: new THREE.Vector3(0, 0, 30), width: 14, depth: 10, repeat: [4, 3] },
-      { id: 'C01', center: new THREE.Vector3(-18, 0, 8), width: 8, depth: 24, repeat: [2, 6] },
-      { id: 'C02', center: new THREE.Vector3(18, 0, 8), width: 8, depth: 24, repeat: [2, 6] },
+    const floorAndCeilingSlabs = [
+      // Trimmed slabs meet at doorway edges instead of overlapping at the same Y plane.
+      { id: 'R01', minX: -4, maxX: 4, minZ: -34, maxZ: -18, repeat: [2, 4.5] },
+      { id: 'R02', minX: -11, maxX: 11, minZ: -18, maxZ: -6, repeat: [6, 3] },
+      { id: 'R03', minX: -30, maxX: -14, minZ: -16, maxZ: 0, repeat: [4, 4] },
+      { id: 'R04', minX: 14, maxX: 30, minZ: -16, maxZ: 0, repeat: [4, 4] },
+      { id: 'R05', minX: -15, maxX: 15, minZ: 2, maxZ: 25, repeat: [8, 5.75] },
+      { id: 'R06', minX: -7, maxX: 7, minZ: 25, maxZ: 35, repeat: [4, 3] },
+      { id: 'C01', minX: -22, maxX: -15, minZ: 0, maxZ: 20, repeat: [2, 5] },
+      { id: 'C02', minX: 15, maxX: 22, minZ: 0, maxZ: 20, repeat: [2, 5] },
+      { id: 'D03', minX: -14, maxX: -11, minZ: -11.8, maxZ: -8.2, repeat: [1, 1] },
+      { id: 'D04', minX: 11, maxX: 14, minZ: -11.8, maxZ: -8.2, repeat: [1, 1] },
+      { id: 'D05', minX: -2.2, maxX: 2.2, minZ: -6, maxZ: 2, repeat: [1.25, 2.25] },
     ];
 
-    zones.forEach((zone) => {
-      const zoneFloorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: zone.repeat, color: 0xffffff, roughness: 0.9, metalness: 0.0, emissive: INDOOR_FLOOR_EMISSIVE, emissiveIntensity: INDOOR_FLOOR_EMISSIVE_INTENSITY });
-      const zoneCeilingMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.ceiling, repeat: zone.repeat, color: 0xffffff, roughness: 0.95, metalness: 0.0, emissive: INDOOR_CEILING_EMISSIVE, emissiveIntensity: INDOOR_CEILING_EMISSIVE_INTENSITY });
-      this.addBox({ size: new THREE.Vector3(zone.width, 0.18, zone.depth), position: new THREE.Vector3(zone.center.x, FLOOR_Y - 0.09, zone.center.z), material: zoneFloorMat, name: `FLOOR-${zone.id}-floor_worn_stone_01` });
-      this.addBox({ size: new THREE.Vector3(zone.width, 0.18, zone.depth), position: new THREE.Vector3(zone.center.x, WALL_HEIGHT, zone.center.z), material: zoneCeilingMat, name: `CEIL-${zone.id}-ceiling_dark_stone_01` });
+    floorAndCeilingSlabs.forEach((slab) => {
+      const width = slab.maxX - slab.minX;
+      const depth = slab.maxZ - slab.minZ;
+      const centerX = (slab.minX + slab.maxX) / 2;
+      const centerZ = (slab.minZ + slab.maxZ) / 2;
+      const slabFloorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: slab.repeat, color: 0xffffff, roughness: 0.9, metalness: 0.0, emissive: INDOOR_FLOOR_EMISSIVE, emissiveIntensity: INDOOR_FLOOR_EMISSIVE_INTENSITY });
+      const slabCeilingMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.ceiling, repeat: slab.repeat, color: 0xffffff, roughness: 0.95, metalness: 0.0, emissive: INDOOR_CEILING_EMISSIVE, emissiveIntensity: INDOOR_CEILING_EMISSIVE_INTENSITY });
+      this.addBox({ size: new THREE.Vector3(width, 0.18, depth), position: new THREE.Vector3(centerX, FLOOR_Y - 0.09, centerZ), material: slabFloorMat, name: `FLOOR-${slab.id}-floor_worn_stone_01` });
+      this.addBox({ size: new THREE.Vector3(width, 0.18, depth), position: new THREE.Vector3(centerX, WALL_HEIGHT, centerZ), material: slabCeilingMat, name: `CEIL-${slab.id}-ceiling_dark_stone_01` });
     });
 
-    const walls = [
-      // R01 entry corridor with an open field-return threshold and open north split-hall connection.
-      { id: 'R01_W', size: [0.35, WALL_HEIGHT, 18], pos: [-4, WALL_HEIGHT / 2, -25] },
-      { id: 'R01_E', size: [0.35, WALL_HEIGHT, 18], pos: [4, WALL_HEIGHT / 2, -25] },
-      { id: 'R01_S_W', size: [2, WALL_HEIGHT, 0.35], pos: [-3, WALL_HEIGHT / 2, -34] },
-      { id: 'R01_S_E', size: [2, WALL_HEIGHT, 0.35], pos: [3, WALL_HEIGHT / 2, -34] },
-
-      // R02 split hall. West/east gaps create the clear first branch; north gap leads to guardian chamber.
-      { id: 'R02_S_W', size: [7, WALL_HEIGHT, 0.35], pos: [-7.5, WALL_HEIGHT / 2, -18] },
-      { id: 'R02_S_E', size: [7, WALL_HEIGHT, 0.35], pos: [7.5, WALL_HEIGHT / 2, -18] },
-      { id: 'R02_W_S', size: [0.35, WALL_HEIGHT, 3.2], pos: [-11, WALL_HEIGHT / 2, -15.4] },
-      { id: 'R02_W_N', size: [0.35, WALL_HEIGHT, 4.8], pos: [-11, WALL_HEIGHT / 2, -8.4] },
-      { id: 'R02_E_S', size: [0.35, WALL_HEIGHT, 3.2], pos: [11, WALL_HEIGHT / 2, -15.4] },
-      { id: 'R02_E_N', size: [0.35, WALL_HEIGHT, 4.8], pos: [11, WALL_HEIGHT / 2, -8.4] },
-      { id: 'R02_N_W', size: [8.8, WALL_HEIGHT, 0.35], pos: [-6.6, WALL_HEIGHT / 2, -6] },
-      { id: 'R02_N_E', size: [8.8, WALL_HEIGHT, 0.35], pos: [6.6, WALL_HEIGHT / 2, -6] },
-
-      // R03 west shrine chamber, with east doorway from split hall and north loop exit.
-      { id: 'R03_W', size: [0.35, WALL_HEIGHT, 16], pos: [-30, WALL_HEIGHT / 2, -8] },
-      { id: 'R03_S', size: [16, WALL_HEIGHT, 0.35], pos: [-22, WALL_HEIGHT / 2, -16] },
-      { id: 'R03_N_W', size: [6.2, WALL_HEIGHT, 0.35], pos: [-26.9, WALL_HEIGHT / 2, 0] },
-      { id: 'R03_N_E', size: [6.2, WALL_HEIGHT, 0.35], pos: [-17.1, WALL_HEIGHT / 2, 0] },
-
-      // R04 east chamber, with grate at west doorway and north loop exit.
-      { id: 'R04_E', size: [0.35, WALL_HEIGHT, 16], pos: [30, WALL_HEIGHT / 2, -8] },
-      { id: 'R04_S', size: [16, WALL_HEIGHT, 0.35], pos: [22, WALL_HEIGHT / 2, -16] },
-      { id: 'R04_N_W', size: [6.2, WALL_HEIGHT, 0.35], pos: [17.1, WALL_HEIGHT / 2, 0] },
-      { id: 'R04_N_E', size: [6.2, WALL_HEIGHT, 0.35], pos: [26.9, WALL_HEIGHT / 2, 0] },
-
-      // Loop corridors keep the baby labyrinth compact while reconnecting to the main room.
-      { id: 'C01_W', size: [0.35, WALL_HEIGHT, 22], pos: [-22, WALL_HEIGHT / 2, 9] },
-      { id: 'C01_E_S', size: [0.35, WALL_HEIGHT, 8.2], pos: [-14, WALL_HEIGHT / 2, 2.1] },
-      { id: 'C01_E_N', size: [0.35, WALL_HEIGHT, 10.2], pos: [-14, WALL_HEIGHT / 2, 14.9] },
-      { id: 'C02_E', size: [0.35, WALL_HEIGHT, 22], pos: [22, WALL_HEIGHT / 2, 9] },
-      { id: 'C02_W_S', size: [0.35, WALL_HEIGHT, 8.2], pos: [14, WALL_HEIGHT / 2, 2.1] },
-      { id: 'C02_W_N', size: [0.35, WALL_HEIGHT, 10.2], pos: [14, WALL_HEIGHT / 2, 14.9] },
-
-      // R05 guardian chamber. South wall is split for the split-hall doorway; side gaps accept the loops; north opens to alcove.
-      { id: 'R05_S_W', size: [12.8, WALL_HEIGHT, 0.35], pos: [-8.6, WALL_HEIGHT / 2, 2] },
-      { id: 'R05_S_E', size: [12.8, WALL_HEIGHT, 0.35], pos: [8.6, WALL_HEIGHT / 2, 2] },
-      { id: 'R05_W_S', size: [0.35, WALL_HEIGHT, 4.2], pos: [-15, WALL_HEIGHT / 2, 4.1] },
-      { id: 'R05_W_N', size: [0.35, WALL_HEIGHT, 16.2], pos: [-15, WALL_HEIGHT / 2, 17.9] },
-      { id: 'R05_E_S', size: [0.35, WALL_HEIGHT, 4.2], pos: [15, WALL_HEIGHT / 2, 4.1] },
-      { id: 'R05_E_N', size: [0.35, WALL_HEIGHT, 16.2], pos: [15, WALL_HEIGHT / 2, 17.9] },
-      { id: 'R05_N_W', size: [13, WALL_HEIGHT, 0.35], pos: [-8.5, WALL_HEIGHT / 2, 26] },
-      { id: 'R05_N_E', size: [13, WALL_HEIGHT, 0.35], pos: [8.5, WALL_HEIGHT / 2, 26] },
-
-      // R06 reliquary alcove.
-      { id: 'R06_W', size: [0.35, WALL_HEIGHT, 10], pos: [-7, WALL_HEIGHT / 2, 30] },
-      { id: 'R06_E', size: [0.35, WALL_HEIGHT, 10], pos: [7, WALL_HEIGHT / 2, 30] },
-      { id: 'R06_N', size: [14, WALL_HEIGHT, 0.35], pos: [0, WALL_HEIGHT / 2, 35] },
-    ];
+    const walls = BABY_LABYRINTH_WALL_SEGMENTS;
 
     walls.forEach((wall) => {
       this.addBox({ size: new THREE.Vector3(...wall.size), position: new THREE.Vector3(...wall.pos), material: wallMat, name: `${wall.id}-WALL_PERIM-wall_black_stone_01` });
