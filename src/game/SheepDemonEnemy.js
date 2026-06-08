@@ -11,6 +11,84 @@ export const SHEEP_DEMON_ANIMATION_ASSETS = Object.freeze({
   run: './assets/enemies/sheep_demon/sheep_demon_01_optimized_run.glb',
 });
 
+const SHEEP_DEMON_NEUTRAL_COLOR = new THREE.Color(0xffffff);
+const SHEEP_DEMON_SHADOW_FILL = new THREE.Color(0x101217);
+
+function tuneSheepDemonMaterialTexture(texture, colorSpace) {
+  if (!texture) return false;
+
+  texture.colorSpace = colorSpace;
+  texture.needsUpdate = true;
+  return true;
+}
+
+function tuneSheepDemonMaterials(root) {
+  const tunedMaterials = new Set();
+  const summary = {
+    meshes: 0,
+    materials: 0,
+    baseColorMapsSetToSrgb: 0,
+    nonColorMapsKeptLinear: 0,
+    neutralizedColorMultipliers: 0,
+  };
+
+  root.traverse((child) => {
+    if (!child.isMesh || !child.material) return;
+
+    summary.meshes += 1;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+
+    materials.forEach((material) => {
+      if (!material || tunedMaterials.has(material)) return;
+      tunedMaterials.add(material);
+      summary.materials += 1;
+
+      if (tuneSheepDemonMaterialTexture(material.map, THREE.SRGBColorSpace)) {
+        summary.baseColorMapsSetToSrgb += 1;
+      }
+
+      [
+        material.normalMap,
+        material.roughnessMap,
+        material.metalnessMap,
+        material.aoMap,
+        material.bumpMap,
+        material.displacementMap,
+        material.alphaMap,
+      ].forEach((texture) => {
+        if (tuneSheepDemonMaterialTexture(texture, THREE.NoColorSpace)) {
+          summary.nonColorMapsKeptLinear += 1;
+        }
+      });
+
+      if (material.color instanceof THREE.Color) {
+        if (!material.color.equals(SHEEP_DEMON_NEUTRAL_COLOR)) {
+          summary.neutralizedColorMultipliers += 1;
+        }
+        material.color.copy(SHEEP_DEMON_NEUTRAL_COLOR);
+      }
+
+      // Sheep Demon readability pass: counteracts warm dungeon fill without changing Ram Man or global lighting.
+      if ('emissive' in material && material.emissive instanceof THREE.Color) {
+        material.emissive.copy(SHEEP_DEMON_SHADOW_FILL);
+        material.emissiveIntensity = Math.max(material.emissiveIntensity ?? 0, 0.12);
+      }
+
+      if ('metalness' in material) {
+        material.metalness = Math.min(material.metalness ?? 0, 0.02);
+      }
+
+      if ('roughness' in material) {
+        material.roughness = THREE.MathUtils.clamp(material.roughness ?? 0.82, 0.78, 0.92);
+      }
+
+      material.needsUpdate = true;
+    });
+  });
+
+  return summary;
+}
+
 export const SHEEP_DEMON_CONFIG = Object.freeze({
   id: 'sheep-demon-01',
   displayName: 'Sheep Demon',
@@ -90,6 +168,11 @@ export class SheepDemonEnemy {
         walkModel.root.name = `${this.config.id}-walk-model`;
         walkModel.root.visible = false;
 
+        const materialTuning = {
+          idle: tuneSheepDemonMaterials(idleModel.root),
+          walk: tuneSheepDemonMaterials(walkModel.root),
+        };
+
         const idleTrack = makeAnimationTrack({ state: 'idle', ...idleModel });
         const walkTrack = makeAnimationTrack({ state: 'walk', ...walkModel });
         const enemyRig = new THREE.Group();
@@ -116,6 +199,7 @@ export class SheepDemonEnemy {
             idle: idleModel.scale,
             walk: walkModel.scale,
           },
+          materialTuning,
           groundingY: this.config.startPosition.y,
           targetHeight: this.config.targetHeight,
           maxWidth: this.config.maxWidth,
