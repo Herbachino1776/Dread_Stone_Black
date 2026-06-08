@@ -80,9 +80,22 @@ export class Combat {
     this.attackCooldown = ATTACK_COOLDOWN;
     this.hud.playAttack();
 
-    // This pass proves the Sheep Demon can threaten the player, but does not yet
-    // add player-to-enemy damage or attack/death animation states.
-    this.hud.showMessage('Your hands cut only stale air. Enemy damage waits for the combat animation pass.');
+    const hit = this.dungeon.damageEnemyFromPlayerAttack?.({
+      position: this.player.position,
+      direction: this.player.getLookDirection(),
+    });
+
+    if (!hit) {
+      this.hud.showMessage('Your hands cut only stale air. Step closer and face the fiend.');
+      return;
+    }
+
+    if (hit.killed) {
+      this.hud.showMessage(`${hit.target} collapses but does not fade.`);
+      return;
+    }
+
+    this.hud.showMessage(`${hit.target} staggers. ${hit.remainingHealth} HP remains.`);
   }
 
   resetEncounter() {
