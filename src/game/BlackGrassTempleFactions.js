@@ -178,10 +178,20 @@ const INITIAL_WAVE_BY_FACTION = Object.freeze({ sheep_demon: 1, neck_man: 1 });
 const DEV_DIAGNOSTIC_INTERVAL_SECONDS = 5;
 const IS_DEV = import.meta.env.DEV;
 const WAYPOINT_REPATH_SECONDS = 0.75;
-const STUCK_MOVEMENT_THRESHOLD = 0.03;
-const STUCK_SECONDS = 1.15;
-const UNSTUCK_SECONDS = 0.42;
-const NAV_CLEARANCE_RADIUS = 0.5;
+const STUCK_MOVEMENT_THRESHOLD = 0.04;
+const SOFT_STUCK_SECONDS = 0.7;
+const HARD_STUCK_SECONDS = 1.5;
+const ABANDON_STUCK_SECONDS = 2.5;
+const UNSTUCK_SECONDS = 0.48;
+const NAV_CLEARANCE_RADIUS = 0.58;
+const LOCAL_DETOUR_PADDING = 1.05;
+const LOCAL_DETOUR_REACHED_DISTANCE = 0.45;
+const STEERING_PROBE_DISTANCE = 0.82;
+const STEERING_PROBE_SECONDS = 0.38;
+const BLOCKED_TARGET_REPATH_SECONDS = 1.7;
+const BLOCKED_SEGMENT_COOLDOWN_SECONDS = 3.0;
+const ENEMY_PERSONAL_SPACE = 1.15;
+const ENEMY_SEPARATION_STRENGTH = 0.42;
 const SHEEP_DEMON_BLACK_GRASS_NEUTRAL_COLOR = new THREE.Color(0xffffff);
 const SHEEP_DEMON_BLACK_GRASS_SHADOW_FILL = new THREE.Color(0x0d1118);
 
@@ -333,6 +343,57 @@ function makeNavPointSummary(point) {
   return point ? { x: Number(point.x.toFixed(2)), z: Number(point.z.toFixed(2)) } : null;
 }
 
+function inflateRect(rect, amount) {
+  return {
+    ...rect,
+    minX: rect.minX - amount,
+    maxX: rect.maxX + amount,
+    minZ: rect.minZ - amount,
+    maxZ: rect.maxZ + amount,
+  };
+}
+
+function segmentIntersectsRect(start, end, rect) {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  let tMin = 0;
+  let tMax = 1;
+  const clip = (p, q) => {
+    if (Math.abs(p) < 0.000001) return q >= 0;
+    const r = q / p;
+    if (p < 0) {
+      if (r > tMax) return false;
+      if (r > tMin) tMin = r;
+    } else {
+      if (r < tMin) return false;
+      if (r < tMax) tMax = r;
+    }
+    return true;
+  };
+
+  return clip(-dx, start.x - rect.minX)
+    && clip(dx, rect.maxX - start.x)
+    && clip(-dz, start.z - rect.minZ)
+    && clip(dz, rect.maxZ - start.z)
+    && tMax >= 0
+    && tMin <= 1;
+}
+
+function pointInExpandedRect(point, rect, padding = 0) {
+  return point.x >= rect.minX - padding && point.x <= rect.maxX + padding
+    && point.z >= rect.minZ - padding && point.z <= rect.maxZ + padding;
+}
+
+function rotateHorizontal(vector, radians) {
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return new THREE.Vector3(
+    vector.x * cos - vector.z * sin,
+    0,
+    vector.x * sin + vector.z * cos,
+  );
+}
+
 
 class BlackGrassFactionEnemy {
   constructor({ scene, collision, navigationGraph = null, species, id, spawnAnchor, patrolPoints = null, onLoaded = null }) {
@@ -374,9 +435,15 @@ class BlackGrassFactionEnemy {
     this.stuckMarker = null;
     this.pathRepathElapsed = WAYPOINT_REPATH_SECONDS;
     this.activeWaypoint = null;
+    this.localAvoidanceWaypoint = null;
+    this.steeringProbeTimer = 0;
+    this.steeringProbeDirection = new THREE.Vector3();
+    this.blockedTargetElapsed = 0;
+    this.blockedSegmentCooldowns = new Map();
     this.stuckElapsed = 0;
     this.unstuckTimer = 0;
     this.unstuckDirection = new THREE.Vector3();
+    this.currentUpdateContext = null;
     this.directorTarget = null;
     this.directorTargetReason = null;
     this.noOpposingTargetElapsed = 0;
@@ -557,7 +624,12 @@ class BlackGrassFactionEnemy {
     }
     this.ensureStuckMarker();
     this.stuckMarker.position.set(this.group.position.x, this.template.targetHeight + 0.95, this.group.position.z);
-    this.stuckMarker.visible = this.unstuckTimer > 0 || this.stuckElapsed > STUCK_SECONDS * 0.65;
+    this.stuckMarker.visible = this.unstuckTimer > 0 || this.stuckElapsed > SOFT_STUCK_SECONDS;
+    if (this.group.userData.navigation) {
+      this.group.userData.navigation.localAvoidanceWaypoint = makeNavPointSummary(this.localAvoidanceWaypoint);
+      this.group.userData.navigation.stuckSeconds = Number(this.stuckElapsed.toFixed(2));
+      this.group.userData.navigation.steeringProbeActive = this.steeringProbeTimer > 0;
+    }
   }
 
   refreshAnimationUserData() {
@@ -618,6 +690,9 @@ class BlackGrassFactionEnemy {
     this.jumpAttackCooldown = Math.max(0, this.jumpAttackCooldown - deltaSeconds);
     this.playerRevengeTimer = Math.max(0, this.playerRevengeTimer - deltaSeconds);
     this.awarenessReactionDelay = Math.max(0, this.awarenessReactionDelay - deltaSeconds);
+    this.currentUpdateContext = context;
+    this.steeringProbeTimer = Math.max(0, this.steeringProbeTimer - deltaSeconds);
+    this.decayBlockedSegmentCooldowns(deltaSeconds);
     if (!this.group || this.isRemoved) return;
 
     if (this.behaviorState === 'dead') {
@@ -757,7 +832,7 @@ class BlackGrassFactionEnemy {
     const revenge = this.playerRevengeTimer > 0 && playerDistance <= LOSE_PLAYER_RADIUS;
     const noOpposing = !opposingEnemy && this.noOpposingTargetElapsed >= NO_OPPOSING_TARGET_PLAYER_SECONDS && playerDistance <= LOSE_PLAYER_RADIUS;
     const playerInterruptingFight = this.playerFightProximityElapsed >= PLAYER_NEAR_FIGHT_SECONDS && playerDistance <= PLAYER_DETECTION_RADIUS + 2;
-    const playerCloserThanStuckEnemy = opposingEnemy && playerDistance + 2 < opposingDistance && this.stuckElapsed > STUCK_SECONDS * 0.7 && playerDistance <= LOSE_PLAYER_RADIUS;
+    const playerCloserThanStuckEnemy = opposingEnemy && playerDistance + 2 < opposingDistance && this.stuckElapsed > SOFT_STUCK_SECONDS && playerDistance <= LOSE_PLAYER_RADIUS;
     return revenge || playerClose || noOpposing || playerInterruptingFight || playerCloserThanStuckEnemy;
   }
 
@@ -768,6 +843,7 @@ class BlackGrassFactionEnemy {
     context.enemies.forEach((enemy) => {
       if (enemy === this || enemy.species !== this.template.opposingFactionId || !enemy.isAlive || !enemy.group) return;
       const awareness = this.getOpposingAwareness(enemy, context);
+      if (this.blockedSegmentCooldowns.has(enemy.id) && awareness.tier !== 'melee') return;
       if (awareness.tier === 'none' || awareness.distance >= nearestDistance) return;
       nearest = enemy;
       nearestDistance = awareness.distance;
@@ -783,6 +859,7 @@ class BlackGrassFactionEnemy {
     if (!this.group || !enemy?.group) return { tier: 'none', distance: Infinity, roomPath: [] };
     const distance = horizontalDistance(this.group.position, enemy.group.position);
     const visible = this.hasLineOfMovement(this.group.position, enemy.group.position);
+    const targetBlockedRecently = this.blockedSegmentCooldowns.has(enemy.id);
     const selfRoom = this.findNearestNavigableRoom(this.group.position);
     const targetRoom = this.findNearestNavigableRoom(enemy.group.position);
     const sameRoom = Boolean(selfRoom && targetRoom && selfRoom.id === targetRoom.id);
@@ -794,13 +871,13 @@ class BlackGrassFactionEnemy {
     const targetNearPlayer = context?.playerPosition ? horizontalDistance(enemy.group.position, context.playerPosition) <= ACTION_BUBBLE_HARD_RADIUS : false;
     const inPlayerActionBubble = selfNearPlayer && targetNearPlayer;
 
-    if (inPlayerActionBubble && distance <= ACTION_BUBBLE_PREFERRED_MAX) {
-      return { tier: distance <= this.template.combatEngageDistance ? 'melee' : 'combat', distance, roomPath };
+    if (inPlayerActionBubble && distance <= ACTION_BUBBLE_PREFERRED_MAX && !targetBlockedRecently) {
+      return { tier: visible && distance <= this.template.combatEngageDistance ? 'melee' : 'combat', distance, roomPath };
     }
-    if ((sameRoom && distance <= this.template.combatEngageDistance) || distance <= this.template.combatEngageDistance || nearDoorway) {
+    if (((sameRoom && visible && distance <= this.template.combatEngageDistance) || (visible && distance <= this.template.combatEngageDistance) || nearDoorway) && !targetBlockedRecently) {
       return { tier: 'melee', distance, roomPath };
     }
-    if ((sameRoom && distance <= COMBAT_AWARENESS_RADIUS) || (visible && distance <= COMBAT_AWARENESS_RADIUS) || nearDoorway) {
+    if (((sameRoom && distance <= COMBAT_AWARENESS_RADIUS) || (visible && distance <= COMBAT_AWARENESS_RADIUS) || nearDoorway) && !targetBlockedRecently) {
       return { tier: 'combat', distance, roomPath };
     }
     if (sameRoom && distance <= SAME_ROOM_AWARENESS_RADIUS) {
@@ -844,8 +921,18 @@ class BlackGrassFactionEnemy {
       return;
     }
 
-    if (distance <= this.template.combatEngageDistance || awareness.tier === 'melee' || awareness.tier === 'combat') {
+    const directClear = this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS);
+    this.blockedTargetElapsed = directClear ? 0 : this.blockedTargetElapsed + deltaSeconds;
+    if (this.blockedTargetElapsed >= BLOCKED_TARGET_REPATH_SECONDS) this.blockCurrentDirectSegment();
+
+    if ((distance <= this.template.combatEngageDistance || awareness.tier === 'melee' || awareness.tier === 'combat') && directClear) {
       this.updateEnemyCombat(deltaSeconds, target, distance, toTarget);
+      return;
+    }
+
+    if ((distance <= this.template.combatEngageDistance || awareness.tier === 'melee' || awareness.tier === 'combat') && !directClear) {
+      this.combatManeuverTimer = 0;
+      this.moveToPosition(target.group.position, this.template.seekSpeed * 0.68, deltaSeconds, Math.max(0, distance - this.template.attackRange * 0.9), 'seek_enemy_faction');
       return;
     }
 
@@ -859,12 +946,20 @@ class BlackGrassFactionEnemy {
   }
 
   updateEnemyCombat(deltaSeconds, target, distance, toTarget) {
+    const directClear = this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS);
+    if (!directClear) {
+      this.blockedTargetElapsed += deltaSeconds;
+      if (this.blockedTargetElapsed >= BLOCKED_TARGET_REPATH_SECONDS) this.blockCurrentDirectSegment();
+      this.moveToPosition(target.group.position, this.template.seekSpeed * 0.72, deltaSeconds, Math.max(0, distance - this.template.attackRange * 0.92), 'seek_enemy_faction');
+      return;
+    }
+    this.blockedTargetElapsed = 0;
     this.activeWaypoint = null;
     this.combatManeuverTimer = Math.max(0, this.combatManeuverTimer - deltaSeconds);
     const direction = distance > 0.001 ? toTarget.clone().normalize() : new THREE.Vector3(Math.sin(this.group.rotation.y), 0, Math.cos(this.group.rotation.y));
     const strafe = new THREE.Vector3(direction.z * this.combatStrafeSign, 0, -direction.x * this.combatStrafeSign).normalize();
 
-    if (distance <= this.template.attackRange && this.attackCooldown <= 0 && this.hasLineOfMovement(this.group.position, target.group.position)) {
+    if (distance <= this.template.attackRange && this.attackCooldown <= 0 && directClear) {
       this.chooseAndBeginEnemyAttack(distance);
       return;
     }
@@ -1033,7 +1128,7 @@ class BlackGrassFactionEnemy {
 
     if (this.currentTarget?.type === 'enemy') {
       const target = this.currentTarget.enemy;
-      if (target?.isAlive && horizontalDistance(this.group.position, target.group.position) <= this.template.attackRange) {
+      if (target?.isAlive && horizontalDistance(this.group.position, target.group.position) <= this.template.attackRange && this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS)) {
         const result = target.receiveFactionDamage(this.template.attackDamage, this.template.displayName);
         this.attackHasDamaged = true;
         this.logCombatEvent('damage-applied', {
@@ -1056,7 +1151,7 @@ class BlackGrassFactionEnemy {
     const window = this.template.attackDamageWindow;
     if (progress < window.start || progress > window.end) return null;
     const distance = horizontalDistance(this.group.position, playerPosition);
-    if (distance > this.template.attackRange) return null;
+    if (distance > this.template.attackRange || !this.hasClearMovementSegment(this.group.position, playerPosition, NAV_CLEARANCE_RADIUS)) return null;
     this.attackHasDamaged = true;
     this.logCombatEvent('damage-applied', { maneuver: 'player_hit', distance, damage: this.template.attackDamage }, { force: true });
     return {
@@ -1146,50 +1241,92 @@ class BlackGrassFactionEnemy {
 
   moveToPosition(finalTarget, speed, deltaSeconds, maxDistance = Infinity, movingState = 'patrol') {
     const waypoint = this.getMovementWaypoint(finalTarget, movingState);
-    this.activeWaypoint = this.hasLineOfMovement(this.group.position, finalTarget) ? null : waypoint;
+    const directClear = this.hasClearMovementSegment(this.group.position, finalTarget, NAV_CLEARANCE_RADIUS);
+    this.activeWaypoint = directClear ? null : waypoint;
     const toWaypoint = waypoint.clone().sub(this.group.position);
     toWaypoint.y = 0;
     const waypointDistance = toWaypoint.length();
+    if (waypointDistance < LOCAL_DETOUR_REACHED_DISTANCE && this.localAvoidanceWaypoint) {
+      this.localAvoidanceWaypoint = null;
+      this.activeWaypoint = null;
+      return;
+    }
     if (waypointDistance < 0.2) {
       this.activeWaypoint = null;
       return;
     }
     const direction = toWaypoint.normalize();
     const allowedDistance = Math.min(maxDistance, waypointDistance);
-    this.moveToward(direction, speed, deltaSeconds, allowedDistance, movingState);
+    this.moveToward(direction, speed, deltaSeconds, allowedDistance, movingState, { desiredTarget: waypoint });
   }
 
   getMovementWaypoint(finalTarget, movingState) {
-    if (!this.navigationGraph) return finalTarget.clone();
-    if (this.activeWaypoint) return this.activeWaypoint.clone();
-    this.pathRepathElapsed = 0;
     const final = finalTarget.clone();
     final.y = 0;
-    if (this.hasLineOfMovement(this.group.position, final)) return final;
+
+    if (this.localAvoidanceWaypoint) {
+      if (horizontalDistance(this.group.position, this.localAvoidanceWaypoint) > LOCAL_DETOUR_REACHED_DISTANCE && this.isWaypointWalkable(this.localAvoidanceWaypoint)) {
+        return this.localAvoidanceWaypoint.clone();
+      }
+      this.localAvoidanceWaypoint = null;
+    }
+
+    const directClear = this.hasClearMovementSegment(this.group.position, final, NAV_CLEARANCE_RADIUS);
+    if (directClear) return final;
+    const direct = this.findBlockingRect(this.group.position, final, NAV_CLEARANCE_RADIUS);
 
     const startRoom = this.findNearestNavigableRoom(this.group.position);
     const targetRoom = this.findNearestNavigableRoom(final);
-    if (!startRoom || !targetRoom || startRoom.id === targetRoom.id) return final;
+    if (startRoom && targetRoom && startRoom.id !== targetRoom.id) {
+      const roomWaypoint = this.getRoomRouteWaypoint(startRoom, targetRoom, final, movingState);
+      if (roomWaypoint && this.hasClearMovementSegment(this.group.position, roomWaypoint, NAV_CLEARANCE_RADIUS * 0.85)) {
+        this.localAvoidanceWaypoint = null;
+        return roomWaypoint;
+      }
+    }
 
+    if (!direct) return final;
+
+    const detour = this.findLocalDetourWaypoint(this.group.position, final, direct.rect);
+    if (detour) {
+      this.localAvoidanceWaypoint = detour;
+      this.logNavigationEvent('local-detour', { movingState, blockingRect: direct.rect, waypoint: detour, final });
+      return detour.clone();
+    }
+
+    if (startRoom && targetRoom && startRoom.id !== targetRoom.id) {
+      const roomWaypoint = this.getRoomRouteWaypoint(startRoom, targetRoom, final, movingState);
+      if (roomWaypoint) return roomWaypoint;
+    }
+
+    this.logNavigationEvent('blocked-no-detour', { movingState, blockingRect: direct.rect, waypoint: null, final });
+    return final;
+  }
+
+  getRoomRouteWaypoint(startRoom, targetRoom, final, movingState) {
+    if (!this.navigationGraph) return null;
+    this.pathRepathElapsed = 0;
     const roomPath = this.findRoomPath(startRoom.id, targetRoom.id);
-    if (roomPath.length < 2) return final;
+    if (roomPath.length < 2) return null;
     const nextRoomId = roomPath[1];
     const link = (this.navigationGraph.links[startRoom.id] ?? []).find((candidate) => candidate.to === nextRoomId);
     const doorway = link?.waypoint?.clone?.() ?? this.navigationGraph.rooms[nextRoomId]?.center?.clone?.();
     const nextCenter = this.navigationGraph.rooms[nextRoomId]?.center?.clone?.();
     const waypoint = doorway && horizontalDistance(this.group.position, doorway) > 0.65 ? doorway : (nextCenter ?? final);
-    if (!this.isWaypointWalkable(waypoint)) return nextCenter && this.isWaypointWalkable(nextCenter) ? nextCenter : final;
+    const chosen = this.isWaypointWalkable(waypoint) ? waypoint : (nextCenter && this.isWaypointWalkable(nextCenter) ? nextCenter : null);
 
     if (IS_DEV && this.group) {
       this.group.userData.navigation = {
+        ...(this.group.userData.navigation ?? {}),
         movingState,
         startRoom: startRoom.id,
         targetRoom: targetRoom.id,
         roomPath,
-        waypoint: makeNavPointSummary(waypoint),
+        waypoint: makeNavPointSummary(chosen),
+        lineOfMovement: 'blocked-route-doorway',
       };
     }
-    return waypoint;
+    return chosen;
   }
 
   findNearestNavigableRoom(position) {
@@ -1209,7 +1346,7 @@ class BlackGrassFactionEnemy {
     while (queue.length) {
       const path = queue.shift();
       const roomId = path[path.length - 1];
-      for (const link of this.navigationGraph.links[roomId] ?? []) {
+      for (const link of this.navigationGraph?.links?.[roomId] ?? []) {
         if (visited.has(link.to)) continue;
         const nextPath = [...path, link.to];
         if (link.to === targetRoomId) return nextPath;
@@ -1221,24 +1358,89 @@ class BlackGrassFactionEnemy {
   }
 
   hasLineOfMovement(start, end) {
+    return this.hasClearMovementSegment(start, end, NAV_CLEARANCE_RADIUS);
+  }
+
+  hasClearMovementSegment(start, end, clearanceRadius = NAV_CLEARANCE_RADIUS) {
+    if (!this.collision) return true;
     const delta = end.clone().sub(start);
     delta.y = 0;
     const distance = delta.length();
     if (distance < 0.001) return true;
     const direction = delta.multiplyScalar(1 / distance);
-    const steps = Math.max(2, Math.ceil(distance / 0.65));
+    const steps = Math.max(2, Math.ceil(distance / 0.45));
     for (let i = 1; i <= steps; i += 1) {
       const probe = start.clone().add(direction.clone().multiplyScalar((distance * i) / steps));
       probe.y = start.y;
-      if (!this.isWaypointWalkable(probe)) return false;
+      if (!this.isWaypointWalkable(probe, clearanceRadius)) return false;
     }
-    return true;
+    return !this.segmentIntersectsAnyBlocker(start, end, clearanceRadius);
   }
 
-  isWaypointWalkable(point) {
+  segmentIntersectsAnyBlocker(start, end, clearanceRadius = NAV_CLEARANCE_RADIUS) {
+    return Boolean(this.findBlockingRect(start, end, clearanceRadius));
+  }
+
+  findBlockingRect(start, end, clearanceRadius = NAV_CLEARANCE_RADIUS) {
+    const blockers = this.collision?.blockerRects ?? [];
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const rect of blockers) {
+      const inflated = inflateRect(rect, clearanceRadius);
+      if (pointInExpandedRect(start, rect, clearanceRadius * 0.25) || pointInExpandedRect(end, rect, clearanceRadius * 0.25)) continue;
+      if (!segmentIntersectsRect(start, end, inflated)) continue;
+      const center = new THREE.Vector3((rect.minX + rect.maxX) / 2, 0, (rect.minZ + rect.maxZ) / 2);
+      const distance = horizontalDistance(start, center);
+      if (distance < nearestDistance) {
+        nearest = { rect, inflated, distance };
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
+  findLocalDetourWaypoint(start, final, blockingRect) {
+    const padded = inflateRect(blockingRect, LOCAL_DETOUR_PADDING);
+    const candidates = [
+      new THREE.Vector3(padded.minX, 0, padded.minZ),
+      new THREE.Vector3(padded.minX, 0, padded.maxZ),
+      new THREE.Vector3(padded.maxX, 0, padded.minZ),
+      new THREE.Vector3(padded.maxX, 0, padded.maxZ),
+      new THREE.Vector3((padded.minX + padded.maxX) / 2, 0, padded.minZ),
+      new THREE.Vector3((padded.minX + padded.maxX) / 2, 0, padded.maxZ),
+      new THREE.Vector3(padded.minX, 0, (padded.minZ + padded.maxZ) / 2),
+      new THREE.Vector3(padded.maxX, 0, (padded.minZ + padded.maxZ) / 2),
+    ];
+
+    let best = null;
+    let bestScore = Infinity;
+    const directDistance = horizontalDistance(start, final);
+    candidates.forEach((candidate) => {
+      candidate.y = start.y;
+      if (!this.isWaypointWalkable(candidate, NAV_CLEARANCE_RADIUS)) return;
+      if (!this.hasClearMovementSegment(start, candidate, NAV_CLEARANCE_RADIUS * 0.8)) return;
+      const candidateToFinalClear = this.hasClearMovementSegment(candidate, final, NAV_CLEARANCE_RADIUS * 0.8);
+      const candidateDistance = horizontalDistance(start, candidate);
+      const remainingDistance = horizontalDistance(candidate, final);
+      if (remainingDistance > directDistance + 3.5) return;
+      const progressBonus = Math.max(0, directDistance - remainingDistance) * 0.35;
+      const clearBonus = candidateToFinalClear ? 6 : 0;
+      const bodyPenalty = this.getEnemyBodyPenalty(candidate) * 3;
+      const score = candidateDistance + remainingDistance * 0.85 - progressBonus - clearBonus + bodyPenalty;
+      if (score < bestScore) {
+        best = candidate.clone();
+        bestScore = score;
+      }
+    });
+    return best;
+  }
+
+  isWaypointWalkable(point, clearanceRadius = NAV_CLEARANCE_RADIUS) {
     if (!point || !this.collision?.canStandAt(point)) return false;
     const offsets = [
-      [NAV_CLEARANCE_RADIUS, 0], [-NAV_CLEARANCE_RADIUS, 0], [0, NAV_CLEARANCE_RADIUS], [0, -NAV_CLEARANCE_RADIUS],
+      [clearanceRadius, 0], [-clearanceRadius, 0], [0, clearanceRadius], [0, -clearanceRadius],
+      [clearanceRadius * 0.7, clearanceRadius * 0.7], [-clearanceRadius * 0.7, clearanceRadius * 0.7],
+      [clearanceRadius * 0.7, -clearanceRadius * 0.7], [-clearanceRadius * 0.7, -clearanceRadius * 0.7],
     ];
     return offsets.every(([x, z]) => this.collision.canStandAt(new THREE.Vector3(point.x + x, point.y, point.z + z)));
   }
@@ -1248,13 +1450,15 @@ class BlackGrassFactionEnemy {
     const facing = new THREE.Vector3(Math.sin(this.group.rotation.y), 0, Math.cos(this.group.rotation.y));
     const lateralSign = Math.random() < 0.5 ? -1 : 1;
     this.unstuckDirection.set(
-      -facing.x * 0.75 + facing.z * lateralSign * 0.55,
+      -facing.x * 0.85 + facing.z * lateralSign * 0.75,
       0,
-      -facing.z * 0.75 - facing.x * lateralSign * 0.55,
+      -facing.z * 0.85 - facing.x * lateralSign * 0.75,
     ).normalize();
     this.unstuckTimer = UNSTUCK_SECONDS;
     this.stuckElapsed = 0;
+    this.blockCurrentDirectSegment();
     this.pathRepathElapsed = WAYPOINT_REPATH_SECONDS;
+    this.localAvoidanceWaypoint = null;
     this.activeWaypoint = null;
     this.pauseTimer = 0;
     this.patrolTargetIndex = (this.patrolTargetIndex + 1) % this.patrolPoints.length;
@@ -1268,39 +1472,168 @@ class BlackGrassFactionEnemy {
     }
   }
 
-  moveToward(direction, speed, deltaSeconds, maxDistance = Infinity, movingState = 'patrol', { suppressStuckTracking = false } = {}) {
+  moveToward(direction, speed, deltaSeconds, maxDistance = Infinity, movingState = 'patrol', { suppressStuckTracking = false, desiredTarget = null } = {}) {
     const stepDistance = Math.min(maxDistance, speed * deltaSeconds);
     if (stepDistance <= 0.001) return 0;
     const previous = this.group.position.clone();
-    const next = this.group.position.clone().add(direction.clone().multiplyScalar(stepDistance));
+    const movementDirection = this.getAdjustedMovementDirection(direction, stepDistance, desiredTarget);
+    const next = this.group.position.clone().add(movementDirection.clone().multiplyScalar(stepDistance));
     next.y = this.spawnAnchor.position.y;
     if (this.collision.canStandAt(next)) {
       this.group.position.copy(next);
       this.setBehaviorState(movingState);
     } else {
-      const slideX = this.group.position.clone();
-      slideX.x = next.x;
-      const slideZ = this.group.position.clone();
-      slideZ.z = next.z;
-      if (this.collision.canStandAt(slideX)) {
-        this.group.position.copy(slideX);
-        this.setBehaviorState(movingState);
-      } else if (this.collision.canStandAt(slideZ)) {
-        this.group.position.copy(slideZ);
-        this.setBehaviorState(movingState);
-      } else {
-        this.activeWaypoint = null;
-        this.pathRepathElapsed = WAYPOINT_REPATH_SECONDS;
-        this.setBehaviorState(movingState);
+      const probeDirection = this.chooseSteeringProbeDirection(movementDirection, desiredTarget ?? next);
+      if (probeDirection) {
+        const probeNext = this.group.position.clone().add(probeDirection.clone().multiplyScalar(stepDistance));
+        probeNext.y = this.spawnAnchor.position.y;
+        if (this.collision.canStandAt(probeNext)) {
+          this.group.position.copy(probeNext);
+          this.steeringProbeDirection.copy(probeDirection);
+          this.steeringProbeTimer = STEERING_PROBE_SECONDS;
+          this.setBehaviorState(movingState);
+        }
+      }
+      if (horizontalDistance(previous, this.group.position) < 0.001) {
+        const slideX = this.group.position.clone();
+        slideX.x = next.x;
+        const slideZ = this.group.position.clone();
+        slideZ.z = next.z;
+        if (this.collision.canStandAt(slideX)) {
+          this.group.position.copy(slideX);
+          this.setBehaviorState(movingState);
+        } else if (this.collision.canStandAt(slideZ)) {
+          this.group.position.copy(slideZ);
+          this.setBehaviorState(movingState);
+        } else {
+          this.activeWaypoint = null;
+          this.localAvoidanceWaypoint = null;
+          this.pathRepathElapsed = WAYPOINT_REPATH_SECONDS;
+          this.setBehaviorState(movingState);
+        }
       }
     }
     const movedDistance = horizontalDistance(previous, this.group.position);
     if (!suppressStuckTracking) {
       this.stuckElapsed = movedDistance < STUCK_MOVEMENT_THRESHOLD ? this.stuckElapsed + deltaSeconds : 0;
-      if (this.stuckElapsed >= STUCK_SECONDS) this.triggerUnstuck();
+      if (this.stuckElapsed >= SOFT_STUCK_SECONDS && !this.localAvoidanceWaypoint && desiredTarget) {
+        const blocker = this.findBlockingRect(this.group.position, desiredTarget, NAV_CLEARANCE_RADIUS)?.rect;
+        const detour = blocker ? this.findLocalDetourWaypoint(this.group.position, desiredTarget, blocker) : null;
+        if (detour) this.localAvoidanceWaypoint = detour;
+      }
+      if (this.stuckElapsed >= HARD_STUCK_SECONDS && this.unstuckTimer <= 0) this.triggerUnstuck();
+      if (this.stuckElapsed >= ABANDON_STUCK_SECONDS) {
+        this.currentTarget = null;
+        this.blockCurrentDirectSegment();
+      }
     }
-    this.faceDirection(movedDistance > 0.001 ? this.group.position.clone().sub(previous).normalize() : direction, deltaSeconds);
+    this.faceDirection(movedDistance > 0.001 ? this.group.position.clone().sub(previous).normalize() : movementDirection, deltaSeconds);
     return movedDistance;
+  }
+
+  getAdjustedMovementDirection(direction, stepDistance, desiredTarget) {
+    let adjusted = direction.clone();
+    adjusted.y = 0;
+    if (adjusted.lengthSq() < 0.001) return adjusted;
+    adjusted.normalize();
+
+    if (this.steeringProbeTimer > 0 && this.steeringProbeDirection.lengthSq() > 0.001) {
+      adjusted.copy(this.steeringProbeDirection);
+    } else {
+      const probeEnd = this.group.position.clone().add(adjusted.clone().multiplyScalar(Math.max(stepDistance, STEERING_PROBE_DISTANCE)));
+      if (!this.hasClearMovementSegment(this.group.position, probeEnd, NAV_CLEARANCE_RADIUS * 0.75)) {
+        const probe = this.chooseSteeringProbeDirection(adjusted, desiredTarget ?? probeEnd);
+        if (probe) {
+          adjusted.copy(probe);
+          this.steeringProbeDirection.copy(probe);
+          this.steeringProbeTimer = STEERING_PROBE_SECONDS;
+        }
+      }
+    }
+
+    const separation = this.getEnemySeparationVector();
+    if (separation.lengthSq() > 0.0001) {
+      adjusted.add(separation.multiplyScalar(ENEMY_SEPARATION_STRENGTH)).normalize();
+    }
+    return adjusted;
+  }
+
+  chooseSteeringProbeDirection(direction, desiredTarget) {
+    const angles = [20, -20, 40, -40, 70, -70, 100, -100, 135, -135];
+    let best = null;
+    let bestScore = -Infinity;
+    const desired = desiredTarget ? desiredTarget.clone().sub(this.group.position) : direction.clone();
+    desired.y = 0;
+    if (desired.lengthSq() < 0.001) desired.copy(direction);
+    desired.normalize();
+    angles.forEach((degrees) => {
+      const candidate = rotateHorizontal(direction, THREE.MathUtils.degToRad(degrees)).normalize();
+      const probe = this.group.position.clone().add(candidate.clone().multiplyScalar(STEERING_PROBE_DISTANCE));
+      probe.y = this.spawnAnchor.position.y;
+      if (!this.isWaypointWalkable(probe, NAV_CLEARANCE_RADIUS * 0.75)) return;
+      if (!this.hasClearMovementSegment(this.group.position, probe, NAV_CLEARANCE_RADIUS * 0.65)) return;
+      const progress = candidate.dot(desired);
+      const bodyPenalty = this.getEnemyBodyPenalty(probe);
+      const score = progress - bodyPenalty * 0.25 - Math.abs(degrees) / 180;
+      if (score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    });
+    return best;
+  }
+
+  getEnemySeparationVector() {
+    const separation = new THREE.Vector3();
+    const enemies = this.currentUpdateContext?.enemies ?? [];
+    enemies.forEach((enemy) => {
+      if (enemy === this || !enemy.isAlive || !enemy.group) return;
+      const away = this.group.position.clone().sub(enemy.group.position);
+      away.y = 0;
+      const distance = away.length();
+      if (distance <= 0.001 || distance >= ENEMY_PERSONAL_SPACE) return;
+      separation.add(away.normalize().multiplyScalar((ENEMY_PERSONAL_SPACE - distance) / ENEMY_PERSONAL_SPACE));
+    });
+    if (separation.lengthSq() > 0.001) separation.normalize();
+    return separation;
+  }
+
+  getEnemyBodyPenalty(point) {
+    let penalty = 0;
+    const enemies = this.currentUpdateContext?.enemies ?? [];
+    enemies.forEach((enemy) => {
+      if (enemy === this || !enemy.isAlive || !enemy.group) return;
+      const distance = horizontalDistance(point, enemy.group.position);
+      if (distance < ENEMY_PERSONAL_SPACE) penalty += (ENEMY_PERSONAL_SPACE - distance) / ENEMY_PERSONAL_SPACE;
+    });
+    return penalty;
+  }
+
+  decayBlockedSegmentCooldowns(deltaSeconds) {
+    for (const [key, value] of this.blockedSegmentCooldowns.entries()) {
+      const next = value - deltaSeconds;
+      if (next <= 0) this.blockedSegmentCooldowns.delete(key);
+      else this.blockedSegmentCooldowns.set(key, next);
+    }
+  }
+
+  blockCurrentDirectSegment() {
+    const key = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy?.id : this.currentTarget?.type;
+    if (key) this.blockedSegmentCooldowns.set(key, BLOCKED_SEGMENT_COOLDOWN_SECONDS);
+  }
+
+  logNavigationEvent(event, { movingState = null, blockingRect = null, waypoint = null, final = null } = {}) {
+    if (!IS_DEV || !this.group) return;
+    this.group.userData.navigation = {
+      ...(this.group.userData.navigation ?? {}),
+      event,
+      movingState,
+      blockingRectId: blockingRect?.id ?? null,
+      waypoint: makeNavPointSummary(waypoint),
+      final: makeNavPointSummary(final),
+      lineOfMovement: blockingRect ? 'blocked' : 'clear',
+      stuckSeconds: Number(this.stuckElapsed.toFixed(2)),
+    };
   }
 
   faceDirection(direction, deltaSeconds) {
@@ -1376,6 +1709,15 @@ export class BlackGrassTempleFactionManager {
         maxShortRouteInvestigationSteps: MAX_SHORT_ROUTE_INVESTIGATION_STEPS,
       },
       respawnCooldownSeconds: RESPAWN_COOLDOWN_SECONDS,
+      localNavigation: {
+        clearanceRadius: NAV_CLEARANCE_RADIUS,
+        detourPadding: LOCAL_DETOUR_PADDING,
+        steeringProbeDistance: STEERING_PROBE_DISTANCE,
+        softStuckSeconds: SOFT_STUCK_SECONDS,
+        hardStuckSeconds: HARD_STUCK_SECONDS,
+        blockedSegmentCooldownSeconds: BLOCKED_SEGMENT_COOLDOWN_SECONDS,
+        enemyPersonalSpace: ENEMY_PERSONAL_SPACE,
+      },
       initialWaveByFaction: INITIAL_WAVE_BY_FACTION,
       maxActiveByFaction: MAX_ACTIVE_BY_FACTION,
       maxActiveTotal: Object.values(MAX_ACTIVE_BY_FACTION).reduce((sum, count) => sum + count, 0),
