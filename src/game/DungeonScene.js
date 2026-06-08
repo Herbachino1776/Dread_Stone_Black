@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CollisionWorld } from './Collision.js';
 import { loadDungeonModel } from './ModelLoader.js';
-import { SheepDemonEnemy } from './SheepDemonEnemy.js';
+import { SHEEP_DEMON_CONFIG, SheepDemonEnemy } from './SheepDemonEnemy.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -55,6 +55,8 @@ const FIELD_PLAYER_START = new THREE.Vector3(0, 1.55, -175);
 const FIELD_PLAYER_YAW = 0;
 const FIELD_CRYPT_A_RETURN_START = new THREE.Vector3(-60, 1.55, -112);
 const FIELD_CRYPT_A_RETURN_YAW = 0;
+const FIELD_BLACK_GRASS_TEMPLE_RETURN_START = new THREE.Vector3(-184, 1.55, 45);
+const FIELD_BLACK_GRASS_TEMPLE_RETURN_YAW = -Math.PI / 2;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const RELIQUARY_FIELD_COLLIDERS = [
@@ -83,6 +85,13 @@ const RELIQUARY_FIELD_COLLIDERS = [
   { id: 'C03_C', minX: 29, maxX: 41, minZ: 127.5, maxZ: 128.5 },
   { id: 'C03_D', minX: 15, maxX: 19, minZ: 128, maxZ: 152 },
   { id: 'C03_E', minX: 51, maxX: 55, minZ: 128, maxZ: 152 },
+
+  // Black Grass Temple temporary west-edge exterior shell. Intended C02 is X -210, Z 55; this v0.1 hook stays inside the first 400 x 400 field slice.
+  { id: 'C02_A', minX: -198, maxX: -170, minZ: 30, maxZ: 60 },
+  { id: 'C02_B', minX: -197, maxX: -193, minZ: 38, maxZ: 58 },
+  { id: 'C02_C', minX: -179, maxX: -175, minZ: 38, maxZ: 58 },
+  { id: 'C02_D', minX: -198, maxX: -170, minZ: 56, maxZ: 60 },
+  { id: 'C02_E', minX: -190, maxX: -180, minZ: 29, maxZ: 33 },
 
   // Standing stones and low ruin walls.
   { id: 'STONE01', minX: 113.5, maxX: 116.5, minZ: -71, maxZ: -69 },
@@ -193,7 +202,7 @@ export class DungeonScene {
     this.textureCheckRig = null;
     this.playerSpawn = this.area === 'field'
       ? this.getFieldPlayerSpawn()
-      : { spawnPosition: new THREE.Vector3(0, 1.55, -30), spawnYaw: 0 };
+      : this.getIndoorPlayerSpawn();
     this.outdoorInteractions = [];
     this.fieldShrineGroup = null;
     this.fieldShrineAnswerLight = null;
@@ -266,17 +275,154 @@ export class DungeonScene {
       },
     ];
 
-    this.collision = this.area === 'field'
-      ? new CollisionWorld({ walkableRects: [FIELD_WALKABLE_RECT], blockerRects: this.createOutdoorBlockers(), playerRadius: 0.5 })
-      : new CollisionWorld({
-        walkableRects: indoorWalkableRects,
-        blockerRects: [this.gateBlocker, ...indoorWallBlockers],
-      });
+    if (this.area === 'black-grass-temple') {
+      this.configureBlackGrassTempleRuntime();
+    } else {
+      this.collision = this.area === 'field'
+        ? new CollisionWorld({ walkableRects: [FIELD_WALKABLE_RECT], blockerRects: this.createOutdoorBlockers(), playerRadius: 0.5 })
+        : new CollisionWorld({
+          walkableRects: indoorWalkableRects,
+          blockerRects: [this.gateBlocker, ...indoorWallBlockers],
+        });
+    }
+  }
+
+
+  getIndoorPlayerSpawn() {
+    if (this.area === 'black-grass-temple') {
+      return { spawnPosition: new THREE.Vector3(0, 1.55, -72), spawnYaw: 0 };
+    }
+
+    return { spawnPosition: new THREE.Vector3(0, 1.55, -30), spawnYaw: 0 };
+  }
+
+  configureBlackGrassTempleRuntime() {
+    this.indoorExitTarget = new THREE.Vector3(0, 1.2, -76);
+    this.gateTarget = new THREE.Vector3(30, 1.2, -20);
+    this.blackGrassEnemyConfigs = this.createBlackGrassEnemyConfigs();
+    this.inspectInteractions = [
+      {
+        id: 'BGT_INT03',
+        target: new THREE.Vector3(0, 1.2, -32),
+        range: 3.0,
+        hint: 'Tap INTERACT to inspect the broken offering slab.',
+        message: 'Old cups are carved into the altar stone. None are empty.',
+      },
+      {
+        id: 'BGT_INT04',
+        target: new THREE.Vector3(30, 1.2, -20),
+        range: 3.0,
+        hint: 'Tap INTERACT to test the first rusted gate.',
+        message: 'The rusted gate holds, but its hinges remember movement.',
+      },
+      {
+        id: 'BGT_INT06',
+        target: new THREE.Vector3(0, 1.2, 82),
+        range: 3.0,
+        hint: 'Tap INTERACT to inspect the central reliquary.',
+        message: 'The grass grows from inside the reliquary block.',
+      },
+      {
+        id: 'BGT_INT07',
+        target: new THREE.Vector3(0, 1.2, 94),
+        range: 3.0,
+        hint: 'Tap INTERACT to inspect the sealed future gate.',
+        message: 'The gate is sealed with roots blacker than iron.',
+      },
+      {
+        id: 'BGT_INT05',
+        target: new THREE.Vector3(44, 1.2, -20),
+        range: 3.5,
+        hint: 'Tap INTERACT to mark the return stair.',
+        message: 'A return stair opens behind the old wall.',
+      },
+    ];
+
+    this.collision = new CollisionWorld({
+      walkableRects: this.getBlackGrassWalkableRects(),
+      blockerRects: this.getBlackGrassBlockers(),
+      playerRadius: 0.5,
+    });
+  }
+
+  getBlackGrassWalkableRects() {
+    return [
+      { id: 'R01', minX: -5, maxX: 5, minZ: -80, maxZ: -57 },
+      { id: 'R02', minX: -12, maxX: 12, minZ: -58, maxZ: -42 },
+      { id: 'R03', minX: -17, maxX: 17, minZ: -41, maxZ: -23 },
+      { id: 'R04', minX: -44, maxX: -24, minZ: -31, maxZ: -9 },
+      { id: 'R05', minX: 24, maxX: 44, minZ: -31, maxZ: -9 },
+      { id: 'R06', minX: -25, maxX: 25, minZ: -13, maxZ: 13 },
+      { id: 'R07', minX: -42, maxX: -26, minZ: -8, maxZ: 25 },
+      { id: 'R08', minX: -31, maxX: 31, minZ: 13, maxZ: 43 },
+      { id: 'R09', minX: -56, maxX: -32, minZ: 39, maxZ: 65 },
+      { id: 'R10', minX: 32, maxX: 56, minZ: 39, maxZ: 65 },
+      { id: 'R11', minX: -25, maxX: 25, minZ: 50, maxZ: 74 },
+      { id: 'R12', minX: -27, maxX: 27, minZ: 74, maxZ: 90 },
+      { id: 'R13', minX: -11, maxX: 11, minZ: 90, maxZ: 100 },
+      { id: 'D03C', minX: -2.1, maxX: 2.1, minZ: -42, maxZ: -41 },
+      { id: 'D04C', minX: -24, maxX: -17, minZ: -26, maxZ: -23 },
+      { id: 'D05C', minX: 17, maxX: 24, minZ: -26, maxZ: -23 },
+      { id: 'D12C', minX: -32, maxX: -31, minZ: 44, maxZ: 48 },
+      { id: 'D13C', minX: 31, maxX: 32, minZ: 44, maxZ: 48 },
+      { id: 'D14C', minX: -2.5, maxX: 2.5, minZ: 43, maxZ: 50 },
+      { id: 'R14A', minX: 27, maxX: 66, minZ: 76, maxZ: 84 },
+      { id: 'R14B', minX: 62, maxX: 72, minZ: -50, maxZ: 84 },
+      { id: 'R14C', minX: 44, maxX: 66, minZ: -24, maxZ: -16 },
+    ];
+  }
+
+  getBlackGrassBlockers() {
+    return [
+      { minX: -3.5, maxX: 3.5, minZ: -33.5, maxZ: -30.5 },
+      { minX: -18, maxX: -6, minZ: -3, maxZ: -1 },
+      { minX: 8, maxX: 18, minZ: 4, maxZ: 6 },
+      { minX: -23, maxX: -13, minZ: 29, maxZ: 31 },
+      { minX: 13, maxX: 23, minZ: 25, maxZ: 27 },
+      { minX: -51, maxX: -39, minZ: 48, maxZ: 56 },
+      { minX: 36, maxX: 52, minZ: 49, maxZ: 51 },
+      { minX: -19, maxX: -17, minZ: 57, maxZ: 59 },
+      { minX: -10, maxX: -8, minZ: 65, maxZ: 67 },
+      { minX: 8, maxX: 10, minZ: 57, maxZ: 59 },
+      { minX: 17, maxX: 19, minZ: 65, maxZ: 67 },
+      { minX: -3, maxX: 3, minZ: 80.5, maxZ: 83.5 },
+      { minX: -4, maxX: 4, minZ: 93.78, maxZ: 94.22 },
+    ];
+  }
+
+  createBlackGrassEnemyConfigs() {
+    const activeIds = new Set(['E01', 'E06', 'E12']);
+    return [
+      ['E01', 8, -31], ['E02', -39, -18], ['E03', -14, 2], ['E04', 16, 6],
+      ['E05', -35, 12], ['E06', -20, 28], ['E07', 2, 33], ['E08', 22, 25],
+      ['E09', -48, 54], ['E10', -10, 61], ['E11', 12, 66], ['E12', 0, 80],
+    ].map(([id, x, z]) => ({
+      id,
+      markerPosition: new THREE.Vector3(x, 0, z),
+      active: activeIds.has(id),
+      config: {
+        ...SHEEP_DEMON_CONFIG,
+        id: `black-grass-temple-${id.toLowerCase()}-sheep-demon`,
+        displayName: `Temple Sheep Demon ${id}`,
+        placement: `Black Grass Temple spawn ${id}`,
+        startPosition: new THREE.Vector3(x, 0, z),
+        patrolPoints: Object.freeze([
+          new THREE.Vector3(x - 2.2, 0, z - 2.2),
+          new THREE.Vector3(x + 2.2, 0, z - 1.4),
+          new THREE.Vector3(x + 1.8, 0, z + 2.2),
+          new THREE.Vector3(x - 2.0, 0, z + 1.6),
+        ]),
+      },
+    }));
   }
 
   getFieldPlayerSpawn() {
     if (this.fieldSpawn === 'cryptAExit') {
       return { spawnPosition: FIELD_CRYPT_A_RETURN_START, spawnYaw: FIELD_CRYPT_A_RETURN_YAW };
+    }
+
+    if (this.fieldSpawn === 'blackGrassTempleExit') {
+      return { spawnPosition: FIELD_BLACK_GRASS_TEMPLE_RETURN_START, spawnYaw: FIELD_BLACK_GRASS_TEMPLE_RETURN_YAW };
     }
 
     return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
@@ -294,6 +440,11 @@ export class DungeonScene {
   }
 
   buildIndoorDungeon() {
+    if (this.area === 'black-grass-temple') {
+      this.buildBlackGrassTempleInterior();
+      return;
+    }
+
     this.addLights();
     this.addBabyLabyrinthInterior();
     this.addBabyLabyrinthStaging();
@@ -539,6 +690,7 @@ export class DungeonScene {
   addReliquaryFieldStructures() {
     this.addBrokenShrine();
     this.addSouthReliquaryCrypt();
+    this.addBlackGrassTempleExterior();
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
     this.addLowRuinWalls();
@@ -702,6 +854,182 @@ export class DungeonScene {
       child.castShadow = true;
       child.receiveShadow = true;
     });
+  }
+
+
+  addBlackGrassTempleExterior() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.8, 1.8], color: 0x77746f, roughness: 0.97, metalness: 0.0, emissive: 0x0c0907, emissiveIntensity: 0.05 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [4, 3], color: 0x80796d, roughness: 0.96, metalness: 0.0 });
+    const grassMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.fieldGrass, repeat: [7, 6], color: 0x252816, roughness: 1.0, metalness: 0.0, emissive: 0x030603, emissiveIntensity: 0.08 });
+    const voidMat = new THREE.MeshBasicMaterial({ color: 0x020202 });
+    const group = new THREE.Group();
+    group.name = 'C02-Black-Grass-Temple-temporary-west-edge-exterior';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(45, 0.08, 38), position: new THREE.Vector3(-184, 0.04, 45), material: grassMat, name: 'C02_G-flat-black-grass-corruption-field_dead_grass_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(28, 0.5, 30), position: new THREE.Vector3(-184, 0.25, 45), material: floorMat, name: 'C02_A-temple-approach-slab-floor_worn_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4, 8, 5), position: new THREE.Vector3(-196, 4, 48), material: stoneMat, name: 'C02_B-left-broken-pylon-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4, 6.4, 5), position: new THREE.Vector3(-176, 3.2, 48), material: stoneMat, name: 'C02_C-right-broken-pylon-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(28, 8, 4), position: new THREE.Vector3(-184, 4, 58), material: stoneMat, name: 'C02_D-rear-temple-wall-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(10, 4.4, 0.3), position: new THREE.Vector3(-184, 2.2, 32), material: voidMat, name: 'C02_F-dark-stair-mouth-visual' }));
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'BGT_INT01',
+      label: 'Black Grass Temple',
+      target: new THREE.Vector3(-184, 1, 31),
+      range: 4.5,
+      hint: 'Tap INTERACT to descend into Black Grass Temple.',
+      message: 'The black grass bends away from the temple stair.',
+      functional: true,
+      area: 'black-grass-temple',
+      type: 'areaEntrance',
+    });
+  }
+
+  buildBlackGrassTempleInterior() {
+    this.scene.background = new THREE.Color(0x100f0d);
+    this.scene.fog = new THREE.Fog(0x242018, 12, 58);
+    this.addBlackGrassTempleLights();
+    this.addBlackGrassTempleRooms();
+    this.addBlackGrassTempleProps();
+    this.addBlackGrassTempleSpawnMarkers();
+    this.addBlackGrassTempleEnemies();
+  }
+
+  addBlackGrassTempleLights() {
+    this.scene.add(new THREE.HemisphereLight(0x80786b, 0x211b16, 1.05));
+    const fill = new THREE.DirectionalLight(0xd0b18a, 0.35);
+    fill.position.set(8, 6, -10);
+    this.scene.add(fill);
+    [
+      [0, 2.0, -61], [-8, 2.0, -50], [8, 2.0, -50], [0, 2.1, -34], [27, 2.1, -20],
+      [-18, 2.0, 0], [18, 2.0, 0], [-25, 2.0, 28], [25, 2.0, 28], [-15, 2.1, 62], [15, 2.1, 62],
+    ].forEach(([x, y, z]) => this.addTorch(new THREE.Vector3(x, y - 0.45, z), x < 0 ? Math.PI / 2 : -Math.PI / 2));
+    const sanctum = new THREE.PointLight(0x9fb7c8, 1.25, 18, 1.2);
+    sanctum.name = 'T12-black-grass-sanctum-cold-dim-center-fill';
+    sanctum.position.set(0, 1.6, 82);
+    this.scene.add(sanctum);
+  }
+
+  getBlackGrassRoomSpecs() {
+    return [
+      { id: 'R01', minX: -5, maxX: 5, minZ: -80, maxZ: -58, floor: 'stone', repeat: [2, 5] },
+      { id: 'R02', minX: -12, maxX: 12, minZ: -58, maxZ: -42, floor: 'stone', repeat: [4, 3] },
+      { id: 'R03', minX: -17, maxX: 17, minZ: -41, maxZ: -23, floor: 'stone', repeat: [5, 3] },
+      { id: 'R04', minX: -44, maxX: -24, minZ: -31, maxZ: -9, floor: 'stone', repeat: [3, 4] },
+      { id: 'R05', minX: 24, maxX: 44, minZ: -31, maxZ: -9, floor: 'stone', repeat: [3, 4] },
+      { id: 'R06', minX: -25, maxX: 25, minZ: -13, maxZ: 13, floor: 'grass', repeat: [8, 5] },
+      { id: 'R07', minX: -42, maxX: -26, minZ: -8, maxZ: 25, floor: 'stone', repeat: [3, 6] },
+      { id: 'R08', minX: -31, maxX: 31, minZ: 13, maxZ: 43, floor: 'grass', repeat: [9, 5] },
+      { id: 'R09', minX: -56, maxX: -32, minZ: 39, maxZ: 65, floor: 'mixed', repeat: [4, 4] },
+      { id: 'R10', minX: 32, maxX: 56, minZ: 39, maxZ: 65, floor: 'mixed', repeat: [4, 4] },
+      { id: 'R11', minX: -25, maxX: 25, minZ: 50, maxZ: 74, floor: 'stone', repeat: [7, 4] },
+      { id: 'R12', minX: -27, maxX: 27, minZ: 74, maxZ: 90, floor: 'grass', repeat: [8, 3] },
+      { id: 'R13', minX: -11, maxX: 11, minZ: 90, maxZ: 100, floor: 'stone', repeat: [3, 2] },
+      { id: 'D03C', minX: -2.1, maxX: 2.1, minZ: -42, maxZ: -41, floor: 'stone', repeat: [1, 1] },
+      { id: 'D04C', minX: -24, maxX: -17, minZ: -26, maxZ: -23, floor: 'stone', repeat: [1.4, 1] },
+      { id: 'D05C', minX: 17, maxX: 24, minZ: -26, maxZ: -23, floor: 'stone', repeat: [1.4, 1] },
+      { id: 'D12C', minX: -32, maxX: -31, minZ: 44, maxZ: 48, floor: 'stone', repeat: [1, 1] },
+      { id: 'D13C', minX: 31, maxX: 32, minZ: 44, maxZ: 48, floor: 'stone', repeat: [1, 1] },
+      { id: 'D14C', minX: -2.5, maxX: 2.5, minZ: 43, maxZ: 50, floor: 'stone', repeat: [1, 1.4] },
+      { id: 'R14A', minX: 27, maxX: 62, minZ: 76, maxZ: 84, floor: 'stone', repeat: [7, 1.5] },
+      { id: 'R14B', minX: 62, maxX: 72, minZ: -50, maxZ: 84, floor: 'stone', repeat: [2, 14] },
+      { id: 'R14C', minX: 44, maxX: 62, minZ: -24, maxZ: -16, floor: 'stone', repeat: [4, 1.5] },
+    ];
+  }
+
+  addBlackGrassTempleRooms() {
+    const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [5, 1.4], color: 0x8c877b, roughness: 0.96, metalness: 0.0, emissive: 0x18120e, emissiveIntensity: 0.14 });
+    const ceilingMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.ceiling, repeat: [5, 5], color: 0x807a72, roughness: 0.98, metalness: 0.0, emissive: 0x151312, emissiveIntensity: 0.12 });
+    this.getBlackGrassRoomSpecs().forEach((room) => {
+      const width = room.maxX - room.minX;
+      const depth = room.maxZ - room.minZ;
+      const center = new THREE.Vector3((room.minX + room.maxX) / 2, 0, (room.minZ + room.maxZ) / 2);
+      const floorPath = room.floor === 'grass' ? TEXTURE_PATHS.fieldGrass : TEXTURE_PATHS.floor;
+      const floorColor = room.floor === 'grass' ? 0x242716 : room.floor === 'mixed' ? 0x4c4f32 : 0x9c9282;
+      const floorMat = this.makeTexturedMaterial({ path: floorPath, repeat: room.repeat, color: floorColor, roughness: 0.98, metalness: 0.0, emissive: room.floor === 'grass' ? 0x030703 : 0x1c140d, emissiveIntensity: room.floor === 'grass' ? 0.12 : 0.16 });
+      this.addBox({ size: new THREE.Vector3(width, 0.18, depth), position: new THREE.Vector3(center.x, FLOOR_Y - 0.09, center.z), material: floorMat, name: `BGT-${room.id}-clean-floor-${room.floor}` });
+      this.addBox({ size: new THREE.Vector3(width, 0.18, depth), position: new THREE.Vector3(center.x, WALL_HEIGHT, center.z), material: ceilingMat, name: `BGT-${room.id}-clean-ceiling-ceiling_dark_stone_01` });
+      this.addRoomWallsWithDoorGaps(room, wallMat);
+    });
+  }
+
+  addRoomWallsWithDoorGaps(room, material) {
+    const t = 0.35;
+    const doors = [
+      { x: 0, z: -78, w: 4.0 }, { x: 0, z: -59, w: 4.0 }, { x: 0, z: -41, w: 4.2 },
+      { x: -17, z: -24, w: 3.6 }, { x: -24, z: -24, w: 3.6 }, { x: 17, z: -24, w: 3.6 }, { x: 24, z: -24, w: 3.6 }, { x: 0, z: -13, w: 4.6 },
+      { x: -34, z: -8, w: 3.6 }, { x: 22, z: -4, w: 4.0 }, { x: -25, z: 4, w: 3.6 },
+      { x: 0, z: 14, w: 5.0 }, { x: -25, z: 22, w: 3.6 }, { x: -31, z: 46, w: 4.0 },
+      { x: 31, z: 46, w: 4.0 }, { x: 0, z: 43, w: 5.0 }, { x: 0, z: 50, w: 5.0 }, { x: 0, z: 74, w: 5.0 },
+      { x: 0, z: 90, w: 4.0 }, { x: 27, z: 80, w: 3.6 }, { x: 44, z: -20, w: 3.6 },
+    ];
+    const addHorizontal = (z, side) => {
+      const gaps = doors.filter((d) => Math.abs(d.z - z) < 1.05 && d.x >= room.minX - 0.1 && d.x <= room.maxX + 0.1);
+      let cursor = room.minX;
+      gaps.sort((a, b) => a.x - b.x).forEach((gap) => {
+        const start = Math.max(room.minX, gap.x - gap.w / 2);
+        const end = Math.min(room.maxX, gap.x + gap.w / 2);
+        if (start - cursor > 0.2) this.addBox({ size: new THREE.Vector3(start - cursor, WALL_HEIGHT, t), position: new THREE.Vector3((cursor + start) / 2, WALL_HEIGHT / 2, z + side * t / 2), material, name: `BGT-${room.id}-wall-z-${z}` });
+        cursor = end;
+      });
+      if (room.maxX - cursor > 0.2) this.addBox({ size: new THREE.Vector3(room.maxX - cursor, WALL_HEIGHT, t), position: new THREE.Vector3((cursor + room.maxX) / 2, WALL_HEIGHT / 2, z + side * t / 2), material, name: `BGT-${room.id}-wall-z-${z}` });
+    };
+    const addVertical = (x, side) => {
+      const gaps = doors.filter((d) => Math.abs(d.x - x) < 1.05 && d.z >= room.minZ - 0.1 && d.z <= room.maxZ + 0.1);
+      let cursor = room.minZ;
+      gaps.sort((a, b) => a.z - b.z).forEach((gap) => {
+        const start = Math.max(room.minZ, gap.z - gap.w / 2);
+        const end = Math.min(room.maxZ, gap.z + gap.w / 2);
+        if (start - cursor > 0.2) this.addBox({ size: new THREE.Vector3(t, WALL_HEIGHT, start - cursor), position: new THREE.Vector3(x + side * t / 2, WALL_HEIGHT / 2, (cursor + start) / 2), material, name: `BGT-${room.id}-wall-x-${x}` });
+        cursor = end;
+      });
+      if (room.maxZ - cursor > 0.2) this.addBox({ size: new THREE.Vector3(t, WALL_HEIGHT, room.maxZ - cursor), position: new THREE.Vector3(x + side * t / 2, WALL_HEIGHT / 2, (cursor + room.maxZ) / 2), material, name: `BGT-${room.id}-wall-x-${x}` });
+    };
+    addHorizontal(room.minZ, -1);
+    addHorizontal(room.maxZ, 1);
+    addVertical(room.minX, -1);
+    addVertical(room.maxX, 1);
+  }
+
+  addBlackGrassTempleProps() {
+    const stone = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2, 1], color: 0x7f7768, roughness: 0.97, metalness: 0.0, emissive: 0x120d0a, emissiveIntensity: 0.12 });
+    const gate = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: [1, 2], color: 0xa28b73, roughness: 0.78, metalness: 0.4, emissive: 0x21130b, emissiveIntensity: 0.24 });
+    const prop = (name, x, y, z, w, h, d, mat = stone) => this.addBox({ size: new THREE.Vector3(w, h, d), position: new THREE.Vector3(x, y, z), material: mat, name });
+    prop('BGT-P01-broken-offering-slab', 0, 0.55, -32, 7, 1.1, 3);
+    prop('BGT-P02-broken-counter-west', -12, 0.6, -2, 12, 1.2, 2);
+    prop('BGT-P03-broken-counter-east', 13, 0.6, 5, 10, 1.2, 2);
+    prop('BGT-P04-low-divider-A', -18, 0.55, 30, 10, 1.1, 2);
+    prop('BGT-P05-low-divider-B', 18, 0.55, 26, 10, 1.1, 2);
+    prop('BGT-P06-booth-divider-cluster', -45, 0.55, 52, 12, 1.1, 8);
+    prop('BGT-P07-back-bar-block', 44, 0.7, 50, 16, 1.4, 2);
+    [[-18,58],[-9,66],[9,58],[18,66]].forEach(([x,z], i) => prop(`BGT-P0${8+i}-square-pillar`, x, 1.6, z, 2, 3.2, 2));
+    this.reliquaryBlock = prop('BGT-P14-central-reliquary-block', 0, 0.8, 82, 6, 1.6, 3);
+    prop('BGT-P15-sealed-future-gate', 0, 1.6, 94, 8, 3.2, 0.45, gate);
+    prop('BGT-G01-first-gate-inspect-rusted-metal', 30, 1.6, -20, 0.45, 3.2, 8, gate);
+  }
+
+  addBlackGrassTempleSpawnMarkers() {
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0x6f1616, transparent: true, opacity: 0.52 });
+    this.blackGrassEnemyConfigs.forEach(({ id, markerPosition, active }) => {
+      const marker = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.08, 0.65), markerMat);
+      marker.name = `BGT-${id}-${active ? 'active' : 'inactive'}-enemy-spawn-marker`;
+      marker.position.set(markerPosition.x, 0.05, markerPosition.z);
+      marker.userData = { spawnId: id, active };
+      this.scene.add(marker);
+    });
+  }
+
+  addBlackGrassTempleEnemies() {
+    this.sheepDemonEnemies = this.blackGrassEnemyConfigs
+      .filter((spawn) => spawn.active)
+      .map((spawn) => {
+        const enemy = new SheepDemonEnemy({ scene: this.scene, collision: this.collision, config: spawn.config });
+        enemy.load();
+        return enemy;
+      });
+    this.sheepDemonEnemy = this.sheepDemonEnemies[0] ?? null;
   }
 
   addLights() {
@@ -1297,16 +1625,38 @@ export class DungeonScene {
   }
 
   updateSheepDemonEnemy(deltaSeconds, player) {
-    if (!this.sheepDemonEnemy || !player) return;
+    if (!player) return;
 
+    if (this.sheepDemonEnemies?.length) {
+      this.sheepDemonEnemies.forEach((enemy) => enemy.update(deltaSeconds, player.position));
+      return;
+    }
+
+    if (!this.sheepDemonEnemy) return;
     this.sheepDemonEnemy.update(deltaSeconds, player.position);
   }
 
   consumeEnemyContactDamage(playerPosition) {
+    if (this.sheepDemonEnemies?.length) {
+      for (const enemy of this.sheepDemonEnemies) {
+        const hit = enemy.consumeContactDamage(playerPosition);
+        if (hit) return hit;
+      }
+      return null;
+    }
+
     return this.sheepDemonEnemy?.consumeContactDamage(playerPosition) ?? null;
   }
 
   damageEnemyFromPlayerAttack(attack) {
+    if (this.sheepDemonEnemies?.length) {
+      for (const enemy of this.sheepDemonEnemies) {
+        const hit = enemy.receivePlayerAttack(attack);
+        if (hit) return hit;
+      }
+      return null;
+    }
+
     return this.sheepDemonEnemy?.receivePlayerAttack(attack) ?? null;
   }
 
