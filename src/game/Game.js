@@ -32,9 +32,11 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 260);
     const query = new URLSearchParams(window.location.search);
     const requestedArea = query.get('area');
-    const fieldSpawn = query.get('from') === 'dungeon' ? 'cryptAExit' : 'start';
+    const returnedFrom = query.get('from');
+    const fieldSpawn = returnedFrom === 'black-grass-temple' ? 'blackGrassTempleExit' : returnedFrom === 'dungeon' ? 'cryptAExit' : 'start';
+    const area = ['dungeon', 'black-grass-temple'].includes(requestedArea) ? requestedArea : 'field';
     this.gameState = new GameState();
-    this.dungeon = new DungeonScene({ area: requestedArea === 'dungeon' ? 'dungeon' : 'field', fieldSpawn, gameState: this.gameState });
+    this.dungeon = new DungeonScene({ area, fieldSpawn, gameState: this.gameState });
     this.scene = this.dungeon.build();
     const movementProfile = this.dungeon.area === 'field'
       ? {
