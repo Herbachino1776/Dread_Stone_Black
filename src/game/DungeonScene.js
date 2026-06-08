@@ -302,7 +302,9 @@ export class DungeonScene {
     this.indoorExitTarget = new THREE.Vector3(0, 1.2, -76);
     this.gateTarget = new THREE.Vector3(30, 1.2, -20);
     this.blackGrassEnemyConfigs = this.createBlackGrassEnemyConfigs();
+    this.blackGrassNavigationGraph = this.createBlackGrassNavigationGraph();
     this.blackGrassFactionSpawnAnchors = this.createBlackGrassFactionSpawnAnchors();
+    this.validateFactionSpawnAnchors(this.blackGrassFactionSpawnAnchors, this.blackGrassNavigationGraph);
     this.inspectInteractions = [
       {
         id: 'BGT_INT03',
@@ -366,6 +368,8 @@ export class DungeonScene {
       { id: 'D03C', minX: -2.1, maxX: 2.1, minZ: -42, maxZ: -41 },
       { id: 'D04C', minX: -24, maxX: -17, minZ: -26, maxZ: -23 },
       { id: 'D05C', minX: 17, maxX: 24, minZ: -26, maxZ: -23 },
+      { id: 'D06C', minX: -36, maxX: -32, minZ: -9, maxZ: -8 },
+      { id: 'D07C', minX: -26, maxX: -25, minZ: 2, maxZ: 6 },
       { id: 'D12C', minX: -32, maxX: -31, minZ: 44, maxZ: 48 },
       { id: 'D13C', minX: 31, maxX: 32, minZ: 44, maxZ: 48 },
       { id: 'D14C', minX: -2.5, maxX: 2.5, minZ: 43, maxZ: 50 },
@@ -377,19 +381,19 @@ export class DungeonScene {
 
   getBlackGrassBlockers() {
     return [
-      { minX: -3.5, maxX: 3.5, minZ: -33.5, maxZ: -30.5 },
-      { minX: -18, maxX: -6, minZ: -3, maxZ: -1 },
-      { minX: 8, maxX: 18, minZ: 4, maxZ: 6 },
-      { minX: -23, maxX: -13, minZ: 29, maxZ: 31 },
-      { minX: 13, maxX: 23, minZ: 25, maxZ: 27 },
-      { minX: -51, maxX: -39, minZ: 48, maxZ: 56 },
-      { minX: 36, maxX: 52, minZ: 49, maxZ: 51 },
-      { minX: -19, maxX: -17, minZ: 57, maxZ: 59 },
-      { minX: -10, maxX: -8, minZ: 65, maxZ: 67 },
-      { minX: 8, maxX: 10, minZ: 57, maxZ: 59 },
-      { minX: 17, maxX: 19, minZ: 65, maxZ: 67 },
-      { minX: -3, maxX: 3, minZ: 80.5, maxZ: 83.5 },
-      { minX: -4, maxX: 4, minZ: 93.78, maxZ: 94.22 },
+      { id: 'BGT_BROKEN_OFFERING_SLAB', minX: -3.5, maxX: 3.5, minZ: -33.5, maxZ: -30.5 },
+      { id: 'BGT_WEST_LOW_COUNTER', minX: -18, maxX: -6, minZ: -3, maxZ: -1 },
+      { id: 'BGT_EAST_LOW_COUNTER', minX: 8, maxX: 18, minZ: 4, maxZ: 6 },
+      { id: 'BGT_WEST_BAR_BLOCK', minX: -23, maxX: -13, minZ: 29, maxZ: 31 },
+      { id: 'BGT_EAST_BOOTH_DIVIDER', minX: 13, maxX: 23, minZ: 25, maxZ: 27 },
+      { id: 'BGT_WEST_DEEP_PILLAR_CLUSTER', minX: -51, maxX: -39, minZ: 48, maxZ: 56 },
+      { id: 'BGT_EAST_DEEP_BAR_BLOCK', minX: 36, maxX: 52, minZ: 49, maxZ: 51 },
+      { id: 'BGT_RELIQUARY_PILLAR_NW', minX: -19, maxX: -17, minZ: 57, maxZ: 59 },
+      { id: 'BGT_RELIQUARY_PILLAR_SW', minX: -10, maxX: -8, minZ: 65, maxZ: 67 },
+      { id: 'BGT_RELIQUARY_PILLAR_NE', minX: 8, maxX: 10, minZ: 57, maxZ: 59 },
+      { id: 'BGT_RELIQUARY_PILLAR_SE', minX: 17, maxX: 19, minZ: 65, maxZ: 67 },
+      { id: 'BGT_CENTRAL_RELIQUARY_BLOCK', minX: -3, maxX: 3, minZ: 80.5, maxZ: 83.5 },
+      { id: 'BGT_SEALED_NORTH_GATE', minX: -4, maxX: 4, minZ: 93.78, maxZ: 94.22 },
     ];
   }
 
@@ -437,16 +441,94 @@ export class DungeonScene {
     };
 
     return Object.freeze([
-      { ...anchor('sheep_initial_west_branch', 'sheep_demon', -30, -22, 3.8), initialWave: true },
-      { ...anchor('neck_initial_east_branch', 'neck_man', 30, -22, 3.8), initialWave: true },
-      anchor('sheep_spawn_a', 'sheep_demon', -39, -18, 4.5),
-      anchor('sheep_spawn_b', 'sheep_demon', -48, 54, 5.0),
-      anchor('neck_spawn_a', 'neck_man', 22, 25, 5.5),
-      anchor('neck_spawn_b', 'neck_man', 44, 50, 4.8),
-      anchor('neutral_spawn_a', 'neutral', -20, 28, 5.2),
-      anchor('neutral_spawn_b', 'neutral', 12, 66, 4.8),
+      { ...anchor('sheep_initial_west_branch', 'sheep_demon', -34, -21, 3.4), initialWave: true },
+      { ...anchor('neck_initial_east_branch', 'neck_man', 34, -21, 3.4), initialWave: true },
+      anchor('sheep_spawn_a', 'sheep_demon', -36, -18, 3.8),
+      anchor('sheep_spawn_b', 'sheep_demon', -44, 62, 3.6),
+      anchor('neck_spawn_a', 'neck_man', 22, 34, 4.0),
+      anchor('neck_spawn_b', 'neck_man', 52, 58, 3.6),
+      anchor('neutral_spawn_a', 'neutral', -20, 25, 4.2),
+      anchor('neutral_spawn_b', 'neutral', 12, 66, 4.0),
     ]);
   }
+
+  createBlackGrassNavigationGraph() {
+    const roomRects = this.getBlackGrassWalkableRects().filter((rect) => /^R\d+/.test(rect.id));
+    const centerOverrides = {
+      R09: new THREE.Vector3(-44, 0, 62),
+      R12: new THREE.Vector3(10, 0, 84),
+    };
+    const roomById = new Map(roomRects.map((rect) => [rect.id, {
+      ...rect,
+      center: centerOverrides[rect.id]?.clone() ?? new THREE.Vector3((rect.minX + rect.maxX) / 2, 0, (rect.minZ + rect.maxZ) / 2),
+    }]));
+    const links = new Map(roomRects.map((rect) => [rect.id, []]));
+    const doorway = (a, b, x, z) => {
+      const waypoint = new THREE.Vector3(x, 0, z);
+      links.get(a)?.push({ to: b, waypoint });
+      links.get(b)?.push({ to: a, waypoint: waypoint.clone() });
+    };
+
+    doorway('R01', 'R02', 0, -58.5);
+    doorway('R02', 'R03', 0, -41.5);
+    doorway('R03', 'R04', -20.5, -24.5);
+    doorway('R03', 'R05', 20.5, -24.5);
+    doorway('R04', 'R07', -34, -8.5);
+    doorway('R05', 'R06', 24.2, -4);
+    doorway('R07', 'R06', -25.5, 4);
+    doorway('R06', 'R08', 0, 13.5);
+    doorway('R07', 'R08', -25, 22);
+    doorway('R08', 'R09', -31.5, 46);
+    doorway('R08', 'R10', 31.5, 46);
+    doorway('R08', 'R11', 0, 46.5);
+    doorway('R11', 'R12', 0, 74);
+    doorway('R12', 'R13', 0, 90);
+    doorway('R12', 'R14A', 27, 80);
+    doorway('R14A', 'R14B', 64, 80);
+    doorway('R14B', 'R14C', 64, -20);
+    doorway('R14C', 'R05', 44, -20);
+
+    return { rooms: Object.fromEntries(roomById), links: Object.fromEntries(links) };
+  }
+
+  validateFactionSpawnAnchors(anchors, navigationGraph) {
+    if (!import.meta.env.DEV) return;
+    const walkableRects = this.getBlackGrassWalkableRects();
+    const blockerRects = this.getBlackGrassBlockers();
+    const clearance = 0.55;
+    const pointInRect = (point, rect) => point.x >= rect.minX && point.x <= rect.maxX && point.z >= rect.minZ && point.z <= rect.maxZ;
+    const blockerOverlap = (point, rect) => {
+      const closestX = THREE.MathUtils.clamp(point.x, rect.minX, rect.maxX);
+      const closestZ = THREE.MathUtils.clamp(point.z, rect.minZ, rect.maxZ);
+      const dx = point.x - closestX;
+      const dz = point.z - closestZ;
+      return dx * dx + dz * dz < clearance * clearance;
+    };
+    const hasRoomClearance = (point, rect) => (
+      point.x >= rect.minX + clearance && point.x <= rect.maxX - clearance
+      && point.z >= rect.minZ + clearance && point.z <= rect.maxZ - clearance
+    );
+
+    anchors.forEach((anchor) => {
+      const position = anchor.position;
+      const walkableRect = walkableRects.find((rect) => pointInRect(position, rect));
+      const roomRect = Object.values(navigationGraph.rooms).find((rect) => pointInRect(position, rect));
+      const overlappingBlocker = blockerRects.find((rect) => blockerOverlap(position, rect));
+      const lacksClearance = walkableRect && !hasRoomClearance(position, walkableRect);
+      if (!walkableRect || !roomRect || overlappingBlocker || lacksClearance) {
+        console.warn('Invalid Black Grass Temple faction spawn anchor:', {
+          id: anchor.id,
+          position: { x: Number(position.x.toFixed(2)), z: Number(position.z.toFixed(2)) },
+          preferredFaction: anchor.preferredFaction,
+          walkableRect: walkableRect?.id ?? null,
+          roomRect: roomRect?.id ?? null,
+          blocker: overlappingBlocker?.id ?? null,
+          reason: !walkableRect ? 'outside walkable rect' : !roomRect ? 'not inside navigable room rect' : overlappingBlocker ? 'overlaps blocker/prop clearance' : 'too close to solid edge',
+        });
+      }
+    });
+  }
+
 
   getFieldPlayerSpawn() {
     if (this.fieldSpawn === 'cryptAExit') {
@@ -963,6 +1045,8 @@ export class DungeonScene {
       { id: 'D03C', minX: -2.1, maxX: 2.1, minZ: -42, maxZ: -41, floor: 'stone', repeat: [1, 1] },
       { id: 'D04C', minX: -24, maxX: -17, minZ: -26, maxZ: -23, floor: 'stone', repeat: [1.4, 1] },
       { id: 'D05C', minX: 17, maxX: 24, minZ: -26, maxZ: -23, floor: 'stone', repeat: [1.4, 1] },
+      { id: 'D06C', minX: -36, maxX: -32, minZ: -9, maxZ: -8, floor: 'stone', repeat: [1, 1] },
+      { id: 'D07C', minX: -26, maxX: -25, minZ: 2, maxZ: 6, floor: 'stone', repeat: [1, 1] },
       { id: 'D12C', minX: -32, maxX: -31, minZ: 44, maxZ: 48, floor: 'stone', repeat: [1, 1] },
       { id: 'D13C', minX: 31, maxX: 32, minZ: 44, maxZ: 48, floor: 'stone', repeat: [1, 1] },
       { id: 'D14C', minX: -2.5, maxX: 2.5, minZ: 43, maxZ: 50, floor: 'stone', repeat: [1, 1.4] },
@@ -1068,6 +1152,7 @@ export class DungeonScene {
       scene: this.scene,
       collision: this.collision,
       anchors: this.blackGrassFactionSpawnAnchors,
+      navigationGraph: this.blackGrassNavigationGraph,
     });
     this.blackGrassFactionManager.spawnInitialWave();
   }
