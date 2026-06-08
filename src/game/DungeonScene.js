@@ -441,14 +441,18 @@ export class DungeonScene {
     };
 
     return Object.freeze([
-      { ...anchor('sheep_initial_west_branch', 'sheep_demon', -34, -21, 3.4), initialWave: true },
-      { ...anchor('neck_initial_east_branch', 'neck_man', 34, -21, 3.4), initialWave: true },
-      anchor('sheep_spawn_a', 'sheep_demon', -36, -18, 3.8),
-      anchor('sheep_spawn_b', 'sheep_demon', -44, 62, 3.6),
-      anchor('neck_spawn_a', 'neck_man', 22, 34, 4.0),
-      anchor('neck_spawn_b', 'neck_man', 52, 58, 3.6),
-      anchor('neutral_spawn_a', 'neutral', -20, 25, 4.2),
-      anchor('neutral_spawn_b', 'neutral', 12, 66, 4.0),
+      { ...anchor('sheep_initial_first_branch', 'sheep_demon', -6.5, -49, 2.8), initialWave: true },
+      { ...anchor('neck_initial_first_branch', 'neck_man', 6.5, -47, 2.8), initialWave: true },
+      anchor('sheep_spawn_early_branch', 'sheep_demon', -9, -33, 3.4),
+      anchor('neck_spawn_early_branch', 'neck_man', 9, -31, 3.4),
+      anchor('sheep_spawn_west_skirmish', 'sheep_demon', -36, -18, 3.8),
+      anchor('neck_spawn_east_skirmish', 'neck_man', 34, -18, 3.8),
+      anchor('sheep_spawn_middle_tavern', 'sheep_demon', -18, 25, 4.0),
+      anchor('neck_spawn_middle_tavern', 'neck_man', 18, 29, 4.0),
+      anchor('sheep_spawn_central_reliquary', 'sheep_demon', -12, 64, 3.8),
+      anchor('neck_spawn_central_reliquary', 'neck_man', 12, 66, 3.8),
+      anchor('neutral_spawn_west_side', 'neutral', -32, 12, 4.0),
+      anchor('neutral_spawn_east_deep', 'neutral', 52, 58, 3.6),
     ]);
   }
 
