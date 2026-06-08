@@ -107,6 +107,24 @@ const LOSE_PLAYER_RADIUS = 28;
 const RESPAWN_COOLDOWN_SECONDS = 10;
 const CORPSE_SECONDS = 5;
 const MAX_ACTIVE_BY_FACTION = Object.freeze({ sheep_demon: 2, neck_man: 2 });
+const INITIAL_WAVE_BY_FACTION = Object.freeze({ sheep_demon: 1, neck_man: 1 });
+const DEV_DIAGNOSTIC_INTERVAL_SECONDS = 5;
+const IS_DEV = import.meta.env.DEV;
+
+function vectorSummary(vector) {
+  return {
+    x: Number(vector.x.toFixed(2)),
+    y: Number(vector.y.toFixed(2)),
+    z: Number(vector.z.toFixed(2)),
+  };
+}
+
+function boxSizeSummary(root) {
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  if (box.isEmpty()) return { x: 0, y: 0, z: 0 };
+  return vectorSummary(box.getSize(new THREE.Vector3()));
+}
 
 function horizontalDistance(a, b) {
   const dx = a.x - b.x;
@@ -180,7 +198,7 @@ function makePatrolPoints(origin, spread = 4.5) {
 }
 
 class BlackGrassFactionEnemy {
-  constructor({ scene, collision, species, id, spawnAnchor, patrolPoints = null }) {
+  constructor({ scene, collision, species, id, spawnAnchor, patrolPoints = null, onLoaded = null }) {
     this.scene = scene;
     this.collision = collision;
     this.species = species;
@@ -202,33 +220,50 @@ class BlackGrassFactionEnemy {
     this.attackElapsed = 0;
     this.attackHasDamaged = false;
     this.corpseTimer = CORPSE_SECONDS;
+    this.onLoaded = onLoaded;
+    this.devMarker = null;
   }
 
   load() {
-    const loadRequests = Object.entries(this.template.assets).map(([state, url]) => (
-      loadDungeonModel({ url, targetHeight: this.template.targetHeight, maxWidth: this.template.maxWidth })
-        .then((model) => [state, model])
-    ));
+    const idleState = this.resolveStateAnimation('spawn');
+    const primaryStates = new Set([
+      idleState,
+      this.resolveStateAnimation('patrol'),
+      this.resolveStateAnimation('seek_enemy_faction'),
+      this.resolveStateAnimation('attack_enemy_faction'),
+      this.resolveStateAnimation('dead'),
+    ]);
+    const loadState = (state) => loadDungeonModel({
+      url: this.template.assets[state],
+      targetHeight: this.template.targetHeight,
+      maxWidth: this.template.maxWidth,
+    }).then((model) => [state, model]);
 
-    return Promise.all(loadRequests)
-      .then((entries) => {
+    return loadState(idleState)
+      .then(([state, model]) => {
         const rig = new THREE.Group();
         rig.name = this.id;
+        rig.visible = true;
         rig.position.copy(this.spawnAnchor.position);
+        rig.position.y = Math.max(0, rig.position.y);
         rig.rotation.y = this.spawnAnchor.yaw ?? 0;
 
         const tracks = {};
         const mixers = [];
         const normalizedScale = {};
-        entries.forEach(([state, model]) => {
-          model.root.name = `${this.id}-${state}-model`;
-          model.root.visible = false;
-          const track = makeAnimationTrack({ state, ...model });
-          tracks[state] = track;
+        const addTrack = (trackState, trackModel) => {
+          trackModel.root.name = `${this.id}-${trackState}-model`;
+          trackModel.root.visible = false;
+          trackModel.root.updateMatrixWorld(true);
+          const track = makeAnimationTrack({ state: trackState, ...trackModel });
+          tracks[trackState] = track;
           mixers.push(track.mixer);
-          normalizedScale[state] = model.scale;
-          rig.add(model.root);
-        });
+          normalizedScale[trackState] = trackModel.scale;
+          rig.add(trackModel.root);
+          return track;
+        };
+
+        addTrack(state, model);
 
         rig.userData = {
           hostile: true,
@@ -236,12 +271,16 @@ class BlackGrassFactionEnemy {
           faction: this.species,
           opposingFaction: this.template.opposingFactionId,
           displayName: `${this.template.displayName} ${this.spawnAnchor.id}`,
+          spawnAnchorId: this.spawnAnchor.id,
+          spawnPosition: vectorSummary(this.spawnAnchor.position),
           stateMachine: FACTION_STATE_MACHINE,
           targetPriority: ['nearest living opposing faction enemy', 'player fallback', 'patrol target'],
           animationMapping: this.template.animationMap,
           assetUrls: this.template.assets,
-          animationClips: Object.fromEntries(Object.keys(this.template.assets).map((state) => [state, tracks[state].clipNames])),
-          animationClipDetails: Object.fromEntries(Object.keys(this.template.assets).map((state) => [state, tracks[state].clipSummaries])),
+          animationClips: {},
+          animationClipDetails: {},
+          loadedAnimationStates: [state],
+          expectedAnimationStates: Object.keys(this.template.assets),
           normalizedScale,
           health: this.health,
         };
@@ -250,12 +289,108 @@ class BlackGrassFactionEnemy {
         this.animation = { mixers, tracks };
         this.scene.add(rig);
         this.setBehaviorState('spawn', { force: true });
+        this.ensureSingleVisibleAnimationRoot();
+        this.addDevMarker();
         this.isLoaded = true;
-        console.info(`Black Grass Temple ${this.template.displayName} faction animation clips detected:`, rig.userData.animationClipDetails);
+        this.refreshAnimationUserData();
+        this.logLoadDiagnostics('idle-visible');
+        this.onLoaded?.(this);
+
+        const remainingStates = Object.keys(this.template.assets).filter((candidate) => candidate !== state);
+        const priorityRemaining = remainingStates.filter((candidate) => primaryStates.has(candidate));
+        const optionalRemaining = remainingStates.filter((candidate) => !primaryStates.has(candidate));
+        [...priorityRemaining, ...optionalRemaining].forEach((remainingState) => {
+          loadState(remainingState)
+            .then(([, remainingModel]) => {
+              addTrack(remainingState, remainingModel);
+              if (this.resolveStateAnimation(this.behaviorState ?? 'spawn') === remainingState) {
+                this.setBehaviorState(this.behaviorState ?? 'spawn', { force: true });
+              }
+              this.refreshAnimationUserData();
+              this.ensureSingleVisibleAnimationRoot();
+              if (IS_DEV && this.group) {
+                console.info('Black Grass Temple faction animation state loaded:', {
+                  species: this.species,
+                  id: this.id,
+                  spawnAnchorId: this.spawnAnchor.id,
+                  state: remainingState,
+                  glbTrackCount: tracks[remainingState].clip?.tracks.length ?? 0,
+                  totalLoadedStates: Object.keys(tracks).length,
+                });
+              }
+            })
+            .catch((error) => {
+              if (IS_DEV) {
+                console.warn(`Black Grass Temple ${this.template.displayName} ${remainingState} animation failed to lazy-load.`, error);
+              }
+            });
+        });
       })
       .catch((error) => {
-        console.warn(`Black Grass Temple ${this.template.displayName} failed to load; faction spawn skipped.`, error);
+        console.warn(`Black Grass Temple ${this.template.displayName} failed to load idle model; faction spawn skipped.`, error);
       });
+  }
+
+  addDevMarker() {
+    if (!IS_DEV || !this.group || this.devMarker) return;
+    const color = this.species === 'sheep_demon' ? 0xff3131 : 0x20d6a4;
+    const marker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 12, 8),
+      new THREE.MeshBasicMaterial({ color, depthTest: false }),
+    );
+    marker.name = `${this.id}-dev-visible-faction-marker`;
+    marker.position.set(0, this.template.targetHeight + 0.45, 0);
+    marker.renderOrder = 999;
+    marker.userData = { devOnly: true, blackGrassFactionMarker: true, species: this.species, enemyId: this.id };
+    this.group.add(marker);
+    this.devMarker = marker;
+  }
+
+  refreshAnimationUserData() {
+    if (!this.group || !this.animation) return;
+    const tracks = this.animation.tracks;
+    this.group.userData.animationClips = Object.fromEntries(Object.entries(tracks).map(([state, track]) => [state, track.clipNames]));
+    this.group.userData.animationClipDetails = Object.fromEntries(Object.entries(tracks).map(([state, track]) => [state, track.clipSummaries]));
+    this.group.userData.loadedAnimationStates = Object.keys(tracks);
+    this.group.userData.normalizedScale = Object.fromEntries(Object.entries(tracks).map(([state, track]) => [state, track.scale]));
+    this.group.userData.visibleAnimationState = this.group.userData.animationState;
+    this.group.userData.visibleAnimationRootCount = Object.values(tracks).filter((track) => track.root.visible).length;
+    this.group.userData.boundingBoxSize = boxSizeSummary(this.group);
+    this.group.userData.worldPosition = vectorSummary(this.group.getWorldPosition(new THREE.Vector3()));
+  }
+
+  ensureSingleVisibleAnimationRoot() {
+    if (!this.group || !this.animation) return;
+    this.group.visible = true;
+    const animationState = this.resolveStateAnimation(this.behaviorState ?? 'spawn');
+    const visibleState = this.animation.tracks[animationState] ? animationState : Object.keys(this.animation.tracks)[0];
+    Object.entries(this.animation.tracks).forEach(([trackState, track]) => {
+      track.root.visible = trackState === visibleState;
+    });
+    this.group.userData.animationState = visibleState;
+    this.group.userData.visibleAnimationState = visibleState;
+    this.group.userData.visibleAnimationRootCount = 1;
+  }
+
+  logLoadDiagnostics(stage) {
+    if (!IS_DEV || !this.group || !this.animation) return;
+    this.refreshAnimationUserData();
+    const visibleAnimationState = this.group.userData.visibleAnimationState;
+    console.info('Black Grass Temple faction enemy visibility diagnostic:', {
+      stage,
+      species: this.species,
+      id: this.id,
+      spawnAnchorId: this.spawnAnchor.id,
+      spawnPosition: vectorSummary(this.spawnAnchor.position),
+      loadedAnimationStates: this.group.userData.loadedAnimationStates,
+      glbTrackCount: this.animation.tracks[visibleAnimationState]?.clip?.tracks.length ?? 0,
+      visibleAnimationState,
+      visibleAnimationRootCount: this.group.userData.visibleAnimationRootCount,
+      groupVisible: this.group.visible,
+      scaleByState: this.group.userData.normalizedScale,
+      boundingBoxSize: this.group.userData.boundingBoxSize,
+      finalWorldPosition: this.group.userData.worldPosition,
+    });
   }
 
   get isAlive() {
@@ -557,6 +692,7 @@ class BlackGrassFactionEnemy {
     const nextTrack = this.animation.tracks[animationState];
     const previousTrack = this.animation.tracks[this.resolveStateAnimation(this.behaviorState ?? 'spawn')];
     if (!nextTrack) return;
+    this.group.visible = true;
     Object.entries(this.animation.tracks).forEach(([trackState, track]) => {
       track.root.visible = trackState === animationState;
     });
@@ -565,6 +701,8 @@ class BlackGrassFactionEnemy {
     this.behaviorState = state;
     this.group.userData.behaviorState = state;
     this.group.userData.animationState = animationState;
+    this.group.userData.visibleAnimationState = animationState;
+    this.group.userData.visibleAnimationRootCount = 1;
   }
 
   getActionDuration(animationState, fallback) {
@@ -580,6 +718,8 @@ export class BlackGrassTempleFactionManager {
     this.enemies = [];
     this.spawnSerial = 0;
     this.respawnTimers = { sheep_demon: null, neck_man: null };
+    this.devStatusElapsed = 0;
+    this.initialWaveSpawned = false;
     this.maxActiveByFaction = MAX_ACTIVE_BY_FACTION;
     this.respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS;
     this.userData = {
@@ -589,6 +729,7 @@ export class BlackGrassTempleFactionManager {
       targetPriority: ['nearest living opposing-faction enemy', 'player fallback', 'patrol target'],
       retargetIntervalSeconds: RETARGET_INTERVAL_SECONDS,
       respawnCooldownSeconds: RESPAWN_COOLDOWN_SECONDS,
+      initialWaveByFaction: INITIAL_WAVE_BY_FACTION,
       maxActiveByFaction: MAX_ACTIVE_BY_FACTION,
       maxActiveTotal: Object.values(MAX_ACTIVE_BY_FACTION).reduce((sum, count) => sum + count, 0),
       animationReport: BLACK_GRASS_FACTION_ANIMATION_REPORT,
@@ -596,20 +737,28 @@ export class BlackGrassTempleFactionManager {
   }
 
   spawnInitialWave() {
-    this.spawnFaction('sheep_demon', 2);
-    this.spawnFaction('neck_man', 2);
-    console.info('Black Grass Temple faction war initialized:', this.userData);
+    this.spawnFaction('sheep_demon', INITIAL_WAVE_BY_FACTION.sheep_demon, { initialWave: true });
+    this.spawnFaction('neck_man', INITIAL_WAVE_BY_FACTION.neck_man, { initialWave: true });
+    this.initialWaveSpawned = true;
+    if (IS_DEV) {
+      console.info('Black Grass Temple faction war initialized:', {
+        ...this.userData,
+        firstWaveNote: 'Initial wave intentionally reduced to one Sheep Demon and one Neck Man so both rigs become visible quickly on mobile.',
+        status: this.getStatusSummary(),
+      });
+    }
   }
 
   update(deltaSeconds, playerPosition) {
     const context = { enemies: this.enemies, playerPosition };
     this.enemies.forEach((enemy) => enemy.update(deltaSeconds, context));
+    this.updateDevStatus(deltaSeconds);
 
     Object.keys(this.respawnTimers).forEach((species) => {
       const livingCount = this.enemies.filter((enemy) => enemy.species === species && enemy.health > 0 && !enemy.isRemoved).length;
       if (livingCount === 0 && this.respawnTimers[species] === null) {
         this.respawnTimers[species] = RESPAWN_COOLDOWN_SECONDS;
-        console.info(`Black Grass Temple ${species} faction wiped; respawn pending in ${RESPAWN_COOLDOWN_SECONDS}s.`);
+        if (IS_DEV) console.info(`Black Grass Temple ${species} faction wiped; respawn pending in ${RESPAWN_COOLDOWN_SECONDS}s.`);
       }
       if (this.respawnTimers[species] !== null) {
         this.respawnTimers[species] -= deltaSeconds;
@@ -624,12 +773,12 @@ export class BlackGrassTempleFactionManager {
     this.enemies = this.enemies.filter((enemy) => !enemy.isRemoved || enemy.isAlive);
   }
 
-  spawnFaction(species, requestedCount) {
+  spawnFaction(species, requestedCount, { initialWave = false } = {}) {
     const livingCount = this.getLivingEnemies(species).length;
     const count = Math.max(0, Math.min(requestedCount, this.maxActiveByFaction[species] - livingCount));
     const usedAnchorIds = new Set();
     for (let i = 0; i < count; i += 1) {
-      const anchor = this.chooseSpawnAnchor(species, i, usedAnchorIds);
+      const anchor = this.chooseSpawnAnchor(species, i, usedAnchorIds, { initialWave });
       usedAnchorIds.add(anchor.id);
       const enemy = new BlackGrassFactionEnemy({
         scene: this.scene,
@@ -638,14 +787,18 @@ export class BlackGrassTempleFactionManager {
         id: `black-grass-temple-${species}-${this.spawnSerial += 1}`,
         spawnAnchor: anchor,
         patrolPoints: anchor.patrolPoints,
+        onLoaded: () => this.logDevStatus('enemy-loaded'),
       });
       this.enemies.push(enemy);
       enemy.load();
     }
   }
 
-  chooseSpawnAnchor(species, offset = 0, excludedAnchorIds = new Set()) {
-    const pool = this.anchors.filter((anchor) => anchor.preferredFaction === species || anchor.preferredFaction === 'neutral');
+  chooseSpawnAnchor(species, offset = 0, excludedAnchorIds = new Set(), { initialWave = false } = {}) {
+    const initialPool = this.anchors.filter((anchor) => anchor.initialWave && anchor.preferredFaction === species);
+    const pool = initialWave && initialPool.length
+      ? initialPool
+      : this.anchors.filter((anchor) => !anchor.initialWave && (anchor.preferredFaction === species || anchor.preferredFaction === 'neutral'));
     const opposing = this.getLivingEnemies(FACTIONS[species].opposingFactionId);
     let best = null;
     let bestScore = -Infinity;
@@ -661,6 +814,45 @@ export class BlackGrassTempleFactionManager {
       }
     });
     return best ?? this.anchors[0];
+  }
+
+  getStatusSummary() {
+    const living = this.getLivingEnemies();
+    const loaded = this.enemies.filter((enemy) => enemy.isLoaded).length;
+    const visible = this.enemies.filter((enemy) => enemy.group?.visible && Object.values(enemy.animation?.tracks ?? {}).some((track) => track.root.visible)).length;
+    const countLiving = (species) => living.filter((enemy) => enemy.species === species).length;
+    return {
+      totalCreated: this.enemies.length,
+      totalLoaded: loaded,
+      totalVisible: visible,
+      livingSheep: countLiving('sheep_demon'),
+      livingNeck: countLiving('neck_man'),
+      respawnTimers: Object.fromEntries(Object.entries(this.respawnTimers).map(([species, timer]) => [species, timer === null ? null : Number(timer.toFixed(2))])),
+      targets: this.enemies.map((enemy) => ({
+        id: enemy.id,
+        species: enemy.species,
+        loaded: enemy.isLoaded,
+        visible: Boolean(enemy.group?.visible),
+        state: enemy.group?.userData.behaviorState ?? enemy.behaviorState,
+        animationState: enemy.group?.userData.animationState ?? null,
+        targetType: enemy.group?.userData.targetType ?? null,
+        targetId: enemy.group?.userData.targetId ?? null,
+        position: enemy.group ? vectorSummary(enemy.group.position) : null,
+      })),
+    };
+  }
+
+  updateDevStatus(deltaSeconds) {
+    if (!IS_DEV) return;
+    this.devStatusElapsed += deltaSeconds;
+    if (this.devStatusElapsed < DEV_DIAGNOSTIC_INTERVAL_SECONDS) return;
+    this.devStatusElapsed = 0;
+    this.logDevStatus('interval');
+  }
+
+  logDevStatus(reason) {
+    if (!IS_DEV) return;
+    console.info(`Black Grass Temple faction status (${reason}):`, this.getStatusSummary());
   }
 
   forceRetargetOpposingFaction(respawnedSpecies) {
