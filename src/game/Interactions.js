@@ -4,10 +4,11 @@ const LEVER_RANGE = 2.2;
 const INDOOR_EXIT_RANGE = 3.6;
 
 export class Interactions {
-  constructor({ player, dungeon, hud }) {
+  constructor({ player, dungeon, hud, feedback = null }) {
     this.player = player;
     this.dungeon = dungeon;
     this.hud = hud;
+    this.feedback = feedback;
     this.hasKey = false;
     this.currentHint = '';
     this.feedbackHint = '';
@@ -94,6 +95,10 @@ export class Interactions {
   }
 
   useOutdoorInteraction(interaction) {
+    if (interaction.type === 'centralShrine') {
+      return this.useCentralShrine(interaction);
+    }
+
     this.setTemporaryHint(interaction.message, 1200);
 
     if (interaction.functional) {
@@ -123,8 +128,41 @@ export class Interactions {
   }
 
   useInspectInteraction(interaction) {
+    if (interaction.type === 'southReliquary') {
+      return this.useSouthReliquary(interaction);
+    }
+
     this.setTemporaryHint(interaction.message, 1200);
     this.hud.showMessage(interaction.message);
+    return false;
+  }
+
+  useSouthReliquary(interaction) {
+    const activated = this.dungeon.activateSouthReliquary();
+    const message = activated ? 'The black reliquary wakes.' : interaction.message;
+    this.setTemporaryHint(message, activated ? 1700 : 1200);
+    this.hud.showMessage(message);
+
+    if (activated) {
+      this.feedback?.shake({ durationMs: 360, intensity: 0.14 });
+    }
+
+    return false;
+  }
+
+  useCentralShrine(interaction) {
+    const shrineIsAwake = Boolean(this.dungeon.gameState?.hasSouthReliquaryFragment);
+    const message = shrineIsAwake ? 'The field answers.' : 'The shrine is cold. Something is missing.';
+    this.setTemporaryHint(message, shrineIsAwake ? 1500 : 1200);
+    this.hud.showMessage(message);
+
+    if (shrineIsAwake) {
+      this.dungeon.awakenFieldShrine();
+      if (this.dungeon.gameState?.markFieldShrineReactionSeen()) {
+        this.feedback?.shake({ durationMs: 360, intensity: 0.12 });
+      }
+    }
+
     return false;
   }
 

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { Combat } from './Combat.js';
 import { DungeonScene } from './DungeonScene.js';
+import { Feedback } from './Feedback.js';
 import { FirstPersonArmsOverlay } from './FirstPersonArmsOverlay.js';
+import { GameState } from './GameState.js';
 import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
 import { MobileControls } from './MobileControls.js';
@@ -31,16 +33,18 @@ export class Game {
     const query = new URLSearchParams(window.location.search);
     const requestedArea = query.get('area');
     const fieldSpawn = query.get('from') === 'dungeon' ? 'cryptAExit' : 'start';
-    this.dungeon = new DungeonScene({ area: requestedArea === 'dungeon' ? 'dungeon' : 'field', fieldSpawn });
+    this.gameState = new GameState();
+    this.dungeon = new DungeonScene({ area: requestedArea === 'dungeon' ? 'dungeon' : 'field', fieldSpawn, gameState: this.gameState });
     this.scene = this.dungeon.build();
     this.player = new PlayerController(this.camera, this.dungeon.collision, {
       ...this.dungeon.playerSpawn,
       movementMultiplier: this.dungeon.area === 'field' ? PlayerController.OUTDOOR_MOVEMENT_MULTIPLIER : 1,
     });
     this.hud = new Hud(this.app);
+    this.feedback = new Feedback(this.camera);
     this.armsOverlay = new FirstPersonArmsOverlay(this.app);
     this.controls = new MobileControls(this.app);
-    this.interactions = new Interactions({ player: this.player, dungeon: this.dungeon, hud: this.hud });
+    this.interactions = new Interactions({ player: this.player, dungeon: this.dungeon, hud: this.hud, feedback: this.feedback });
     this.combat = new Combat({ player: this.player, dungeon: this.dungeon, hud: this.hud, controls: this.controls });
 
     this.preventMobilePageGestures();
@@ -49,7 +53,23 @@ export class Game {
     this.viewportResizeObserver = new ResizeObserver(() => this.resize());
     this.viewportResizeObserver.observe(this.viewport);
 
+    this.playFieldReturnReactionIfNeeded({ query });
+
     this.renderer.setAnimationLoop((time) => this.update(time));
+  }
+
+  playFieldReturnReactionIfNeeded({ query }) {
+    const returnedFromDungeon = this.dungeon.area === 'field' && query.get('from') === 'dungeon';
+    if (!returnedFromDungeon || !this.gameState.hasSouthReliquaryFragment) return;
+
+    window.setTimeout(() => {
+      if (this.gameState.markFieldShrineReactionSeen()) {
+        this.dungeon.awakenFieldShrine();
+        this.interactions.setTemporaryHint('The field answers.', 1700);
+        this.hud.showMessage('The field answers.');
+        this.feedback.shake({ durationMs: 380, intensity: 0.13 });
+      }
+    }, 260);
   }
 
   renderShell() {
@@ -121,6 +141,7 @@ export class Game {
     }
 
     this.hud.updateDebug(this.player);
+    this.feedback.update(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
   }
 
