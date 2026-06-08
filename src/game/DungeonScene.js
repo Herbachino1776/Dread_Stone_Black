@@ -631,6 +631,11 @@ export class DungeonScene {
     guardianGlow.position.set(0, 2.35, 14);
     this.scene.add(guardianGlow);
 
+    const sheepDemonReadabilityGlow = new THREE.PointLight(0xf0b06e, 1.8, 13, 1.45);
+    sheepDemonReadabilityGlow.name = 'R04-sheep-demon-animation-readable-fill';
+    sheepDemonReadabilityGlow.position.set(22, 2.15, -8.2);
+    this.scene.add(sheepDemonReadabilityGlow);
+
     const reliquaryGlow = new THREE.PointLight(0x9fb7d6, 1.65, 15, 1.38);
     reliquaryGlow.name = 'R06-reliquary-alcove-dim-cold-fill';
     reliquaryGlow.position.set(0, 1.85, 32);
@@ -1193,6 +1198,10 @@ export class DungeonScene {
 
   consumeEnemyContactDamage(playerPosition) {
     return this.sheepDemonEnemy?.consumeContactDamage(playerPosition) ?? null;
+  }
+
+  damageEnemyFromPlayerAttack(attack) {
+    return this.sheepDemonEnemy?.receivePlayerAttack(attack) ?? null;
   }
 
   addGate() {
