@@ -1,6 +1,6 @@
 # Dread Stone Black - World Architecture Index
 
-Version: v0.2
+Version: v0.3
 Lane: Game World Architect  
 Purpose: Repo-facing index for buildable location blueprints.
 
@@ -38,7 +38,7 @@ Creature animation lock-in:
 - Default new animated creature states are `idle` and `walk` only.
 - Ram Man proves the friendly animated NPC pipeline.
 - Sheep Demon proves the hostile animated enemy pipeline with multiple GLB animation states.
-- Hunyuan → texture optimization → Animate Anything → GLB animation → Three.js integration is a proven creature workflow.
+- Hunyuan -> texture optimization -> Animate Anything -> GLB animation -> Three.js integration is a proven creature workflow.
 - Do not require new attack, hurt, death, stagger, or transition animations unless the user explicitly approves them.
 
 ---
@@ -154,10 +154,11 @@ docs/world/
   crypts/
     south_reliquary_crypt_baby_labyrinth_v01.md
   temples/
-    temple_of_black_grass_v01.md
+    black_grass_temple_v01.md
   addendums/
     reliquary_field_addendum_001.md
     south_reliquary_crypt_addendum_001.md
+    black_grass_temple_addendum_001.md
 ```
 
 ---
@@ -168,6 +169,7 @@ docs/world/
 |---|---:|---|
 | `docs/world/overworld/reliquary_field_v01.md` | v0.1 built foundation | 800 x 800 tomb-field master plan plus implemented first playable slice |
 | `docs/world/crypts/south_reliquary_crypt_baby_labyrinth_v01.md` | v0.1 built foundation | First compact baby labyrinth under the South Reliquary Crypt entrance; use addendums for future changes |
+| `docs/world/temples/black_grass_temple_v01.md` | v0.1 draft | Production-grade medium dungeon: field temple, subterranean ruins, black-grass tavern halls, enemy spawn plan, lower sanctum, return shortcut |
 
 ---
 
@@ -237,17 +239,25 @@ The first field-to-labyrinth loop is built and should be treated as the current 
 - Sheep Demon proves the hostile animated enemy pipeline and is a successful concept proof.
 - Do not restart either location as a fresh build target; extend them through addendums or connected blueprints.
 
-Active priority has shifted from proving spaces to making the world flow clear and purposeful.
+Active priority has shifted from proving spaces to building the next production-grade connected dungeon.
+
+Black Grass Temple is the next major architecture target:
+
+- field-side temple landmark
+- subterranean torchlit stone ruins
+- black-grass tavern halls using the existing grass texture in an interior context
+- at least 14 planned rooms/zones
+- 12 enemy spawn markers with safe activation guidance
+- main route, optional branch, service loop, sanctum endpoint, and return shortcut
 
 ## 11. Next Useful Work
 
 Near-term Architect/Codex tasks should focus on:
 
-- first real player objective with a simple interactable and clear feedback
-- progression reason to enter the crypts from the field
-- field landmarks, pathing, silhouettes, and navigation clarity
-- next Architect-authored blueprint for another connected location
-- South Reliquary Crypt addendums for branches, gates, reliquary rewards, shortcuts, or encounter revisions
-- future combat, creature behavior, and animation polish after world structure advances
+- implementing `docs/world/temples/black_grass_temple_v01.md` as a disciplined PR-sized dungeon shell
+- preserving Reliquary Field and South Reliquary Crypt while adding the new temple area
+- keeping the first Black Grass Temple build geometry-stable: no missing walls, no floor z-fighting, no overlapping coplanar slabs
+- activating only a safe subset of enemy spawns if current combat/performance needs restraint
+- using addendums after playtest for enemy tuning, sanctum reward, field approach expansion, or second-depth work
 
-Keep these tasks small, mobile-readable, and grounded in the built field-to-crypt loop.
+Keep these tasks mobile-readable, buildable, and grounded in the existing field-to-crypt loop.
