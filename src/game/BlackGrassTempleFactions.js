@@ -56,19 +56,24 @@ const FACTIONS = Object.freeze({
     attackDamage: 12,
     playerAttackDamage: 15,
     playerAttackRange: 2.85,
-    attackRange: 2.7,
+    attackRange: 2.28,
+    visualContactRange: 2.38,
+    attackCommitRange: 3.45,
+    attackImpactRange: 2.42,
+    attackLungeDistance: 0.58,
     attackCooldownSeconds: 1.12,
     attackDamageWindow: Object.freeze({ start: 0.36, end: 0.68 }),
-    desiredCombatDistance: 3.05,
-    tooCloseDistance: 1.65,
+    desiredCombatDistance: 2.32,
+    tooCloseDistance: 1.18,
     combatEngageDistance: 6.2,
     circleSpeed: 0.58,
     backstepSpeed: 1.45,
     lungeSpeed: 2.75,
-    defensiveManeuverChance: 0.28,
-    offensiveLungeChance: 0.56,
-    jumpAttackChance: 0.28,
-    jumpAttackCooldownSeconds: 4.8,
+    defensiveManeuverChance: 0.2,
+    offensiveLungeChance: 0.62,
+    jumpAttackChance: 0.18,
+    jumpAttackCooldownSeconds: 6.2,
+    turnSpeed: 4.1,
     enemyAttackAnimations: Object.freeze(['punch_left']),
   }),
   neck_man: Object.freeze({
@@ -83,11 +88,11 @@ const FACTIONS = Object.freeze({
       seek_enemy_faction: 'run',
       combat_enter: 'walk',
       combat_circle: 'walk',
-      combat_feint: 'crawl',
+      combat_feint: 'walk',
       combat_lunge: 'run',
       attack_enemy_faction: 'punch_right',
       jump_attack_enemy_faction: 'kick_right',
-      defensive_backstep: 'crawl',
+      defensive_backstep: 'walk',
       defensive_strafe: 'walk',
       recover: 'idle',
       seek_player_fallback: 'walk',
@@ -102,19 +107,24 @@ const FACTIONS = Object.freeze({
     attackDamage: 10,
     playerAttackDamage: 15,
     playerAttackRange: 2.75,
-    attackRange: 2.45,
+    attackRange: 2.12,
+    visualContactRange: 2.16,
+    attackCommitRange: 3.2,
+    attackImpactRange: 2.2,
+    attackLungeDistance: 0.46,
     attackCooldownSeconds: 0.95,
     attackDamageWindow: Object.freeze({ start: 0.34, end: 0.64 }),
-    desiredCombatDistance: 2.65,
-    tooCloseDistance: 1.5,
+    desiredCombatDistance: 2.04,
+    tooCloseDistance: 1.08,
     combatEngageDistance: 5.9,
     circleSpeed: 1.05,
     backstepSpeed: 1.45,
     lungeSpeed: 3.05,
-    defensiveManeuverChance: 0.28,
-    offensiveLungeChance: 0.52,
+    defensiveManeuverChance: 0.18,
+    offensiveLungeChance: 0.58,
     jumpAttackChance: 0,
     jumpAttackCooldownSeconds: 999,
+    turnSpeed: 5.8,
     enemyAttackAnimations: Object.freeze(['punch_left', 'punch_right', 'cross_punch_left', 'kick_right']),
   }),
 });
@@ -150,6 +160,10 @@ const FACTION_STATE_MACHINE = Object.freeze([
 ]);
 
 const RETARGET_INTERVAL_SECONDS = 0.38;
+const TARGET_LOCK_SECONDS = 1.25;
+const WAYPOINT_LOCK_SECONDS = 0.72;
+const COMBAT_MANEUVER_LOCK_MIN_SECONDS = 0.72;
+const DIRECTOR_TARGET_LOCK_SECONDS = 2.8;
 const ACTION_BUBBLE_PREFERRED_MIN = 12;
 const ACTION_BUBBLE_PREFERRED_MAX = 28;
 const ACTION_BUBBLE_HARD_RADIUS = 48;
@@ -187,11 +201,26 @@ const NAV_CLEARANCE_RADIUS = 0.58;
 const LOCAL_DETOUR_PADDING = 1.05;
 const LOCAL_DETOUR_REACHED_DISTANCE = 0.45;
 const STEERING_PROBE_DISTANCE = 0.82;
-const STEERING_PROBE_SECONDS = 0.38;
+const STEERING_PROBE_SECONDS = 0.5;
 const BLOCKED_TARGET_REPATH_SECONDS = 1.7;
 const BLOCKED_SEGMENT_COOLDOWN_SECONDS = 3.0;
 const ENEMY_PERSONAL_SPACE = 1.15;
-const ENEMY_SEPARATION_STRENGTH = 0.42;
+const ENEMY_SEPARATION_STRENGTH = 0.32;
+const LOCOMOTION_ANIMATION_HOLD_SECONDS = Object.freeze({
+  spawn: 0.4,
+  patrol: 0.8,
+  investigate_enemy_faction: 0.8,
+  seek_enemy_faction: 0.7,
+  combat_enter: 0.55,
+  combat_circle: 0.55,
+  combat_feint: 0.55,
+  combat_lunge: 0.45,
+  defensive_backstep: 0.5,
+  defensive_strafe: 0.5,
+  recover: 0.25,
+  seek_player_fallback: 0.7,
+});
+const IMMEDIATE_ANIMATION_STATES = new Set(['attack_enemy_faction', 'jump_attack_enemy_faction', 'attack_player_fallback', 'dead']);
 const SHEEP_DEMON_BLACK_GRASS_NEUTRAL_COLOR = new THREE.Color(0xffffff);
 const SHEEP_DEMON_BLACK_GRASS_SHADOW_FILL = new THREE.Color(0x0d1118);
 
@@ -250,7 +279,7 @@ function makeAnimationTrack({ state, root, gltf, scale }) {
   }
 
   const action = mixer.clipAction(clip);
-  const isOneShot = ['punch_left', 'punch_right', 'cross_punch_left', 'kick_right', 'die'].includes(state);
+  const isOneShot = ['punch_left', 'punch_right', 'cross_punch_left', 'kick_right', 'jump', 'die'].includes(state);
   action.setLoop(isOneShot ? THREE.LoopOnce : THREE.LoopRepeat, isOneShot ? 1 : Infinity);
   action.clampWhenFinished = isOneShot;
 
@@ -411,6 +440,7 @@ class BlackGrassFactionEnemy {
     this.isLoaded = false;
     this.isRemoved = false;
     this.retargetElapsed = RETARGET_INTERVAL_SECONDS * Math.random();
+    this.targetLockTimer = TARGET_LOCK_SECONDS * (0.4 + Math.random() * 0.4);
     this.currentTarget = null;
     this.patrolPoints = Object.freeze((patrolPoints ?? makePatrolPoints(spawnAnchor.position)).map((point) => clampPatrolPoint(point, spawnAnchor.position)));
     this.patrolTargetIndex = Math.floor(Math.random() * this.patrolPoints.length);
@@ -435,6 +465,7 @@ class BlackGrassFactionEnemy {
     this.stuckMarker = null;
     this.pathRepathElapsed = WAYPOINT_REPATH_SECONDS;
     this.activeWaypoint = null;
+    this.waypointLockTimer = 0;
     this.localAvoidanceWaypoint = null;
     this.steeringProbeTimer = 0;
     this.steeringProbeDirection = new THREE.Vector3();
@@ -446,6 +477,8 @@ class BlackGrassFactionEnemy {
     this.currentUpdateContext = null;
     this.directorTarget = null;
     this.directorTargetReason = null;
+    this.directorTargetLockTimer = 0;
+    this.animationStateElapsed = 0;
     this.noOpposingTargetElapsed = 0;
     this.playerRevengeTimer = 0;
     this.playerFightProximityElapsed = 0;
@@ -702,7 +735,12 @@ class BlackGrassFactionEnemy {
     }
 
     this.retargetElapsed += deltaSeconds;
-    if (this.retargetElapsed >= RETARGET_INTERVAL_SECONDS || !this.isTargetStillValid(context)) {
+    this.targetLockTimer = Math.max(0, this.targetLockTimer - deltaSeconds);
+    this.waypointLockTimer = Math.max(0, this.waypointLockTimer - deltaSeconds);
+    this.directorTargetLockTimer = Math.max(0, this.directorTargetLockTimer - deltaSeconds);
+    this.animationStateElapsed += deltaSeconds;
+    const attackCommitted = this.behaviorState === 'attack_enemy_faction' || this.behaviorState === 'jump_attack_enemy_faction' || this.behaviorState === 'attack_player_fallback';
+    if (!attackCommitted && (this.retargetElapsed >= RETARGET_INTERVAL_SECONDS || !this.isTargetStillValid(context))) {
       this.retargetElapsed = 0;
       this.selectTarget(context);
     }
@@ -792,6 +830,10 @@ class BlackGrassFactionEnemy {
 
   selectTarget(context) {
     const previousTargetId = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy?.id : null;
+    if (this.targetLockTimer > 0 && this.isTargetStillValid(context)) {
+      this.group.userData.targetLockRemaining = Number(this.targetLockTimer.toFixed(2));
+      return;
+    }
     const opposingEnemy = this.findNearestOpposingEnemy(context);
     const shouldPressurePlayer = this.shouldTargetPlayer(context, opposingEnemy);
     const opposingIsImmediatelyRelevant = opposingEnemy && ['melee', 'combat', 'same_room', 'adjacent_room'].includes(this.awarenessTier);
@@ -804,6 +846,7 @@ class BlackGrassFactionEnemy {
         this.logCombatEvent('target-acquired', { target: opposingEnemy, maneuver: this.awarenessTier, distance: horizontalDistance(this.group.position, opposingEnemy.group.position) });
       }
       this.currentTarget = { type: 'enemy', enemy: opposingEnemy };
+      if (previousTargetId !== opposingEnemy.id) this.targetLockTimer = TARGET_LOCK_SECONDS * (0.85 + Math.random() * 0.35);
       this.group.userData.targetType = 'opposing_faction';
       this.group.userData.targetId = opposingEnemy.id;
       this.group.userData.awarenessTier = this.awarenessTier;
@@ -811,7 +854,9 @@ class BlackGrassFactionEnemy {
     }
 
     if (shouldPressurePlayer) {
+      const wasPlayerTarget = this.currentTarget?.type === 'player';
       this.currentTarget = { type: 'player' };
+      if (!wasPlayerTarget) this.targetLockTimer = TARGET_LOCK_SECONDS;
       this.group.userData.targetType = this.playerRevengeTimer > 0 ? 'player_revenge' : 'player_fallback';
       this.group.userData.targetId = 'player';
       this.logCombatEvent('player-targeted', { maneuver: this.group.userData.targetType, distance: horizontalDistance(this.group.position, context.playerPosition) });
@@ -819,6 +864,7 @@ class BlackGrassFactionEnemy {
     }
 
     this.currentTarget = null;
+    this.targetLockTimer = 0;
     this.group.userData.targetType = this.directorTarget ? 'director_encounter_zone' : 'patrol';
     this.group.userData.targetId = this.directorTargetReason ?? null;
     this.group.userData.awarenessTier = 'none';
@@ -914,7 +960,6 @@ class BlackGrassFactionEnemy {
     const toTarget = target.group.position.clone().sub(this.group.position);
     toTarget.y = 0;
     const distance = toTarget.length();
-    if (distance > 0.001) this.faceDirection(toTarget.clone().normalize(), deltaSeconds);
 
     if (this.awarenessReactionDelay > 0) {
       this.setBehaviorState(awareness.tier === 'far' || awareness.tier === 'adjacent_room' || awareness.tier === 'short_route' ? 'investigate_enemy_faction' : 'combat_enter');
@@ -959,7 +1004,12 @@ class BlackGrassFactionEnemy {
     const direction = distance > 0.001 ? toTarget.clone().normalize() : new THREE.Vector3(Math.sin(this.group.rotation.y), 0, Math.cos(this.group.rotation.y));
     const strafe = new THREE.Vector3(direction.z * this.combatStrafeSign, 0, -direction.x * this.combatStrafeSign).normalize();
 
-    if (distance <= this.template.attackRange && this.attackCooldown <= 0 && directClear) {
+    if (this.attackCooldown <= 0 && distance <= this.template.attackCommitRange && directClear) {
+      if (distance > this.template.visualContactRange) {
+        this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange), 'combat_lunge', { faceTarget: target.group.position });
+        this.logCombatEvent('maneuver', { target, maneuver: 'contact-lunge', distance });
+        return;
+      }
       this.chooseAndBeginEnemyAttack(distance);
       return;
     }
@@ -974,14 +1024,14 @@ class BlackGrassFactionEnemy {
       return;
     }
 
-    if (this.combatManeuver === 'lunge' && distance > this.template.attackRange * 0.82) {
-      this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.attackRange * 0.78), 'combat_lunge');
+    if (this.combatManeuver === 'lunge' && distance > this.template.visualContactRange * 0.9) {
+      this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange * 0.88), 'combat_lunge', { faceTarget: target.group.position });
       this.logCombatEvent('maneuver', { target, maneuver: 'lunge', distance });
       return;
     }
 
-    if (distance > this.template.desiredCombatDistance + 0.75) {
-      this.moveToward(direction, this.template.seekSpeed * 0.82, deltaSeconds, Math.max(0, distance - this.template.desiredCombatDistance), 'combat_lunge');
+    if (distance > this.template.desiredCombatDistance + 0.45) {
+      this.moveToward(direction, this.template.seekSpeed * 0.86, deltaSeconds, Math.max(0, distance - this.template.desiredCombatDistance), 'combat_lunge', { faceTarget: target.group.position });
       return;
     }
 
@@ -1001,20 +1051,21 @@ class BlackGrassFactionEnemy {
   }
 
   chooseCombatManeuver(distance) {
+    if (this.combatManeuverTimer > 0) return;
     this.combatStrafeSign = Math.random() < 0.5 ? -1 : 1;
     const roll = Math.random();
     if (distance < this.template.tooCloseDistance || roll < this.template.defensiveManeuverChance * 0.45) {
       this.combatManeuver = 'backstep';
-      this.combatManeuverTimer = 0.45 + Math.random() * 0.45;
+      this.combatManeuverTimer = COMBAT_MANEUVER_LOCK_MIN_SECONDS + Math.random() * 0.35;
     } else if (roll < this.template.defensiveManeuverChance) {
       this.combatManeuver = 'strafe';
-      this.combatManeuverTimer = 0.55 + Math.random() * 0.65;
+      this.combatManeuverTimer = COMBAT_MANEUVER_LOCK_MIN_SECONDS + Math.random() * 0.55;
     } else if (roll < this.template.defensiveManeuverChance + this.template.offensiveLungeChance) {
       this.combatManeuver = 'lunge';
-      this.combatManeuverTimer = 0.28 + Math.random() * 0.34;
+      this.combatManeuverTimer = COMBAT_MANEUVER_LOCK_MIN_SECONDS + Math.random() * 0.28;
     } else {
       this.combatManeuver = 'feint';
-      this.combatManeuverTimer = 0.22 + Math.random() * 0.32;
+      this.combatManeuverTimer = COMBAT_MANEUVER_LOCK_MIN_SECONDS + Math.random() * 0.22;
     }
     this.group.userData.combatManeuver = this.combatManeuver;
   }
@@ -1100,7 +1151,28 @@ class BlackGrassFactionEnemy {
     if (targetPosition) {
       const face = targetPosition.clone().sub(this.group.position);
       face.y = 0;
-      if (face.lengthSq() > 0.001) this.faceDirection(face.normalize(), deltaSeconds);
+      const distance = face.length();
+      if (distance > 0.001) {
+        const direction = face.clone().multiplyScalar(1 / distance);
+        this.faceDirection(direction, deltaSeconds, this.template.turnSpeed * 1.2);
+        const animationState = this.resolveStateAnimation(this.behaviorState);
+        const duration = this.getActionDuration(animationState, 0.9);
+        const progress = this.attackElapsed / Math.max(duration, 0.001);
+        const canLungeIn = progress < this.template.attackDamageWindow.start
+          && distance > this.template.visualContactRange
+          && distance <= this.template.attackCommitRange
+          && this.hasClearMovementSegment(this.group.position, targetPosition, NAV_CLEARANCE_RADIUS);
+        if (canLungeIn) {
+          this.moveToward(
+            direction,
+            this.template.lungeSpeed * 0.82,
+            deltaSeconds,
+            Math.min(this.template.attackLungeDistance, Math.max(0, distance - this.template.visualContactRange)),
+            this.behaviorState,
+            { suppressStuckTracking: true, desiredTarget: targetPosition, faceTarget: targetPosition },
+          );
+        }
+      }
     }
 
     this.applyAttackDamageIfReady(context);
@@ -1128,7 +1200,7 @@ class BlackGrassFactionEnemy {
 
     if (this.currentTarget?.type === 'enemy') {
       const target = this.currentTarget.enemy;
-      if (target?.isAlive && horizontalDistance(this.group.position, target.group.position) <= this.template.attackRange && this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS)) {
+      if (target?.isAlive && horizontalDistance(this.group.position, target.group.position) <= this.template.attackImpactRange && this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS)) {
         const result = target.receiveFactionDamage(this.template.attackDamage, this.template.displayName);
         this.attackHasDamaged = true;
         this.logCombatEvent('damage-applied', {
@@ -1151,7 +1223,7 @@ class BlackGrassFactionEnemy {
     const window = this.template.attackDamageWindow;
     if (progress < window.start || progress > window.end) return null;
     const distance = horizontalDistance(this.group.position, playerPosition);
-    if (distance > this.template.attackRange || !this.hasClearMovementSegment(this.group.position, playerPosition, NAV_CLEARANCE_RADIUS)) return null;
+    if (distance > this.template.attackImpactRange || !this.hasClearMovementSegment(this.group.position, playerPosition, NAV_CLEARANCE_RADIUS)) return null;
     this.attackHasDamaged = true;
     this.logCombatEvent('damage-applied', { maneuver: 'player_hit', distance, damage: this.template.attackDamage }, { force: true });
     return {
@@ -1242,13 +1314,18 @@ class BlackGrassFactionEnemy {
   moveToPosition(finalTarget, speed, deltaSeconds, maxDistance = Infinity, movingState = 'patrol') {
     const waypoint = this.getMovementWaypoint(finalTarget, movingState);
     const directClear = this.hasClearMovementSegment(this.group.position, finalTarget, NAV_CLEARANCE_RADIUS);
+    const previousWaypoint = this.activeWaypoint;
     this.activeWaypoint = directClear ? null : waypoint;
+    if (this.activeWaypoint && (!previousWaypoint || horizontalDistance(previousWaypoint, this.activeWaypoint) > 0.25)) {
+      this.waypointLockTimer = WAYPOINT_LOCK_SECONDS;
+    }
     const toWaypoint = waypoint.clone().sub(this.group.position);
     toWaypoint.y = 0;
     const waypointDistance = toWaypoint.length();
     if (waypointDistance < LOCAL_DETOUR_REACHED_DISTANCE && this.localAvoidanceWaypoint) {
       this.localAvoidanceWaypoint = null;
       this.activeWaypoint = null;
+      this.waypointLockTimer = 0;
       return;
     }
     if (waypointDistance < 0.2) {
@@ -1263,6 +1340,10 @@ class BlackGrassFactionEnemy {
   getMovementWaypoint(finalTarget, movingState) {
     const final = finalTarget.clone();
     final.y = 0;
+
+    if (this.activeWaypoint && this.waypointLockTimer > 0 && horizontalDistance(this.group.position, this.activeWaypoint) > LOCAL_DETOUR_REACHED_DISTANCE && this.isWaypointWalkable(this.activeWaypoint)) {
+      return this.activeWaypoint.clone();
+    }
 
     if (this.localAvoidanceWaypoint) {
       if (horizontalDistance(this.group.position, this.localAvoidanceWaypoint) > LOCAL_DETOUR_REACHED_DISTANCE && this.isWaypointWalkable(this.localAvoidanceWaypoint)) {
@@ -1472,7 +1553,7 @@ class BlackGrassFactionEnemy {
     }
   }
 
-  moveToward(direction, speed, deltaSeconds, maxDistance = Infinity, movingState = 'patrol', { suppressStuckTracking = false, desiredTarget = null } = {}) {
+  moveToward(direction, speed, deltaSeconds, maxDistance = Infinity, movingState = 'patrol', { suppressStuckTracking = false, desiredTarget = null, faceTarget = null } = {}) {
     const stepDistance = Math.min(maxDistance, speed * deltaSeconds);
     if (stepDistance <= 0.001) return 0;
     const previous = this.group.position.clone();
@@ -1527,7 +1608,9 @@ class BlackGrassFactionEnemy {
         this.blockCurrentDirectSegment();
       }
     }
-    this.faceDirection(movedDistance > 0.001 ? this.group.position.clone().sub(previous).normalize() : movementDirection, deltaSeconds);
+    const combatFacing = faceTarget ? faceTarget.clone().sub(this.group.position) : null;
+    if (combatFacing) combatFacing.y = 0;
+    this.faceDirection(combatFacing?.lengthSq() > 0.001 ? combatFacing.normalize() : (movedDistance > 0.001 ? this.group.position.clone().sub(previous).normalize() : movementDirection), deltaSeconds);
     return movedDistance;
   }
 
@@ -1636,9 +1719,14 @@ class BlackGrassFactionEnemy {
     };
   }
 
-  faceDirection(direction, deltaSeconds) {
+  faceDirection(direction, deltaSeconds, turnSpeed = this.template.turnSpeed ?? 5.2) {
+    if (!this.group || !direction || direction.lengthSq() < 0.0004) return;
     const desiredYaw = Math.atan2(direction.x, direction.z);
-    this.group.rotation.y = THREE.MathUtils.damp(this.group.rotation.y, desiredYaw, 5.4, deltaSeconds);
+    const yawDelta = THREE.MathUtils.euclideanModulo(desiredYaw - this.group.rotation.y + Math.PI, Math.PI * 2) - Math.PI;
+    const maxDelta = Math.max(0.01, turnSpeed * deltaSeconds);
+    const dampedDelta = yawDelta * (1 - Math.exp(-turnSpeed * deltaSeconds));
+    this.group.rotation.y += THREE.MathUtils.clamp(dampedDelta, -maxDelta, maxDelta);
+    this.group.rotation.y = THREE.MathUtils.euclideanModulo(this.group.rotation.y + Math.PI, Math.PI * 2) - Math.PI;
   }
 
   resolveStateAnimation(state) {
@@ -1651,16 +1739,25 @@ class BlackGrassFactionEnemy {
   setBehaviorState(state, { force = false } = {}) {
     if (!this.animation || (!force && this.behaviorState === state)) return;
     const animationState = this.resolveStateAnimation(state);
+    const currentAnimationState = this.resolveStateAnimation(this.behaviorState ?? 'spawn');
+    const canOverride = force || IMMEDIATE_ANIMATION_STATES.has(state) || IMMEDIATE_ANIMATION_STATES.has(this.behaviorState);
+    const minimumHold = LOCOMOTION_ANIMATION_HOLD_SECONDS[this.behaviorState] ?? 0;
+    if (!canOverride && this.animationStateElapsed < minimumHold) return;
     const nextTrack = this.animation.tracks[animationState];
-    const previousTrack = this.animation.tracks[this.resolveStateAnimation(this.behaviorState ?? 'spawn')];
+    const previousTrack = this.animation.tracks[currentAnimationState];
     if (!nextTrack) return;
     this.group.visible = true;
     Object.entries(this.animation.tracks).forEach(([trackState, track]) => {
       track.root.visible = trackState === animationState;
     });
-    nextTrack.action?.reset().fadeIn(0.1).play();
-    if (previousTrack?.action && previousTrack !== nextTrack) previousTrack.action.fadeOut(0.1);
+    if (previousTrack === nextTrack && currentAnimationState === animationState) {
+      nextTrack.action?.play();
+    } else {
+      nextTrack.action?.reset().fadeIn(0.1).play();
+      if (previousTrack?.action && previousTrack !== nextTrack) previousTrack.action.fadeOut(0.1);
+    }
     this.behaviorState = state;
+    this.animationStateElapsed = 0;
     this.group.userData.behaviorState = state;
     this.group.userData.animationState = animationState;
     this.group.userData.visibleAnimationState = animationState;
@@ -1709,6 +1806,25 @@ export class BlackGrassTempleFactionManager {
         maxShortRouteInvestigationSteps: MAX_SHORT_ROUTE_INVESTIGATION_STEPS,
       },
       respawnCooldownSeconds: RESPAWN_COOLDOWN_SECONDS,
+      movementSmoothing: {
+        likelySpinSource: 'retarget, waypoint, steering, maneuver, and combat-facing branches could each change yaw intent; yaw now uses shortest-angle clamped interpolation with target/waypoint/maneuver locks.',
+        targetLockSeconds: TARGET_LOCK_SECONDS,
+        waypointLockSeconds: WAYPOINT_LOCK_SECONDS,
+        combatManeuverLockMinSeconds: COMBAT_MANEUVER_LOCK_MIN_SECONDS,
+        directorTargetLockSeconds: DIRECTOR_TARGET_LOCK_SECONDS,
+        steeringProbeSeconds: STEERING_PROBE_SECONDS,
+        locomotionAnimationHoldSeconds: LOCOMOTION_ANIMATION_HOLD_SECONDS,
+      },
+      combatContact: Object.fromEntries(Object.entries(FACTIONS).map(([species, template]) => [species, {
+        desiredCombatDistance: template.desiredCombatDistance,
+        tooCloseDistance: template.tooCloseDistance,
+        attackRange: template.attackRange,
+        visualContactRange: template.visualContactRange,
+        attackCommitRange: template.attackCommitRange,
+        attackImpactRange: template.attackImpactRange,
+        attackLungeDistance: template.attackLungeDistance,
+        turnSpeed: template.turnSpeed,
+      }])),
       localNavigation: {
         clearanceRadius: NAV_CLEARANCE_RADIUS,
         detourPadding: LOCAL_DETOUR_PADDING,
@@ -1785,8 +1901,11 @@ export class BlackGrassTempleFactionManager {
       const playerDistance = horizontalDistance(enemy.group.position, playerPosition);
       if (playerDistance > ACTION_BUBBLE_HARD_RADIUS || (!enemy.currentTarget && this.nearbyCombatQuietSeconds > FAR_IRRELEVANT_REDIRECT_SECONDS)) {
         enemy.farIrrelevantElapsed += deltaSeconds;
-        enemy.directorTarget = this.getEncounterPoint(zone, enemy.species);
-        enemy.directorTargetReason = zone.id;
+        if (!enemy.directorTarget || enemy.directorTargetLockTimer <= 0 || playerDistance > ACTION_BUBBLE_RECYCLE_RADIUS) {
+          enemy.directorTarget = this.getEncounterPoint(zone, enemy.species);
+          enemy.directorTargetReason = zone.id;
+          enemy.directorTargetLockTimer = DIRECTOR_TARGET_LOCK_SECONDS;
+        }
         enemy.retargetElapsed = RETARGET_INTERVAL_SECONDS;
       } else {
         enemy.farIrrelevantElapsed = Math.max(0, enemy.farIrrelevantElapsed - deltaSeconds * 0.5);
@@ -1798,6 +1917,7 @@ export class BlackGrassTempleFactionManager {
         enemy.spawnAnchor = anchor;
         enemy.patrolPoints = anchor.patrolPoints;
         enemy.directorTarget = this.getEncounterPoint(zone, enemy.species);
+        enemy.directorTargetLockTimer = DIRECTOR_TARGET_LOCK_SECONDS;
         enemy.farIrrelevantElapsed = 0;
         enemy.retargetElapsed = RETARGET_INTERVAL_SECONDS;
         enemy.group.userData.recycledByBattleDirector = { zone: zone.id, reason: 'far_irrelevant', playerDistance: Number(playerDistance.toFixed(2)) };
