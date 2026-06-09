@@ -56,15 +56,16 @@ const FACTIONS = Object.freeze({
     attackDamage: 12,
     playerAttackDamage: 15,
     playerAttackRange: 2.85,
-    attackRange: 2.28,
-    visualContactRange: 2.38,
-    attackCommitRange: 3.45,
-    attackImpactRange: 2.42,
-    attackLungeDistance: 0.58,
+    attackRange: 2.05,
+    visualContactRange: 1.82,
+    attackCommitRange: 2.72,
+    attackImpactRange: 1.98,
+    attackLungeDistance: 0.72,
+    minimumBodySeparation: 0.98,
     attackCooldownSeconds: 1.12,
     attackDamageWindow: Object.freeze({ start: 0.36, end: 0.68 }),
-    desiredCombatDistance: 2.32,
-    tooCloseDistance: 1.18,
+    desiredCombatDistance: 2.12,
+    tooCloseDistance: 1.04,
     combatEngageDistance: 6.2,
     circleSpeed: 0.58,
     backstepSpeed: 1.45,
@@ -107,15 +108,16 @@ const FACTIONS = Object.freeze({
     attackDamage: 10,
     playerAttackDamage: 15,
     playerAttackRange: 2.75,
-    attackRange: 2.12,
-    visualContactRange: 2.16,
-    attackCommitRange: 3.2,
-    attackImpactRange: 2.2,
-    attackLungeDistance: 0.46,
+    attackRange: 1.9,
+    visualContactRange: 1.7,
+    attackCommitRange: 2.55,
+    attackImpactRange: 1.84,
+    attackLungeDistance: 0.62,
+    minimumBodySeparation: 0.92,
     attackCooldownSeconds: 0.95,
     attackDamageWindow: Object.freeze({ start: 0.34, end: 0.64 }),
-    desiredCombatDistance: 2.04,
-    tooCloseDistance: 1.08,
+    desiredCombatDistance: 1.92,
+    tooCloseDistance: 0.98,
     combatEngageDistance: 5.9,
     circleSpeed: 1.05,
     backstepSpeed: 1.45,
@@ -1004,9 +1006,17 @@ class BlackGrassFactionEnemy {
     const direction = distance > 0.001 ? toTarget.clone().normalize() : new THREE.Vector3(Math.sin(this.group.rotation.y), 0, Math.cos(this.group.rotation.y));
     const strafe = new THREE.Vector3(direction.z * this.combatStrafeSign, 0, -direction.x * this.combatStrafeSign).normalize();
 
+    if (distance < this.template.minimumBodySeparation) {
+      const sideBias = Math.random() < 0.55 ? strafe.multiplyScalar(0.75) : new THREE.Vector3();
+      const backstep = direction.clone().multiplyScalar(-1).add(sideBias).normalize();
+      this.moveToward(backstep, this.template.backstepSpeed, deltaSeconds, Infinity, 'defensive_backstep');
+      this.logCombatEvent('maneuver', { target, maneuver: 'minimum-separation-backstep', distance });
+      return;
+    }
+
     if (this.attackCooldown <= 0 && distance <= this.template.attackCommitRange && directClear) {
       if (distance > this.template.visualContactRange) {
-        this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange), 'combat_lunge', { faceTarget: target.group.position });
+        this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: this.template.minimumBodySeparation });
         this.logCombatEvent('maneuver', { target, maneuver: 'contact-lunge', distance });
         return;
       }
@@ -1025,13 +1035,13 @@ class BlackGrassFactionEnemy {
     }
 
     if (this.combatManeuver === 'lunge' && distance > this.template.visualContactRange * 0.9) {
-      this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange * 0.88), 'combat_lunge', { faceTarget: target.group.position });
+      this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange * 0.88), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: this.template.minimumBodySeparation });
       this.logCombatEvent('maneuver', { target, maneuver: 'lunge', distance });
       return;
     }
 
     if (distance > this.template.desiredCombatDistance + 0.45) {
-      this.moveToward(direction, this.template.seekSpeed * 0.86, deltaSeconds, Math.max(0, distance - this.template.desiredCombatDistance), 'combat_lunge', { faceTarget: target.group.position });
+      this.moveToward(direction, this.template.seekSpeed * 0.86, deltaSeconds, Math.max(0, distance - this.template.desiredCombatDistance), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: this.template.minimumBodySeparation });
       return;
     }
 
@@ -1086,12 +1096,18 @@ class BlackGrassFactionEnemy {
     const toPlayer = playerPosition.clone().sub(this.group.position);
     toPlayer.y = 0;
     const distance = toPlayer.length();
-    if (distance <= this.template.attackRange && this.attackCooldown <= 0 && this.hasLineOfMovement(this.group.position, playerPosition)) {
+    const directClear = this.hasLineOfMovement(this.group.position, playerPosition);
+    if (this.attackCooldown <= 0 && distance <= this.template.attackCommitRange && directClear) {
+      if (distance > this.template.visualContactRange) {
+        const direction = distance > 0.001 ? toPlayer.clone().normalize() : new THREE.Vector3(Math.sin(this.group.rotation.y), 0, Math.cos(this.group.rotation.y));
+        this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange), 'seek_player_fallback', { desiredTarget: playerPosition, faceTarget: playerPosition, minimumTargetDistance: this.template.minimumBodySeparation });
+        return;
+      }
       this.beginAttack('attack_player_fallback');
       return;
     }
 
-    this.moveToPosition(playerPosition, this.template.seekSpeed * 0.88, deltaSeconds, Math.max(0, distance - this.template.attackRange * 0.82), 'seek_player_fallback');
+    this.moveToPosition(playerPosition, this.template.seekSpeed * 0.88, deltaSeconds, Math.max(0, distance - this.template.visualContactRange), 'seek_player_fallback');
   }
 
   updateDirectorTarget(deltaSeconds) {
@@ -1169,7 +1185,7 @@ class BlackGrassFactionEnemy {
             deltaSeconds,
             Math.min(this.template.attackLungeDistance, Math.max(0, distance - this.template.visualContactRange)),
             this.behaviorState,
-            { suppressStuckTracking: true, desiredTarget: targetPosition, faceTarget: targetPosition },
+            { suppressStuckTracking: true, desiredTarget: targetPosition, faceTarget: targetPosition, minimumTargetDistance: this.template.minimumBodySeparation },
           );
         }
       }
@@ -1553,8 +1569,11 @@ class BlackGrassFactionEnemy {
     }
   }
 
-  moveToward(direction, speed, deltaSeconds, maxDistance = Infinity, movingState = 'patrol', { suppressStuckTracking = false, desiredTarget = null, faceTarget = null } = {}) {
-    const stepDistance = Math.min(maxDistance, speed * deltaSeconds);
+  moveToward(direction, speed, deltaSeconds, maxDistance = Infinity, movingState = 'patrol', { suppressStuckTracking = false, desiredTarget = null, faceTarget = null, minimumTargetDistance = 0 } = {}) {
+    const targetLimitedDistance = desiredTarget && minimumTargetDistance > 0
+      ? Math.max(0, horizontalDistance(this.group.position, desiredTarget) - minimumTargetDistance)
+      : Infinity;
+    const stepDistance = Math.min(maxDistance, targetLimitedDistance, speed * deltaSeconds);
     if (stepDistance <= 0.001) return 0;
     const previous = this.group.position.clone();
     const movementDirection = this.getAdjustedMovementDirection(direction, stepDistance, desiredTarget);
@@ -1674,8 +1693,9 @@ class BlackGrassFactionEnemy {
       const away = this.group.position.clone().sub(enemy.group.position);
       away.y = 0;
       const distance = away.length();
-      if (distance <= 0.001 || distance >= ENEMY_PERSONAL_SPACE) return;
-      separation.add(away.normalize().multiplyScalar((ENEMY_PERSONAL_SPACE - distance) / ENEMY_PERSONAL_SPACE));
+      const personalSpace = Math.max(ENEMY_PERSONAL_SPACE, enemy.template?.minimumBodySeparation ?? 0, this.template.minimumBodySeparation ?? 0);
+      if (distance <= 0.001 || distance >= personalSpace) return;
+      separation.add(away.normalize().multiplyScalar((personalSpace - distance) / personalSpace));
     });
     if (separation.lengthSq() > 0.001) separation.normalize();
     return separation;
@@ -1823,6 +1843,7 @@ export class BlackGrassTempleFactionManager {
         attackCommitRange: template.attackCommitRange,
         attackImpactRange: template.attackImpactRange,
         attackLungeDistance: template.attackLungeDistance,
+        minimumBodySeparation: template.minimumBodySeparation,
         turnSpeed: template.turnSpeed,
       }])),
       localNavigation: {
