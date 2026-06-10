@@ -1,6 +1,7 @@
 const SOUTH_RELIQUARY_FRAGMENT_KEY = 'dreadStoneBlack.hasSouthReliquaryFragment';
 const FIELD_SHRINE_REACTION_KEY = 'dreadStoneBlack.fieldShrineReactionSeen';
 const EQUIPMENT_STATE_KEY = 'dreadStoneBlack.equipmentState';
+const OBJECTIVE_STATE_KEY = 'dreadStoneBlack.objectiveState';
 
 export class GameState {
   constructor(storage = window.localStorage) {
@@ -31,6 +32,14 @@ export class GameState {
 
   saveEquipmentSnapshot(snapshot) {
     this.writeJson(EQUIPMENT_STATE_KEY, snapshot);
+  }
+
+  getObjectiveSnapshot() {
+    return this.readJson(OBJECTIVE_STATE_KEY, null);
+  }
+
+  saveObjectiveSnapshot(snapshot) {
+    this.writeJson(OBJECTIVE_STATE_KEY, snapshot);
   }
 
   readFlag(key, fallback) {

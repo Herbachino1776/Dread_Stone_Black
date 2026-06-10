@@ -148,6 +148,7 @@ export const blackGrassTempleDefinition = Object.freeze({
   id: 'black-grass-temple',
   displayName: 'Black Grass Temple',
   type: 'temple',
+  objectivePackId: 'black-grass-temple-foundation',
   tags: ['interior', 'dungeon', 'faction-war', 'compiled-runtime'],
   notes: 'Migrated from the hand-built Black Grass Temple scene. Keep this definition as the source of truth for BGT rooms, collision, spawns, nav, lights, exits, and encounter zones.',
   fog: { color: 0x242018, near: 12, far: 58 },

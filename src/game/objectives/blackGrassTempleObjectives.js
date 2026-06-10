@@ -1,0 +1,149 @@
+import { defineObjective } from '../../engine/objectives/ObjectiveDefinition.js';
+import { ObjectiveActions } from '../../engine/objectives/ObjectiveActions.js';
+import { ObjectiveConditions } from '../../engine/objectives/ObjectiveConditions.js';
+import { OBJECTIVE_EVENTS } from '../../engine/objectives/ObjectiveEvents.js';
+
+export const blackGrassTempleObjectivePackId = 'black-grass-temple-foundation';
+
+export const blackGrassTempleObjectives = Object.freeze([
+  defineObjective({
+    id: 'bgt_arm_yourself',
+    locationId: 'black-grass-temple',
+    title: 'Arm Yourself',
+    shortText: 'Find, take, and equip a temple blade.',
+    description: 'The temple asks for a hand that can answer iron.',
+    tags: ['proof', 'equipment', 'black_grass_temple'],
+    startEvents: [{ type: OBJECTIVE_EVENTS.locationEntered, locationId: 'black-grass-temple' }],
+    startConditions: ObjectiveConditions.locationVisited('black-grass-temple'),
+    completionConditions: ObjectiveConditions.equippedWeapon('rusted_sword'),
+    failureConditions: [],
+    rewards: [],
+    actionsOnStart: [ObjectiveActions.showToast('bgt_arm_started')],
+    actionsOnComplete: [
+      ObjectiveActions.showToast('bgt_sword_equipped'),
+      ObjectiveActions.setFlag('bgt_arm_yourself_complete'),
+      ObjectiveActions.startObjective('bgt_blood_the_blade'),
+    ],
+    debug: { authoringNote: 'Proof objective for rusted sword chest, acquisition, and equipment runtime events.' },
+    steps: [
+      {
+        id: 'find_rusted_sword_chest',
+        title: 'Find the rusted sword chest',
+        shortText: 'Reach the Broken Offering Room.',
+        roomId: 'R03',
+        markerRef: 'BGT-P16-rusted-sword-chest-placeholder',
+        conditions: ObjectiveConditions.roomVisited('R03'),
+        completionEvents: [{ type: OBJECTIVE_EVENTS.roomEntered, locationId: 'black-grass-temple', roomId: 'R03' }],
+        actionsOnComplete: [ObjectiveActions.showToast('bgt_find_chest_complete')],
+        tags: ['room', 'chest'],
+      },
+      {
+        id: 'take_rusted_sword',
+        title: 'Open the chest',
+        shortText: 'Take the rusted sword.',
+        interactionId: 'BGT_INT_RUSTED_SWORD_CHEST',
+        itemId: 'rusted_sword',
+        equipmentId: 'rusted_sword',
+        conditions: ObjectiveConditions.hasEquipment('rusted_sword'),
+        completionEvents: [
+          { type: OBJECTIVE_EVENTS.chestOpened, locationId: 'black-grass-temple', interactionId: 'BGT_INT_RUSTED_SWORD_CHEST' },
+          { type: OBJECTIVE_EVENTS.equipmentAcquired, locationId: 'black-grass-temple', equipmentId: 'rusted_sword' },
+        ],
+        actionsOnComplete: [ObjectiveActions.showToast('bgt_sword_taken')],
+        tags: ['interaction', 'equipment'],
+      },
+      {
+        id: 'equip_rusted_sword',
+        title: 'Equip the rusted sword',
+        shortText: 'Put the blade in your hand.',
+        itemId: 'rusted_sword',
+        equipmentId: 'rusted_sword',
+        conditions: ObjectiveConditions.equippedWeapon('rusted_sword'),
+        completionEvents: [{ type: OBJECTIVE_EVENTS.equipmentEquipped, locationId: 'black-grass-temple', equipmentId: 'rusted_sword' }],
+        tags: ['equipment'],
+      },
+    ],
+  }),
+  defineObjective({
+    id: 'bgt_blood_the_blade',
+    locationId: 'black-grass-temple',
+    title: 'Blood the Blade',
+    shortText: 'Wound a hostile creature with the rusted sword.',
+    description: 'The old blade needs a living answer.',
+    hidden: true,
+    visible: false,
+    tags: ['proof', 'combat', 'black_grass_temple'],
+    startConditions: ObjectiveConditions.objectiveComplete('bgt_arm_yourself'),
+    completionConditions: ObjectiveConditions.any(
+      ObjectiveConditions.enemyDamaged({ species: 'sheep_demon' }),
+      ObjectiveConditions.enemyDamaged({ species: 'neck_man' }),
+    ),
+    failureConditions: [],
+    rewards: [],
+    actionsOnStart: [ObjectiveActions.showToast('bgt_blood_started')],
+    actionsOnComplete: [
+      ObjectiveActions.showToast('bgt_blood_complete'),
+      ObjectiveActions.setFlag('bgt_blood_the_blade_complete'),
+      ObjectiveActions.startObjective('bgt_survive_warring_temple'),
+    ],
+    debug: { authoringNote: 'Uses combat hit events only; no enemy behavior or spawn requirements changed.' },
+    steps: [
+      {
+        id: 'wound_hostile_with_rusted_sword',
+        title: 'Wound the temple hostile',
+        shortText: 'Damage Sheep Demon or Neck Man with the rusted sword.',
+        itemId: 'rusted_sword',
+        equipmentId: 'rusted_sword',
+        enemyId: 'any_black_grass_hostile',
+        conditions: ObjectiveConditions.equippedWeapon('rusted_sword'),
+        completionEvents: [
+          { type: OBJECTIVE_EVENTS.enemyDamaged, locationId: 'black-grass-temple', weaponId: 'rusted_sword', species: 'sheep_demon' },
+          { type: OBJECTIVE_EVENTS.enemyDamaged, locationId: 'black-grass-temple', weaponId: 'rusted_sword', species: 'neck_man' },
+          { type: OBJECTIVE_EVENTS.enemyKilled, locationId: 'black-grass-temple', weaponId: 'rusted_sword', species: 'sheep_demon' },
+          { type: OBJECTIVE_EVENTS.enemyKilled, locationId: 'black-grass-temple', weaponId: 'rusted_sword', species: 'neck_man' },
+        ],
+        tags: ['combat', 'weapon'],
+      },
+    ],
+  }),
+  defineObjective({
+    id: 'bgt_survive_warring_temple',
+    locationId: 'black-grass-temple',
+    title: 'Survive the Warring Temple',
+    shortText: 'Push beyond the first clash.',
+    description: 'The war in the grass does not wait for your courage.',
+    hidden: true,
+    visible: false,
+    tags: ['proof', 'location', 'placeholder', 'black_grass_temple'],
+    startConditions: ObjectiveConditions.objectiveComplete('bgt_blood_the_blade'),
+    completionConditions: ObjectiveConditions.any(
+      ObjectiveConditions.roomVisited('R06'),
+      ObjectiveConditions.roomVisited('R08'),
+    ),
+    failureConditions: [],
+    rewards: [],
+    actionsOnStart: [ObjectiveActions.showToast('bgt_survive_started')],
+    actionsOnComplete: [
+      ObjectiveActions.showToast('bgt_survive_complete'),
+      ObjectiveActions.setFlag('bgt_survive_warring_temple_complete'),
+    ],
+    debug: { authoringNote: 'Conservative placeholder: room entry only, no gate or encounter lock.' },
+    steps: [
+      {
+        id: 'reach_first_grass_tavern',
+        title: 'Reach the grass tavern',
+        shortText: 'Enter the deeper tavern room.',
+        roomId: 'R06',
+        conditions: ObjectiveConditions.any(
+          ObjectiveConditions.roomVisited('R06'),
+          ObjectiveConditions.roomVisited('R08'),
+        ),
+        completionEvents: [
+          { type: OBJECTIVE_EVENTS.roomEntered, locationId: 'black-grass-temple', roomId: 'R06' },
+          { type: OBJECTIVE_EVENTS.roomEntered, locationId: 'black-grass-temple', roomId: 'R08' },
+        ],
+        tags: ['room', 'placeholder'],
+      },
+    ],
+  }),
+]);
