@@ -3,6 +3,8 @@ import { Combat } from './Combat.js';
 import { DungeonScene } from './DungeonScene.js';
 import { EQUIPMENT_EVENTS } from '../engine/equipment/EquipmentEvents.js';
 import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
+import { ObjectiveRuntime } from '../engine/objectives/ObjectiveRuntime.js';
+import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
 import { Feedback } from './Feedback.js';
 import { FirstPersonArmsOverlay } from './FirstPersonArmsOverlay.js';
 import { EquipmentPanel } from './equipment/EquipmentPanel.js';
@@ -14,6 +16,10 @@ import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
 import { MobileControls } from './MobileControls.js';
 import { PlayerController } from './PlayerController.js';
+import { getLocationDefinition } from './locations/locationRegistry.js';
+import { getObjectivePackForLocation } from './objectives/objectiveRegistry.js';
+import { objectiveMessages, resolveObjectiveMessage } from './objectives/objectiveMessages.js';
+import { ObjectivePanel } from './ui/ObjectivePanel.js';
 
 export class Game {
   constructor(app) {
@@ -50,6 +56,14 @@ export class Game {
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.saveEquipmentState());
     this.dungeon = new DungeonScene({ area, fieldSpawn, gameState: this.gameState });
     this.scene = this.dungeon.build();
+    this.locationId = this.resolveLocationId(this.dungeon.area);
+    this.objectiveRuntime = this.createObjectiveRuntime();
+    this.registerCurrentObjectivePack();
+    this.objectiveRuntime.loadSnapshot(this.gameState.getObjectiveSnapshot());
+    if (import.meta.env.DEV) {
+      window.dreadStoneObjectiveRuntime = this.objectiveRuntime;
+      window.dreadStoneObjectiveDebug = () => this.objectiveRuntime.getDebugInfo();
+    }
     const movementProfile = this.dungeon.area === 'field'
       ? {
         moveSpeed: PlayerController.OUTDOOR_MOVE_SPEED,
@@ -66,6 +80,10 @@ export class Game {
     this.hud = new Hud(this.app);
     this.feedback = new Feedback(this.camera);
     this.armsOverlay = new FirstPersonArmsOverlay(this.app);
+    this.objectivePanel = new ObjectivePanel({
+      root: this.app,
+      objectiveRuntime: this.objectiveRuntime,
+    });
     this.fpvEquipmentRenderer = new FPVEquipmentRenderer({
       root: this.app,
       armsOverlay: this.armsOverlay,
@@ -79,6 +97,7 @@ export class Game {
       hud: this.hud,
       feedback: this.feedback,
       equipmentRuntime: this.equipmentRuntime,
+      objectiveRuntime: this.objectiveRuntime,
     });
     this.combat = new Combat({
       player: this.player,
@@ -95,9 +114,132 @@ export class Game {
     this.viewportResizeObserver = new ResizeObserver(() => this.resize());
     this.viewportResizeObserver.observe(this.viewport);
 
+    this.bindObjectiveEquipmentEvents();
+    this.emitLocationEntered();
     this.playFieldReturnReactionIfNeeded({ query });
 
     this.renderer.setAnimationLoop((time) => this.update(time));
+  }
+
+  resolveLocationId(area) {
+    if (area === 'dungeon') return 'south-reliquary-crypt';
+    if (area === 'field') return 'reliquary-field';
+    return area;
+  }
+
+  createObjectiveRuntime() {
+    const runtime = new ObjectiveRuntime({
+      context: {
+        equipmentRuntime: this.equipmentRuntime,
+      },
+      callbacks: {
+        resolveMessage: resolveObjectiveMessage,
+        showToast: (message) => {
+          this.objectivePanel?.showToast(message);
+          this.hud?.showMessage(message);
+        },
+        showLocationMessage: (message) => {
+          this.objectivePanel?.showToast(message);
+          this.hud?.showMessage(message);
+        },
+      },
+      validation: this.createObjectiveValidationContext(),
+    });
+    runtime.on('objectiveChanged', () => {
+      this.objectivePanel?.render();
+      this.saveObjectiveState();
+    });
+    runtime.on('objectiveEvent', () => this.saveObjectiveState());
+    return runtime;
+  }
+
+  createObjectiveValidationContext() {
+    const definitions = ['black-grass-temple', 'south-reliquary-crypt']
+      .map((id) => getLocationDefinition(id))
+      .filter(Boolean);
+    return {
+      knownInteractionIds: new Set(definitions.flatMap((definition) => (definition.interactions ?? []).map((interaction) => interaction.id))),
+      knownRoomIds: new Set(definitions.flatMap((definition) => (definition.rooms ?? []).map((room) => room.id))),
+      knownItemIds: new Set(Object.keys(equipmentRegistry.items ?? {})),
+      knownMessageIds: new Set(Object.keys(objectiveMessages)),
+    };
+  }
+
+  registerCurrentObjectivePack() {
+    const locationDefinition = getLocationDefinition(this.locationId);
+    const pack = getObjectivePackForLocation(this.locationId, locationDefinition?.objectivePackId);
+    if (!pack) return;
+    this.objectiveRuntime.registerLocationObjectives(pack.locationId, pack.definitions, {
+      objectivePackId: pack.id,
+    });
+  }
+
+  bindObjectiveEquipmentEvents() {
+    this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, ({ item, metadata }) => {
+      const payload = {
+        locationId: this.locationId,
+        roomId: this.currentRoomId,
+        itemId: item.id,
+        equipmentId: item.id,
+        interactionId: metadata?.source ?? null,
+        sourceId: metadata?.source ?? 'equipment',
+        tags: metadata?.tags ?? [],
+      };
+      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.itemAcquired, payload);
+      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.equipmentAcquired, payload);
+    });
+    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, ({ itemId, slotId }) => {
+      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.equipmentEquipped, {
+        locationId: this.locationId,
+        roomId: this.currentRoomId,
+        itemId,
+        equipmentId: itemId,
+        sourceId: slotId,
+        tags: ['equipment'],
+      });
+    });
+    this.equipmentRuntime.on(EQUIPMENT_EVENTS.attackResolved, ({ weaponProfile, hit }) => {
+      this.emitObjectiveCombatHit({ weaponProfile, hit });
+    });
+  }
+
+  emitLocationEntered() {
+    this.currentRoomId = this.dungeon.findRoomIdForPosition?.(this.player.position) ?? this.locationId;
+    this.objectiveRuntime.emit(OBJECTIVE_EVENTS.locationEntered, {
+      locationId: this.locationId,
+      roomId: this.currentRoomId,
+      tags: [this.dungeon.area],
+    });
+    this.objectiveRuntime.emit(OBJECTIVE_EVENTS.roomEntered, {
+      locationId: this.locationId,
+      roomId: this.currentRoomId,
+    });
+  }
+
+  emitObjectiveCombatHit({ weaponProfile, hit }) {
+    if (!hit) return;
+    const goreEvent = hit.goreEvent ?? {};
+    const basePayload = {
+      locationId: this.locationId,
+      roomId: goreEvent.roomId ?? this.currentRoomId,
+      weaponId: weaponProfile?.id ?? goreEvent.weaponId,
+      enemyId: goreEvent.targetId ?? null,
+      targetId: goreEvent.targetId ?? null,
+      species: goreEvent.species ?? goreEvent.creatureId ?? null,
+      factionId: goreEvent.factionId ?? null,
+      sourceId: goreEvent.sourceId ?? 'player',
+      tags: ['player_attack', ...(goreEvent.tags ?? [])],
+      metadata: {
+        damage: hit.damage,
+        remainingHealth: hit.remainingHealth,
+        target: hit.target,
+      },
+    };
+    this.objectiveRuntime.emit(OBJECTIVE_EVENTS.enemyDamaged, basePayload);
+    if (hit.killed) {
+      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.enemyKilled, basePayload);
+      if (basePayload.factionId) this.objectiveRuntime.emit(OBJECTIVE_EVENTS.factionEnemyKilled, basePayload);
+    }
   }
 
   playFieldReturnReactionIfNeeded({ query }) {
@@ -116,6 +258,10 @@ export class Game {
 
   saveEquipmentState() {
     this.gameState.saveEquipmentSnapshot(this.equipmentRuntime.getSnapshot());
+  }
+
+  saveObjectiveState() {
+    this.gameState.saveObjectiveSnapshot(this.objectiveRuntime.getSnapshot());
   }
 
   renderShell() {
@@ -193,6 +339,7 @@ export class Game {
     this.dungeon.update(deltaSeconds, this.player);
     this.combat.update(deltaSeconds);
     this.armsOverlay.update(deltaSeconds);
+    this.updateObjectiveLocationTracking(deltaSeconds);
     this.interactions.updateHint();
 
     if (this.controls.consumeInteract()) {
@@ -202,6 +349,24 @@ export class Game {
     this.hud.updateDebug(this.player);
     this.feedback.update(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  updateObjectiveLocationTracking(deltaSeconds) {
+    const roomId = this.dungeon.findRoomIdForPosition?.(this.player.position) ?? this.locationId;
+    if (roomId && roomId !== this.currentRoomId) {
+      this.currentRoomId = roomId;
+      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.roomEntered, {
+        locationId: this.locationId,
+        roomId,
+      });
+    }
+
+    this.objectiveRuntime.update(deltaSeconds, {
+      equipmentRuntime: this.equipmentRuntime,
+      playerPosition: this.player.position,
+      locationId: this.locationId,
+      roomId: this.currentRoomId,
+    });
   }
 
   getViewportSize() {

@@ -1,3 +1,5 @@
+import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
+
 const INTERACT_RANGE = 3.0;
 const KEY_RANGE = 2.55;
 const LEVER_RANGE = 2.5;
@@ -6,12 +8,13 @@ const SHORTCUT_DOOR_RANGE = 2.55;
 const SECRET_WALL_RANGE = 2.4;
 
 export class Interactions {
-  constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null }) {
+  constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null, objectiveRuntime = null }) {
     this.player = player;
     this.dungeon = dungeon;
     this.hud = hud;
     this.feedback = feedback;
     this.equipmentRuntime = equipmentRuntime;
+    this.objectiveRuntime = objectiveRuntime;
     this.hasKey = false;
     this.currentHint = '';
     this.feedbackHint = '';
@@ -98,6 +101,12 @@ export class Interactions {
   }
 
   useOutdoorInteraction(interaction) {
+    this.emitObjectiveEvent(OBJECTIVE_EVENTS.interactionUsed, {
+      interactionId: interaction.id,
+      sourceId: interaction.id,
+      tags: ['outdoor', interaction.type ?? 'inspect'],
+    });
+
     if (interaction.type === 'centralShrine') {
       return this.useCentralShrine(interaction);
     }
@@ -106,6 +115,11 @@ export class Interactions {
 
     if (interaction.functional) {
       this.hud.showMessage(interaction.message);
+      this.emitObjectiveEvent(OBJECTIVE_EVENTS.locationExited, {
+        interactionId: interaction.id,
+        targetId: interaction.area ?? 'dungeon',
+        tags: ['transition'],
+      });
       window.setTimeout(() => {
         window.location.assign(`${window.location.pathname}?area=${interaction.area ?? 'dungeon'}`);
       }, 220);
@@ -120,6 +134,11 @@ export class Interactions {
     const fromArea = this.dungeon.area === 'black-grass-temple' ? 'black-grass-temple' : 'dungeon';
     const hint = this.dungeon.area === 'black-grass-temple' ? 'The field air waits above.' : 'Cold field air seeps down the stair.';
     this.setTemporaryHint(hint, 900);
+    this.emitObjectiveEvent(OBJECTIVE_EVENTS.locationExited, {
+      interactionId: `${this.getLocationId()}_exit`,
+      targetId: 'reliquary-field',
+      tags: ['transition', 'indoor_exit'],
+    });
     window.setTimeout(() => {
       window.location.assign(`${window.location.pathname}?area=field&from=${fromArea}`);
     }, 160);
@@ -133,6 +152,12 @@ export class Interactions {
   }
 
   useInspectInteraction(interaction) {
+    this.emitObjectiveEvent(OBJECTIVE_EVENTS.interactionUsed, {
+      interactionId: interaction.id,
+      sourceId: interaction.id,
+      tags: [interaction.type ?? 'inspect'],
+    });
+
     if (interaction.type === 'equipmentPickup') {
       return this.useEquipmentPickup(interaction);
     }
@@ -163,6 +188,13 @@ export class Interactions {
       source: interaction.id,
       tags: ['pickup', this.dungeon.area],
     });
+    this.emitObjectiveEvent(OBJECTIVE_EVENTS.chestOpened, {
+      interactionId: interaction.id,
+      itemId: interaction.itemId,
+      equipmentId: interaction.itemId,
+      sourceId: interaction.id,
+      tags: ['equipment', 'chest'],
+    });
     if (this.dungeon.markInteractionCollected?.(interaction.id)) {
       interaction.hint = interaction.repeatHint ?? 'The chest lies open and empty.';
       interaction.message = interaction.repeatMessage ?? 'The chest lies open and empty.';
@@ -178,6 +210,11 @@ export class Interactions {
     const message = activated ? 'The black reliquary wakes.' : interaction.message;
     this.setTemporaryHint(message, activated ? 1700 : 1200);
     this.hud.showMessage(message);
+    this.emitObjectiveEvent(OBJECTIVE_EVENTS.altarActivated, {
+      interactionId: interaction.id,
+      sourceId: interaction.id,
+      tags: ['reliquary', activated ? 'activated' : 'already_awake'],
+    });
 
     if (activated) {
       this.feedback?.shake({ durationMs: 360, intensity: 0.14 });
@@ -207,6 +244,11 @@ export class Interactions {
 
     this.hasKey = true;
     this.hud.showMessage('You take the tarnished reliquary key.');
+    this.emitObjectiveEvent(OBJECTIVE_EVENTS.itemAcquired, {
+      itemId: 'tarnished_reliquary_key',
+      sourceId: 'south_crypt_key',
+      tags: ['key'],
+    });
   }
 
   useGate() {
@@ -217,6 +259,11 @@ export class Interactions {
 
     if (this.dungeon.openGate()) {
       this.hud.showMessage('The key turns. The iron gate groans upward.');
+      this.emitObjectiveEvent(OBJECTIVE_EVENTS.gateUnlocked, {
+        interactionId: 'INT03',
+        targetId: 'GATE01',
+        tags: ['gate'],
+      });
     } else {
       this.hud.showMessage('The gate stands open.');
     }
@@ -235,12 +282,20 @@ export class Interactions {
 
     if (this.dungeon.openShortcutDoor()) {
       this.hud.showMessage('You lift the hooks. A shortcut opens back to the first chamber.');
+      this.emitObjectiveEvent(OBJECTIVE_EVENTS.gateUnlocked, {
+        targetId: 'south_crypt_shortcut_door',
+        tags: ['shortcut'],
+      });
     }
   }
 
   useSecretWall() {
     if (this.dungeon.revealSecret()) {
       this.hud.showMessage('The cracked wall sinks with a dry scrape, exposing a candleless alcove.');
+      this.emitObjectiveEvent(OBJECTIVE_EVENTS.interactionUsed, {
+        interactionId: 'south_crypt_secret_wall',
+        tags: ['secret'],
+      });
     } else {
       this.hud.showMessage('The alcove is empty, but the stones whisper back.');
     }
@@ -249,9 +304,28 @@ export class Interactions {
   useLever() {
     if (this.dungeon.useLever()) {
       this.hud.showMessage('The switch snaps down. Stone rumbles somewhere nearby.');
+      this.emitObjectiveEvent(OBJECTIVE_EVENTS.leverPulled, {
+        interactionId: 'south_crypt_wall_switch',
+        tags: ['lever'],
+      });
     } else {
       this.hud.showMessage('The switch is already lowered.');
     }
+  }
+
+  emitObjectiveEvent(type, payload = {}) {
+    if (!this.objectiveRuntime) return;
+    this.objectiveRuntime.emit(type, {
+      locationId: this.getLocationId(),
+      roomId: this.dungeon.findRoomIdForPosition?.(this.player.position) ?? null,
+      ...payload,
+    });
+  }
+
+  getLocationId() {
+    if (this.dungeon.area === 'dungeon') return 'south-reliquary-crypt';
+    if (this.dungeon.area === 'field') return 'reliquary-field';
+    return this.dungeon.area;
   }
 
   getNearbyOutdoorInteraction() {

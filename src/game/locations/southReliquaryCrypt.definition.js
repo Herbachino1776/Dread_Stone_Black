@@ -2,6 +2,7 @@ export const southReliquaryCryptDefinition = Object.freeze({
   id: 'south-reliquary-crypt',
   displayName: 'South Reliquary Crypt',
   type: 'crypt',
+  objectivePackId: 'south-reliquary-crypt-partial-foundation',
   tags: ['interior', 'baby-labyrinth', 'partial-definition'],
   notes: [
     'Partial authoring definition only. The live South Reliquary Crypt still uses DungeonScene baby labyrinth code.',
