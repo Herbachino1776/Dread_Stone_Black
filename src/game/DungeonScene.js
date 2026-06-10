@@ -3,9 +3,11 @@ import { compileDungeonLocation } from '../engine/dungeon-authoring/DungeonCompi
 import { DungeonDebugRenderer } from '../engine/dungeon-authoring/DungeonDebugRenderer.js';
 import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRuntimeRegistry.js';
 import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
+import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
 import { CollisionWorld } from './Collision.js';
 import { BlackGrassTempleFactionManager } from './BlackGrassTempleFactions.js';
 import { SheepDemonEnemy } from './SheepDemonEnemy.js';
+import { createGameGoreRegistry } from './gore/goreRegistry.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 import './creatures/creatureRegistry.js';
 import { RAM_MAN_FRIENDLY_ANIMATION_FILES } from './creatures/ramManFriendly.config.js';
@@ -240,6 +242,13 @@ export class DungeonScene {
     this.blackGrassFactionManager = null;
     this.blackGrassRuntime = null;
     this.dungeonDebugRenderer = null;
+    this.goreRuntime = new GoreRuntime({
+      scene: this.scene,
+      registry: createGameGoreRegistry(),
+      locationId: this.area,
+      getRoomIdForPosition: (position) => this.findRoomIdForPosition(position),
+      getFloorYForPosition: (position) => this.getFloorYForPosition(position),
+    });
     this.torchLights = [];
     this.lightTime = 0;
     this.gateBlocker = { minX: 10.72, maxX: 11.28, minZ: -10.85, maxZ: -5.15 };
@@ -448,6 +457,7 @@ export class DungeonScene {
     this.updateRamManNpcPatrol(deltaSeconds);
     this.updateBlackGrassFactionEnemies(deltaSeconds, player);
     this.updateSheepDemonEnemy(deltaSeconds, player);
+    this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
     this.dungeonDebugRenderer?.update(player?.position);
   }
 
@@ -878,8 +888,57 @@ export class DungeonScene {
       anchors: this.blackGrassFactionSpawnAnchors,
       navigationGraph: this.blackGrassNavigationGraph,
       encounterZones: this.blackGrassRuntime?.encounterZones,
+      onGoreEvent: (payload) => this.handleFactionGoreEvent(payload),
     });
     this.blackGrassFactionManager.spawnInitialWave();
+  }
+
+  findRoomIdForPosition(position) {
+    if (!position) return this.area;
+    const rooms = this.blackGrassRuntime?.rooms?.length
+      ? this.blackGrassRuntime.rooms
+      : [
+        { id: 'R01', minX: -4, maxX: 4, minZ: -34, maxZ: -16 },
+        { id: 'R02', minX: -11, maxX: 11, minZ: -18, maxZ: -6 },
+        { id: 'R03', minX: -30, maxX: -14, minZ: -16, maxZ: 0 },
+        { id: 'R04', minX: 14, maxX: 30, minZ: -16, maxZ: 0 },
+        { id: 'R05', minX: -15, maxX: 15, minZ: 2, maxZ: 26 },
+        { id: 'R06', minX: -7, maxX: 7, minZ: 25, maxZ: 35 },
+      ];
+    const room = rooms.find((candidate) => (
+      position.x >= candidate.minX
+      && position.x <= candidate.maxX
+      && position.z >= candidate.minZ
+      && position.z <= candidate.maxZ
+    ));
+    return room?.id ?? this.area;
+  }
+
+  getFloorYForPosition(position) {
+    const roomId = this.findRoomIdForPosition(position);
+    const authoredRoom = this.blackGrassRuntime?.rooms?.find((room) => room.id === roomId);
+    return authoredRoom?.floorY ?? FLOOR_Y;
+  }
+
+  handleFactionGoreEvent({ kind, event }) {
+    if (!event) return;
+    if (kind === 'death') this.goreRuntime.emitDeathGore(event);
+    else this.goreRuntime.emitHitGore(event);
+  }
+
+  emitPlayerAttackGore(hit, attack) {
+    if (!hit?.goreEvent) return;
+    const event = {
+      ...hit.goreEvent,
+      weaponId: hit.goreEvent.weaponId ?? 'sword',
+      direction: hit.goreEvent.direction ?? attack.direction,
+      roomId: hit.goreEvent.roomId ?? this.findRoomIdForPosition(hit.goreEvent.position),
+      damageAmount: hit.damage,
+      hitStrength: hit.killed ? 1.7 : 1.05,
+      tags: ['player_attack', ...(hit.goreEvent.tags ?? [])],
+    };
+    if (hit.killed) this.goreRuntime.emitDeathGore(event);
+    else this.goreRuntime.emitHitGore(event);
   }
 
   addLights() {
@@ -1479,18 +1538,23 @@ export class DungeonScene {
 
   damageEnemyFromPlayerAttack(attack) {
     if (this.area === 'black-grass-temple') {
-      return this.blackGrassFactionManager?.damageEnemyFromPlayerAttack(attack) ?? null;
+      const hit = this.blackGrassFactionManager?.damageEnemyFromPlayerAttack(attack) ?? null;
+      this.emitPlayerAttackGore(hit, attack);
+      return hit;
     }
 
     if (this.sheepDemonEnemies?.length) {
       for (const enemy of this.sheepDemonEnemies) {
         const hit = enemy.receivePlayerAttack(attack);
+        this.emitPlayerAttackGore(hit, attack);
         if (hit) return hit;
       }
       return null;
     }
 
-    return this.sheepDemonEnemy?.receivePlayerAttack(attack) ?? null;
+    const hit = this.sheepDemonEnemy?.receivePlayerAttack(attack) ?? null;
+    this.emitPlayerAttackGore(hit, attack);
+    return hit;
   }
 
   addGate() {
