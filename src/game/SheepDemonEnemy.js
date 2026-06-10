@@ -579,6 +579,7 @@ export class SheepDemonEnemy {
     this.hasDetectedPlayer = false;
     this.group.position.y = this.config.startPosition.y;
     this.group.userData.health = 0;
+    this.group.userData.bodyWoundsShouldClear = true;
     this.setBehaviorState('dead', { force: true });
     const dieAction = this.animation?.tracks.die?.action;
     if (dieAction) {
