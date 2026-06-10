@@ -1,15 +1,13 @@
 import * as THREE from 'three';
-import { loadDungeonModel } from './ModelLoader.js';
+import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
+import './creatures/creatureRegistry.js';
+import {
+  sheepDemonConfig,
+  SHEEP_DEMON_ANIMATION_FILES,
+  SHEEP_DEMON_STATE_TO_ANIMATION as CREATURE_SHEEP_DEMON_STATE_TO_ANIMATION,
+} from './creatures/sheepDemon.config.js';
 
-export const SHEEP_DEMON_ANIMATION_ASSETS = Object.freeze({
-  idle: './assets/enemies/sheep_demon/sheep_demon_01_optimized_idle.glb',
-  walk: './assets/enemies/sheep_demon/sheep_demon_01_optimized_walk.glb',
-  crouch_walk: './assets/enemies/sheep_demon/sheep_demon_01_optimized_crouch_walk.glb',
-  run: './assets/enemies/sheep_demon/sheep_demon_01_optimized_run.glb',
-  punch_left: './assets/enemies/sheep_demon/sheep_demon_01_optimized_punch_left.glb',
-  jump: './assets/enemies/sheep_demon/sheep_demon_01_optimized_jump.glb',
-  die: './assets/enemies/sheep_demon/sheep_demon_01_optimized_die.glb',
-});
+export const SHEEP_DEMON_ANIMATION_ASSETS = SHEEP_DEMON_ANIMATION_FILES;
 
 export const SHEEP_DEMON_STATES = Object.freeze({
   idle: 'idle',
@@ -23,17 +21,7 @@ export const SHEEP_DEMON_STATES = Object.freeze({
   dead: 'dead',
 });
 
-const SHEEP_DEMON_STATE_TO_ANIMATION = Object.freeze({
-  idle: 'idle',
-  patrol: 'walk',
-  alert: 'walk',
-  chase: 'run',
-  stalk: 'crouch_walk',
-  attack: 'punch_left',
-  jump: 'jump',
-  hurt_optional_placeholder: 'idle',
-  dead: 'die',
-});
+const SHEEP_DEMON_STATE_TO_ANIMATION = CREATURE_SHEEP_DEMON_STATE_TO_ANIMATION;
 
 const SHEEP_DEMON_NEUTRAL_COLOR = new THREE.Color(0xffffff);
 const SHEEP_DEMON_SHADOW_FILL = new THREE.Color(0x101217);
@@ -125,6 +113,7 @@ function tuneSheepDemonMaterials(root) {
 
 export const SHEEP_DEMON_CONFIG = Object.freeze({
   id: 'sheep-demon-01',
+  creatureConfigId: sheepDemonConfig.id,
   displayName: 'Sheep Demon',
   placement: 'R04 east crypt chamber in the first functional dungeon interior',
   startPosition: new THREE.Vector3(21.5, 0, -8.4),
@@ -134,13 +123,13 @@ export const SHEEP_DEMON_CONFIG = Object.freeze({
     new THREE.Vector3(24.4, 0, -4.8),
     new THREE.Vector3(18.4, 0, -5.6),
   ]),
-  targetHeight: 2.18,
-  maxWidth: 1.5,
-  modelYawOffset: 0,
-  maxHealth: 45,
-  playerAttackRange: 2.85,
-  playerAttackArcRadians: THREE.MathUtils.degToRad(72),
-  playerAttackDamage: 15,
+  targetHeight: sheepDemonConfig.scale.targetHeight,
+  maxWidth: sheepDemonConfig.scale.maxWidth,
+  modelYawOffset: sheepDemonConfig.scale.rotationOffset,
+  maxHealth: sheepDemonConfig.combatProfile.maxHealth,
+  playerAttackRange: sheepDemonConfig.combatProfile.playerAttackRange,
+  playerAttackArcRadians: sheepDemonConfig.combatProfile.playerAttackArcRadians,
+  playerAttackDamage: sheepDemonConfig.combatProfile.playerAttackDamage,
   walkSpeed: 0.72,
   stalkSpeed: 0.42,
   runSpeed: 2.25,
@@ -154,9 +143,9 @@ export const SHEEP_DEMON_CONFIG = Object.freeze({
   loseInterestRadius: 32,
   runBurstSeconds: 1.45,
   runCooldownSeconds: 2.25,
-  attackDamage: 12,
-  attackCooldownSeconds: 1.65,
-  punchDamageWindow: Object.freeze({ start: 0.4, end: 0.65 }),
+  attackDamage: sheepDemonConfig.combatProfile.attackDamage,
+  attackCooldownSeconds: sheepDemonConfig.combatProfile.attackCooldownSeconds,
+  punchDamageWindow: sheepDemonConfig.combatProfile.punchDamageWindow,
   jumpCooldownSeconds: 8.5,
   jumpChancePerSecond: 0.18,
   jumpMaxDistance: 2.2,
@@ -215,6 +204,7 @@ export class SheepDemonEnemy {
     this.scene = scene;
     this.collision = collision;
     this.config = config;
+    this.actor = null;
     this.group = null;
     this.animation = null;
     this.behaviorState = null;
@@ -238,56 +228,28 @@ export class SheepDemonEnemy {
   }
 
   load() {
-    const loadRequests = SHEEP_DEMON_ASSET_STATES.map((state) => (
-      loadDungeonModel({
-        url: SHEEP_DEMON_ANIMATION_ASSETS[state],
-        targetHeight: this.config.targetHeight,
-        maxWidth: this.config.maxWidth,
-      }).then((model) => [state, model])
-    ));
+    this.actor = createCreatureActor(this.config.creatureConfigId, {
+      scene: this.scene,
+      position: this.config.startPosition,
+      yaw: this.config.modelYawOffset,
+      name: this.config.id,
+    });
 
-    return Promise.all(loadRequests)
-      .then((entries) => {
-        const enemyRig = new THREE.Group();
-        enemyRig.name = this.config.id;
-        enemyRig.position.copy(this.config.startPosition);
-        enemyRig.rotation.y = this.config.modelYawOffset;
-
-        const materialTuning = {};
-        const tracks = {};
-        const mixers = [];
-        const normalizedScale = {};
-
-        entries.forEach(([state, model]) => {
-          model.root.name = `${this.config.id}-${state}-model`;
-          model.root.visible = false;
-          materialTuning[state] = tuneSheepDemonMaterials(model.root);
-          const track = makeAnimationTrack({ state, ...model });
-          tracks[state] = track;
-          mixers.push(track.mixer);
-          normalizedScale[state] = model.scale;
-          enemyRig.add(model.root);
-        });
-
-        enemyRig.userData = {
+    return this.actor.load({ initialStates: SHEEP_DEMON_ASSET_STATES })
+      .then((actor) => {
+        this.group = actor.group;
+        this.animation = actor.animationSet;
+        this.group.userData = {
+          ...this.group.userData,
           hostile: true,
           displayName: this.config.displayName,
           placement: this.config.placement,
-          assetUrls: SHEEP_DEMON_ANIMATION_ASSETS,
           activeAnimations: SHEEP_DEMON_ASSET_STATES,
-          // Animation prototype strategy: each uploaded GLB is loaded as its own normalized scene under one enemy rig.
-          // Swapping child visibility is safer for this asset set than retargeting clips across possibly mismatched skeleton/node names.
-          animationStrategy: 'separate GLB scenes are swapped inside one positioned Sheep Demon rig',
-          animationClips: Object.fromEntries(SHEEP_DEMON_ASSET_STATES.map((state) => [state, tracks[state].clipNames])),
-          animationClipDetails: Object.fromEntries(SHEEP_DEMON_ASSET_STATES.map((state) => [state, tracks[state].clipSummaries])),
-          normalizedScale,
-          materialTuning,
           groundingY: this.config.startPosition.y,
           targetHeight: this.config.targetHeight,
           maxWidth: this.config.maxWidth,
           rotationYOffsetRadians: this.config.modelYawOffset,
           stateMachine: Object.keys(SHEEP_DEMON_STATES),
-          health: this.health,
           combat: {
             maxHealth: this.config.maxHealth,
             playerAttackDamage: this.config.playerAttackDamage,
@@ -299,15 +261,12 @@ export class SheepDemonEnemy {
           },
         };
 
-        this.group = enemyRig;
-        this.animation = { state: null, mixers, tracks };
-
-        this.setBehaviorState('idle');
-        this.scene.add(enemyRig);
+        this.setBehaviorState('idle', { force: true });
         this.installDevAnimationKeys();
         this.isLoaded = true;
-        console.info('Sheep Demon animation clips detected:', enemyRig.userData.animationClipDetails);
-        console.info('Sheep Demon behavior prototype loaded:', enemyRig.userData);
+        if (import.meta.env.DEV) {
+          console.info('Sheep Demon behavior prototype loaded through CreatureActor:', this.group.userData);
+        }
       })
       .catch((error) => {
         this.loadError = error;
@@ -514,18 +473,7 @@ export class SheepDemonEnemy {
     if (!this.animation || (!force && this.behaviorState === state)) return;
 
     const animationState = SHEEP_DEMON_STATE_TO_ANIMATION[state] ?? 'idle';
-    const nextTrack = this.animation.tracks[animationState];
-    const previousTrack = this.animation.tracks[SHEEP_DEMON_STATE_TO_ANIMATION[this.behaviorState]];
-    if (!nextTrack) return;
-
-    Object.entries(this.animation.tracks).forEach(([trackState, track]) => {
-      track.root.visible = trackState === animationState;
-    });
-
-    nextTrack.action?.reset().fadeIn(0.12).play();
-    if (previousTrack?.action && previousTrack !== nextTrack) {
-      previousTrack.action.fadeOut(0.12);
-    }
+    if (!this.actor?.setAnimationState(animationState, { force, fadeSeconds: 0.12 })) return;
 
     const previousState = this.behaviorState;
     this.behaviorState = state;
@@ -533,11 +481,11 @@ export class SheepDemonEnemy {
       this.group.userData.behaviorState = state;
       this.group.userData.health = this.health;
     }
-    if (previousState !== state) console.info(`Sheep Demon state: ${previousState} -> ${state} (${animationState})`);
+    if (previousState !== state && import.meta.env.DEV) console.info(`Sheep Demon state: ${previousState} -> ${state} (${animationState})`);
   }
 
   getActionDuration(animationState, fallback) {
-    return this.animation?.tracks[animationState]?.clip?.duration || fallback;
+    return this.actor?.getActionDuration(animationState, fallback) ?? fallback;
   }
 
   consumeContactDamage(playerPosition) {
@@ -576,6 +524,7 @@ export class SheepDemonEnemy {
     }
 
     this.health = Math.max(0, this.health - damage);
+    if (this.actor) this.actor.health = this.health;
     this.hasDetectedPlayer = true;
     if (this.group) this.group.userData.health = this.health;
 
@@ -592,6 +541,7 @@ export class SheepDemonEnemy {
     if (!this.group || this.behaviorState === 'dead') return;
 
     this.health = 0;
+    if (this.actor) this.actor.health = 0;
     this.attackHasDamaged = true;
     this.hasDetectedPlayer = false;
     this.group.position.y = this.config.startPosition.y;

@@ -1,119 +1,78 @@
 import * as THREE from 'three';
-import { loadDungeonModel } from './ModelLoader.js';
+import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
+import './creatures/creatureRegistry.js';
+import {
+  sheepDemonConfig,
+  SHEEP_DEMON_ANIMATION_FILES,
+  SHEEP_DEMON_FACTION_STATE_TO_ANIMATION,
+} from './creatures/sheepDemon.config.js';
+import {
+  neckManConfig,
+  NECK_MAN_ANIMATION_FILES,
+  NECK_MAN_FACTION_STATE_TO_ANIMATION,
+} from './creatures/neckMan.config.js';
 
-export const BLACK_GRASS_SHEEP_DEMON_ANIMATION_ASSETS = Object.freeze({
-  idle: './assets/enemies/sheep_demon/sheep_demon_01_optimized_idle.glb',
-  walk: './assets/enemies/sheep_demon/sheep_demon_01_optimized_walk.glb',
-  crouch_walk: './assets/enemies/sheep_demon/sheep_demon_01_optimized_crouch_walk.glb',
-  run: './assets/enemies/sheep_demon/sheep_demon_01_optimized_run.glb',
-  punch_left: './assets/enemies/sheep_demon/sheep_demon_01_optimized_punch_left.glb',
-  jump: './assets/enemies/sheep_demon/sheep_demon_01_optimized_jump.glb',
-  die: './assets/enemies/sheep_demon/sheep_demon_01_optimized_die.glb',
-});
-
-export const BLACK_GRASS_NECK_MAN_ANIMATION_ASSETS = Object.freeze({
-  idle: './assets/enemies/neck_man/neckman_01_optimized_idle.glb',
-  walk: './assets/enemies/neck_man/neckman_01_optimized_walk.glb',
-  crawl: './assets/enemies/neck_man/neckman_01_optimized_crawl.glb',
-  run: './assets/enemies/neck_man/neckman_01_optimized_run.glb',
-  punch_left: './assets/enemies/neck_man/neckman_01_optimized_punch_left.glb',
-  punch_right: './assets/enemies/neck_man/neckman_01_optimized_punch_right.glb',
-  cross_punch_left: './assets/enemies/neck_man/neckman_01_optimized_cross_punch_left.glb',
-  kick_right: './assets/enemies/neck_man/neckman_01_optimized_kick_right.glb',
-  talk: './assets/enemies/neck_man/neckman_01_optimized_talk.glb',
-  die: './assets/enemies/neck_man/neckman_01_optimized_die.glb',
-});
+export const BLACK_GRASS_SHEEP_DEMON_ANIMATION_ASSETS = SHEEP_DEMON_ANIMATION_FILES;
+export const BLACK_GRASS_NECK_MAN_ANIMATION_ASSETS = NECK_MAN_ANIMATION_FILES;
 
 const FACTIONS = Object.freeze({
   sheep_demon: Object.freeze({
+    creatureConfigId: sheepDemonConfig.id,
     factionId: 'sheep_demon',
-    displayName: 'Sheep Demon',
+    displayName: sheepDemonConfig.identity.displayName,
     opposingFactionId: 'neck_man',
     assets: BLACK_GRASS_SHEEP_DEMON_ANIMATION_ASSETS,
-    animationMap: Object.freeze({
-      spawn: 'idle',
-      patrol: 'walk',
-      investigate_enemy_faction: 'walk',
-      seek_enemy_faction: 'run',
-      combat_enter: 'walk',
-      combat_circle: 'crouch_walk',
-      combat_feint: 'crouch_walk',
-      combat_lunge: 'run',
-      attack_enemy_faction: 'punch_left',
-      jump_attack_enemy_faction: 'jump',
-      defensive_backstep: 'crouch_walk',
-      defensive_strafe: 'crouch_walk',
-      recover: 'idle',
-      seek_player_fallback: 'walk',
-      attack_player_fallback: 'punch_left',
-      dead: 'die',
-    }),
-    targetHeight: 2.18,
-    maxWidth: 1.5,
-    maxHealth: 45,
+    animationMap: SHEEP_DEMON_FACTION_STATE_TO_ANIMATION,
+    targetHeight: sheepDemonConfig.scale.targetHeight,
+    maxWidth: sheepDemonConfig.scale.maxWidth,
+    maxHealth: sheepDemonConfig.combatProfile.maxHealth,
     walkSpeed: 0.82,
     seekSpeed: 1.55,
-    attackDamage: 12,
-    playerAttackDamage: 15,
-    playerAttackRange: 2.85,
+    attackDamage: sheepDemonConfig.combatProfile.attackDamage,
+    playerAttackDamage: sheepDemonConfig.combatProfile.playerAttackDamage,
+    playerAttackRange: sheepDemonConfig.combatProfile.playerAttackRange,
     attackRange: 2.05,
-    visualContactRange: 1.82,
-    attackCommitRange: 2.72,
-    attackImpactRange: 1.98,
-    attackLungeDistance: 0.72,
-    minimumBodySeparation: 0.98,
+    visualContactRange: sheepDemonConfig.combatProfile.visualContactRange,
+    attackCommitRange: sheepDemonConfig.combatProfile.attackCommitRange,
+    attackImpactRange: sheepDemonConfig.combatProfile.attackImpactRange,
+    attackLungeDistance: sheepDemonConfig.combatProfile.lungeDistance,
+    minimumBodySeparation: sheepDemonConfig.combatProfile.minimumBodySeparation,
     attackCooldownSeconds: 1.12,
     attackDamageWindow: Object.freeze({ start: 0.36, end: 0.68 }),
-    desiredCombatDistance: 2.12,
-    tooCloseDistance: 1.04,
+    desiredCombatDistance: sheepDemonConfig.combatProfile.desiredCombatDistance,
+    tooCloseDistance: sheepDemonConfig.combatProfile.tooCloseDistance,
     combatEngageDistance: 6.2,
     circleSpeed: 0.58,
     backstepSpeed: 1.45,
     lungeSpeed: 2.75,
-    defensiveManeuverChance: 0.2,
-    offensiveLungeChance: 0.62,
-    jumpAttackChance: 0.18,
+    defensiveManeuverChance: sheepDemonConfig.combatProfile.defensiveManeuverChance,
+    offensiveLungeChance: sheepDemonConfig.combatProfile.offensiveLungeChance,
+    jumpAttackChance: sheepDemonConfig.combatProfile.jumpAttackChance,
     jumpAttackCooldownSeconds: 6.2,
     turnSpeed: 4.1,
     enemyAttackAnimations: Object.freeze(['punch_left']),
   }),
   neck_man: Object.freeze({
+    creatureConfigId: neckManConfig.id,
     factionId: 'neck_man',
-    displayName: 'Neck Man',
+    displayName: neckManConfig.identity.displayName,
     opposingFactionId: 'sheep_demon',
     assets: BLACK_GRASS_NECK_MAN_ANIMATION_ASSETS,
-    animationMap: Object.freeze({
-      spawn: 'idle',
-      patrol: 'walk',
-      investigate_enemy_faction: 'walk',
-      seek_enemy_faction: 'run',
-      combat_enter: 'walk',
-      combat_circle: 'walk',
-      combat_feint: 'walk',
-      combat_lunge: 'run',
-      attack_enemy_faction: 'punch_right',
-      jump_attack_enemy_faction: 'kick_right',
-      defensive_backstep: 'walk',
-      defensive_strafe: 'walk',
-      recover: 'idle',
-      seek_player_fallback: 'walk',
-      attack_player_fallback: 'punch_left',
-      dead: 'die',
-    }),
-    targetHeight: 2.05,
-    maxWidth: 1.35,
-    maxHealth: 38,
+    animationMap: NECK_MAN_FACTION_STATE_TO_ANIMATION,
+    targetHeight: neckManConfig.scale.targetHeight,
+    maxWidth: neckManConfig.scale.maxWidth,
+    maxHealth: neckManConfig.combatProfile.maxHealth,
     walkSpeed: 0.92,
     seekSpeed: 1.7,
-    attackDamage: 10,
-    playerAttackDamage: 15,
-    playerAttackRange: 2.75,
-    attackRange: 1.9,
-    visualContactRange: 1.7,
-    attackCommitRange: 2.55,
-    attackImpactRange: 1.84,
-    attackLungeDistance: 0.62,
-    minimumBodySeparation: 0.92,
+    attackDamage: neckManConfig.combatProfile.attackDamage,
+    playerAttackDamage: neckManConfig.combatProfile.playerAttackDamage,
+    playerAttackRange: neckManConfig.combatProfile.playerAttackRange,
+    attackRange: neckManConfig.combatProfile.attackRange,
+    visualContactRange: neckManConfig.combatProfile.visualContactRange,
+    attackCommitRange: neckManConfig.combatProfile.attackCommitRange,
+    attackImpactRange: neckManConfig.combatProfile.attackImpactRange,
+    attackLungeDistance: neckManConfig.combatProfile.lungeDistance,
+    minimumBodySeparation: neckManConfig.combatProfile.minimumBodySeparation,
     attackCooldownSeconds: 0.95,
     attackDamageWindow: Object.freeze({ start: 0.34, end: 0.64 }),
     desiredCombatDistance: 1.92,
@@ -122,9 +81,9 @@ const FACTIONS = Object.freeze({
     circleSpeed: 1.05,
     backstepSpeed: 1.45,
     lungeSpeed: 3.05,
-    defensiveManeuverChance: 0.18,
-    offensiveLungeChance: 0.58,
-    jumpAttackChance: 0,
+    defensiveManeuverChance: neckManConfig.combatProfile.defensiveManeuverChance,
+    offensiveLungeChance: neckManConfig.combatProfile.offensiveLungeChance,
+    jumpAttackChance: neckManConfig.combatProfile.jumpAttackChance,
     jumpAttackCooldownSeconds: 999,
     turnSpeed: 5.8,
     enemyAttackAnimations: Object.freeze(['punch_left', 'punch_right', 'cross_punch_left', 'kick_right']),
@@ -444,6 +403,7 @@ class BlackGrassFactionEnemy {
     this.template = FACTIONS[species];
     this.id = id;
     this.spawnAnchor = spawnAnchor;
+    this.actor = null;
     this.group = null;
     this.animation = null;
     this.behaviorState = null;
@@ -511,43 +471,24 @@ class BlackGrassFactionEnemy {
       this.resolveStateAnimation('dead'),
       ...this.template.enemyAttackAnimations,
     ]);
-    const loadState = (state) => loadDungeonModel({
-      url: this.template.assets[state],
-      targetHeight: this.template.targetHeight,
-      maxWidth: this.template.maxWidth,
-    }).then((model) => [state, model]);
+    const allStates = Object.keys(this.template.assets);
+    const priorityRemaining = allStates.filter((candidate) => candidate !== idleState && primaryStates.has(candidate));
+    const optionalRemaining = allStates.filter((candidate) => candidate !== idleState && !primaryStates.has(candidate));
 
-    return loadState(idleState)
-      .then(([state, model]) => {
-        const rig = new THREE.Group();
-        rig.name = this.id;
-        rig.visible = true;
-        rig.position.copy(this.spawnAnchor.position);
-        rig.position.y = Math.max(0, rig.position.y);
-        rig.rotation.y = this.spawnAnchor.yaw ?? 0;
+    this.actor = createCreatureActor(this.template.creatureConfigId, {
+      scene: this.scene,
+      position: this.spawnAnchor.position,
+      yaw: this.spawnAnchor.yaw ?? 0,
+      name: this.id,
+    });
 
-        const tracks = {};
-        const mixers = [];
-        const normalizedScale = {};
-        const addTrack = (trackState, trackModel) => {
-          trackModel.root.name = `${this.id}-${trackState}-model`;
-          if (this.species === 'sheep_demon') {
-            const materialSummary = tuneBlackGrassSheepDemonMaterials(trackModel.root);
-            trackModel.root.userData.blackGrassSheepDemonMaterialTuning = materialSummary;
-          }
-          trackModel.root.visible = false;
-          trackModel.root.updateMatrixWorld(true);
-          const track = makeAnimationTrack({ state: trackState, ...trackModel });
-          tracks[trackState] = track;
-          mixers.push(track.mixer);
-          normalizedScale[trackState] = trackModel.scale;
-          rig.add(trackModel.root);
-          return track;
-        };
-
-        addTrack(state, model);
-
-        rig.userData = {
+    return this.actor.load({ initialStates: [idleState], lazyStates: [...priorityRemaining, ...optionalRemaining] })
+      .then((actor) => {
+        this.group = actor.group;
+        this.group.visible = true;
+        this.animation = actor.animationSet;
+        this.group.userData = {
+          ...this.group.userData,
           hostile: true,
           blackGrassTempleFactionEnemy: true,
           faction: this.species,
@@ -559,17 +500,10 @@ class BlackGrassFactionEnemy {
           targetPriority: ['nearest living opposing faction enemy', 'player fallback', 'patrol target'],
           animationMapping: this.template.animationMap,
           assetUrls: this.template.assets,
-          animationClips: {},
-          animationClipDetails: {},
-          loadedAnimationStates: [state],
           expectedAnimationStates: Object.keys(this.template.assets),
-          normalizedScale,
           health: this.health,
         };
 
-        this.group = rig;
-        this.animation = { mixers, tracks };
-        this.scene.add(rig);
         this.setBehaviorState('spawn', { force: true });
         this.ensureSingleVisibleAnimationRoot();
         this.addDevMarker();
@@ -577,36 +511,6 @@ class BlackGrassFactionEnemy {
         this.refreshAnimationUserData();
         this.logLoadDiagnostics('idle-visible');
         this.onLoaded?.(this);
-
-        const remainingStates = Object.keys(this.template.assets).filter((candidate) => candidate !== state);
-        const priorityRemaining = remainingStates.filter((candidate) => primaryStates.has(candidate));
-        const optionalRemaining = remainingStates.filter((candidate) => !primaryStates.has(candidate));
-        [...priorityRemaining, ...optionalRemaining].forEach((remainingState) => {
-          loadState(remainingState)
-            .then(([, remainingModel]) => {
-              addTrack(remainingState, remainingModel);
-              if (this.resolveStateAnimation(this.behaviorState ?? 'spawn') === remainingState) {
-                this.setBehaviorState(this.behaviorState ?? 'spawn', { force: true });
-              }
-              this.refreshAnimationUserData();
-              this.ensureSingleVisibleAnimationRoot();
-              if (IS_DEV && this.group) {
-                console.info('Black Grass Temple faction animation state loaded:', {
-                  species: this.species,
-                  id: this.id,
-                  spawnAnchorId: this.spawnAnchor.id,
-                  state: remainingState,
-                  glbTrackCount: tracks[remainingState].clip?.tracks.length ?? 0,
-                  totalLoadedStates: Object.keys(tracks).length,
-                });
-              }
-            })
-            .catch((error) => {
-              if (IS_DEV) {
-                console.warn(`Black Grass Temple ${this.template.displayName} ${remainingState} animation failed to lazy-load.`, error);
-              }
-            });
-        });
       })
       .catch((error) => {
         console.warn(`Black Grass Temple ${this.template.displayName} failed to load idle model; faction spawn skipped.`, error);
@@ -1262,6 +1166,7 @@ class BlackGrassFactionEnemy {
   receiveFactionDamage(damage, source) {
     if (!this.isAlive) return null;
     this.health = Math.max(0, this.health - damage);
+    if (this.actor) this.actor.health = this.health;
     this.group.userData.health = this.health;
     if (this.health <= 0) {
       this.kill(source);
@@ -1283,6 +1188,7 @@ class BlackGrassFactionEnemy {
       if (angle > THREE.MathUtils.degToRad(72) * 0.5) return null;
     }
     this.health = Math.max(0, this.health - damage);
+    if (this.actor) this.actor.health = this.health;
     this.group.userData.health = this.health;
     if (this.health <= 0) {
       this.kill('player');
@@ -1294,6 +1200,7 @@ class BlackGrassFactionEnemy {
   kill(source = 'unknown') {
     if (!this.group || this.behaviorState === 'dead') return;
     this.health = 0;
+    if (this.actor) this.actor.health = 0;
     this.attackHasDamaged = true;
     this.currentTarget = null;
     this.group.userData.health = 0;
@@ -1772,29 +1679,18 @@ class BlackGrassFactionEnemy {
     const canOverride = force || IMMEDIATE_ANIMATION_STATES.has(state) || IMMEDIATE_ANIMATION_STATES.has(this.behaviorState);
     const minimumHold = LOCOMOTION_ANIMATION_HOLD_SECONDS[this.behaviorState] ?? 0;
     if (!canOverride && this.animationStateElapsed < minimumHold) return;
-    const nextTrack = this.animation.tracks[animationState];
-    const previousTrack = this.animation.tracks[currentAnimationState];
-    if (!nextTrack) return;
     this.group.visible = true;
-    Object.entries(this.animation.tracks).forEach(([trackState, track]) => {
-      track.root.visible = trackState === animationState;
-    });
-    if (previousTrack === nextTrack && currentAnimationState === animationState) {
-      nextTrack.action?.play();
-    } else {
-      nextTrack.action?.reset().fadeIn(0.1).play();
-      if (previousTrack?.action && previousTrack !== nextTrack) previousTrack.action.fadeOut(0.1);
-    }
+    if (!this.actor?.setAnimationState(animationState, { force, fadeSeconds: 0.1 })) return;
     this.behaviorState = state;
     this.animationStateElapsed = 0;
     this.group.userData.behaviorState = state;
     this.group.userData.animationState = animationState;
-    this.group.userData.visibleAnimationState = animationState;
+    this.group.userData.visibleAnimationState = this.actor.animationSet.currentState ?? animationState;
     this.group.userData.visibleAnimationRootCount = 1;
   }
 
   getActionDuration(animationState, fallback) {
-    return this.animation?.tracks[animationState]?.clip?.duration || fallback;
+    return this.actor?.getActionDuration(animationState, fallback) ?? fallback;
   }
 }
 

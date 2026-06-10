@@ -2,16 +2,16 @@ import * as THREE from 'three';
 import { compileDungeonLocation } from '../engine/dungeon-authoring/DungeonCompiler.js';
 import { DungeonDebugRenderer } from '../engine/dungeon-authoring/DungeonDebugRenderer.js';
 import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRuntimeRegistry.js';
+import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
 import { CollisionWorld } from './Collision.js';
-import { loadDungeonModel } from './ModelLoader.js';
 import { BlackGrassTempleFactionManager } from './BlackGrassTempleFactions.js';
 import { SheepDemonEnemy } from './SheepDemonEnemy.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
+import './creatures/creatureRegistry.js';
+import { RAM_MAN_FRIENDLY_ANIMATION_FILES } from './creatures/ramManFriendly.config.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
-const RAM_MAN_NPC_IDLE_URL = './assets/npcs/ram_man/ram_man_friendly_idle_01.glb';
-const RAM_MAN_NPC_WALK_URL = './assets/npcs/ram_man/ram_man_friendly_walk_01.glb';
 const RAM_MAN_NPC_POSITION = new THREE.Vector3(0, FLOOR_Y, 14);
 const RAM_MAN_NPC_PATROL_POINTS = [
   new THREE.Vector3(-7, FLOOR_Y, 10),
@@ -230,6 +230,7 @@ export class DungeonScene {
     this.shortcutOpen = false;
     this.secretWall = null;
     this.secretRevealed = false;
+    this.ramManNpcActor = null;
     this.ramManNpc = null;
     this.ramManNpcPatrolIndex = 0;
     this.ramManNpcMoveTarget = 1;
@@ -1305,7 +1306,7 @@ export class DungeonScene {
 
 
   updateRamManNpcPatrol(deltaSeconds) {
-    this.ramManNpcAnimation?.mixers.forEach((mixer) => mixer.update(deltaSeconds));
+    this.ramManNpcActor?.update(deltaSeconds, { behaviorState: this.ramManNpcAnimation?.state ?? 'idle' });
 
     if (!this.ramManNpc || RAM_MAN_NPC_PATROL_POINTS.length < 2) {
       this.setRamManNpcAnimation('idle');
@@ -1354,20 +1355,9 @@ export class DungeonScene {
     const animation = this.ramManNpcAnimation;
     if (!animation || animation.state === state) return;
 
-    const nextTrack = animation.tracks[state];
-    const previousTrack = animation.tracks[animation.state];
-    if (!nextTrack) return;
-
-    Object.entries(animation.tracks).forEach(([trackState, track]) => {
-      track.root.visible = trackState === state;
-    });
-
-    nextTrack.action?.reset().fadeIn(0.16).play();
-    if (previousTrack?.action && previousTrack !== nextTrack) {
-      previousTrack.action.fadeOut(0.16);
-    }
-
+    if (!this.ramManNpcActor?.setAnimationState(state, { fadeSeconds: 0.16 })) return;
     animation.state = state;
+    if (this.ramManNpc) this.ramManNpc.userData.behaviorState = state;
   }
 
   createRamManNpcAnimationTrack({ state, root, gltf, scale }) {
@@ -1402,38 +1392,17 @@ export class DungeonScene {
 
   addRamManNpc() {
     // Friendly ambience-only NPC: no collision blocker, no enemy registration, no combat hooks.
-    Promise.all([
-      loadDungeonModel({ url: RAM_MAN_NPC_IDLE_URL, targetHeight: 1.72, maxWidth: 1.15 }),
-      loadDungeonModel({ url: RAM_MAN_NPC_WALK_URL, targetHeight: 1.72, maxWidth: 1.15 }),
-    ])
-      .then(([idleModel, walkModel]) => {
-        idleModel.root.name = 'ram-man-friendly-idle-01-model';
-        walkModel.root.name = 'ram-man-friendly-walk-01-model';
-        walkModel.root.visible = false;
+    const actor = createCreatureActor('ram_man_friendly', {
+      scene: this.scene,
+      position: RAM_MAN_NPC_POSITION,
+      yaw: 0,
+      name: 'ram-man-friendly-01',
+    });
 
-        const idleTrack = this.createRamManNpcAnimationTrack({ state: 'idle', ...idleModel });
-        const walkTrack = this.createRamManNpcAnimationTrack({ state: 'walk', ...walkModel });
-
-        const patrolRig = new THREE.Group();
-        patrolRig.name = 'ram-man-friendly-01';
-        patrolRig.position.copy(RAM_MAN_NPC_POSITION);
-        patrolRig.userData = {
-          assetUrls: {
-            idle: RAM_MAN_NPC_IDLE_URL,
-            walk: RAM_MAN_NPC_WALK_URL,
-          },
-          animationClips: {
-            idle: idleTrack.clipNames,
-            walk: walkTrack.clipNames,
-          },
-          animationClipDetails: {
-            idle: idleTrack.clipSummaries,
-            walk: walkTrack.clipSummaries,
-          },
-          normalizedScale: {
-            idle: idleModel.scale,
-            walk: walkModel.scale,
-          },
+    actor.load({ initialStates: ['idle', 'walk'] })
+      .then(() => {
+        actor.group.userData = {
+          ...actor.group.userData,
           friendly: true,
           collision: 'none - visual roaming NPC only',
           combat: 'none - not registered as an enemy or target',
@@ -1442,26 +1411,22 @@ export class DungeonScene {
           patrolPauseSeconds: RAM_MAN_NPC_PATROL_PAUSE_SECONDS,
           patrolPoints: RAM_MAN_NPC_PATROL_POINTS.map((point) => ({ x: point.x, y: point.y, z: point.z })),
         };
-        patrolRig.add(idleModel.root, walkModel.root);
 
-        this.ramManNpc = patrolRig;
+        this.ramManNpcActor = actor;
+        this.ramManNpc = actor.group;
         this.ramManNpcAnimation = {
           state: null,
-          mixers: [idleTrack.mixer, walkTrack.mixer],
-          tracks: {
-            idle: idleTrack,
-            walk: walkTrack,
-          },
+          tracks: actor.animationSet.tracks,
         };
         this.setRamManNpcAnimation('idle');
-        this.scene.add(patrolRig);
 
-        console.info('Friendly Ram Man animation clips detected:', patrolRig.userData.animationClipDetails);
+        if (import.meta.env.DEV) console.info('Friendly Ram Man CreatureActor loaded:', actor.group.userData.debug);
       })
       .catch((error) => {
+        this.ramManNpcActor = null;
         this.ramManNpcAnimation = null;
         console.warn(
-          `Friendly Ram Man animated GLBs failed to load from ${RAM_MAN_NPC_IDLE_URL} or ${RAM_MAN_NPC_WALK_URL}. The dungeon remains playable.`,
+          `Friendly Ram Man animated GLBs failed to load from ${RAM_MAN_FRIENDLY_ANIMATION_FILES.idle} or ${RAM_MAN_FRIENDLY_ANIMATION_FILES.walk}. The dungeon remains playable.`,
           error,
         );
       });
