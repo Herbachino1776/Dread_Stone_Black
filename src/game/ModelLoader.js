@@ -35,7 +35,7 @@ function prepareMaterials(root) {
   });
 }
 
-function centerAndScale(root, { targetHeight = 1, maxWidth = 1.15 } = {}) {
+function centerAndScale(root, { targetHeight = 1, maxWidth = 1.15, scaleMultiplier = 1, groundOffset = 0, yOffset = 0 } = {}) {
   root.updateMatrixWorld(true);
 
   const box = new THREE.Box3().setFromObject(root);
@@ -46,7 +46,7 @@ function centerAndScale(root, { targetHeight = 1, maxWidth = 1.15 } = {}) {
   const largestSide = Math.max(size.x, size.z, 0.001);
   const heightScale = targetHeight / Math.max(size.y, 0.001);
   const widthScale = maxWidth / largestSide;
-  const scale = Math.min(heightScale, widthScale);
+  const scale = Math.min(heightScale, widthScale) * scaleMultiplier;
 
   root.position.sub(center.multiplyScalar(scale));
   root.scale.multiplyScalar(scale);
@@ -54,11 +54,12 @@ function centerAndScale(root, { targetHeight = 1, maxWidth = 1.15 } = {}) {
 
   const centeredBox = new THREE.Box3().setFromObject(root);
   root.position.y -= centeredBox.min.y;
+  root.position.y += groundOffset + yOffset;
 
   return { box: centeredBox, scale };
 }
 
-export function loadDungeonModel({ url, targetHeight, maxWidth } = {}) {
+export function loadDungeonModel({ url, targetHeight, maxWidth, scaleMultiplier = 1, groundOffset = 0, yOffset = 0 } = {}) {
   return new Promise((resolve, reject) => {
     gltfLoader.load(
       url,
@@ -71,8 +72,8 @@ export function loadDungeonModel({ url, targetHeight, maxWidth } = {}) {
         }
 
         prepareMaterials(root);
-        const { scale } = centerAndScale(root, { targetHeight, maxWidth });
-        resolve({ root, gltf, scale });
+        const { box, scale } = centerAndScale(root, { targetHeight, maxWidth, scaleMultiplier, groundOffset, yOffset });
+        resolve({ root, gltf, scale, box });
       },
       undefined,
       (error) => reject(error),
