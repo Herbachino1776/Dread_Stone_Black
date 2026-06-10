@@ -6,11 +6,12 @@ const SHORTCUT_DOOR_RANGE = 2.55;
 const SECRET_WALL_RANGE = 2.4;
 
 export class Interactions {
-  constructor({ player, dungeon, hud, feedback = null }) {
+  constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null }) {
     this.player = player;
     this.dungeon = dungeon;
     this.hud = hud;
     this.feedback = feedback;
+    this.equipmentRuntime = equipmentRuntime;
     this.hasKey = false;
     this.currentHint = '';
     this.feedbackHint = '';
@@ -132,12 +133,43 @@ export class Interactions {
   }
 
   useInspectInteraction(interaction) {
+    if (interaction.type === 'equipmentPickup') {
+      return this.useEquipmentPickup(interaction);
+    }
+
     if (interaction.type === 'southReliquary') {
       return this.useSouthReliquary(interaction);
     }
 
     this.setTemporaryHint(interaction.message, 1200);
     this.hud.showMessage(interaction.message);
+    return false;
+  }
+
+  useEquipmentPickup(interaction) {
+    if (!interaction.itemId || !this.equipmentRuntime) {
+      this.setTemporaryHint(interaction.message ?? 'The chest is empty.', 1200);
+      return false;
+    }
+
+    if (this.equipmentRuntime.hasItem(interaction.itemId)) {
+      const repeatMessage = interaction.repeatMessage ?? 'The chest lies open and empty.';
+      this.setTemporaryHint(repeatMessage, 1200);
+      this.hud.showMessage(repeatMessage);
+      return false;
+    }
+
+    this.equipmentRuntime.acquireItem(interaction.itemId, {
+      source: interaction.id,
+      tags: ['pickup', this.dungeon.area],
+    });
+    if (this.dungeon.markInteractionCollected?.(interaction.id)) {
+      interaction.hint = interaction.repeatHint ?? 'The chest lies open and empty.';
+      interaction.message = interaction.repeatMessage ?? 'The chest lies open and empty.';
+    }
+    const message = interaction.acquiredMessage ?? interaction.message ?? 'You acquire an item.';
+    this.setTemporaryHint(message, 1600);
+    this.hud.showMessage(message);
     return false;
   }
 

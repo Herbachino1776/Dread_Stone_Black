@@ -3,11 +3,13 @@ const ATTACK_COOLDOWN = 0.95;
 const POWER_RECOVERY_RATE = 1.15;
 
 export class Combat {
-  constructor({ player, dungeon, hud, controls }) {
+  constructor({ player, dungeon, hud, controls, equipmentRuntime = null, fpvEquipmentRenderer = null }) {
     this.player = player;
     this.dungeon = dungeon;
     this.hud = hud;
     this.controls = controls;
+    this.equipmentRuntime = equipmentRuntime;
+    this.fpvEquipmentRenderer = fpvEquipmentRenderer;
     this.maxPower = 10;
     this.power = this.maxPower;
     this.maxHp = 100;
@@ -66,27 +68,46 @@ export class Combat {
   }
 
   tryPlayerAttack() {
+    const weaponProfile = this.equipmentRuntime?.getEquippedWeaponProfile?.() ?? {
+      id: 'unarmed',
+      displayName: 'Unarmed',
+      damage: 15,
+      attackRange: 2.75,
+      attackCooldown: ATTACK_COOLDOWN,
+      staminaCost: ATTACK_POWER_COST,
+      goreProfileId: 'unarmed',
+    };
+    const powerCost = weaponProfile.staminaCost ?? ATTACK_POWER_COST;
+
     if (this.attackCooldown > 0) {
       this.hud.showMessage('Let your arms settle.');
       return;
     }
 
-    if (this.power < ATTACK_POWER_COST) {
+    if (this.power < powerCost) {
       this.hud.showMessage('You need POWER to strike. Step back and breathe.');
       return;
     }
 
-    this.power -= ATTACK_POWER_COST;
-    this.attackCooldown = ATTACK_COOLDOWN;
+    this.power -= powerCost;
+    this.attackCooldown = weaponProfile.attackCooldown ?? ATTACK_COOLDOWN;
     this.hud.playAttack();
+    this.fpvEquipmentRenderer?.playAttack(weaponProfile);
 
     const hit = this.dungeon.damageEnemyFromPlayerAttack?.({
       position: this.player.position,
       direction: this.player.getLookDirection(),
+      damage: weaponProfile.damage,
+      range: weaponProfile.attackRange,
+      weaponId: weaponProfile.id,
+      weaponProfile,
+      goreProfileId: weaponProfile.goreProfileId,
+      hitReactionType: weaponProfile.hitReactionType,
     });
+    this.equipmentRuntime?.emitAttack({ weaponProfile, hit });
 
     if (!hit) {
-      this.hud.showMessage('Your hands cut only stale air. Step closer and face the fiend.');
+      this.hud.showMessage(`${weaponProfile.displayName} cuts only stale air. Step closer and face the fiend.`);
       return;
     }
 

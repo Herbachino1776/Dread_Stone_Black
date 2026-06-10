@@ -1,8 +1,14 @@
 import * as THREE from 'three';
 import { Combat } from './Combat.js';
 import { DungeonScene } from './DungeonScene.js';
+import { EQUIPMENT_EVENTS } from '../engine/equipment/EquipmentEvents.js';
+import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
 import { Feedback } from './Feedback.js';
 import { FirstPersonArmsOverlay } from './FirstPersonArmsOverlay.js';
+import { EquipmentPanel } from './equipment/EquipmentPanel.js';
+import { equipmentRegistry } from './equipment/equipmentRegistry.js';
+import { startingEquipment } from './equipment/startingEquipment.js';
+import { FPVEquipmentRenderer } from './fpv/FPVEquipmentRenderer.js';
 import { GameState } from './GameState.js';
 import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
@@ -36,6 +42,12 @@ export class Game {
     const fieldSpawn = returnedFrom === 'black-grass-temple' ? 'blackGrassTempleExit' : returnedFrom === 'dungeon' ? 'cryptAExit' : 'start';
     const area = ['dungeon', 'black-grass-temple'].includes(requestedArea) ? requestedArea : 'field';
     this.gameState = new GameState();
+    this.equipmentRuntime = new EquipmentRuntime({
+      weaponProfiles: equipmentRegistry.weapons,
+      startingEquipment: this.gameState.getEquipmentSnapshot() ?? startingEquipment,
+    });
+    this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, () => this.saveEquipmentState());
+    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.saveEquipmentState());
     this.dungeon = new DungeonScene({ area, fieldSpawn, gameState: this.gameState });
     this.scene = this.dungeon.build();
     const movementProfile = this.dungeon.area === 'field'
@@ -54,9 +66,28 @@ export class Game {
     this.hud = new Hud(this.app);
     this.feedback = new Feedback(this.camera);
     this.armsOverlay = new FirstPersonArmsOverlay(this.app);
+    this.fpvEquipmentRenderer = new FPVEquipmentRenderer({
+      root: this.app,
+      armsOverlay: this.armsOverlay,
+      equipmentRuntime: this.equipmentRuntime,
+    });
     this.controls = new MobileControls(this.app);
-    this.interactions = new Interactions({ player: this.player, dungeon: this.dungeon, hud: this.hud, feedback: this.feedback });
-    this.combat = new Combat({ player: this.player, dungeon: this.dungeon, hud: this.hud, controls: this.controls });
+    this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime });
+    this.interactions = new Interactions({
+      player: this.player,
+      dungeon: this.dungeon,
+      hud: this.hud,
+      feedback: this.feedback,
+      equipmentRuntime: this.equipmentRuntime,
+    });
+    this.combat = new Combat({
+      player: this.player,
+      dungeon: this.dungeon,
+      hud: this.hud,
+      controls: this.controls,
+      equipmentRuntime: this.equipmentRuntime,
+      fpvEquipmentRenderer: this.fpvEquipmentRenderer,
+    });
 
     this.preventMobilePageGestures();
     window.addEventListener('resize', () => this.resize());
@@ -83,6 +114,10 @@ export class Game {
     }, 260);
   }
 
+  saveEquipmentState() {
+    this.gameState.saveEquipmentSnapshot(this.equipmentRuntime.getSnapshot());
+  }
+
   renderShell() {
     return `
       <main class="reliquary-shell" aria-label="Dread Stone Black handheld reliquary interface">
@@ -100,8 +135,20 @@ export class Game {
             <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
             <div class="first-person-arms" data-arms-overlay aria-hidden="true">
               <div class="first-person-arms__layer" data-arms-layer="base"></div>
+              <div class="first-person-weapon" data-fpv-equipment-layer hidden></div>
             </div>
             <div class="damage-flash" data-hud="damage" aria-hidden="true"></div>
+            <section class="equipment-panel" data-equipment-panel aria-label="Equipment" aria-hidden="true">
+              <div class="equipment-panel__header">
+                <div>
+                  <span class="equipment-panel__eyebrow">Equipment</span>
+                  <h2>Weapon Slot</h2>
+                </div>
+                <button class="equipment-close" data-equipment="close" type="button" aria-label="Close equipment">X</button>
+              </div>
+              <p class="equipment-current">Equipped: <strong data-equipment="current-weapon">Unarmed</strong></p>
+              <div class="equipment-list" data-equipment="weapon-list"></div>
+            </section>
           </div>
           <div class="viewport-ornament viewport-ornament-bottom" aria-hidden="true">◆</div>
         </section>
@@ -120,6 +167,7 @@ export class Game {
           <div class="action-cluster" aria-label="Action buttons">
             <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact">X</button>
             <button class="attack-button action-button" data-action="attack" type="button" aria-label="Attack">A</button>
+            <button class="equipment-button action-button" data-action="equipment" type="button" aria-label="Equipment">EQ</button>
           </div>
 
           <div class="stick-zone look-zone" data-control="look" aria-label="Look">

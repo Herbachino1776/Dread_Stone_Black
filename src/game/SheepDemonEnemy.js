@@ -508,13 +508,13 @@ export class SheepDemonEnemy {
     };
   }
 
-  receivePlayerAttack({ position, direction, damage = this.config.playerAttackDamage } = {}) {
+  receivePlayerAttack({ position, direction, damage = this.config.playerAttackDamage, range = this.config.playerAttackRange, goreProfileId = 'sword', weaponId = goreProfileId } = {}) {
     if (!this.group || this.behaviorState === 'dead') return null;
 
     const toEnemy = this.group.position.clone().sub(position);
     toEnemy.y = 0;
     const distance = toEnemy.length();
-    if (distance > this.config.playerAttackRange) return null;
+    if (distance > range) return null;
 
     const attackDirection = direction.clone();
     attackDirection.y = 0;
@@ -535,7 +535,7 @@ export class SheepDemonEnemy {
         damage,
         remainingHealth: 0,
         killed: true,
-        goreEvent: this.createGoreEventMetadata({ position, direction, damage, weaponId: 'sword' }),
+        goreEvent: this.createGoreEventMetadata({ position, direction, damage, weaponId }),
       };
     }
 
@@ -545,7 +545,7 @@ export class SheepDemonEnemy {
       damage,
       remainingHealth: this.health,
       killed: false,
-      goreEvent: this.createGoreEventMetadata({ position, direction, damage, weaponId: 'sword' }),
+      goreEvent: this.createGoreEventMetadata({ position, direction, damage, weaponId }),
     };
   }
 

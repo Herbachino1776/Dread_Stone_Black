@@ -1177,12 +1177,12 @@ class BlackGrassFactionEnemy {
     return { killed: false, remainingHealth: this.health, goreEvent: this.createGoreEventMetadata({ damage, sourceId: source, weaponId: 'claw' }) };
   }
 
-  receivePlayerAttack({ position, direction, damage = this.template.playerAttackDamage } = {}) {
+  receivePlayerAttack({ position, direction, damage = this.template.playerAttackDamage, range = this.template.playerAttackRange, goreProfileId = 'sword', weaponId = goreProfileId } = {}) {
     if (!this.isAlive) return null;
     const toEnemy = this.group.position.clone().sub(position);
     toEnemy.y = 0;
     const distance = toEnemy.length();
-    if (distance > this.template.playerAttackRange) return null;
+    if (distance > range) return null;
     const attackDirection = direction.clone();
     attackDirection.y = 0;
     if (attackDirection.lengthSq() > 0.001 && toEnemy.lengthSq() > 0.001) {
@@ -1199,7 +1199,7 @@ class BlackGrassFactionEnemy {
         damage,
         remainingHealth: 0,
         killed: true,
-        goreEvent: this.createGoreEventMetadata({ damage, sourceId: 'player', sourcePosition: position, direction, weaponId: 'sword' }),
+        goreEvent: this.createGoreEventMetadata({ damage, sourceId: 'player', sourcePosition: position, direction, weaponId }),
       };
     }
     return {
@@ -1207,7 +1207,7 @@ class BlackGrassFactionEnemy {
       damage,
       remainingHealth: this.health,
       killed: false,
-      goreEvent: this.createGoreEventMetadata({ damage, sourceId: 'player', sourcePosition: position, direction, weaponId: 'sword' }),
+      goreEvent: this.createGoreEventMetadata({ damage, sourceId: 'player', sourcePosition: position, direction, weaponId }),
     };
   }
 
