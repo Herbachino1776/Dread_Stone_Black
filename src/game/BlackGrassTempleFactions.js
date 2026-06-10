@@ -1259,6 +1259,7 @@ class BlackGrassFactionEnemy {
     this.currentTarget = null;
     this.group.userData.health = 0;
     this.group.userData.killedBy = source;
+    this.group.userData.bodyWoundsShouldClear = true;
     this.setBehaviorState('dead', { force: true });
     this.logCombatEvent('death', { maneuver: source, targetHp: 0 }, { force: true });
   }
@@ -1266,6 +1267,7 @@ class BlackGrassFactionEnemy {
   hideCorpse() {
     if (!this.group || this.isRemoved) return;
     this.group.visible = false;
+    this.group.userData.isRemoved = true;
     this.scene.remove(this.group);
     if (this.pathMarker) this.scene.remove(this.pathMarker);
     if (this.stuckMarker) this.scene.remove(this.stuckMarker);

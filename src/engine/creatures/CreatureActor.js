@@ -165,6 +165,7 @@ export class CreatureActor {
   }
 
   dispose() {
+    this.group.userData.disposed = true;
     this.animationSet.dispose();
     if (this.group.parent) this.group.parent.remove(this.group);
   }

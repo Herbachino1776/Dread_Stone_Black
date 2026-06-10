@@ -131,7 +131,8 @@ export class GoreRuntime {
         targetRoot: event.targetRoot,
         position: event.position,
         normal: event.direction.clone().multiplyScalar(-1),
-        creatureId: event.targetId ?? event.creatureId,
+        creatureId: event.creatureId,
+        targetId: event.targetId ?? event.creatureId,
         profile,
       });
     }
@@ -142,6 +143,7 @@ export class GoreRuntime {
   emitDeathGore(eventData) {
     const event = this.normalizeEvent({ ...eventData, type: GORE_EVENT_TYPES.KILL, hitStrength: eventData.hitStrength ?? 1.6 });
     const profile = this.resolveProfile(event);
+    this.clearBodyWoundsForEvent(event);
     if (this.isNearPlayer(event.position)) {
       this.particles.spawnBurst({
         position: event.position,
@@ -200,6 +202,27 @@ export class GoreRuntime {
 
     this.lastEvent = event;
     return { event, corpseId, bloodPoolId };
+  }
+
+  clearBodyWoundsForEvent(event) {
+    this.wounds.clearWoundsForObject(event.targetRoot);
+    if (event.targetId) {
+      this.wounds.clearWoundsForTarget(event.targetId);
+    } else if (!event.targetRoot) {
+      this.wounds.clearWoundsForTarget(event.creatureId);
+    }
+  }
+
+  clearWoundsForTarget(targetId) {
+    this.wounds.clearWoundsForTarget(targetId);
+  }
+
+  clearWoundsForObject(object) {
+    this.wounds.clearWoundsForObject(object);
+  }
+
+  disposeTargetWounds(targetId) {
+    this.wounds.disposeTargetWounds(targetId);
   }
 
   registerCorpse(corpseData) {
