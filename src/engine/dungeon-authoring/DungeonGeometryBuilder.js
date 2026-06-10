@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { asArray, resolveTextureProfile } from './DungeonDefinitionTypes.js';
+import { TorchFixture } from '../lighting/TorchFixture.js';
 
 function toVector3(value, fallbackY = 0) {
   return new THREE.Vector3(
@@ -213,8 +214,8 @@ function addProps({ definition, group, materialFactory }) {
   }).filter(Boolean);
 }
 
-function addLights({ definition, group, torchFactory }) {
-  return asArray(definition.lights).map((light) => {
+function addLights({ definition, group, lights, torchFactory }) {
+  return asArray(lights ?? definition.lights).map((light) => {
     let object = null;
     const position = toVector3(light.position, 1.6);
 
@@ -247,7 +248,30 @@ function addLights({ definition, group, torchFactory }) {
   }).filter(Boolean);
 }
 
-export function buildDungeonGeometry(definition, { materialFactory = null, torchFactory = null } = {}) {
+function addTorchFixtures({ group, torchFixtures }) {
+  return asArray(torchFixtures).map((fixture) => {
+    const torch = new TorchFixture(fixture);
+    torch.group.userData = {
+      ...torch.group.userData,
+      lightId: fixture.id,
+      generatedBy: 'TorchFixture',
+    };
+    group.add(torch.group);
+    return torch.group;
+  });
+}
+
+function collectPointLights(objects) {
+  const pointLights = [];
+  objects.forEach((object) => {
+    object?.traverse?.((child) => {
+      if (child.isPointLight && child.visible !== false) pointLights.push(child);
+    });
+  });
+  return pointLights;
+}
+
+export function buildDungeonGeometry(definition, { materialFactory = null, torchFactory = null, lightRegistry = null } = {}) {
   const group = new THREE.Group();
   group.name = `${definition.id}-compiled-runtime`;
   group.userData = {
@@ -258,7 +282,9 @@ export function buildDungeonGeometry(definition, { materialFactory = null, torch
 
   asArray(definition.rooms).forEach((room) => addRoomGeometry({ definition, group, room, materialFactory }));
   const props = addProps({ definition, group, materialFactory });
-  const lights = addLights({ definition, group, torchFactory });
+  const lights = addLights({ definition, group, lights: lightRegistry?.nonTorchLights, torchFactory });
+  const torchObjects = addTorchFixtures({ group, torchFixtures: lightRegistry?.torchFixtures });
+  const pointLights = collectPointLights([...lights, ...torchObjects]);
 
-  return { group, props, lights };
+  return { group, props, lights, torchObjects, pointLights };
 }

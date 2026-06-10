@@ -125,6 +125,25 @@ function prop(id, kind, roomId, x, y, z, width, height, depth, collisionRef, mat
   };
 }
 
+function torchFixture(id, roomId, wallSide, distanceAlongWall, profile = 'dungeonTorch', options = {}) {
+  return {
+    id,
+    kind: 'torch',
+    roomId,
+    wallSide,
+    distanceAlongWall,
+    height: options.height ?? 1.72,
+    insetFromCorner: options.insetFromCorner ?? 1.35,
+    offsetFromWall: options.offsetFromWall ?? 0.16,
+    profile,
+    visualKind: options.visualKind ?? 'procedural-sconce',
+    flameKind: options.flameKind ?? 'procedural-warm-flame',
+    debug: {
+      note: options.note ?? 'Black Grass Temple wall-mounted torch fixture',
+    },
+  };
+}
+
 export const blackGrassTempleDefinition = Object.freeze({
   id: 'black-grass-temple',
   displayName: 'Black Grass Temple',
@@ -272,13 +291,24 @@ export const blackGrassTempleDefinition = Object.freeze({
     },
   ],
 
+  torchFixtures: [
+    torchFixture('BGT_T01_entry_west_wall', 'R01', 'west', 14, 'weakTorch', { note: 'Entry stair pool, clear of field-return and vestibule doorways.' }),
+    torchFixture('BGT_T02_vestibule_west_wall', 'R02', 'west', 6, 'dungeonTorch'),
+    torchFixture('BGT_T03_vestibule_east_wall', 'R02', 'east', 10, 'dungeonTorch'),
+    torchFixture('BGT_T04_offering_west_wall', 'R03', 'west', 7, 'dungeonTorch', { note: 'Moved off the broken offering room centerline.' }),
+    torchFixture('BGT_T05_gate_hall_east_wall', 'R05', 'east', 17.5, 'strongTorch', { note: 'Reads the first gate hall without blocking the gate interaction.' }),
+    torchFixture('BGT_T06_tavern_west_wall', 'R06', 'west', 20, 'dungeonTorch'),
+    torchFixture('BGT_T07_tavern_east_wall', 'R06', 'east', 5, 'dungeonTorch'),
+    torchFixture('BGT_T08_service_loop_west_wall', 'R07', 'west', 19, 'weakTorch'),
+    torchFixture('BGT_T09_drinking_hall_west_wall', 'R08', 'west', 15, 'dungeonTorch'),
+    torchFixture('BGT_T10_drinking_hall_east_wall', 'R08', 'east', 15, 'dungeonTorch'),
+    torchFixture('BGT_T11_reliquary_hall_west_wall', 'R11', 'west', 12, 'ritualTorch'),
+    torchFixture('BGT_T12_reliquary_hall_east_wall', 'R11', 'east', 12, 'ritualTorch'),
+  ],
+
   lights: [
     { id: 'bgt_ambient_hemi', kind: 'ambient', skyColor: 0x80786b, groundColor: 0x211b16, intensity: 1.05 },
     { id: 'bgt_warm_directional_fill', kind: 'directional', color: 0xd0b18a, intensity: 0.35, position: { x: 8, y: 6, z: -10 } },
-    ...[
-      ['T01', 0, 1.55, -61], ['T02', -8, 1.55, -50], ['T03', 8, 1.55, -50], ['T04', 0, 1.65, -34], ['T05', 27, 1.65, -20],
-      ['T06', -18, 1.55, 0], ['T07', 18, 1.55, 0], ['T08', -25, 1.55, 28], ['T09', 25, 1.55, 28], ['T10', -15, 1.65, 62], ['T11', 15, 1.65, 62],
-    ].map(([id, x, y, z]) => ({ id, kind: 'torch', position: { x, y, z }, rotationY: x < 0 ? Math.PI / 2 : -Math.PI / 2, color: 0xffa85a, intensity: 2.65, distance: 8.4, roomId: null })),
     { id: 'T12_black_grass_sanctum_cold_fill', kind: 'point', color: 0x9fb7c8, intensity: 1.25, distance: 18, decay: 1.2, position: { x: 0, y: 1.6, z: 82 }, roomId: 'R12' },
   ],
 

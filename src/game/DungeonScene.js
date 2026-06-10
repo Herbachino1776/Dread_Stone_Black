@@ -4,6 +4,7 @@ import { DungeonDebugRenderer } from '../engine/dungeon-authoring/DungeonDebugRe
 import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRuntimeRegistry.js';
 import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
 import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
+import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
 import { CollisionWorld } from './Collision.js';
 import { BlackGrassTempleFactionManager } from './BlackGrassTempleFactions.js';
 import { SheepDemonEnemy } from './SheepDemonEnemy.js';
@@ -249,8 +250,8 @@ export class DungeonScene {
       getRoomIdForPosition: (position) => this.findRoomIdForPosition(position),
       getFloorYForPosition: (position) => this.getFloorYForPosition(position),
     });
+    this.torchFlickerController = new TorchFlickerController();
     this.torchLights = [];
-    this.lightTime = 0;
     this.gateBlocker = { minX: 10.72, maxX: 11.28, minZ: -10.85, maxZ: -5.15 };
     const indoorWallBlockers = babyLabyrinthWallBlockerRects();
     const indoorWalkableRects = [
@@ -452,8 +453,7 @@ export class DungeonScene {
       }
     }
 
-    this.lightTime += deltaSeconds;
-    this.updateTorchFlicker();
+    this.updateTorchFlicker(deltaSeconds);
     this.updateRamManNpcPatrol(deltaSeconds);
     this.updateBlackGrassFactionEnemies(deltaSeconds, player);
     this.updateSheepDemonEnemy(deltaSeconds, player);
@@ -876,6 +876,7 @@ export class DungeonScene {
       runtime.definition.fog?.far ?? 58,
     );
     this.scene.add(runtime.group);
+    this.torchFlickerController.registerFromObject(runtime.group);
     this.reliquaryBlock = runtime.group.getObjectByName('BGT-P14-central-reliquary-block');
     this.dungeonDebugRenderer = new DungeonDebugRenderer({ scene: this.scene, runtime });
     this.addBlackGrassTempleEnemies();
@@ -1243,12 +1244,21 @@ export class DungeonScene {
     const glow = new THREE.PointLight(INDOOR_TORCH_COLOR, INDOOR_TORCH_INTENSITY, INDOOR_TORCH_DISTANCE, INDOOR_TORCH_DECAY);
     glow.position.copy(flame.position);
     group.add(glow);
+    const phase = this.torchLights.length * 1.93;
     this.torchLights.push({
       light: glow,
       flame,
       baseIntensity: glow.intensity,
       baseDistance: glow.distance,
-      phase: this.torchLights.length * 1.93,
+      phase,
+    });
+    this.torchFlickerController.registerFixture({
+      pointLight: glow,
+      flame,
+      baseIntensity: glow.intensity,
+      baseDistance: glow.distance,
+      phase,
+      profile: { flickerAmount: 0.11, flickerSpeed: 1 },
     });
 
     return group;
@@ -1350,17 +1360,8 @@ export class DungeonScene {
   }
 
 
-  updateTorchFlicker() {
-    this.torchLights.forEach(({ light, flame, baseIntensity, baseDistance, phase }) => {
-      const slowPulse = Math.sin(this.lightTime * 7.5 + phase) * 0.11;
-      const fastPulse = Math.sin(this.lightTime * 18.0 + phase * 2.7) * 0.055;
-      const emberPulse = Math.sin(this.lightTime * 31.0 + phase * 0.6) * 0.025;
-      const flicker = THREE.MathUtils.clamp(1 + slowPulse + fastPulse + emberPulse, 0.78, 1.18);
-
-      light.intensity = baseIntensity * flicker;
-      light.distance = baseDistance * THREE.MathUtils.clamp(0.96 + (flicker - 1) * 0.35, 0.9, 1.05);
-      flame.scale.setScalar(THREE.MathUtils.clamp(0.94 + (flicker - 1) * 0.28, 0.9, 1.05));
-    });
+  updateTorchFlicker(deltaSeconds) {
+    this.torchFlickerController.update(deltaSeconds);
   }
 
 
