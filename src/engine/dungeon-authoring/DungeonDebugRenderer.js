@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { TorchDebugRenderer } from '../lighting/TorchDebugRenderer.js';
 
-const DEBUG_LAYERS = Object.freeze(['all', 'rooms', 'blockers', 'nav', 'spawns', 'encounters', 'exits']);
+const DEBUG_LAYERS = Object.freeze(['all', 'rooms', 'blockers', 'nav', 'spawns', 'encounters', 'exits', 'torches']);
 
 function rectMesh(rect, color, y = 0.035, opacity = 0.18) {
   const width = rect.maxX - rect.minX;
@@ -128,6 +129,9 @@ export class DungeonDebugRenderer {
       mesh.userData = { locationId: this.runtime.locationId, exitId: exit.id, devOnly: true };
       this.layers.exits.add(mesh);
     });
+
+    const torchDebug = new TorchDebugRenderer({ runtime: this.runtime });
+    this.layers.torches.add(torchDebug.group);
 
     this.playerMarker = marker(new THREE.Vector3(), 0xffffff, 0.42);
     this.playerMarker.name = `${this.runtime.locationId}-debug-player-position`;

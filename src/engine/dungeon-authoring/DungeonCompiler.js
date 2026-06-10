@@ -5,6 +5,8 @@ import { buildDungeonNavigation } from './DungeonNavigationBuilder.js';
 import { buildDungeonSpawns } from './DungeonSpawnBuilder.js';
 import { asArray } from './DungeonDefinitionTypes.js';
 import { logDungeonValidation, validateDungeonDefinition } from './DungeonValidation.js';
+import { buildLightObjectRegistry } from '../lighting/LightObjectRegistry.js';
+import { validateTorchPlacements } from '../lighting/TorchPlacementValidator.js';
 
 function toVector3(value, fallbackY = 0) {
   return new THREE.Vector3(
@@ -49,7 +51,16 @@ function normalizeExits(definition) {
 }
 
 export function compileDungeonLocation(definition, options = {}) {
-  const validation = validateDungeonDefinition(definition, options.validation ?? {});
+  const baseValidation = validateDungeonDefinition(definition, options.validation ?? {});
+  const lightRegistry = buildLightObjectRegistry(definition, options.lightRegistry ?? {});
+  const fixtureValidation = validateTorchPlacements(definition, lightRegistry.torchFixtures);
+  const validation = {
+    ...baseValidation,
+    errors: [...baseValidation.errors, ...fixtureValidation.errors],
+    warnings: [...baseValidation.warnings, ...fixtureValidation.warnings],
+    ok: baseValidation.errors.length + fixtureValidation.errors.length === 0,
+    fixtureValidation,
+  };
   if (import.meta.env?.DEV && options.logValidation !== false) {
     logDungeonValidation(validation);
   }
@@ -57,6 +68,7 @@ export function compileDungeonLocation(definition, options = {}) {
   const geometry = buildDungeonGeometry(definition, {
     materialFactory: options.materialFactory,
     torchFactory: options.torchFactory,
+    lightRegistry,
   });
   const collision = buildDungeonCollision(definition);
   const navGraph = buildDungeonNavigation(definition);
@@ -79,6 +91,11 @@ export function compileDungeonLocation(definition, options = {}) {
     encounterZones,
     exits,
     lights: geometry.lights,
+    lightFixtures: lightRegistry.lightFixtures,
+    torchFixtures: lightRegistry.torchFixtures,
+    pointLights: geometry.pointLights,
+    fixtureValidation,
+    lightBudget: lightRegistry.budget,
     props: geometry.props,
     debugData: {
       rooms: asArray(definition.rooms),
@@ -87,6 +104,8 @@ export function compileDungeonLocation(definition, options = {}) {
       spawnAnchors,
       encounterZones,
       exits,
+      torchFixtures: lightRegistry.torchFixtures,
+      fixtureValidation,
     },
     validation,
   };
@@ -99,6 +118,8 @@ export function compileDungeonLocation(definition, options = {}) {
     validation: {
       errors: validation.errors.length,
       warnings: validation.warnings.length,
+      fixtureErrors: fixtureValidation.errors.length,
+      fixtureWarnings: fixtureValidation.warnings.length,
     },
   };
 

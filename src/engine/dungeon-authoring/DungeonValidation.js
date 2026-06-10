@@ -81,6 +81,8 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     { label: 'encounterZones', items: encounterZones },
     { label: 'exits', items: exits },
     { label: 'lights', items: definition.lights },
+    { label: 'lightFixtures', items: definition.lightFixtures },
+    { label: 'torchFixtures', items: definition.torchFixtures },
   ], errors);
 
   rooms.forEach((room) => {
