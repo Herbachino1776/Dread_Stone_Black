@@ -61,6 +61,30 @@ const requiredChecks = [
     ok: (blackGrassTempleDefinition.encounterZones ?? []).every((zone) => (zone.roomIds ?? []).every((roomId) => rooms.has(roomId))),
     message: 'one or more encounter zones reference missing rooms',
   },
+  {
+    ok: blackGrassTempleObjectives.every((objective) => objective.silent === true && objective.visible === false),
+    message: 'BGT objectives must remain silent and hidden in normal gameplay',
+  },
+  {
+    ok: blackGrassTempleObjectives.every((objective) => [
+      ...(objective.actionsOnStart ?? []),
+      ...(objective.actionsOnComplete ?? []),
+      ...(objective.steps ?? []).flatMap((step) => [...(step.actionsOnStart ?? []), ...(step.actionsOnComplete ?? [])]),
+    ].every((action) => !['showToast', 'showLocationMessage', 'markObjectiveVisible'].includes(action.type))),
+    message: 'BGT objectives must not include production-facing objective text actions',
+  },
+  {
+    ok: (blackGrassTempleDefinition.interactions ?? []).every((interaction) => (
+      !interaction.id.startsWith('BGT_')
+      || [interaction.hint, interaction.message, interaction.acquiredMessage, interaction.repeatHint, interaction.repeatMessage]
+        .every((value) => value === undefined || value === null || value === '')
+    )),
+    message: 'BGT interactions must not author visible hint/message copy',
+  },
+  {
+    ok: (blackGrassTempleDefinition.interactions ?? []).find((interaction) => interaction.id === 'BGT_INT_RUSTED_SWORD_CHEST')?.autoEquip === true,
+    message: 'rusted sword chest should silently auto-equip for non-text feedback',
+  },
 ];
 
 requiredChecks.forEach((check) => {

@@ -5,6 +5,7 @@ const objectivePacks = Object.freeze({
   [blackGrassTempleObjectivePackId]: Object.freeze({
     id: blackGrassTempleObjectivePackId,
     locationId: 'black-grass-temple',
+    silent: true,
     definitions: blackGrassTempleObjectives,
   }),
   [southReliquaryCryptObjectivePackId]: Object.freeze({

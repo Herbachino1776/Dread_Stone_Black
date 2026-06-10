@@ -1,11 +1,13 @@
 export class ObjectivePanel {
-  constructor({ root, objectiveRuntime }) {
+  constructor({ root, objectiveRuntime, enabled = false }) {
     this.root = root;
     this.objectiveRuntime = objectiveRuntime;
+    this.enabled = enabled;
     this.viewport = root.querySelector('[data-game="viewport"]');
     this.toastTimer = null;
     this.isExpanded = false;
 
+    if (!this.enabled) return;
     this.mount();
     this.bindEvents();
     this.render();

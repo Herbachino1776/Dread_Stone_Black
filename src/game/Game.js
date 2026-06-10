@@ -45,6 +45,7 @@ export class Game {
     const query = new URLSearchParams(window.location.search);
     const requestedArea = query.get('area');
     const returnedFrom = query.get('from');
+    const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
     const fieldSpawn = returnedFrom === 'black-grass-temple' ? 'blackGrassTempleExit' : returnedFrom === 'dungeon' ? 'cryptAExit' : 'start';
     const area = ['dungeon', 'black-grass-temple'].includes(requestedArea) ? requestedArea : 'field';
     this.gameState = new GameState();
@@ -83,6 +84,7 @@ export class Game {
     this.objectivePanel = new ObjectivePanel({
       root: this.app,
       objectiveRuntime: this.objectiveRuntime,
+      enabled: objectiveDebugUiEnabled,
     });
     this.fpvEquipmentRenderer = new FPVEquipmentRenderer({
       root: this.app,
@@ -136,11 +138,9 @@ export class Game {
         resolveMessage: resolveObjectiveMessage,
         showToast: (message) => {
           this.objectivePanel?.showToast(message);
-          this.hud?.showMessage(message);
         },
         showLocationMessage: (message) => {
           this.objectivePanel?.showToast(message);
-          this.hud?.showMessage(message);
         },
       },
       validation: this.createObjectiveValidationContext(),
@@ -171,6 +171,7 @@ export class Game {
     if (!pack) return;
     this.objectiveRuntime.registerLocationObjectives(pack.locationId, pack.definitions, {
       objectivePackId: pack.id,
+      silent: pack.silent,
     });
   }
 

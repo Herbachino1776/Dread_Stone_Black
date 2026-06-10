@@ -18,6 +18,7 @@ export function defineObjective(definition) {
     repeatable: false,
     visible: true,
     hidden: false,
+    silent: false,
     failureConditions: [],
     rewards: [],
     tags: [],
@@ -30,6 +31,7 @@ export function defineObjective(definition) {
       actionsOnStart: [],
       actionsOnComplete: [],
       tags: [],
+      silent: definition.silent ?? false,
       ...step,
     }))),
   });

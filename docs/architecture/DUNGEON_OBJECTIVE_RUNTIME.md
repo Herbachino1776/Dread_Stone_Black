@@ -13,6 +13,8 @@ The runtime currently supports:
 - simple actions such as flags, toasts, visibility, and objective chaining
 - localStorage snapshot persistence through `GameState`
 
+Objectives are progression state first. They are not mandatory HUD text. Normal Dread Stone Black gameplay should avoid quest checklists, objective boxes, and instructional step prompts unless a future mode explicitly asks for that surface.
+
 ## Files
 
 Engine:
@@ -51,6 +53,7 @@ defineObjective({
   description: 'The temple asks for a hand that can answer iron.',
   visible: true,
   hidden: false,
+  silent: false,
   repeatable: false,
   tags: ['proof', 'equipment'],
   startEvents: [{ type: 'location_entered', locationId: 'black-grass-temple' }],
@@ -89,8 +92,11 @@ Steps are also data only. No scripting language is used.
   enemyId: null,
   factionId: null,
   tags: ['interaction', 'equipment'],
+  silent: false,
 }
 ```
+
+`silent: true` can be set on an objective, step, or objective pack. Silent objectives still start, complete, set flags, persist state, and evaluate conditions. They do not become visible active objectives, and visual objective actions such as `showToast`, `showLocationMessage`, and `markObjectiveVisible` are skipped.
 
 ## Event Model
 
@@ -195,15 +201,13 @@ The snapshot includes:
 
 The snapshot is saved when objective events or objective transitions occur. It rides alongside the existing equipment snapshot and existing South Reliquary flags.
 
-## UI Feedback
+## UI And Debug Feedback
 
-`ObjectivePanel` adds:
+`ObjectivePanel` is an optional debug/development surface, not a production quest HUD. Normal gameplay does not mount the panel or objective toasts by default.
 
-- a compact active objective readout inside the viewport
-- objective toasts for starts and completions
-- a collapsible detail view toggled by tapping the readout or pressing `O`
+When enabled for development with `?objectiveDebug=1`, it can show non-silent active objectives and toasts. Silent objectives are still best inspected through the console debug API.
 
-It does not add a full quest journal and does not add more mobile control buttons.
+The production guidance is: communicate through space, light, props, enemy staging, interaction behavior, equipment changes, and combat feedback before adding text.
 
 ## Equipment Integration
 
@@ -228,15 +232,16 @@ export const blackGrassTempleDefinition = Object.freeze({
 
 `Game` resolves the current location id, asks `objectiveRegistry` for the pack, registers it with `ObjectiveRuntime`, then emits `location_entered` and `room_entered`.
 
-## Black Grass Temple Proof Objectives
+## Black Grass Temple Silent Objectives
 
-Black Grass Temple has a conservative proof chain:
+Black Grass Temple has a conservative silent proof chain:
 
 - `bgt_arm_yourself`: enter the temple, reach the Broken Offering Room, take the rusted sword, equip it
 - `bgt_blood_the_blade`: damage or kill Sheep Demon or Neck Man with `rusted_sword`
 - `bgt_survive_warring_temple`: enter the first deeper tavern room after the blade is blooded
+- `bgt_touch_silent_altar`: optional silent altar interaction state
 
-No objective blocks exiting the temple. No gate or encounter lock was added.
+No objective blocks exiting the temple. No gate or encounter lock was added. These objectives are hidden state for future progression logic; the player should discover the route from the authored room composition, torch pools, chest placement, FPV weapon change, and faction conflict.
 
 ## South Reliquary Crypt Partial Objectives
 
@@ -262,7 +267,7 @@ In Vite dev mode:
 
 - objective transitions log once
 - `window.dreadStoneObjectiveRuntime` exposes the runtime
-- `window.dreadStoneObjectiveDebug()` returns active objectives, completed objectives, flags, last event, current pack, and step states
+- `window.dreadStoneObjectiveDebug()` returns active objectives, visible active objectives, silent active objectives, completed objectives, flags, last event, current pack, and step states
 
 There is no per-frame objective logging.
 

@@ -1,4 +1,5 @@
 import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
+import { EQUIPMENT_SLOTS } from '../engine/equipment/EquipmentSlot.js';
 
 const INTERACT_RANGE = 3.0;
 const KEY_RANGE = 2.55;
@@ -48,7 +49,7 @@ export class Interactions {
     const indoorExit = this.getNearbyIndoorExit();
     if (indoorExit) {
       return {
-        hint: this.dungeon.area === 'black-grass-temple' ? 'Tap INTERACT to climb back to Reliquary Field.' : 'Tap INTERACT to climb back to the tomb-field.',
+        hint: this.dungeon.area === 'black-grass-temple' ? '' : 'Tap INTERACT to climb back to the tomb-field.',
         use: () => this.useIndoorExit(),
       };
     }
@@ -132,7 +133,7 @@ export class Interactions {
 
   useIndoorExit() {
     const fromArea = this.dungeon.area === 'black-grass-temple' ? 'black-grass-temple' : 'dungeon';
-    const hint = this.dungeon.area === 'black-grass-temple' ? 'The field air waits above.' : 'Cold field air seeps down the stair.';
+    const hint = this.dungeon.area === 'black-grass-temple' ? '' : 'Cold field air seeps down the stair.';
     this.setTemporaryHint(hint, 900);
     this.emitObjectiveEvent(OBJECTIVE_EVENTS.locationExited, {
       interactionId: `${this.getLocationId()}_exit`,
@@ -188,6 +189,9 @@ export class Interactions {
       source: interaction.id,
       tags: ['pickup', this.dungeon.area],
     });
+    if (interaction.autoEquip === true) {
+      this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, interaction.itemId);
+    }
     this.emitObjectiveEvent(OBJECTIVE_EVENTS.chestOpened, {
       interactionId: interaction.id,
       itemId: interaction.itemId,
