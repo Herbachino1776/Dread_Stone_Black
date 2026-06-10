@@ -36,8 +36,20 @@ export class ObjectiveRuntime {
     this.callbacks[eventName]?.(payload);
   }
 
-  registerLocationObjectives(locationId, definitions, { objectivePackId = null, validation = {} } = {}) {
-    const normalizedDefinitions = definitions ?? [];
+  registerLocationObjectives(locationId, definitions, { objectivePackId = null, validation = {}, silent = false } = {}) {
+    const normalizedDefinitions = (definitions ?? []).map((definition) => {
+      const definitionIsSilent = definition.silent ?? silent;
+      return {
+        ...definition,
+        silent: definitionIsSilent,
+        visible: definitionIsSilent ? false : definition.visible,
+        hidden: definitionIsSilent ? true : definition.hidden,
+        steps: (definition.steps ?? []).map((step) => ({
+          ...step,
+          silent: step.silent ?? definitionIsSilent,
+        })),
+      };
+    });
     const result = validateObjectiveDefinitions(normalizedDefinitions, {
       ...this.validationOptions,
       ...validation,
@@ -75,9 +87,9 @@ export class ObjectiveRuntime {
     }
 
     state.status = OBJECTIVE_STATUS.active;
-    state.visible = options.visible ?? definition.visible ?? !definition.hidden;
+    state.visible = definition.silent ? false : (options.visible ?? definition.visible ?? !definition.hidden);
     state.startedAt = Date.now();
-    this.fireActions(definition.actionsOnStart, { objectiveId });
+    this.fireActions(definition.actionsOnStart, { objectiveId, definition, silent: definition.silent });
     this.activateNextStep(definition, state);
     this.logTransition(`start:${objectiveId}`, `Objective started: ${objectiveId}`);
     this.notify('objectiveChanged', { type: 'objective_started', definition, state });
@@ -90,19 +102,21 @@ export class ObjectiveRuntime {
     if (!definition || !state || state.status === OBJECTIVE_STATUS.complete) return false;
 
     state.status = OBJECTIVE_STATUS.complete;
-    state.visible = true;
+    state.visible = definition.silent ? false : true;
     state.completedAt = Date.now();
-    this.fireActions(definition.actionsOnComplete, { objectiveId });
+    this.fireActions(definition.actionsOnComplete, { objectiveId, definition, silent: definition.silent });
     this.logTransition(`complete:${objectiveId}`, `Objective complete: ${objectiveId}`);
     this.notify('objectiveChanged', { type: 'objective_completed', definition, state });
     return true;
   }
 
   markObjectiveVisible(objectiveId) {
+    const definition = this.definitions.get(objectiveId);
+    if (definition?.silent) return false;
     const state = this.objectiveStates.get(objectiveId);
     if (!state) return false;
     state.visible = true;
-    this.notify('objectiveChanged', { type: 'objective_visible', state, definition: this.definitions.get(objectiveId) });
+    this.notify('objectiveChanged', { type: 'objective_visible', state, definition });
     return true;
   }
 
@@ -163,7 +177,7 @@ export class ObjectiveRuntime {
     const stepState = state.stepStates[nextStep.id];
     stepState.status = OBJECTIVE_STATUS.active;
     stepState.startedAt = Date.now();
-    this.fireActions(nextStep.actionsOnStart, { objectiveId: definition.id, stepId: nextStep.id });
+    this.fireActions(nextStep.actionsOnStart, { objectiveId: definition.id, stepId: nextStep.id, definition, step: nextStep, silent: definition.silent || nextStep.silent });
     this.logTransition(`step-start:${definition.id}:${nextStep.id}`, `Objective step started: ${definition.id}/${nextStep.id}`);
     this.notify('objectiveChanged', { type: 'step_started', definition, state, step: nextStep, stepState });
     return true;
@@ -174,7 +188,7 @@ export class ObjectiveRuntime {
     if (!stepState || stepState.status === OBJECTIVE_STATUS.complete) return false;
     stepState.status = OBJECTIVE_STATUS.complete;
     stepState.completedAt = Date.now();
-    this.fireActions(step.actionsOnComplete, { objectiveId: definition.id, stepId: step.id });
+    this.fireActions(step.actionsOnComplete, { objectiveId: definition.id, stepId: step.id, definition, step, silent: definition.silent || step.silent });
     this.logTransition(`step-complete:${definition.id}:${step.id}`, `Objective step complete: ${definition.id}/${step.id}`);
     this.notify('objectiveChanged', { type: 'step_completed', definition, state, step, stepState });
     this.activateNextStep(definition, state);
@@ -192,6 +206,7 @@ export class ObjectiveRuntime {
 
   fireActions(actions = [], metadata = {}) {
     actions.forEach((action) => {
+      if (metadata.silent && ['showToast', 'showLocationMessage', 'markObjectiveVisible'].includes(action.type)) return;
       executeObjectiveAction(action, {
         runtime: this,
         facts: this.facts,
@@ -235,6 +250,7 @@ export class ObjectiveRuntime {
   getActiveObjectives() {
     return [...this.objectiveStates.values()]
       .filter((state) => this.definitions.has(state.id) && state.status === OBJECTIVE_STATUS.active && state.visible)
+      .filter((state) => !this.definitions.get(state.id)?.silent)
       .map((state) => ({
         ...this.definitions.get(state.id),
         state,

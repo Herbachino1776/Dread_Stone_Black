@@ -6,6 +6,8 @@ Black Grass Temple v0.2 turns the compiled dungeon slice into the first serious 
 
 The intended feel is a buried stone temple swallowed by black subterranean grass. The player should understand where they entered, find the rusted sword, see Sheep Demon and Neck Man conflict, survive a widening route through hostile ritual rooms, and still be able to return to the field.
 
+The v0.2 correction pass makes that sequence diegetic. Objectives remain internal progression state, but normal play should not show quest boxes, checklist steps, objective-complete toasts, or instructional chest text.
+
 ## Playable Path
 
 1. Enter from Reliquary Field through the west-edge temple mouth.
@@ -39,18 +41,18 @@ The path is still dungeon-like, with branches and side rooms, but the torch pool
 
 ## Objective Sequence
 
-- Arm Yourself starts when entering Black Grass Temple. It asks the player to find the Broken Offering Room, open the rusted sword chest, and equip the Rusted Sword.
-- Blood the Blade starts after the Rusted Sword is equipped. It completes on a stable existing combat event against Sheep Demon or Neck Man.
-- Enter the Deeper Grass Hall starts after the blade is blooded. It completes when the player reaches the Black Grass Hall or Warring Crossing.
-- Touch the Silent Altar is optional. It starts when R12 is visited and completes when the existing silent altar inspect interaction is used.
+- Arm Yourself starts when entering Black Grass Temple and silently tracks the Broken Offering Room, rusted sword acquisition, and weapon equip state.
+- Blood the Blade starts after the Rusted Sword is equipped and silently completes on a stable existing combat event against Sheep Demon or Neck Man.
+- Enter the Deeper Grass Hall starts after the blade is blooded and silently completes when the player reaches the Black Grass Hall or Warring Crossing.
+- Touch the Silent Altar is optional silent state. It starts when R12 is visited and completes when the existing altar inspect interaction is used.
 
-No objective blocks exiting the temple. No objective depends on exact faction AI outcomes.
+No objective blocks exiting the temple. No objective depends on exact faction AI outcomes. BGT objectives should remain `silent: true`, hidden, and free of production-facing `showToast` or location-message actions.
 
 ## Equipment And Chest Placement
 
 The rusted sword chest remains the existing `equipmentPickup` interaction for `rusted_sword`. It moved to the southwest offering niche in R03, clear of the central doorway line and the early faction spawn paths. A strong south-wall torch and a black grass floor patch frame it visually.
 
-The interaction still emits `chest_opened`, acquires `rusted_sword`, updates the chest state, and lets the equipment panel and FPV weapon renderer react through the existing equipment runtime.
+The interaction still emits `chest_opened`, acquires `rusted_sword`, updates the chest state, and lets the equipment panel and FPV weapon renderer react through the existing equipment runtime. The chest uses blank authored hint/message fields in normal play and silently auto-equips the sword so the FPV weapon change carries the feedback.
 
 ## Faction Encounter Staging
 
@@ -84,17 +86,20 @@ Ambient and directional fill were reduced so the dungeon does not read as fullbr
 - The gate-watch torch was moved off the return doorway after validation caught it in the doorway center.
 - The return-route torch was moved away from the D19 doorway clearance.
 - Existing player exit trigger remains in R01 and keeps the route back to Reliquary Field available.
+- BGT inspect/chest/gate/altar authored hint and message fields are blank for normal gameplay; their interaction events still fire.
 
 ## Environmental Storytelling
 
-The pass adds short, physical storytelling beats rather than long text:
+The pass adds physical storytelling beats rather than normal HUD text:
 
 - black grass creeping at the entry, chest niche, Warring Crossing, Lower Rooted Room, and silent altar
 - empty offering stones around the broken slab
 - a cracked west shrine and Neck Man scratch stone
 - pale bone markers in side threat pockets
 - old blood smears near faction pressure spaces
-- concise inspect text at the chest, altar, gate, return mark, and sealed root gate
+- silent inspect surfaces at the chest, altar, gate, return mark, and sealed root gate
+
+Future BGT prompts should prefer environmental contrast, light, object state, weapon visuals, and enemy behavior over text.
 
 ## Validation
 
@@ -105,6 +110,10 @@ Added `npm run validate:bgt`, which checks:
 - objective id/reference validation
 - rusted sword chest interaction and prop presence
 - `rusted_sword` item registry presence
+- BGT objective silence and hidden-state policy
+- absence of BGT production-facing objective text actions
+- absence of BGT authored interaction hint/message copy
+- silent auto-equip on the rusted sword chest
 - player start and field-return exit presence
 - encounter-zone room references
 

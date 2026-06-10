@@ -1,6 +1,11 @@
 export function createObjectiveDebugInfo(runtime) {
+  const activeStates = [...runtime.objectiveStates.values()].filter((state) => state.status === 'active');
   return {
-    activeObjectives: runtime.getActiveObjectives().map((objective) => objective.id),
+    activeObjectives: activeStates.map((state) => state.id),
+    visibleActiveObjectives: runtime.getActiveObjectives().map((objective) => objective.id),
+    silentActiveObjectives: activeStates
+      .filter((state) => runtime.definitions.get(state.id)?.silent)
+      .map((state) => state.id),
     completedObjectives: [...runtime.objectiveStates.values()]
       .filter((state) => state.status === 'complete')
       .map((state) => state.id),

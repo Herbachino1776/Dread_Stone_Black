@@ -19,6 +19,7 @@ function normalizeMessage(message) {
 
 export function executeObjectiveAction(action, context = {}) {
   if (!action) return false;
+  if (context.silent && ['showToast', 'showLocationMessage', 'markObjectiveVisible'].includes(action.type)) return false;
   const runtime = context.runtime;
   const callbacks = context.callbacks ?? {};
   const facts = context.facts;
