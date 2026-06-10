@@ -425,6 +425,15 @@ function rotateHorizontal(vector, radians) {
   );
 }
 
+function toVector3(value, fallbackY = 0) {
+  if (value instanceof THREE.Vector3) return value.clone();
+  return new THREE.Vector3(
+    Number(value?.x ?? value?.[0] ?? 0),
+    Number(value?.y ?? value?.[1] ?? fallbackY),
+    Number(value?.z ?? value?.[2] ?? 0),
+  );
+}
+
 
 class BlackGrassFactionEnemy {
   constructor({ scene, collision, navigationGraph = null, species, id, spawnAnchor, patrolPoints = null, onLoaded = null }) {
@@ -1790,7 +1799,7 @@ class BlackGrassFactionEnemy {
 }
 
 export class BlackGrassTempleFactionManager {
-  constructor({ scene, collision, anchors, navigationGraph = null }) {
+  constructor({ scene, collision, anchors, navigationGraph = null, encounterZones = null }) {
     this.scene = scene;
     this.collision = collision;
     this.anchors = anchors;
@@ -1801,7 +1810,7 @@ export class BlackGrassTempleFactionManager {
     this.devStatusElapsed = 0;
     this.nearbyCombatQuietSeconds = 0;
     this.initialWaveSpawned = false;
-    this.encounterZones = this.createEncounterZones();
+    this.encounterZones = this.createEncounterZones(encounterZones);
     this.maxActiveByFaction = MAX_ACTIVE_BY_FACTION;
     this.respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS;
     this.userData = {
@@ -1862,7 +1871,21 @@ export class BlackGrassTempleFactionManager {
     };
   }
 
-  createEncounterZones() {
+  createEncounterZones(authoredZones = null) {
+    if (authoredZones?.length) {
+      return Object.freeze(authoredZones.map((zone) => Object.freeze({
+        id: zone.id,
+        label: zone.label ?? zone.id,
+        roomIds: Object.freeze([...(zone.roomIds ?? [])]),
+        center: toVector3(zone.center),
+        sheepOffset: toVector3(zone.userData?.sheepOffset ?? { x: -5, y: 0, z: 0 }),
+        neckOffset: toVector3(zone.userData?.neckOffset ?? { x: 5, y: 0, z: 0 }),
+        radius: zone.radius,
+        weight: zone.weight,
+        actionBubblePriority: zone.actionBubblePriority,
+      })));
+    }
+
     const roomCenter = (roomId, fallback) => this.navigationGraph?.rooms?.[roomId]?.center?.clone?.() ?? fallback;
     return Object.freeze([
       { id: 'early_first_branch', label: 'early battle zone near first branch', roomIds: ['R02', 'R03'], center: new THREE.Vector3(0, 0, -47), sheepOffset: new THREE.Vector3(-5.5, 0, -1.5), neckOffset: new THREE.Vector3(5.5, 0, 1.5) },
