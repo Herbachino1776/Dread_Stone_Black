@@ -237,6 +237,7 @@ export const blackGrassTempleDefinition = Object.freeze({
     prop('BGT-P14-central-reliquary-block', 'reliquary', 'R12', 0, 0.8, 82, 6, 1.6, 3, 'BGT_CENTRAL_RELIQUARY_BLOCK'),
     prop('BGT-P15-sealed-future-gate', 'gate', 'R13', 0, 1.6, 94, 8, 3.2, 0.45, 'BGT_SEALED_NORTH_GATE', 'gate'),
     prop('BGT-G01-first-gate-inspect-rusted-metal', 'gate', 'R05', 30, 1.6, -20, 0.45, 3.2, 8, null, 'gate'),
+    prop('BGT-P16-rusted-sword-chest-placeholder', 'equipment_chest', 'R03', -10.8, 0.42, -34.8, 1.55, 0.84, 1.05, null, 'propStone'),
   ],
 
   spawns: [
@@ -314,6 +315,19 @@ export const blackGrassTempleDefinition = Object.freeze({
 
   interactions: [
     { id: 'BGT_INT03', target: { x: 0, y: 1.2, z: -32 }, range: 3.0, hint: 'Tap INTERACT to inspect the broken offering slab.', message: 'Old cups are carved into the altar stone. None are empty.' },
+    {
+      id: 'BGT_INT_RUSTED_SWORD_CHEST',
+      target: { x: -10.8, y: 1.0, z: -34.8 },
+      range: 3.1,
+      hint: 'Tap INTERACT to open the rusted sword chest.',
+      message: 'A rusted sword rests inside the black stone chest.',
+      acquiredMessage: 'You take the Rusted Sword.',
+      repeatHint: 'The rusted sword chest is open.',
+      repeatMessage: 'The chest lies open and empty.',
+      type: 'equipmentPickup',
+      itemId: 'rusted_sword',
+      userData: { propId: 'BGT-P16-rusted-sword-chest-placeholder', placeholder: true },
+    },
     { id: 'BGT_INT04', target: { x: 30, y: 1.2, z: -20 }, range: 3.0, hint: 'Tap INTERACT to test the first rusted gate.', message: 'The rusted gate holds, but its hinges remember movement.' },
     { id: 'BGT_INT06', target: { x: 0, y: 1.2, z: 82 }, range: 3.0, hint: 'Tap INTERACT to inspect the central reliquary.', message: 'The grass grows from inside the reliquary block.' },
     { id: 'BGT_INT07', target: { x: 0, y: 1.2, z: 94 }, range: 3.0, hint: 'Tap INTERACT to inspect the sealed future gate.', message: 'The gate is sealed with roots blacker than iron.' },

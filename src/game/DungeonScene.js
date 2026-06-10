@@ -878,6 +878,7 @@ export class DungeonScene {
     this.scene.add(runtime.group);
     this.torchFlickerController.registerFromObject(runtime.group);
     this.reliquaryBlock = runtime.group.getObjectByName('BGT-P14-central-reliquary-block');
+    this.rustedSwordChest = runtime.group.getObjectByName('BGT-P16-rusted-sword-chest-placeholder');
     this.dungeonDebugRenderer = new DungeonDebugRenderer({ scene: this.scene, runtime });
     this.addBlackGrassTempleEnemies();
   }
@@ -931,7 +932,7 @@ export class DungeonScene {
     if (!hit?.goreEvent) return;
     const event = {
       ...hit.goreEvent,
-      weaponId: hit.goreEvent.weaponId ?? 'sword',
+      weaponId: hit.goreEvent.weaponId ?? attack.goreProfileId ?? attack.weaponId ?? 'sword',
       direction: hit.goreEvent.direction ?? attack.direction,
       roomId: hit.goreEvent.roomId ?? this.findRoomIdForPosition(hit.goreEvent.position),
       damageAmount: hit.damage,
@@ -940,6 +941,21 @@ export class DungeonScene {
     };
     if (hit.killed) this.goreRuntime.emitDeathGore(event);
     else this.goreRuntime.emitHitGore(event);
+  }
+
+  markInteractionCollected(interactionId) {
+    const interaction = this.inspectInteractions.find((candidate) => candidate.id === interactionId);
+    if (!interaction) return false;
+    interaction.collected = true;
+    const propId = interaction.userData?.propId;
+    const prop = propId ? this.scene.getObjectByName(propId) : null;
+    if (prop?.material) {
+      prop.material = prop.material.clone();
+      prop.material.color.setHex(0x42382f);
+      prop.material.emissive?.setHex?.(0x120d0a);
+      prop.material.emissiveIntensity = 0.08;
+    }
+    return true;
   }
 
   addLights() {

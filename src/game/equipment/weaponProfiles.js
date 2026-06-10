@@ -1,0 +1,36 @@
+import { createWeaponProfileRegistry } from '../../engine/equipment/WeaponProfile.js';
+
+export const weaponProfiles = createWeaponProfileRegistry([
+  {
+    id: 'unarmed',
+    displayName: 'Unarmed',
+    description: 'Bare hands. Fast, desperate, and short-ranged.',
+    weaponType: 'unarmed',
+    damage: 10,
+    attackRange: 2.25,
+    attackCooldown: 0.74,
+    windupTime: 0.05,
+    recoveryTime: 0.2,
+    staminaCost: 3,
+    fpvProfileId: 'unarmed',
+    goreProfileId: 'unarmed',
+    hitReactionType: 'light_stagger',
+    tags: ['starting', 'melee', 'fallback'],
+  },
+  {
+    id: 'rusted_sword',
+    displayName: 'Rusted Sword',
+    description: 'An old temple blade. It reaches farther and bites harder than bare hands.',
+    weaponType: 'sword',
+    damage: 17,
+    attackRange: 3.05,
+    attackCooldown: 1.05,
+    windupTime: 0.12,
+    recoveryTime: 0.34,
+    staminaCost: 4,
+    fpvProfileId: 'rusted_sword',
+    goreProfileId: 'sword',
+    hitReactionType: 'slash_stagger',
+    tags: ['weapon', 'melee', 'blade', 'black_grass_temple'],
+  },
+]);
