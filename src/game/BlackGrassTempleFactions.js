@@ -147,7 +147,7 @@ const NEARBY_COMBAT_TIMEOUT_SECONDS = 18;
 const FAR_IRRELEVANT_REDIRECT_SECONDS = 4;
 const FAR_IRRELEVANT_RECYCLE_SECONDS = 9;
 const RESPAWN_COOLDOWN_SECONDS = 10;
-const CORPSE_SECONDS = 5;
+const CORPSE_SECONDS = 28;
 const MAX_ACTIVE_BY_FACTION = Object.freeze({ sheep_demon: 2, neck_man: 2 });
 const INITIAL_WAVE_BY_FACTION = Object.freeze({ sheep_demon: 1, neck_man: 1 });
 const DEV_DIAGNOSTIC_INTERVAL_SECONDS = 5;
@@ -395,7 +395,7 @@ function toVector3(value, fallbackY = 0) {
 
 
 class BlackGrassFactionEnemy {
-  constructor({ scene, collision, navigationGraph = null, species, id, spawnAnchor, patrolPoints = null, onLoaded = null }) {
+  constructor({ scene, collision, navigationGraph = null, species, id, spawnAnchor, patrolPoints = null, onLoaded = null, onGoreEvent = null }) {
     this.scene = scene;
     this.collision = collision;
     this.navigationGraph = navigationGraph;
@@ -431,6 +431,7 @@ class BlackGrassFactionEnemy {
     this.devLastCombatLogKey = '';
     this.corpseTimer = CORPSE_SECONDS;
     this.onLoaded = onLoaded;
+    this.onGoreEvent = onGoreEvent;
     this.devMarker = null;
     this.pathMarker = null;
     this.stuckMarker = null;
@@ -1132,6 +1133,7 @@ class BlackGrassFactionEnemy {
       if (target?.isAlive && horizontalDistance(this.group.position, target.group.position) <= this.template.attackImpactRange && this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS)) {
         const result = target.receiveFactionDamage(this.template.attackDamage, this.template.displayName);
         this.attackHasDamaged = true;
+        this.emitFactionGore({ target, damage: this.template.attackDamage, result });
         this.logCombatEvent('damage-applied', {
           target,
           maneuver: this.pendingAttackAnimation ?? this.behaviorState,
@@ -1170,9 +1172,9 @@ class BlackGrassFactionEnemy {
     this.group.userData.health = this.health;
     if (this.health <= 0) {
       this.kill(source);
-      return { killed: true, remainingHealth: 0 };
+      return { killed: true, remainingHealth: 0, goreEvent: this.createGoreEventMetadata({ damage, sourceId: source, weaponId: 'claw' }) };
     }
-    return { killed: false, remainingHealth: this.health };
+    return { killed: false, remainingHealth: this.health, goreEvent: this.createGoreEventMetadata({ damage, sourceId: source, weaponId: 'claw' }) };
   }
 
   receivePlayerAttack({ position, direction, damage = this.template.playerAttackDamage } = {}) {
@@ -1192,9 +1194,61 @@ class BlackGrassFactionEnemy {
     this.group.userData.health = this.health;
     if (this.health <= 0) {
       this.kill('player');
-      return { target: this.template.displayName, damage, remainingHealth: 0, killed: true };
+      return {
+        target: this.template.displayName,
+        damage,
+        remainingHealth: 0,
+        killed: true,
+        goreEvent: this.createGoreEventMetadata({ damage, sourceId: 'player', sourcePosition: position, direction, weaponId: 'sword' }),
+      };
     }
-    return { target: this.template.displayName, damage, remainingHealth: this.health, killed: false };
+    return {
+      target: this.template.displayName,
+      damage,
+      remainingHealth: this.health,
+      killed: false,
+      goreEvent: this.createGoreEventMetadata({ damage, sourceId: 'player', sourcePosition: position, direction, weaponId: 'sword' }),
+    };
+  }
+
+  createGoreEventMetadata({ damage, sourceId = null, sourcePosition = null, direction = null, weaponId = null } = {}) {
+    const hitDirection = direction?.clone?.() ?? (sourcePosition
+      ? this.group.position.clone().sub(sourcePosition)
+      : new THREE.Vector3(0, 0, 1));
+    hitDirection.y = 0;
+    if (hitDirection.lengthSq() < 0.0001) hitDirection.set(0, 0, 1);
+    hitDirection.normalize();
+    const hitPosition = this.group.position.clone().add(new THREE.Vector3(0, this.template.targetHeight * 0.48, 0));
+    hitPosition.addScaledVector(hitDirection, -0.2);
+    return {
+      sourceId,
+      targetId: this.id,
+      creatureId: this.species,
+      species: this.species,
+      factionId: this.template.factionId,
+      weaponId,
+      damageAmount: damage,
+      position: hitPosition,
+      direction: hitDirection,
+      targetRoot: this.group,
+      tags: ['black_grass_temple_faction'],
+    };
+  }
+
+  emitFactionGore({ target, damage, result }) {
+    if (!target?.group || !this.onGoreEvent) return;
+    const direction = target.group.position.clone().sub(this.group.position);
+    direction.y = 0;
+    if (direction.lengthSq() < 0.0001) direction.set(0, 0, 1);
+    direction.normalize();
+    const event = target.createGoreEventMetadata({
+      damage,
+      sourceId: this.id,
+      sourcePosition: this.group.position,
+      direction,
+      weaponId: this.species === 'sheep_demon' ? 'claw' : 'unarmed',
+    });
+    this.onGoreEvent({ kind: result?.killed ? 'death' : 'hit', event });
   }
 
   kill(source = 'unknown') {
@@ -1695,7 +1749,7 @@ class BlackGrassFactionEnemy {
 }
 
 export class BlackGrassTempleFactionManager {
-  constructor({ scene, collision, anchors, navigationGraph = null, encounterZones = null }) {
+  constructor({ scene, collision, anchors, navigationGraph = null, encounterZones = null, onGoreEvent = null }) {
     this.scene = scene;
     this.collision = collision;
     this.anchors = anchors;
@@ -1706,6 +1760,7 @@ export class BlackGrassTempleFactionManager {
     this.devStatusElapsed = 0;
     this.nearbyCombatQuietSeconds = 0;
     this.initialWaveSpawned = false;
+    this.onGoreEvent = onGoreEvent;
     this.encounterZones = this.createEncounterZones(encounterZones);
     this.maxActiveByFaction = MAX_ACTIVE_BY_FACTION;
     this.respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS;
@@ -1975,6 +2030,7 @@ export class BlackGrassTempleFactionManager {
         spawnAnchor: anchor,
         patrolPoints: anchor.patrolPoints,
         onLoaded: () => this.logDevStatus('enemy-loaded'),
+        onGoreEvent: this.onGoreEvent,
       });
       this.enemies.push(enemy);
       enemy.load();

@@ -530,11 +530,44 @@ export class SheepDemonEnemy {
 
     if (this.health <= 0) {
       this.kill();
-      return { target: this.config.displayName, damage, remainingHealth: 0, killed: true };
+      return {
+        target: this.config.displayName,
+        damage,
+        remainingHealth: 0,
+        killed: true,
+        goreEvent: this.createGoreEventMetadata({ position, direction, damage, weaponId: 'sword' }),
+      };
     }
 
     console.info(`Sheep Demon took ${damage} damage (${this.health}/${this.config.maxHealth} HP remaining).`);
-    return { target: this.config.displayName, damage, remainingHealth: this.health, killed: false };
+    return {
+      target: this.config.displayName,
+      damage,
+      remainingHealth: this.health,
+      killed: false,
+      goreEvent: this.createGoreEventMetadata({ position, direction, damage, weaponId: 'sword' }),
+    };
+  }
+
+  createGoreEventMetadata({ position, direction, damage, weaponId }) {
+    const hitDirection = direction?.clone?.() ?? this.group.position.clone().sub(position);
+    hitDirection.y = 0;
+    if (hitDirection.lengthSq() < 0.0001) hitDirection.set(0, 0, 1);
+    hitDirection.normalize();
+    const hitPosition = this.group.position.clone().add(new THREE.Vector3(0, this.config.targetHeight * 0.48, 0));
+    hitPosition.addScaledVector(hitDirection, -0.22);
+    return {
+      sourceId: 'player',
+      targetId: this.group.name || 'sheep-demon',
+      creatureId: 'sheep_demon',
+      species: 'sheep_demon',
+      weaponId,
+      damageAmount: damage,
+      position: hitPosition,
+      direction: hitDirection,
+      targetRoot: this.group,
+      tags: ['standalone_sheep_demon'],
+    };
   }
 
   kill() {
