@@ -10,6 +10,15 @@ import { WoundAttachmentSystem } from './WoundAttachmentSystem.js';
 
 const FLOOR_NORMAL = new THREE.Vector3(0, 1, 0);
 
+const GORE_RUNTIME_TUNING = Object.freeze({
+  freshBloodColor: 0xb00016,
+  wetHighlightColor: 0xe02028,
+  pooledBloodColor: 0x65000b,
+  driedBloodColor: 0x2a0004,
+  deathPoolScale: [1.4, 2.2],
+  deathPoolGrowSeconds: [1.5, 2.6],
+});
+
 export class GoreRuntime {
   constructor({
     scene,
@@ -89,6 +98,22 @@ export class GoreRuntime {
       lifetimeSeconds: 38,
     });
 
+    const satelliteDecals = isHeavy ? 2 : Math.random() < 0.45 ? 1 : 0;
+    for (let i = 0; i < satelliteDecals; i += 1) {
+      const offset = new THREE.Vector3((Math.random() - 0.5) * 0.72, 0, (Math.random() - 0.5) * 0.72);
+      offset.addScaledVector(event.direction, 0.14 + Math.random() * 0.38);
+      const satellitePosition = floorPosition.clone().add(offset);
+      this.decals.addFloorDecal({
+        position: satellitePosition,
+        roomId: event.roomId,
+        profile,
+        type: Math.random() < 0.34 && profile.decalType === 'slash' ? 'smear' : 'splat',
+        scaleRange: isHeavy ? [0.22, 0.46] : [0.14, 0.3],
+        floorY: this.getFloorY(satellitePosition),
+        lifetimeSeconds: isHeavy ? 40 : 28,
+      });
+    }
+
     if (event.surfaceType === 'wall' || event.tags.includes('wall_spray') || isHeavy) {
       const wallPosition = event.position.clone().addScaledVector(event.direction, 0.42);
       wallPosition.y += 0.24;
@@ -133,19 +158,33 @@ export class GoreRuntime {
       roomId: event.roomId,
       profile,
       type: 'pool',
-      scaleRange: profile.deathPoolScale ?? [1, 1.65],
+      scaleRange: profile.deathPoolScale ?? GORE_RUNTIME_TUNING.deathPoolScale,
       floorY: this.getFloorY(event.position),
       lifetimeSeconds: 70,
     });
 
+    const deathSplatPosition = event.position.clone().addScaledVector(event.direction, 0.4);
     this.decals.addFloorDecal({
-      position: event.position.clone().addScaledVector(event.direction, 0.4),
+      position: deathSplatPosition,
       roomId: event.roomId,
       profile,
       type: profile.decalType === 'slash' ? 'smear' : 'splat',
-      floorY: this.getFloorY(event.position),
+      floorY: this.getFloorY(deathSplatPosition),
       lifetimeSeconds: 46,
     });
+
+    if (profile.decalType === 'slash' || event.tags.includes('long_slash_smears')) {
+      const smearPosition = event.position.clone().addScaledVector(event.direction, 0.72);
+      this.decals.addFloorDecal({
+        position: smearPosition,
+        roomId: event.roomId,
+        profile,
+        type: 'smear',
+        scaleRange: [0.58, 1.06],
+        floorY: this.getFloorY(smearPosition),
+        lifetimeSeconds: 48,
+      });
+    }
 
     const corpseId = this.registerCorpse({
       creatureId: event.creatureId,
