@@ -68,55 +68,9 @@ const FIELD_BLACK_GRASS_TEMPLE_RETURN_YAW = 0;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const BGT_EXTERIOR_ENTRANCE_TARGET = new THREE.Vector3(-184, 1, 31);
-const RELIQUARY_FIELD_COLLIDERS = [
-  // Invisible 400 x 400 slice boundaries from the Reliquary Field v0.1 blueprint.
-  { id: 'BOUND02', minX: -205, maxX: 205, minZ: -205, maxZ: -199 },
-  { id: 'BOUND01', minX: -205, maxX: 205, minZ: 199, maxZ: 205 },
-  { id: 'BOUND03', minX: -205, maxX: -199, minZ: -205, maxZ: 205 },
-  { id: 'BOUND04', minX: 199, maxX: 205, minZ: -205, maxZ: 205 },
-
-  // Broken Shrine slabs and pillars.
-  { id: 'S01_A', minX: -9, maxX: 9, minZ: -9, maxZ: 9 },
-  { id: 'S01_B', minX: -6, maxX: 6, minZ: 4.25, maxZ: 5.75 },
-  { id: 'S01_C', minX: -8, maxX: -6, minZ: -1, maxZ: 1 },
-  { id: 'S01_D', minX: 6, maxX: 8, minZ: -2, maxZ: 0 },
-
-  // South Reliquary Crypt exterior shell.
-  { id: 'C01_A', minX: -74, maxX: -46, minZ: -107, maxZ: -83 },
-  { id: 'C01_B', minX: -73.5, maxX: -70.5, minZ: -106, maxZ: -84 },
-  { id: 'C01_C', minX: -49.5, maxX: -46.5, minZ: -106, maxZ: -84 },
-  { id: 'C01_D', minX: -73.5, maxX: -46.5, minZ: -85.5, maxZ: -82.5 },
-  { id: 'C01_E', minX: -74, maxX: -46, minZ: -97.5, maxZ: -92.5 },
-
-  // Sunken Central Tomb exterior shell and sealed gate.
-  { id: 'C03_A', minX: 17, maxX: 53, minZ: 126, maxZ: 154 },
-  { id: 'C03_B', minX: 18, maxX: 52, minZ: 150, maxZ: 154 },
-  { id: 'C03_C', minX: 29, maxX: 41, minZ: 127.5, maxZ: 128.5 },
-  { id: 'C03_D', minX: 15, maxX: 19, minZ: 128, maxZ: 152 },
-  { id: 'C03_E', minX: 51, maxX: 55, minZ: 128, maxZ: 152 },
-
-  // Black Grass Temple grounded west-edge facade. The central mouth stays reachable; the rear mass, wings,
-  // pylons, and chalices prevent nonsensical walk-behind access.
-  { id: 'C02_REAR_MASS', minX: -198, maxX: -170, minZ: 53, maxZ: 61 },
-  { id: 'C02_LEFT_PYLON', minX: -198.5, maxX: -190.5, minZ: 34, maxZ: 55 },
-  { id: 'C02_RIGHT_PYLON', minX: -177.5, maxX: -169.5, minZ: 34, maxZ: 55 },
-  { id: 'C02_LEFT_WING', minX: -203, maxX: -193, minZ: 43, maxZ: 48 },
-  { id: 'C02_RIGHT_WING', minX: -175, maxX: -165, minZ: 43, maxZ: 48 },
-  { id: 'C02_GATE_MOUTH', minX: -188, maxX: -180, minZ: 32.2, maxZ: 33 },
-  { id: 'C02_LEFT_DOOR_JAMB', minX: -192.8, maxX: -188.2, minZ: 34.2, maxZ: 36.8 },
-  { id: 'C02_RIGHT_DOOR_JAMB', minX: -179.8, maxX: -175.2, minZ: 34.2, maxZ: 36.8 },
-  { id: 'C02_LEFT_CHALICE_FRONT', minX: -192.5, maxX: -189.5, minZ: 26.5, maxZ: 29.5 },
-  { id: 'C02_RIGHT_CHALICE_FRONT', minX: -178.5, maxX: -175.5, minZ: 26.5, maxZ: 29.5 },
-  { id: 'C02_LEFT_CHALICE_REAR', minX: -195, maxX: -192, minZ: 36.5, maxZ: 39.5 },
-  { id: 'C02_RIGHT_CHALICE_REAR', minX: -176, maxX: -173, minZ: 36.5, maxZ: 39.5 },
-
-  // Standing stones and low ruin walls.
-  { id: 'STONE01', minX: 113.5, maxX: 116.5, minZ: -71, maxZ: -69 },
-  { id: 'STONE02', minX: 121, maxX: 123, minZ: -65, maxZ: -63 },
-  { id: 'STONE03', minX: 107, maxX: 109, minZ: -59, maxZ: -57 },
-  { id: 'RUIN01', minX: -144, maxX: -116, minZ: 18.5, maxZ: 21.5 },
-  { id: 'RUIN02', minX: 73, maxX: 97, minZ: 53.5, maxZ: 56.5 },
-];
+function getReliquaryFieldColliders() {
+  return getLocationDefinition('reliquary-field')?.blockers ?? [];
+}
 
 const TEXTURE_REPEATS = {
   roomWall: [4, 1.35],
@@ -599,7 +553,19 @@ export class DungeonScene {
   }
 
   createOutdoorBlockers() {
-    return RELIQUARY_FIELD_COLLIDERS.map(({ minX, maxX, minZ, maxZ }) => ({ minX, maxX, minZ, maxZ }));
+    return getReliquaryFieldColliders()
+      .filter((blocker) => blocker.blocksPlayer !== false)
+      .map(({ id, minX, maxX, minZ, maxZ, height, type, tags, userData }) => ({
+        id,
+        minX,
+        maxX,
+        minZ,
+        maxZ,
+        height,
+        type,
+        tags,
+        userData,
+      }));
   }
 
   addOutdoorLights() {
@@ -869,6 +835,8 @@ export class DungeonScene {
     group.add(this.createBoxMesh({ size: new THREE.Vector3(7.0, 4.9, 0.22), position: new THREE.Vector3(-184, 2.45, 32.25), material: voidMat, name: 'C02_J-dark-descending-stair-mouth-visual' }));
     group.add(this.createBoxMesh({ size: new THREE.Vector3(11, 4.2, 5), position: new THREE.Vector3(-198, 2.1, 45.5), material: darkStoneMat, name: 'C02_K-left-broken-wall-wing-wall_black_stone_01' }));
     group.add(this.createBoxMesh({ size: new THREE.Vector3(11, 3.8, 5), position: new THREE.Vector3(-170, 1.9, 45.5), material: darkStoneMat, name: 'C02_L-right-broken-wall-wing-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(8, 6.5, 25), position: new THREE.Vector3(-166, 3.25, 66.5), material: darkStoneMat, name: 'C02_S-right-rear-return-wall-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(36, 3.5, 18), position: new THREE.Vector3(-180, 1.75, 70), material: darkStoneMat, name: 'C02_T-buried-rear-backfill-wall_black_stone_01' }));
     group.add(this.createBoxMesh({ size: new THREE.Vector3(18, 0.04, 6.5), position: new THREE.Vector3(-184, 0.53, 29.2), material: thresholdGlowMat, name: 'C02_M-warm-threshold-light-spill' }));
 
     this.createOutdoorFlameChalice({ parent: group, position: new THREE.Vector3(-191, 0, 28), name: 'C02_N-left-front-grounded-flame-chalice' });

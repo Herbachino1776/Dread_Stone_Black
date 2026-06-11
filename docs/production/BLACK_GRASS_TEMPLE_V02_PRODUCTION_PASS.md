@@ -83,7 +83,10 @@ Ambient and directional fill were reduced so the dungeon does not read as fullbr
 
 - Compiled BGT wall collision now generates blockers from the same authored wall-gap data used by visual wall generation.
 - Visual walls are solid unless the room edge has an authored doorway or exit gap.
+- Dungeon Integrity validation now checks BGT wall coverage, blocker support, declared openings, doorway alignment, and sampled leak paths.
+- D08, D12, and D13 were realigned after integrity validation found their wall gaps outside the referenced room edges.
 - D19 return-threshold wall gaps were realigned to the R14B west edge and R14C east edge so the return route remains open without punching holes through unrelated walls.
+- The rusted gate watch prop now has a matching collision blocker instead of being a visual-only structural gate.
 - R01 and R02 are marked non-spawning for safer entry/readability.
 - Chest placement is clear of the central slab, branch doorways, and faction anchors.
 - New storytelling props are non-colliding unless they correspond to existing solid blockers.
@@ -96,6 +99,8 @@ Ambient and directional fill were reduced so the dungeon does not read as fullbr
 ## Field Entrance Correction
 
 The Reliquary Field side of Black Grass Temple was rebuilt from procedural geometry into a grounded facade: dark rear stone mass, heavy side pylons, embedded gate plane, short broken wall wings, warm threshold glow, and four large flame chalices placed on the ground. The field collision now matches the solid facade pieces while leaving the central mouth reachable, so the player is funneled toward the entrance instead of walking behind a flat prop.
+
+The facade now has authored integrity metadata in `reliquaryField.definition.js`, including approach, doorway, collision hull, visual structure, chalice, and behind-zone data. Integrity validation added a right-rear return wall and buried rear backfill mass so the player cannot walk behind the Black Grass Temple gate in a nonsensical way.
 
 ## Environmental Storytelling
 
@@ -121,6 +126,7 @@ Added `npm run validate:bgt`, which checks:
 - `rusted_sword` item registry presence
 - unarmed new-game equipment state
 - compiled wall blockers for authored BGT walls
+- Dungeon Integrity wall/collision matching and room-edge sealing
 - D19 return-route wall-gap alignment
 - BGT objective silence and hidden-state policy
 - absence of BGT production-facing objective text actions
@@ -133,6 +139,7 @@ Use it alongside the normal production checks:
 
 ```sh
 npm.cmd run validate:bgt
+npm.cmd run validate:integrity
 npm.cmd run build
 git diff --check
 ```

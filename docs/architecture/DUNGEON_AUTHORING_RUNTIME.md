@@ -9,6 +9,8 @@ The practical target is boring stability: visible layout, collision, spawns, and
 - Player starts and return points can be validated against walkable rectangles and blockers.
 - Enemy spawns can be checked for blocker overlap and wall clearance.
 - Prop collision can be aligned against prop footprints.
+- Visible walls, structural props, and exterior facades can be checked against collision truth.
+- Room edges can be sealed unless an opening, doorway, passage, or exit is explicitly authored.
 - The faction navigation graph can be generated from authored rooms and links.
 - Encounter zones and doorway waypoints live beside the layout that makes them valid.
 - Debug rendering can show the compiled room graph, blockers, spawns, exits, and encounter rings without shipping production junk.
@@ -65,6 +67,7 @@ The bundle is built by small engine modules in `src/engine/dungeon-authoring/`:
 - `DungeonSpawnBuilder.js`
 - `DungeonDebugRenderer.js`
 - `DungeonRuntimeRegistry.js`
+- `integrity/DungeonIntegrityValidator.js`
 
 Generated Three.js objects receive useful `userData` such as `locationId`, `roomId`, `blockerId`, `propId`, `spawnId`, `encounterZoneId`, and `devOnly` where applicable.
 
@@ -79,6 +82,8 @@ warning: spawn sheep_spawn_mid has low clearance near blocker altar_mid_01
 
 Current checks include duplicate/missing ids, inverted bounds, room/spawn references, player and return spawn placement, enemy spawn placement and clearance, encounter zone room references, exit destination ids, door/nav room references, doorway waypoint walkability, blocker coverage of critical spawns, prop `collisionRef` alignment, and spawns too close to walls unless explicitly allowed.
 
+Integrity validation extends those checks with visual wall to collision matching, collision to visual support, room edge sealing, declared opening validation, sampled walkable leak detection, and exterior facade entrance checks. See `docs/architecture/DUNGEON_INTEGRITY_AND_COLLISION_TRUTH.md` for the full issue-code guide and authoring rules.
+
 Warnings are meant to guide authoring. Errors mean the definition should not be trusted.
 
 ## Debug Rendering
@@ -90,7 +95,7 @@ Controls:
 - `F2`: toggle dungeon debug
 - `F3`: cycle layers
 
-Layers show walkable room rectangles, blockers, nav links, spawn anchors, encounter-zone rings, exit trigger rectangles, and a current player marker.
+Layers show walkable room rectangles, blockers, nav links, spawn anchors, encounter-zone rings, exit trigger rectangles, torch diagnostics, integrity wall/opening/facade markers, and a current player marker.
 
 ## Black Grass Temple
 
@@ -109,6 +114,7 @@ The compiler supplies:
 - exit metadata
 - inspect interaction targets
 - validation and debug data
+- integrity validation report data
 
 `DungeonScene` still owns the high-level scene lifecycle, current routing, material creation, torch flicker bookkeeping, and the faction manager instance. `BlackGrassTempleFactions` still owns combat behavior, animation loading, target selection, and battle-director logic, but it now consumes compiler-generated anchors, nav graph, and encounter zones.
 
@@ -116,7 +122,7 @@ The compiler supplies:
 
 `southReliquaryCrypt.definition.js` captures current known spawns, return points, major interaction locations, a few known rooms, and notes for future migration. The live South Reliquary Crypt still uses the existing baby labyrinth scene code.
 
-`reliquaryField.definition.js` captures first-slice field bounds, player start, return spawns, and transition metadata for South Reliquary Crypt and Black Grass Temple. The live field still uses the existing outdoor field builders.
+`reliquaryField.definition.js` captures first-slice field bounds, player start, return spawns, transition metadata, outdoor blockers, and the Black Grass Temple facade integrity metadata. The live field still uses the existing outdoor visual builders, but collision is now sourced from the field definition.
 
 Those partial definitions are registry entries and migration anchors, not active runtime replacements yet.
 
@@ -126,11 +132,12 @@ Those partial definitions are registry entries and migration anchors, not active
 2. Add rooms first, with generous walkable rectangles and clear labels.
 3. Add doors/connectors and explicit nav links.
 4. Add blockers and props, using `collisionRef` for any solid prop.
-5. Add player, return, enemy, npc, and debug spawns.
-6. Add encounter zones and exits.
-7. Register the definition in `locationRegistry.js`.
-8. Compile it from scene code with the local material and torch factories.
-9. Run validation and use `F2`/`F3` to inspect the compiled runtime.
+5. Add `integrity.nonBlockingDecor` for visible decorative props that are intentionally non-solid.
+6. Add player, return, enemy, npc, and debug spawns.
+7. Add encounter zones and exits.
+8. Register the definition in `locationRegistry.js`.
+9. Compile it from scene code with the local material and torch factories.
+10. Run validation and use `F2`/`F3` to inspect the compiled runtime.
 
 ## Current Limitations
 
@@ -140,6 +147,7 @@ Those partial definitions are registry entries and migration anchors, not active
 - South Reliquary Crypt and Reliquary Field are only partially authored.
 - The faction AI remains hand-coded behavior that consumes authored data.
 - No visual editor exists yet.
+- Integrity validation uses practical rectangular heuristics rather than arbitrary mesh analysis.
 
 ## Intentionally Not Migrated
 
