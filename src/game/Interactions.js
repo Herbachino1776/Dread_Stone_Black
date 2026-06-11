@@ -167,6 +167,12 @@ export class Interactions {
       return this.useSouthReliquary(interaction);
     }
 
+    if (interaction.id === 'BGT_INT06') {
+      this.dungeon.gameState?.markBlackGrassTempleAltarActivated?.();
+      this.dungeon.ensureGiantRamManFieldManifestation?.();
+      return false;
+    }
+
     this.setTemporaryHint(interaction.message, 1200);
     this.hud.showMessage(interaction.message);
     return false;

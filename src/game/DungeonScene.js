@@ -6,6 +6,7 @@ import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js
 import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
 import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
 import { CollisionWorld } from './Collision.js';
+import { loadDungeonModel } from './ModelLoader.js';
 import { BlackGrassTempleFactionManager } from './BlackGrassTempleFactions.js';
 import { SheepDemonEnemy } from './SheepDemonEnemy.js';
 import { createGameGoreRegistry } from './gore/goreRegistry.js';
@@ -177,6 +178,8 @@ export class DungeonScene {
     this.outdoorInteractions = [];
     this.fieldShrineGroup = null;
     this.fieldShrineAnswerLight = null;
+    this.giantRamManFieldManifestation = null;
+    this.giantRamManFieldManifestationLoading = false;
     this.reliquaryBlock = null;
     this.reliquaryAwakeLight = null;
 
@@ -400,6 +403,82 @@ export class DungeonScene {
     this.addOutdoorTerrain();
     this.addOutdoorBoundary();
     this.addReliquaryFieldStructures();
+    this.ensureGiantRamManFieldManifestation();
+  }
+
+  shouldManifestGiantRamManInField(manifestation) {
+    if (this.area !== 'field' || !manifestation) return false;
+    if (manifestation.conditionFlag === 'blackGrassTempleAltarActivated') {
+      return Boolean(this.gameState?.hasBlackGrassTempleAltarActivated?.());
+    }
+    return false;
+  }
+
+  getGiantRamManFieldManifestationDefinition() {
+    return (getLocationDefinition('reliquary-field')?.fieldManifestations ?? [])
+      .find((manifestation) => manifestation.id === 'giant_ram_man_field_altar_manifestation') ?? null;
+  }
+
+  ensureGiantRamManFieldManifestation() {
+    const manifestation = this.getGiantRamManFieldManifestationDefinition();
+    if (!this.shouldManifestGiantRamManInField(manifestation)) return;
+    if (this.giantRamManFieldManifestation || this.giantRamManFieldManifestationLoading) return;
+
+    this.giantRamManFieldManifestationLoading = true;
+    loadDungeonModel({
+      url: manifestation.asset,
+      targetHeight: manifestation.targetHeight,
+      maxWidth: manifestation.maxWidth,
+      scaleMultiplier: manifestation.scaleMultiplier,
+    })
+      .then(({ root, scale, box }) => {
+        const group = new THREE.Group();
+        group.name = manifestation.id;
+        group.position.copy(this.toVector3(manifestation.position));
+        group.rotation.y = manifestation.yaw ?? 0;
+        group.userData = {
+          ...(manifestation.userData ?? {}),
+          fieldManifestation: true,
+          staticVisualActor: true,
+          id: manifestation.id,
+          species: manifestation.species,
+          asset: manifestation.asset,
+          conditionFlag: manifestation.conditionFlag,
+          collision: manifestation.collision ?? 'none',
+          combat: 'none',
+          interaction: 'none',
+          scale,
+          bounds: {
+            min: { x: box.min.x, y: box.min.y, z: box.min.z },
+            max: { x: box.max.x, y: box.max.y, z: box.max.z },
+          },
+          tags: manifestation.tags ?? [],
+        };
+
+        root.name = `${manifestation.id}-model`;
+        root.traverse((child) => {
+          if (!child.isMesh) return;
+          child.castShadow = true;
+          child.receiveShadow = true;
+        });
+        group.add(root);
+        this.enableOutdoorReadableShadows(group);
+        this.scene.add(group);
+        this.giantRamManFieldManifestation = group;
+
+        if (!this.giantRamManFieldManifestationLight) {
+          this.giantRamManFieldManifestationLight = new THREE.PointLight(0xd69a45, 1.1, 28, 1.45);
+          this.giantRamManFieldManifestationLight.name = 'S01-giant-ram-man-field-altar-manifestation-glow';
+          this.giantRamManFieldManifestationLight.position.set(0, 3.8, 3.2);
+          this.fieldShrineGroup?.add(this.giantRamManFieldManifestationLight);
+        }
+      })
+      .catch((error) => {
+        console.warn(`Giant Ram Man field manifestation failed to load from ${manifestation.asset}.`, error);
+      })
+      .finally(() => {
+        this.giantRamManFieldManifestationLoading = false;
+      });
   }
 
   update(deltaSeconds, player = null) {
@@ -458,6 +537,8 @@ export class DungeonScene {
       shrineInteraction.hint = 'Tap INTERACT to touch the awakened shrine.';
       shrineInteraction.message = 'The field answers.';
     }
+
+    this.ensureGiantRamManFieldManifestation();
 
     if (!this.fieldShrineGroup || this.fieldShrineAnswerLight) return;
 
@@ -651,7 +732,10 @@ export class DungeonScene {
   }
 
   addBrokenShrine() {
-    const shrineAwake = Boolean(this.gameState?.hasSouthReliquaryFragment);
+    const shrineAwake = Boolean(
+      this.gameState?.hasSouthReliquaryFragment
+      || this.gameState?.hasBlackGrassTempleAltarActivated?.(),
+    );
     const stoneMat = this.makeTexturedMaterial({
       path: TEXTURE_PATHS.wall,
       repeat: [1.4, 1.8],

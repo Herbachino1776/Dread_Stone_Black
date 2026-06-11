@@ -71,6 +71,27 @@ export const reliquaryFieldDefinition = Object.freeze({
     gate: { path: './assets/textures/metal_gate_rusted_01.png' },
   },
   defaultFloorY: 0,
+  fieldManifestations: [
+    {
+      id: 'giant_ram_man_field_altar_manifestation',
+      kind: 'staticVisualActor',
+      species: 'ram_man',
+      conditionFlag: 'blackGrassTempleAltarActivated',
+      asset: './assets/npcs/ram_man_friendly_01_optimized.glb',
+      position: { x: 0, y: 0, z: 8.5 },
+      yaw: Math.PI,
+      targetHeight: 1.72,
+      maxWidth: 1.15,
+      scaleMultiplier: 5.6,
+      collision: 'none',
+      tags: ['silent', 'mythic', 'central-field-altar', 'visual-only'],
+      userData: {
+        placement: 'Behind the altered central field altar, facing the field spawn approach.',
+        noInteraction: true,
+        noCombat: true,
+      },
+    },
+  ],
   integrity: {
     walkableBounds: { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 },
     leakDetection: false,
