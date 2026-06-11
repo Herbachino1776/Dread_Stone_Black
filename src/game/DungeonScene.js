@@ -67,6 +67,7 @@ const FIELD_BLACK_GRASS_TEMPLE_RETURN_START = new THREE.Vector3(-184, 1.55, 25);
 const FIELD_BLACK_GRASS_TEMPLE_RETURN_YAW = 0;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
+const BGT_EXTERIOR_ENTRANCE_TARGET = new THREE.Vector3(-184, 1, 31);
 const RELIQUARY_FIELD_COLLIDERS = [
   // Invisible 400 x 400 slice boundaries from the Reliquary Field v0.1 blueprint.
   { id: 'BOUND02', minX: -205, maxX: 205, minZ: -205, maxZ: -199 },
@@ -94,12 +95,20 @@ const RELIQUARY_FIELD_COLLIDERS = [
   { id: 'C03_D', minX: 15, maxX: 19, minZ: 128, maxZ: 152 },
   { id: 'C03_E', minX: 51, maxX: 55, minZ: 128, maxZ: 152 },
 
-  // Black Grass Temple temporary west-edge exterior shell. Intended C02 is X -210, Z 55; this v0.1 hook stays inside the first 400 x 400 field slice.
-  { id: 'C02_A', minX: -198, maxX: -170, minZ: 30, maxZ: 60 },
-  { id: 'C02_B', minX: -197, maxX: -193, minZ: 38, maxZ: 58 },
-  { id: 'C02_C', minX: -179, maxX: -175, minZ: 38, maxZ: 58 },
-  { id: 'C02_D', minX: -198, maxX: -170, minZ: 56, maxZ: 60 },
-  { id: 'C02_E', minX: -190, maxX: -180, minZ: 29, maxZ: 33 },
+  // Black Grass Temple grounded west-edge facade. The central mouth stays reachable; the rear mass, wings,
+  // pylons, and chalices prevent nonsensical walk-behind access.
+  { id: 'C02_REAR_MASS', minX: -198, maxX: -170, minZ: 53, maxZ: 61 },
+  { id: 'C02_LEFT_PYLON', minX: -198.5, maxX: -190.5, minZ: 34, maxZ: 55 },
+  { id: 'C02_RIGHT_PYLON', minX: -177.5, maxX: -169.5, minZ: 34, maxZ: 55 },
+  { id: 'C02_LEFT_WING', minX: -203, maxX: -193, minZ: 43, maxZ: 48 },
+  { id: 'C02_RIGHT_WING', minX: -175, maxX: -165, minZ: 43, maxZ: 48 },
+  { id: 'C02_GATE_MOUTH', minX: -188, maxX: -180, minZ: 32.2, maxZ: 33 },
+  { id: 'C02_LEFT_DOOR_JAMB', minX: -192.8, maxX: -188.2, minZ: 34.2, maxZ: 36.8 },
+  { id: 'C02_RIGHT_DOOR_JAMB', minX: -179.8, maxX: -175.2, minZ: 34.2, maxZ: 36.8 },
+  { id: 'C02_LEFT_CHALICE_FRONT', minX: -192.5, maxX: -189.5, minZ: 26.5, maxZ: 29.5 },
+  { id: 'C02_RIGHT_CHALICE_FRONT', minX: -178.5, maxX: -175.5, minZ: 26.5, maxZ: 29.5 },
+  { id: 'C02_LEFT_CHALICE_REAR', minX: -195, maxX: -192, minZ: 36.5, maxZ: 39.5 },
+  { id: 'C02_RIGHT_CHALICE_REAR', minX: -176, maxX: -173, minZ: 36.5, maxZ: 39.5 },
 
   // Standing stones and low ruin walls.
   { id: 'STONE01', minX: 113.5, maxX: 116.5, minZ: -71, maxZ: -69 },
@@ -837,26 +846,47 @@ export class DungeonScene {
 
 
   addBlackGrassTempleExterior() {
-    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.8, 1.8], color: 0x77746f, roughness: 0.97, metalness: 0.0, emissive: 0x0c0907, emissiveIntensity: 0.05 });
-    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [4, 3], color: 0x80796d, roughness: 0.96, metalness: 0.0 });
-    const grassMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.fieldGrass, repeat: [7, 6], color: 0x252816, roughness: 1.0, metalness: 0.0, emissive: 0x030603, emissiveIntensity: 0.08 });
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [3.4, 2.1], color: 0x34312d, roughness: 0.98, metalness: 0.0, emissive: 0x050403, emissiveIntensity: 0.08 });
+    const darkStoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.0, 1.7], color: 0x1f1c19, roughness: 0.99, metalness: 0.0, emissive: 0x030201, emissiveIntensity: 0.1 });
+    const edgeStoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.6, 1.5], color: 0x4d4941, roughness: 0.98, metalness: 0.0, emissive: 0x080503, emissiveIntensity: 0.08 });
+    const gateMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: [1.1, 1.8], color: 0xd3a865, roughness: 0.76, metalness: 0.42, emissive: 0x7f3b12, emissiveIntensity: 0.72 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [5.5, 4.2], color: 0x777064, roughness: 0.97, metalness: 0.0, emissive: 0x080604, emissiveIntensity: 0.08 });
+    const grassMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.fieldGrass, repeat: [8, 7], color: 0x1d210f, roughness: 1.0, metalness: 0.0, emissive: 0x020501, emissiveIntensity: 0.08 });
     const voidMat = new THREE.MeshBasicMaterial({ color: 0x020202 });
+    const thresholdGlowMat = new THREE.MeshBasicMaterial({ color: 0xff9a37, transparent: true, opacity: 0.42, depthWrite: false });
     const group = new THREE.Group();
-    group.name = 'C02-Black-Grass-Temple-temporary-west-edge-exterior';
+    group.name = 'C02-Black-Grass-Temple-grounded-field-entrance';
 
-    group.add(this.createBoxMesh({ size: new THREE.Vector3(45, 0.08, 38), position: new THREE.Vector3(-184, 0.04, 45), material: grassMat, name: 'C02_G-flat-black-grass-corruption-field_dead_grass_01' }));
-    group.add(this.createBoxMesh({ size: new THREE.Vector3(28, 0.5, 30), position: new THREE.Vector3(-184, 0.25, 45), material: floorMat, name: 'C02_A-temple-approach-slab-floor_worn_stone_01' }));
-    group.add(this.createBoxMesh({ size: new THREE.Vector3(4, 8, 5), position: new THREE.Vector3(-196, 4, 48), material: stoneMat, name: 'C02_B-left-broken-pylon-wall_black_stone_01' }));
-    group.add(this.createBoxMesh({ size: new THREE.Vector3(4, 6.4, 5), position: new THREE.Vector3(-176, 3.2, 48), material: stoneMat, name: 'C02_C-right-broken-pylon-wall_black_stone_01' }));
-    group.add(this.createBoxMesh({ size: new THREE.Vector3(28, 8, 4), position: new THREE.Vector3(-184, 4, 58), material: stoneMat, name: 'C02_D-rear-temple-wall-wall_black_stone_01' }));
-    group.add(this.createBoxMesh({ size: new THREE.Vector3(10, 4.4, 0.3), position: new THREE.Vector3(-184, 2.2, 32), material: voidMat, name: 'C02_F-dark-stair-mouth-visual' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(54, 0.08, 44), position: new THREE.Vector3(-184, 0.04, 43), material: grassMat, name: 'C02_G-black-grass-corruption-approach-field_dead_grass_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(24, 0.5, 28), position: new THREE.Vector3(-184, 0.25, 39), material: floorMat, name: 'C02_A-temple-approach-stone-run-floor_worn_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(7.5, 10.5, 22), position: new THREE.Vector3(-195, 5.25, 44.5), material: stoneMat, name: 'C02_B-left-heavy-pylon-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(7.5, 9.4, 22), position: new THREE.Vector3(-173, 4.7, 44.5), material: stoneMat, name: 'C02_C-right-heavy-pylon-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(30, 9.2, 8), position: new THREE.Vector3(-184, 4.6, 57), material: darkStoneMat, name: 'C02_D-deep-rear-temple-mass-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(13, 2.3, 5.5), position: new THREE.Vector3(-184, 9.45, 39.5), material: edgeStoneMat, name: 'C02_E-bright-threshold-lintel-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.2, 6.2, 2.2), position: new THREE.Vector3(-190.5, 3.1, 35.5), material: edgeStoneMat, name: 'C02_F-left-door-jamb-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.2, 6.2, 2.2), position: new THREE.Vector3(-177.5, 3.1, 35.5), material: edgeStoneMat, name: 'C02_H-right-door-jamb-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(7.8, 5.2, 0.34), position: new THREE.Vector3(-184, 2.6, 32.5), material: gateMat, name: 'C02_I-bright-rusted-gate-focal-metal_gate_rusted_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(7.0, 4.9, 0.22), position: new THREE.Vector3(-184, 2.45, 32.25), material: voidMat, name: 'C02_J-dark-descending-stair-mouth-visual' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(11, 4.2, 5), position: new THREE.Vector3(-198, 2.1, 45.5), material: darkStoneMat, name: 'C02_K-left-broken-wall-wing-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(11, 3.8, 5), position: new THREE.Vector3(-170, 1.9, 45.5), material: darkStoneMat, name: 'C02_L-right-broken-wall-wing-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(18, 0.04, 6.5), position: new THREE.Vector3(-184, 0.53, 29.2), material: thresholdGlowMat, name: 'C02_M-warm-threshold-light-spill' }));
+
+    this.createOutdoorFlameChalice({ parent: group, position: new THREE.Vector3(-191, 0, 28), name: 'C02_N-left-front-grounded-flame-chalice' });
+    this.createOutdoorFlameChalice({ parent: group, position: new THREE.Vector3(-177, 0, 28), name: 'C02_O-right-front-grounded-flame-chalice' });
+    this.createOutdoorFlameChalice({ parent: group, position: new THREE.Vector3(-193.5, 0, 38), name: 'C02_P-left-rear-grounded-flame-chalice', scale: 0.86 });
+    this.createOutdoorFlameChalice({ parent: group, position: new THREE.Vector3(-174.5, 0, 38), name: 'C02_Q-right-rear-grounded-flame-chalice', scale: 0.86 });
+
+    const gateGlow = new THREE.PointLight(0xffa24a, 2.4, 28, 1.45);
+    gateGlow.name = 'C02_R-bright-warm-temple-mouth-light';
+    gateGlow.position.set(-184, 3.2, 32.5);
+    group.add(gateGlow);
 
     this.enableOutdoorReadableShadows(group);
     this.scene.add(group);
     this.outdoorInteractions.push({
       id: 'BGT_INT01',
       label: 'Black Grass Temple',
-      target: new THREE.Vector3(-184, 1, 31),
+      target: BGT_EXTERIOR_ENTRANCE_TARGET.clone(),
       range: 4.5,
       hint: 'Tap INTERACT to descend into Black Grass Temple.',
       message: 'The black grass bends away from the temple stair.',
@@ -864,6 +894,70 @@ export class DungeonScene {
       area: 'black-grass-temple',
       type: 'areaEntrance',
     });
+  }
+
+  createOutdoorFlameChalice({ parent, position, name, scale = 1 }) {
+    const group = new THREE.Group();
+    group.name = name;
+    group.position.copy(position);
+    group.scale.setScalar(scale);
+
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [0.8, 0.8], color: 0x2c2823, roughness: 0.96, metalness: 0.0, emissive: 0x050302, emissiveIntensity: 0.08 });
+    const ironMat = new THREE.MeshStandardMaterial({ color: 0x2b211a, roughness: 0.82, metalness: 0.55, emissive: 0x120805, emissiveIntensity: 0.16 });
+    const flameOuterMat = new THREE.MeshBasicMaterial({ color: 0xff7a21, transparent: true, opacity: 0.86, depthWrite: false });
+    const flameInnerMat = new THREE.MeshBasicMaterial({ color: 0xffdf8a, transparent: true, opacity: 0.94, depthWrite: false });
+
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.25, 0.42, 12), stoneMat);
+    base.name = `${name}-ground-base`;
+    base.position.y = 0.21;
+    group.add(base);
+
+    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.76, 1.05, 12), stoneMat);
+    pedestal.name = `${name}-stone-pedestal`;
+    pedestal.position.y = 0.95;
+    group.add(pedestal);
+
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(1.08, 0.72, 0.48, 14), ironMat);
+    bowl.name = `${name}-iron-bowl`;
+    bowl.position.y = 1.64;
+    group.add(bowl);
+
+    const flame = new THREE.Group();
+    flame.name = `${name}-flame`;
+    flame.position.y = 2.05;
+    group.add(flame);
+
+    const flameOuter = new THREE.Mesh(new THREE.ConeGeometry(0.58, 1.25, 9), flameOuterMat);
+    flameOuter.name = `${name}-flame-outer`;
+    flameOuter.position.y = 0.38;
+    flame.add(flameOuter);
+
+    const flameInner = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.92, 8), flameInnerMat);
+    flameInner.name = `${name}-flame-inner`;
+    flameInner.position.y = 0.42;
+    flame.add(flameInner);
+
+    const light = new THREE.PointLight(0xff9b42, 2.9, 20, 1.38);
+    light.name = `${name}-warm-point-light`;
+    light.position.copy(flame.position);
+    group.add(light);
+
+    this.torchFlickerController.registerFixture({
+      pointLight: light,
+      flame,
+      flameOuter,
+      flameInner,
+      baseIntensity: light.intensity,
+      baseDistance: light.distance,
+      baseOuterOpacity: flameOuter.material.opacity,
+      baseInnerOpacity: flameInner.material.opacity,
+      phase: this.torchLights.length * 1.73,
+      profile: { flickerAmount: 0.18, flickerSpeed: 1.08 },
+    });
+    this.torchLights.push({ light, flame, baseIntensity: light.intensity, baseDistance: light.distance, phase: this.torchLights.length * 1.73 });
+
+    parent.add(group);
+    return group;
   }
 
   buildBlackGrassTempleInterior() {
@@ -879,6 +973,9 @@ export class DungeonScene {
     this.torchFlickerController.registerFromObject(runtime.group);
     this.reliquaryBlock = runtime.group.getObjectByName('BGT-P14-central-reliquary-block');
     this.rustedSwordChest = runtime.group.getObjectByName('BGT-P16-rusted-sword-chest-placeholder');
+    if (this.gameState?.hasRustedSwordChestOpened?.()) {
+      this.markInteractionCollected('BGT_INT_RUSTED_SWORD_CHEST');
+    }
     this.dungeonDebugRenderer = new DungeonDebugRenderer({ scene: this.scene, runtime });
     this.addBlackGrassTempleEnemies();
   }

@@ -52,7 +52,9 @@ No objective blocks exiting the temple. No objective depends on exact faction AI
 
 The rusted sword chest remains the existing `equipmentPickup` interaction for `rusted_sword`. It moved to the southwest offering niche in R03, clear of the central doorway line and the early faction spawn paths. A strong south-wall torch and a black grass floor patch frame it visually.
 
-The interaction still emits `chest_opened`, acquires `rusted_sword`, updates the chest state, and lets the equipment panel and FPV weapon renderer react through the existing equipment runtime. The chest uses blank authored hint/message fields in normal play and silently auto-equips the sword so the FPV weapon change carries the feedback.
+New game starts unarmed with only `unarmed` acquired. The rusted sword is not part of starting equipment, and stale saved equipment is repaired if it contains `rusted_sword` while the rusted sword chest has never been opened.
+
+The interaction still emits `chest_opened`, acquires `rusted_sword`, persists the chest-open state, updates the chest visual state, and lets the equipment panel and FPV weapon renderer react through the existing equipment runtime. The chest uses blank authored hint/message fields in normal play and silently auto-equips the sword so the FPV weapon change carries the feedback.
 
 ## Faction Encounter Staging
 
@@ -79,6 +81,9 @@ Ambient and directional fill were reduced so the dungeon does not read as fullbr
 
 ## Geometry And Collision Fixes
 
+- Compiled BGT wall collision now generates blockers from the same authored wall-gap data used by visual wall generation.
+- Visual walls are solid unless the room edge has an authored doorway or exit gap.
+- D19 return-threshold wall gaps were realigned to the R14B west edge and R14C east edge so the return route remains open without punching holes through unrelated walls.
 - R01 and R02 are marked non-spawning for safer entry/readability.
 - Chest placement is clear of the central slab, branch doorways, and faction anchors.
 - New storytelling props are non-colliding unless they correspond to existing solid blockers.
@@ -87,6 +92,10 @@ Ambient and directional fill were reduced so the dungeon does not read as fullbr
 - The return-route torch was moved away from the D19 doorway clearance.
 - Existing player exit trigger remains in R01 and keeps the route back to Reliquary Field available.
 - BGT inspect/chest/gate/altar authored hint and message fields are blank for normal gameplay; their interaction events still fire.
+
+## Field Entrance Correction
+
+The Reliquary Field side of Black Grass Temple was rebuilt from procedural geometry into a grounded facade: dark rear stone mass, heavy side pylons, embedded gate plane, short broken wall wings, warm threshold glow, and four large flame chalices placed on the ground. The field collision now matches the solid facade pieces while leaving the central mouth reachable, so the player is funneled toward the entrance instead of walking behind a flat prop.
 
 ## Environmental Storytelling
 
@@ -110,6 +119,9 @@ Added `npm run validate:bgt`, which checks:
 - objective id/reference validation
 - rusted sword chest interaction and prop presence
 - `rusted_sword` item registry presence
+- unarmed new-game equipment state
+- compiled wall blockers for authored BGT walls
+- D19 return-route wall-gap alignment
 - BGT objective silence and hidden-state policy
 - absence of BGT production-facing objective text actions
 - absence of BGT authored interaction hint/message copy

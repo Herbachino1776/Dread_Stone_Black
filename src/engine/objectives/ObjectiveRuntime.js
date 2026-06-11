@@ -221,6 +221,7 @@ export class ObjectiveRuntime {
     if (event.type === OBJECTIVE_EVENTS.locationEntered && event.locationId) this.facts.visitedLocationIds.add(event.locationId);
     if (event.type === OBJECTIVE_EVENTS.roomEntered && event.roomId) this.facts.visitedRoomIds.add(event.roomId);
     if (event.type === OBJECTIVE_EVENTS.interactionUsed && event.interactionId) this.facts.usedInteractionIds.add(event.interactionId);
+    if (event.type === OBJECTIVE_EVENTS.chestOpened && event.interactionId) this.facts.chestOpenedInteractionIds.add(event.interactionId);
     if (event.type === OBJECTIVE_EVENTS.enemyDamaged) {
       if (event.enemyId) this.facts.damagedEnemyIds.add(event.enemyId);
       if (event.targetId) this.facts.damagedEnemyIds.add(event.targetId);

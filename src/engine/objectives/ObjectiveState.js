@@ -31,6 +31,7 @@ export function createObjectiveFacts(snapshot = {}) {
   return {
     flags: new Set(snapshot.flags ?? []),
     usedInteractionIds: new Set(snapshot.usedInteractionIds ?? []),
+    chestOpenedInteractionIds: new Set(snapshot.chestOpenedInteractionIds ?? []),
     visitedLocationIds: new Set(snapshot.visitedLocationIds ?? []),
     visitedRoomIds: new Set(snapshot.visitedRoomIds ?? []),
     damagedEnemyIds: new Set(snapshot.damagedEnemyIds ?? []),
@@ -47,6 +48,7 @@ export function serializeFacts(facts) {
   return {
     flags: [...facts.flags],
     usedInteractionIds: [...facts.usedInteractionIds],
+    chestOpenedInteractionIds: [...facts.chestOpenedInteractionIds],
     visitedLocationIds: [...facts.visitedLocationIds],
     visitedRoomIds: [...facts.visitedRoomIds],
     damagedEnemyIds: [...facts.damagedEnemyIds],

@@ -211,7 +211,7 @@ export const blackGrassTempleDefinition = Object.freeze({
     connector('D16', 'R12', 'R13', 0, 90, 4.0, [wallGap('R12', 0, 90, 4), wallGap('R13', 0, 90, 4)]),
     connector('D17', 'R12', 'R14A', 27, 80, 3.6, [wallGap('R12', 27, 80, 3.6), wallGap('R14A', 27, 80, 3.6)]),
     connector('D18', 'R14A', 'R14B', 64, 80, 3.6, [wallGap('R14A', 66, 80, 3.6), wallGap('R14B', 62, 80, 3.6)]),
-    connector('D19', 'R14B', 'R14C', 64, -20, 3.6, [wallGap('R14B', 64, -50, 3.6), wallGap('R14C', 64, -24, 3.6)]),
+    connector('D19', 'R14B', 'R14C', 64, -20, 3.6, [wallGap('R14B', 62, -20, 3.6), wallGap('R14C', 66, -20, 3.6)]),
     connector('D20', 'R14C', 'R05', 44, -20, 3.6, [wallGap('R14C', 44, -20, 3.6), wallGap('R05', 44, -20, 3.6)]),
   ],
 
