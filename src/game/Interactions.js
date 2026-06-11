@@ -185,6 +185,9 @@ export class Interactions {
       return false;
     }
 
+    if (interaction.id === 'BGT_INT_RUSTED_SWORD_CHEST') {
+      this.dungeon.gameState?.markRustedSwordChestOpened?.();
+    }
     this.equipmentRuntime.acquireItem(interaction.itemId, {
       source: interaction.id,
       tags: ['pickup', this.dungeon.area],

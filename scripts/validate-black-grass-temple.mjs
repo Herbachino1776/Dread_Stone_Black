@@ -1,4 +1,5 @@
 import { validateDungeonDefinition } from '../src/engine/dungeon-authoring/DungeonValidation.js';
+import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
 import { buildLightObjectRegistry } from '../src/engine/lighting/LightObjectRegistry.js';
 import { validateTorchPlacements } from '../src/engine/lighting/TorchPlacementValidator.js';
 import { validateObjectiveDefinitions } from '../src/engine/objectives/ObjectiveDefinition.js';
@@ -6,6 +7,7 @@ import { blackGrassTempleDefinition } from '../src/game/locations/blackGrassTemp
 import { blackGrassTempleObjectives } from '../src/game/objectives/blackGrassTempleObjectives.js';
 import { objectiveMessages } from '../src/game/objectives/objectiveMessages.js';
 import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
+import { startingEquipment } from '../src/game/equipment/startingEquipment.js';
 
 const rooms = new Set(blackGrassTempleDefinition.rooms.map((room) => room.id));
 const interactions = new Set((blackGrassTempleDefinition.interactions ?? []).map((interaction) => interaction.id));
@@ -13,6 +15,8 @@ const items = new Set(Object.keys(equipmentRegistry.items ?? {}));
 const messages = new Set(Object.keys(objectiveMessages));
 const props = new Set((blackGrassTempleDefinition.props ?? []).map((prop) => prop.id));
 const spawns = blackGrassTempleDefinition.spawns ?? [];
+const collision = buildDungeonCollision(blackGrassTempleDefinition);
+const compiledWallBlockers = collision.blockerRects.filter((blocker) => blocker.tags?.includes('compiled-wall'));
 
 const destinationSpawnIds = new Set(['field_black_grass_temple_return']);
 const dungeonValidation = validateDungeonDefinition(blackGrassTempleDefinition, { destinationSpawnIds });
@@ -50,6 +54,10 @@ const requiredChecks = [
     message: 'missing rusted_sword item in equipment registry',
   },
   {
+    ok: !startingEquipment.acquiredItemIds.includes('rusted_sword') && startingEquipment.equipped.weapon === 'unarmed',
+    message: 'new-game starting equipment must be unarmed with no rusted_sword acquired',
+  },
+  {
     ok: spawns.some((spawn) => spawn.kind === 'player' && spawn.roomId === 'R01'),
     message: 'missing BGT player spawn in entry room R01',
   },
@@ -85,6 +93,15 @@ const requiredChecks = [
     ok: (blackGrassTempleDefinition.interactions ?? []).find((interaction) => interaction.id === 'BGT_INT_RUSTED_SWORD_CHEST')?.autoEquip === true,
     message: 'rusted sword chest should silently auto-equip for non-text feedback',
   },
+  {
+    ok: compiledWallBlockers.length > 0,
+    message: 'BGT compiled collision must include generated wall blockers that match visual walls',
+  },
+  {
+    ok: (blackGrassTempleDefinition.doors ?? []).find((door) => door.id === 'D19')?.wallGaps?.some((gap) => gap.roomId === 'R14B' && gap.position.x === 62 && gap.position.z === -20)
+      && (blackGrassTempleDefinition.doors ?? []).find((door) => door.id === 'D19')?.wallGaps?.some((gap) => gap.roomId === 'R14C' && gap.position.x === 66 && gap.position.z === -20),
+    message: 'D19 return-route wall gaps must align to the R14B west edge and R14C east edge',
+  },
 ];
 
 requiredChecks.forEach((check) => {
@@ -106,6 +123,7 @@ console.log('Black Grass Temple validation');
 printIssues('Errors', errors);
 printIssues('Warnings', warnings);
 console.log(`Rooms: ${rooms.size}`);
+console.log(`Compiled wall blockers: ${compiledWallBlockers.length}`);
 console.log(`Torch fixtures: ${lightRegistry.torchFixtures.length}`);
 console.log(`Objective definitions: ${blackGrassTempleObjectives.length}`);
 
