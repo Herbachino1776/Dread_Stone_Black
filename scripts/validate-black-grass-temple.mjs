@@ -1,5 +1,7 @@
 import { validateDungeonDefinition } from '../src/engine/dungeon-authoring/DungeonValidation.js';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
+import { validateDungeonIntegrity } from '../src/engine/dungeon-authoring/integrity/DungeonIntegrityValidator.js';
+import { formatIntegrityIssue } from '../src/engine/dungeon-authoring/integrity/DungeonIntegrityReport.js';
 import { buildLightObjectRegistry } from '../src/engine/lighting/LightObjectRegistry.js';
 import { validateTorchPlacements } from '../src/engine/lighting/TorchPlacementValidator.js';
 import { validateObjectiveDefinitions } from '../src/engine/objectives/ObjectiveDefinition.js';
@@ -20,6 +22,7 @@ const compiledWallBlockers = collision.blockerRects.filter((blocker) => blocker.
 
 const destinationSpawnIds = new Set(['field_black_grass_temple_return']);
 const dungeonValidation = validateDungeonDefinition(blackGrassTempleDefinition, { destinationSpawnIds });
+const integrityValidation = validateDungeonIntegrity(blackGrassTempleDefinition);
 const lightRegistry = buildLightObjectRegistry(blackGrassTempleDefinition);
 const torchValidation = validateTorchPlacements(blackGrassTempleDefinition, lightRegistry.torchFixtures);
 const objectiveValidation = validateObjectiveDefinitions(blackGrassTempleObjectives, {
@@ -31,11 +34,13 @@ const objectiveValidation = validateObjectiveDefinitions(blackGrassTempleObjecti
 
 const errors = [
   ...dungeonValidation.errors,
+  ...integrityValidation.errors,
   ...torchValidation.errors,
   ...objectiveValidation.errors,
 ];
 const warnings = [
   ...dungeonValidation.warnings,
+  ...integrityValidation.warnings,
   ...torchValidation.warnings,
   ...objectiveValidation.warnings,
 ];
@@ -124,8 +129,17 @@ printIssues('Errors', errors);
 printIssues('Warnings', warnings);
 console.log(`Rooms: ${rooms.size}`);
 console.log(`Compiled wall blockers: ${compiledWallBlockers.length}`);
+console.log(`Integrity wall segments: ${integrityValidation.debug.wallSegments.length}`);
+console.log(`Integrity declared openings: ${integrityValidation.debug.openings.length}`);
 console.log(`Torch fixtures: ${lightRegistry.torchFixtures.length}`);
 console.log(`Objective definitions: ${blackGrassTempleObjectives.length}`);
+
+if (integrityValidation.errors.length || integrityValidation.warnings.length) {
+  console.log('Integrity issues:');
+  [...integrityValidation.errors, ...integrityValidation.warnings].forEach((issue) => {
+    console.log(`- ${formatIntegrityIssue(issue)}`);
+  });
+}
 
 if (errors.length) {
   process.exitCode = 1;

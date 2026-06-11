@@ -5,6 +5,7 @@ import { buildDungeonNavigation } from './DungeonNavigationBuilder.js';
 import { buildDungeonSpawns } from './DungeonSpawnBuilder.js';
 import { asArray } from './DungeonDefinitionTypes.js';
 import { logDungeonValidation, validateDungeonDefinition } from './DungeonValidation.js';
+import { validateDungeonIntegrity } from './integrity/DungeonIntegrityValidator.js';
 import { buildLightObjectRegistry } from '../lighting/LightObjectRegistry.js';
 import { validateTorchPlacements } from '../lighting/TorchPlacementValidator.js';
 
@@ -52,14 +53,17 @@ function normalizeExits(definition) {
 
 export function compileDungeonLocation(definition, options = {}) {
   const baseValidation = validateDungeonDefinition(definition, options.validation ?? {});
+  const integrityReport = validateDungeonIntegrity(definition, options.integrity ?? {});
   const lightRegistry = buildLightObjectRegistry(definition, options.lightRegistry ?? {});
   const fixtureValidation = validateTorchPlacements(definition, lightRegistry.torchFixtures);
   const validation = {
     ...baseValidation,
-    errors: [...baseValidation.errors, ...fixtureValidation.errors],
-    warnings: [...baseValidation.warnings, ...fixtureValidation.warnings],
-    ok: baseValidation.errors.length + fixtureValidation.errors.length === 0,
+    errors: [...baseValidation.errors, ...fixtureValidation.errors, ...integrityReport.errors],
+    warnings: [...baseValidation.warnings, ...fixtureValidation.warnings, ...integrityReport.warnings],
+    infos: [...(baseValidation.infos ?? []), ...integrityReport.infos],
+    ok: baseValidation.errors.length + fixtureValidation.errors.length + integrityReport.errors.length === 0,
     fixtureValidation,
+    integrity: integrityReport,
   };
   if (import.meta.env?.DEV && options.logValidation !== false) {
     logDungeonValidation(validation);
@@ -97,6 +101,7 @@ export function compileDungeonLocation(definition, options = {}) {
     fixtureValidation,
     lightBudget: lightRegistry.budget,
     props: geometry.props,
+    integrityReport,
     debugData: {
       rooms: asArray(definition.rooms),
       blockers: collision.blockerRects,
@@ -106,6 +111,7 @@ export function compileDungeonLocation(definition, options = {}) {
       exits,
       torchFixtures: lightRegistry.torchFixtures,
       fixtureValidation,
+      integrity: integrityReport,
     },
     validation,
   };
@@ -120,6 +126,8 @@ export function compileDungeonLocation(definition, options = {}) {
       warnings: validation.warnings.length,
       fixtureErrors: fixtureValidation.errors.length,
       fixtureWarnings: fixtureValidation.warnings.length,
+      integrityErrors: integrityReport.errors.length,
+      integrityWarnings: integrityReport.warnings.length,
     },
   };
 

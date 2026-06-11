@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { TorchDebugRenderer } from '../lighting/TorchDebugRenderer.js';
+import { addIntegrityDebugLayer } from './integrity/DungeonIntegrityDebug.js';
 
-const DEBUG_LAYERS = Object.freeze(['all', 'rooms', 'blockers', 'nav', 'spawns', 'encounters', 'exits', 'torches']);
+const DEBUG_LAYERS = Object.freeze(['all', 'rooms', 'blockers', 'nav', 'spawns', 'encounters', 'exits', 'torches', 'integrity']);
 
 function rectMesh(rect, color, y = 0.035, opacity = 0.18) {
   const width = rect.maxX - rect.minX;
@@ -132,6 +133,7 @@ export class DungeonDebugRenderer {
 
     const torchDebug = new TorchDebugRenderer({ runtime: this.runtime });
     this.layers.torches.add(torchDebug.group);
+    addIntegrityDebugLayer({ runtime: this.runtime, group: this.layers.integrity });
 
     this.playerMarker = marker(new THREE.Vector3(), 0xffffff, 0.42);
     this.playerMarker.name = `${this.runtime.locationId}-debug-player-position`;
