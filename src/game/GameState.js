@@ -3,6 +3,7 @@ const FIELD_SHRINE_REACTION_KEY = 'dreadStoneBlack.fieldShrineReactionSeen';
 const EQUIPMENT_STATE_KEY = 'dreadStoneBlack.equipmentState';
 const OBJECTIVE_STATE_KEY = 'dreadStoneBlack.objectiveState';
 const RUSTED_SWORD_CHEST_OPENED_KEY = 'dreadStoneBlack.blackGrassTemple.rustedSwordChestOpened';
+const BLACK_GRASS_TEMPLE_ALTAR_ACTIVATED_KEY = 'dreadStoneBlack.blackGrassTemple.altarActivated';
 const RUSTED_SWORD_ITEM_ID = 'rusted_sword';
 const RUSTED_SWORD_CHEST_INTERACTION_ID = 'BGT_INT_RUSTED_SWORD_CHEST';
 
@@ -13,8 +14,13 @@ export class GameState {
     this.fieldShrineReactionSeen = this.readFlag(FIELD_SHRINE_REACTION_KEY, false);
     this.rustedSwordChestOpened = this.readFlag(RUSTED_SWORD_CHEST_OPENED_KEY, false)
       || this.inferRustedSwordChestOpenedFromObjectives();
+    this.blackGrassTempleAltarActivated = this.readFlag(BLACK_GRASS_TEMPLE_ALTAR_ACTIVATED_KEY, false)
+      || this.inferBlackGrassTempleAltarActivatedFromObjectives();
     if (this.rustedSwordChestOpened) {
       this.writeFlag(RUSTED_SWORD_CHEST_OPENED_KEY, true);
+    }
+    if (this.blackGrassTempleAltarActivated) {
+      this.writeFlag(BLACK_GRASS_TEMPLE_ALTAR_ACTIVATED_KEY, true);
     }
   }
 
@@ -54,6 +60,18 @@ export class GameState {
     return this.rustedSwordChestOpened;
   }
 
+  hasBlackGrassTempleAltarActivated() {
+    return this.blackGrassTempleAltarActivated;
+  }
+
+  markBlackGrassTempleAltarActivated() {
+    if (this.blackGrassTempleAltarActivated) return false;
+
+    this.blackGrassTempleAltarActivated = true;
+    this.writeFlag(BLACK_GRASS_TEMPLE_ALTAR_ACTIVATED_KEY, true);
+    return true;
+  }
+
   markRustedSwordChestOpened() {
     if (this.rustedSwordChestOpened) return false;
 
@@ -89,6 +107,25 @@ export class GameState {
     return (snapshot.objectiveStates ?? []).some((objectiveState) => (
       objectiveState?.id === 'bgt_arm_yourself'
       && objectiveState.stepStates?.take_rusted_sword?.status === 'complete'
+    ));
+  }
+
+
+  inferBlackGrassTempleAltarActivatedFromObjectives() {
+    const snapshot = this.readJson(OBJECTIVE_STATE_KEY, null);
+    if (!snapshot || typeof snapshot !== 'object') return false;
+
+    const facts = snapshot.facts ?? {};
+    if ((facts.flags ?? []).includes('bgt_silent_altar_touched')) return true;
+    if ((facts.usedInteractionIds ?? []).includes('BGT_INT06')) return true;
+    if (snapshot.lastEvent?.type === 'interaction_used' && snapshot.lastEvent?.interactionId === 'BGT_INT06') return true;
+
+    return (snapshot.objectiveStates ?? []).some((objectiveState) => (
+      objectiveState?.id === 'bgt_touch_silent_altar'
+      && (
+        objectiveState.status === 'complete'
+        || objectiveState.stepStates?.inspect_silent_altar?.status === 'complete'
+      )
     ));
   }
 
