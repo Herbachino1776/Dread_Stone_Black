@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
 export class Hud {
-  constructor(root) {
+  constructor(root, { debugEnabled = false } = {}) {
     this.root = root;
+    this.debugEnabled = debugEnabled;
     this.hintEl = root.querySelector('[data-hud="hint"]');
     this.debugEl = root.querySelector('[data-hud="debug"]');
     this.hpEl = root.querySelector('[data-stat="hp"]');
@@ -29,9 +30,10 @@ export class Hud {
   }
 
   updateDebug(player) {
-    // Keep this subtle, but visible enough to confirm touch controls move the player on a phone.
+    if (!this.debugEnabled || !this.debugEl) return;
+
     this.debugFrameSkip = (this.debugFrameSkip + 1) % 8;
-    if (this.debugFrameSkip !== 0 || !this.debugEl) return;
+    if (this.debugFrameSkip !== 0) return;
 
     const yawDegrees = Math.round(THREE.MathUtils.radToDeg(player.yaw));
     const pitchDegrees = Math.round(THREE.MathUtils.radToDeg(player.pitch));

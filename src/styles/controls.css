@@ -267,3 +267,41 @@
     height: clamp(52px, 14vw, 64px);
   }
 }
+
+.control-deck {
+  grid-template-columns: minmax(76px, 1fr) minmax(132px, auto) minmax(76px, 1fr);
+  min-height: clamp(112px, 16vh, 136px);
+  padding: 7px 9px calc(env(safe-area-inset-bottom) + 8px);
+  border-radius: 20px;
+}
+
+.action-cluster {
+  grid-template-columns: repeat(2, max-content);
+  justify-content: center;
+  gap: clamp(12px, 4vw, 18px);
+}
+
+.action-button {
+  width: clamp(58px, 15vw, 70px);
+  height: clamp(58px, 15vw, 70px);
+}
+
+.action-button span {
+  display: grid;
+  place-items: center;
+  width: 72%;
+  height: 72%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 380px) {
+  .control-deck {
+    grid-template-columns: minmax(64px, 1fr) minmax(124px, auto) minmax(64px, 1fr);
+  }
+
+  .action-cluster {
+    gap: 8px;
+  }
+}
