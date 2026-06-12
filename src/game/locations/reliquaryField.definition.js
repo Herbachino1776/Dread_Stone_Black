@@ -36,6 +36,20 @@ function visualStructure(id, minX, maxX, minZ, maxZ, {
   };
 }
 
+const fieldKeeperHouseCollisionHullIds = Object.freeze([
+  'FKH_EXT_WALL_REAR',
+  'FKH_EXT_WALL_W',
+  'FKH_EXT_WALL_E',
+  'FKH_EXT_FRONT_L',
+  'FKH_EXT_FRONT_R',
+  'FKH_EXT_CHIMNEY',
+]);
+
+const fieldKeeperHouseVisualStructureIds = Object.freeze([
+  'FKH_EXT_BASE',
+  ...fieldKeeperHouseCollisionHullIds,
+]);
+
 const blackGrassTempleFacadeCollisionHullIds = Object.freeze([
   'C02_REAR_MASS',
   'C02_LEFT_PYLON',
@@ -96,6 +110,33 @@ export const reliquaryFieldDefinition = Object.freeze({
     walkableBounds: { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 },
     leakDetection: false,
     facades: [
+
+      {
+        id: 'reliquary-field-keeper-house-exterior',
+        locationId: 'reliquary-field',
+        type: 'fieldHouseFacade',
+        bounds: { minX: 127, maxX: 157, minZ: -80, maxZ: -52 },
+        approachZone: { minX: 138, maxX: 146, minZ: -84, maxZ: -76 },
+        behindZone: { minX: 128, maxX: 156, minZ: -56, maxZ: -52 },
+        doorway: {
+          triggerId: 'field_enter_field_keeper_house',
+          openingRect: { minX: 139.5, maxX: 144.5, minZ: -79, maxZ: -74.5 },
+          entryTriggerId: 'field_enter_field_keeper_house',
+        },
+        allowedWalkBehind: true,
+        collisionHullIds: fieldKeeperHouseCollisionHullIds,
+        visualStructureIds: fieldKeeperHouseVisualStructureIds,
+        visualStructures: [
+          visualStructure('FKH_EXT_BASE', 128, 156, -76, -52, { kind: 'foundation', y: 0.2 }),
+          visualStructure('FKH_EXT_WALL_REAR', 128, 156, -55, -53, { kind: 'ruinedHouseRearWall' }),
+          visualStructure('FKH_EXT_WALL_W', 127, 129, -75, -53, { kind: 'ruinedHouseSideWall' }),
+          visualStructure('FKH_EXT_WALL_E', 155, 157, -75, -53, { kind: 'ruinedHouseSideWall' }),
+          visualStructure('FKH_EXT_FRONT_L', 130, 140, -77, -75, { kind: 'ruinedHouseFrontReturn' }),
+          visualStructure('FKH_EXT_FRONT_R', 144, 154, -77, -75, { kind: 'ruinedHouseFrontReturn' }),
+          visualStructure('FKH_EXT_CHIMNEY', 132.5, 135.5, -64.5, -61.5, { kind: 'chimney' }),
+        ],
+        validation: { sampleStep: 1 },
+      },
       {
         id: 'reliquary-field-black-grass-temple-facade',
         locationId: 'reliquary-field',
@@ -173,6 +214,13 @@ export const reliquaryFieldDefinition = Object.freeze({
     exteriorBlocker('C02_RIGHT_CHALICE_FRONT', -178.5, -175.5, 26.5, 29.5, { visualStructureId: 'C02_O-right-front-grounded-flame-chalice' }),
     exteriorBlocker('C02_LEFT_CHALICE_REAR', -195, -192, 36.5, 39.5, { visualStructureId: 'C02_P-left-rear-grounded-flame-chalice' }),
     exteriorBlocker('C02_RIGHT_CHALICE_REAR', -176, -173, 36.5, 39.5, { visualStructureId: 'C02_Q-right-rear-grounded-flame-chalice' }),
+
+    exteriorBlocker('FKH_EXT_WALL_REAR', 128, 156, -55, -53, { height: 4.8, visualStructureId: 'FKH_EXT_WALL_REAR' }),
+    exteriorBlocker('FKH_EXT_WALL_W', 127, 129, -75, -53, { height: 4.0, visualStructureId: 'FKH_EXT_WALL_W' }),
+    exteriorBlocker('FKH_EXT_WALL_E', 155, 157, -75, -53, { height: 3.6, visualStructureId: 'FKH_EXT_WALL_E' }),
+    exteriorBlocker('FKH_EXT_FRONT_L', 130, 140, -77, -75, { height: 3.2, visualStructureId: 'FKH_EXT_FRONT_L' }),
+    exteriorBlocker('FKH_EXT_FRONT_R', 144, 154, -77, -75, { height: 3.2, visualStructureId: 'FKH_EXT_FRONT_R' }),
+    exteriorBlocker('FKH_EXT_CHIMNEY', 132.5, 135.5, -64.5, -61.5, { height: 8, visualStructureId: 'FKH_EXT_CHIMNEY' }),
     exteriorBlocker('STONE01', 113.5, 116.5, -71, -69, { visualStructureId: 'STONE01-standing-stone-wall_black_stone_01' }),
     exteriorBlocker('STONE02', 121, 123, -65, -63, { visualStructureId: 'STONE02-standing-stone-wall_black_stone_01' }),
     exteriorBlocker('STONE03', 107, 109, -59, -57, { visualStructureId: 'STONE03-standing-stone-wall_black_stone_01' }),
@@ -183,6 +231,7 @@ export const reliquaryFieldDefinition = Object.freeze({
     { id: 'field_player_start', kind: 'player', position: { x: 0, y: 1.55, z: -175 }, yaw: 0, roomId: 'FIELD01', tags: ['live'] },
     { id: 'field_south_reliquary_crypt_return', kind: 'return', position: { x: -60, y: 1.55, z: -112 }, yaw: 0, roomId: 'FIELD01', tags: ['live', 'south-reliquary-crypt'] },
     { id: 'field_black_grass_temple_return', kind: 'return', position: { x: -184, y: 1.55, z: 25 }, yaw: 0, roomId: 'FIELD01', tags: ['live', 'black-grass-temple'] },
+    { id: 'field_keeper_house_return', kind: 'return', position: { x: 142, y: 1.55, z: -82 }, yaw: 0, roomId: 'FIELD01', tags: ['live', 'field-keeper-house'] },
   ],
   exits: [
     {
@@ -194,6 +243,21 @@ export const reliquaryFieldDefinition = Object.freeze({
       destinationSpawnId: 'south_crypt_player_start',
       promptText: 'Tap INTERACT to enter the South Reliquary Crypt.',
       tags: ['live'],
+    },
+
+    {
+      id: 'field_enter_field_keeper_house',
+      fromLocation: 'reliquary-field',
+      toLocation: 'field-keeper-house',
+      triggerRect: { minX: 139.5, maxX: 144.5, minZ: -80, maxZ: -74.5 },
+      position: { x: 142, y: 1, z: -77 },
+      destinationSpawnId: 'field_keeper_house_player_start',
+      promptText: 'Tap INTERACT to enter the Field Keeper House.',
+      tags: ['live', 'field-keeper-house'],
+      userData: {
+        exteriorCenter: { x: 142, y: 0, z: -64 },
+        placementNote: 'Adjusted within blueprint safe band to avoid the existing standing-stone cluster.',
+      },
     },
     {
       id: 'field_enter_black_grass_temple',
