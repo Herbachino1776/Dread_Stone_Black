@@ -1,6 +1,6 @@
 # Dread Stone Black - World Architecture Index
 
-Version: v0.4
+Version: v0.5
 Lane: Game World Architect  
 Purpose: Repo-facing index for buildable location blueprints and construction standards.
 
@@ -203,6 +203,8 @@ docs/world/
   temples/
     black_grass_temple_v01.md
     black_grass_temple_v02_construction_blueprint.md
+  houses/
+    field_keeper_house_v01.md
   addendums/
     reliquary_field_addendum_001.md
     south_reliquary_crypt_addendum_001.md
@@ -229,6 +231,7 @@ docs/world/
 | `docs/world/crypts/south_reliquary_crypt_baby_labyrinth_v01.md` | v0.1 built foundation | First compact baby labyrinth under the South Reliquary Crypt entrance; use addendums for future changes |
 | `docs/world/temples/black_grass_temple_v01.md` | v0.1 design blueprint | Production-grade medium dungeon: field temple, subterranean ruins, black-grass tavern halls, enemy spawn plan, lower sanctum, return shortcut |
 | `docs/world/temples/black_grass_temple_v02_construction_blueprint.md` | v0.2 construction blueprint | Runtime-facing audit blueprint for `src/game/locations/blackGrassTemple.definition.js` |
+| `docs/world/houses/field_keeper_house_v01.md` | v0.1 construction blueprint | Compact ruined field house: exterior shell, hearth room, side rooms, collapsed rear room, cellar stair, root cellar, return route |
 
 ---
 
@@ -301,7 +304,7 @@ The first field-to-labyrinth loop is built and should be treated as the current 
 
 Active priority has shifted to construction-grade authoring and runtime validation.
 
-Black Grass Temple is the next major architecture target:
+Black Grass Temple remains the major dungeon architecture target:
 
 - use `black_grass_temple_v02_construction_blueprint.md`
 - audit `src/game/locations/blackGrassTemple.definition.js`
@@ -309,14 +312,23 @@ Black Grass Temple is the next major architecture target:
 - run `npm run build`, `npm run validate:bgt`, `npm run validate:integrity`, and `npm run validate:dungeons`
 - fix validation errors before claiming completion
 
+Field Keeper House is the current small-structure test target:
+
+- use `docs/world/houses/field_keeper_house_v01.md`
+- create `src/game/locations/fieldKeeperHouse.definition.js`
+- connect it to Reliquary Field as a compact enterable house
+- test small-room wall sealing, prop collision, torch fixtures, cellar flow, and return routing
+- do not add enemies or new assets in v0.1
+
 ## 12. Next Useful Work
 
 Near-term Architect/Codex tasks should focus on:
 
-- using the new construction standard for all future locations
+- implementing Field Keeper House as the first reusable house/interior pattern
+- using the construction standard for all future locations
 - auditing Black Grass Temple against the v02 construction blueprint
 - resolving validation warnings/errors honestly
-- preserving Reliquary Field and South Reliquary Crypt while improving BGT
-- using addendums after playtest for enemy tuning, sanctum reward, field approach expansion, or second-depth work
+- preserving Reliquary Field, South Reliquary Crypt, and Black Grass Temple while adding smaller structures
+- using addendums after playtest for house polish, field approach integration, cellar expansion, or future ruined-house variants
 
 Keep these tasks mobile-readable, buildable, and grounded in the existing field-to-crypt loop.
