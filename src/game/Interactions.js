@@ -49,7 +49,7 @@ export class Interactions {
     const indoorExit = this.getNearbyIndoorExit();
     if (indoorExit) {
       return {
-        hint: this.dungeon.area === 'black-grass-temple' ? '' : 'Tap INTERACT to climb back to the tomb-field.',
+        hint: indoorExit.promptText ?? (this.dungeon.area === 'black-grass-temple' ? '' : 'Tap INTERACT to climb back to the tomb-field.'),
         use: () => this.useIndoorExit(),
       };
     }
@@ -132,8 +132,8 @@ export class Interactions {
   }
 
   useIndoorExit() {
-    const fromArea = this.dungeon.area === 'black-grass-temple' ? 'black-grass-temple' : 'dungeon';
-    const hint = this.dungeon.area === 'black-grass-temple' ? '' : 'Cold field air seeps down the stair.';
+    const fromArea = this.dungeon.area === 'dungeon' ? 'dungeon' : this.dungeon.area;
+    const hint = this.dungeon.area === 'black-grass-temple' ? '' : this.dungeon.area === 'field-keeper-house' ? 'Cold field air leaks under the threshold.' : 'Cold field air seeps down the stair.';
     this.setTemporaryHint(hint, 900);
     this.emitObjectiveEvent(OBJECTIVE_EVENTS.locationExited, {
       interactionId: `${this.getLocationId()}_exit`,
@@ -351,8 +351,10 @@ export class Interactions {
   }
 
   getNearbyIndoorExit() {
-    if (!['dungeon', 'black-grass-temple'].includes(this.dungeon.area)) return null;
-    return this.isCloseEnough(this.dungeon.indoorExitTarget, INDOOR_EXIT_RANGE);
+    if (this.dungeon.area === 'field') return null;
+    if (!this.dungeon.indoorExitTarget) return null;
+    if (!this.isCloseEnough(this.dungeon.indoorExitTarget, INDOOR_EXIT_RANGE)) return null;
+    return this.dungeon.compiledLocationRuntime?.exits?.find((exit) => exit.toLocation === 'reliquary-field') ?? true;
   }
 
   isNearKey() {

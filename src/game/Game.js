@@ -50,8 +50,9 @@ export class Game {
     const requestedArea = query.get('area');
     const returnedFrom = query.get('from');
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
-    const fieldSpawn = returnedFrom === 'black-grass-temple' ? 'blackGrassTempleExit' : returnedFrom === 'dungeon' ? 'cryptAExit' : 'start';
-    const area = ['dungeon', 'black-grass-temple'].includes(requestedArea) ? requestedArea : 'field';
+    const fieldSpawn = returnedFrom === 'black-grass-temple' ? 'blackGrassTempleExit' : returnedFrom === 'field-keeper-house' ? 'fieldKeeperHouseExit' : returnedFrom === 'dungeon' ? 'cryptAExit' : 'start';
+    const requestedLocation = getLocationDefinition(requestedArea);
+    const area = ['dungeon', 'black-grass-temple'].includes(requestedArea) || requestedLocation?.tags?.includes('compiled-runtime') ? requestedArea : 'field';
     this.gameState = new GameState();
     this.equipmentRuntime = new EquipmentRuntime({
       weaponProfiles: equipmentRegistry.weapons,
@@ -159,7 +160,7 @@ export class Game {
   }
 
   createObjectiveValidationContext() {
-    const definitions = ['black-grass-temple', 'south-reliquary-crypt']
+    const definitions = ['black-grass-temple', 'south-reliquary-crypt', 'field-keeper-house']
       .map((id) => getLocationDefinition(id))
       .filter(Boolean);
     return {

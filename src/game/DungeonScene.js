@@ -66,9 +66,12 @@ const FIELD_CRYPT_A_RETURN_START = new THREE.Vector3(-60, 1.55, -112);
 const FIELD_CRYPT_A_RETURN_YAW = 0;
 const FIELD_BLACK_GRASS_TEMPLE_RETURN_START = new THREE.Vector3(-184, 1.55, 25);
 const FIELD_BLACK_GRASS_TEMPLE_RETURN_YAW = 0;
+const FIELD_KEEPER_HOUSE_RETURN_START = new THREE.Vector3(142, 1.55, -82);
+const FIELD_KEEPER_HOUSE_RETURN_YAW = 0;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const BGT_EXTERIOR_ENTRANCE_TARGET = new THREE.Vector3(-184, 1, 31);
+const FIELD_KEEPER_HOUSE_ENTRANCE_TARGET = new THREE.Vector3(142, 1, -77);
 function getReliquaryFieldColliders() {
   return getLocationDefinition('reliquary-field')?.blockers ?? [];
 }
@@ -208,6 +211,7 @@ export class DungeonScene {
     this.sheepDemonEnemy = null;
     this.blackGrassFactionManager = null;
     this.blackGrassRuntime = null;
+    this.compiledLocationRuntime = null;
     this.dungeonDebugRenderer = null;
     this.goreRuntime = new GoreRuntime({
       scene: this.scene,
@@ -262,6 +266,8 @@ export class DungeonScene {
 
     if (this.area === 'black-grass-temple') {
       this.configureBlackGrassTempleRuntime();
+    } else if (this.isCompiledRuntimeArea()) {
+      this.configureCompiledLocationRuntime(this.area);
     } else {
       this.collision = this.area === 'field'
         ? new CollisionWorld({ walkableRects: [FIELD_WALKABLE_RECT], blockerRects: this.createOutdoorBlockers(), playerRadius: 0.5 })
@@ -274,15 +280,45 @@ export class DungeonScene {
 
 
   getIndoorPlayerSpawn() {
-    if (this.area === 'black-grass-temple') {
-      return { spawnPosition: new THREE.Vector3(0, 1.55, -72), spawnYaw: 0 };
+    const definition = getLocationDefinition(this.area);
+    const playerSpawn = definition?.spawns?.find((spawn) => spawn.kind === 'player');
+    if (playerSpawn?.position) {
+      return { spawnPosition: this.toVector3(playerSpawn.position, 1.55), spawnYaw: playerSpawn.yaw ?? 0 };
     }
 
     return { spawnPosition: new THREE.Vector3(0, 1.55, -30), spawnYaw: 0 };
   }
 
+  isCompiledRuntimeArea() {
+    return this.area !== 'field' && this.area !== 'dungeon' && getLocationDefinition(this.area)?.tags?.includes('compiled-runtime');
+  }
+
+  configureCompiledLocationRuntime(locationId = this.area) {
+    const runtime = this.compileLocationRuntime(locationId);
+    this.blackGrassRuntime = locationId === 'black-grass-temple' ? runtime : this.blackGrassRuntime;
+    this.compiledLocationRuntime = runtime;
+    this.collision = runtime.collisionWorld;
+
+    const exit = runtime.exits.find((candidate) => candidate.toLocation === 'reliquary-field') ?? runtime.exits[0];
+    this.indoorExitTarget = exit?.position?.clone() ?? new THREE.Vector3(0, 1.2, -30);
+    this.inspectInteractions = (runtime.definition.interactions ?? []).map((interaction) => ({
+      ...interaction,
+      target: this.toVector3(interaction.target, 1.2),
+    }));
+
+    const playerStart = runtime.spawnAnchors.find((spawn) => spawn.kind === 'player');
+    if (playerStart) {
+      this.playerSpawn = {
+        spawnPosition: playerStart.position.clone(),
+        spawnYaw: playerStart.yaw ?? 0,
+      };
+    }
+
+    return runtime;
+  }
+
   configureBlackGrassTempleRuntime() {
-    this.blackGrassRuntime = this.compileLocationRuntime('black-grass-temple');
+    this.blackGrassRuntime = this.configureCompiledLocationRuntime('black-grass-temple');
     this.blackGrassNavigationGraph = this.blackGrassRuntime.navGraph;
     this.blackGrassFactionSpawnAnchors = Object.freeze(this.blackGrassRuntime.spawnAnchors
       .filter((spawn) => spawn.tags?.includes('faction-war-anchor'))
@@ -301,22 +337,9 @@ export class DungeonScene {
         ]).map((point) => point.clone())),
       })));
 
-    this.collision = this.blackGrassRuntime.collisionWorld;
     const exit = this.blackGrassRuntime.exits.find((candidate) => candidate.id === 'bgt_exit_to_reliquary_field');
-    this.indoorExitTarget = exit?.position?.clone() ?? new THREE.Vector3(0, 1.2, -76);
-    this.inspectInteractions = (this.blackGrassRuntime.definition.interactions ?? []).map((interaction) => ({
-      ...interaction,
-      target: this.toVector3(interaction.target, 1.2),
-    }));
+    this.indoorExitTarget = exit?.position?.clone() ?? this.indoorExitTarget;
     this.gateTarget = this.inspectInteractions.find((interaction) => interaction.id === 'BGT_INT04')?.target?.clone() ?? new THREE.Vector3(30, 1.2, -20);
-
-    const playerStart = this.blackGrassRuntime.spawnAnchors.find((spawn) => spawn.kind === 'player');
-    if (playerStart) {
-      this.playerSpawn = {
-        spawnPosition: playerStart.position.clone(),
-        spawnYaw: playerStart.yaw ?? 0,
-      };
-    }
   }
 
   compileLocationRuntime(locationId) {
@@ -368,6 +391,10 @@ export class DungeonScene {
       return { spawnPosition: FIELD_BLACK_GRASS_TEMPLE_RETURN_START, spawnYaw: FIELD_BLACK_GRASS_TEMPLE_RETURN_YAW };
     }
 
+    if (this.fieldSpawn === 'fieldKeeperHouseExit') {
+      return { spawnPosition: FIELD_KEEPER_HOUSE_RETURN_START, spawnYaw: FIELD_KEEPER_HOUSE_RETURN_YAW };
+    }
+
     return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
   }
 
@@ -385,6 +412,11 @@ export class DungeonScene {
   buildIndoorDungeon() {
     if (this.area === 'black-grass-temple') {
       this.buildBlackGrassTempleInterior();
+      return;
+    }
+
+    if (this.isCompiledRuntimeArea()) {
+      this.buildCompiledLocationInterior();
       return;
     }
 
@@ -726,6 +758,7 @@ export class DungeonScene {
     this.addBrokenShrine();
     this.addSouthReliquaryCrypt();
     this.addBlackGrassTempleExterior();
+    this.addFieldKeeperHouseExterior();
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
     this.addLowRuinWalls();
@@ -819,6 +852,46 @@ export class DungeonScene {
       hint: 'Tap INTERACT to enter the South Reliquary Crypt.',
       message: 'The crypt air moves inward.',
       functional: true,
+    });
+  }
+
+
+  addFieldKeeperHouseExterior() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.2, 1.6], color: 0x6f695f, roughness: 0.97, metalness: 0.0, emissive: 0x080605, emissiveIntensity: 0.08 });
+    const darkStoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.8, 1.3], color: 0x4e4942, roughness: 0.98, metalness: 0.0, emissive: 0x050403, emissiveIntensity: 0.09 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [3.2, 2.8], color: 0x7f7668, roughness: 0.96, metalness: 0.0, emissive: 0x0f0b08, emissiveIntensity: 0.08 });
+    const thresholdMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [1, 1], color: 0x9a8564, roughness: 0.94, metalness: 0.0, emissive: 0x1a1008, emissiveIntensity: 0.18 });
+    const voidMat = new THREE.MeshBasicMaterial({ color: 0x030202 });
+    const group = new THREE.Group();
+    group.name = 'FKH-Field-Keeper-House-exterior-ruined-shell';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(28, 0.4, 24), position: new THREE.Vector3(142, 0.2, -64), material: floorMat, name: 'FKH_EXT_BASE-low-house-foundation-floor_worn_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(28, 4.8, 2), position: new THREE.Vector3(142, 2.4, -54), material: darkStoneMat, name: 'FKH_EXT_WALL_REAR-ruined-rear-wall-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(2, 4.0, 22), position: new THREE.Vector3(128, 2.0, -64), material: stoneMat, name: 'FKH_EXT_WALL_W-west-broken-wall-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(2, 3.6, 22), position: new THREE.Vector3(156, 1.8, -64), material: stoneMat, name: 'FKH_EXT_WALL_E-east-broken-wall-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(10, 3.2, 2), position: new THREE.Vector3(135, 1.6, -76), material: stoneMat, name: 'FKH_EXT_FRONT_L-front-left-return-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(10, 3.2, 2), position: new THREE.Vector3(149, 1.6, -76), material: stoneMat, name: 'FKH_EXT_FRONT_R-front-right-return-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(5, 0.12, 3.2), position: new THREE.Vector3(142, 0.46, -77.2), material: thresholdMat, name: 'FKH_EXT_DOOR-cracked-threshold-entrance-trigger-visual' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.2, 3.1, 0.18), position: new THREE.Vector3(142, 1.55, -77.15), material: voidMat, name: 'FKH_EXT_DOOR-dark-empty-house-mouth' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(3, 8, 3), position: new THREE.Vector3(134, 4, -63), material: darkStoneMat, name: 'FKH_EXT_CHIMNEY-chimney-block-wall_black_stone_01' }));
+
+    const mouthFill = new THREE.PointLight(0xc27b42, 0.75, 15, 1.55);
+    mouthFill.name = 'FKH_EXT_MOUTH-dim-warm-house-threshold-fill';
+    mouthFill.position.set(142, 2.1, -76.4);
+    group.add(mouthFill);
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'FKH_INT_ENTER',
+      label: 'Field Keeper House',
+      target: FIELD_KEEPER_HOUSE_ENTRANCE_TARGET.clone(),
+      range: 5.0,
+      hint: 'Tap INTERACT to enter the Field Keeper House.',
+      message: 'The ruined field house exhales cold dust.',
+      functional: true,
+      area: 'field-keeper-house',
+      type: 'areaEntrance',
     });
   }
 
@@ -1010,6 +1083,20 @@ export class DungeonScene {
 
     parent.add(group);
     return group;
+  }
+
+  buildCompiledLocationInterior() {
+    const runtime = this.compiledLocationRuntime ?? this.configureCompiledLocationRuntime(this.area);
+    this.compiledLocationRuntime = runtime;
+    this.scene.background = new THREE.Color(runtime.definition.lighting?.background ?? 0x100f0d);
+    this.scene.fog = new THREE.Fog(
+      runtime.definition.fog?.color ?? 0x242018,
+      runtime.definition.fog?.near ?? 10,
+      runtime.definition.fog?.far ?? 52,
+    );
+    this.scene.add(runtime.group);
+    this.torchFlickerController.registerFromObject(runtime.group);
+    this.dungeonDebugRenderer = new DungeonDebugRenderer({ scene: this.scene, runtime });
   }
 
   buildBlackGrassTempleInterior() {
