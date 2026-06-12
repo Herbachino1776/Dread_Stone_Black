@@ -29,6 +29,11 @@ export class Game {
   }
 
   start() {
+    const query = new URLSearchParams(window.location.search);
+    this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
+    this.isPaused = false;
+    this.resetConfirmTimer = null;
+    this.resetConfirmExpiresAt = 0;
     this.app.innerHTML = this.renderShell();
 
     this.canvas = this.app.querySelector('#game-canvas');
@@ -42,7 +47,6 @@ export class Game {
     this.renderer.setSize(width, height, false);
 
     this.camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 260);
-    const query = new URLSearchParams(window.location.search);
     const requestedArea = query.get('area');
     const returnedFrom = query.get('from');
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
@@ -78,7 +82,7 @@ export class Game {
       ...this.dungeon.playerSpawn,
       ...movementProfile,
     });
-    this.hud = new Hud(this.app);
+    this.hud = new Hud(this.app, { debugEnabled: this.debugHudEnabled });
     this.feedback = new Feedback(this.camera);
     this.armsOverlay = new FirstPersonArmsOverlay(this.app);
     this.objectivePanel = new ObjectivePanel({
@@ -117,6 +121,7 @@ export class Game {
     this.viewportResizeObserver.observe(this.viewport);
 
     this.bindObjectiveEquipmentEvents();
+    this.bindHudToolbar();
     this.emitLocationEntered();
     this.playFieldReturnReactionIfNeeded({ query });
 
@@ -266,14 +271,26 @@ export class Game {
   }
 
   renderShell() {
+    const debugReadout = this.debugHudEnabled
+      ? '<p class="debug-readout" data-hud="debug" aria-label="Debug player position">POS 0.0, 0.0 · YAW 0° · PITCH 0°</p>'
+      : '';
+
     return `
       <main class="reliquary-shell" aria-label="Dread Stone Black handheld reliquary interface">
-        <section class="top-stat-row" aria-label="Player status">
-          <div class="stat stat-hp"><span>HP</span><strong data-stat="hp">100</strong></div>
-          <div class="stat stat-mp"><span>MP</span><strong>24</strong></div>
-          <div class="stat stat-power"><span>POWER</span><strong data-stat="power">10</strong></div>
-          <div class="stat stat-magic"><span>MAGIC</span><strong>3</strong></div>
-        </section>
+        <header class="hud-top" aria-label="Player status and game toolbar">
+          <section class="top-stat-row" aria-label="Player status">
+            <div class="stat stat-hp"><span>HP</span><strong data-stat="hp">100</strong></div>
+            <div class="stat stat-mp"><span>MP</span><strong>24</strong></div>
+            <div class="stat stat-power"><span>POWER</span><strong data-stat="power">10</strong></div>
+            <div class="stat stat-magic"><span>MAGIC</span><strong>3</strong></div>
+          </section>
+
+          <nav class="top-toolbar" aria-label="Game toolbar">
+            <button class="toolbar-button toolbar-button--equipment" data-action="equipment" type="button" aria-label="Open equipment">EQ</button>
+            <button class="toolbar-button toolbar-button--reset" data-action="reset" type="button" aria-label="Reset progress">RESET</button>
+            <button class="toolbar-button toolbar-button--pause" data-action="pause" type="button" aria-label="Pause game">PAUSE</button>
+          </nav>
+        </header>
 
         <section class="viewport-frame" aria-label="Framed game viewport">
           <div class="viewport-ornament viewport-ornament-top" aria-hidden="true">✦</div>
@@ -285,6 +302,15 @@ export class Game {
               <div class="first-person-weapon" data-fpv-equipment-layer hidden></div>
             </div>
             <div class="damage-flash" data-hud="damage" aria-hidden="true"></div>
+            <section class="pause-overlay" data-pause-overlay aria-label="Paused" aria-hidden="true">
+              <div class="pause-card">
+                <p class="pause-title">PAUSED</p>
+                <div class="pause-actions">
+                  <button class="pause-action-button" data-action="resume" type="button">RESUME</button>
+                  <button class="pause-action-button pause-action-button--reset" data-action="reset" type="button">RESET</button>
+                </div>
+              </div>
+            </section>
             <section class="equipment-panel" data-equipment-panel aria-label="Equipment" aria-hidden="true">
               <div class="equipment-panel__header">
                 <div>
@@ -312,9 +338,8 @@ export class Game {
           </div>
 
           <div class="action-cluster" aria-label="Action buttons">
-            <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact">X</button>
-            <button class="attack-button action-button" data-action="attack" type="button" aria-label="Attack">A</button>
-            <button class="equipment-button action-button" data-action="equipment" type="button" aria-label="Equipment">EQ</button>
+            <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact"><span>X</span></button>
+            <button class="attack-button action-button" data-action="attack" type="button" aria-label="Attack"><span>A</span></button>
           </div>
 
           <div class="stick-zone look-zone" data-control="look" aria-label="Look">
@@ -327,13 +352,22 @@ export class Game {
           </div>
         </section>
 
-        <p class="debug-readout" data-hud="debug" aria-label="Debug player position">POS 0.0, 0.0 · YAW 0° · PITCH 0°</p>
+        ${debugReadout}
       </main>
     `;
   }
 
   update() {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
+
+    if (this.isPaused) {
+      this.controls.consumeAttack();
+      this.controls.consumeInteract();
+      this.hud.updateDebug(this.player);
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+
     if (!this.combat.isPlayerDead) {
       this.player.update(deltaSeconds, this.controls);
     }
@@ -350,6 +384,78 @@ export class Game {
     this.hud.updateDebug(this.player);
     this.feedback.update(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  bindHudToolbar() {
+    this.pauseOverlay = this.app.querySelector('[data-pause-overlay]');
+    this.pauseButton = this.app.querySelector('[data-action="pause"]');
+    this.resumeButton = this.app.querySelector('[data-action="resume"]');
+    this.resetButtons = [...this.app.querySelectorAll('[data-action="reset"]')];
+
+    this.pauseButton?.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      this.togglePause();
+    });
+    this.resumeButton?.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      this.setPaused(false);
+    });
+    this.resetButtons.forEach((button) => {
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        this.requestProgressReset();
+      });
+    });
+    window.addEventListener('keydown', (event) => {
+      if (event.code !== 'Escape') return;
+      event.preventDefault();
+      this.togglePause();
+    });
+  }
+
+  togglePause() {
+    this.setPaused(!this.isPaused);
+  }
+
+  setPaused(isPaused) {
+    this.isPaused = isPaused;
+    this.app.classList.toggle('is-paused', this.isPaused);
+    this.pauseOverlay?.classList.toggle('is-open', this.isPaused);
+    this.pauseOverlay?.setAttribute('aria-hidden', String(!this.isPaused));
+    if (this.pauseButton) this.pauseButton.textContent = this.isPaused ? 'RESUME' : 'PAUSE';
+    if (!this.isPaused) this.clearResetConfirmation();
+  }
+
+  requestProgressReset() {
+    const now = window.performance.now();
+    if (now <= this.resetConfirmExpiresAt) {
+      this.performProgressReset();
+      return;
+    }
+
+    this.resetConfirmExpiresAt = now + 3000;
+    this.setResetButtonLabels('CONFIRM');
+    window.clearTimeout(this.resetConfirmTimer);
+    this.resetConfirmTimer = window.setTimeout(() => this.clearResetConfirmation(), 3000);
+  }
+
+  clearResetConfirmation() {
+    this.resetConfirmExpiresAt = 0;
+    window.clearTimeout(this.resetConfirmTimer);
+    this.resetConfirmTimer = null;
+    this.setResetButtonLabels('RESET');
+  }
+
+  setResetButtonLabels(label) {
+    this.resetButtons?.forEach((button) => {
+      button.textContent = label;
+    });
+  }
+
+  performProgressReset() {
+    this.clearResetConfirmation();
+    GameState.resetAllProgress(window.localStorage);
+    window.location.reload();
   }
 
   updateObjectiveLocationTracking(deltaSeconds) {

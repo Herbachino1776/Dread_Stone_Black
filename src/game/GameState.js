@@ -8,6 +8,23 @@ const RUSTED_SWORD_ITEM_ID = 'rusted_sword';
 const RUSTED_SWORD_CHEST_INTERACTION_ID = 'BGT_INT_RUSTED_SWORD_CHEST';
 
 export class GameState {
+  static resetAllProgress(storage = window.localStorage) {
+    const prefix = 'dreadStoneBlack.';
+    const keysToRemove = [];
+
+    try {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key?.startsWith(prefix)) keysToRemove.push(key);
+      }
+      keysToRemove.forEach((key) => storage.removeItem(key));
+    } catch {
+      // Reset should never wipe unrelated storage or crash if localStorage is blocked.
+    }
+
+    return keysToRemove.length;
+  }
+
   constructor(storage = window.localStorage) {
     this.storage = storage;
     this.hasSouthReliquaryFragment = this.readFlag(SOUTH_RELIQUARY_FRAGMENT_KEY, false);
