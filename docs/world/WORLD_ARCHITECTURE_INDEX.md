@@ -1,8 +1,8 @@
 # Dread Stone Black - World Architecture Index
 
-Version: v0.3
+Version: v0.4
 Lane: Game World Architect  
-Purpose: Repo-facing index for buildable location blueprints.
+Purpose: Repo-facing index for buildable location blueprints and construction standards.
 
 ---
 
@@ -10,9 +10,20 @@ Purpose: Repo-facing index for buildable location blueprints.
 
 World architecture for **Dread Stone Black** is designed as text first, code second.
 
-Each location blueprint should be detailed enough that Codex can convert it into Three.js geometry, materials, collision, interactions, and testing work without inventing core structure.
+Each location blueprint should be detailed enough that Codex can convert it into Three.js geometry, materials, collision, interactions, runtime definition data, and testing work without inventing core structure.
 
 The Architect produces planning documents. The Producer/Dev Lead reviews them, decides what gets built, then creates Codex prompts or repo tasks.
+
+Current production direction:
+
+```txt
+Architectural concept
+-> construction blueprint
+-> runtime definition
+-> validation
+-> playtest
+-> addendum
+```
 
 ---
 
@@ -32,6 +43,11 @@ Deployment lock-ins:
 - The base path must remain `/Dread_Stone_Black/`.
 - Do not remove `.github/workflows/deploy-pages.yml`.
 - Every implementation PR must pass `npm run build`.
+
+Validation lock-ins:
+
+- Location implementation PRs should pass `npm run validate:dungeons`.
+- Black Grass Temple PRs should pass `npm run validate:bgt` and `npm run validate:integrity`.
 
 Creature animation lock-in:
 
@@ -63,15 +79,42 @@ Every blueprint should define:
 
 Avoid vague mood writing unless it directly informs geometry, lighting, placement, or player routing.
 
-### 3.2 Modular Geometry First
+### 3.2 Runtime Definition First
+
+New compiled locations should be authored through:
+
+```txt
+src/game/locations/<locationId>.definition.js
+```
+
+Codex should prefer runtime definitions over hand-building major dungeon geometry in `DungeonScene.js`.
+
+Blueprints should map cleanly to runtime fields:
+
+```txt
+rooms
+doors / connectors
+wallGaps
+blockers
+props
+spawns
+encounterZones
+exits
+lights / torch fixtures
+navigation
+integrity metadata
+```
+
+### 3.3 Modular Geometry First
 
 Complex places should be built from simple repeated structures:
 
-- rectangular stone blocks
+- rectangular rooms
+- rectangular wall boxes
 - low walls
 - standing slabs
-- floor planes
-- ceiling planes for interiors
+- floor planes/slabs
+- ceiling planes/slabs
 - gates and barred doors
 - tomb-mouth openings
 - simple ramps/stairs only when needed
@@ -79,7 +122,7 @@ Complex places should be built from simple repeated structures:
 
 The current texture kit should be used before asking for new assets.
 
-### 3.3 Mobile Readability
+### 3.4 Mobile Readability
 
 For iPhone portrait play:
 
@@ -88,22 +131,24 @@ For iPhone portrait play:
 - gates and entrances should be visible in fog before the player reaches them
 - interaction targets should be generous
 - avoid tiny props required for progression
-- avoid dense object clutter in the first playable slice
+- avoid dense object clutter in first passes
 
-### 3.4 PR-Sized Development
+### 3.5 PR-Sized Development
 
 Large spaces should be split into implementation phases.
 
 Recommended build order:
 
-1. terrain / floor plane
-2. collision bounds
-3. landmark shells
-4. entrances and interactions
-5. interior/baby labyrinth loading hook
-6. creatures and patrol zones
-7. lighting/fog tuning
-8. QA pass
+1. runtime definition / room graph
+2. floor and ceiling ownership
+3. wall gaps and sealed edges
+4. collision truth
+5. landmark props
+6. exits and interactions
+7. torch fixtures and lighting
+8. spawns and encounter zones
+9. validation pass
+10. mobile playtest pass
 
 ---
 
@@ -147,6 +192,8 @@ public/assets/enemies/<enemy_name>/<enemy_name>_walk_01.glb
 ```txt
 docs/world/
   WORLD_ARCHITECTURE_INDEX.md
+  ARCHITECTURE_BLUEPRINT_STANDARD.md
+  LOCATION_CONSTRUCTION_TEMPLATE.md
   LOCATION_BLUEPRINT_TEMPLATE.md
   OVERWORLD_FIELD_BLUEPRINT.md
   overworld/
@@ -155,6 +202,7 @@ docs/world/
     south_reliquary_crypt_baby_labyrinth_v01.md
   temples/
     black_grass_temple_v01.md
+    black_grass_temple_v02_construction_blueprint.md
   addendums/
     reliquary_field_addendum_001.md
     south_reliquary_crypt_addendum_001.md
@@ -163,17 +211,28 @@ docs/world/
 
 ---
 
-## 6. Active Location Documents
+## 6. Core World Architecture Documents
+
+| File | Status | Purpose |
+|---|---:|---|
+| `docs/world/ARCHITECTURE_BLUEPRINT_STANDARD.md` | v1.0 active standard | Required blueprint rules for rooms, wall gaps, floors, ceilings, collision truth, torches, spawns, exits, validation, and Codex prompts |
+| `docs/world/LOCATION_CONSTRUCTION_TEMPLATE.md` | v0.1 active template | Reusable construction blueprint shell for future dungeons, temples, houses, crypts, fields, shrines, and interiors |
+| `docs/world/WORLD_ARCHITECTURE_INDEX.md` | active index | Entry point for architecture docs and current production priorities |
+
+---
+
+## 7. Active Location Documents
 
 | File | Status | Purpose |
 |---|---:|---|
 | `docs/world/overworld/reliquary_field_v01.md` | v0.1 built foundation | 800 x 800 tomb-field master plan plus implemented first playable slice |
 | `docs/world/crypts/south_reliquary_crypt_baby_labyrinth_v01.md` | v0.1 built foundation | First compact baby labyrinth under the South Reliquary Crypt entrance; use addendums for future changes |
-| `docs/world/temples/black_grass_temple_v01.md` | v0.1 draft | Production-grade medium dungeon: field temple, subterranean ruins, black-grass tavern halls, enemy spawn plan, lower sanctum, return shortcut |
+| `docs/world/temples/black_grass_temple_v01.md` | v0.1 design blueprint | Production-grade medium dungeon: field temple, subterranean ruins, black-grass tavern halls, enemy spawn plan, lower sanctum, return shortcut |
+| `docs/world/temples/black_grass_temple_v02_construction_blueprint.md` | v0.2 construction blueprint | Runtime-facing audit blueprint for `src/game/locations/blackGrassTemple.definition.js` |
 
 ---
 
-## 7. Addendum Rules
+## 8. Addendum Rules
 
 Use addendums when a location grows or changes after the base blueprint is accepted.
 
@@ -198,25 +257,26 @@ Each addendum should include:
 
 ---
 
-## 8. Blueprint Approval Flow
+## 9. Blueprint Approval Flow
 
-1. Architect drafts the blueprint.
+1. Architect drafts the blueprint or addendum.
 2. Producer/Dev Lead reviews it.
 3. User approves, rejects, or asks for an addendum.
 4. Producer/Dev Lead turns approved blueprint into a Codex prompt.
 5. Codex implements in a PR-sized chunk.
-6. User tests on mobile and desktop.
-7. Bugs or expansion requests become addendums.
+6. Codex runs build and validation.
+7. User tests on mobile and desktop.
+8. Bugs or expansion requests become addendums.
 
 ---
 
-## 9. Do-Not-Add List Unless Approved
+## 10. Do-Not-Add List Unless Approved
 
 Do not add without explicit approval:
 
 - new deployment tooling
 - new framework
-- new animation states beyond idle/walk
+- new animation states beyond current approved creature systems
 - procedural world-generation systems
 - large physics rewrites
 - minimap system
@@ -228,7 +288,7 @@ Do not add without explicit approval:
 
 ---
 
-## 10. Current Architecture Priority
+## 11. Current Architecture Priority
 
 The first field-to-labyrinth loop is built and should be treated as the current foundation:
 
@@ -239,25 +299,24 @@ The first field-to-labyrinth loop is built and should be treated as the current 
 - Sheep Demon proves the hostile animated enemy pipeline and is a successful concept proof.
 - Do not restart either location as a fresh build target; extend them through addendums or connected blueprints.
 
-Active priority has shifted from proving spaces to building the next production-grade connected dungeon.
+Active priority has shifted to construction-grade authoring and runtime validation.
 
 Black Grass Temple is the next major architecture target:
 
-- field-side temple landmark
-- subterranean torchlit stone ruins
-- black-grass tavern halls using the existing grass texture in an interior context
-- at least 14 planned rooms/zones
-- 12 enemy spawn markers with safe activation guidance
-- main route, optional branch, service loop, sanctum endpoint, and return shortcut
+- use `black_grass_temple_v02_construction_blueprint.md`
+- audit `src/game/locations/blackGrassTemple.definition.js`
+- keep geometry compiled through Dungeon Authoring Runtime
+- run `npm run build`, `npm run validate:bgt`, `npm run validate:integrity`, and `npm run validate:dungeons`
+- fix validation errors before claiming completion
 
-## 11. Next Useful Work
+## 12. Next Useful Work
 
 Near-term Architect/Codex tasks should focus on:
 
-- implementing `docs/world/temples/black_grass_temple_v01.md` as a disciplined PR-sized dungeon shell
-- preserving Reliquary Field and South Reliquary Crypt while adding the new temple area
-- keeping the first Black Grass Temple build geometry-stable: no missing walls, no floor z-fighting, no overlapping coplanar slabs
-- activating only a safe subset of enemy spawns if current combat/performance needs restraint
+- using the new construction standard for all future locations
+- auditing Black Grass Temple against the v02 construction blueprint
+- resolving validation warnings/errors honestly
+- preserving Reliquary Field and South Reliquary Crypt while improving BGT
 - using addendums after playtest for enemy tuning, sanctum reward, field approach expansion, or second-depth work
 
 Keep these tasks mobile-readable, buildable, and grounded in the existing field-to-crypt loop.
