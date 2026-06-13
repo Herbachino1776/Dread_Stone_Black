@@ -233,6 +233,7 @@ export const reliquaryFieldDefinition = Object.freeze({
     { id: 'field_black_grass_temple_return', kind: 'return', position: { x: -184, y: 1.55, z: 25 }, yaw: 0, roomId: 'FIELD01', tags: ['live', 'black-grass-temple'] },
     { id: 'field_keeper_house_return', kind: 'return', position: { x: 142, y: 1.55, z: -82 }, yaw: 0, roomId: 'FIELD01', tags: ['live', 'field-keeper-house'] },
     { id: 'field_ddplus_level_1_return', kind: 'return', position: { x: 154, y: 1.55, z: 104 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'ddplus-test', 'level-1'] },
+    { id: 'field_sumerian_city_block_v0_return', kind: 'return', position: { x: 122, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-city-block-v0'] },
   ],
   exits: [
     {
@@ -285,6 +286,20 @@ export const reliquaryFieldDefinition = Object.freeze({
       userData: {
         temporary: true,
         removalNote: 'Temporary DDplus Level 1 compiled-runtime smoke-test entrance.',
+      },
+    },
+    {
+      id: 'field_enter_sumerian_city_block_v0',
+      fromLocation: 'reliquary-field',
+      toLocation: 'sumerian-city-block-v0',
+      triggerRect: { minX: 118, maxX: 126, minZ: 145, maxZ: 153 },
+      position: { x: 122, y: 1, z: 149 },
+      destinationSpawnId: 'sumerian_city_block_player_start',
+      promptText: 'Tap INTERACT to enter Sumerian City Block v0.',
+      tags: ['temporary', 'sumerian-city-block-v0'],
+      userData: {
+        temporary: true,
+        removalNote: 'Temporary direct-authored Sumerian city block compiled-runtime smoke-test entrance.',
       },
     },
   ],

@@ -70,11 +70,14 @@ const FIELD_KEEPER_HOUSE_RETURN_START = new THREE.Vector3(142, 1.55, -82);
 const FIELD_KEEPER_HOUSE_RETURN_YAW = 0;
 const FIELD_DDPLUS_LEVEL1_RETURN_START = new THREE.Vector3(154, 1.55, 104);
 const FIELD_DDPLUS_LEVEL1_RETURN_YAW = Math.PI;
+const FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_START = new THREE.Vector3(122, 1.55, 144.5);
+const FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const BGT_EXTERIOR_ENTRANCE_TARGET = new THREE.Vector3(-184, 1, 31);
 const FIELD_KEEPER_HOUSE_ENTRANCE_TARGET = new THREE.Vector3(142, 1, -77);
 const DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET = new THREE.Vector3(154, 1, 110);
+const SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET = new THREE.Vector3(122, 1, 149);
 function getReliquaryFieldColliders() {
   return getLocationDefinition('reliquary-field')?.blockers ?? [];
 }
@@ -400,6 +403,10 @@ export class DungeonScene {
 
     if (this.fieldSpawn === 'ddplusLevel1Exit') {
       return { spawnPosition: FIELD_DDPLUS_LEVEL1_RETURN_START, spawnYaw: FIELD_DDPLUS_LEVEL1_RETURN_YAW };
+    }
+
+    if (this.fieldSpawn === 'sumerianCityBlockV0Exit') {
+      return { spawnPosition: FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_START, spawnYaw: FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_YAW };
     }
 
     return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
@@ -767,6 +774,7 @@ export class DungeonScene {
     this.addBlackGrassTempleExterior();
     this.addFieldKeeperHouseExterior();
     this.addDdplusLevel1TestEntrance();
+    this.addSumerianCityBlockV0TestEntrance();
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
     this.addLowRuinWalls();
@@ -932,6 +940,39 @@ export class DungeonScene {
       message: 'The temporary DDplus test chamber opens.',
       functional: true,
       area: 'level-1',
+      type: 'areaEntrance',
+    });
+  }
+
+  addSumerianCityBlockV0TestEntrance() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.8, 1.3], color: 0x8a7552, roughness: 0.98, metalness: 0.0, emissive: 0x130d07, emissiveIntensity: 0.12 });
+    const gateMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: [1.0, 1.35], color: 0xa07955, roughness: 0.84, metalness: 0.32, emissive: 0x241409, emissiveIntensity: 0.2 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [2.6, 2.6], color: 0x9a865e, roughness: 0.98, metalness: 0.0, emissive: 0x120d07, emissiveIntensity: 0.1 });
+    const group = new THREE.Group();
+    group.name = 'SUMERIAN_CITY_BLOCK_V0-temporary-city-gate-entrance';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(10, 0.28, 8), position: new THREE.Vector3(122, 0.14, 149), material: floorMat, name: 'SUMERIAN_CITY_BLOCK_V0_TEMP_BASE-floor_worn_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.6, 4.6, 1.6), position: new THREE.Vector3(118.2, 2.3, 149), material: stoneMat, name: 'SUMERIAN_CITY_BLOCK_V0_TEMP_LEFT_PIER-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.6, 4.6, 1.6), position: new THREE.Vector3(125.8, 2.3, 149), material: stoneMat, name: 'SUMERIAN_CITY_BLOCK_V0_TEMP_RIGHT_PIER-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(7.6, 1.2, 1.2), position: new THREE.Vector3(122, 4.4, 149), material: stoneMat, name: 'SUMERIAN_CITY_BLOCK_V0_TEMP_LINTEL-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.8, 3.1, 0.22), position: new THREE.Vector3(122, 1.55, 148.35), material: gateMat, name: 'SUMERIAN_CITY_BLOCK_V0_TEMP_TEST_GATE-metal_gate_rusted_01' }));
+
+    const glow = new THREE.PointLight(0xd8a25a, 1.05, 16, 1.45);
+    glow.name = 'SUMERIAN_CITY_BLOCK_V0_TEMP_GATE-warm-test-light';
+    glow.position.set(122, 2.35, 147.8);
+    group.add(glow);
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'SUMERIAN_CITY_BLOCK_V0_INT_ENTER',
+      label: 'Sumerian City Block v0',
+      target: SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET.clone(),
+      range: 5.0,
+      hint: 'Tap INTERACT to enter Sumerian City Block v0.',
+      message: 'The temporary Sumerian city gate opens.',
+      functional: true,
+      area: 'sumerian-city-block-v0',
       type: 'areaEntrance',
     });
   }
