@@ -1751,7 +1751,7 @@ class BlackGrassFactionEnemy {
 }
 
 export class BlackGrassTempleFactionManager {
-  constructor({ scene, collision, anchors, navigationGraph = null, encounterZones = null, onGoreEvent = null }) {
+  constructor({ scene, collision, anchors, navigationGraph = null, encounterZones = null, onGoreEvent = null, enableBattleDirector = true, enableRespawns = true } = {}) {
     this.scene = scene;
     this.collision = collision;
     this.anchors = anchors;
@@ -1763,6 +1763,8 @@ export class BlackGrassTempleFactionManager {
     this.nearbyCombatQuietSeconds = 0;
     this.initialWaveSpawned = false;
     this.onGoreEvent = onGoreEvent;
+    this.enableBattleDirector = enableBattleDirector;
+    this.enableRespawns = enableRespawns;
     this.encounterZones = this.createEncounterZones(encounterZones);
     this.maxActiveByFaction = MAX_ACTIVE_BY_FACTION;
     this.respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS;
@@ -2014,10 +2016,17 @@ export class BlackGrassTempleFactionManager {
   }
 
   update(deltaSeconds, playerPosition) {
-    const director = this.updateBattleDirector(deltaSeconds, playerPosition);
+    const director = this.enableBattleDirector
+      ? this.updateBattleDirector(deltaSeconds, playerPosition)
+      : { zone: null, nearbyCount: this.enemies.length, combatPairs: 0, quietSeconds: 0 };
     const context = { enemies: this.enemies, playerPosition, director };
     this.enemies.forEach((enemy) => enemy.update(deltaSeconds, context));
     this.updateDevStatus(deltaSeconds);
+
+    if (!this.enableRespawns) {
+      this.enemies = this.enemies.filter((enemy) => !enemy.isRemoved || enemy.isAlive);
+      return;
+    }
 
     Object.keys(this.respawnTimers).forEach((species) => {
       const livingCount = this.enemies.filter((enemy) => enemy.species === species && enemy.health > 0 && !enemy.isRemoved).length;

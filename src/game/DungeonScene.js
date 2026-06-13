@@ -76,6 +76,11 @@ const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_START = new THREE.Vector3(96,
 const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
+const GENERATED_ENEMY_ACTIVE_CAP = 5;
+const GENERATED_ENEMY_INITIAL_CAP = 4;
+const GENERATED_ENEMY_WAKE_RADIUS = 28;
+const GENERATED_ENEMY_SLEEP_RADIUS = 42;
+const GENERATED_ENEMY_RESPAWN_COOLDOWN_MS = 8000;
 const BGT_EXTERIOR_ENTRANCE_TARGET = new THREE.Vector3(-184, 1, 31);
 const FIELD_KEEPER_HOUSE_ENTRANCE_TARGET = new THREE.Vector3(142, 1, -77);
 const DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET = new THREE.Vector3(154, 1, 110);
@@ -174,6 +179,13 @@ function babyLabyrinthWallBlockerRects() {
   }));
 }
 
+function horizontalDistance(a, b) {
+  if (!a || !b) return Infinity;
+  const dx = a.x - b.x;
+  const dz = a.z - b.z;
+  return Math.hypot(dx, dz);
+}
+
 export class DungeonScene {
   constructor({ area = 'field', fieldSpawn = 'start', gameState = null } = {}) {
     this.area = area;
@@ -219,6 +231,7 @@ export class DungeonScene {
     this.ramManNpcAnimation = null;
     this.sheepDemonEnemy = null;
     this.blackGrassFactionManager = null;
+    this.generatedEnemyRuntime = null;
     this.blackGrassRuntime = null;
     this.compiledLocationRuntime = null;
     this.dungeonDebugRenderer = null;
@@ -1241,8 +1254,76 @@ export class DungeonScene {
       navigationGraph: runtime.navGraph,
       encounterZones: runtime.encounterZones,
       onGoreEvent: (payload) => this.handleFactionGoreEvent(payload),
+      enableBattleDirector: false,
+      enableRespawns: false,
     });
-    this.blackGrassFactionManager.spawnInitialAnchors(factionAnchors);
+    const policy = this.createGeneratedEnemySpawnPolicy(runtime);
+    this.generatedEnemyRuntime = {
+      anchors: factionAnchors,
+      activeAnchorIds: new Set(),
+      sleepingUntil: new Map(),
+      policy,
+    };
+    const initialPlayerPosition = this.playerSpawn?.spawnPosition ?? factionAnchors[0]?.position;
+    const initialAnchors = this.selectGeneratedEnemyWakeAnchors(initialPlayerPosition, policy.initialEnemyCap);
+    this.spawnGeneratedEnemyAnchors(initialAnchors);
+  }
+
+  createGeneratedEnemySpawnPolicy(runtime) {
+    const policy = runtime?.definition?.runtimeSpawnPolicy ?? {};
+    const activeEnemyCap = Math.max(1, Number(policy.activeEnemyCap ?? GENERATED_ENEMY_ACTIVE_CAP));
+    return {
+      activeEnemyCap,
+      initialEnemyCap: Math.max(1, Math.min(activeEnemyCap, Number(policy.initialEnemyCap ?? GENERATED_ENEMY_INITIAL_CAP))),
+      wakeRadius: Math.max(1, Number(policy.wakeRadius ?? GENERATED_ENEMY_WAKE_RADIUS)),
+      sleepRadius: Math.max(1, Number(policy.sleepRadius ?? GENERATED_ENEMY_SLEEP_RADIUS)),
+      respawnCooldownMs: Math.max(0, Number(policy.respawnCooldownMs ?? GENERATED_ENEMY_RESPAWN_COOLDOWN_MS)),
+    };
+  }
+
+  selectGeneratedEnemyWakeAnchors(playerPosition, limit) {
+    if (!this.generatedEnemyRuntime || !playerPosition) return [];
+    const now = Date.now();
+    const { anchors, activeAnchorIds, sleepingUntil, policy } = this.generatedEnemyRuntime;
+    const capacity = Math.max(0, Math.min(limit, policy.activeEnemyCap - activeAnchorIds.size));
+    if (capacity <= 0) return [];
+    return anchors
+      .filter((anchor) => !activeAnchorIds.has(anchor.id) && (sleepingUntil.get(anchor.id) ?? 0) <= now)
+      .map((anchor) => ({ anchor, distance: horizontalDistance(anchor.position, playerPosition) }))
+      .filter(({ distance }) => distance <= policy.wakeRadius)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, capacity)
+      .map(({ anchor }) => anchor);
+  }
+
+  spawnGeneratedEnemyAnchors(anchors) {
+    if (!anchors?.length || !this.blackGrassFactionManager || !this.generatedEnemyRuntime) return;
+    this.blackGrassFactionManager.spawnInitialAnchors(anchors);
+    anchors.forEach((anchor) => this.generatedEnemyRuntime.activeAnchorIds.add(anchor.id));
+  }
+
+  updateGeneratedEnemyActivation(playerPosition) {
+    if (!this.generatedEnemyRuntime || !this.blackGrassFactionManager || !playerPosition) return;
+    const { activeAnchorIds, sleepingUntil, policy } = this.generatedEnemyRuntime;
+    const now = Date.now();
+
+    this.blackGrassFactionManager.enemies.forEach((enemy) => {
+      const anchorId = enemy.spawnAnchor?.id;
+      if (!anchorId || !activeAnchorIds.has(anchorId) || !enemy.group || enemy.isRemoved) return;
+      const distance = horizontalDistance(enemy.group.position, playerPosition);
+      const isEngaged = enemy.playerRevengeTimer > 0
+        || enemy.behaviorState === 'attack_player_fallback'
+        || enemy.behaviorState === 'attack_enemy_faction'
+        || enemy.behaviorState === 'jump_attack_enemy_faction';
+      if (distance > policy.sleepRadius && !isEngaged) {
+        enemy.hideCorpse();
+        activeAnchorIds.delete(anchorId);
+        sleepingUntil.set(anchorId, now + policy.respawnCooldownMs);
+      }
+    });
+
+    this.blackGrassFactionManager.enemies = this.blackGrassFactionManager.enemies.filter((enemy) => !enemy.isRemoved || enemy.isAlive);
+    this.spawnGeneratedEnemyAnchors(this.selectGeneratedEnemyWakeAnchors(playerPosition, policy.activeEnemyCap));
   }
 
   createRuntimeEnemyAnchor(spawn, runtime) {
@@ -1966,6 +2047,7 @@ export class DungeonScene {
 
   updateBlackGrassFactionEnemies(deltaSeconds, player) {
     if (!this.blackGrassFactionManager || !player?.position) return;
+    this.updateGeneratedEnemyActivation(player.position);
     this.blackGrassFactionManager.update(deltaSeconds, player.position);
   }
 
@@ -1982,7 +2064,7 @@ export class DungeonScene {
   }
 
   consumeEnemyContactDamage(playerPosition) {
-    if (this.area === 'black-grass-temple') {
+    if (this.area === 'black-grass-temple' || this.generatedEnemyRuntime) {
       return this.blackGrassFactionManager?.consumeEnemyContactDamage(playerPosition) ?? null;
     }
 
@@ -1998,7 +2080,7 @@ export class DungeonScene {
   }
 
   damageEnemyFromPlayerAttack(attack) {
-    if (this.area === 'black-grass-temple') {
+    if (this.area === 'black-grass-temple' || this.generatedEnemyRuntime) {
       const hit = this.blackGrassFactionManager?.damageEnemyFromPlayerAttack(attack) ?? null;
       this.emitPlayerAttackGore(hit, attack);
       return hit;
