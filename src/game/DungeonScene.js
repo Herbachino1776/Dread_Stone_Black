@@ -72,6 +72,7 @@ const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const BGT_EXTERIOR_ENTRANCE_TARGET = new THREE.Vector3(-184, 1, 31);
 const FIELD_KEEPER_HOUSE_ENTRANCE_TARGET = new THREE.Vector3(142, 1, -77);
+const DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET = new THREE.Vector3(154, 1, 110);
 function getReliquaryFieldColliders() {
   return getLocationDefinition('reliquary-field')?.blockers ?? [];
 }
@@ -759,6 +760,7 @@ export class DungeonScene {
     this.addSouthReliquaryCrypt();
     this.addBlackGrassTempleExterior();
     this.addFieldKeeperHouseExterior();
+    this.addDdplusLevel1TestEntrance();
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
     this.addLowRuinWalls();
@@ -891,6 +893,39 @@ export class DungeonScene {
       message: 'The ruined field house exhales cold dust.',
       functional: true,
       area: 'field-keeper-house',
+      type: 'areaEntrance',
+    });
+  }
+
+  addDdplusLevel1TestEntrance() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.4, 1.2], color: 0x6a675f, roughness: 0.98, metalness: 0.0, emissive: 0x0d0b08, emissiveIntensity: 0.1 });
+    const gateMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: [1.1, 1.2], color: 0xa3835f, roughness: 0.82, metalness: 0.35, emissive: 0x24150c, emissiveIntensity: 0.22 });
+    const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [2.2, 2.2], color: 0x8b8170, roughness: 0.97, metalness: 0.0, emissive: 0x100b08, emissiveIntensity: 0.1 });
+    const group = new THREE.Group();
+    group.name = 'DDPLUS_LEVEL1-temporary-test-chamber-entrance';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(8, 0.28, 8), position: new THREE.Vector3(154, 0.14, 110), material: floorMat, name: 'DDPLUS_LEVEL1_TEMP_BASE-floor_worn_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.4, 4.2, 1.4), position: new THREE.Vector3(150.6, 2.1, 110), material: stoneMat, name: 'DDPLUS_LEVEL1_TEMP_LEFT_PIER-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.4, 4.2, 1.4), position: new THREE.Vector3(157.4, 2.1, 110), material: stoneMat, name: 'DDPLUS_LEVEL1_TEMP_RIGHT_PIER-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(6.8, 1.1, 1.2), position: new THREE.Vector3(154, 4.05, 110), material: stoneMat, name: 'DDPLUS_LEVEL1_TEMP_LINTEL-wall_black_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.4, 3.0, 0.22), position: new THREE.Vector3(154, 1.5, 109.35), material: gateMat, name: 'DDPLUS_LEVEL1_TEMP_TEST_GATE-metal_gate_rusted_01' }));
+
+    const glow = new THREE.PointLight(0xd69a54, 0.95, 15, 1.45);
+    glow.name = 'DDPLUS_LEVEL1_TEMP_GATE-warm-test-light';
+    glow.position.set(154, 2.2, 108.8);
+    group.add(glow);
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'DDPLUS_LEVEL1_INT_ENTER',
+      label: 'Level 1 DDplus Test',
+      target: DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET.clone(),
+      range: 5.0,
+      hint: 'Tap INTERACT to enter the Level 1 DDplus Test.',
+      message: 'The temporary DDplus test chamber opens.',
+      functional: true,
+      area: 'level-1',
       type: 'areaEntrance',
     });
   }

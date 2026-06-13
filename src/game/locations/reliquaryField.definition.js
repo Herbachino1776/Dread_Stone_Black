@@ -272,5 +272,19 @@ export const reliquaryFieldDefinition = Object.freeze({
         intendedLongTermC02Position: { x: -210, y: 0, z: 55 },
       },
     },
+    {
+      id: 'field_enter_ddplus_level_1',
+      fromLocation: 'reliquary-field',
+      toLocation: 'level-1',
+      triggerRect: { minX: 150, maxX: 158, minZ: 106, maxZ: 114 },
+      position: { x: 154, y: 1, z: 110 },
+      destinationSpawnId: 'P01',
+      promptText: 'Tap INTERACT to enter the Level 1 DDplus Test.',
+      tags: ['temporary', 'ddplus-test', 'level-1'],
+      userData: {
+        temporary: true,
+        removalNote: 'Temporary DDplus Level 1 compiled-runtime smoke-test entrance.',
+      },
+    },
   ],
 });
