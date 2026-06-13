@@ -1,6 +1,7 @@
 import { asArray, hasUsableId } from './DungeonDefinitionTypes.js';
 
 const loggedValidationKeys = new Set();
+const RUNTIME_ENEMY_SPECIES = new Set(['sheep_demon', 'neck_man']);
 
 function pointInRect(point, rect, padding = 0) {
   return point.x >= rect.minX - padding && point.x <= rect.maxX + padding
@@ -71,6 +72,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   const roomIds = new Set(rooms.map((room) => room.id));
   const spawnIds = new Set(spawns.map((spawn) => spawn.id));
   const blockerIds = new Set(blockers.map((blocker) => blocker.id));
+  const validatesGeneratedEnemyRuntime = asArray(definition.tags).some((tag) => ['ai-authored-location', 'ddplus-export'].includes(tag));
 
   collectIds([
     { label: 'rooms', items: rooms },
@@ -122,6 +124,22 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     }
     if (spawn.kind === 'enemy' && clearance < 0.75) {
       addIssue(warnings, 'warning', `spawn ${spawn.id} has low clearance near room wall`, spawn.id);
+    }
+    if (validatesGeneratedEnemyRuntime && spawn.kind === 'enemy' && !RUNTIME_ENEMY_SPECIES.has(spawn.species)) {
+      addIssue(warnings, 'warning', `enemy spawn ${spawn.id} uses unknown runtime species ${spawn.species}`, spawn.id);
+    }
+    if (validatesGeneratedEnemyRuntime && spawn.kind === 'enemy' && !spawn.roomId) {
+      addIssue(warnings, 'warning', `enemy spawn ${spawn.id} is missing roomId`, spawn.id);
+    }
+    if (validatesGeneratedEnemyRuntime && spawn.kind === 'enemy') {
+      asArray(spawn.userData?.patrolPoints).forEach((point, index) => {
+        const patrolPosition = positionOf(point);
+        if (!patrolPosition || !rooms.some((candidate) => pointInRect(patrolPosition, candidate))) {
+          addIssue(warnings, 'warning', `enemy spawn ${spawn.id} patrol point ${index} is outside walkable room rectangles`, spawn.id);
+        } else if (blockerRects.find((blocker) => circleIntersectsRect(patrolPosition, 0.58, blocker))) {
+          addIssue(warnings, 'warning', `enemy spawn ${spawn.id} patrol point ${index} overlaps a blocker`, spawn.id);
+        }
+      });
     }
     if (['player', 'return', 'enemy'].includes(spawn.kind) && !allowsNearWall && clearance < 0.7) {
       addIssue(warnings, 'warning', `spawn ${spawn.id} is close to a wall`, spawn.id);
