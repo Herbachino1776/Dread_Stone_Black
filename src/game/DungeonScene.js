@@ -68,6 +68,8 @@ const FIELD_BLACK_GRASS_TEMPLE_RETURN_START = new THREE.Vector3(-184, 1.55, 25);
 const FIELD_BLACK_GRASS_TEMPLE_RETURN_YAW = 0;
 const FIELD_KEEPER_HOUSE_RETURN_START = new THREE.Vector3(142, 1.55, -82);
 const FIELD_KEEPER_HOUSE_RETURN_YAW = 0;
+const FIELD_DDPLUS_LEVEL1_RETURN_START = new THREE.Vector3(154, 1.55, 104);
+const FIELD_DDPLUS_LEVEL1_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const BGT_EXTERIOR_ENTRANCE_TARGET = new THREE.Vector3(-184, 1, 31);
@@ -394,6 +396,10 @@ export class DungeonScene {
 
     if (this.fieldSpawn === 'fieldKeeperHouseExit') {
       return { spawnPosition: FIELD_KEEPER_HOUSE_RETURN_START, spawnYaw: FIELD_KEEPER_HOUSE_RETURN_YAW };
+    }
+
+    if (this.fieldSpawn === 'ddplusLevel1Exit') {
+      return { spawnPosition: FIELD_DDPLUS_LEVEL1_RETURN_START, spawnYaw: FIELD_DDPLUS_LEVEL1_RETURN_YAW };
     }
 
     return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };

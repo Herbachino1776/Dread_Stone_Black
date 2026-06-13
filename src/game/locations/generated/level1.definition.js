@@ -122,12 +122,12 @@ export const level1Definition = Object.freeze({
 },
   rooms: [
   {
-    id: "R01",
-    label: "Room R01",
-    minX: 1,
-    maxX: 5,
-    minZ: 7,
-    maxZ: 17,
+    id: "C01",
+    label: "Central Spine",
+    minX: 18,
+    maxX: 23,
+    minZ: 10,
+    maxZ: 24,
     floorY: 0,
     ceilingY: 3.2,
     floorTexture: {
@@ -135,9 +135,132 @@ export const level1Definition = Object.freeze({
   },
     wallTexture: "wall",
     ceilingTexture: "ceiling",
-    tags: [],
-    encounterWeight: 1,
+    tags: [
+    "connector"
+  ],
+    encounterWeight: 0,
+    safeForSpawn: false,
+    wallGeometry: false,
+    userData: {
+    ddplusType: "corridor"
+  }
+  },
+  {
+    id: "C02",
+    label: "West Link",
+    minX: 12,
+    maxX: 19,
+    minZ: 16,
+    maxZ: 20,
+    floorY: 0,
+    ceilingY: 3.2,
+    floorTexture: {
+    texture: "floor"
+  },
+    wallTexture: "wall",
+    ceilingTexture: "ceiling",
+    tags: [
+    "connector"
+  ],
+    encounterWeight: 0,
+    safeForSpawn: false,
+    wallGeometry: false,
+    userData: {
+    ddplusType: "corridor"
+  }
+  },
+  {
+    id: "C03",
+    label: "East Link",
+    minX: 23,
+    maxX: 28,
+    minZ: 16,
+    maxZ: 20,
+    floorY: 0,
+    ceilingY: 3.2,
+    floorTexture: {
+    texture: "floor"
+  },
+    wallTexture: "wall",
+    ceilingTexture: "ceiling",
+    tags: [
+    "connector"
+  ],
+    encounterWeight: 0,
+    safeForSpawn: false,
+    wallGeometry: false,
+    userData: {
+    ddplusType: "corridor"
+  }
+  },
+  {
+    id: "C04",
+    label: "Exit Link",
+    minX: 28,
+    maxX: 35,
+    minZ: 22,
+    maxZ: 25,
+    floorY: 0,
+    ceilingY: 3.2,
+    floorTexture: {
+    texture: "floor"
+  },
+    wallTexture: "wall",
+    ceilingTexture: "ceiling",
+    tags: [
+    "connector"
+  ],
+    encounterWeight: 0,
+    safeForSpawn: false,
+    wallGeometry: false,
+    userData: {
+    ddplusType: "corridor"
+  }
+  },
+  {
+    id: "C05",
+    label: "Entry Stair",
+    minX: 17,
+    maxX: 23,
+    minZ: 29,
+    maxZ: 34,
+    floorY: 0,
+    ceilingY: 3.2,
+    floorTexture: {
+    texture: "floor"
+  },
+    wallTexture: "wall",
+    ceilingTexture: "ceiling",
+    tags: [
+    "connector",
+    "entry"
+  ],
+    encounterWeight: 0,
     safeForSpawn: true,
+    wallGeometry: false,
+    userData: {
+    ddplusType: "corridor"
+  }
+  },
+  {
+    id: "R01",
+    label: "Reliquary",
+    minX: 16,
+    maxX: 25,
+    minZ: 3,
+    maxZ: 11,
+    floorY: 0,
+    ceilingY: 3.2,
+    floorTexture: {
+    texture: "floor"
+  },
+    wallTexture: "wall",
+    ceilingTexture: "ceiling",
+    tags: [
+    "sanctum"
+  ],
+    encounterWeight: 1,
+    safeForSpawn: false,
     wallGeometry: true,
     userData: {
     ddplusType: "room"
@@ -145,11 +268,11 @@ export const level1Definition = Object.freeze({
   },
   {
     id: "R02",
-    label: "Room R02",
-    minX: 1,
-    maxX: 40,
-    minZ: 0,
-    maxZ: 33,
+    label: "West Guard Room",
+    minX: 3,
+    maxX: 13,
+    minZ: 13,
+    maxZ: 21,
     floorY: 0,
     ceilingY: 3.2,
     floorTexture: {
@@ -157,24 +280,351 @@ export const level1Definition = Object.freeze({
   },
     wallTexture: "wall",
     ceilingTexture: "ceiling",
-    tags: [],
+    tags: [
+    "guard"
+  ],
+    encounterWeight: 2,
+    safeForSpawn: true,
+    wallGeometry: true,
+    userData: {
+    ddplusType: "room"
+  }
+  },
+  {
+    id: "R03",
+    label: "East Stores",
+    minX: 27,
+    maxX: 37,
+    minZ: 13,
+    maxZ: 20,
+    floorY: 0,
+    ceilingY: 3.2,
+    floorTexture: {
+    texture: "floor"
+  },
+    wallTexture: "wall",
+    ceilingTexture: "ceiling",
+    tags: [
+    "stores"
+  ],
     encounterWeight: 1,
     safeForSpawn: true,
     wallGeometry: true,
     userData: {
     ddplusType: "room"
   }
+  },
+  {
+    id: "R04",
+    label: "Lower Hall",
+    minX: 12,
+    maxX: 28,
+    minZ: 23,
+    maxZ: 30,
+    floorY: 0,
+    ceilingY: 3.2,
+    floorTexture: {
+    texture: "floor"
+  },
+    wallTexture: "wall",
+    ceilingTexture: "ceiling",
+    tags: [
+    "hall"
+  ],
+    encounterWeight: 2,
+    safeForSpawn: true,
+    wallGeometry: true,
+    userData: {
+    ddplusType: "room"
+  }
+  },
+  {
+    id: "R05",
+    label: "Exit Cell",
+    minX: 34,
+    maxX: 40,
+    minZ: 22,
+    maxZ: 26,
+    floorY: 0,
+    ceilingY: 3.2,
+    floorTexture: {
+    texture: "floor"
+  },
+    wallTexture: "wall",
+    ceilingTexture: "ceiling",
+    tags: [
+    "exit"
+  ],
+    encounterWeight: 0,
+    safeForSpawn: false,
+    wallGeometry: true,
+    userData: {
+    ddplusType: "room"
+  }
   }
 ],
-  doors: [],
+  doors: [
+  {
+    id: "D01",
+    fromRoom: "R01",
+    toRoom: "C01",
+    position: {
+    x: 20,
+    y: 0,
+    z: 11
+  },
+    width: 2,
+    kind: "door",
+    navWaypoint: {
+    x: 20,
+    y: 0,
+    z: 11
+  },
+    wallGaps: [
+    {
+      roomId: "R01",
+      position: {
+      x: 20,
+      y: 0,
+      z: 11
+    },
+      width: 2
+    },
+    {
+      roomId: "C01",
+      position: {
+      x: 20,
+      y: 0,
+      z: 11
+    },
+      width: 2
+    }
+  ],
+    tags: [
+    "doorway"
+  ],
+    userData: {
+    ddplus: {
+    orientation: "horizontal",
+    wallSide: "south",
+    primaryRoomId: "R01",
+    secondaryRoomId: "C01",
+    snapped: true,
+    snapDistance: 0
+  }
+  }
+  },
+  {
+    id: "D02",
+    fromRoom: "R02",
+    toRoom: "C02",
+    position: {
+    x: 13,
+    y: 0,
+    z: 18
+  },
+    width: 1,
+    kind: "lockedDoor",
+    navWaypoint: {
+    x: 13,
+    y: 0,
+    z: 18
+  },
+    wallGaps: [
+    {
+      roomId: "R02",
+      position: {
+      x: 13,
+      y: 0,
+      z: 18
+    },
+      width: 1
+    },
+    {
+      roomId: "C02",
+      position: {
+      x: 13,
+      y: 0,
+      z: 18
+    },
+      width: 1
+    }
+  ],
+    tags: [
+    "doorway",
+    "locked"
+  ],
+    userData: {
+    ddplus: {
+    orientation: "vertical",
+    wallSide: "east",
+    primaryRoomId: "R02",
+    secondaryRoomId: "C02",
+    snapped: true,
+    snapDistance: 0
+  }
+  }
+  },
+  {
+    id: "D03",
+    fromRoom: "R03",
+    toRoom: "C03",
+    position: {
+    x: 27,
+    y: 0,
+    z: 18
+  },
+    width: 1,
+    kind: "secretDoor",
+    navWaypoint: {
+    x: 27,
+    y: 0,
+    z: 18
+  },
+    wallGaps: [
+    {
+      roomId: "R03",
+      position: {
+      x: 27,
+      y: 0,
+      z: 18
+    },
+      width: 1
+    },
+    {
+      roomId: "C03",
+      position: {
+      x: 27,
+      y: 0,
+      z: 18
+    },
+      width: 1
+    }
+  ],
+    tags: [
+    "doorway",
+    "secret"
+  ],
+    userData: {
+    ddplus: {
+    orientation: "vertical",
+    wallSide: "west",
+    primaryRoomId: "R03",
+    secondaryRoomId: "C03",
+    snapped: true,
+    snapDistance: 0
+  }
+  }
+  },
+  {
+    id: "D04",
+    fromRoom: "R04",
+    toRoom: "C01",
+    position: {
+    x: 20,
+    y: 0,
+    z: 23
+  },
+    width: 2,
+    kind: "doubleDoor",
+    navWaypoint: {
+    x: 20,
+    y: 0,
+    z: 23
+  },
+    wallGaps: [
+    {
+      roomId: "R04",
+      position: {
+      x: 20,
+      y: 0,
+      z: 23
+    },
+      width: 2
+    },
+    {
+      roomId: "C01",
+      position: {
+      x: 20,
+      y: 0,
+      z: 23
+    },
+      width: 2
+    }
+  ],
+    tags: [
+    "doorway"
+  ],
+    userData: {
+    ddplus: {
+    orientation: "horizontal",
+    wallSide: "north",
+    primaryRoomId: "R04",
+    secondaryRoomId: "C01",
+    snapped: true,
+    snapDistance: 0
+  }
+  }
+  },
+  {
+    id: "D05",
+    fromRoom: "R05",
+    toRoom: "C04",
+    position: {
+    x: 34,
+    y: 0,
+    z: 24
+  },
+    width: 1,
+    kind: "door",
+    navWaypoint: {
+    x: 34,
+    y: 0,
+    z: 24
+  },
+    wallGaps: [
+    {
+      roomId: "R05",
+      position: {
+      x: 34,
+      y: 0,
+      z: 24
+    },
+      width: 1
+    },
+    {
+      roomId: "C04",
+      position: {
+      x: 34,
+      y: 0,
+      z: 24
+    },
+      width: 1
+    }
+  ],
+    tags: [
+    "doorway"
+  ],
+    userData: {
+    ddplus: {
+    orientation: "vertical",
+    wallSide: "west",
+    primaryRoomId: "R05",
+    secondaryRoomId: "C04",
+    snapped: true,
+    snapDistance: 0
+  }
+  }
+  }
+],
   blockers: [
   {
     id: "O01-blocker",
     type: "chest",
-    minX: 17.4,
-    maxX: 18.6,
-    minZ: 2.6,
-    maxZ: 3.4,
+    minX: 32.4,
+    maxX: 33.6,
+    minZ: 14.6,
+    maxZ: 15.4,
     height: 0.8,
     blocksPlayer: true,
     blocksEnemies: true,
@@ -185,239 +635,54 @@ export const level1Definition = Object.freeze({
   ],
     userData: {
     sourcePlacementId: "O01",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O02-blocker",
-    type: "chest",
-    minX: 21.4,
-    maxX: 22.6,
-    minZ: 2.6,
-    maxZ: 3.4,
-    height: 0.8,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O02",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O03-blocker",
-    type: "chest",
-    minX: 24.4,
-    maxX: 25.6,
-    minZ: 2.6,
-    maxZ: 3.4,
-    height: 0.8,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O03",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O04-blocker",
-    type: "chest",
-    minX: 12.4,
-    maxX: 13.6,
-    minZ: 2.6,
-    maxZ: 3.4,
-    height: 0.8,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O04",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O05-blocker",
-    type: "statue",
-    minX: 31.5,
-    maxX: 32.5,
-    minZ: 14.5,
-    maxZ: 15.5,
-    height: 2,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O05",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O06-blocker",
-    type: "statue",
-    minX: 27.5,
-    maxX: 28.5,
-    minZ: 13.5,
-    maxZ: 14.5,
-    height: 2,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O06",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O07-blocker",
-    type: "statue",
-    minX: 18.5,
-    maxX: 19.5,
-    minZ: 13.5,
-    maxZ: 14.5,
-    height: 2,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O07",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O08-blocker",
-    type: "statue",
-    minX: 11.5,
-    maxX: 12.5,
-    minZ: 13.5,
-    maxZ: 14.5,
-    height: 2,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O08",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O09-blocker",
-    type: "statue",
-    minX: 10.5,
-    maxX: 11.5,
-    minZ: 8.5,
-    maxZ: 9.5,
-    height: 2,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O09",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O10-blocker",
-    type: "statue",
-    minX: 15.5,
-    maxX: 16.5,
-    minZ: 8.5,
-    maxZ: 9.5,
-    height: 2,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O10",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O11-blocker",
-    type: "statue",
-    minX: 22.5,
-    maxX: 23.5,
-    minZ: 8.5,
-    maxZ: 9.5,
-    height: 2,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O11",
-    roomId: "R02"
-  }
-  },
-  {
-    id: "O12-blocker",
-    type: "statue",
-    minX: 29.5,
-    maxX: 30.5,
-    minZ: 8.5,
-    maxZ: 9.5,
-    height: 2,
-    blocksPlayer: true,
-    blocksEnemies: true,
-    blocksLineOfMovement: true,
-    tags: [
-    "solid",
-    "ddplus-generated"
-  ],
-    userData: {
-    sourcePlacementId: "O12",
-    roomId: "R02"
+    roomId: "R03"
   }
   }
 ],
   props: [
   {
+    id: "N01",
+    kind: "note",
+    roomId: "R01",
+    position: {
+    x: 20,
+    y: 0,
+    z: 7
+  },
+    rotation: {
+    x: 0,
+    y: 0,
+    z: 0
+  },
+    scale: {
+    x: 1,
+    y: 1,
+    z: 1
+  },
+    dimensions: {
+    width: 1,
+    depth: 1
+  },
+    collisionRef: null,
+    material: "propStone",
+    tags: [
+    "compiled-prop",
+    "nonBlockingDecor"
+  ],
+    userData: {
+    note: "A cold sigil is carved into the central stone.",
+    blockingMode: "nonBlockingDecor",
+    collisionPurpose: "decorative non-blocking geometry"
+  }
+  },
+  {
     id: "O01",
     kind: "chest",
-    roomId: "R02",
+    roomId: "R03",
     position: {
-    x: 18,
+    x: 33,
     y: 0,
-    z: 3
+    z: 15
   },
     rotation: {
     x: 0,
@@ -444,400 +709,15 @@ export const level1Definition = Object.freeze({
     blockingMode: "solid",
     collisionPurpose: "visible DDplus prop"
   }
-  },
-  {
-    id: "O02",
-    kind: "chest",
-    roomId: "R02",
-    position: {
-    x: 22,
-    y: 0,
-    z: 3
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1.2,
-    depth: 0.8,
-    height: 0.8
-  },
-    collisionRef: "O02-blocker",
-    material: "gate",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
-  },
-  {
-    id: "O03",
-    kind: "chest",
-    roomId: "R02",
-    position: {
-    x: 25,
-    y: 0,
-    z: 3
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1.2,
-    depth: 0.8,
-    height: 0.8
-  },
-    collisionRef: "O03-blocker",
-    material: "gate",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
-  },
-  {
-    id: "O04",
-    kind: "chest",
-    roomId: "R02",
-    position: {
-    x: 13,
-    y: 0,
-    z: 3
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1.2,
-    depth: 0.8,
-    height: 0.8
-  },
-    collisionRef: "O04-blocker",
-    material: "gate",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
-  },
-  {
-    id: "O05",
-    kind: "statue",
-    roomId: "R02",
-    position: {
-    x: 32,
-    y: 0,
-    z: 15
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1,
-    depth: 1,
-    height: 2
-  },
-    collisionRef: "O05-blocker",
-    material: "offeringStone",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
-  },
-  {
-    id: "O06",
-    kind: "statue",
-    roomId: "R02",
-    position: {
-    x: 28,
-    y: 0,
-    z: 14
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1,
-    depth: 1,
-    height: 2
-  },
-    collisionRef: "O06-blocker",
-    material: "offeringStone",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
-  },
-  {
-    id: "O07",
-    kind: "statue",
-    roomId: "R02",
-    position: {
-    x: 19,
-    y: 0,
-    z: 14
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1,
-    depth: 1,
-    height: 2
-  },
-    collisionRef: "O07-blocker",
-    material: "offeringStone",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
-  },
-  {
-    id: "O08",
-    kind: "statue",
-    roomId: "R02",
-    position: {
-    x: 12,
-    y: 0,
-    z: 14
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1,
-    depth: 1,
-    height: 2
-  },
-    collisionRef: "O08-blocker",
-    material: "offeringStone",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
-  },
-  {
-    id: "O09",
-    kind: "statue",
-    roomId: "R02",
-    position: {
-    x: 11,
-    y: 0,
-    z: 9
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1,
-    depth: 1,
-    height: 2
-  },
-    collisionRef: "O09-blocker",
-    material: "offeringStone",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
-  },
-  {
-    id: "O10",
-    kind: "statue",
-    roomId: "R02",
-    position: {
-    x: 16,
-    y: 0,
-    z: 9
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1,
-    depth: 1,
-    height: 2
-  },
-    collisionRef: "O10-blocker",
-    material: "offeringStone",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
-  },
-  {
-    id: "O11",
-    kind: "statue",
-    roomId: "R02",
-    position: {
-    x: 23,
-    y: 0,
-    z: 9
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1,
-    depth: 1,
-    height: 2
-  },
-    collisionRef: "O11-blocker",
-    material: "offeringStone",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
-  },
-  {
-    id: "O12",
-    kind: "statue",
-    roomId: "R02",
-    position: {
-    x: 30,
-    y: 0,
-    z: 9
-  },
-    rotation: {
-    x: 0,
-    y: 0,
-    z: 0
-  },
-    scale: {
-    x: 1,
-    y: 1,
-    z: 1
-  },
-    dimensions: {
-    width: 1,
-    depth: 1,
-    height: 2
-  },
-    collisionRef: "O12-blocker",
-    material: "offeringStone",
-    tags: [
-    "compiled-prop",
-    "solid"
-  ],
-    userData: {
-    blockingMode: "solid",
-    collisionPurpose: "visible DDplus prop"
-  }
   }
 ],
   torchFixtures: [
   {
     id: "L01",
     kind: "torch",
-    roomId: "R02",
+    roomId: "R01",
     wallSide: "north",
-    distanceAlongWall: 12,
+    distanceAlongWall: 2,
     height: 1.5,
     insetFromCorner: 1.25,
     offsetFromWall: 0.16,
@@ -851,17 +731,17 @@ export const level1Definition = Object.freeze({
   {
     id: "L02",
     kind: "torch",
-    roomId: "R02",
-    wallSide: "north",
-    distanceAlongWall: 26,
+    roomId: "C03",
+    wallSide: "east",
+    distanceAlongWall: 3.2,
     height: 1.5,
-    insetFromCorner: 1.25,
+    insetFromCorner: 0.6,
     offsetFromWall: 0.16,
-    profile: "dungeonTorch",
+    profile: "weakTorch",
     visualKind: "procedural-sconce",
     flameKind: "procedural-warm-flame",
     debug: {
-    note: "DDplus torch wall-mounted light"
+    note: "DDplus wallSconce wall-mounted light"
   }
   },
   {
@@ -869,7 +749,7 @@ export const level1Definition = Object.freeze({
     kind: "torch",
     roomId: "R02",
     wallSide: "north",
-    distanceAlongWall: 35,
+    distanceAlongWall: 3,
     height: 1.5,
     insetFromCorner: 1.25,
     offsetFromWall: 0.16,
@@ -878,470 +758,6 @@ export const level1Definition = Object.freeze({
     flameKind: "procedural-warm-flame",
     debug: {
     note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L04",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "east",
-    distanceAlongWall: 5,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L05",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "east",
-    distanceAlongWall: 13,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L06",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "east",
-    distanceAlongWall: 21,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L07",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "east",
-    distanceAlongWall: 26,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L08",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "south",
-    distanceAlongWall: 33,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L09",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "south",
-    distanceAlongWall: 24,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L10",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "south",
-    distanceAlongWall: 10,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L11",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "south",
-    distanceAlongWall: 1,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L12",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "west",
-    distanceAlongWall: 28,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L13",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "west",
-    distanceAlongWall: 21,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L14",
-    kind: "torch",
-    roomId: "R01",
-    wallSide: "west",
-    distanceAlongWall: 6,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L15",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "west",
-    distanceAlongWall: 5,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L16",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "north",
-    distanceAlongWall: 4,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "dungeonTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus torch wall-mounted light"
-  }
-  },
-  {
-    id: "L17",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "west",
-    distanceAlongWall: 12,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L18",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "north",
-    distanceAlongWall: 16,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L19",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "north",
-    distanceAlongWall: 20,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L20",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "north",
-    distanceAlongWall: 22,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L21",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "north",
-    distanceAlongWall: 24,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L22",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "east",
-    distanceAlongWall: 12,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L23",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "east",
-    distanceAlongWall: 12,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L24",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "south",
-    distanceAlongWall: 24,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L25",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "south",
-    distanceAlongWall: 20,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L26",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "south",
-    distanceAlongWall: 14,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L27",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "south",
-    distanceAlongWall: 13,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L28",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "south",
-    distanceAlongWall: 9,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L29",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "west",
-    distanceAlongWall: 25,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L30",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "south",
-    distanceAlongWall: 17,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L31",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "east",
-    distanceAlongWall: 24,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
-  }
-  },
-  {
-    id: "L32",
-    kind: "torch",
-    roomId: "R02",
-    wallSide: "east",
-    distanceAlongWall: 18,
-    height: 1.5,
-    insetFromCorner: 1.25,
-    offsetFromWall: 0.16,
-    profile: "weakTorch",
-    visualKind: "procedural-sconce",
-    flameKind: "procedural-warm-flame",
-    debug: {
-    note: "DDplus wallSconce wall-mounted light"
   }
   }
 ],
@@ -1352,123 +768,30 @@ export const level1Definition = Object.freeze({
     kind: "enemy",
     species: "sheep_demon",
     faction: "none",
-    roomId: "R02",
+    roomId: "R05",
     position: {
-    x: 9,
+    x: 36,
     y: 0,
-    z: 22
+    z: 24
   },
     yaw: 0,
     allowedForInitialWave: true,
     allowedForRespawn: true,
     tags: [
-    "enemy"
+    "skeleton"
   ],
-    userData: {}
-  },
-  {
-    id: "E02",
-    kind: "enemy",
-    species: "sheep_demon",
-    faction: "none",
-    roomId: "R02",
-    position: {
-    x: 14,
-    y: 0,
-    z: 22
-  },
-    yaw: 0,
-    allowedForInitialWave: true,
-    allowedForRespawn: true,
-    tags: [
-    "enemy"
-  ],
-    userData: {}
-  },
-  {
-    id: "E03",
-    kind: "enemy",
-    species: "sheep_demon",
-    faction: "none",
-    roomId: "R02",
-    position: {
-    x: 18,
-    y: 0,
-    z: 22
-  },
-    yaw: 0,
-    allowedForInitialWave: true,
-    allowedForRespawn: true,
-    tags: [
-    "enemy"
-  ],
-    userData: {}
-  },
-  {
-    id: "E04",
-    kind: "enemy",
-    species: "sheep_demon",
-    faction: "none",
-    roomId: "R02",
-    position: {
-    x: 23,
-    y: 0,
-    z: 22
-  },
-    yaw: 0,
-    allowedForInitialWave: true,
-    allowedForRespawn: true,
-    tags: [
-    "enemy"
-  ],
-    userData: {}
-  },
-  {
-    id: "E05",
-    kind: "enemy",
-    species: "sheep_demon",
-    faction: "none",
-    roomId: "R02",
-    position: {
-    x: 4,
-    y: 0,
-    z: 19
-  },
-    yaw: 0,
-    allowedForInitialWave: true,
-    allowedForRespawn: true,
-    tags: [
-    "enemy"
-  ],
-    userData: {}
-  },
-  {
-    id: "E06",
-    kind: "enemy",
-    species: "sheep_demon",
-    faction: "none",
-    roomId: "R01",
-    position: {
-    x: 4,
-    y: 0,
-    z: 16
-  },
-    yaw: 0,
-    allowedForInitialWave: true,
-    allowedForRespawn: true,
-    tags: [
-    "enemy"
-  ],
-    userData: {}
+    userData: {
+    encounter: "sentinel"
+  }
   },
   {
     id: "P01",
     kind: "player",
-    roomId: "R02",
+    roomId: "R04",
     position: {
-    x: 19,
+    x: 23,
     y: 1.55,
-    z: 30
+    z: 27
   },
     yaw: 0,
     tags: [
@@ -1477,7 +800,43 @@ export const level1Definition = Object.freeze({
     userData: {}
   }
 ],
-  exits: [],
+  exits: [
+  {
+    id: "X01",
+    fromLocation: "level-1",
+    toLocation: "reliquary-field",
+    roomId: "R05",
+    position: {
+    x: 37,
+    y: 1.2,
+    z: 24
+  },
+    triggerRect: {
+    minX: 36,
+    maxX: 38,
+    minZ: 23,
+    maxZ: 25
+  },
+    destinationSpawnId: "field_ddplus_level_1_return",
+    promptText: "Tap INTERACT to return to Reliquary Field.",
+    wallGaps: [
+    {
+      roomId: "R05",
+      position: {
+      x: 40,
+      y: 0,
+      z: 24
+    },
+      width: 2
+    }
+  ],
+    tags: [
+    "field-return",
+    "ddplus-export"
+  ],
+    userData: {}
+  }
+],
   interactions: [],
   userData: {
   ddplus: {
@@ -1487,8 +846,18 @@ export const level1Definition = Object.freeze({
   height: 34,
   cellSize: 1
 },
-  footprint: "rectangle",
-  notes: [],
+  footprint: "temple",
+  notes: [
+  {
+    id: "N01",
+    roomId: "R01",
+    position: {
+    x: 20,
+    z: 7
+  },
+    note: "A cold sigil is carved into the central stone."
+  }
+],
   exportContract: "DDplus DSB v1 rectangle-authoring contract"
 }
 }
