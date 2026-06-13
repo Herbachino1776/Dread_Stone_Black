@@ -232,6 +232,7 @@ export const reliquaryFieldDefinition = Object.freeze({
     { id: 'field_south_reliquary_crypt_return', kind: 'return', position: { x: -60, y: 1.55, z: -112 }, yaw: 0, roomId: 'FIELD01', tags: ['live', 'south-reliquary-crypt'] },
     { id: 'field_black_grass_temple_return', kind: 'return', position: { x: -184, y: 1.55, z: 25 }, yaw: 0, roomId: 'FIELD01', tags: ['live', 'black-grass-temple'] },
     { id: 'field_keeper_house_return', kind: 'return', position: { x: 142, y: 1.55, z: -82 }, yaw: 0, roomId: 'FIELD01', tags: ['live', 'field-keeper-house'] },
+    { id: 'field_ddplus_level_1_return', kind: 'return', position: { x: 154, y: 1.55, z: 104 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'ddplus-test', 'level-1'] },
   ],
   exits: [
     {

@@ -50,7 +50,7 @@ export class Game {
     const requestedArea = query.get('area');
     const returnedFrom = query.get('from');
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
-    const fieldSpawn = returnedFrom === 'black-grass-temple' ? 'blackGrassTempleExit' : returnedFrom === 'field-keeper-house' ? 'fieldKeeperHouseExit' : returnedFrom === 'dungeon' ? 'cryptAExit' : 'start';
+    const fieldSpawn = returnedFrom === 'black-grass-temple' ? 'blackGrassTempleExit' : returnedFrom === 'field-keeper-house' ? 'fieldKeeperHouseExit' : returnedFrom === 'level-1' ? 'ddplusLevel1Exit' : returnedFrom === 'dungeon' ? 'cryptAExit' : 'start';
     const requestedLocation = getLocationDefinition(requestedArea);
     const area = ['dungeon', 'black-grass-temple'].includes(requestedArea) || requestedLocation?.tags?.includes('compiled-runtime') ? requestedArea : 'field';
     this.gameState = new GameState();
