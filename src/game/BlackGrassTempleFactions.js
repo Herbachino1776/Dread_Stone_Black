@@ -1991,6 +1991,28 @@ export class BlackGrassTempleFactionManager {
     }
   }
 
+  spawnInitialAnchors(anchors = this.anchors.filter((anchor) => anchor.initialWave)) {
+    anchors
+      .filter((anchor) => FACTIONS[anchor.preferredFaction])
+      .forEach((anchor) => {
+        const species = anchor.preferredFaction;
+        const enemy = new BlackGrassFactionEnemy({
+          scene: this.scene,
+          collision: this.collision,
+          navigationGraph: this.navigationGraph,
+          species,
+          id: `${anchor.id ?? 'generated-anchor'}-${species}-${this.spawnSerial += 1}`,
+          spawnAnchor: anchor,
+          patrolPoints: anchor.patrolPoints,
+          onLoaded: () => this.logDevStatus('enemy-loaded'),
+          onGoreEvent: this.onGoreEvent,
+        });
+        this.enemies.push(enemy);
+        enemy.load();
+      });
+    this.initialWaveSpawned = true;
+  }
+
   update(deltaSeconds, playerPosition) {
     const director = this.updateBattleDirector(deltaSeconds, playerPosition);
     const context = { enemies: this.enemies, playerPosition, director };

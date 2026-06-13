@@ -1231,7 +1231,7 @@ export class DungeonScene {
       spawn.kind === 'enemy'
       && ['sheep_demon', 'neck_man'].includes(spawn.species)
       && (spawn.allowedForInitialWave || spawn.initialWave || spawn.tags?.includes('initial-wave'))
-    ));
+    )).map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime)).filter(Boolean);
     if (factionAnchors.length === 0) return;
 
     this.blackGrassFactionManager = new BlackGrassTempleFactionManager({
@@ -1242,7 +1242,69 @@ export class DungeonScene {
       encounterZones: runtime.encounterZones,
       onGoreEvent: (payload) => this.handleFactionGoreEvent(payload),
     });
-    this.blackGrassFactionManager.spawnInitialWave();
+    this.blackGrassFactionManager.spawnInitialAnchors(factionAnchors);
+  }
+
+  createRuntimeEnemyAnchor(spawn, runtime) {
+    const safePosition = this.findSafeCompiledEnemySpawnPosition(spawn, runtime);
+    if (!safePosition) {
+      console.warn(`Skipping generated enemy spawn ${spawn.id}: no safe walkable point found.`);
+      return null;
+    }
+    const patrolPoints = (spawn.patrolPoints?.length ? spawn.patrolPoints : this.createFallbackPatrolPoints(safePosition))
+      .map((point) => this.findSafeCompiledEnemySpawnPosition({ ...spawn, id: `${spawn.id}:patrol`, position: point }, runtime) ?? safePosition.clone());
+    return {
+      id: spawn.id,
+      preferredFaction: spawn.faction ?? spawn.preferredFaction ?? spawn.species,
+      faction: spawn.faction,
+      species: spawn.species,
+      position: safePosition,
+      yaw: spawn.yaw,
+      roomId: spawn.roomId ?? this.findCompiledRoomIdForPoint(safePosition, runtime),
+      initialWave: spawn.initialWave || spawn.allowedForInitialWave || spawn.tags?.includes('initial-wave'),
+      allowedForInitialWave: spawn.allowedForInitialWave,
+      allowedForRespawn: spawn.allowedForRespawn,
+      minDistanceFromPlayer: spawn.minDistanceFromPlayer,
+      actionBubblePriority: spawn.actionBubblePriority,
+      tags: spawn.tags ?? [],
+      userData: spawn.userData ?? {},
+      patrolPoints: Object.freeze(patrolPoints.map((point) => point.clone())),
+    };
+  }
+
+  findSafeCompiledEnemySpawnPosition(spawn, runtime) {
+    const position = spawn.position?.clone?.() ?? this.toVector3(spawn.position, 0);
+    position.y = 0;
+    if (this.collision?.canStandAt(position)) return position;
+    const room = runtime.navGraph?.rooms?.[spawn.roomId] ?? this.findCompiledRoomForPoint(position, runtime);
+    const candidates = [];
+    if (room) {
+      const clamped = position.clone();
+      clamped.x = THREE.MathUtils.clamp(clamped.x, room.minX + 0.9, room.maxX - 0.9);
+      clamped.z = THREE.MathUtils.clamp(clamped.z, room.minZ + 0.9, room.maxZ - 0.9);
+      candidates.push(clamped, room.center?.clone?.());
+    }
+    candidates.push(...this.createFallbackPatrolPoints(position, 1.5));
+    return candidates.find((candidate) => candidate && this.collision?.canStandAt(candidate))?.clone() ?? null;
+  }
+
+  findCompiledRoomForPoint(point, runtime) {
+    return Object.values(runtime.navGraph?.rooms ?? {}).find((room) => (
+      point.x >= room.minX && point.x <= room.maxX && point.z >= room.minZ && point.z <= room.maxZ
+    )) ?? null;
+  }
+
+  findCompiledRoomIdForPoint(point, runtime) {
+    return this.findCompiledRoomForPoint(point, runtime)?.id ?? null;
+  }
+
+  createFallbackPatrolPoints(position, radius = 3) {
+    return [
+      position.clone().add(new THREE.Vector3(-radius, 0, -radius)),
+      position.clone().add(new THREE.Vector3(radius, 0, -radius)),
+      position.clone().add(new THREE.Vector3(radius, 0, radius)),
+      position.clone().add(new THREE.Vector3(-radius, 0, radius)),
+    ];
   }
 
   buildBlackGrassTempleInterior() {
@@ -1903,7 +1965,7 @@ export class DungeonScene {
   }
 
   updateBlackGrassFactionEnemies(deltaSeconds, player) {
-    if (this.area !== 'black-grass-temple' || !this.blackGrassFactionManager || !player?.position) return;
+    if (!this.blackGrassFactionManager || !player?.position) return;
     this.blackGrassFactionManager.update(deltaSeconds, player.position);
   }
 
