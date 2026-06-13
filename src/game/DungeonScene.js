@@ -72,12 +72,15 @@ const FIELD_DDPLUS_LEVEL1_RETURN_START = new THREE.Vector3(154, 1.55, 104);
 const FIELD_DDPLUS_LEVEL1_RETURN_YAW = Math.PI;
 const FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_START = new THREE.Vector3(122, 1.55, 144.5);
 const FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_YAW = Math.PI;
+const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_START = new THREE.Vector3(96, 1.55, 144.5);
+const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const BGT_EXTERIOR_ENTRANCE_TARGET = new THREE.Vector3(-184, 1, 31);
 const FIELD_KEEPER_HOUSE_ENTRANCE_TARGET = new THREE.Vector3(142, 1, -77);
 const DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET = new THREE.Vector3(154, 1, 110);
 const SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET = new THREE.Vector3(122, 1, 149);
+const SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET = new THREE.Vector3(96, 1, 149);
 function getReliquaryFieldColliders() {
   return getLocationDefinition('reliquary-field')?.blockers ?? [];
 }
@@ -407,6 +410,10 @@ export class DungeonScene {
 
     if (this.fieldSpawn === 'sumerianCityBlockV0Exit') {
       return { spawnPosition: FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_START, spawnYaw: FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_YAW };
+    }
+
+    if (this.fieldSpawn === 'sumerianSunPalaceDistrictV1Exit') {
+      return { spawnPosition: FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_START, spawnYaw: FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_YAW };
     }
 
     return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
@@ -775,6 +782,7 @@ export class DungeonScene {
     this.addFieldKeeperHouseExterior();
     this.addDdplusLevel1TestEntrance();
     this.addSumerianCityBlockV0TestEntrance();
+    this.addSumerianSunPalaceDistrictV1TestEntrance();
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
     this.addLowRuinWalls();
@@ -973,6 +981,40 @@ export class DungeonScene {
       message: 'The temporary Sumerian city gate opens.',
       functional: true,
       area: 'sumerian-city-block-v0',
+      type: 'areaEntrance',
+    });
+  }
+
+
+  addSumerianSunPalaceDistrictV1TestEntrance() {
+    const stoneMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/wall_sandstone_ritual_01.png', repeat: [1.8, 1.3], color: 0xc9a763, roughness: 0.98, metalness: 0.0, emissive: 0x2b1a08, emissiveIntensity: 0.18 });
+    const gateMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/metal_bronze_ritual_01.png', repeat: [1.0, 1.35], color: 0xd7a15f, roughness: 0.84, metalness: 0.32, emissive: 0x2b1606, emissiveIntensity: 0.22 });
+    const floorMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/floor_limestone_temple_01.png', repeat: [2.6, 2.6], color: 0xd4bd85, roughness: 0.98, metalness: 0.0, emissive: 0x201507, emissiveIntensity: 0.12 });
+    const group = new THREE.Group();
+    group.name = 'SUMERIAN_SUN_PALACE_DISTRICT_V1-temporary-sun-gate-entrance';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(10, 0.28, 8), position: new THREE.Vector3(96, 0.14, 149), material: floorMat, name: 'SUMERIAN_SUN_PALACE_DISTRICT_V1_TEMP_BASE-pack1-floor_limestone_temple_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.6, 4.8, 1.6), position: new THREE.Vector3(92.2, 2.4, 149), material: stoneMat, name: 'SUMERIAN_SUN_PALACE_DISTRICT_V1_TEMP_LEFT_PIER-pack1-wall_sandstone_ritual_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.6, 4.8, 1.6), position: new THREE.Vector3(99.8, 2.4, 149), material: stoneMat, name: 'SUMERIAN_SUN_PALACE_DISTRICT_V1_TEMP_RIGHT_PIER-pack1-wall_sandstone_ritual_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(7.6, 1.2, 1.2), position: new THREE.Vector3(96, 4.55, 149), material: stoneMat, name: 'SUMERIAN_SUN_PALACE_DISTRICT_V1_TEMP_LINTEL-pack1-wall_sandstone_ritual_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.8, 3.1, 0.22), position: new THREE.Vector3(96, 1.55, 148.35), material: gateMat, name: 'SUMERIAN_SUN_PALACE_DISTRICT_V1_TEMP_TEST_GATE-pack1-metal_bronze_ritual_01' }));
+
+    const glow = new THREE.PointLight(0xffc56d, 1.25, 18, 1.35);
+    glow.name = 'SUMERIAN_SUN_PALACE_DISTRICT_V1_TEMP_GATE-bright-test-light';
+    glow.position.set(96, 2.35, 147.8);
+    group.add(glow);
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'SUMERIAN_SUN_PALACE_DISTRICT_V1_INT_ENTER',
+      label: 'Sumerian Sun Palace',
+      target: SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET.clone(),
+      range: 5.0,
+      hint: 'Tap INTERACT to enter the Sumerian Sun Palace.',
+      message: 'The temporary Sumerian Sun Palace gate opens.',
+      functional: true,
+      area: 'sumerian-sun-palace-district-v1',
       type: 'areaEntrance',
     });
   }
@@ -1179,6 +1221,28 @@ export class DungeonScene {
     this.scene.add(runtime.group);
     this.torchFlickerController.registerFromObject(runtime.group);
     this.dungeonDebugRenderer = new DungeonDebugRenderer({ scene: this.scene, runtime });
+    this.addCompiledLocationEnemies(runtime);
+  }
+
+
+  addCompiledLocationEnemies(runtime = this.compiledLocationRuntime) {
+    if (!runtime || runtime.locationId === 'black-grass-temple') return;
+    const factionAnchors = runtime.spawnAnchors.filter((spawn) => (
+      spawn.kind === 'enemy'
+      && ['sheep_demon', 'neck_man'].includes(spawn.species)
+      && (spawn.allowedForInitialWave || spawn.initialWave || spawn.tags?.includes('initial-wave'))
+    ));
+    if (factionAnchors.length === 0) return;
+
+    this.blackGrassFactionManager = new BlackGrassTempleFactionManager({
+      scene: this.scene,
+      collision: this.collision,
+      anchors: factionAnchors,
+      navigationGraph: runtime.navGraph,
+      encounterZones: runtime.encounterZones,
+      onGoreEvent: (payload) => this.handleFactionGoreEvent(payload),
+    });
+    this.blackGrassFactionManager.spawnInitialWave();
   }
 
   buildBlackGrassTempleInterior() {

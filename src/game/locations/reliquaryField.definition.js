@@ -234,6 +234,7 @@ export const reliquaryFieldDefinition = Object.freeze({
     { id: 'field_keeper_house_return', kind: 'return', position: { x: 142, y: 1.55, z: -82 }, yaw: 0, roomId: 'FIELD01', tags: ['live', 'field-keeper-house'] },
     { id: 'field_ddplus_level_1_return', kind: 'return', position: { x: 154, y: 1.55, z: 104 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'ddplus-test', 'level-1'] },
     { id: 'field_sumerian_city_block_v0_return', kind: 'return', position: { x: 122, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-city-block-v0'] },
+    { id: 'field_sumerian_sun_palace_district_v1_return', kind: 'return', position: { x: 96, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-sun-palace-district-v1'] },
   ],
   exits: [
     {
@@ -286,6 +287,20 @@ export const reliquaryFieldDefinition = Object.freeze({
       userData: {
         temporary: true,
         removalNote: 'Temporary DDplus Level 1 compiled-runtime smoke-test entrance.',
+      },
+    },
+    {
+      id: 'field_enter_sumerian_sun_palace_district_v1',
+      fromLocation: 'reliquary-field',
+      toLocation: 'sumerian-sun-palace-district-v1',
+      triggerRect: { minX: 92, maxX: 100, minZ: 145, maxZ: 153 },
+      position: { x: 96, y: 1, z: 149 },
+      destinationSpawnId: 'sumerian_sun_palace_player_start',
+      promptText: 'Tap INTERACT to enter the Sumerian Sun Palace.',
+      tags: ['temporary', 'sumerian-sun-palace-district-v1'],
+      userData: {
+        temporary: true,
+        removalNote: 'Temporary direct-authored Sumerian Sun Palace District compiled-runtime smoke-test entrance.',
       },
     },
     {

@@ -58,6 +58,8 @@ export class Game {
           ? 'ddplusLevel1Exit'
           : returnedFrom === 'sumerian-city-block-v0'
             ? 'sumerianCityBlockV0Exit'
+            : returnedFrom === 'sumerian-sun-palace-district-v1'
+              ? 'sumerianSunPalaceDistrictV1Exit'
             : returnedFrom === 'dungeon'
               ? 'cryptAExit'
               : 'start';
