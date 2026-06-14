@@ -5,6 +5,11 @@ import { fpvWeaponProfiles } from './fpvWeaponProfiles.js';
 
 const warnedMissingProfiles = new Set();
 const gltfLoader = new GLTFLoader();
+const isDev = import.meta.env.DEV;
+
+function devLog(...args) {
+  if (isDev) console.info(...args);
+}
 
 function applyTransform(object, profile, attack = null) {
   const p = profile.position ?? { x: 0, y: 0, z: -1.2 };
@@ -58,6 +63,7 @@ export class FPVEquipmentRenderer {
 
     if (this.currentProfileId === fpvProfile.id) return;
     this.currentProfileId = fpvProfile.id;
+    devLog('[FPVEquipmentRenderer] equipped FPV profile id:', fpvProfile.id);
     this.armsOverlay.play(fpvProfile.baseClip);
     this.renderWeaponLayer(fpvProfile, weaponProfile);
   }
@@ -70,12 +76,13 @@ export class FPVEquipmentRenderer {
     this.weaponLayer.hidden = fpvProfile.weaponLayer === 'none';
     this.weaponLayer.title = '';
     this.hideGlbWeapon();
+    devLog('[FPVEquipmentRenderer] current weaponLayer mode:', fpvProfile.weaponLayer);
 
     if (fpvProfile.weaponLayer === 'glb-model') {
       this.weaponLayer.hidden = false;
       this.weaponLayer.classList.add('first-person-weapon--glb');
       this.weaponLayer.title = `${weaponProfile?.displayName ?? fpvProfile.id} FPV model`;
-      this.showGlbWeapon(fpvProfile);
+      this.showGlbWeapon(fpvProfile, weaponProfile);
       return;
     }
     if (fpvProfile.weaponLayer === 'sword-placeholder') {
@@ -102,7 +109,7 @@ export class FPVEquipmentRenderer {
     this.glbRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.glbRenderer.setClearColor(0x000000, 0);
     this.glbScene = new THREE.Scene();
-    this.glbCamera = new THREE.PerspectiveCamera(42, 1, 0.01, 20);
+    this.glbCamera = new THREE.PerspectiveCamera(50, 1, 0.01, 20);
     this.glbCamera.position.set(0, 0, 0);
     this.glbScene.add(new THREE.HemisphereLight(0xffe7c0, 0x160d08, 1.8));
     const key = new THREE.DirectionalLight(0xffd08a, 2.2);
@@ -110,11 +117,12 @@ export class FPVEquipmentRenderer {
     this.glbScene.add(key);
   }
 
-  showGlbWeapon(fpvProfile) {
+  showGlbWeapon(fpvProfile, weaponProfile) {
     this.ensureGlbOverlay();
     this.glbProfile = fpvProfile;
     this.glbCanvas.hidden = false;
     const token = ++this.glbLoadToken;
+    devLog('[FPVEquipmentRenderer] loading GLB model URL:', fpvProfile.modelUrl);
     if (this.glbWeapon?.userData?.modelUrl === fpvProfile.modelUrl) {
       applyTransform(this.glbWeapon, fpvProfile);
       this.startRenderLoop();
@@ -137,16 +145,36 @@ export class FPVEquipmentRenderer {
       applyTransform(root, fpvProfile);
       this.glbWeapon = root;
       this.glbScene.add(root);
+      devLog('[FPVEquipmentRenderer] GLB loaded successfully:', fpvProfile.modelUrl);
       this.startRenderLoop();
-    }, undefined, (error) => console.warn(`Unable to load FPV weapon model ${fpvProfile.modelUrl}`, error));
+    }, undefined, (error) => {
+      if (token !== this.glbLoadToken) return;
+      console.warn(`Unable to load FPV weapon model ${fpvProfile.modelUrl}`, error);
+      devLog('[FPVEquipmentRenderer] GLB load failure:', fpvProfile.modelUrl, error);
+      this.showGlbFallback(weaponProfile);
+    });
   }
 
   hideGlbWeapon() {
     this.glbLoadToken += 1;
     this.glbProfile = null;
+    this.attackStartedAt = 0;
     if (this.glbCanvas) this.glbCanvas.hidden = true;
     if (this.glbWeapon && this.glbScene) this.glbScene.remove(this.glbWeapon);
     this.glbWeapon = null;
+  }
+
+  showGlbFallback(weaponProfile) {
+    this.glbProfile = null;
+    if (this.glbCanvas) this.glbCanvas.hidden = true;
+    if (this.glbWeapon && this.glbScene) this.glbScene.remove(this.glbWeapon);
+    this.glbWeapon = null;
+    if (!this.weaponLayer) return;
+    this.weaponLayer.hidden = false;
+    this.weaponLayer.className = 'first-person-weapon first-person-weapon--rusted-sword';
+    this.weaponLayer.dataset.weaponId = weaponProfile?.id ?? 'broadsword_ritual_01';
+    this.weaponLayer.title = 'Ritual Broadsword GLB failed; using placeholder';
+    devLog('[FPVEquipmentRenderer] current weaponLayer mode: sword-placeholder fallback');
   }
 
   setOffhand(itemId) {
@@ -162,7 +190,7 @@ export class FPVEquipmentRenderer {
     if (!this.weaponLayer || this.weaponLayer.hidden) return;
     if (this.glbProfile?.weaponLayer === 'glb-model') {
       this.attackStartedAt = performance.now();
-      this.attackDurationMs = Math.max(260, Math.min((weaponProfile?.attackCooldown ?? 0.8) * 720, 780));
+      this.attackDurationMs = Math.max(420, Math.min((weaponProfile?.attackCooldown ?? 0.8) * 460, 520));
       this.startRenderLoop();
       return;
     }
@@ -194,12 +222,12 @@ export class FPVEquipmentRenderer {
           const recover = t < 0.58 ? 0 : Math.min((t - 0.58) / 0.42, 1);
           const slash = Math.sin(swing * Math.PI);
           applyTransform(this.glbWeapon, this.glbProfile, {
-            x: 0.08 * windup - 0.32 * slash * (1 - recover),
-            y: 0.12 * windup - 0.2 * slash,
-            z: -0.18 * slash,
-            rx: -0.16 * windup + 0.5 * slash,
-            ry: 0.12 * windup - 0.62 * slash,
-            rz: -0.2 * windup - 1.05 * slash,
+            x: 0.1 * windup - 0.34 * slash * (1 - recover),
+            y: 0.12 * windup - 0.24 * slash,
+            z: -0.08 * windup - 0.2 * slash,
+            rx: -0.18 * windup + 0.54 * slash,
+            ry: -0.08 * windup - 0.66 * slash,
+            rz: -0.18 * windup - 1.08 * slash,
           });
         } else {
           this.attackStartedAt = 0;
@@ -207,7 +235,7 @@ export class FPVEquipmentRenderer {
         }
       }
       this.glbRenderer.render(this.glbScene, this.glbCamera);
-      if (this.attackStartedAt > 0) this.animationFrame = requestAnimationFrame(render);
+      if (this.glbProfile && this.glbCanvas && !this.glbCanvas.hidden) this.animationFrame = requestAnimationFrame(render);
     };
     this.animationFrame = requestAnimationFrame(render);
   }
