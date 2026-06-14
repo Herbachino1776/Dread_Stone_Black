@@ -9,6 +9,7 @@ const isDev = import.meta.env.DEV;
 const DEBUG_FPV_WEAPON = false;
 const BROADSWORD_FPV_PROFILE_ID = 'broadsword_ritual_01';
 const DEFAULT_FPV_CAMERA = Object.freeze({ fov: 50, near: 0.01, far: 100 });
+const BROADSWORD_GRIP_ANCHOR = Object.freeze({ xPercent: 72, yPercent: 73 });
 const BROADSWORD_TUNE_STEP = Object.freeze({ position: 0.03, rotation: 0.04, scale: 0.04 });
 
 function devLog(...args) {
@@ -47,18 +48,6 @@ function lerpPose(from, to, t) {
   };
 }
 
-function offsetPose(pose, offset) {
-  const next = copyPose(pose);
-  next.position.x += offset.x ?? 0;
-  next.position.y += offset.y ?? 0;
-  next.position.z += offset.z ?? 0;
-  next.rotation.x += offset.rx ?? 0;
-  next.rotation.y += offset.ry ?? 0;
-  next.rotation.z += offset.rz ?? 0;
-  next.scale += offset.scale ?? 0;
-  return next;
-}
-
 export class FPVEquipmentRenderer {
   constructor({ root, armsOverlay, equipmentRuntime }) {
     this.root = root;
@@ -74,6 +63,7 @@ export class FPVEquipmentRenderer {
     this.glbWeapon = null;
     this.glbModelGroup = null;
     this.glbAxisHelper = null;
+    this.glbGripAnchor = null;
     this.glbProfile = null;
     this.glbIdlePose = null;
     this.broadswordTunePose = null;
@@ -144,8 +134,16 @@ export class FPVEquipmentRenderer {
     this.glbCanvas.className = 'first-person-weapon__glb-canvas';
     this.glbCanvas.setAttribute('aria-hidden', 'true');
     this.weaponLayer.append(this.glbCanvas);
-    this.glbRenderer = new THREE.WebGLRenderer({ canvas: this.glbCanvas, alpha: true, antialias: true, powerPreference: 'low-power' });
-    this.glbRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    if (isDev) {
+      this.glbGripAnchor = document.createElement('div');
+      this.glbGripAnchor.className = 'first-person-weapon__grip-anchor';
+      this.glbGripAnchor.setAttribute('aria-hidden', 'true');
+      this.glbGripAnchor.style.left = `${BROADSWORD_GRIP_ANCHOR.xPercent}%`;
+      this.glbGripAnchor.style.top = `${BROADSWORD_GRIP_ANCHOR.yPercent}%`;
+      this.weaponLayer.append(this.glbGripAnchor);
+    }
+    this.glbRenderer = new THREE.WebGLRenderer({ canvas: this.glbCanvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
+    this.glbRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.glbRenderer.setClearColor(0x000000, 0);
     this.glbScene = new THREE.Scene();
     this.glbCamera = new THREE.PerspectiveCamera(DEFAULT_FPV_CAMERA.fov, 1, DEFAULT_FPV_CAMERA.near, DEFAULT_FPV_CAMERA.far);
@@ -160,6 +158,7 @@ export class FPVEquipmentRenderer {
     this.ensureGlbOverlay();
     this.glbProfile = fpvProfile;
     this.glbCanvas.hidden = false;
+    if (this.glbGripAnchor) this.glbGripAnchor.hidden = fpvProfile.id !== BROADSWORD_FPV_PROFILE_ID;
     const token = ++this.glbLoadToken;
     devLog('[FPVEquipmentRenderer] loading GLB model URL:', fpvProfile.modelUrl);
     if (this.glbWeapon?.userData?.modelUrl === fpvProfile.modelUrl) {
@@ -217,6 +216,7 @@ export class FPVEquipmentRenderer {
     this.glbIdlePose = null;
     this.attackStartedAt = 0;
     if (this.glbCanvas) this.glbCanvas.hidden = true;
+    if (this.glbGripAnchor) this.glbGripAnchor.hidden = true;
     if (this.glbWeapon && this.glbScene) this.glbScene.remove(this.glbWeapon);
     this.glbWeapon = null;
     this.glbModelGroup = null;
@@ -226,6 +226,24 @@ export class FPVEquipmentRenderer {
   createIdlePose(fpvProfile) {
     if (fpvProfile.id === BROADSWORD_FPV_PROFILE_ID && this.broadswordTunePose) return copyPose(this.broadswordTunePose);
     return copyPose({ position: fpvProfile.position, rotation: fpvProfile.rotation, scale: fpvProfile.scale });
+  }
+
+
+  createAttackPose(profilePose, idlePose) {
+    if (!profilePose) return copyPose(idlePose);
+    return {
+      position: {
+        x: profilePose.position?.x ?? idlePose.position.x,
+        y: profilePose.position?.y ?? idlePose.position.y,
+        z: profilePose.position?.z ?? idlePose.position.z,
+      },
+      rotation: {
+        x: profilePose.rotation?.x ?? idlePose.rotation.x,
+        y: profilePose.rotation?.y ?? idlePose.rotation.y,
+        z: profilePose.rotation?.z ?? idlePose.rotation.z,
+      },
+      scale: profilePose.scale ?? idlePose.scale,
+    };
   }
 
   normalizeModel(root, modelGroup, fpvProfile) {
@@ -248,6 +266,7 @@ export class FPVEquipmentRenderer {
   showGlbFallback(weaponProfile) {
     this.glbProfile = null;
     if (this.glbCanvas) this.glbCanvas.hidden = true;
+    if (this.glbGripAnchor) this.glbGripAnchor.hidden = true;
     if (this.glbWeapon && this.glbScene) this.glbScene.remove(this.glbWeapon);
     this.glbWeapon = null;
     this.glbModelGroup = null;
@@ -273,7 +292,7 @@ export class FPVEquipmentRenderer {
     if (!this.weaponLayer || this.weaponLayer.hidden) return;
     if (this.glbProfile?.weaponLayer === 'glb-model') {
       this.attackStartedAt = performance.now();
-      this.attackDurationMs = Math.max(420, Math.min((weaponProfile?.attackCooldown ?? 0.8) * 460, 520));
+      this.attackDurationMs = Math.max(450, Math.min(this.glbProfile.attack?.durationMs ?? (weaponProfile?.attackCooldown ?? 0.8) * 500, 520));
       this.startRenderLoop();
       return;
     }
@@ -317,7 +336,7 @@ export class FPVEquipmentRenderer {
     const render = () => {
       this.animationFrame = null;
       if (!this.glbRenderer || !this.glbCanvas || this.glbCanvas.hidden || !this.glbProfile) return;
-      const rect = this.weaponLayer.getBoundingClientRect();
+      const rect = (this.root ?? this.weaponLayer).getBoundingClientRect();
       const width = Math.max(1, Math.floor(rect.width));
       const height = Math.max(1, Math.floor(rect.height));
       if (this.glbCanvas.width !== Math.floor(width * this.glbRenderer.getPixelRatio()) || this.glbCanvas.height !== Math.floor(height * this.glbRenderer.getPixelRatio())) {
@@ -334,8 +353,8 @@ export class FPVEquipmentRenderer {
           const swing = t < 0.22 ? 0 : Math.min((t - 0.22) / 0.36, 1);
           const recover = t < 0.58 ? 0 : Math.min((t - 0.58) / 0.42, 1);
           const idlePose = this.glbIdlePose ?? this.createIdlePose(this.glbProfile);
-          const windupPose = offsetPose(idlePose, { x: 0.08, y: 0.1, z: -0.08, rx: -0.12, ry: -0.06, rz: -0.08 });
-          const strikePose = offsetPose(idlePose, { x: -0.22, y: -0.2, z: -0.18, rx: 0.34, ry: -0.42, rz: 0.42 });
+          const windupPose = this.createAttackPose(this.glbProfile.attack?.windupPose, idlePose);
+          const strikePose = this.createAttackPose(this.glbProfile.attack?.strikePose, idlePose);
           const recoveryPose = recover > 0 ? lerpPose(strikePose, idlePose, recover) : strikePose;
           const attackPose = t < 0.22 ? lerpPose(idlePose, windupPose, windup) : lerpPose(windupPose, recoveryPose, swing);
           applyPose(this.glbWeapon, attackPose);

@@ -22,10 +22,21 @@ export const fpvWeaponProfiles = Object.freeze({
     weaponLayer: 'glb-model',
     modelUrl: `${import.meta.env.BASE_URL}assets/models/weapons/weapon_broadsword_ritual_01.glb`,
     modelKind: 'sword',
-    scale: 0.92,
+    scale: 1.05,
     normalizedHeight: 1.65,
-    position: { x: 0.02, y: -0.42, z: -2.15 },
-    rotation: { x: -0.85, y: -0.2, z: 0.28 },
+    position: { x: 0.34, y: -1.05, z: -2.35 },
+    rotation: { x: -0.90, y: -0.18, z: 0.28 },
+    attack: Object.freeze({
+      durationMs: 500,
+      windupPose: Object.freeze({
+        position: Object.freeze({ x: 0.44, y: -0.90, z: -2.42 }),
+        rotation: Object.freeze({ x: -1.02, y: -0.28, z: 0.12 }),
+      }),
+      strikePose: Object.freeze({
+        position: Object.freeze({ x: 0.12, y: -1.18, z: -2.12 }),
+        rotation: Object.freeze({ x: -0.68, y: -0.08, z: 0.72 }),
+      }),
+    }),
   }),
   rusted_sword: Object.freeze({
     id: 'rusted_sword',
