@@ -1138,10 +1138,11 @@ export class DungeonScene {
     this.restoreHarvestedRedwoodVisuals();
     this.addCampfireCraftingPrompt();
 
-    const savedCampfirePosition = this.gameState?.getFieldSurvivalSnapshot?.()?.campfirePosition;
-    if (this.gameState?.hasFieldCampfireBuilt?.() && savedCampfirePosition) {
-      this.addFieldCampfire(new THREE.Vector3(savedCampfirePosition.x, savedCampfirePosition.y ?? 0, savedCampfirePosition.z));
-    }
+    const savedCampfires = this.gameState?.getFieldCampfires?.() ?? [];
+    savedCampfires.forEach((campfire) => {
+      const position = campfire.position;
+      if (position) this.addFieldCampfire(new THREE.Vector3(position.x, position.y ?? 0, position.z), campfire.id);
+    });
   }
 
   addFieldSurvivalChest({ id, label, position, itemId, acquiredMessage }) {
@@ -1252,8 +1253,8 @@ export class DungeonScene {
       label: 'Harvestable Redwood',
       target: new THREE.Vector3(position.x, 1, position.z),
       range: 6.5,
-      hint: harvested ? 'The chopped stump is dry and bare.' : 'A tool is needed.',
-      message: harvested ? 'The chopped stump is dry and bare.' : 'A tool is needed.',
+      hint: harvested ? 'The chopped stump is dry and bare.' : '',
+      message: harvested ? 'The chopped stump is dry and bare.' : 'Equip Wood Axe.',
       type: 'fieldHarvestableTree',
       treeObject: harvestableBillboard,
       stumpPosition: new THREE.Vector3(position.x, 0, position.z),
@@ -1313,15 +1314,16 @@ export class DungeonScene {
     return open ? new THREE.Vector3(open.x, 0, open.z) : null;
   }
 
-  addFieldCampfire(position) {
+  addFieldCampfire(position, id = null) {
+    const campfireId = id ?? `field_survival_campfire_${this.fieldSurvivalObjects.size}`;
     const group = this.createFieldCampfireGroup();
-    group.name = 'field_survival_campfire-visual';
+    group.name = `${campfireId}-visual`;
     group.position.set(position.x, 0, position.z);
     this.scene.add(group);
-    this.fieldSurvivalObjects.set('field_survival_campfire', group);
-    if (!this.outdoorInteractions.some((interaction) => interaction.id === 'field_survival_campfire_use')) {
+    this.fieldSurvivalObjects.set(campfireId, group);
+    if (!this.outdoorInteractions.some((interaction) => interaction.id === `${campfireId}_use`)) {
       this.outdoorInteractions.push({
-        id: 'field_survival_campfire_use',
+        id: `${campfireId}_use`,
         label: 'Small Campfire',
         target: new THREE.Vector3(position.x, 1, position.z),
         range: 4.25,

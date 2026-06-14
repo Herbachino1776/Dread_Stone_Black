@@ -5,6 +5,7 @@ export class MobileControls {
     this.look = { x: 0, y: 0 };
     this.interactPressed = false;
     this.attackPressed = false;
+    this.interactHeld = false;
     this.lookVerticalDeadzone = 0.24;
 
     this.movePointerId = null;
@@ -36,7 +37,13 @@ export class MobileControls {
     this.interactButton.addEventListener('pointerdown', (event) => {
       event.preventDefault();
       this.interactPressed = true;
+      this.interactHeld = true;
     });
+    this.interactButton.addEventListener('pointerup', (event) => {
+      event.preventDefault();
+      this.interactHeld = false;
+    });
+    this.interactButton.addEventListener('pointercancel', () => { this.interactHeld = false; });
 
     this.attackButton.addEventListener('pointerdown', (event) => {
       event.preventDefault();
@@ -124,6 +131,10 @@ export class MobileControls {
       knobX,
       knobY,
     };
+  }
+
+  isInteractHeld() {
+    return this.interactHeld;
   }
 
   consumeInteract() {

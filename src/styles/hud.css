@@ -820,3 +820,30 @@
   color: #c9b88a;
   font-size: 0.84rem;
 }
+
+
+.hold-progress-ring {
+  --hold-progress: 0deg;
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  background: conic-gradient(rgba(255, 255, 255, 0.96) var(--hold-progress), rgba(255, 255, 255, 0.14) 0deg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 90ms ease;
+}
+
+.hold-progress-ring::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: rgba(21, 13, 10, 0.92);
+}
+
+.hold-progress-ring.is-visible { opacity: 1; }
+
+.action-button > span:not(.hold-progress-ring) {
+  position: relative;
+  z-index: 1;
+}

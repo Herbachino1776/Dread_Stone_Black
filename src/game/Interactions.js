@@ -7,6 +7,7 @@ const LEVER_RANGE = 2.5;
 const INDOOR_EXIT_RANGE = 4.0;
 const SHORTCUT_DOOR_RANGE = 2.55;
 const SECRET_WALL_RANGE = 2.4;
+const CAMPFIRE_HOLD_SECONDS = 2;
 
 export class Interactions {
   constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null, objectiveRuntime = null }) {
@@ -20,6 +21,7 @@ export class Interactions {
     this.currentHint = '';
     this.feedbackHint = '';
     this.feedbackUntil = 0;
+    this.campfireHold = null;
   }
 
   updateHint() {
@@ -38,6 +40,12 @@ export class Interactions {
     const interaction = this.getNearbyInteraction();
 
     if (!interaction) {
+      const fieldAttemptMessage = this.dungeon.area === 'field' ? this.getCampfireRequirementMessage?.() : '';
+      if (fieldAttemptMessage && fieldAttemptMessage !== 'Need open ground.') {
+        this.setTemporaryHint(fieldAttemptMessage, 1200);
+        this.hud.showMessage(fieldAttemptMessage);
+        return;
+      }
       this.hud.showMessage('Nothing answers your touch.');
       return;
     }
@@ -130,7 +138,7 @@ export class Interactions {
     }
 
     if (interaction.type === 'fieldCampfireCraft') {
-      return this.useFieldCampfireCraft(interaction);
+      return this.tryStartFieldCampfireHold(interaction);
     }
 
     if (interaction.type === 'fieldCampfire') {
@@ -332,8 +340,8 @@ export class Interactions {
       ? this.equipmentRuntime.getEquippedWeaponProfile?.().id === 'wood_axe'
       : this.dungeon.gameState?.getEquippedFieldTool?.() === 'wood_axe';
     if (!hasAxe) {
-      this.setTemporaryHint('A tool is needed.', 1200);
-      this.hud.showMessage('A tool is needed.');
+      this.setTemporaryHint('Equip Wood Axe.', 1200);
+      this.hud.showMessage('Equip Wood Axe.');
       return false;
     }
 
@@ -363,38 +371,68 @@ export class Interactions {
     return false;
   }
 
-  useFieldCampfireCraft(interaction = null) {
-    if (this.dungeon.gameState?.hasFieldCampfireBuilt?.()) {
-      this.setTemporaryHint('Use campfire', 900);
-      return false;
-    }
+  getCampfireRequirementMessage(interaction = null) {
+    if (this.dungeon.area !== 'field') return 'Need open ground.';
+    if (this.dungeon.gameState?.getFieldItemCount?.('wood') < 1) return 'Need Wood.';
+    if (!this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick')) return 'Need Flint Stick.';
+    if (this.dungeon.gameState?.getEquippedFieldItem?.() !== 'wood') return 'Equip Wood.';
+    const placeAt = interaction?.placement ?? this.dungeon.getFieldCampfirePlacement?.(this.player);
+    if (!placeAt || !this.dungeon.isFieldCampfireOpenGround?.(placeAt)) return 'Need open ground.';
+    return '';
+  }
 
-    if (
-      this.dungeon.gameState?.getFieldItemCount?.('wood') < 1
-      || !this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick')
-    ) {
-      const missing = this.dungeon.gameState?.getFieldItemCount?.('wood') < 1 ? 'Need Wood.' : 'Need Flint Stick.';
+  tryStartFieldCampfireHold(interaction = null) {
+    const missing = this.getCampfireRequirementMessage(interaction);
+    if (missing) {
       this.setTemporaryHint(missing, 1400);
       this.hud.showMessage(missing);
+      this.cancelCampfireHold();
       return false;
     }
 
-    const placeAt = interaction?.placement ?? this.dungeon.getFieldCampfirePlacement?.(this.player);
-    if (!placeAt || !this.dungeon.isFieldCampfireOpenGround?.(placeAt)) {
-      this.setTemporaryHint('Need open ground.', 1400);
-      this.hud.showMessage('Need open ground.');
+    const placement = interaction?.placement ?? this.dungeon.getFieldCampfirePlacement?.(this.player);
+    this.campfireHold = { placement: placement.clone?.() ?? placement, origin: this.player.position.clone(), elapsed: 0 };
+    this.hud.updateHoldProgress?.(0);
+    this.setTemporaryHint('Hold Interact', 500);
+    return false;
+  }
+
+  updateHold(deltaSeconds, isInteractHeld, cancelRequested = false) {
+    if (!this.campfireHold) {
+      this.hud.updateHoldProgress?.(0);
+      return;
+    }
+    if (cancelRequested || !isInteractHeld || this.player.position.distanceTo(this.campfireHold.origin) > 1.4) {
+      this.cancelCampfireHold();
+      return;
+    }
+    if (this.getCampfireRequirementMessage({ placement: this.campfireHold.placement })) {
+      this.cancelCampfireHold();
+      return;
+    }
+    this.campfireHold.elapsed += deltaSeconds;
+    const progress = Math.min(1, this.campfireHold.elapsed / CAMPFIRE_HOLD_SECONDS);
+    this.hud.updateHoldProgress?.(progress);
+    if (progress >= 1) this.completeFieldCampfireCraft();
+  }
+
+  cancelCampfireHold() {
+    this.campfireHold = null;
+    this.hud.updateHoldProgress?.(0);
+  }
+
+  completeFieldCampfireCraft() {
+    const hold = this.campfireHold;
+    this.cancelCampfireHold();
+    if (!hold || this.getCampfireRequirementMessage({ placement: hold.placement })) return false;
+    if (!this.dungeon.gameState?.consumeFieldItems?.({ wood: 1 })) {
+      this.setTemporaryHint('Need Wood.', 1400);
       return false;
     }
 
-    if (!this.dungeon.gameState?.consumeFieldItems?.({ wood: 1, flint_stick: 1 })) {
-      const missing = this.dungeon.gameState?.getFieldItemCount?.('wood') < 1 ? 'Need Wood.' : 'Need Flint Stick.';
-      this.setTemporaryHint(missing, 1400);
-      return false;
-    }
-
-    placeAt.y = 0;
-    this.dungeon.gameState?.markFieldCampfireBuilt?.(placeAt);
-    this.dungeon.addFieldCampfire?.(placeAt);
+    hold.placement.y = 0;
+    this.dungeon.gameState?.markFieldCampfireBuilt?.(hold.placement);
+    this.dungeon.addFieldCampfire?.(hold.placement);
     this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: false });
     this.setTemporaryHint('Campfire Built.', 1600);
     this.hud.showMessage('Campfire Built.');
@@ -498,10 +536,10 @@ export class Interactions {
   }
 
   getOpenGroundCampfireCraftInteraction() {
-    if (this.dungeon.area !== 'field' || this.dungeon.gameState?.hasFieldCampfireBuilt?.()) return null;
-    const hasIngredients = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1
-      && this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick');
-    if (!hasIngredients) return null;
+    if (this.dungeon.area !== 'field') return null;
+    if (this.dungeon.gameState?.getFieldItemCount?.('wood') < 1
+      || !this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick')
+      || this.dungeon.gameState?.getEquippedFieldItem?.() !== 'wood') return null;
 
     const placement = this.dungeon.getFieldCampfirePlacement?.(this.player);
     return {
@@ -509,7 +547,7 @@ export class Interactions {
       label: 'Campfire Crafting',
       target: placement ?? this.player.position,
       range: 99,
-      hint: placement ? 'Build Campfire' : 'Need open ground.',
+      hint: placement ? 'Hold Interact' : 'Need open ground.',
       message: placement ? 'Campfire Built.' : 'Need open ground.',
       type: 'fieldCampfireCraft',
       placement,
@@ -532,7 +570,7 @@ export class Interactions {
 
   isOutdoorInteractionAvailable(interaction) {
     if (interaction.type === 'fieldCampfireCraft') {
-      return this.dungeon.area === 'field' && !this.dungeon.gameState?.hasFieldCampfireBuilt?.();
+      return this.dungeon.area === 'field' && !this.getCampfireRequirementMessage(interaction);
     }
     return true;
   }
@@ -543,13 +581,12 @@ export class Interactions {
       const equippedAxe = this.equipmentRuntime
         ? this.equipmentRuntime.getEquippedWeaponProfile?.().id === 'wood_axe'
         : this.dungeon.gameState?.getEquippedFieldTool?.() === 'wood_axe';
-      interaction.hint = !hasAxe ? 'A tool is needed.' : equippedAxe ? 'Chop redwood' : 'Equip Wood Axe.';
+      interaction.hint = equippedAxe ? 'Chop redwood' : '';
     }
     if (interaction.type === 'fieldCampfireCraft') {
-      const hasIngredients = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1
-        && this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick');
-      interaction.hint = hasIngredients ? 'Build Campfire' : (this.dungeon.gameState?.getFieldItemCount?.('wood') < 1 ? 'Need Wood.' : 'Need Flint Stick.');
-      interaction.message = hasIngredients ? 'Campfire Built.' : interaction.hint;
+      const missing = this.getCampfireRequirementMessage(interaction);
+      interaction.hint = missing || 'Hold Interact';
+      interaction.message = missing || 'Campfire Built.';
     }
     return interaction;
   }

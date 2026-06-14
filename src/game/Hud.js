@@ -10,6 +10,7 @@ export class Hud {
     this.powerEl = root.querySelector('[data-stat="power"]');
     this.damageEl = root.querySelector('[data-hud="damage"]');
     this.fieldKitEl = root.querySelector('[data-hud="field-kit"]');
+    this.holdProgressEl = root.querySelector('[data-hud="hold-progress"]');
     this.debugFrameSkip = 0;
   }
 
@@ -51,6 +52,13 @@ export class Hud {
   showMessage(message) {
     // Gameplay message calls intentionally stay non-visual while the message panel is removed.
     if (message) console.debug(`[Dread Stone Black] ${message}`);
+  }
+
+  updateHoldProgress(progress = 0) {
+    if (!this.holdProgressEl) return;
+    const clamped = Math.max(0, Math.min(1, Number(progress) || 0));
+    this.holdProgressEl.style.setProperty('--hold-progress', `${clamped * 360}deg`);
+    this.holdProgressEl.classList.toggle('is-visible', clamped > 0 && clamped < 1);
   }
 
   updateFieldKitStatus() {
