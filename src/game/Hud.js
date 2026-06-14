@@ -53,24 +53,10 @@ export class Hud {
     if (message) console.debug(`[Dread Stone Black] ${message}`);
   }
 
-  updateFieldKitStatus(snapshot, { visible = false } = {}) {
+  updateFieldKitStatus() {
     if (!this.fieldKitEl) return;
-
-    const inventory = snapshot?.inventory ?? {};
-    const hasAxe = Boolean(inventory.field_axe || snapshot?.equipment?.owned?.field_axe);
-    const equippedTool = snapshot?.equipment?.equippedTool === 'field_axe' ? 'Field Axe' : 'none';
-    const wood = Math.max(0, Number(inventory.wood) || 0);
-    const hasFlint = Boolean(inventory.flint_stick);
-    const campfireBuilt = Boolean(snapshot?.campfireBuilt);
-    const shouldShow = visible && (hasAxe || wood > 0 || hasFlint || campfireBuilt);
-
-    this.fieldKitEl.hidden = !shouldShow;
-    this.fieldKitEl.classList.toggle('is-visible', shouldShow);
-    if (!shouldShow) {
-      this.fieldKitEl.textContent = '';
-      return;
-    }
-
-    this.fieldKitEl.textContent = `Field Kit: Tool ${hasAxe ? equippedTool : 'none'} | Wood ${wood} | Flint Stick ${hasFlint ? 'yes' : 'no'} | Campfire ${campfireBuilt ? 'built' : 'not built'}`;
+    this.fieldKitEl.hidden = true;
+    this.fieldKitEl.classList.remove('is-visible');
+    this.fieldKitEl.textContent = '';
   }
 }

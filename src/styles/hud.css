@@ -753,3 +753,70 @@
 .field-kit-status.is-visible {
   opacity: 1;
 }
+
+.first-person-weapon--wood-axe::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  width: 13%;
+  height: 66%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3b2417, #8a5931 45% 58%, #2a170f);
+  box-shadow: inset 2px 0 rgba(255, 214, 139, 0.18);
+  transform: translateX(-50%) rotate(-3deg);
+}
+
+.first-person-weapon--wood-axe::after {
+  content: "";
+  position: absolute;
+  left: 52%;
+  bottom: 70%;
+  width: 58%;
+  height: 18%;
+  border: 1px solid rgba(220, 225, 221, 0.28);
+  border-radius: 10px 18px 18px 8px;
+  background: linear-gradient(135deg, #17191a, #5c6466 48%, #202426);
+  clip-path: polygon(0 22%, 58% 0, 100% 44%, 66% 100%, 0 82%, 18% 50%);
+  transform: translateX(-50%) rotate(-8deg);
+}
+
+.first-person-weapon--wood-axe.is-attacking {
+  animation: fpv-axe-chop 280ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+
+@keyframes fpv-axe-chop {
+  0% { transform: translateX(26%) rotate(-10deg); }
+  38% { transform: translateX(0%) translateY(9%) rotate(-42deg); }
+  62% { transform: translateX(10%) translateY(3%) rotate(-22deg); }
+  100% { transform: translateX(26%) rotate(-10deg); }
+}
+
+.inventory-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.inventory-tab {
+  border: 1px solid rgba(153, 124, 75, 0.66);
+  border-radius: 999px;
+  background: rgba(31, 27, 24, 0.96);
+  color: #f4e5bc;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.inventory-tab[aria-pressed="true"] {
+  border-color: rgba(128, 226, 146, 0.78);
+  background: rgba(28, 53, 34, 0.94);
+}
+
+.inventory-empty {
+  margin: 6px 0 0;
+  color: #c9b88a;
+  font-size: 0.84rem;
+}

@@ -23,7 +23,7 @@ export class Interactions {
   }
 
   updateHint() {
-    this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: this.dungeon.area === 'field' });
+    this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: false });
     const hint = Date.now() < this.feedbackUntil
       ? this.feedbackHint
       : this.getNearbyInteraction()?.hint ?? '';
@@ -277,50 +277,47 @@ export class Interactions {
     return false;
   }
 
+  openFieldChestVisual(chestId) {
+    const chest = this.dungeon.fieldSurvivalObjects?.get(chestId);
+    if (!chest) return;
+    chest.children.forEach((child) => {
+      if (child.geometry?.type === 'BoxGeometry' && child.position.y > 0.6) {
+        child.position.set(0, 0.92, -0.42);
+        child.rotation.x = -0.72;
+      }
+    });
+  }
+
   useFieldSurvivalChest(interaction) {
-    if (this.dungeon.gameState?.hasOpenedFieldChest?.(interaction.id)) {
-      const repeatMessage = interaction.repeatMessage ?? 'The chest lies open and empty.';
+    if (this.dungeon.gameState?.hasLootedFieldChest?.(interaction.id)) {
+      const repeatMessage = interaction.repeatMessage ?? 'Empty.';
       this.setTemporaryHint(repeatMessage, 1200);
       this.hud.showMessage(repeatMessage);
       return false;
     }
 
-    this.dungeon.gameState?.markFieldChestOpened?.(interaction.id);
+    if (!this.dungeon.gameState?.hasOpenedFieldChest?.(interaction.id)) {
+      this.dungeon.gameState?.markFieldChestOpened?.(interaction.id);
+      this.openFieldChestVisual(interaction.id);
+      interaction.hint = 'Retrieve item';
+      interaction.message = interaction.acquiredMessage ?? 'Item acquired.';
+      this.setTemporaryHint('Chest opened.', 1200);
+      this.hud.showMessage('Chest opened.');
+      return false;
+    }
+
+    this.dungeon.gameState?.markFieldChestLooted?.(interaction.id);
     this.dungeon.gameState?.addFieldItem?.(interaction.itemId);
-    let autoEquipMessage = '';
-    if (interaction.itemId === 'field_axe') {
-      this.equipmentRuntime?.acquireItem?.('field_axe', {
-        source: interaction.id,
-        displayName: 'Field Axe',
-        name: 'Field Axe',
-        itemType: 'tool',
-        slot: 'tool',
-        tags: ['axe', 'woodcutting', 'field-survival'],
-      });
-      if (!this.equipmentRuntime?.getEquippedToolId?.()) {
-        this.equipmentRuntime?.equip?.(EQUIPMENT_SLOTS.tool, 'field_axe');
-        this.dungeon.gameState?.equipFieldTool?.('field_axe');
-        autoEquipMessage = ' Equipped Field Axe.';
-      }
+    if (interaction.itemId === 'wood_axe') {
+      this.equipmentRuntime?.acquireItem?.('wood_axe', { source: interaction.id, tags: ['weapon', 'axe', 'woodcutting', 'field-survival'] });
     }
-    const chest = this.dungeon.fieldSurvivalObjects?.get(interaction.id);
-    if (chest) {
-      chest.children.forEach((child) => {
-        if (child.geometry?.type === 'BoxGeometry' && child.position.y > 0.6) {
-          child.position.set(0, 0.92, -0.42);
-          child.rotation.x = -0.72;
-        }
-      });
-    }
+    this.openFieldChestVisual(interaction.id);
     interaction.hint = interaction.repeatHint ?? 'The chest lies open and empty.';
     interaction.message = interaction.repeatMessage ?? 'The chest lies open and empty.';
-    const message = `${interaction.acquiredMessage ?? 'You acquire an item.'}${autoEquipMessage}`;
-    const readyMessage = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1 && this.dungeon.gameState?.hasFieldItem?.('flint_stick')
-      ? ' Wood and Flint Stick ready. Hold INTERACT in open ground to build campfire.'
-      : '';
-    this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: this.dungeon.area === 'field' });
-    this.setTemporaryHint(`${message}${readyMessage}`, 2400);
-    this.hud.showMessage(`${message}${readyMessage}`);
+    const message = interaction.acquiredMessage ?? 'Item acquired.';
+    this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: false });
+    this.setTemporaryHint(message, 1600);
+    this.hud.showMessage(message);
     return false;
   }
 
@@ -330,10 +327,10 @@ export class Interactions {
       return false;
     }
 
-    const hasAxe = this.dungeon.gameState?.hasFieldItem?.('field_axe') || this.equipmentRuntime?.hasItem?.('field_axe');
+    const hasAxe = this.dungeon.gameState?.hasFieldItem?.('wood_axe') || this.equipmentRuntime?.hasItem?.('wood_axe');
     const equippedAxe = this.equipmentRuntime
-      ? this.equipmentRuntime.getEquippedToolId?.() === 'field_axe'
-      : this.dungeon.gameState?.getEquippedFieldTool?.() === 'field_axe';
+      ? this.equipmentRuntime.getEquippedWeaponProfile?.().id === 'wood_axe'
+      : this.dungeon.gameState?.getEquippedFieldTool?.() === 'wood_axe';
     if (!hasAxe) {
       this.setTemporaryHint('A tool is needed.', 1200);
       this.hud.showMessage('A tool is needed.');
@@ -341,12 +338,14 @@ export class Interactions {
     }
 
     if (!equippedAxe) {
-      this.setTemporaryHint('Equip Field Axe to chop.', 1200);
-      this.hud.showMessage('Equip Field Axe to chop.');
+      this.setTemporaryHint('Equip Wood Axe.', 1200);
+      this.hud.showMessage('Equip Wood Axe.');
       return false;
     }
 
     this.setTemporaryHint('Chop redwood', 700);
+    this.feedback?.shake?.({ durationMs: 180, intensity: 0.08 });
+    this.dungeon.fpvEquipmentRenderer?.playAttack?.(this.equipmentRuntime?.getEquippedWeaponProfile?.());
     this.dungeon.gameState?.markFieldTreeHarvested?.(interaction.id);
     this.dungeon.gameState?.addFieldItem?.('wood', interaction.yield ?? 1);
     if (interaction.treeObject) interaction.treeObject.visible = false;
@@ -354,10 +353,10 @@ export class Interactions {
     interaction.hint = 'The chopped stump is dry and bare.';
     interaction.message = 'The chopped stump is dry and bare.';
     window.setTimeout(() => {
-      const message = this.dungeon.gameState?.hasFieldItem?.('flint_stick')
-        ? 'Harvested Wood. Wood and Flint Stick ready. Hold INTERACT in open ground to build campfire.'
-        : 'Harvested Wood. Find Flint Stick to build a campfire.';
-      this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: this.dungeon.area === 'field' });
+      const message = this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick')
+        ? 'Wood harvested.'
+        : 'Wood harvested.';
+      this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: false });
       this.setTemporaryHint(message, 2400);
       this.hud.showMessage(message);
     }, 250);
@@ -372,10 +371,11 @@ export class Interactions {
 
     if (
       this.dungeon.gameState?.getFieldItemCount?.('wood') < 1
-      || !this.dungeon.gameState?.hasFieldItem?.('flint_stick')
+      || !this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick')
     ) {
-      this.setTemporaryHint('Need Wood and Flint Stick.', 1400);
-      this.hud.showMessage('Need Wood and Flint Stick.');
+      const missing = this.dungeon.gameState?.getFieldItemCount?.('wood') < 1 ? 'Need Wood.' : 'Need Flint Stick.';
+      this.setTemporaryHint(missing, 1400);
+      this.hud.showMessage(missing);
       return false;
     }
 
@@ -387,16 +387,17 @@ export class Interactions {
     }
 
     if (!this.dungeon.gameState?.consumeFieldItems?.({ wood: 1, flint_stick: 1 })) {
-      this.setTemporaryHint('Need Wood and Flint Stick.', 1400);
+      const missing = this.dungeon.gameState?.getFieldItemCount?.('wood') < 1 ? 'Need Wood.' : 'Need Flint Stick.';
+      this.setTemporaryHint(missing, 1400);
       return false;
     }
 
     placeAt.y = 0;
     this.dungeon.gameState?.markFieldCampfireBuilt?.(placeAt);
     this.dungeon.addFieldCampfire?.(placeAt);
-    this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: this.dungeon.area === 'field' });
-    this.setTemporaryHint('Built Campfire.', 1600);
-    this.hud.showMessage('Built Campfire.');
+    this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: false });
+    this.setTemporaryHint('Campfire Built.', 1600);
+    this.hud.showMessage('Campfire Built.');
     return false;
   }
 
@@ -499,7 +500,7 @@ export class Interactions {
   getOpenGroundCampfireCraftInteraction() {
     if (this.dungeon.area !== 'field' || this.dungeon.gameState?.hasFieldCampfireBuilt?.()) return null;
     const hasIngredients = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1
-      && this.dungeon.gameState?.hasFieldItem?.('flint_stick');
+      && this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick');
     if (!hasIngredients) return null;
 
     const placement = this.dungeon.getFieldCampfirePlacement?.(this.player);
@@ -508,8 +509,8 @@ export class Interactions {
       label: 'Campfire Crafting',
       target: placement ?? this.player.position,
       range: 99,
-      hint: placement ? 'Build Campfire: Use Wood + Flint Stick' : 'Need open ground.',
-      message: placement ? 'Built Campfire.' : 'Need open ground.',
+      hint: placement ? 'Build Campfire' : 'Need open ground.',
+      message: placement ? 'Campfire Built.' : 'Need open ground.',
       type: 'fieldCampfireCraft',
       placement,
       openGroundCraft: true,
@@ -538,17 +539,17 @@ export class Interactions {
 
   decorateOutdoorInteraction(interaction) {
     if (interaction.type === 'fieldHarvestableTree' && !this.dungeon.gameState?.hasHarvestedFieldTree?.(interaction.id)) {
-      const hasAxe = this.dungeon.gameState?.hasFieldItem?.('field_axe') || this.equipmentRuntime?.hasItem?.('field_axe');
+      const hasAxe = this.dungeon.gameState?.hasFieldItem?.('wood_axe') || this.equipmentRuntime?.hasItem?.('wood_axe');
       const equippedAxe = this.equipmentRuntime
-        ? this.equipmentRuntime.getEquippedToolId?.() === 'field_axe'
-        : this.dungeon.gameState?.getEquippedFieldTool?.() === 'field_axe';
-      interaction.hint = !hasAxe ? 'A tool is needed.' : equippedAxe ? 'Chop redwood' : 'Equip Field Axe to chop.';
+        ? this.equipmentRuntime.getEquippedWeaponProfile?.().id === 'wood_axe'
+        : this.dungeon.gameState?.getEquippedFieldTool?.() === 'wood_axe';
+      interaction.hint = !hasAxe ? 'A tool is needed.' : equippedAxe ? 'Chop redwood' : 'Equip Wood Axe.';
     }
     if (interaction.type === 'fieldCampfireCraft') {
       const hasIngredients = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1
-        && this.dungeon.gameState?.hasFieldItem?.('flint_stick');
-      interaction.hint = hasIngredients ? 'Build Campfire: Use Wood + Flint Stick' : 'Need Wood and Flint Stick.';
-      interaction.message = hasIngredients ? 'Built Campfire.' : 'Need Wood and Flint Stick.';
+        && this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick');
+      interaction.hint = hasIngredients ? 'Build Campfire' : (this.dungeon.gameState?.getFieldItemCount?.('wood') < 1 ? 'Need Wood.' : 'Need Flint Stick.');
+      interaction.message = hasIngredients ? 'Campfire Built.' : interaction.hint;
     }
     return interaction;
   }

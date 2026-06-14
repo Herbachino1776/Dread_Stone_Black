@@ -9,11 +9,13 @@ const RUSTED_SWORD_ITEM_ID = 'rusted_sword';
 const RUSTED_SWORD_CHEST_INTERACTION_ID = 'BGT_INT_RUSTED_SWORD_CHEST';
 
 const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
-  inventory: { field_axe: false, flint_stick: false, wood: 0 },
+  inventory: { wood_axe: false, wood: 0 },
+  keyItems: { flint_stick: false },
   equipment: { owned: {}, equippedTool: null },
   campfireBuilt: false,
   campfirePosition: null,
   openedChests: {},
+  lootedChests: {},
   harvestedTrees: {},
 });
 
@@ -112,39 +114,53 @@ export class GameState {
     return this.repairFieldSurvivalState(this.fieldSurvivalState);
   }
 
+  normalizeFieldItemId(itemId) {
+    return itemId === 'field_axe' ? 'wood_axe' : itemId;
+  }
+
   hasFieldItem(itemId) {
-    return Boolean(this.fieldSurvivalState.inventory?.[itemId]);
+    const normalizedItemId = this.normalizeFieldItemId(itemId);
+    return Boolean(this.fieldSurvivalState.inventory?.[normalizedItemId]);
+  }
+
+  hasFieldKeyItem(itemId) {
+    return Boolean(this.fieldSurvivalState.keyItems?.[itemId]);
   }
 
   getFieldItemCount(itemId) {
-    const value = this.fieldSurvivalState.inventory?.[itemId];
+    const value = this.fieldSurvivalState.inventory?.[this.normalizeFieldItemId(itemId)];
     return Number.isFinite(value) ? value : (value ? 1 : 0);
   }
 
   addFieldItem(itemId, amount = 1) {
-    if (itemId === 'wood') {
+    const normalizedItemId = this.normalizeFieldItemId(itemId);
+    if (normalizedItemId === 'wood') {
       this.fieldSurvivalState.inventory.wood = Math.max(0, this.getFieldItemCount('wood') + amount);
+    } else if (normalizedItemId === 'flint_stick') {
+      this.fieldSurvivalState.keyItems.flint_stick = true;
     } else {
-      this.fieldSurvivalState.inventory[itemId] = true;
+      this.fieldSurvivalState.inventory[normalizedItemId] = true;
     }
-    if (itemId === 'field_axe') this.acquireFieldTool('field_axe');
+    if (normalizedItemId === 'wood_axe') this.acquireFieldTool('wood_axe');
     this.saveFieldSurvivalState();
     return true;
   }
 
   acquireFieldTool(itemId) {
     if (!itemId) return false;
-    this.fieldSurvivalState.equipment.owned[itemId] = true;
+    const normalizedItemId = this.normalizeFieldItemId(itemId);
+    this.fieldSurvivalState.equipment.owned[normalizedItemId] = true;
     if (!this.fieldSurvivalState.equipment.equippedTool) {
-      this.fieldSurvivalState.equipment.equippedTool = itemId;
+      this.fieldSurvivalState.equipment.equippedTool = null;
     }
     this.saveFieldSurvivalState();
     return true;
   }
 
   equipFieldTool(itemId) {
-    if (itemId && !this.fieldSurvivalState.equipment.owned?.[itemId]) return false;
-    this.fieldSurvivalState.equipment.equippedTool = itemId ?? null;
+    const normalizedItemId = this.normalizeFieldItemId(itemId);
+    if (normalizedItemId && !this.fieldSurvivalState.equipment.owned?.[normalizedItemId]) return false;
+    this.fieldSurvivalState.equipment.equippedTool = normalizedItemId ?? null;
     this.saveFieldSurvivalState();
     return true;
   }
@@ -155,10 +171,20 @@ export class GameState {
 
   consumeFieldItems(cost = {}) {
     if (this.getFieldItemCount('wood') < (cost.wood ?? 0)) return false;
-    if ((cost.flint_stick ?? 0) > 0 && !this.hasFieldItem('flint_stick')) return false;
+    if ((cost.flint_stick ?? 0) > 0 && !this.hasFieldKeyItem('flint_stick')) return false;
 
     this.fieldSurvivalState.inventory.wood -= cost.wood ?? 0;
-    if ((cost.flint_stick ?? 0) > 0) this.fieldSurvivalState.inventory.flint_stick = false;
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  hasLootedFieldChest(chestId) {
+    return Boolean(this.fieldSurvivalState.lootedChests?.[chestId]);
+  }
+
+  markFieldChestLooted(chestId) {
+    if (this.hasLootedFieldChest(chestId)) return false;
+    this.fieldSurvivalState.lootedChests[chestId] = true;
     this.saveFieldSurvivalState();
     return true;
   }
@@ -206,31 +232,44 @@ export class GameState {
     const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
     return {
       inventory: {
-        field_axe: Boolean(source.inventory?.field_axe),
-        flint_stick: Boolean(source.inventory?.flint_stick),
+        field_axe: false,
+        wood_axe: Boolean(source.inventory?.wood_axe || source.inventory?.field_axe),
         wood: Math.max(0, Number(source.inventory?.wood) || 0),
+      },
+      keyItems: {
+        flint_stick: Boolean(source.keyItems?.flint_stick || source.inventory?.flint_stick),
       },
       equipment: {
         owned: {
           ...(source.equipment?.owned ?? {}),
-          ...(source.inventory?.field_axe ? { field_axe: true } : {}),
+          ...(source.equipment?.owned?.field_axe ? { wood_axe: true } : {}),
+          ...(source.inventory?.field_axe || source.inventory?.wood_axe ? { wood_axe: true } : {}),
         },
-        equippedTool: source.equipment?.equippedTool ?? (source.inventory?.field_axe ? 'field_axe' : null),
+        equippedTool: source.equipment?.equippedTool === 'field_axe' ? 'wood_axe' : (source.equipment?.equippedTool ?? null),
       },
       campfireBuilt: Boolean(source.campfireBuilt),
       campfirePosition: source.campfirePosition ?? null,
       openedChests: { ...(source.openedChests ?? DEFAULT_FIELD_SURVIVAL_STATE.openedChests) },
+      lootedChests: { ...(source.lootedChests ?? {}) },
       harvestedTrees: { ...(source.harvestedTrees ?? DEFAULT_FIELD_SURVIVAL_STATE.harvestedTrees) },
     };
   }
 
   repairEquipmentSnapshot(snapshot) {
-    if (!snapshot || typeof snapshot !== 'object' || this.rustedSwordChestOpened) return snapshot;
+    if (!snapshot || typeof snapshot !== 'object') return snapshot;
 
-    const acquiredItemIds = (snapshot.acquiredItemIds ?? []).filter((itemId) => itemId !== RUSTED_SWORD_ITEM_ID);
+    const acquiredItemIds = (snapshot.acquiredItemIds ?? [])
+      .filter((itemId) => this.rustedSwordChestOpened || itemId !== RUSTED_SWORD_ITEM_ID)
+      .map((itemId) => itemId === 'field_axe' ? 'wood_axe' : itemId);
+    const weapon = snapshot.equipped?.weapon === RUSTED_SWORD_ITEM_ID && !this.rustedSwordChestOpened
+      ? 'unarmed'
+      : snapshot.equipped?.weapon === 'field_axe'
+        ? 'wood_axe'
+        : (snapshot.equipped?.weapon ?? 'unarmed');
     const equipped = {
       ...(snapshot.equipped ?? {}),
-      weapon: snapshot.equipped?.weapon === RUSTED_SWORD_ITEM_ID ? 'unarmed' : (snapshot.equipped?.weapon ?? 'unarmed'),
+      weapon,
+      tool: snapshot.equipped?.tool === 'field_axe' ? null : (snapshot.equipped?.tool ?? null),
     };
 
     return {
