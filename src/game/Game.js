@@ -359,6 +359,7 @@ export class Game {
             <div class="stat stat-hp"><span>HP</span><strong data-stat="hp">100</strong></div>
             <div class="stat stat-mp"><span>MP</span><strong>24</strong></div>
             <div class="stat stat-power"><span>POWER</span><strong data-stat="power">10</strong></div>
+            <div class="stat stat-hunger"><span>HUNGER</span><strong data-stat="hunger">3:00</strong></div>
             <div class="stat stat-magic"><span>MAGIC</span><strong>3</strong></div>
           </section>
 
@@ -453,6 +454,8 @@ export class Game {
     }
     this.dungeon.update(deltaSeconds, this.player);
     this.combat.update(deltaSeconds);
+    const hunger = this.gameState.updateHunger?.(deltaSeconds, { paused: this.equipmentPanel?.isOpen || this.isPaused, applyStarvationDamage: (amount) => this.combat.takeDamage?.(amount, 'Starvation') });
+    if (hunger) this.hud.updateHunger?.(hunger);
     this.armsOverlay.update(deltaSeconds);
     this.updatePlayerTorchLight(deltaSeconds);
     this.updateObjectiveLocationTracking(deltaSeconds);
@@ -463,7 +466,7 @@ export class Game {
     this.interactions.updateHold(deltaSeconds, interactHeld, this.equipmentPanel?.isOpen || this.isPaused);
 
     if (this.controls.consumeInteract() || keyboardInteractPressed) {
-      this.interactions.interact();
+      if (!this.interactions.useEquippedConsumable?.()) this.interactions.interact();
     }
     this.wasKeyboardInteractHeld = keyboardInteractHeld;
 

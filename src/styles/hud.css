@@ -896,3 +896,46 @@
   from { transform: translateY(0) scale(0.96) rotate(-2deg); opacity: 0.86; }
   to { transform: translateY(-3px) scale(1.04) rotate(3deg); opacity: 1; }
 }
+
+
+/* Centered global hold ring for campfires, fishing, and cooking. */
+.hold-progress-ring {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 28;
+  box-shadow: 0 0 24px rgba(255,255,255,0.16);
+}
+.hold-progress-ring::before {
+  content: attr(data-label);
+  position: absolute;
+  inset: 19px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 6, 7, 0.62);
+  color: rgba(255,255,255,0.92);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  font-weight: 800;
+}
+.stat-hunger strong { color: #d7c08b; }
+.first-person-weapon--fishing-rod::before {
+  content: '';
+  position: absolute;
+  right: 24%; bottom: -18%;
+  width: 9px; height: 72vh;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2a1a0f, #76502c 45%, #1d120b);
+  transform: rotate(24deg);
+  transform-origin: bottom center;
+  box-shadow: 0 0 8px rgba(0,0,0,0.65);
+}
+.first-person-weapon--fishing-rod::after {
+  content: ''; position: absolute; right: 18%; bottom: 38%; width: 54px; height: 2px; background: rgba(220,220,210,0.38); transform: rotate(-22deg);
+}

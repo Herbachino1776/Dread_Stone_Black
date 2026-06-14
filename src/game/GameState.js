@@ -9,7 +9,7 @@ const RUSTED_SWORD_ITEM_ID = 'rusted_sword';
 const RUSTED_SWORD_CHEST_INTERACTION_ID = 'BGT_INT_RUSTED_SWORD_CHEST';
 
 const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
-  inventory: { wood_axe: false, wood: 0, torch: false },
+  inventory: { wood_axe: false, fishing_rod: false, wood: 0, raw_fish: 0, cooked_fish: 0, torch: false },
   keyItems: { flint_stick: false },
   equipment: { owned: {}, equippedTool: null, equippedItem: null, equippedOffhand: null },
   campfires: [],
@@ -18,6 +18,9 @@ const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
   openedChests: {},
   lootedChests: {},
   harvestedTrees: {},
+  hungerMaxSeconds: 20 * 60,
+  hungerSecondsRemaining: 3 * 60,
+  starvationDamageTimer: 0,
 });
 
 export class GameState {
@@ -139,14 +142,15 @@ export class GameState {
 
   addFieldItem(itemId, amount = 1) {
     const normalizedItemId = this.normalizeFieldItemId(itemId);
-    if (normalizedItemId === 'wood') {
-      this.fieldSurvivalState.inventory.wood = Math.max(0, this.getFieldItemCount('wood') + amount);
+    if (['wood', 'raw_fish', 'cooked_fish'].includes(normalizedItemId)) {
+      this.fieldSurvivalState.inventory[normalizedItemId] = Math.max(0, this.getFieldItemCount(normalizedItemId) + amount);
     } else if (normalizedItemId === 'flint_stick') {
       this.fieldSurvivalState.keyItems.flint_stick = true;
     } else {
       this.fieldSurvivalState.inventory[normalizedItemId] = true;
     }
     if (normalizedItemId === 'wood_axe') this.acquireFieldTool('wood_axe');
+    if (normalizedItemId === 'fishing_rod') this.acquireFieldTool('fishing_rod');
     if (normalizedItemId === 'torch') this.acquireFieldOffhand('torch');
     this.saveFieldSurvivalState();
     return true;
@@ -194,8 +198,8 @@ export class GameState {
   }
 
   equipFieldItem(itemId) {
-    if (itemId && itemId !== 'wood') return false;
-    if (itemId === 'wood' && this.getFieldItemCount('wood') < 1) return false;
+    if (itemId && !['wood', 'raw_fish', 'cooked_fish'].includes(itemId)) return false;
+    if (itemId && this.getFieldItemCount(itemId) < 1) return false;
     this.fieldSurvivalState.equipment.equippedItem = itemId ?? null;
     this.saveFieldSurvivalState();
     return true;
@@ -206,13 +210,47 @@ export class GameState {
   }
 
   consumeFieldItems(cost = {}) {
-    if (this.getFieldItemCount('wood') < (cost.wood ?? 0)) return false;
+    for (const [itemId, amount] of Object.entries(cost)) {
+      if (itemId === 'flint_stick') continue;
+      if (this.getFieldItemCount(itemId) < (amount ?? 0)) return false;
+    }
     if ((cost.flint_stick ?? 0) > 0 && !this.hasFieldKeyItem('flint_stick')) return false;
 
-    this.fieldSurvivalState.inventory.wood -= cost.wood ?? 0;
-    if (this.fieldSurvivalState.inventory.wood < 1 && this.fieldSurvivalState.equipment?.equippedItem === 'wood') {
-      this.fieldSurvivalState.equipment.equippedItem = null;
+    for (const [itemId, amount] of Object.entries(cost)) {
+      if (itemId === 'flint_stick') continue;
+      this.fieldSurvivalState.inventory[itemId] = Math.max(0, this.getFieldItemCount(itemId) - (amount ?? 0));
+      if (this.fieldSurvivalState.inventory[itemId] < 1 && this.fieldSurvivalState.equipment?.equippedItem === itemId) {
+        this.fieldSurvivalState.equipment.equippedItem = null;
+      }
     }
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+
+  updateHunger(deltaSeconds, { paused = false, applyStarvationDamage = null } = {}) {
+    if (paused || !Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return null;
+    const state = this.fieldSurvivalState;
+    state.hungerSecondsRemaining = Math.max(0, (state.hungerSecondsRemaining ?? DEFAULT_FIELD_SURVIVAL_STATE.hungerSecondsRemaining) - deltaSeconds);
+    let damaged = false;
+    if (state.hungerSecondsRemaining <= 0) {
+      state.starvationDamageTimer = (state.starvationDamageTimer ?? 0) + deltaSeconds;
+      while (state.starvationDamageTimer >= 10) {
+        state.starvationDamageTimer -= 10;
+        applyStarvationDamage?.(1);
+        damaged = true;
+      }
+    } else {
+      state.starvationDamageTimer = 0;
+    }
+    return { hungerSecondsRemaining: state.hungerSecondsRemaining, hungerMaxSeconds: state.hungerMaxSeconds, damaged };
+  }
+
+  eatCookedFish() {
+    if (this.getFieldItemCount('cooked_fish') < 1) return false;
+    this.consumeFieldItems({ cooked_fish: 1 });
+    this.fieldSurvivalState.hungerSecondsRemaining = Math.min(this.fieldSurvivalState.hungerMaxSeconds, this.fieldSurvivalState.hungerSecondsRemaining + 10 * 60);
+    this.fieldSurvivalState.starvationDamageTimer = 0;
     this.saveFieldSurvivalState();
     return true;
   }
@@ -283,7 +321,10 @@ export class GameState {
       inventory: {
         field_axe: false,
         wood_axe: Boolean(source.inventory?.wood_axe || source.inventory?.field_axe),
+        fishing_rod: Boolean(source.inventory?.fishing_rod || source.equipment?.owned?.fishing_rod),
         wood: Math.max(0, Number(source.inventory?.wood) || 0),
+        raw_fish: Math.max(0, Number(source.inventory?.raw_fish) || 0),
+        cooked_fish: Math.max(0, Number(source.inventory?.cooked_fish) || 0),
         torch: Boolean(source.inventory?.torch || source.equipment?.owned?.torch),
       },
       keyItems: {
@@ -294,10 +335,11 @@ export class GameState {
           ...(source.equipment?.owned ?? {}),
           ...(source.equipment?.owned?.field_axe ? { wood_axe: true } : {}),
           ...(source.inventory?.field_axe || source.inventory?.wood_axe ? { wood_axe: true } : {}),
+          ...(source.inventory?.fishing_rod || source.equipment?.owned?.fishing_rod ? { fishing_rod: true } : {}),
           ...(source.inventory?.torch || source.equipment?.owned?.torch ? { torch: true } : {}),
         },
-        equippedTool: source.equipment?.equippedTool === 'field_axe' ? 'wood_axe' : (source.equipment?.equippedTool ?? null),
-        equippedItem: source.equipment?.equippedItem === 'wood' && Math.max(0, Number(source.inventory?.wood) || 0) > 0 ? 'wood' : null,
+        equippedTool: source.equipment?.equippedTool === 'field_axe' ? 'wood_axe' : (['wood_axe', 'fishing_rod'].includes(source.equipment?.equippedTool) ? source.equipment.equippedTool : null),
+        equippedItem: ['wood', 'raw_fish', 'cooked_fish'].includes(source.equipment?.equippedItem) && Math.max(0, Number(source.inventory?.[source.equipment.equippedItem]) || 0) > 0 ? source.equipment.equippedItem : null,
         equippedOffhand: source.equipment?.equippedOffhand === 'torch' && Boolean(source.inventory?.torch || source.equipment?.owned?.torch) ? 'torch' : null,
       },
       campfires: this.repairFieldCampfires(source),
@@ -306,6 +348,9 @@ export class GameState {
       openedChests: { ...(source.openedChests ?? DEFAULT_FIELD_SURVIVAL_STATE.openedChests) },
       lootedChests: { ...(source.lootedChests ?? {}) },
       harvestedTrees: { ...(source.harvestedTrees ?? DEFAULT_FIELD_SURVIVAL_STATE.harvestedTrees) },
+      hungerMaxSeconds: Math.max(1, Number(source.hungerMaxSeconds) || DEFAULT_FIELD_SURVIVAL_STATE.hungerMaxSeconds),
+      hungerSecondsRemaining: Math.max(0, Number.isFinite(Number(source.hungerSecondsRemaining)) ? Number(source.hungerSecondsRemaining) : DEFAULT_FIELD_SURVIVAL_STATE.hungerSecondsRemaining),
+      starvationDamageTimer: Math.max(0, Number(source.starvationDamageTimer) || 0),
     };
   }
 

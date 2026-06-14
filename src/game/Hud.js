@@ -8,6 +8,7 @@ export class Hud {
     this.debugEl = root.querySelector('[data-hud="debug"]');
     this.hpEl = root.querySelector('[data-stat="hp"]');
     this.powerEl = root.querySelector('[data-stat="power"]');
+    this.hungerEl = root.querySelector('[data-stat="hunger"]');
     this.damageEl = root.querySelector('[data-hud="damage"]');
     this.fieldKitEl = root.querySelector('[data-hud="field-kit"]');
     this.holdProgressEl = root.querySelector('[data-hud="hold-progress"]');
@@ -54,10 +55,20 @@ export class Hud {
     if (message) console.debug(`[Dread Stone Black] ${message}`);
   }
 
-  updateHoldProgress(progress = 0) {
+  updateHunger({ hungerSecondsRemaining = 0, hungerMaxSeconds = 1 } = {}) {
+    if (!this.hungerEl) return;
+    const seconds = Math.max(0, Math.ceil(hungerSecondsRemaining));
+    const minutes = Math.floor(seconds / 60);
+    const remainder = String(seconds % 60).padStart(2, '0');
+    this.hungerEl.textContent = `${minutes}:${remainder}`;
+    this.hungerEl.parentElement?.style.setProperty('--hunger-ratio', String(Math.max(0, Math.min(1, seconds / Math.max(1, hungerMaxSeconds)))));
+  }
+
+  updateHoldProgress(progress = 0, label = '') {
     if (!this.holdProgressEl) return;
     const clamped = Math.max(0, Math.min(1, Number(progress) || 0));
     this.holdProgressEl.style.setProperty('--hold-progress', `${clamped * 360}deg`);
+    this.holdProgressEl.dataset.label = label || this.holdProgressEl.dataset.label || '';
     this.holdProgressEl.classList.toggle('is-visible', clamped > 0 && clamped < 1);
   }
 

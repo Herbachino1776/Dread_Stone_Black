@@ -251,6 +251,7 @@ function horizontalDistance(a, b) {
 export const FIELD_SURVIVAL_PLACEMENTS = Object.freeze({
   axeChest: { id: 'field_survival_axe_chest', position: { x: -34, y: 0, z: -118 } },
   flintStickChest: { id: 'field_survival_flint_stick_chest', position: { x: 116, y: 0, z: -24 } },
+  fishingRodChest: { id: 'field_survival_fishing_rod_chest', position: { x: -156, y: 0, z: -122 } },
   harvestableTree: { id: 'field_survival_redwood_01', position: { x: 46, y: 0, z: -132 } },
 });
 
@@ -274,6 +275,8 @@ export class DungeonScene {
     this.fieldFoliageBillboards = [];
     this.fieldRedwoodHarvestables = [];
     this.fieldSurvivalObjects = new Map();
+    this.fieldFishingZones = [];
+    this.fieldCookedFishPickups = [];
     this.giantRamManFieldManifestation = null;
     this.giantRamManFieldManifestationLoading = false;
     this.reliquaryBlock = null;
@@ -540,6 +543,7 @@ export class DungeonScene {
     this.addOutdoorLights();
     this.addReliquaryFieldSkyDome();
     this.addOutdoorTerrain();
+    this.addReliquaryFieldRiverBoundary();
     this.addReliquaryFieldHorizonSystem();
     this.addOutdoorBoundary();
     this.addReliquaryFieldStructures();
@@ -642,6 +646,7 @@ export class DungeonScene {
     this.updateBlackGrassFactionEnemies(deltaSeconds, player);
     this.updateSheepDemonEnemy(deltaSeconds, player);
     this.updateReliquaryFieldFoliage(player);
+    this.updateCookedFishPickups(deltaSeconds);
     this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
     this.dungeonDebugRenderer?.update(player?.position);
   }
@@ -1024,6 +1029,37 @@ export class DungeonScene {
     this.scene.add(terrain);
   }
 
+  addReliquaryFieldRiverBoundary() {
+    const waterMat = new THREE.MeshStandardMaterial({ color: 0x0c1820, roughness: 0.88, metalness: 0.0, transparent: true, opacity: 0.82, emissive: 0x020609, emissiveIntensity: 0.28 });
+    const specs = [
+      { name: 'north', size: [FIELD_SIZE + 46, 24], pos: [0, -194] },
+      { name: 'south', size: [FIELD_SIZE + 46, 24], pos: [0, 194] },
+      { name: 'west', size: [24, FIELD_SIZE + 46], pos: [-194, 0] },
+      { name: 'east', size: [24, FIELD_SIZE + 46], pos: [194, 0] },
+    ];
+    specs.forEach((spec) => {
+      const geometry = new THREE.PlaneGeometry(spec.size[0], spec.size[1], 1, 1);
+      geometry.rotateX(-Math.PI / 2);
+      const mesh = new THREE.Mesh(geometry, waterMat);
+      mesh.name = `FIELD-RIVER-${spec.name}-dark-cursed-water-boundary-seam-cover`;
+      mesh.position.set(spec.pos[0], 0.035, spec.pos[1]);
+      mesh.userData = { collision: 'visual-only water boundary', fishing: true, performance: 'single static low-poly strip; no reflections, physics, or per-frame raycasts' };
+      this.scene.add(mesh);
+    });
+    this.fieldFishingZones = [
+      { id: 'field_river_fishing_nw', position: new THREE.Vector3(-158, 0, -132), radius: 13 },
+      { id: 'field_river_fishing_n', position: new THREE.Vector3(12, 0, -170), radius: 13 },
+      { id: 'field_river_fishing_ne', position: new THREE.Vector3(152, 0, -112), radius: 13 },
+      { id: 'field_river_fishing_w', position: new THREE.Vector3(-170, 0, 42), radius: 13 },
+      { id: 'field_river_fishing_s', position: new THREE.Vector3(80, 0, 170), radius: 13 },
+    ];
+  }
+
+  getNearbyFishingZone(position) {
+    if (this.area !== 'field' || !position) return null;
+    return this.fieldFishingZones.find((zone) => horizontalDistance(position, zone.position) <= zone.radius) ?? null;
+  }
+
   addOutdoorBoundary() {
     const boundaryMaterial = new THREE.MeshBasicMaterial({ visible: false });
     const boundarySpecs = [
@@ -1305,6 +1341,7 @@ export class DungeonScene {
       itemId: 'flint_stick',
       acquiredMessage: 'Flint Stick Acquired.',
     });
+    this.addFieldSurvivalChest({ id: FIELD_SURVIVAL_PLACEMENTS.fishingRodChest.id, label: 'Fishing Rod Chest', position: FIELD_SURVIVAL_PLACEMENTS.fishingRodChest.position, itemId: 'fishing_rod', acquiredMessage: 'Fishing Rod Acquired.' });
     this.restoreHarvestedRedwoodVisuals();
     this.addCampfireCraftingPrompt();
 
@@ -1482,6 +1519,39 @@ export class DungeonScene {
       return this.isFieldCampfireOpenGround(candidate);
     });
     return open ? new THREE.Vector3(open.x, 0, open.z) : null;
+  }
+
+  spawnCookedFishPickup(position) {
+    const pickupId = `field_cooked_fish_${Date.now()}_${this.fieldCookedFishPickups.length + 1}`;
+    const mat = new THREE.MeshStandardMaterial({ color: 0x6b3f22, roughness: 0.9, emissive: 0x120805, emissiveIntensity: 0.15 });
+    const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.42, 4, 8), mat);
+    mesh.name = `${pickupId}-brown-placeholder-pickup`;
+    mesh.position.set(position.x, 0.75, position.z);
+    mesh.rotation.z = Math.PI / 2;
+    this.scene.add(mesh);
+    const landing = new THREE.Vector3(position.x + 1.15, 0.28, position.z + 0.45);
+    const pickup = { id: pickupId, mesh, start: mesh.position.clone(), target: landing.clone(), elapsed: 0, duration: 0.65 };
+    this.fieldCookedFishPickups.push(pickup);
+    this.outdoorInteractions.push({ id: pickupId, label: 'Cooked Fish', target: landing.clone().setY(1), range: 2.4, hint: 'Pick up Cooked Fish', message: 'Cooked Fish Acquired.', type: 'cookedFishPickup', pickup });
+    return pickup;
+  }
+
+  updateCookedFishPickups(deltaSeconds) {
+    this.fieldCookedFishPickups.forEach((pickup) => {
+      if (!pickup.mesh || pickup.elapsed >= pickup.duration) return;
+      pickup.elapsed = Math.min(pickup.duration, pickup.elapsed + deltaSeconds);
+      const t = pickup.elapsed / pickup.duration;
+      pickup.mesh.position.lerpVectors(pickup.start, pickup.target, t);
+      pickup.mesh.position.y = 0.28 + Math.sin(t * Math.PI) * 1.2;
+      pickup.mesh.rotation.y += deltaSeconds * 4;
+    });
+  }
+
+  removeCookedFishPickup(pickup) {
+    if (!pickup) return;
+    if (pickup.mesh) this.scene.remove(pickup.mesh);
+    this.fieldCookedFishPickups = this.fieldCookedFishPickups.filter((entry) => entry !== pickup);
+    this.outdoorInteractions = this.outdoorInteractions.filter((entry) => entry.pickup !== pickup);
   }
 
   addFieldCampfire(position, id = null) {

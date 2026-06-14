@@ -67,6 +67,10 @@ export class Combat {
     this.hud.showMessage(`${source} burns your ribs. Back away.`);
   }
 
+  takeDamage(amount, source = 'the enemy') {
+    this.applyPlayerDamage(amount, source);
+  }
+
   tryPlayerAttack() {
     const weaponProfile = this.equipmentRuntime?.getEquippedWeaponProfile?.() ?? {
       id: 'unarmed',

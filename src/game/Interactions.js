@@ -8,6 +8,8 @@ const INDOOR_EXIT_RANGE = 4.0;
 const SHORTCUT_DOOR_RANGE = 2.55;
 const SECRET_WALL_RANGE = 2.4;
 const CAMPFIRE_HOLD_SECONDS = 2;
+const FISHING_HOLD_SECONDS = 3;
+const COOKING_HOLD_SECONDS = 10;
 
 export class Interactions {
   constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null, objectiveRuntime = null }) {
@@ -21,6 +23,7 @@ export class Interactions {
     this.currentHint = '';
     this.feedbackHint = '';
     this.feedbackUntil = 0;
+    this.activeHold = null;
     this.campfireHold = null;
   }
 
@@ -143,6 +146,14 @@ export class Interactions {
 
     if (interaction.type === 'fieldCampfire') {
       return this.useFieldCampfire(interaction);
+    }
+
+    if (interaction.type === 'fieldFishing') {
+      return this.startHoldAction('fish', FISHING_HOLD_SECONDS, interaction);
+    }
+
+    if (interaction.type === 'cookedFishPickup') {
+      return this.pickupCookedFish(interaction);
     }
 
     this.setTemporaryHint(interaction.message, 1200);
@@ -323,6 +334,9 @@ export class Interactions {
     if (interaction.itemId === 'wood_axe') {
       this.equipmentRuntime?.acquireItem?.('wood_axe', { source: interaction.id, tags: ['weapon', 'axe', 'woodcutting', 'field-survival'] });
     }
+    if (interaction.itemId === 'fishing_rod') {
+      this.equipmentRuntime?.acquireItem?.('fishing_rod', { source: interaction.id, tags: ['weapon', 'tool', 'fishing', 'field-survival'] });
+    }
     if (interaction.itemId === 'torch') {
       this.equipmentRuntime?.acquireItem?.('torch', { source: interaction.id, tags: ['offhand', 'torch', 'light', 'dungeon-utility'] });
     }
@@ -398,38 +412,28 @@ export class Interactions {
     }
 
     const placement = interaction?.placement ?? this.dungeon.getFieldCampfirePlacement?.(this.player);
-    this.campfireHold = { placement: placement.clone?.() ?? placement, origin: this.player.position.clone(), elapsed: 0 };
-    this.hud.updateHoldProgress?.(0);
+    this.startHoldAction('campfire', CAMPFIRE_HOLD_SECONDS, { placement: placement.clone?.() ?? placement, origin: this.player.position.clone() });
     this.setTemporaryHint('Hold Interact', 500);
     return false;
   }
 
   updateHold(deltaSeconds, isInteractHeld, cancelRequested = false) {
-    if (!this.campfireHold) {
-      this.hud.updateHoldProgress?.(0);
-      return;
-    }
-    if (cancelRequested || !isInteractHeld || this.player.position.distanceTo(this.campfireHold.origin) > 1.4) {
-      this.cancelCampfireHold();
-      return;
-    }
-    if (this.getCampfireRequirementMessage({ placement: this.campfireHold.placement })) {
-      this.cancelCampfireHold();
-      return;
-    }
-    this.campfireHold.elapsed += deltaSeconds;
-    const progress = Math.min(1, this.campfireHold.elapsed / CAMPFIRE_HOLD_SECONDS);
-    this.hud.updateHoldProgress?.(progress);
-    if (progress >= 1) this.completeFieldCampfireCraft();
+    if (!this.activeHold) { this.hud.updateHoldProgress?.(0); return; }
+    if (cancelRequested || !isInteractHeld || this.shouldCancelActiveHold()) { this.cancelCampfireHold(); return; }
+    this.activeHold.elapsed += deltaSeconds;
+    const progress = Math.min(1, this.activeHold.elapsed / this.activeHold.duration);
+    this.hud.updateHoldProgress?.(progress, this.activeHold.label);
+    if (progress >= 1) this.completeActiveHold();
   }
 
   cancelCampfireHold() {
+    this.activeHold = null;
     this.campfireHold = null;
     this.hud.updateHoldProgress?.(0);
   }
 
   completeFieldCampfireCraft() {
-    const hold = this.campfireHold;
+    const hold = this.activeHold;
     this.cancelCampfireHold();
     if (!hold || this.getCampfireRequirementMessage({ placement: hold.placement })) return false;
     if (!this.dungeon.gameState?.consumeFieldItems?.({ wood: 1 })) {
@@ -447,10 +451,65 @@ export class Interactions {
   }
 
   useFieldCampfire(interaction) {
-    // TODO: Route this interaction into the future cooking system once recipes exist.
+    if (this.dungeon.gameState?.getEquippedFieldItem?.() === 'raw_fish' && this.dungeon.gameState?.getFieldItemCount?.('raw_fish') > 0) {
+      return this.startHoldAction('cook', COOKING_HOLD_SECONDS, { ...interaction, origin: this.player.position.clone() });
+    }
     this.setTemporaryHint(interaction.message ?? 'The fire is ready for cooking.', 1400);
     this.hud.showMessage(interaction.message ?? 'The fire is ready for cooking.');
     return false;
+  }
+
+  startHoldAction(type, duration, payload = {}) {
+    this.activeHold = { type, duration, elapsed: 0, origin: payload.origin ?? this.player.position.clone(), label: type === 'cook' ? 'COOK' : type === 'fish' ? 'FISH' : 'BUILD', ...payload };
+    this.campfireHold = this.activeHold.type === 'campfire' ? this.activeHold : null;
+    this.hud.updateHoldProgress?.(0, this.activeHold.label);
+    this.setTemporaryHint('Hold Interact', 500);
+    return false;
+  }
+
+  shouldCancelActiveHold() {
+    const hold = this.activeHold;
+    if (!hold) return false;
+    if (this.player.position.distanceTo(hold.origin) > (hold.type === 'fish' ? 2.0 : 1.4)) return true;
+    if (hold.type === 'campfire') return Boolean(this.getCampfireRequirementMessage({ placement: hold.placement }));
+    if (hold.type === 'fish') return this.equipmentRuntime?.getEquippedWeaponProfile?.().id !== 'fishing_rod' || !this.dungeon.getNearbyFishingZone?.(this.player.position);
+    if (hold.type === 'cook') return this.dungeon.gameState?.getEquippedFieldItem?.() !== 'raw_fish' || this.dungeon.gameState?.getFieldItemCount?.('raw_fish') < 1 || this.horizontalDistanceTo(hold.target) > (hold.range ?? 4.25);
+    return false;
+  }
+
+  completeActiveHold() {
+    const hold = this.activeHold;
+    if (hold?.type === 'campfire') return this.completeFieldCampfireCraft();
+    this.cancelCampfireHold();
+    if (!hold) return false;
+    if (hold.type === 'fish') {
+      this.dungeon.gameState?.addFieldItem?.('raw_fish', 1);
+      this.setTemporaryHint('Fish Caught.', 1500);
+      this.hud.showMessage('Fish Caught.');
+    } else if (hold.type === 'cook') {
+      if (this.dungeon.gameState?.consumeFieldItems?.({ raw_fish: 1 })) {
+        this.dungeon.spawnCookedFishPickup?.(hold.target);
+        this.setTemporaryHint('Fish Cooked.', 1500);
+        this.hud.showMessage('Fish Cooked.');
+      }
+    }
+    return false;
+  }
+
+  pickupCookedFish(interaction) {
+    this.dungeon.gameState?.addFieldItem?.('cooked_fish', 1);
+    this.dungeon.removeCookedFishPickup?.(interaction.pickup);
+    this.setTemporaryHint('Cooked Fish Acquired.', 1400);
+    this.hud.showMessage('Cooked Fish Acquired.');
+    return false;
+  }
+
+  useEquippedConsumable() {
+    if (this.dungeon.gameState?.getEquippedFieldItem?.() !== 'cooked_fish') return false;
+    if (!this.dungeon.gameState?.eatCookedFish?.()) return false;
+    this.setTemporaryHint('Ate Cooked Fish.', 1300);
+    this.hud.showMessage('Ate Cooked Fish.');
+    return true;
   }
 
   pickUpKey() {
@@ -564,6 +623,11 @@ export class Interactions {
 
   getNearbyOutdoorInteraction() {
     if (!this.dungeon.outdoorInteractions?.length) return null;
+
+    const fishingZone = this.dungeon.getNearbyFishingZone?.(this.player.position);
+    if (fishingZone && this.equipmentRuntime?.getEquippedWeaponProfile?.().id === 'fishing_rod') {
+      return { id: fishingZone.id, label: 'River Fishing', target: fishingZone.position, range: fishingZone.radius, hint: 'Fish', message: 'Fish Caught.', type: 'fieldFishing' };
+    }
 
     const redwoodInteraction = this.dungeon.getNearbyFieldHarvestableRedwood?.(this.player.position);
     if (redwoodInteraction) return this.decorateOutdoorInteraction(redwoodInteraction);
