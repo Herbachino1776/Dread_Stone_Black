@@ -35,6 +35,7 @@ export class EquipmentPanel {
     });
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, () => this.render());
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.render());
+    window.addEventListener('field-item-equipped-changed', () => this.render());
   }
 
   open() { this.isOpen = true; this.panel?.classList.add('is-open'); this.panel?.setAttribute('aria-hidden', 'false'); this.render(); }
@@ -83,8 +84,9 @@ export class EquipmentPanel {
         description: weapon.description,
         pressed: equippedWeapon.id === weapon.id,
         onSelect: () => {
-          if (this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, weapon.id) && weapon.id === 'wood_axe') {
-            this.gameState?.equipFieldTool?.('wood_axe');
+          const isEquipped = this.equipmentRuntime.getEquippedWeaponProfile().id === weapon.id;
+          if (this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, isEquipped ? 'unarmed' : weapon.id)) {
+            this.gameState?.equipFieldTool?.(!isEquipped && weapon.id === 'wood_axe' ? 'wood_axe' : null);
           }
         },
       }));
@@ -94,8 +96,20 @@ export class EquipmentPanel {
 
   renderItems() {
     const wood = this.gameState?.getFieldItemCount?.('wood') ?? 0;
+    const equippedItem = this.gameState?.getEquippedFieldItem?.();
     if (wood > 0) {
-      this.inventoryList.append(this.createRow({ id: 'wood', name: 'Wood', stats: `x${wood}`, description: 'Campfire fuel.' }));
+      this.inventoryList.append(this.createRow({
+        id: 'wood',
+        name: 'Wood',
+        stats: equippedItem === 'wood' ? `Equipped · x${wood}` : `x${wood}`,
+        description: 'Campfire fuel.',
+        pressed: equippedItem === 'wood',
+        onSelect: () => {
+          const nextItem = this.gameState?.getEquippedFieldItem?.() === 'wood' ? null : 'wood';
+          if (!this.gameState?.equipFieldItem?.(nextItem)) this.gameState?.equipFieldItem?.(null);
+          window.dispatchEvent(new CustomEvent('field-item-equipped-changed'));
+        },
+      }));
     } else {
       this.renderEmpty('No items.');
     }

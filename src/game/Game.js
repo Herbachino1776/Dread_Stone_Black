@@ -33,6 +33,7 @@ export class Game {
     this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
     this.isPaused = false;
     this.resetConfirmTimer = null;
+    this.wasKeyboardInteractHeld = false;
     this.resetConfirmExpiresAt = 0;
     this.app.innerHTML = this.renderShell();
 
@@ -354,7 +355,7 @@ export class Game {
           </div>
 
           <div class="action-cluster" aria-label="Action buttons">
-            <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact"><span>X</span></button>
+            <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact"><span>X</span><span class="hold-progress-ring" data-hud="hold-progress" aria-hidden="true"></span></button>
             <button class="attack-button action-button" data-action="attack" type="button" aria-label="Attack"><span>A</span></button>
           </div>
 
@@ -392,10 +393,15 @@ export class Game {
     this.armsOverlay.update(deltaSeconds);
     this.updateObjectiveLocationTracking(deltaSeconds);
     this.interactions.updateHint();
+    const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
+    const interactHeld = (this.controls.isInteractHeld?.() ?? false) || keyboardInteractHeld;
+    const keyboardInteractPressed = keyboardInteractHeld && !this.wasKeyboardInteractHeld;
+    this.interactions.updateHold(deltaSeconds, interactHeld, this.equipmentPanel?.isOpen || this.isPaused);
 
-    if (this.controls.consumeInteract()) {
+    if (this.controls.consumeInteract() || keyboardInteractPressed) {
       this.interactions.interact();
     }
+    this.wasKeyboardInteractHeld = keyboardInteractHeld;
 
     this.hud.updateDebug(this.player);
     this.feedback.update(deltaSeconds);
@@ -459,6 +465,7 @@ export class Game {
     this.resetConfirmExpiresAt = 0;
     window.clearTimeout(this.resetConfirmTimer);
     this.resetConfirmTimer = null;
+    this.wasKeyboardInteractHeld = false;
     this.setResetButtonLabels('RESET');
   }
 

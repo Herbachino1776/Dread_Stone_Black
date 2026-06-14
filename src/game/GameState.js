@@ -11,7 +11,8 @@ const RUSTED_SWORD_CHEST_INTERACTION_ID = 'BGT_INT_RUSTED_SWORD_CHEST';
 const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
   inventory: { wood_axe: false, wood: 0 },
   keyItems: { flint_stick: false },
-  equipment: { owned: {}, equippedTool: null },
+  equipment: { owned: {}, equippedTool: null, equippedItem: null },
+  campfires: [],
   campfireBuilt: false,
   campfirePosition: null,
   openedChests: {},
@@ -169,11 +170,26 @@ export class GameState {
     return this.fieldSurvivalState.equipment?.equippedTool ?? null;
   }
 
+  equipFieldItem(itemId) {
+    if (itemId && itemId !== 'wood') return false;
+    if (itemId === 'wood' && this.getFieldItemCount('wood') < 1) return false;
+    this.fieldSurvivalState.equipment.equippedItem = itemId ?? null;
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  getEquippedFieldItem() {
+    return this.fieldSurvivalState.equipment?.equippedItem ?? null;
+  }
+
   consumeFieldItems(cost = {}) {
     if (this.getFieldItemCount('wood') < (cost.wood ?? 0)) return false;
     if ((cost.flint_stick ?? 0) > 0 && !this.hasFieldKeyItem('flint_stick')) return false;
 
     this.fieldSurvivalState.inventory.wood -= cost.wood ?? 0;
+    if (this.fieldSurvivalState.inventory.wood < 1 && this.fieldSurvivalState.equipment?.equippedItem === 'wood') {
+      this.fieldSurvivalState.equipment.equippedItem = null;
+    }
     this.saveFieldSurvivalState();
     return true;
   }
@@ -212,15 +228,25 @@ export class GameState {
   }
 
   hasFieldCampfireBuilt() {
-    return Boolean(this.fieldSurvivalState.campfireBuilt);
+    return this.getFieldCampfires().length > 0;
+  }
+
+  getFieldCampfires() {
+    return Array.isArray(this.fieldSurvivalState.campfires) ? this.fieldSurvivalState.campfires : [];
   }
 
   markFieldCampfireBuilt(position) {
-    if (this.hasFieldCampfireBuilt()) return false;
+    if (!position) return false;
+    const campfire = {
+      id: `field_campfire_${Date.now()}_${this.getFieldCampfires().length + 1}`,
+      position: { x: position.x, y: position.y ?? 0, z: position.z },
+      createdAt: Date.now(),
+    };
+    this.fieldSurvivalState.campfires.push(campfire);
     this.fieldSurvivalState.campfireBuilt = true;
-    this.fieldSurvivalState.campfirePosition = position ? { x: position.x, y: position.y ?? 0, z: position.z } : null;
+    this.fieldSurvivalState.campfirePosition = this.fieldSurvivalState.campfirePosition ?? campfire.position;
     this.saveFieldSurvivalState();
-    return true;
+    return campfire;
   }
 
   saveFieldSurvivalState() {
@@ -246,13 +272,30 @@ export class GameState {
           ...(source.inventory?.field_axe || source.inventory?.wood_axe ? { wood_axe: true } : {}),
         },
         equippedTool: source.equipment?.equippedTool === 'field_axe' ? 'wood_axe' : (source.equipment?.equippedTool ?? null),
+        equippedItem: source.equipment?.equippedItem === 'wood' && Math.max(0, Number(source.inventory?.wood) || 0) > 0 ? 'wood' : null,
       },
-      campfireBuilt: Boolean(source.campfireBuilt),
-      campfirePosition: source.campfirePosition ?? null,
+      campfires: this.repairFieldCampfires(source),
+      campfireBuilt: Boolean(source.campfireBuilt || source.campfirePosition || source.campfires?.length),
+      campfirePosition: source.campfirePosition ?? source.campfires?.[0]?.position ?? null,
       openedChests: { ...(source.openedChests ?? DEFAULT_FIELD_SURVIVAL_STATE.openedChests) },
       lootedChests: { ...(source.lootedChests ?? {}) },
       harvestedTrees: { ...(source.harvestedTrees ?? DEFAULT_FIELD_SURVIVAL_STATE.harvestedTrees) },
     };
+  }
+
+  repairFieldCampfires(source) {
+    const campfires = Array.isArray(source.campfires) ? source.campfires : [];
+    const repaired = campfires
+      .filter((campfire) => campfire?.position)
+      .map((campfire, index) => ({
+        id: campfire.id ?? `field_campfire_legacy_${index + 1}`,
+        position: { x: campfire.position.x, y: campfire.position.y ?? 0, z: campfire.position.z },
+        createdAt: campfire.createdAt ?? 0,
+      }));
+    if (!repaired.length && source.campfirePosition) {
+      repaired.push({ id: 'field_campfire_legacy_1', position: { x: source.campfirePosition.x, y: source.campfirePosition.y ?? 0, z: source.campfirePosition.z }, createdAt: 0 });
+    }
+    return repaired;
   }
 
   repairEquipmentSnapshot(snapshot) {
