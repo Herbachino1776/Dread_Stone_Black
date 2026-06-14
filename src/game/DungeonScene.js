@@ -1342,6 +1342,19 @@ export class DungeonScene {
       acquiredMessage: 'Flint Stick Acquired.',
     });
     this.addFieldSurvivalChest({ id: FIELD_SURVIVAL_PLACEMENTS.fishingRodChest.id, label: 'Fishing Rod Chest', position: FIELD_SURVIVAL_PLACEMENTS.fishingRodChest.position, itemId: 'fishing_rod', acquiredMessage: 'Fishing Rod Acquired.' });
+    this.addFieldSurvivalChest({
+      id: 'field_bgt_broadsword_chest',
+      label: 'Ritual Broadsword Chest',
+      position: { x: -184, y: 0, z: 23 },
+      itemId: 'broadsword_ritual_01',
+      equipmentItemId: 'broadsword_ritual_01',
+      openedHint: 'Retrieve Ritual Broadsword',
+      unopenedHint: 'Open chest',
+      acquiredMessage: 'Ritual Broadsword Acquired.',
+      repeatHint: 'Empty.',
+      repeatMessage: 'Empty.',
+      rotationY: Math.PI * 0.08,
+    });
     this.restoreHarvestedRedwoodVisuals();
     this.addCampfireCraftingPrompt();
 
@@ -1352,12 +1365,13 @@ export class DungeonScene {
     });
   }
 
-  addFieldSurvivalChest({ id, label, position, itemId, acquiredMessage }) {
+  addFieldSurvivalChest({ id, label, position, itemId, equipmentItemId = null, acquiredMessage, unopenedHint = 'Open chest', openedHint = 'Retrieve item', repeatHint = 'Empty.', repeatMessage = 'Empty.', autoEquip = false, rotationY = 0 }) {
     const opened = this.gameState?.hasOpenedFieldChest?.(id) ?? false;
     const looted = this.gameState?.hasLootedFieldChest?.(id) ?? false;
     const group = this.createFieldChestGroup(opened);
     group.name = `${id}-visual`;
     group.position.set(position.x, position.y, position.z);
+    group.rotation.y = rotationY;
     this.scene.add(group);
     this.fieldSurvivalObjects.set(id, group);
 
@@ -1366,13 +1380,17 @@ export class DungeonScene {
       label,
       target: new THREE.Vector3(position.x, 1, position.z),
       range: 4.0,
-      hint: looted ? 'Empty.' : opened ? 'Retrieve item' : 'Open chest',
-      message: looted ? 'Empty.' : opened ? acquiredMessage : 'Chest opened.',
+      hint: looted ? repeatHint : opened ? openedHint : unopenedHint,
+      message: looted ? repeatMessage : opened ? acquiredMessage : 'Chest opened.',
       type: 'fieldSurvivalChest',
       itemId,
+      equipmentItemId,
       acquiredMessage,
-      repeatHint: 'Empty.',
-      repeatMessage: 'Empty.',
+      unopenedHint,
+      openedHint,
+      autoEquip,
+      repeatHint,
+      repeatMessage,
     });
   }
 
