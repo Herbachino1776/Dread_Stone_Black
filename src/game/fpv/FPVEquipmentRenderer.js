@@ -6,24 +6,57 @@ import { fpvWeaponProfiles } from './fpvWeaponProfiles.js';
 const warnedMissingProfiles = new Set();
 const gltfLoader = new GLTFLoader();
 const isDev = import.meta.env.DEV;
+const DEBUG_FPV_WEAPON = false;
+const BROADSWORD_FPV_PROFILE_ID = 'broadsword_ritual_01';
+const DEFAULT_FPV_CAMERA = Object.freeze({ fov: 50, near: 0.01, far: 100 });
+const BROADSWORD_TUNE_STEP = Object.freeze({ position: 0.03, rotation: 0.04, scale: 0.04 });
 
 function devLog(...args) {
   if (isDev) console.info(...args);
 }
 
-function applyTransform(object, profile, attack = null) {
-  const p = profile.position ?? { x: 0, y: 0, z: -1.2 };
-  const r = profile.rotation ?? { x: 0, y: 0, z: 0 };
+function copyPose(pose = {}) {
+  return {
+    position: { x: pose.position?.x ?? 0, y: pose.position?.y ?? 0, z: pose.position?.z ?? -1.2 },
+    rotation: { x: pose.rotation?.x ?? 0, y: pose.rotation?.y ?? 0, z: pose.rotation?.z ?? 0 },
+    scale: pose.scale ?? 1,
+  };
+}
+
+function applyPose(object, pose) {
+  const p = pose.position ?? { x: 0, y: 0, z: -1.2 };
+  const r = pose.rotation ?? { x: 0, y: 0, z: 0 };
   object.position.set(p.x, p.y, p.z);
   object.rotation.set(r.x, r.y, r.z);
-  if (attack) {
-    object.position.x += attack.x ?? 0;
-    object.position.y += attack.y ?? 0;
-    object.position.z += attack.z ?? 0;
-    object.rotation.x += attack.rx ?? 0;
-    object.rotation.y += attack.ry ?? 0;
-    object.rotation.z += attack.rz ?? 0;
-  }
+  object.scale.setScalar(pose.scale ?? 1);
+}
+
+function lerpPose(from, to, t) {
+  return {
+    position: {
+      x: THREE.MathUtils.lerp(from.position.x, to.position.x, t),
+      y: THREE.MathUtils.lerp(from.position.y, to.position.y, t),
+      z: THREE.MathUtils.lerp(from.position.z, to.position.z, t),
+    },
+    rotation: {
+      x: THREE.MathUtils.lerp(from.rotation.x, to.rotation.x, t),
+      y: THREE.MathUtils.lerp(from.rotation.y, to.rotation.y, t),
+      z: THREE.MathUtils.lerp(from.rotation.z, to.rotation.z, t),
+    },
+    scale: THREE.MathUtils.lerp(from.scale, to.scale, t),
+  };
+}
+
+function offsetPose(pose, offset) {
+  const next = copyPose(pose);
+  next.position.x += offset.x ?? 0;
+  next.position.y += offset.y ?? 0;
+  next.position.z += offset.z ?? 0;
+  next.rotation.x += offset.rx ?? 0;
+  next.rotation.y += offset.ry ?? 0;
+  next.rotation.z += offset.rz ?? 0;
+  next.scale += offset.scale ?? 0;
+  return next;
 }
 
 export class FPVEquipmentRenderer {
@@ -39,11 +72,17 @@ export class FPVEquipmentRenderer {
     this.glbScene = null;
     this.glbCamera = null;
     this.glbWeapon = null;
+    this.glbModelGroup = null;
+    this.glbAxisHelper = null;
     this.glbProfile = null;
+    this.glbIdlePose = null;
+    this.broadswordTunePose = null;
     this.glbLoadToken = 0;
     this.attackStartedAt = 0;
     this.attackDurationMs = 0;
     this.animationFrame = null;
+    this.handleDevHotkey = this.handleDevHotkey.bind(this);
+    if (isDev) window.addEventListener('keydown', this.handleDevHotkey);
 
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, ({ weaponProfile, slotId, itemId }) => {
       this.setWeaponProfile(weaponProfile);
@@ -109,7 +148,7 @@ export class FPVEquipmentRenderer {
     this.glbRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.glbRenderer.setClearColor(0x000000, 0);
     this.glbScene = new THREE.Scene();
-    this.glbCamera = new THREE.PerspectiveCamera(50, 1, 0.01, 20);
+    this.glbCamera = new THREE.PerspectiveCamera(DEFAULT_FPV_CAMERA.fov, 1, DEFAULT_FPV_CAMERA.near, DEFAULT_FPV_CAMERA.far);
     this.glbCamera.position.set(0, 0, 0);
     this.glbScene.add(new THREE.HemisphereLight(0xffe7c0, 0x160d08, 1.8));
     const key = new THREE.DirectionalLight(0xffd08a, 2.2);
@@ -124,12 +163,14 @@ export class FPVEquipmentRenderer {
     const token = ++this.glbLoadToken;
     devLog('[FPVEquipmentRenderer] loading GLB model URL:', fpvProfile.modelUrl);
     if (this.glbWeapon?.userData?.modelUrl === fpvProfile.modelUrl) {
-      applyTransform(this.glbWeapon, fpvProfile);
+      this.glbIdlePose = this.createIdlePose(fpvProfile);
+      applyPose(this.glbWeapon, this.glbIdlePose);
       this.startRenderLoop();
       return;
     }
     if (this.glbWeapon) this.glbScene.remove(this.glbWeapon);
     this.glbWeapon = null;
+    this.glbModelGroup = null;
     gltfLoader.load(fpvProfile.modelUrl, (gltf) => {
       if (token !== this.glbLoadToken) return;
       const root = gltf.scene ?? gltf.scenes?.[0];
@@ -141,10 +182,25 @@ export class FPVEquipmentRenderer {
         child.castShadow = false;
         child.receiveShadow = false;
       });
-      root.scale.setScalar(fpvProfile.scale ?? 1);
-      applyTransform(root, fpvProfile);
-      this.glbWeapon = root;
-      this.glbScene.add(root);
+      const weaponRoot = new THREE.Group();
+      const modelGroup = new THREE.Group();
+      weaponRoot.userData.modelUrl = fpvProfile.modelUrl;
+      weaponRoot.add(modelGroup);
+      modelGroup.add(root);
+      if (!this.normalizeModel(root, modelGroup, fpvProfile)) {
+        console.warn('Broadsword GLB loaded but FPV bounds/transform invalid; using placeholder.');
+        this.showGlbFallback(weaponProfile);
+        return;
+      }
+      this.glbIdlePose = this.createIdlePose(fpvProfile);
+      applyPose(weaponRoot, this.glbIdlePose);
+      if (isDev && DEBUG_FPV_WEAPON) {
+        this.glbAxisHelper = new THREE.AxesHelper(0.45);
+        weaponRoot.add(this.glbAxisHelper);
+      }
+      this.glbWeapon = weaponRoot;
+      this.glbModelGroup = modelGroup;
+      this.glbScene.add(weaponRoot);
       devLog('[FPVEquipmentRenderer] GLB loaded successfully:', fpvProfile.modelUrl);
       this.startRenderLoop();
     }, undefined, (error) => {
@@ -158,10 +214,35 @@ export class FPVEquipmentRenderer {
   hideGlbWeapon() {
     this.glbLoadToken += 1;
     this.glbProfile = null;
+    this.glbIdlePose = null;
     this.attackStartedAt = 0;
     if (this.glbCanvas) this.glbCanvas.hidden = true;
     if (this.glbWeapon && this.glbScene) this.glbScene.remove(this.glbWeapon);
     this.glbWeapon = null;
+    this.glbModelGroup = null;
+    this.glbAxisHelper = null;
+  }
+
+  createIdlePose(fpvProfile) {
+    if (fpvProfile.id === BROADSWORD_FPV_PROFILE_ID && this.broadswordTunePose) return copyPose(this.broadswordTunePose);
+    return copyPose({ position: fpvProfile.position, rotation: fpvProfile.rotation, scale: fpvProfile.scale });
+  }
+
+  normalizeModel(root, modelGroup, fpvProfile) {
+    root.updateMatrixWorld(true);
+    const rawBounds = new THREE.Box3().setFromObject(root);
+    const rawSize = rawBounds.getSize(new THREE.Vector3());
+    const rawCenter = rawBounds.getCenter(new THREE.Vector3());
+    if (!Number.isFinite(rawSize.x + rawSize.y + rawSize.z) || rawSize.y <= 0 || rawSize.length() <= 0.0001 || rawSize.length() > 1000) return false;
+    const targetHeight = fpvProfile.normalizedHeight ?? 1.65;
+    const normalizedScale = targetHeight / rawSize.y;
+    if (!Number.isFinite(normalizedScale) || normalizedScale <= 0) return false;
+    root.position.set(-rawCenter.x, -rawBounds.min.y, -rawCenter.z);
+    modelGroup.scale.setScalar(normalizedScale);
+    modelGroup.updateMatrixWorld(true);
+    const normalizedBounds = new THREE.Box3().setFromObject(modelGroup);
+    const normalizedSize = normalizedBounds.getSize(new THREE.Vector3());
+    return Number.isFinite(normalizedSize.x + normalizedSize.y + normalizedSize.z) && normalizedSize.y > 0.05 && normalizedSize.y < 20;
   }
 
   showGlbFallback(weaponProfile) {
@@ -169,6 +250,8 @@ export class FPVEquipmentRenderer {
     if (this.glbCanvas) this.glbCanvas.hidden = true;
     if (this.glbWeapon && this.glbScene) this.glbScene.remove(this.glbWeapon);
     this.glbWeapon = null;
+    this.glbModelGroup = null;
+    this.glbAxisHelper = null;
     if (!this.weaponLayer) return;
     this.weaponLayer.hidden = false;
     this.weaponLayer.className = 'first-person-weapon first-person-weapon--rusted-sword';
@@ -199,6 +282,36 @@ export class FPVEquipmentRenderer {
     this.weaponLayer.classList.add('is-attacking');
   }
 
+  handleDevHotkey(event) {
+    if (!isDev || this.glbProfile?.id !== BROADSWORD_FPV_PROFILE_ID || !this.glbWeapon) return;
+    const idlePose = this.glbIdlePose ?? this.createIdlePose(this.glbProfile);
+    const nextPose = copyPose(idlePose);
+    let handled = true;
+    switch (event.key) {
+      case 'ArrowLeft': nextPose.position.x -= BROADSWORD_TUNE_STEP.position; break;
+      case 'ArrowRight': nextPose.position.x += BROADSWORD_TUNE_STEP.position; break;
+      case 'ArrowUp': nextPose.position.y += BROADSWORD_TUNE_STEP.position; break;
+      case 'ArrowDown': nextPose.position.y -= BROADSWORD_TUNE_STEP.position; break;
+      case 'PageUp': nextPose.position.z -= BROADSWORD_TUNE_STEP.position; break;
+      case 'PageDown': nextPose.position.z += BROADSWORD_TUNE_STEP.position; break;
+      case 'q': case 'Q': nextPose.rotation.z -= BROADSWORD_TUNE_STEP.rotation; break;
+      case 'e': case 'E': nextPose.rotation.z += BROADSWORD_TUNE_STEP.rotation; break;
+      case 'w': case 'W': nextPose.rotation.x -= BROADSWORD_TUNE_STEP.rotation; break;
+      case 's': case 'S': nextPose.rotation.x += BROADSWORD_TUNE_STEP.rotation; break;
+      case 'a': case 'A': nextPose.rotation.y -= BROADSWORD_TUNE_STEP.rotation; break;
+      case 'd': case 'D': nextPose.rotation.y += BROADSWORD_TUNE_STEP.rotation; break;
+      case '-': nextPose.scale = Math.max(0.1, nextPose.scale - BROADSWORD_TUNE_STEP.scale); break;
+      case '=': case '+': nextPose.scale += BROADSWORD_TUNE_STEP.scale; break;
+      default: handled = false;
+    }
+    if (!handled) return;
+    event.preventDefault();
+    this.broadswordTunePose = nextPose;
+    this.glbIdlePose = copyPose(nextPose);
+    if (this.attackStartedAt === 0) applyPose(this.glbWeapon, this.glbIdlePose);
+    console.info('FPV broadsword transform:', { position: { ...nextPose.position }, rotation: { ...nextPose.rotation }, scale: nextPose.scale });
+  }
+
   startRenderLoop() {
     if (this.animationFrame) return;
     const render = () => {
@@ -220,18 +333,16 @@ export class FPVEquipmentRenderer {
           const windup = Math.min(t / 0.22, 1);
           const swing = t < 0.22 ? 0 : Math.min((t - 0.22) / 0.36, 1);
           const recover = t < 0.58 ? 0 : Math.min((t - 0.58) / 0.42, 1);
-          const slash = Math.sin(swing * Math.PI);
-          applyTransform(this.glbWeapon, this.glbProfile, {
-            x: 0.1 * windup - 0.34 * slash * (1 - recover),
-            y: 0.12 * windup - 0.24 * slash,
-            z: -0.08 * windup - 0.2 * slash,
-            rx: -0.18 * windup + 0.54 * slash,
-            ry: -0.08 * windup - 0.66 * slash,
-            rz: -0.18 * windup - 1.08 * slash,
-          });
+          const idlePose = this.glbIdlePose ?? this.createIdlePose(this.glbProfile);
+          const windupPose = offsetPose(idlePose, { x: 0.1, y: 0.12, z: -0.08, rx: -0.18, ry: -0.08, rz: -0.18 });
+          const strikePose = offsetPose(idlePose, { x: -0.34, y: -0.24, z: -0.2, rx: 0.54, ry: -0.66, rz: -1.08 });
+          const recoveryPose = recover > 0 ? lerpPose(strikePose, idlePose, recover) : strikePose;
+          const attackPose = t < 0.22 ? lerpPose(idlePose, windupPose, windup) : lerpPose(windupPose, recoveryPose, swing);
+          applyPose(this.glbWeapon, attackPose);
         } else {
           this.attackStartedAt = 0;
-          applyTransform(this.glbWeapon, this.glbProfile);
+          this.glbIdlePose = this.createIdlePose(this.glbProfile);
+          applyPose(this.glbWeapon, this.glbIdlePose);
         }
       }
       this.glbRenderer.render(this.glbScene, this.glbCamera);
