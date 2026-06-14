@@ -287,6 +287,22 @@ export class Interactions {
 
     this.dungeon.gameState?.markFieldChestOpened?.(interaction.id);
     this.dungeon.gameState?.addFieldItem?.(interaction.itemId);
+    let autoEquipMessage = '';
+    if (interaction.itemId === 'field_axe') {
+      this.equipmentRuntime?.acquireItem?.('field_axe', {
+        source: interaction.id,
+        displayName: 'Field Axe',
+        name: 'Field Axe',
+        itemType: 'tool',
+        slot: 'tool',
+        tags: ['axe', 'woodcutting', 'field-survival'],
+      });
+      if (!this.equipmentRuntime?.getEquippedToolId?.()) {
+        this.equipmentRuntime?.equip?.(EQUIPMENT_SLOTS.tool, 'field_axe');
+        this.dungeon.gameState?.equipFieldTool?.('field_axe');
+        autoEquipMessage = ' Equipped Field Axe.';
+      }
+    }
     const chest = this.dungeon.fieldSurvivalObjects?.get(interaction.id);
     if (chest) {
       chest.children.forEach((child) => {
@@ -298,7 +314,7 @@ export class Interactions {
     }
     interaction.hint = interaction.repeatHint ?? 'The chest lies open and empty.';
     interaction.message = interaction.repeatMessage ?? 'The chest lies open and empty.';
-    const message = interaction.acquiredMessage ?? 'You acquire an item.';
+    const message = `${interaction.acquiredMessage ?? 'You acquire an item.'}${autoEquipMessage}`;
     const readyMessage = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1 && this.dungeon.gameState?.hasFieldItem?.('flint_stick')
       ? ' Wood and Flint Stick ready. Hold INTERACT in open ground to build campfire.'
       : '';
@@ -314,15 +330,25 @@ export class Interactions {
       return false;
     }
 
-    if (!this.dungeon.gameState?.hasFieldItem?.('field_axe')) {
+    const hasAxe = this.dungeon.gameState?.hasFieldItem?.('field_axe') || this.equipmentRuntime?.hasItem?.('field_axe');
+    const equippedAxe = this.equipmentRuntime
+      ? this.equipmentRuntime.getEquippedToolId?.() === 'field_axe'
+      : this.dungeon.gameState?.getEquippedFieldTool?.() === 'field_axe';
+    if (!hasAxe) {
       this.setTemporaryHint('A tool is needed.', 1200);
       this.hud.showMessage('A tool is needed.');
       return false;
     }
 
-    this.setTemporaryHint('Chop tree', 700);
+    if (!equippedAxe) {
+      this.setTemporaryHint('Equip Field Axe to chop.', 1200);
+      this.hud.showMessage('Equip Field Axe to chop.');
+      return false;
+    }
+
+    this.setTemporaryHint('Chop redwood', 700);
     this.dungeon.gameState?.markFieldTreeHarvested?.(interaction.id);
-    this.dungeon.gameState?.addFieldItem?.('wood', 1);
+    this.dungeon.gameState?.addFieldItem?.('wood', interaction.yield ?? 1);
     if (interaction.treeObject) interaction.treeObject.visible = false;
     this.dungeon.addFieldStump?.(interaction.stumpPosition, interaction.id);
     interaction.hint = 'The chopped stump is dry and bare.';
@@ -493,6 +519,9 @@ export class Interactions {
   getNearbyOutdoorInteraction() {
     if (!this.dungeon.outdoorInteractions?.length) return null;
 
+    const redwoodInteraction = this.dungeon.getNearbyFieldHarvestableRedwood?.(this.player.position);
+    if (redwoodInteraction) return this.decorateOutdoorInteraction(redwoodInteraction);
+
     return this.dungeon.outdoorInteractions
       .filter((interaction) => this.isOutdoorInteractionAvailable(interaction))
       .map((interaction) => ({ interaction: this.decorateOutdoorInteraction(interaction), distance: this.horizontalDistanceTo(interaction.target) }))
@@ -509,7 +538,11 @@ export class Interactions {
 
   decorateOutdoorInteraction(interaction) {
     if (interaction.type === 'fieldHarvestableTree' && !this.dungeon.gameState?.hasHarvestedFieldTree?.(interaction.id)) {
-      interaction.hint = this.dungeon.gameState?.hasFieldItem?.('field_axe') ? 'Chop tree' : 'A tool is needed.';
+      const hasAxe = this.dungeon.gameState?.hasFieldItem?.('field_axe') || this.equipmentRuntime?.hasItem?.('field_axe');
+      const equippedAxe = this.equipmentRuntime
+        ? this.equipmentRuntime.getEquippedToolId?.() === 'field_axe'
+        : this.dungeon.gameState?.getEquippedFieldTool?.() === 'field_axe';
+      interaction.hint = !hasAxe ? 'A tool is needed.' : equippedAxe ? 'Chop redwood' : 'Equip Field Axe to chop.';
     }
     if (interaction.type === 'fieldCampfireCraft') {
       const hasIngredients = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1

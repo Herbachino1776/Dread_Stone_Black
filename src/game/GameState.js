@@ -10,6 +10,7 @@ const RUSTED_SWORD_CHEST_INTERACTION_ID = 'BGT_INT_RUSTED_SWORD_CHEST';
 
 const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
   inventory: { field_axe: false, flint_stick: false, wood: 0 },
+  equipment: { owned: {}, equippedTool: null },
   campfireBuilt: false,
   campfirePosition: null,
   openedChests: {},
@@ -126,8 +127,30 @@ export class GameState {
     } else {
       this.fieldSurvivalState.inventory[itemId] = true;
     }
+    if (itemId === 'field_axe') this.acquireFieldTool('field_axe');
     this.saveFieldSurvivalState();
     return true;
+  }
+
+  acquireFieldTool(itemId) {
+    if (!itemId) return false;
+    this.fieldSurvivalState.equipment.owned[itemId] = true;
+    if (!this.fieldSurvivalState.equipment.equippedTool) {
+      this.fieldSurvivalState.equipment.equippedTool = itemId;
+    }
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  equipFieldTool(itemId) {
+    if (itemId && !this.fieldSurvivalState.equipment.owned?.[itemId]) return false;
+    this.fieldSurvivalState.equipment.equippedTool = itemId ?? null;
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  getEquippedFieldTool() {
+    return this.fieldSurvivalState.equipment?.equippedTool ?? null;
   }
 
   consumeFieldItems(cost = {}) {
@@ -186,6 +209,13 @@ export class GameState {
         field_axe: Boolean(source.inventory?.field_axe),
         flint_stick: Boolean(source.inventory?.flint_stick),
         wood: Math.max(0, Number(source.inventory?.wood) || 0),
+      },
+      equipment: {
+        owned: {
+          ...(source.equipment?.owned ?? {}),
+          ...(source.inventory?.field_axe ? { field_axe: true } : {}),
+        },
+        equippedTool: source.equipment?.equippedTool ?? (source.inventory?.field_axe ? 'field_axe' : null),
       },
       campfireBuilt: Boolean(source.campfireBuilt),
       campfirePosition: source.campfirePosition ?? null,

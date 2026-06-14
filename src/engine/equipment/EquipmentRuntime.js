@@ -14,6 +14,7 @@ export class EquipmentRuntime {
       [EQUIPMENT_SLOTS.weapon]: startingEquipment.equipped?.weapon ?? 'unarmed',
       [EQUIPMENT_SLOTS.armor]: startingEquipment.equipped?.armor ?? null,
       [EQUIPMENT_SLOTS.quickItem]: startingEquipment.equipped?.quickItem ?? null,
+      [EQUIPMENT_SLOTS.tool]: startingEquipment.equipped?.tool ?? null,
     };
     this.listeners = new Map();
 
@@ -95,6 +96,10 @@ export class EquipmentRuntime {
     return this.inventory.list();
   }
 
+  getEquippedToolId() {
+    return this.equipped.tool ?? null;
+  }
+
   emitAttack(payload) {
     this.emit(EQUIPMENT_EVENTS.attackResolved, payload);
   }
@@ -106,6 +111,7 @@ export class EquipmentRuntime {
         weapon: this.equipped.weapon ?? 'unarmed',
         armor: this.equipped.armor ?? null,
         quickItem: this.equipped.quickItem ?? null,
+        tool: this.equipped.tool ?? null,
       },
     };
   }
@@ -117,6 +123,9 @@ export class EquipmentRuntime {
       : 'unarmed';
     this.equipped.armor = snapshot.equipped?.armor ?? null;
     this.equipped.quickItem = snapshot.equipped?.quickItem ?? null;
+    this.equipped.tool = snapshot.equipped?.tool && this.inventory.has(snapshot.equipped.tool)
+      ? snapshot.equipped.tool
+      : null;
     this.emit(EQUIPMENT_EVENTS.equippedChanged, {
       slotId: EQUIPMENT_SLOTS.weapon,
       previousItemId: null,

@@ -57,7 +57,8 @@ export class Hud {
     if (!this.fieldKitEl) return;
 
     const inventory = snapshot?.inventory ?? {};
-    const hasAxe = Boolean(inventory.field_axe);
+    const hasAxe = Boolean(inventory.field_axe || snapshot?.equipment?.owned?.field_axe);
+    const equippedTool = snapshot?.equipment?.equippedTool === 'field_axe' ? 'Field Axe' : 'none';
     const wood = Math.max(0, Number(inventory.wood) || 0);
     const hasFlint = Boolean(inventory.flint_stick);
     const campfireBuilt = Boolean(snapshot?.campfireBuilt);
@@ -70,6 +71,6 @@ export class Hud {
       return;
     }
 
-    this.fieldKitEl.textContent = `Field Kit: Axe ${hasAxe ? 'yes' : 'no'} | Wood x${wood} | Flint Stick ${hasFlint ? 'yes' : 'no'} | Campfire ${campfireBuilt ? 'built' : 'not built'}`;
+    this.fieldKitEl.textContent = `Field Kit: Tool ${hasAxe ? equippedTool : 'none'} | Wood ${wood} | Flint Stick ${hasFlint ? 'yes' : 'no'} | Campfire ${campfireBuilt ? 'built' : 'not built'}`;
   }
 }

@@ -8,6 +8,8 @@ export class EquipmentPanel {
     this.panel = root.querySelector('[data-equipment-panel]');
     this.weaponList = root.querySelector('[data-equipment="weapon-list"]');
     this.currentWeapon = root.querySelector('[data-equipment="current-weapon"]');
+    this.currentTool = root.querySelector('[data-equipment="current-tool"]');
+    this.toolList = root.querySelector('[data-equipment="tool-list"]');
     this.toggleButton = root.querySelector('[data-action="equipment"]');
     this.closeButton = root.querySelector('[data-equipment="close"]');
     this.isOpen = false;
@@ -55,6 +57,31 @@ export class EquipmentPanel {
   render() {
     const equippedWeapon = this.equipmentRuntime.getEquippedWeaponProfile();
     if (this.currentWeapon) this.currentWeapon.textContent = equippedWeapon.displayName;
+    const equippedToolId = this.equipmentRuntime.getEquippedToolId?.() ?? null;
+    const inventoryItems = this.equipmentRuntime.getInventoryItems?.() ?? [];
+    const tools = inventoryItems.filter((item) => item.id === 'field_axe' || item.metadata?.slot === 'tool' || item.metadata?.itemType === 'tool');
+    const currentTool = tools.find((item) => item.id === equippedToolId) ?? null;
+    if (this.currentTool) this.currentTool.textContent = currentTool?.metadata?.displayName ?? currentTool?.metadata?.name ?? (equippedToolId === 'field_axe' ? 'Field Axe' : 'None');
+    if (this.toolList) {
+      this.toolList.innerHTML = '';
+      tools.forEach((tool) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'equipment-row';
+        row.dataset.toolId = tool.id;
+        row.setAttribute('aria-pressed', String(equippedToolId === tool.id));
+        row.innerHTML = `
+          <span class="equipment-row__name">${tool.metadata?.displayName ?? tool.metadata?.name ?? 'Field Axe'}</span>
+          <span class="equipment-row__stats">Tool</span>
+          <span class="equipment-row__description">Woodcutting field survival tool</span>
+        `;
+        row.addEventListener('pointerdown', (event) => {
+          event.preventDefault();
+          this.equipmentRuntime.equip(EQUIPMENT_SLOTS.tool, tool.id);
+        });
+        this.toolList.append(row);
+      });
+    }
     if (!this.weaponList) return;
 
     this.weaponList.innerHTML = '';
