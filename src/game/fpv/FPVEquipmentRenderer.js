@@ -309,7 +309,7 @@ export class FPVEquipmentRenderer {
     this.broadswordTunePose = nextPose;
     this.glbIdlePose = copyPose(nextPose);
     if (this.attackStartedAt === 0) applyPose(this.glbWeapon, this.glbIdlePose);
-    console.info('FPV broadsword transform:', { position: { ...nextPose.position }, rotation: { ...nextPose.rotation }, scale: nextPose.scale });
+    console.info('FPV broadsword transform', { position: { ...nextPose.position }, rotation: { ...nextPose.rotation }, scale: nextPose.scale });
   }
 
   startRenderLoop() {
@@ -334,8 +334,8 @@ export class FPVEquipmentRenderer {
           const swing = t < 0.22 ? 0 : Math.min((t - 0.22) / 0.36, 1);
           const recover = t < 0.58 ? 0 : Math.min((t - 0.58) / 0.42, 1);
           const idlePose = this.glbIdlePose ?? this.createIdlePose(this.glbProfile);
-          const windupPose = offsetPose(idlePose, { x: 0.1, y: 0.12, z: -0.08, rx: -0.18, ry: -0.08, rz: -0.18 });
-          const strikePose = offsetPose(idlePose, { x: -0.34, y: -0.24, z: -0.2, rx: 0.54, ry: -0.66, rz: -1.08 });
+          const windupPose = offsetPose(idlePose, { x: 0.08, y: 0.1, z: -0.08, rx: -0.12, ry: -0.06, rz: -0.08 });
+          const strikePose = offsetPose(idlePose, { x: -0.22, y: -0.2, z: -0.18, rx: 0.34, ry: -0.42, rz: 0.42 });
           const recoveryPose = recover > 0 ? lerpPose(strikePose, idlePose, recover) : strikePose;
           const attackPose = t < 0.22 ? lerpPose(idlePose, windupPose, windup) : lerpPose(windupPose, recoveryPose, swing);
           applyPose(this.glbWeapon, attackPose);
