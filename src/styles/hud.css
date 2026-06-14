@@ -847,3 +847,52 @@
   position: relative;
   z-index: 1;
 }
+
+.first-person-offhand {
+  position: absolute;
+  left: 6%;
+  bottom: -2%;
+  z-index: 2;
+  width: min(22%, 112px);
+  height: min(58%, 310px);
+  pointer-events: none;
+  transform: rotate(9deg);
+  transform-origin: 44% 92%;
+  filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.72));
+}
+
+.first-person-offhand[hidden] {
+  display: none;
+}
+
+.first-person-offhand--torch::before {
+  content: "";
+  position: absolute;
+  left: 44%;
+  bottom: 0;
+  width: 18%;
+  height: 76%;
+  border-radius: 999px 999px 8px 8px;
+  background: linear-gradient(90deg, #2b170e, #6f3f20 45%, #22120b);
+  box-shadow: inset 3px 0 0 rgba(255, 198, 104, 0.12);
+}
+
+.first-person-offhand--torch::after {
+  content: "";
+  position: absolute;
+  left: 29%;
+  bottom: 70%;
+  width: 48%;
+  height: 24%;
+  border-radius: 48% 52% 46% 54%;
+  background:
+    radial-gradient(circle at 50% 62%, #fff2a8 0 16%, #ffbc47 17% 42%, rgba(242, 79, 17, 0.88) 43% 68%, transparent 70%),
+    radial-gradient(circle, rgba(255, 145, 47, 0.42), transparent 68%);
+  box-shadow: 0 0 24px rgba(255, 163, 64, 0.82), 0 0 54px rgba(255, 110, 20, 0.36);
+  animation: torch-fpv-flicker 1.15s ease-in-out infinite alternate;
+}
+
+@keyframes torch-fpv-flicker {
+  from { transform: translateY(0) scale(0.96) rotate(-2deg); opacity: 0.86; }
+  to { transform: translateY(-3px) scale(1.04) rotate(3deg); opacity: 1; }
+}

@@ -1797,8 +1797,22 @@ export class DungeonScene {
     this.torchFlickerController.registerFromObject(runtime.group);
     this.dungeonDebugRenderer = new DungeonDebugRenderer({ scene: this.scene, runtime });
     this.addCompiledLocationEnemies(runtime);
+    if (runtime.locationId === 'sumerian-sun-palace-district-v1') this.addSumerianSunPalaceTorchChest();
   }
 
+
+
+  addSumerianSunPalaceTorchChest() {
+    const id = 'sumerian_sun_palace_spawn_torch_chest';
+    const position = { x: 46.6, y: 0, z: 4.2 };
+    const opened = this.gameState?.hasOpenedFieldChest?.(id) ?? false;
+    const group = this.createFieldChestGroup(opened);
+    group.name = `${id}-visual`;
+    group.position.set(position.x, position.y, position.z);
+    group.rotation.y = Math.PI * 0.5;
+    this.scene.add(group);
+    this.fieldSurvivalObjects.set(id, group);
+  }
 
   addCompiledLocationEnemies(runtime = this.compiledLocationRuntime) {
     if (!runtime || runtime.locationId === 'black-grass-temple') return;

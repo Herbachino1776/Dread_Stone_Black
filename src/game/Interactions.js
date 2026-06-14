@@ -196,6 +196,10 @@ export class Interactions {
       return this.useEquipmentPickup(interaction);
     }
 
+    if (interaction.type === 'fieldSurvivalChest') {
+      return this.useFieldSurvivalChest(interaction);
+    }
+
     if (interaction.type === 'southReliquary') {
       return this.useSouthReliquary(interaction);
     }
@@ -318,6 +322,9 @@ export class Interactions {
     this.dungeon.gameState?.addFieldItem?.(interaction.itemId);
     if (interaction.itemId === 'wood_axe') {
       this.equipmentRuntime?.acquireItem?.('wood_axe', { source: interaction.id, tags: ['weapon', 'axe', 'woodcutting', 'field-survival'] });
+    }
+    if (interaction.itemId === 'torch') {
+      this.equipmentRuntime?.acquireItem?.('torch', { source: interaction.id, tags: ['offhand', 'torch', 'light', 'dungeon-utility'] });
     }
     this.openFieldChestVisual(interaction.id);
     interaction.hint = interaction.repeatHint ?? 'The chest lies open and empty.';

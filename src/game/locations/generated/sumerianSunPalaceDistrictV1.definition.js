@@ -393,7 +393,23 @@ export const sumerianSunPalaceDistrictV1Definition = Object.freeze({
     },
   ],
 
-  interactions: [],
+  interactions: [
+    {
+      id: 'sumerian_sun_palace_spawn_torch_chest',
+      label: 'Torch Chest',
+      roomId: 'G01',
+      target: { x: 46.6, y: 1, z: 4.2 },
+      range: 3.4,
+      hint: 'Open chest',
+      message: 'Chest opened.',
+      type: 'fieldSurvivalChest',
+      itemId: 'torch',
+      acquiredMessage: 'Torch Acquired.',
+      repeatHint: 'Empty.',
+      repeatMessage: 'Empty.',
+      userData: { note: 'Left-hand Torch chest, placed west of the player spawn in the South Gate Throat.' },
+    },
+  ],
 
   userData: {
     authoredBy: 'ChatGPT direct architecture pass',

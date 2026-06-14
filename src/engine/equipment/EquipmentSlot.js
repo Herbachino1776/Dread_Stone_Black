@@ -3,6 +3,7 @@ export const EQUIPMENT_SLOTS = Object.freeze({
   armor: 'armor',
   quickItem: 'quickItem',
   tool: 'tool',
+  offhand: 'offhand',
 });
 
 export function isKnownEquipmentSlot(slotId) {

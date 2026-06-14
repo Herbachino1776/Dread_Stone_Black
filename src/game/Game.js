@@ -72,9 +72,13 @@ export class Game {
       startingEquipment: this.gameState.getEquipmentSnapshot() ?? startingEquipment,
     });
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, () => this.saveEquipmentState());
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.saveEquipmentState());
+    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, ({ slotId, itemId }) => {
+      this.saveEquipmentState();
+      if (slotId === 'offhand') this.setPlayerTorchEnabled(itemId === 'torch');
+    });
     this.dungeon = new DungeonScene({ area, fieldSpawn, gameState: this.gameState });
     this.scene = this.dungeon.build();
+    this.scene.add(this.camera);
     this.locationId = this.resolveLocationId(this.dungeon.area);
     this.objectiveRuntime = this.createObjectiveRuntime();
     this.registerCurrentObjectivePack();
@@ -104,12 +108,14 @@ export class Game {
       objectiveRuntime: this.objectiveRuntime,
       enabled: objectiveDebugUiEnabled,
     });
+    this.createPlayerTorchLight();
     this.fpvEquipmentRenderer = new FPVEquipmentRenderer({
       root: this.app,
       armsOverlay: this.armsOverlay,
       equipmentRuntime: this.equipmentRuntime,
     });
     this.dungeon.fpvEquipmentRenderer = this.fpvEquipmentRenderer;
+    this.setPlayerTorchEnabled(this.equipmentRuntime.getEquippedOffhandId?.() === 'torch');
     this.controls = new MobileControls(this.app);
     this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
     this.interactions = new Interactions({
@@ -277,6 +283,34 @@ export class Game {
     }, 260);
   }
 
+
+  createPlayerTorchLight() {
+    this.playerTorch = new THREE.Group();
+    this.playerTorch.position.set(-0.42, -0.28, -0.82);
+    this.playerTorchPointLight = new THREE.PointLight(0xffaa55, 4.2, 24, 1.65);
+    this.playerTorchPointLight.castShadow = false;
+    this.playerTorchPointLight.position.set(-0.18, -0.08, -0.18);
+    this.playerTorchSpotLight = new THREE.SpotLight(0xffb36a, 2.6, 32, 0.68, 0.72, 1.65);
+    this.playerTorchSpotLight.castShadow = false;
+    this.playerTorchSpotLight.position.set(-0.1, -0.08, -0.12);
+    this.playerTorchSpotLight.target.position.set(-0.25, -0.16, -6);
+    this.playerTorch.add(this.playerTorchPointLight, this.playerTorchSpotLight, this.playerTorchSpotLight.target);
+    this.playerTorch.visible = false;
+    this.camera.add(this.playerTorch);
+  }
+
+  setPlayerTorchEnabled(enabled) {
+    if (this.playerTorch) this.playerTorch.visible = Boolean(enabled);
+  }
+
+  updatePlayerTorchLight(deltaSeconds) {
+    if (!this.playerTorch?.visible) return;
+    this.playerTorchElapsed = (this.playerTorchElapsed ?? 0) + deltaSeconds;
+    const flicker = 0.94 + Math.sin(this.playerTorchElapsed * 7.1) * 0.035 + Math.sin(this.playerTorchElapsed * 13.7) * 0.025;
+    this.playerTorchPointLight.intensity = 4.2 * flicker;
+    this.playerTorchSpotLight.intensity = 2.6 * (0.96 + (flicker - 0.94) * 0.65);
+  }
+
   saveEquipmentState() {
     this.gameState.saveEquipmentSnapshot(this.equipmentRuntime.getSnapshot());
   }
@@ -315,6 +349,7 @@ export class Game {
             <p class="field-kit-status" data-hud="field-kit" aria-live="polite" hidden></p>
             <div class="first-person-arms" data-arms-overlay aria-hidden="true">
               <div class="first-person-arms__layer" data-arms-layer="base"></div>
+              <div class="first-person-offhand first-person-offhand--torch" data-fpv-offhand-layer hidden></div>
               <div class="first-person-weapon" data-fpv-equipment-layer hidden></div>
             </div>
             <div class="damage-flash" data-hud="damage" aria-hidden="true"></div>
@@ -391,6 +426,7 @@ export class Game {
     this.dungeon.update(deltaSeconds, this.player);
     this.combat.update(deltaSeconds);
     this.armsOverlay.update(deltaSeconds);
+    this.updatePlayerTorchLight(deltaSeconds);
     this.updateObjectiveLocationTracking(deltaSeconds);
     this.interactions.updateHint();
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;

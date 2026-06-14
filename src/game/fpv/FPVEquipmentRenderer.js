@@ -9,12 +9,15 @@ export class FPVEquipmentRenderer {
     this.armsOverlay = armsOverlay;
     this.equipmentRuntime = equipmentRuntime;
     this.weaponLayer = root.querySelector('[data-fpv-equipment-layer]');
+    this.offhandLayer = root.querySelector('[data-fpv-offhand-layer]');
     this.currentProfileId = null;
 
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, ({ weaponProfile }) => {
+    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, ({ weaponProfile, slotId, itemId }) => {
       this.setWeaponProfile(weaponProfile);
+      if (slotId === 'offhand') this.setOffhand(itemId);
     });
     this.setWeaponProfile(this.equipmentRuntime.getEquippedWeaponProfile());
+    this.setOffhand(this.equipmentRuntime.getEquippedOffhandId?.());
   }
 
   setWeaponProfile(weaponProfile) {
@@ -46,6 +49,14 @@ export class FPVEquipmentRenderer {
       this.weaponLayer.classList.add('first-person-weapon--wood-axe');
       this.weaponLayer.title = 'Wood Axe FPV placeholder';
     }
+  }
+
+  setOffhand(itemId) {
+    if (!this.offhandLayer) return;
+    const equippedTorch = itemId === 'torch';
+    this.offhandLayer.hidden = !equippedTorch;
+    this.offhandLayer.dataset.offhandId = equippedTorch ? 'torch' : '';
+    this.offhandLayer.title = equippedTorch ? 'Torch FPV placeholder' : '';
   }
 
   playAttack(weaponProfile) {

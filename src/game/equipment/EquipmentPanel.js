@@ -5,6 +5,7 @@ const POCKETS = Object.freeze([
   { id: 'weapons', label: 'Weapons' },
   { id: 'items', label: 'Items' },
   { id: 'keyItems', label: 'Key Items' },
+  { id: 'offhand', label: 'Offhand' },
 ]);
 
 export class EquipmentPanel {
@@ -72,7 +73,8 @@ export class EquipmentPanel {
     this.inventoryList.innerHTML = '';
     if (this.activePocket === 'weapons') return this.renderWeapons(equippedWeapon);
     if (this.activePocket === 'items') return this.renderItems();
-    return this.renderKeyItems();
+    if (this.activePocket === 'keyItems') return this.renderKeyItems();
+    return this.renderOffhand();
   }
 
   renderWeapons(equippedWeapon) {
@@ -112,6 +114,28 @@ export class EquipmentPanel {
       }));
     } else {
       this.renderEmpty('No items.');
+    }
+  }
+
+  renderOffhand() {
+    if (this.gameState?.hasFieldOffhandItem?.('torch') || this.equipmentRuntime?.hasItem?.('torch')) {
+      const equippedOffhand = this.equipmentRuntime?.getEquippedOffhandId?.() ?? this.gameState?.getEquippedFieldOffhand?.();
+      this.inventoryList.append(this.createRow({
+        id: 'torch',
+        name: 'Torch',
+        stats: equippedOffhand === 'torch' ? 'Equipped' : 'Offhand',
+        description: 'Left-hand utility light.',
+        pressed: equippedOffhand === 'torch',
+        onSelect: () => {
+          const isEquipped = this.equipmentRuntime?.getEquippedOffhandId?.() === 'torch';
+          if (this.equipmentRuntime?.equip(EQUIPMENT_SLOTS.offhand, isEquipped ? null : 'torch')) {
+            this.gameState?.equipFieldOffhand?.(isEquipped ? null : 'torch');
+            window.dispatchEvent(new CustomEvent('field-offhand-equipped-changed'));
+          }
+        },
+      }));
+    } else {
+      this.renderEmpty('No offhand gear.');
     }
   }
 
