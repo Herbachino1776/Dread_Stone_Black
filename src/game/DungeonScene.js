@@ -56,6 +56,20 @@ const TEXTURE_PATHS = {
   fieldGrass: './assets/textures/outdoor/field_dead_grass_01.png',
 };
 
+const FIELD_FOLIAGE_SPRITES = Object.freeze([
+  { id: 'billboard_tree_windswept_field_01', path: './assets/sprites/foliage/billboard_tree_windswept_field_01.png', type: 'tree', width: 0.78 },
+  { id: 'billboard_bush_ritual_seedpod_01', path: './assets/sprites/foliage/billboard_bush_ritual_seedpod_01.png', type: 'bush', width: 0.98 },
+  { id: 'billboard_bush_dead_scrub_01', path: './assets/sprites/foliage/billboard_bush_dead_scrub_01.png', type: 'bush', width: 1.12 },
+  { id: 'billboard_bush_dark_bramble_01', path: './assets/sprites/foliage/billboard_bush_dark_bramble_01.png', type: 'bush', width: 1.08 },
+  { id: 'billboard_tree_pale_ashen_willow_01', path: './assets/sprites/foliage/billboard_tree_pale_ashen_willow_01.png', type: 'tree', width: 0.86 },
+  { id: 'billboard_tree_black_cypress_01', path: './assets/sprites/foliage/billboard_tree_black_cypress_01.png', type: 'tree', width: 0.72 },
+  { id: 'billboard_tree_gnarled_ritual_01', path: './assets/sprites/foliage/billboard_tree_gnarled_ritual_01.png', type: 'tree', width: 0.92 },
+  { id: 'billboard_tree_thorn_crowned_01', path: './assets/sprites/foliage/billboard_tree_thorn_crowned_01.png', type: 'tree', width: 0.88 },
+]);
+const FIELD_FOLIAGE_INSTANCE_TARGET = 156;
+const FIELD_FOLIAGE_ALPHA_TEST = 0.35;
+const FIELD_FOLIAGE_VISIBLE_DISTANCE = 185;
+const FIELD_FOLIAGE_VISIBLE_DISTANCE_SQ = FIELD_FOLIAGE_VISIBLE_DISTANCE * FIELD_FOLIAGE_VISIBLE_DISTANCE;
 const FIELD_SIZE = 400;
 const FIELD_GRASS_REPEAT = [50, 50];
 const OUTDOOR_DAWN_SKY_COLOR = 0x64727d;
@@ -89,6 +103,17 @@ const FIELD_KEEPER_HOUSE_ENTRANCE_TARGET = new THREE.Vector3(142, 1, -77);
 const DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET = new THREE.Vector3(154, 1, 110);
 const SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET = new THREE.Vector3(122, 1, 149);
 const SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET = new THREE.Vector3(96, 1, 149);
+const FIELD_FOLIAGE_CLEAR_ZONES = Object.freeze([
+  { x: FIELD_PLAYER_START.x, z: FIELD_PLAYER_START.z, radius: 22 },
+  { x: 0, z: -8, radius: 18 },
+  { x: -60, z: -107, radius: 24 },
+  { x: BGT_EXTERIOR_ENTRANCE_TARGET.x, z: BGT_EXTERIOR_ENTRANCE_TARGET.z, radius: 28 },
+  { x: FIELD_KEEPER_HOUSE_ENTRANCE_TARGET.x, z: FIELD_KEEPER_HOUSE_ENTRANCE_TARGET.z, radius: 24 },
+  { x: DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET.x, z: DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET.z, radius: 18 },
+  { x: SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET.x, z: SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET.z, radius: 18 },
+  { x: SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET.x, z: SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET.z, radius: 18 },
+  { x: 35, z: 124, radius: 22 },
+]);
 function getReliquaryFieldColliders() {
   return getLocationDefinition('reliquary-field')?.blockers ?? [];
 }
@@ -205,6 +230,8 @@ export class DungeonScene {
     this.outdoorInteractions = [];
     this.fieldShrineGroup = null;
     this.fieldShrineAnswerLight = null;
+    this.fieldFoliageGroup = null;
+    this.fieldFoliageBillboards = [];
     this.giantRamManFieldManifestation = null;
     this.giantRamManFieldManifestationLoading = false;
     this.reliquaryBlock = null;
@@ -472,6 +499,7 @@ export class DungeonScene {
     this.addOutdoorTerrain();
     this.addOutdoorBoundary();
     this.addReliquaryFieldStructures();
+    this.addReliquaryFieldFoliage();
     this.ensureGiantRamManFieldManifestation();
   }
 
@@ -568,8 +596,21 @@ export class DungeonScene {
     this.updateRamManNpcPatrol(deltaSeconds);
     this.updateBlackGrassFactionEnemies(deltaSeconds, player);
     this.updateSheepDemonEnemy(deltaSeconds, player);
+    this.updateReliquaryFieldFoliage(player);
     this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
     this.dungeonDebugRenderer?.update(player?.position);
+  }
+
+  updateReliquaryFieldFoliage(player = null) {
+    if (this.area !== 'field' || !player?.position || !this.fieldFoliageBillboards.length) return;
+
+    this.fieldFoliageBillboards.forEach((billboard) => {
+      const dx = player.position.x - billboard.position.x;
+      const dz = player.position.z - billboard.position.z;
+      billboard.visible = dx * dx + dz * dz <= FIELD_FOLIAGE_VISIBLE_DISTANCE_SQ;
+      if (!billboard.visible) return;
+      billboard.rotation.y = Math.atan2(dx, dz) + (billboard.userData.yawOffset ?? 0);
+    });
   }
 
   activateSouthReliquary() {
@@ -789,6 +830,157 @@ export class DungeonScene {
       const mesh = this.addBox({ ...boundary, material: boundaryMaterial, name: `${boundary.id}-invisible-solid-slice-boundary` });
       mesh.userData.collision = 'solid invisible boundary';
     });
+  }
+
+  createFieldFoliageRandom(seed = 0x5eedf011) {
+    let state = seed >>> 0;
+    return () => {
+      state = (state * 1664525 + 1013904223) >>> 0;
+      return state / 0x100000000;
+    };
+  }
+
+  isFieldFoliageSafePosition(x, z) {
+    if (z < -188 && Math.abs(x) < 34) return false;
+    if (Math.abs(x) < 12 && z > -185 && z < 18) return false;
+    if (x > -83 && x < -37 && z > -123 && z < -84) return false;
+    if (x > -196 && x < -165 && z > 4 && z < 48) return false;
+    if (x > 122 && x < 162 && z > -90 && z < -48) return false;
+    if (x > 80 && x < 164 && z > 132 && z < 160) return false;
+
+    return !FIELD_FOLIAGE_CLEAR_ZONES.some((zone) => {
+      const dx = x - zone.x;
+      const dz = z - zone.z;
+      return dx * dx + dz * dz < zone.radius * zone.radius;
+    });
+  }
+
+  createReliquaryFieldFoliagePlacements() {
+    const random = this.createFieldFoliageRandom();
+    const placements = [];
+    const pushPlacement = ({ x, z, zone, treeBias = 0.55, minScale = 1.6, maxScale = 6.8 }) => {
+      if (placements.length >= FIELD_FOLIAGE_INSTANCE_TARGET || !this.isFieldFoliageSafePosition(x, z)) return false;
+      const wantsTree = random() < treeBias;
+      const variants = FIELD_FOLIAGE_SPRITES.filter((sprite) => sprite.type === (wantsTree ? 'tree' : 'bush'));
+      const sprite = variants[Math.floor(random() * variants.length) % variants.length];
+      const scale = minScale + random() * (maxScale - minScale);
+      placements.push({
+        id: `field-foliage-${String(placements.length + 1).padStart(3, '0')}`,
+        spriteId: sprite.id,
+        x,
+        z,
+        y: Math.max(0.58, scale * 0.5 - 0.16),
+        scale,
+        width: sprite.width,
+        yawOffset: (random() - 0.5) * 0.36,
+        zone,
+      });
+      return true;
+    };
+
+    for (let i = 0; i < 82; i += 1) {
+      const side = i % 4;
+      const edgeJitter = random() * 28;
+      const x = side === 0 ? -188 + edgeJitter : side === 1 ? 188 - edgeJitter : -184 + random() * 368;
+      const z = side === 2 ? -188 + edgeJitter : side === 3 ? 188 - edgeJitter : -184 + random() * 368;
+      pushPlacement({ x, z, zone: 'border-forest-ring', treeBias: 0.78, minScale: 4.8, maxScale: 8.0 });
+    }
+
+    const clusterCenters = [
+      { x: -88, z: -128 }, { x: -94, z: -76 }, { x: -162, z: 70 }, { x: -130, z: 112 },
+      { x: 112, z: -112 }, { x: 176, z: -22 }, { x: 72, z: 88 }, { x: 18, z: 166 },
+    ];
+    clusterCenters.forEach((center, clusterIndex) => {
+      for (let i = 0; i < 7; i += 1) {
+        const angle = random() * Math.PI * 2;
+        const radius = 5 + random() * 23;
+        pushPlacement({
+          x: center.x + Math.cos(angle) * radius,
+          z: center.z + Math.sin(angle) * radius,
+          zone: clusterIndex < 2 ? 'crypt-approach-cluster' : 'wilderness-cluster',
+          treeBias: 0.62,
+          minScale: 2.2,
+          maxScale: 7.0,
+        });
+      }
+    });
+
+    for (let i = 0; i < 44; i += 1) {
+      pushPlacement({
+        x: -160 + random() * 330,
+        z: -156 + random() * 326,
+        zone: 'field-scatter',
+        treeBias: 0.34,
+        minScale: 1.2,
+        maxScale: 4.6,
+      });
+    }
+
+    let fillAttempts = 0;
+    while (placements.length < FIELD_FOLIAGE_INSTANCE_TARGET && fillAttempts < 600) {
+      fillAttempts += 1;
+      pushPlacement({
+        x: -186 + random() * 372,
+        z: -186 + random() * 372,
+        zone: 'field-scatter-fill',
+        treeBias: 0.48,
+        minScale: 1.4,
+        maxScale: 5.8,
+      });
+    }
+
+    return placements;
+  }
+
+  loadFoliageTexture(path) {
+    const texture = this.textureLoader.load(path);
+    texture.name = path;
+    texture.userData = { path, foliageBillboard: true };
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return texture;
+  }
+
+  addReliquaryFieldFoliage() {
+    const group = new THREE.Group();
+    group.name = `FIELD-FOLIAGE-rich-billboard-forest-${FIELD_FOLIAGE_INSTANCE_TARGET}-instances`;
+    group.userData = {
+      fieldOnly: true,
+      billboardCount: FIELD_FOLIAGE_INSTANCE_TARGET,
+      spriteCount: FIELD_FOLIAGE_SPRITES.length,
+      placementStrategy: 'seeded border forest ring, approach clusters, wilderness clusters, and path-safe scatter',
+      collision: 'visual only; no per-sprite blockers',
+    };
+
+    const geometry = new THREE.PlaneGeometry(1, 1);
+    const materials = new Map(FIELD_FOLIAGE_SPRITES.map((sprite) => {
+      const material = new THREE.MeshBasicMaterial({
+        map: this.loadFoliageTexture(sprite.path),
+        transparent: true,
+        alphaTest: FIELD_FOLIAGE_ALPHA_TEST,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+      });
+      material.name = `${sprite.id}-alpha-tested-billboard-material`;
+      return [sprite.id, material];
+    }));
+
+    this.fieldFoliageBillboards = this.createReliquaryFieldFoliagePlacements().map((placement) => {
+      const mesh = new THREE.Mesh(geometry, materials.get(placement.spriteId));
+      mesh.name = `${placement.id}-${placement.spriteId}-${placement.zone}`;
+      mesh.position.set(placement.x, placement.y, placement.z);
+      mesh.scale.set(placement.scale * placement.width, placement.scale, 1);
+      mesh.rotation.y = placement.yawOffset;
+      mesh.userData = { ...placement, billboard: true, collision: 'none' };
+      group.add(mesh);
+      return mesh;
+    });
+
+    this.fieldFoliageGroup = group;
+    this.scene.add(group);
   }
 
   addReliquaryFieldStructures() {
