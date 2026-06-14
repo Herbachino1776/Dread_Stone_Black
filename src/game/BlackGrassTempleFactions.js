@@ -633,7 +633,11 @@ class BlackGrassFactionEnemy {
   }
 
   update(deltaSeconds, context) {
-    this.animation?.mixers.forEach((mixer) => mixer.update(deltaSeconds));
+    const generatedRuntime = context?.generatedRuntime === true;
+    const updateTier = context?.updateTier ?? 'near';
+    const aiTickAllowed = context?.aiTickAllowed !== false;
+    const animationDelta = generatedRuntime && updateTier === 'sleep' ? 0 : deltaSeconds;
+    if (animationDelta > 0) this.animation?.mixers.forEach((mixer) => mixer.update(animationDelta));
     this.attackCooldown = Math.max(0, this.attackCooldown - deltaSeconds);
     this.devCombatLogElapsed += deltaSeconds;
     this.jumpAttackCooldown = Math.max(0, this.jumpAttackCooldown - deltaSeconds);
@@ -641,8 +645,18 @@ class BlackGrassFactionEnemy {
     this.awarenessReactionDelay = Math.max(0, this.awarenessReactionDelay - deltaSeconds);
     this.currentUpdateContext = context;
     this.steeringProbeTimer = Math.max(0, this.steeringProbeTimer - deltaSeconds);
-    this.decayBlockedSegmentCooldowns(deltaSeconds);
+    if (aiTickAllowed) this.decayBlockedSegmentCooldowns(deltaSeconds);
     if (!this.group || this.isRemoved) return;
+
+    if (generatedRuntime && !aiTickAllowed) {
+      this.group.userData.generatedAiLod = updateTier;
+      this.group.userData.generatedAiSkipped = true;
+      return;
+    }
+    if (generatedRuntime) {
+      this.group.userData.generatedAiLod = updateTier;
+      this.group.userData.generatedAiSkipped = false;
+    }
 
     if (this.behaviorState === 'dead') {
       this.corpseTimer -= deltaSeconds;
@@ -2015,12 +2029,34 @@ export class BlackGrassTempleFactionManager {
     this.initialWaveSpawned = true;
   }
 
-  update(deltaSeconds, playerPosition) {
+  update(deltaSeconds, playerPosition, options = {}) {
+    const generatedRuntime = options.generatedRuntime ?? null;
     const director = this.enableBattleDirector
       ? this.updateBattleDirector(deltaSeconds, playerPosition)
       : { zone: null, nearbyCount: this.enemies.length, combatPairs: 0, quietSeconds: 0 };
-    const context = { enemies: this.enemies, playerPosition, director };
-    this.enemies.forEach((enemy) => enemy.update(deltaSeconds, context));
+    const baseContext = { enemies: this.enemies, playerPosition, director, generatedRuntime: Boolean(generatedRuntime) };
+    const policy = generatedRuntime?.policy ?? null;
+    const lodEnabled = Boolean(generatedRuntime && policy?.generatedAiLod);
+    this.enemies.forEach((enemy, index) => {
+      if (!lodEnabled || !enemy.group || enemy.isRemoved || !enemy.isAlive) {
+        enemy.update(deltaSeconds, baseContext);
+        return;
+      }
+      const distance = playerPosition ? horizontalDistance(enemy.group.position, playerPosition) : Infinity;
+      const isCombatRelevant = enemy.playerRevengeTimer > 0
+        || enemy.behaviorState === 'attack_player_fallback'
+        || enemy.behaviorState === 'attack_enemy_faction'
+        || enemy.behaviorState === 'jump_attack_enemy_faction'
+        || enemy.currentTarget?.type === 'player';
+      let updateTier = 'sleep';
+      if (isCombatRelevant || distance <= policy.aiNearRadius) updateTier = 'near';
+      else if (distance <= policy.aiMidRadius) updateTier = 'mid';
+      const interval = updateTier === 'near' ? 0 : updateTier === 'mid' ? 0.16 : 0.5;
+      enemy.generatedAiElapsed = (enemy.generatedAiElapsed ?? (index % 3) * 0.055) + deltaSeconds;
+      const aiTickAllowed = updateTier === 'near' || enemy.generatedAiElapsed >= interval;
+      if (aiTickAllowed) enemy.generatedAiElapsed = 0;
+      enemy.update(deltaSeconds, { ...baseContext, updateTier, aiTickAllowed });
+    });
     this.updateDevStatus(deltaSeconds);
 
     if (!this.enableRespawns) {

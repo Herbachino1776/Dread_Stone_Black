@@ -76,11 +76,14 @@ const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_START = new THREE.Vector3(96,
 const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
-const GENERATED_ENEMY_ACTIVE_CAP = 5;
-const GENERATED_ENEMY_INITIAL_CAP = 4;
-const GENERATED_ENEMY_WAKE_RADIUS = 28;
-const GENERATED_ENEMY_SLEEP_RADIUS = 42;
-const GENERATED_ENEMY_RESPAWN_COOLDOWN_MS = 8000;
+const GENERATED_ENEMY_ACTIVE_CAP = 3;
+const GENERATED_ENEMY_INITIAL_CAP = 2;
+const GENERATED_ENEMY_WAKE_RADIUS = 20;
+const GENERATED_ENEMY_SLEEP_RADIUS = 38;
+const GENERATED_ENEMY_AI_NEAR_RADIUS = 18;
+const GENERATED_ENEMY_AI_MID_RADIUS = 30;
+const GENERATED_ENEMY_RESPAWN_COOLDOWN_MS = 15000;
+const GENERATED_ENEMY_MAX_WAKE_PER_SECOND = 1;
 const BGT_EXTERIOR_ENTRANCE_TARGET = new THREE.Vector3(-184, 1, 31);
 const FIELD_KEEPER_HOUSE_ENTRANCE_TARGET = new THREE.Vector3(142, 1, -77);
 const DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET = new THREE.Vector3(154, 1, 110);
@@ -1262,6 +1265,8 @@ export class DungeonScene {
       anchors: factionAnchors,
       activeAnchorIds: new Set(),
       sleepingUntil: new Map(),
+      lastWakeAt: 0,
+      devStats: { wakeCount: 0, sleepCount: 0, elapsedSeconds: 0 },
       policy,
     };
     const initialPlayerPosition = this.playerSpawn?.spawnPosition ?? factionAnchors[0]?.position;
@@ -1278,6 +1283,10 @@ export class DungeonScene {
       wakeRadius: Math.max(1, Number(policy.wakeRadius ?? GENERATED_ENEMY_WAKE_RADIUS)),
       sleepRadius: Math.max(1, Number(policy.sleepRadius ?? GENERATED_ENEMY_SLEEP_RADIUS)),
       respawnCooldownMs: Math.max(0, Number(policy.respawnCooldownMs ?? GENERATED_ENEMY_RESPAWN_COOLDOWN_MS)),
+      maxWakePerSecond: Math.max(0.1, Number(policy.maxWakePerSecond ?? GENERATED_ENEMY_MAX_WAKE_PER_SECOND)),
+      generatedAiLod: policy.generatedAiLod !== false,
+      aiNearRadius: Math.max(1, Number(policy.aiNearRadius ?? GENERATED_ENEMY_AI_NEAR_RADIUS)),
+      aiMidRadius: Math.max(1, Number(policy.aiMidRadius ?? GENERATED_ENEMY_AI_MID_RADIUS)),
     };
   }
 
@@ -1304,7 +1313,7 @@ export class DungeonScene {
 
   updateGeneratedEnemyActivation(playerPosition) {
     if (!this.generatedEnemyRuntime || !this.blackGrassFactionManager || !playerPosition) return;
-    const { activeAnchorIds, sleepingUntil, policy } = this.generatedEnemyRuntime;
+    const { activeAnchorIds, sleepingUntil, policy, devStats } = this.generatedEnemyRuntime;
     const now = Date.now();
 
     this.blackGrassFactionManager.enemies.forEach((enemy) => {
@@ -1319,11 +1328,20 @@ export class DungeonScene {
         enemy.hideCorpse();
         activeAnchorIds.delete(anchorId);
         sleepingUntil.set(anchorId, now + policy.respawnCooldownMs);
+        if (devStats) devStats.sleepCount += 1;
       }
     });
 
     this.blackGrassFactionManager.enemies = this.blackGrassFactionManager.enemies.filter((enemy) => !enemy.isRemoved || enemy.isAlive);
-    this.spawnGeneratedEnemyAnchors(this.selectGeneratedEnemyWakeAnchors(playerPosition, policy.activeEnemyCap));
+    const wakeIntervalMs = 1000 / policy.maxWakePerSecond;
+    if (now - (this.generatedEnemyRuntime.lastWakeAt ?? 0) >= wakeIntervalMs) {
+      const anchors = this.selectGeneratedEnemyWakeAnchors(playerPosition, 1);
+      if (anchors.length) {
+        this.spawnGeneratedEnemyAnchors(anchors);
+        this.generatedEnemyRuntime.lastWakeAt = now;
+        if (devStats) devStats.wakeCount += anchors.length;
+      }
+    }
   }
 
   createRuntimeEnemyAnchor(spawn, runtime) {
@@ -2048,7 +2066,7 @@ export class DungeonScene {
   updateBlackGrassFactionEnemies(deltaSeconds, player) {
     if (!this.blackGrassFactionManager || !player?.position) return;
     this.updateGeneratedEnemyActivation(player.position);
-    this.blackGrassFactionManager.update(deltaSeconds, player.position);
+    this.blackGrassFactionManager.update(deltaSeconds, player.position, { generatedRuntime: this.generatedEnemyRuntime });
   }
 
   updateSheepDemonEnemy(deltaSeconds, player) {
