@@ -76,8 +76,8 @@ export const reliquaryFieldDefinition = Object.freeze({
     'Partial authoring definition only. The live field still uses DungeonScene outdoor field builders.',
     'This captures bounds, return spawns, and transition metadata so future field migration has stable ids.',
   ],
-  fog: { color: 0x717a80, near: 38, far: 215 },
-  lighting: { background: 0x64727d },
+  fog: { color: 0x8a8170, near: 42, far: 335 },
+  lighting: { background: 0x4d5660 },
   textures: {
     fieldGrass: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [50, 50] },
     wall: { path: './assets/textures/wall_black_stone_01.png' },

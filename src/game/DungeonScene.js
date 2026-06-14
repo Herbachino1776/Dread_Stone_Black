@@ -99,8 +99,15 @@ const FIELD_FOLIAGE_VISIBLE_DISTANCE_SQ = FIELD_FOLIAGE_VISIBLE_DISTANCE * FIELD
 const FIELD_REDWOOD_VISIBLE_DISTANCE_SQ = FIELD_REDWOOD_VISIBLE_DISTANCE * FIELD_REDWOOD_VISIBLE_DISTANCE;
 const FIELD_SIZE = 400;
 const FIELD_GRASS_REPEAT = [50, 50];
-const OUTDOOR_DAWN_SKY_COLOR = 0x64727d;
-const OUTDOOR_DAWN_FOG_COLOR = 0x717a80;
+const OUTDOOR_DAWN_SKY_COLOR = 0x4d5660;
+const OUTDOOR_DAWN_FOG_COLOR = 0x8a8170;
+const OUTDOOR_FOG_NEAR = 42;
+const OUTDOOR_FOG_FAR = 335;
+const FIELD_SKYDOME_RADIUS = 620;
+const FIELD_HORIZON_RIDGE_RADIUS = 284;
+const FIELD_HORIZON_RIDGE_SEGMENTS = 96;
+const FIELD_HORIZON_FOREST_RADIUS = 242;
+const FIELD_HORIZON_FOREST_COUNT = 88;
 const FIELD_PLAYER_START = new THREE.Vector3(0, 1.55, -175);
 const FIELD_PLAYER_YAW = 0;
 const FIELD_CRYPT_A_RETURN_START = new THREE.Vector3(-60, 1.55, -112);
@@ -529,9 +536,11 @@ export class DungeonScene {
 
   buildOutdoorField() {
     this.scene.background = new THREE.Color(OUTDOOR_DAWN_SKY_COLOR);
-    this.scene.fog = new THREE.Fog(OUTDOOR_DAWN_FOG_COLOR, 38, 215);
+    this.scene.fog = new THREE.Fog(OUTDOOR_DAWN_FOG_COLOR, OUTDOOR_FOG_NEAR, OUTDOOR_FOG_FAR);
     this.addOutdoorLights();
+    this.addReliquaryFieldSkyDome();
     this.addOutdoorTerrain();
+    this.addReliquaryFieldHorizonSystem();
     this.addOutdoorBoundary();
     this.addReliquaryFieldStructures();
     this.addReliquaryFieldFoliage();
@@ -826,6 +835,167 @@ export class DungeonScene {
     tombMouthFill.name = 'outdoor-muted-warm-crypt-threshold-fill';
     tombMouthFill.position.set(0, 3.2, -25);
     this.scene.add(tombMouthFill);
+  }
+
+
+  addReliquaryFieldSkyDome() {
+    const skyUniforms = {
+      upperColor: { value: new THREE.Color(0x252b33) },
+      midColor: { value: new THREE.Color(0x596065) },
+      horizonColor: { value: new THREE.Color(0x9a8662) },
+      groundHazeColor: { value: new THREE.Color(0x6f6758) },
+    };
+    const skyMaterial = new THREE.ShaderMaterial({
+      name: 'FIELD-SKYDOME-haunted-dawn-vertical-gradient-material',
+      uniforms: skyUniforms,
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPosition.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPosition;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vWorldPosition;
+        uniform vec3 upperColor;
+        uniform vec3 midColor;
+        uniform vec3 horizonColor;
+        uniform vec3 groundHazeColor;
+        void main() {
+          vec3 dir = normalize(vWorldPosition);
+          float vertical = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+          float horizon = 1.0 - smoothstep(0.48, 0.68, vertical);
+          vec3 dawn = mix(horizonColor, midColor, smoothstep(0.46, 0.74, vertical));
+          vec3 sky = mix(dawn, upperColor, smoothstep(0.62, 1.0, vertical));
+          sky = mix(sky, groundHazeColor, horizon * 0.22);
+          gl_FragColor = vec4(sky, 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+      depthWrite: false,
+      depthTest: false,
+      fog: false,
+    });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(FIELD_SKYDOME_RADIUS, 32, 16), skyMaterial);
+    dome.name = 'FIELD-SKYDOME-haunted-dawn-dust-horizon-gradient';
+    dome.renderOrder = -1000;
+    dome.userData = {
+      fieldOnly: true,
+      visualOnly: true,
+      purpose: 'Replaces flat gray outdoor void with a cheap haunted dawn gradient and warm dusty horizon band.',
+      collision: 'none',
+    };
+    this.scene.add(dome);
+  }
+
+  addReliquaryFieldHorizonSystem() {
+    const horizonGroup = new THREE.Group();
+    horizonGroup.name = 'FIELD-HORIZON-layered-world-edge-ridge-forest-haze-system';
+    horizonGroup.userData = {
+      fieldOnly: true,
+      visualOnly: true,
+      collision: 'none',
+      performance: 'static low-poly ridge mesh plus a fixed count of non-interactive distant billboard silhouettes; no shadows, colliders, particles, or per-frame work',
+    };
+
+    horizonGroup.add(this.createReliquaryFieldRidgeRing());
+    horizonGroup.add(this.createReliquaryFieldDistantForestBand());
+    horizonGroup.add(this.createReliquaryFieldRuinSilhouettes());
+    this.scene.add(horizonGroup);
+  }
+
+  createReliquaryFieldRidgeRing() {
+    const vertices = [];
+    const indices = [];
+    const color = new THREE.Color();
+    const colors = [];
+    const pushVertex = (x, y, z, hex) => {
+      vertices.push(x, y, z);
+      color.setHex(hex);
+      colors.push(color.r, color.g, color.b);
+      return (vertices.length / 3) - 1;
+    };
+
+    for (let i = 0; i <= FIELD_HORIZON_RIDGE_SEGMENTS; i += 1) {
+      const t = i / FIELD_HORIZON_RIDGE_SEGMENTS;
+      const angle = t * Math.PI * 2;
+      const wave = Math.sin(angle * 3.0 + 0.5) * 6 + Math.sin(angle * 7.0) * 4 + Math.sin(angle * 13.0 + 1.7) * 2.5;
+      const radius = FIELD_HORIZON_RIDGE_RADIUS + Math.sin(angle * 5.0) * 12 + Math.sin(angle * 11.0 + 0.4) * 5;
+      const baseY = -3.6 + Math.sin(angle * 4.0) * 0.8;
+      const crestY = 12 + wave + (Math.sin(angle - 0.4) > 0.78 ? 8 : 0);
+      const innerBase = pushVertex(Math.cos(angle) * (radius - 18), baseY, Math.sin(angle) * (radius - 18), 0x2a241d);
+      const crest = pushVertex(Math.cos(angle) * radius, crestY, Math.sin(angle) * radius, 0x171412);
+      const outerBase = pushVertex(Math.cos(angle) * (radius + 20), baseY - 1.2, Math.sin(angle) * (radius + 20), 0x3b342b);
+      if (i < FIELD_HORIZON_RIDGE_SEGMENTS) {
+        const n = i * 3;
+        indices.push(n, n + 1, n + 3, n + 1, n + 4, n + 3, n + 1, n + 2, n + 4, n + 2, n + 5, n + 4);
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    const material = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true, side: THREE.DoubleSide });
+    material.name = 'FIELD-HORIZON-broken-black-earth-ridge-fogged-basic-material';
+    const ridge = new THREE.Mesh(geometry, material);
+    ridge.name = 'FIELD-HORIZON-distant-broken-ridge-ring-visual-only';
+    ridge.userData = { collision: 'none', visualOnly: true, radius: FIELD_HORIZON_RIDGE_RADIUS };
+    return ridge;
+  }
+
+  createReliquaryFieldDistantForestBand() {
+    const group = new THREE.Group();
+    group.name = `FIELD-HORIZON-distant-redwood-lod-strip-${FIELD_HORIZON_FOREST_COUNT}-billboards`;
+    const geometry = new THREE.PlaneGeometry(1, 1);
+    const materials = FIELD_REDWOOD_SPRITES.map((sprite) => new THREE.MeshBasicMaterial({
+      map: this.loadFoliageTexture(sprite.path),
+      color: 0x2c3028,
+      transparent: true,
+      opacity: 0.72,
+      alphaTest: 0.42,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      fog: true,
+      toneMapped: false,
+    }));
+    materials.forEach((material, index) => { material.name = `${FIELD_REDWOOD_SPRITES[index].id}-distant-haze-lod-material`; });
+
+    for (let i = 0; i < FIELD_HORIZON_FOREST_COUNT; i += 1) {
+      const angle = (i / FIELD_HORIZON_FOREST_COUNT) * Math.PI * 2;
+      const radius = FIELD_HORIZON_FOREST_RADIUS + Math.sin(angle * 9.0) * 10 + ((i % 5) - 2) * 2.5;
+      const height = 22 + (i % 7) * 2.1 + Math.sin(angle * 6.0) * 4;
+      const width = height * (0.32 + (i % 3) * 0.035);
+      const mesh = new THREE.Mesh(geometry, materials[i % materials.length]);
+      mesh.name = `FIELD-HORIZON-redwood-silhouette-lod-${String(i + 1).padStart(3, '0')}`;
+      mesh.position.set(Math.cos(angle) * radius, height * 0.5 - 2.5, Math.sin(angle) * radius);
+      mesh.scale.set(width, height, 1);
+      mesh.rotation.y = -angle + Math.PI / 2 + (((i % 4) - 1.5) * 0.05);
+      mesh.userData = { collision: 'none', visualOnly: true, harvestable: false, distantHorizonLod: true };
+      group.add(mesh);
+    }
+    return group;
+  }
+
+  createReliquaryFieldRuinSilhouettes() {
+    const group = new THREE.Group();
+    group.name = 'FIELD-HORIZON-sparse-broken-ritual-ruin-silhouettes';
+    const material = new THREE.MeshBasicMaterial({ color: 0x181411, fog: true });
+    material.name = 'FIELD-HORIZON-distant-ruin-silhouette-material';
+    [-2.55, -0.78, 0.42, 1.88, 2.72].forEach((angle, index) => {
+      const radius = FIELD_HORIZON_RIDGE_RADIUS - 6 + (index % 2) * 10;
+      const height = 10 + index * 1.6;
+      const ruin = new THREE.Mesh(new THREE.BoxGeometry(3.2 + index * 0.5, height, 2.5), material);
+      ruin.name = `FIELD-HORIZON-broken-monolith-silhouette-${String(index + 1).padStart(2, '0')}`;
+      ruin.position.set(Math.cos(angle) * radius, height * 0.5 - 1.8, Math.sin(angle) * radius);
+      ruin.rotation.y = -angle + 0.25;
+      ruin.rotation.z = (index % 2 === 0 ? -0.1 : 0.08);
+      ruin.userData = { collision: 'none', visualOnly: true };
+      group.add(ruin);
+    });
+    return group;
   }
 
   addOutdoorTerrain() {
