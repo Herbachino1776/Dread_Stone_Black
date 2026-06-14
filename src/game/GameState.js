@@ -4,8 +4,17 @@ const EQUIPMENT_STATE_KEY = 'dreadStoneBlack.equipmentState';
 const OBJECTIVE_STATE_KEY = 'dreadStoneBlack.objectiveState';
 const RUSTED_SWORD_CHEST_OPENED_KEY = 'dreadStoneBlack.blackGrassTemple.rustedSwordChestOpened';
 const BLACK_GRASS_TEMPLE_ALTAR_ACTIVATED_KEY = 'dreadStoneBlack.blackGrassTemple.altarActivated';
+const FIELD_SURVIVAL_STATE_KEY = 'dreadStoneBlack.reliquaryField.survivalState';
 const RUSTED_SWORD_ITEM_ID = 'rusted_sword';
 const RUSTED_SWORD_CHEST_INTERACTION_ID = 'BGT_INT_RUSTED_SWORD_CHEST';
+
+const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
+  inventory: { field_axe: false, flint_stick: false, wood: 0 },
+  campfireBuilt: false,
+  campfirePosition: null,
+  openedChests: {},
+  harvestedTrees: {},
+});
 
 export class GameState {
   static resetAllProgress(storage = window.localStorage) {
@@ -33,6 +42,7 @@ export class GameState {
       || this.inferRustedSwordChestOpenedFromObjectives();
     this.blackGrassTempleAltarActivated = this.readFlag(BLACK_GRASS_TEMPLE_ALTAR_ACTIVATED_KEY, false)
       || this.inferBlackGrassTempleAltarActivatedFromObjectives();
+    this.fieldSurvivalState = this.repairFieldSurvivalState(this.readJson(FIELD_SURVIVAL_STATE_KEY, null));
     if (this.rustedSwordChestOpened) {
       this.writeFlag(RUSTED_SWORD_CHEST_OPENED_KEY, true);
     }
@@ -95,6 +105,93 @@ export class GameState {
     this.rustedSwordChestOpened = true;
     this.writeFlag(RUSTED_SWORD_CHEST_OPENED_KEY, true);
     return true;
+  }
+
+  getFieldSurvivalSnapshot() {
+    return this.repairFieldSurvivalState(this.fieldSurvivalState);
+  }
+
+  hasFieldItem(itemId) {
+    return Boolean(this.fieldSurvivalState.inventory?.[itemId]);
+  }
+
+  getFieldItemCount(itemId) {
+    const value = this.fieldSurvivalState.inventory?.[itemId];
+    return Number.isFinite(value) ? value : (value ? 1 : 0);
+  }
+
+  addFieldItem(itemId, amount = 1) {
+    if (itemId === 'wood') {
+      this.fieldSurvivalState.inventory.wood = Math.max(0, this.getFieldItemCount('wood') + amount);
+    } else {
+      this.fieldSurvivalState.inventory[itemId] = true;
+    }
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  consumeFieldItems(cost = {}) {
+    if (this.getFieldItemCount('wood') < (cost.wood ?? 0)) return false;
+    if ((cost.flint_stick ?? 0) > 0 && !this.hasFieldItem('flint_stick')) return false;
+
+    this.fieldSurvivalState.inventory.wood -= cost.wood ?? 0;
+    if ((cost.flint_stick ?? 0) > 0) this.fieldSurvivalState.inventory.flint_stick = false;
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  hasOpenedFieldChest(chestId) {
+    return Boolean(this.fieldSurvivalState.openedChests?.[chestId]);
+  }
+
+  markFieldChestOpened(chestId) {
+    if (this.hasOpenedFieldChest(chestId)) return false;
+    this.fieldSurvivalState.openedChests[chestId] = true;
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  hasHarvestedFieldTree(treeId) {
+    return Boolean(this.fieldSurvivalState.harvestedTrees?.[treeId]);
+  }
+
+  markFieldTreeHarvested(treeId) {
+    if (this.hasHarvestedFieldTree(treeId)) return false;
+    this.fieldSurvivalState.harvestedTrees[treeId] = true;
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  hasFieldCampfireBuilt() {
+    return Boolean(this.fieldSurvivalState.campfireBuilt);
+  }
+
+  markFieldCampfireBuilt(position) {
+    if (this.hasFieldCampfireBuilt()) return false;
+    this.fieldSurvivalState.campfireBuilt = true;
+    this.fieldSurvivalState.campfirePosition = position ? { x: position.x, y: position.y ?? 0, z: position.z } : null;
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  saveFieldSurvivalState() {
+    this.fieldSurvivalState = this.repairFieldSurvivalState(this.fieldSurvivalState);
+    this.writeJson(FIELD_SURVIVAL_STATE_KEY, this.fieldSurvivalState);
+  }
+
+  repairFieldSurvivalState(snapshot) {
+    const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
+    return {
+      inventory: {
+        field_axe: Boolean(source.inventory?.field_axe),
+        flint_stick: Boolean(source.inventory?.flint_stick),
+        wood: Math.max(0, Number(source.inventory?.wood) || 0),
+      },
+      campfireBuilt: Boolean(source.campfireBuilt),
+      campfirePosition: source.campfirePosition ?? null,
+      openedChests: { ...(source.openedChests ?? DEFAULT_FIELD_SURVIVAL_STATE.openedChests) },
+      harvestedTrees: { ...(source.harvestedTrees ?? DEFAULT_FIELD_SURVIVAL_STATE.harvestedTrees) },
+    };
   }
 
   repairEquipmentSnapshot(snapshot) {

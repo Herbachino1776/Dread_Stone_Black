@@ -236,6 +236,12 @@ function horizontalDistance(a, b) {
   return Math.hypot(dx, dz);
 }
 
+export const FIELD_SURVIVAL_PLACEMENTS = Object.freeze({
+  axeChest: { id: 'field_survival_axe_chest', position: { x: -34, y: 0, z: -118 } },
+  flintStickChest: { id: 'field_survival_flint_stick_chest', position: { x: 116, y: 0, z: -24 } },
+  harvestableTree: { id: 'field_survival_redwood_01', position: { x: 46, y: 0, z: -132 } },
+});
+
 export class DungeonScene {
   constructor({ area = 'field', fieldSpawn = 'start', gameState = null } = {}) {
     this.area = area;
@@ -254,6 +260,7 @@ export class DungeonScene {
     this.fieldShrineAnswerLight = null;
     this.fieldFoliageGroup = null;
     this.fieldFoliageBillboards = [];
+    this.fieldSurvivalObjects = new Map();
     this.giantRamManFieldManifestation = null;
     this.giantRamManFieldManifestationLoading = false;
     this.reliquaryBlock = null;
@@ -522,6 +529,7 @@ export class DungeonScene {
     this.addOutdoorBoundary();
     this.addReliquaryFieldStructures();
     this.addReliquaryFieldFoliage();
+    this.addFieldSurvivalLoopObjects();
     this.ensureGiantRamManFieldManifestation();
   }
 
@@ -1066,6 +1074,166 @@ export class DungeonScene {
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
     this.addLowRuinWalls();
+  }
+
+  addFieldSurvivalLoopObjects() {
+    this.addFieldSurvivalChest({
+      id: FIELD_SURVIVAL_PLACEMENTS.axeChest.id,
+      label: 'Crude Field Axe Chest',
+      position: FIELD_SURVIVAL_PLACEMENTS.axeChest.position,
+      itemId: 'field_axe',
+      acquiredMessage: 'Found Field Axe.',
+    });
+    this.addFieldSurvivalChest({
+      id: FIELD_SURVIVAL_PLACEMENTS.flintStickChest.id,
+      label: 'Flint Stick Chest',
+      position: FIELD_SURVIVAL_PLACEMENTS.flintStickChest.position,
+      itemId: 'flint_stick',
+      acquiredMessage: 'Found Flint Stick.',
+    });
+    this.addHarvestableFieldTree();
+    this.addCampfireCraftingPrompt();
+
+    const savedCampfirePosition = this.gameState?.getFieldSurvivalSnapshot?.()?.campfirePosition;
+    if (this.gameState?.hasFieldCampfireBuilt?.() && savedCampfirePosition) {
+      this.addFieldCampfire(new THREE.Vector3(savedCampfirePosition.x, savedCampfirePosition.y ?? 0, savedCampfirePosition.z));
+    }
+  }
+
+  addFieldSurvivalChest({ id, label, position, itemId, acquiredMessage }) {
+    const opened = this.gameState?.hasOpenedFieldChest?.(id) ?? false;
+    const group = this.createFieldChestGroup(opened);
+    group.name = `${id}-visual`;
+    group.position.set(position.x, position.y, position.z);
+    this.scene.add(group);
+    this.fieldSurvivalObjects.set(id, group);
+
+    this.outdoorInteractions.push({
+      id,
+      label,
+      target: new THREE.Vector3(position.x, 1, position.z),
+      range: 4.0,
+      hint: opened ? 'The chest lies open and empty.' : 'Open chest',
+      message: opened ? 'The chest lies open and empty.' : acquiredMessage,
+      type: 'fieldSurvivalChest',
+      itemId,
+      acquiredMessage,
+      repeatHint: 'The chest lies open and empty.',
+      repeatMessage: 'The chest lies open and empty.',
+    });
+  }
+
+  createFieldChestGroup(opened = false) {
+    const group = new THREE.Group();
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a2b18, roughness: 0.92, metalness: 0.0, emissive: 0x100805, emissiveIntensity: 0.12 });
+    const ironMat = new THREE.MeshStandardMaterial({ color: 0x1f1d1b, roughness: 0.78, metalness: 0.35 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.65, 0.9), woodMat);
+    base.position.y = 0.33;
+    group.add(base);
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.18, 0.96), woodMat);
+    lid.position.set(0, opened ? 0.92 : 0.73, opened ? -0.42 : 0);
+    lid.rotation.x = opened ? -0.72 : 0;
+    group.add(lid);
+    [-0.48, 0.48].forEach((x) => {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.78, 0.98), ironMat);
+      band.position.set(x, 0.42, 0);
+      group.add(band);
+    });
+    return group;
+  }
+
+  addHarvestableFieldTree() {
+    const { id, position } = FIELD_SURVIVAL_PLACEMENTS.harvestableTree;
+    const harvested = this.gameState?.hasHarvestedFieldTree?.(id) ?? false;
+    const harvestableBillboard = this.fieldFoliageBillboards.find((mesh) => mesh.userData?.hero && Math.abs(mesh.position.x - position.x) < 1 && Math.abs(mesh.position.z - position.z) < 1);
+    if (harvestableBillboard) {
+      harvestableBillboard.name = `${id}-harvestable-${harvestableBillboard.name}`;
+      harvestableBillboard.userData.harvestableTreeId = id;
+      harvestableBillboard.visible = !harvested;
+    }
+    if (harvested) this.addFieldStump(new THREE.Vector3(position.x, 0, position.z), id);
+
+    this.outdoorInteractions.push({
+      id,
+      label: 'Harvestable Redwood',
+      target: new THREE.Vector3(position.x, 1, position.z),
+      range: 6.5,
+      hint: harvested ? 'The chopped stump is dry and bare.' : 'A tool is needed.',
+      message: harvested ? 'The chopped stump is dry and bare.' : 'A tool is needed.',
+      type: 'fieldHarvestableTree',
+      treeObject: harvestableBillboard,
+      stumpPosition: new THREE.Vector3(position.x, 0, position.z),
+    });
+  }
+
+  addFieldStump(position, id = 'field-stump') {
+    const stumpMat = new THREE.MeshStandardMaterial({ color: 0x3b2114, roughness: 0.96, emissive: 0x0b0503, emissiveIntensity: 0.1 });
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.94, 0.62, 9), stumpMat);
+    stump.name = `${id}-chopped-stump`;
+    stump.position.set(position.x, 0.31, position.z);
+    this.scene.add(stump);
+    this.fieldSurvivalObjects.set(`${id}-stump`, stump);
+    return stump;
+  }
+
+  addCampfireCraftingPrompt() {
+    this.outdoorInteractions.push({
+      id: 'field_survival_craft_campfire',
+      label: 'Campfire Crafting',
+      target: new THREE.Vector3(0, 1, -146),
+      range: 7.5,
+      hint: 'Need Wood and Flint Stick.',
+      message: 'Need Wood and Flint Stick.',
+      type: 'fieldCampfireCraft',
+    });
+  }
+
+  addFieldCampfire(position) {
+    const group = this.createFieldCampfireGroup();
+    group.name = 'field_survival_campfire-visual';
+    group.position.set(position.x, 0, position.z);
+    this.scene.add(group);
+    this.fieldSurvivalObjects.set('field_survival_campfire', group);
+    if (!this.outdoorInteractions.some((interaction) => interaction.id === 'field_survival_campfire_use')) {
+      this.outdoorInteractions.push({
+        id: 'field_survival_campfire_use',
+        label: 'Small Campfire',
+        target: new THREE.Vector3(position.x, 1, position.z),
+        range: 4.25,
+        hint: 'Use campfire',
+        message: 'The fire is ready for cooking.',
+        type: 'fieldCampfire',
+      });
+    }
+    return group;
+  }
+
+  createFieldCampfireGroup() {
+    const group = new THREE.Group();
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x332015, roughness: 0.95, emissive: 0x160804, emissiveIntensity: 0.18 });
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x2c2a27, roughness: 0.98 });
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xd96b24, transparent: true, opacity: 0.9 });
+    for (let index = 0; index < 6; index += 1) {
+      const angle = (Math.PI * 2 * index) / 6;
+      const stone = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.18, 0.22), stoneMat);
+      stone.position.set(Math.cos(angle) * 0.75, 0.09, Math.sin(angle) * 0.75);
+      stone.rotation.y = angle;
+      group.add(stone);
+    }
+    [0, Math.PI / 2].forEach((angle) => {
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.25, 7), woodMat);
+      log.rotation.z = Math.PI / 2;
+      log.rotation.y = angle;
+      log.position.y = 0.22;
+      group.add(log);
+    });
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.72, 7), flameMat);
+    flame.position.y = 0.65;
+    group.add(flame);
+    const light = new THREE.PointLight(0xff8a32, 1.15, 14, 1.7);
+    light.position.set(0, 0.9, 0);
+    group.add(light);
+    return group;
   }
 
   addBrokenShrine() {
