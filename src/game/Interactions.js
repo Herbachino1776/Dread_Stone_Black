@@ -322,7 +322,7 @@ export class Interactions {
     if (!this.dungeon.gameState?.hasOpenedFieldChest?.(interaction.id)) {
       this.dungeon.gameState?.markFieldChestOpened?.(interaction.id);
       this.openFieldChestVisual(interaction.id);
-      interaction.hint = 'Retrieve item';
+      interaction.hint = interaction.openedHint ?? 'Retrieve item';
       interaction.message = interaction.acquiredMessage ?? 'Item acquired.';
       this.setTemporaryHint('Chest opened.', 1200);
       this.hud.showMessage('Chest opened.');
@@ -330,15 +330,17 @@ export class Interactions {
     }
 
     this.dungeon.gameState?.markFieldChestLooted?.(interaction.id);
-    this.dungeon.gameState?.addFieldItem?.(interaction.itemId);
-    if (interaction.itemId === 'wood_axe') {
-      this.equipmentRuntime?.acquireItem?.('wood_axe', { source: interaction.id, tags: ['weapon', 'axe', 'woodcutting', 'field-survival'] });
+    if (interaction.itemId) this.dungeon.gameState?.addFieldItem?.(interaction.itemId);
+
+    const equipmentItemId = interaction.equipmentItemId ?? (['wood_axe', 'fishing_rod', 'torch'].includes(interaction.itemId) ? interaction.itemId : null);
+    if (equipmentItemId && !this.equipmentRuntime?.hasItem?.(equipmentItemId)) {
+      this.equipmentRuntime?.acquireItem?.(equipmentItemId, {
+        source: interaction.id,
+        tags: ['field-chest', ...(interaction.tags ?? [])],
+      });
     }
-    if (interaction.itemId === 'fishing_rod') {
-      this.equipmentRuntime?.acquireItem?.('fishing_rod', { source: interaction.id, tags: ['weapon', 'tool', 'fishing', 'field-survival'] });
-    }
-    if (interaction.itemId === 'torch') {
-      this.equipmentRuntime?.acquireItem?.('torch', { source: interaction.id, tags: ['offhand', 'torch', 'light', 'dungeon-utility'] });
+    if (equipmentItemId && interaction.autoEquip === true) {
+      this.equipmentRuntime?.equip?.(EQUIPMENT_SLOTS.weapon, equipmentItemId);
     }
     this.openFieldChestVisual(interaction.id);
     interaction.hint = interaction.repeatHint ?? 'The chest lies open and empty.';
