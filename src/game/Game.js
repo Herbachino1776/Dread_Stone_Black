@@ -21,6 +21,22 @@ import { getObjectivePackForLocation } from './objectives/objectiveRegistry.js';
 import { objectiveMessages, resolveObjectiveMessage } from './objectives/objectiveMessages.js';
 import { ObjectivePanel } from './ui/ObjectivePanel.js';
 
+const PLAYER_TORCH_POINT_LIGHT = Object.freeze({
+  color: 0xffb066,
+  intensity: 6.8,
+  distance: 36,
+  decay: 1.3,
+});
+
+const PLAYER_TORCH_SPOT_LIGHT = Object.freeze({
+  color: 0xffc078,
+  intensity: 7.2,
+  distance: 56,
+  angle: 0.78,
+  penumbra: 0.82,
+  decay: 1.25,
+});
+
 export class Game {
   constructor(app) {
     this.app = app;
@@ -287,10 +303,22 @@ export class Game {
   createPlayerTorchLight() {
     this.playerTorch = new THREE.Group();
     this.playerTorch.position.set(-0.42, -0.28, -0.82);
-    this.playerTorchPointLight = new THREE.PointLight(0xffaa55, 4.2, 24, 1.65);
+    this.playerTorchPointLight = new THREE.PointLight(
+      PLAYER_TORCH_POINT_LIGHT.color,
+      PLAYER_TORCH_POINT_LIGHT.intensity,
+      PLAYER_TORCH_POINT_LIGHT.distance,
+      PLAYER_TORCH_POINT_LIGHT.decay,
+    );
     this.playerTorchPointLight.castShadow = false;
     this.playerTorchPointLight.position.set(-0.18, -0.08, -0.18);
-    this.playerTorchSpotLight = new THREE.SpotLight(0xffb36a, 2.6, 32, 0.68, 0.72, 1.65);
+    this.playerTorchSpotLight = new THREE.SpotLight(
+      PLAYER_TORCH_SPOT_LIGHT.color,
+      PLAYER_TORCH_SPOT_LIGHT.intensity,
+      PLAYER_TORCH_SPOT_LIGHT.distance,
+      PLAYER_TORCH_SPOT_LIGHT.angle,
+      PLAYER_TORCH_SPOT_LIGHT.penumbra,
+      PLAYER_TORCH_SPOT_LIGHT.decay,
+    );
     this.playerTorchSpotLight.castShadow = false;
     this.playerTorchSpotLight.position.set(-0.1, -0.08, -0.12);
     this.playerTorchSpotLight.target.position.set(-0.25, -0.16, -6);
@@ -306,9 +334,9 @@ export class Game {
   updatePlayerTorchLight(deltaSeconds) {
     if (!this.playerTorch?.visible) return;
     this.playerTorchElapsed = (this.playerTorchElapsed ?? 0) + deltaSeconds;
-    const flicker = 0.94 + Math.sin(this.playerTorchElapsed * 7.1) * 0.035 + Math.sin(this.playerTorchElapsed * 13.7) * 0.025;
-    this.playerTorchPointLight.intensity = 4.2 * flicker;
-    this.playerTorchSpotLight.intensity = 2.6 * (0.96 + (flicker - 0.94) * 0.65);
+    const flicker = 0.97 + Math.sin(this.playerTorchElapsed * 6.7) * 0.02 + Math.sin(this.playerTorchElapsed * 11.3) * 0.012;
+    this.playerTorchPointLight.intensity = PLAYER_TORCH_POINT_LIGHT.intensity * flicker;
+    this.playerTorchSpotLight.intensity = PLAYER_TORCH_SPOT_LIGHT.intensity * (0.985 + (flicker - 0.97) * 0.55);
   }
 
   saveEquipmentState() {
