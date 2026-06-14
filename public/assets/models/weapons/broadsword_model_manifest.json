@@ -1,0 +1,88 @@
+{
+  "source_file": "bROADSWORD.glb",
+  "output_file": "public/assets/models/weapons/weapon_broadsword_ritual_01.glb",
+  "format": "GLB",
+  "optimized_for": "Dread Stone Black mobile/Three.js prototype",
+  "mesh_count": 1,
+  "vertices": 11544,
+  "faces": 12329,
+  "bounds_after_grip_anchor": [
+    [
+      -0.09729831665754318,
+      -0.190341517329216,
+      -0.01868671551346779
+    ],
+    [
+      0.09729831665754318,
+      1.0095295906066895,
+      0.01868671551346779
+    ]
+  ],
+  "extents_after_grip_anchor": [
+    0.19459663331508636,
+    1.1998711079359055,
+    0.03737343102693558
+  ],
+  "anchor_note": "Origin placed near center of leather grip; blade points +Y; crossguard spreads along X; thickness on Z.",
+  "texture_resize_report": [
+    {
+      "texture": "baseColorTexture",
+      "old": [
+        4096,
+        4096
+      ],
+      "new": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "texture": "metallicRoughnessTexture",
+      "old": [
+        4096,
+        4096
+      ],
+      "new": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "texture": "normalTexture",
+      "old": [
+        4096,
+        4096
+      ],
+      "new": [
+        1024,
+        1024
+      ]
+    }
+  ],
+  "verified_textures_after_export": [
+    {
+      "texture": "baseColorTexture",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "texture": "metallicRoughnessTexture",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "texture": "normalTexture",
+      "size": [
+        1024,
+        1024
+      ]
+    }
+  ],
+  "recommended_repo_path": "public/assets/models/weapons/weapon_broadsword_ritual_01.glb",
+  "suggested_threejs_scale_start": 1.0,
+  "suggested_fp_hand_mount": "parent to right-hand weapon socket, then tune small rotation/translation in game"
+}
