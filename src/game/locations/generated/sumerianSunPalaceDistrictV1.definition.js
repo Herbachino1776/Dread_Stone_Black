@@ -162,10 +162,13 @@ export const sumerianSunPalaceDistrictV1Definition = Object.freeze({
   collision: { playerRadius: 0.5 },
   geometry: { wallThickness: 0.35, floorThickness: 0.18, ceilingThickness: 0.18 },
   runtimeSpawnPolicy: {
-    activeEnemyCap: 5,
-    wakeRadius: 28,
-    sleepRadius: 42,
-    initialEnemyCap: 4,
+    activeEnemyCap: 3,
+    initialEnemyCap: 2,
+    wakeRadius: 20,
+    sleepRadius: 38,
+    respawnCooldownMs: 15000,
+    maxWakePerSecond: 1,
+    generatedAiLod: true,
   },
   integrity: {
     roomEdgePolicy: 'sealedUnlessDeclaredOpening',
