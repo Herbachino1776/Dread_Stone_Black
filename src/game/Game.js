@@ -329,12 +329,14 @@ export class Game {
               <div class="equipment-panel__header">
                 <div>
                   <span class="equipment-panel__eyebrow">Equipment</span>
-                  <h2>Weapon Slot</h2>
+                  <h2>Equipment Slots</h2>
                 </div>
                 <button class="equipment-close" data-equipment="close" type="button" aria-label="Close equipment">X</button>
               </div>
-              <p class="equipment-current">Equipped: <strong data-equipment="current-weapon">Unarmed</strong></p>
+              <p class="equipment-current">Weapon: <strong data-equipment="current-weapon">Unarmed</strong></p>
+              <p class="equipment-current">Tool: <strong data-equipment="current-tool">None</strong></p>
               <div class="equipment-list" data-equipment="weapon-list"></div>
+              <div class="equipment-list" data-equipment="tool-list"></div>
             </section>
           </div>
           <div class="viewport-ornament viewport-ornament-bottom" aria-hidden="true">◆</div>

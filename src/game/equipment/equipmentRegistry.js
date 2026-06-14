@@ -9,6 +9,16 @@ export const equipmentRegistry = Object.freeze({
       itemType: 'weapon',
       weaponProfileId: 'unarmed',
     }),
+    field_axe: Object.freeze({
+      id: 'field_axe',
+      name: 'Field Axe',
+      displayName: 'Field Axe',
+      itemType: 'tool',
+      type: 'tool',
+      slot: 'tool',
+      tags: ['axe', 'woodcutting', 'field-survival'],
+      source: 'field_survival_axe_chest',
+    }),
     rusted_sword: Object.freeze({
       id: 'rusted_sword',
       displayName: 'Rusted Sword',

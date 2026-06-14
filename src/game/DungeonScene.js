@@ -265,6 +265,7 @@ export class DungeonScene {
     this.fieldShrineAnswerLight = null;
     this.fieldFoliageGroup = null;
     this.fieldFoliageBillboards = [];
+    this.fieldRedwoodHarvestables = [];
     this.fieldSurvivalObjects = new Map();
     this.giantRamManFieldManifestation = null;
     this.giantRamManFieldManifestationLoading = false;
@@ -642,7 +643,8 @@ export class DungeonScene {
     this.fieldFoliageBillboards.forEach((billboard) => {
       const dx = player.position.x - billboard.position.x;
       const dz = player.position.z - billboard.position.z;
-      billboard.visible = dx * dx + dz * dz <= (billboard.userData.visibleDistanceSq ?? FIELD_FOLIAGE_VISIBLE_DISTANCE_SQ);
+      const harvested = billboard.userData.harvestableTreeId && this.gameState?.hasHarvestedFieldTree?.(billboard.userData.harvestableTreeId);
+      billboard.visible = !harvested && dx * dx + dz * dz <= (billboard.userData.visibleDistanceSq ?? FIELD_FOLIAGE_VISIBLE_DISTANCE_SQ);
       if (!billboard.visible) return;
       billboard.rotation.y = Math.atan2(dx, dz) + (billboard.userData.yawOffset ?? 0);
     });
@@ -1093,6 +1095,10 @@ export class DungeonScene {
       mesh.scale.set(placement.scale * placement.width, placement.scale, 1);
       mesh.rotation.y = placement.yawOffset;
       mesh.userData = { ...placement, billboard: true, collision: 'none' };
+      if (placement.layer === 'redwood' && placement.harvestable !== false) {
+        const harvestable = this.createRedwoodHarvestable(placement, mesh);
+        mesh.userData.harvestableTreeId = harvestable.id;
+      }
       group.add(mesh);
       return mesh;
     });
@@ -1120,7 +1126,7 @@ export class DungeonScene {
       label: 'Crude Field Axe Chest',
       position: FIELD_SURVIVAL_PLACEMENTS.axeChest.position,
       itemId: 'field_axe',
-      acquiredMessage: 'Found Field Axe. Trees can now be chopped.',
+      acquiredMessage: 'Found Field Axe. Equip it to chop redwoods.',
     });
     this.addFieldSurvivalChest({
       id: FIELD_SURVIVAL_PLACEMENTS.flintStickChest.id,
@@ -1129,7 +1135,7 @@ export class DungeonScene {
       itemId: 'flint_stick',
       acquiredMessage: 'Found Flint Stick. Wood + Flint Stick can build a campfire.',
     });
-    this.addHarvestableFieldTree();
+    this.restoreHarvestedRedwoodVisuals();
     this.addCampfireCraftingPrompt();
 
     const savedCampfirePosition = this.gameState?.getFieldSurvivalSnapshot?.()?.campfirePosition;
@@ -1178,6 +1184,55 @@ export class DungeonScene {
       group.add(band);
     });
     return group;
+  }
+
+
+  createRedwoodHarvestable(placement, mesh) {
+    const isHero = Boolean(placement.hero);
+    const isBoundary = placement.zone === 'continuous-perimeter-redwood-wall';
+    const id = `redwood_harvest_${String(this.fieldRedwoodHarvestables.length + 1).padStart(3, '0')}`;
+    const harvestable = {
+      id,
+      kind: 'redwood',
+      position: new THREE.Vector3(placement.x, 0, placement.z),
+      target: new THREE.Vector3(placement.x, 1, placement.z),
+      interactRadius: isHero ? 7.0 : 5.5,
+      range: isHero ? 7.0 : 5.5,
+      yield: isHero ? 3 : isBoundary ? 2 : 1,
+      assetId: placement.spriteId,
+      label: isHero ? 'Hero Redwood' : 'Redwood',
+      type: 'fieldHarvestableTree',
+      treeObject: mesh,
+      stumpPosition: new THREE.Vector3(placement.x, 0, placement.z),
+      zone: placement.zone,
+    };
+    this.fieldRedwoodHarvestables.push(harvestable);
+    return harvestable;
+  }
+
+  restoreHarvestedRedwoodVisuals() {
+    this.fieldRedwoodHarvestables.forEach((tree) => {
+      if (!this.gameState?.hasHarvestedFieldTree?.(tree.id)) return;
+      if (tree.treeObject) tree.treeObject.visible = false;
+      this.addFieldStump(tree.stumpPosition, tree.id);
+    });
+  }
+
+  getNearbyFieldHarvestableRedwood(position) {
+    if (this.area !== 'field' || !position || !this.fieldRedwoodHarvestables.length) return null;
+    let nearest = null;
+    let nearestDistanceSq = Infinity;
+    this.fieldRedwoodHarvestables.forEach((tree) => {
+      if (this.gameState?.hasHarvestedFieldTree?.(tree.id)) return;
+      const dx = position.x - tree.position.x;
+      const dz = position.z - tree.position.z;
+      const range = tree.interactRadius ?? 5.5;
+      const distanceSq = dx * dx + dz * dz;
+      if (distanceSq > range * range || distanceSq >= nearestDistanceSq) return;
+      nearest = tree;
+      nearestDistanceSq = distanceSq;
+    });
+    return nearest;
   }
 
   addHarvestableFieldTree() {
