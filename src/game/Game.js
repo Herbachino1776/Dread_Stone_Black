@@ -108,8 +108,9 @@ export class Game {
       armsOverlay: this.armsOverlay,
       equipmentRuntime: this.equipmentRuntime,
     });
+    this.dungeon.fpvEquipmentRenderer = this.fpvEquipmentRenderer;
     this.controls = new MobileControls(this.app);
-    this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime });
+    this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
     this.interactions = new Interactions({
       player: this.player,
       dungeon: this.dungeon,
@@ -325,18 +326,17 @@ export class Game {
                 </div>
               </div>
             </section>
-            <section class="equipment-panel" data-equipment-panel aria-label="Equipment" aria-hidden="true">
+            <section class="equipment-panel" data-equipment-panel aria-label="Inventory" aria-hidden="true">
               <div class="equipment-panel__header">
                 <div>
-                  <span class="equipment-panel__eyebrow">Equipment</span>
-                  <h2>Equipment Slots</h2>
+                  <span class="equipment-panel__eyebrow">Inventory</span>
+                  <h2>Inventory</h2>
                 </div>
-                <button class="equipment-close" data-equipment="close" type="button" aria-label="Close equipment">X</button>
+                <button class="equipment-close" data-equipment="close" type="button" aria-label="Close inventory">X</button>
               </div>
               <p class="equipment-current">Weapon: <strong data-equipment="current-weapon">Unarmed</strong></p>
-              <p class="equipment-current">Tool: <strong data-equipment="current-tool">None</strong></p>
-              <div class="equipment-list" data-equipment="weapon-list"></div>
-              <div class="equipment-list" data-equipment="tool-list"></div>
+              <div class="inventory-tabs" data-inventory="pocket-tabs" role="tablist" aria-label="Inventory pockets"></div>
+              <div class="equipment-list" data-inventory="list"></div>
             </section>
           </div>
           <div class="viewport-ornament viewport-ornament-bottom" aria-hidden="true">◆</div>

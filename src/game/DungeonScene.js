@@ -1123,17 +1123,17 @@ export class DungeonScene {
   addFieldSurvivalLoopObjects() {
     this.addFieldSurvivalChest({
       id: FIELD_SURVIVAL_PLACEMENTS.axeChest.id,
-      label: 'Crude Field Axe Chest',
+      label: 'Wood Axe Chest',
       position: FIELD_SURVIVAL_PLACEMENTS.axeChest.position,
-      itemId: 'field_axe',
-      acquiredMessage: 'Found Field Axe. Equip it to chop redwoods.',
+      itemId: 'wood_axe',
+      acquiredMessage: 'Wood Axe Acquired.',
     });
     this.addFieldSurvivalChest({
       id: FIELD_SURVIVAL_PLACEMENTS.flintStickChest.id,
       label: 'Flint Stick Chest',
       position: FIELD_SURVIVAL_PLACEMENTS.flintStickChest.position,
       itemId: 'flint_stick',
-      acquiredMessage: 'Found Flint Stick. Wood + Flint Stick can build a campfire.',
+      acquiredMessage: 'Flint Stick Acquired.',
     });
     this.restoreHarvestedRedwoodVisuals();
     this.addCampfireCraftingPrompt();
@@ -1146,6 +1146,7 @@ export class DungeonScene {
 
   addFieldSurvivalChest({ id, label, position, itemId, acquiredMessage }) {
     const opened = this.gameState?.hasOpenedFieldChest?.(id) ?? false;
+    const looted = this.gameState?.hasLootedFieldChest?.(id) ?? false;
     const group = this.createFieldChestGroup(opened);
     group.name = `${id}-visual`;
     group.position.set(position.x, position.y, position.z);
@@ -1157,13 +1158,13 @@ export class DungeonScene {
       label,
       target: new THREE.Vector3(position.x, 1, position.z),
       range: 4.0,
-      hint: opened ? 'The chest lies open and empty.' : 'Open chest',
-      message: opened ? 'The chest lies open and empty.' : acquiredMessage,
+      hint: looted ? 'Empty.' : opened ? 'Retrieve item' : 'Open chest',
+      message: looted ? 'Empty.' : opened ? acquiredMessage : 'Chest opened.',
       type: 'fieldSurvivalChest',
       itemId,
       acquiredMessage,
-      repeatHint: 'The chest lies open and empty.',
-      repeatMessage: 'The chest lies open and empty.',
+      repeatHint: 'Empty.',
+      repeatMessage: 'Empty.',
     });
   }
 
@@ -1275,8 +1276,8 @@ export class DungeonScene {
       label: 'Campfire Crafting',
       target: new THREE.Vector3(0, 1, -146),
       range: 7.5,
-      hint: 'Need Wood and Flint Stick.',
-      message: 'Need Wood and Flint Stick.',
+      hint: 'Need Wood.',
+      message: 'Need Wood.',
       type: 'fieldCampfireCraft',
       fixedCraftStation: true,
     });

@@ -42,6 +42,10 @@ export class FPVEquipmentRenderer {
       this.weaponLayer.classList.add('first-person-weapon--rusted-sword');
       this.weaponLayer.title = 'Rusted Sword FPV placeholder';
     }
+    if (fpvProfile.weaponLayer === 'axe-placeholder') {
+      this.weaponLayer.classList.add('first-person-weapon--wood-axe');
+      this.weaponLayer.title = 'Wood Axe FPV placeholder';
+    }
   }
 
   playAttack(weaponProfile) {
