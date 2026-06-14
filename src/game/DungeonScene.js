@@ -75,12 +75,19 @@ const FIELD_REDWOOD_SPRITES = Object.freeze([
   { id: 'billboard_tree_redwood_runic_giant_01', path: './assets/sprites/foliage/billboard_tree_redwood_runic_giant_01.png', type: 'redwood', width: 0.72 },
 ]);
 const FIELD_FOLIAGE_SPRITES = Object.freeze([...FIELD_SMALL_FOLIAGE_SPRITES, ...FIELD_REDWOOD_SPRITES]);
-const FIELD_FOREST_DENSITY = 0.9;
-const FIELD_REDWOOD_COUNT_TARGET = 48;
-const FIELD_MID_FOLIAGE_COUNT_TARGET = 140;
-const FIELD_BUSH_COUNT_TARGET = 120;
+const FIELD_FOREST_DENSITY = 0.95;
+const FIELD_REDWOOD_COUNT_TARGET = 60;
+const FIELD_MID_FOLIAGE_COUNT_TARGET = 190;
+const FIELD_BUSH_COUNT_TARGET = 190;
 const FIELD_FOLIAGE_INSTANCE_TARGET = FIELD_REDWOOD_COUNT_TARGET + FIELD_MID_FOLIAGE_COUNT_TARGET + FIELD_BUSH_COUNT_TARGET;
 const FIELD_FOLIAGE_ALPHA_TEST = 0.35;
+const FIELD_FOLIAGE_GROUND_Y = 0;
+const FIELD_REDWOOD_SINK_RATIO_MIN = 0.04;
+const FIELD_REDWOOD_SINK_RATIO_MAX = 0.08;
+const FIELD_MID_FOLIAGE_SINK_RATIO_MIN = 0.03;
+const FIELD_MID_FOLIAGE_SINK_RATIO_MAX = 0.07;
+const FIELD_BUSH_SINK_RATIO_MIN = 0.02;
+const FIELD_BUSH_SINK_RATIO_MAX = 0.06;
 const FIELD_FOLIAGE_VISIBLE_DISTANCE = 185;
 const FIELD_REDWOOD_VISIBLE_DISTANCE = 260;
 const FIELD_FOLIAGE_VISIBLE_DISTANCE_SQ = FIELD_FOLIAGE_VISIBLE_DISTANCE * FIELD_FOLIAGE_VISIBLE_DISTANCE;
@@ -889,18 +896,30 @@ export class DungeonScene {
       if (preferredIndex !== null) return sprites[preferredIndex % sprites.length];
       return sprites[Math.floor(random() * sprites.length) % sprites.length];
     };
+    const sinkRatioForLayer = (layer) => {
+      const [min, max] = layer === 'redwood'
+        ? [FIELD_REDWOOD_SINK_RATIO_MIN, FIELD_REDWOOD_SINK_RATIO_MAX]
+        : layer === 'mid'
+          ? [FIELD_MID_FOLIAGE_SINK_RATIO_MIN, FIELD_MID_FOLIAGE_SINK_RATIO_MAX]
+          : [FIELD_BUSH_SINK_RATIO_MIN, FIELD_BUSH_SINK_RATIO_MAX];
+      return min + random() * (max - min);
+    };
     const pushPlacement = ({ x, z, zone, layer, minScale, maxScale, hero = false, preferredIndex = null }) => {
       if (counts[layer] >= targetForLayer(layer) || !this.isFieldFoliageSafePosition(x, z)) return false;
       const sprite = chooseSprite(layer, preferredIndex);
       const scale = minScale + random() * (maxScale - minScale);
+      const sinkRatio = sinkRatioForLayer(layer);
+      const sinkDepth = scale * sinkRatio;
       counts[layer] += 1;
       placements.push({
         id: `field-foliage-${String(placements.length + 1).padStart(3, '0')}`,
         spriteId: sprite.id,
         x,
         z,
-        y: Math.max(0.58, scale * 0.5 - 0.16),
+        y: FIELD_FOLIAGE_GROUND_Y + scale * 0.5 - sinkDepth,
         scale,
+        sinkRatio,
+        sinkDepth,
         width: sprite.width,
         yawOffset: (random() - 0.5) * (layer === 'redwood' ? 0.18 : 0.36),
         zone,
@@ -920,7 +939,7 @@ export class DungeonScene {
       pushPlacement({ ...tree, zone: 'hero-carved-legend-redwood', layer: 'redwood', minScale: 15.0, maxScale: 18.0, hero: true, preferredIndex: index });
     });
 
-    for (let i = 0; counts.redwood < 30 && i < 180; i += 1) {
+    for (let i = 0; counts.redwood < 40 && i < 260; i += 1) {
       const side = i % 4;
       const edgeJitter = random() * 26;
       const x = side === 0 ? -190 + edgeJitter : side === 1 ? 190 - edgeJitter : -186 + random() * 372;
@@ -934,7 +953,7 @@ export class DungeonScene {
       { x: -24, z: 62 }, { x: 118, z: 18 },
     ];
     clusterCenters.forEach((center, clusterIndex) => {
-      for (let i = 0; i < 4; i += 1) {
+      for (let i = 0; i < 5; i += 1) {
         const angle = random() * Math.PI * 2;
         const radius = 8 + random() * 30;
         pushPlacement({
@@ -969,11 +988,12 @@ export class DungeonScene {
     };
 
     clusterCenters.forEach((center) => {
-      pushLayerScatter('mid', 'mid-forest-body-cluster', 3.0, 6.0, { ...center, minRadius: 6, maxRadius: 42 }, 9, 260);
-      pushLayerScatter('bush', 'dark-understory-path-edge', 1.2, 2.5, { ...center, minRadius: 5, maxRadius: 36 }, 8, 220);
+      pushLayerScatter('mid', 'mid-forest-body-cluster', 3.0, 6.2, { ...center, minRadius: 5, maxRadius: 48 }, 14, 360);
+      pushLayerScatter('bush', 'dark-understory-path-edge', 1.2, 2.7, { ...center, minRadius: 4, maxRadius: 42 }, 13, 320);
     });
-    pushLayerScatter('mid', 'outer-mid-tree-wall', 3.2, 5.8, { x: 0, z: 0, minRadius: 118, maxRadius: 192 });
-    pushLayerScatter('bush', 'outer-bramble-understory', 1.2, 2.4, { x: 0, z: 0, minRadius: 84, maxRadius: 190 });
+    pushLayerScatter('redwood', 'landmark-redwood-backfill-grove', 10.5, 16.5, { x: 0, z: 0, minRadius: 70, maxRadius: 182 }, Infinity, 900);
+    pushLayerScatter('mid', 'outer-mid-tree-wall', 3.2, 6.0, { x: 0, z: 0, minRadius: 92, maxRadius: 194 }, Infinity, 2400);
+    pushLayerScatter('bush', 'outer-bramble-understory', 1.2, 2.6, { x: 0, z: 0, minRadius: 42, maxRadius: 192 }, Infinity, 2400);
 
     return placements;
   }
@@ -1001,7 +1021,8 @@ export class DungeonScene {
       bushCount: FIELD_BUSH_COUNT_TARGET,
       spriteCount: FIELD_FOLIAGE_SPRITES.length,
       redwoodSpriteCount: FIELD_REDWOOD_SPRITES.length,
-      placementStrategy: 'seeded outer redwood ring, interior forest clusters, path-safe understory, and landmark carved legend trees',
+      placementStrategy: 'seeded dense outer redwood ring, rich interior forest clusters, path-safe understory, and landmark carved legend trees',
+      grounding: 'centered planes placed at ground plus half height minus per-layer sink depth',
       collision: 'visual only; no per-sprite blockers',
     };
 
