@@ -34,6 +34,15 @@ export const weaponProfiles = createWeaponProfileRegistry([
     tags: ['weapon', 'tool', 'melee', 'axe', 'woodcutting', 'field-survival'],
   },
   {
+    id: 'fishing_rod',
+    displayName: 'Fishing Rod',
+    description: 'A dark river tool for pulling food from cursed water.',
+    weaponType: 'tool',
+    damage: 2, attackRange: 2.0, attackCooldown: 1.2, windupTime: 0.1, recoveryTime: 0.2, staminaCost: 1,
+    fpvProfileId: 'fishing_rod', goreProfileId: 'unarmed', hitReactionType: 'light_stagger',
+    tags: ['weapon', 'tool', 'fishing', 'field-survival'],
+  },
+  {
     id: 'rusted_sword',
     displayName: 'Rusted Sword',
     description: 'An old temple blade. It reaches farther and bites harder than bare hands.',

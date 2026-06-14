@@ -13,6 +13,9 @@ export const fpvWeaponProfiles = Object.freeze({
     placeholder: true,
     note: 'Procedural DOM fallback for Wood Axe FPV placeholder.',
   }),
+  fishing_rod: Object.freeze({
+    id: 'fishing_rod', baseClip: ARM_OVERLAY_ASSETS.unarmedIdle, weaponLayer: 'fishing-rod-placeholder', placeholder: true, note: 'Procedural Fishing Rod FPV placeholder.',
+  }),
   rusted_sword: Object.freeze({
     id: 'rusted_sword',
     baseClip: ARM_OVERLAY_ASSETS.unarmedIdle,

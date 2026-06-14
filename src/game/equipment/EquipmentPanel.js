@@ -88,7 +88,7 @@ export class EquipmentPanel {
         onSelect: () => {
           const isEquipped = this.equipmentRuntime.getEquippedWeaponProfile().id === weapon.id;
           if (this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, isEquipped ? 'unarmed' : weapon.id)) {
-            this.gameState?.equipFieldTool?.(!isEquipped && weapon.id === 'wood_axe' ? 'wood_axe' : null);
+            this.gameState?.equipFieldTool?.(!isEquipped && ['wood_axe', 'fishing_rod'].includes(weapon.id) ? weapon.id : null);
           }
         },
       }));
@@ -97,24 +97,22 @@ export class EquipmentPanel {
   }
 
   renderItems() {
-    const wood = this.gameState?.getFieldItemCount?.('wood') ?? 0;
     const equippedItem = this.gameState?.getEquippedFieldItem?.();
-    if (wood > 0) {
-      this.inventoryList.append(this.createRow({
-        id: 'wood',
-        name: 'Wood',
-        stats: equippedItem === 'wood' ? `Equipped · x${wood}` : `x${wood}`,
-        description: 'Campfire fuel.',
-        pressed: equippedItem === 'wood',
-        onSelect: () => {
-          const nextItem = this.gameState?.getEquippedFieldItem?.() === 'wood' ? null : 'wood';
-          if (!this.gameState?.equipFieldItem?.(nextItem)) this.gameState?.equipFieldItem?.(null);
-          window.dispatchEvent(new CustomEvent('field-item-equipped-changed'));
-        },
-      }));
-    } else {
-      this.renderEmpty('No items.');
-    }
+    const items = [
+      ['wood', 'Wood', 'Campfire fuel.'],
+      ['raw_fish', 'Raw Fish', 'Cook at a campfire.'],
+      ['cooked_fish', 'Cooked Fish', 'Eat with X to restore hunger.'],
+    ];
+    items.forEach(([id, name, description]) => {
+      const count = this.gameState?.getFieldItemCount?.(id) ?? 0;
+      if (count < 1) return;
+      this.inventoryList.append(this.createRow({ id, name, stats: equippedItem === id ? `Equipped · x${count}` : `x${count}`, description, pressed: equippedItem === id, onSelect: () => {
+        const nextItem = this.gameState?.getEquippedFieldItem?.() === id ? null : id;
+        if (!this.gameState?.equipFieldItem?.(nextItem)) this.gameState?.equipFieldItem?.(null);
+        window.dispatchEvent(new CustomEvent('field-item-equipped-changed'));
+      }}));
+    });
+    if (!this.inventoryList.children.length) this.renderEmpty('No items.');
   }
 
   renderOffhand() {
