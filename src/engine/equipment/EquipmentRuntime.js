@@ -15,6 +15,7 @@ export class EquipmentRuntime {
       [EQUIPMENT_SLOTS.armor]: startingEquipment.equipped?.armor ?? null,
       [EQUIPMENT_SLOTS.quickItem]: startingEquipment.equipped?.quickItem ?? null,
       [EQUIPMENT_SLOTS.tool]: startingEquipment.equipped?.tool ?? null,
+      [EQUIPMENT_SLOTS.offhand]: startingEquipment.equipped?.offhand ?? null,
     };
     this.listeners = new Map();
 
@@ -100,6 +101,10 @@ export class EquipmentRuntime {
     return this.equipped.tool ?? null;
   }
 
+  getEquippedOffhandId() {
+    return this.equipped.offhand ?? null;
+  }
+
   emitAttack(payload) {
     this.emit(EQUIPMENT_EVENTS.attackResolved, payload);
   }
@@ -112,6 +117,7 @@ export class EquipmentRuntime {
         armor: this.equipped.armor ?? null,
         quickItem: this.equipped.quickItem ?? null,
         tool: this.equipped.tool ?? null,
+        offhand: this.equipped.offhand ?? null,
       },
     };
   }
@@ -125,6 +131,9 @@ export class EquipmentRuntime {
     this.equipped.quickItem = snapshot.equipped?.quickItem ?? null;
     this.equipped.tool = snapshot.equipped?.tool && this.inventory.has(snapshot.equipped.tool)
       ? snapshot.equipped.tool
+      : null;
+    this.equipped.offhand = snapshot.equipped?.offhand && this.inventory.has(snapshot.equipped.offhand)
+      ? snapshot.equipped.offhand
       : null;
     this.emit(EQUIPMENT_EVENTS.equippedChanged, {
       slotId: EQUIPMENT_SLOTS.weapon,

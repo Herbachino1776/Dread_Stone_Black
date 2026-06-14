@@ -33,5 +33,15 @@ export const equipmentRegistry = Object.freeze({
       weaponProfileId: 'rusted_sword',
       source: 'black_grass_temple_rusted_sword_chest',
     }),
+    torch: Object.freeze({
+      id: 'torch',
+      name: 'Torch',
+      displayName: 'Torch',
+      itemType: 'offhand',
+      type: 'offhand',
+      slot: 'offhand',
+      tags: ['torch', 'light', 'dungeon-utility'],
+      source: 'sumerian_sun_palace_spawn_torch_chest',
+    }),
   }),
 });

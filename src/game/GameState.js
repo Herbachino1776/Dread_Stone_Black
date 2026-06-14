@@ -9,9 +9,9 @@ const RUSTED_SWORD_ITEM_ID = 'rusted_sword';
 const RUSTED_SWORD_CHEST_INTERACTION_ID = 'BGT_INT_RUSTED_SWORD_CHEST';
 
 const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
-  inventory: { wood_axe: false, wood: 0 },
+  inventory: { wood_axe: false, wood: 0, torch: false },
   keyItems: { flint_stick: false },
-  equipment: { owned: {}, equippedTool: null, equippedItem: null },
+  equipment: { owned: {}, equippedTool: null, equippedItem: null, equippedOffhand: null },
   campfires: [],
   campfireBuilt: false,
   campfirePosition: null,
@@ -124,6 +124,10 @@ export class GameState {
     return Boolean(this.fieldSurvivalState.inventory?.[normalizedItemId]);
   }
 
+  hasFieldOffhandItem(itemId) {
+    return Boolean(this.fieldSurvivalState.inventory?.[itemId] && this.fieldSurvivalState.equipment?.owned?.[itemId]);
+  }
+
   hasFieldKeyItem(itemId) {
     return Boolean(this.fieldSurvivalState.keyItems?.[itemId]);
   }
@@ -143,6 +147,7 @@ export class GameState {
       this.fieldSurvivalState.inventory[normalizedItemId] = true;
     }
     if (normalizedItemId === 'wood_axe') this.acquireFieldTool('wood_axe');
+    if (normalizedItemId === 'torch') this.acquireFieldOffhand('torch');
     this.saveFieldSurvivalState();
     return true;
   }
@@ -156,6 +161,24 @@ export class GameState {
     }
     this.saveFieldSurvivalState();
     return true;
+  }
+
+  acquireFieldOffhand(itemId) {
+    if (!itemId) return false;
+    this.fieldSurvivalState.equipment.owned[itemId] = true;
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  equipFieldOffhand(itemId) {
+    if (itemId && !this.fieldSurvivalState.equipment.owned?.[itemId]) return false;
+    this.fieldSurvivalState.equipment.equippedOffhand = itemId ?? null;
+    this.saveFieldSurvivalState();
+    return true;
+  }
+
+  getEquippedFieldOffhand() {
+    return this.fieldSurvivalState.equipment?.equippedOffhand ?? null;
   }
 
   equipFieldTool(itemId) {
@@ -261,6 +284,7 @@ export class GameState {
         field_axe: false,
         wood_axe: Boolean(source.inventory?.wood_axe || source.inventory?.field_axe),
         wood: Math.max(0, Number(source.inventory?.wood) || 0),
+        torch: Boolean(source.inventory?.torch || source.equipment?.owned?.torch),
       },
       keyItems: {
         flint_stick: Boolean(source.keyItems?.flint_stick || source.inventory?.flint_stick),
@@ -270,9 +294,11 @@ export class GameState {
           ...(source.equipment?.owned ?? {}),
           ...(source.equipment?.owned?.field_axe ? { wood_axe: true } : {}),
           ...(source.inventory?.field_axe || source.inventory?.wood_axe ? { wood_axe: true } : {}),
+          ...(source.inventory?.torch || source.equipment?.owned?.torch ? { torch: true } : {}),
         },
         equippedTool: source.equipment?.equippedTool === 'field_axe' ? 'wood_axe' : (source.equipment?.equippedTool ?? null),
         equippedItem: source.equipment?.equippedItem === 'wood' && Math.max(0, Number(source.inventory?.wood) || 0) > 0 ? 'wood' : null,
+        equippedOffhand: source.equipment?.equippedOffhand === 'torch' && Boolean(source.inventory?.torch || source.equipment?.owned?.torch) ? 'torch' : null,
       },
       campfires: this.repairFieldCampfires(source),
       campfireBuilt: Boolean(source.campfireBuilt || source.campfirePosition || source.campfires?.length),
@@ -313,6 +339,7 @@ export class GameState {
       ...(snapshot.equipped ?? {}),
       weapon,
       tool: snapshot.equipped?.tool === 'field_axe' ? null : (snapshot.equipped?.tool ?? null),
+      offhand: acquiredItemIds.includes(snapshot.equipped?.offhand) ? snapshot.equipped?.offhand : null,
     };
 
     return {
