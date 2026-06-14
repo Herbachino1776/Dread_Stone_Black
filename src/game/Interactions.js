@@ -23,6 +23,7 @@ export class Interactions {
   }
 
   updateHint() {
+    this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: this.dungeon.area === 'field' });
     const hint = Date.now() < this.feedbackUntil
       ? this.feedbackHint
       : this.getNearbyInteraction()?.hint ?? '';
@@ -51,6 +52,14 @@ export class Interactions {
       return {
         hint: indoorExit.promptText ?? (this.dungeon.area === 'black-grass-temple' ? '' : 'Tap INTERACT to climb back to the tomb-field.'),
         use: () => this.useIndoorExit(),
+      };
+    }
+
+    const fieldCampfireCraft = this.getOpenGroundCampfireCraftInteraction();
+    if (fieldCampfireCraft) {
+      return {
+        hint: fieldCampfireCraft.hint,
+        use: () => this.useOutdoorInteraction(fieldCampfireCraft),
       };
     }
 
@@ -290,8 +299,12 @@ export class Interactions {
     interaction.hint = interaction.repeatHint ?? 'The chest lies open and empty.';
     interaction.message = interaction.repeatMessage ?? 'The chest lies open and empty.';
     const message = interaction.acquiredMessage ?? 'You acquire an item.';
-    this.setTemporaryHint(message, 1600);
-    this.hud.showMessage(message);
+    const readyMessage = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1 && this.dungeon.gameState?.hasFieldItem?.('flint_stick')
+      ? ' Wood and Flint Stick ready. Hold INTERACT in open ground to build campfire.'
+      : '';
+    this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: this.dungeon.area === 'field' });
+    this.setTemporaryHint(`${message}${readyMessage}`, 2400);
+    this.hud.showMessage(`${message}${readyMessage}`);
     return false;
   }
 
@@ -315,13 +328,17 @@ export class Interactions {
     interaction.hint = 'The chopped stump is dry and bare.';
     interaction.message = 'The chopped stump is dry and bare.';
     window.setTimeout(() => {
-      this.setTemporaryHint('Harvested Wood.', 1500);
-      this.hud.showMessage('Harvested Wood.');
+      const message = this.dungeon.gameState?.hasFieldItem?.('flint_stick')
+        ? 'Harvested Wood. Wood and Flint Stick ready. Hold INTERACT in open ground to build campfire.'
+        : 'Harvested Wood. Find Flint Stick to build a campfire.';
+      this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: this.dungeon.area === 'field' });
+      this.setTemporaryHint(message, 2400);
+      this.hud.showMessage(message);
     }, 250);
     return false;
   }
 
-  useFieldCampfireCraft() {
+  useFieldCampfireCraft(interaction = null) {
     if (this.dungeon.gameState?.hasFieldCampfireBuilt?.()) {
       this.setTemporaryHint('Use campfire', 900);
       return false;
@@ -336,16 +353,22 @@ export class Interactions {
       return false;
     }
 
+    const placeAt = interaction?.placement ?? this.dungeon.getFieldCampfirePlacement?.(this.player);
+    if (!placeAt || !this.dungeon.isFieldCampfireOpenGround?.(placeAt)) {
+      this.setTemporaryHint('Need open ground.', 1400);
+      this.hud.showMessage('Need open ground.');
+      return false;
+    }
+
     if (!this.dungeon.gameState?.consumeFieldItems?.({ wood: 1, flint_stick: 1 })) {
       this.setTemporaryHint('Need Wood and Flint Stick.', 1400);
       return false;
     }
 
-    const placeAt = this.player.position.clone();
-    placeAt.z -= 2.2;
     placeAt.y = 0;
     this.dungeon.gameState?.markFieldCampfireBuilt?.(placeAt);
     this.dungeon.addFieldCampfire?.(placeAt);
+    this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: this.dungeon.area === 'field' });
     this.setTemporaryHint('Built Campfire.', 1600);
     this.hud.showMessage('Built Campfire.');
     return false;
@@ -447,6 +470,26 @@ export class Interactions {
     return this.dungeon.area;
   }
 
+  getOpenGroundCampfireCraftInteraction() {
+    if (this.dungeon.area !== 'field' || this.dungeon.gameState?.hasFieldCampfireBuilt?.()) return null;
+    const hasIngredients = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1
+      && this.dungeon.gameState?.hasFieldItem?.('flint_stick');
+    if (!hasIngredients) return null;
+
+    const placement = this.dungeon.getFieldCampfirePlacement?.(this.player);
+    return {
+      id: 'field_survival_open_ground_campfire',
+      label: 'Campfire Crafting',
+      target: placement ?? this.player.position,
+      range: 99,
+      hint: placement ? 'Build Campfire: Use Wood + Flint Stick' : 'Need open ground.',
+      message: placement ? 'Built Campfire.' : 'Need open ground.',
+      type: 'fieldCampfireCraft',
+      placement,
+      openGroundCraft: true,
+    };
+  }
+
   getNearbyOutdoorInteraction() {
     if (!this.dungeon.outdoorInteractions?.length) return null;
 
@@ -471,7 +514,7 @@ export class Interactions {
     if (interaction.type === 'fieldCampfireCraft') {
       const hasIngredients = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1
         && this.dungeon.gameState?.hasFieldItem?.('flint_stick');
-      interaction.hint = hasIngredients ? 'Build campfire' : 'Need Wood and Flint Stick.';
+      interaction.hint = hasIngredients ? 'Build Campfire: Use Wood + Flint Stick' : 'Need Wood and Flint Stick.';
       interaction.message = hasIngredients ? 'Built Campfire.' : 'Need Wood and Flint Stick.';
     }
     return interaction;

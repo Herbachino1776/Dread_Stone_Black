@@ -729,3 +729,27 @@
     min-height: 36px;
   }
 }
+
+.field-kit-status {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 4;
+  max-width: min(72%, 430px);
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid rgba(183, 151, 82, 0.68);
+  border-radius: 10px;
+  background: rgba(10, 8, 7, 0.78);
+  color: #f8e2aa;
+  font-size: clamp(0.68rem, 2.4vw, 0.8rem);
+  line-height: 1.2;
+  text-shadow: 0 2px 4px #000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.field-kit-status.is-visible {
+  opacity: 1;
+}

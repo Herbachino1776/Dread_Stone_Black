@@ -310,6 +310,7 @@ export class Game {
           <div class="viewport-stage" data-game="viewport">
             <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
             <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
+            <p class="field-kit-status" data-hud="field-kit" aria-live="polite" hidden></p>
             <div class="first-person-arms" data-arms-overlay aria-hidden="true">
               <div class="first-person-arms__layer" data-arms-layer="base"></div>
               <div class="first-person-weapon" data-fpv-equipment-layer hidden></div>
