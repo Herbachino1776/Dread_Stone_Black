@@ -76,9 +76,14 @@ const FIELD_REDWOOD_SPRITES = Object.freeze([
 ]);
 const FIELD_FOLIAGE_SPRITES = Object.freeze([...FIELD_SMALL_FOLIAGE_SPRITES, ...FIELD_REDWOOD_SPRITES]);
 const FIELD_FOREST_DENSITY = 0.95;
-const FIELD_REDWOOD_COUNT_TARGET = 60;
-const FIELD_MID_FOLIAGE_COUNT_TARGET = 190;
-const FIELD_BUSH_COUNT_TARGET = 190;
+const FIELD_TREE_WALL_ENABLED = true;
+const FIELD_TREE_WALL_REDWOOD_COUNT = 120;
+const FIELD_TREE_WALL_UNDERGROWTH_COUNT = 180;
+const FIELD_TREE_WALL_MIN_RADIUS = 175;
+const FIELD_TREE_WALL_MAX_RADIUS = 205;
+const FIELD_REDWOOD_COUNT_TARGET = 60 + FIELD_TREE_WALL_REDWOOD_COUNT;
+const FIELD_MID_FOLIAGE_COUNT_TARGET = 190 + Math.floor(FIELD_TREE_WALL_UNDERGROWTH_COUNT * 0.45);
+const FIELD_BUSH_COUNT_TARGET = 190 + Math.ceil(FIELD_TREE_WALL_UNDERGROWTH_COUNT * 0.55);
 const FIELD_FOLIAGE_INSTANCE_TARGET = FIELD_REDWOOD_COUNT_TARGET + FIELD_MID_FOLIAGE_COUNT_TARGET + FIELD_BUSH_COUNT_TARGET;
 const FIELD_FOLIAGE_ALPHA_TEST = 0.35;
 const FIELD_FOLIAGE_GROUND_Y = 0;
@@ -938,6 +943,36 @@ export class DungeonScene {
       return true;
     };
 
+
+    if (FIELD_TREE_WALL_ENABLED) {
+      for (let i = 0; i < FIELD_TREE_WALL_REDWOOD_COUNT; i += 1) {
+        const angle = (Math.PI * 2 * i) / FIELD_TREE_WALL_REDWOOD_COUNT;
+        const radius = FIELD_TREE_WALL_MIN_RADIUS + random() * (FIELD_TREE_WALL_MAX_RADIUS - FIELD_TREE_WALL_MIN_RADIUS);
+        pushPlacement({
+          x: Math.cos(angle) * radius,
+          z: Math.sin(angle) * radius,
+          zone: 'continuous-perimeter-redwood-wall',
+          layer: 'redwood',
+          minScale: 12.5,
+          maxScale: 18.0,
+          preferredIndex: i,
+        });
+      }
+      for (let i = 0; i < FIELD_TREE_WALL_UNDERGROWTH_COUNT; i += 1) {
+        const angle = (Math.PI * 2 * (i + 0.5)) / FIELD_TREE_WALL_UNDERGROWTH_COUNT;
+        const radius = FIELD_TREE_WALL_MIN_RADIUS - 8 + random() * (FIELD_TREE_WALL_MAX_RADIUS - FIELD_TREE_WALL_MIN_RADIUS + 10);
+        pushPlacement({
+          x: Math.cos(angle) * radius,
+          z: Math.sin(angle) * radius,
+          zone: 'continuous-perimeter-understory-wall',
+          layer: i % 2 === 0 ? 'mid' : 'bush',
+          minScale: i % 2 === 0 ? 3.4 : 1.3,
+          maxScale: i % 2 === 0 ? 6.5 : 2.8,
+          preferredIndex: i,
+        });
+      }
+    }
+
     const heroRedwoods = [
       { x: -44, z: -142 }, { x: 46, z: -132 }, { x: -112, z: -42 },
       { x: 96, z: -34 }, { x: -142, z: 82 }, { x: 132, z: 58 },
@@ -1029,7 +1064,10 @@ export class DungeonScene {
       bushCount: FIELD_BUSH_COUNT_TARGET,
       spriteCount: FIELD_FOLIAGE_SPRITES.length,
       redwoodSpriteCount: FIELD_REDWOOD_SPRITES.length,
-      placementStrategy: 'seeded dense outer redwood ring, rich interior forest clusters, path-safe understory, and landmark carved legend trees',
+      placementStrategy: 'seeded dense outer redwood ring, deterministic continuous perimeter tree wall, rich interior forest clusters, path-safe understory, and landmark carved legend trees',
+      treeWallEnabled: FIELD_TREE_WALL_ENABLED,
+      treeWallRedwoodCount: FIELD_TREE_WALL_REDWOOD_COUNT,
+      treeWallUndergrowthCount: FIELD_TREE_WALL_UNDERGROWTH_COUNT,
       grounding: 'centered planes placed at ground plus half height minus per-layer sink depth',
       collision: 'visual only; no per-sprite blockers',
     };
@@ -1082,14 +1120,14 @@ export class DungeonScene {
       label: 'Crude Field Axe Chest',
       position: FIELD_SURVIVAL_PLACEMENTS.axeChest.position,
       itemId: 'field_axe',
-      acquiredMessage: 'Found Field Axe.',
+      acquiredMessage: 'Found Field Axe. Trees can now be chopped.',
     });
     this.addFieldSurvivalChest({
       id: FIELD_SURVIVAL_PLACEMENTS.flintStickChest.id,
       label: 'Flint Stick Chest',
       position: FIELD_SURVIVAL_PLACEMENTS.flintStickChest.position,
       itemId: 'flint_stick',
-      acquiredMessage: 'Found Flint Stick.',
+      acquiredMessage: 'Found Flint Stick. Wood + Flint Stick can build a campfire.',
     });
     this.addHarvestableFieldTree();
     this.addCampfireCraftingPrompt();
@@ -1185,7 +1223,38 @@ export class DungeonScene {
       hint: 'Need Wood and Flint Stick.',
       message: 'Need Wood and Flint Stick.',
       type: 'fieldCampfireCraft',
+      fixedCraftStation: true,
     });
+  }
+
+  isFieldCampfireOpenGround(position) {
+    if (!position || this.area !== 'field') return false;
+    const x = position.x;
+    const z = position.z;
+    if (Math.abs(x) > 168 || Math.abs(z) > 168) return false;
+    if (!this.isFieldFoliageSafePosition(x, z)) return false;
+    const protectedTargets = this.outdoorInteractions.filter((interaction) => interaction.type !== 'fieldCampfireCraft');
+    return !protectedTargets.some((interaction) => {
+      const dx = x - interaction.target.x;
+      const dz = z - interaction.target.z;
+      const radius = Math.max(5.5, (interaction.range ?? 4) + 2.5);
+      return dx * dx + dz * dz < radius * radius;
+    });
+  }
+
+  getFieldCampfirePlacement(player) {
+    if (!player?.position || this.area !== 'field') return null;
+    const forward = typeof player.getLookDirection === 'function'
+      ? player.getLookDirection()
+      : new THREE.Vector3(Math.sin(player.yaw ?? 0), 0, Math.cos(player.yaw ?? 0)).normalize();
+    const base = player.position.clone();
+    const candidates = [3.0, 4.2, 2.2].map((distance) => base.clone().addScaledVector(forward, distance));
+    candidates.push(base.clone().add(new THREE.Vector3(2.8, 0, 0)), base.clone().add(new THREE.Vector3(-2.8, 0, 0)));
+    const open = candidates.find((candidate) => {
+      candidate.y = 0;
+      return this.isFieldCampfireOpenGround(candidate);
+    });
+    return open ? new THREE.Vector3(open.x, 0, open.z) : null;
   }
 
   addFieldCampfire(position) {

@@ -9,6 +9,7 @@ export class Hud {
     this.hpEl = root.querySelector('[data-stat="hp"]');
     this.powerEl = root.querySelector('[data-stat="power"]');
     this.damageEl = root.querySelector('[data-hud="damage"]');
+    this.fieldKitEl = root.querySelector('[data-hud="field-kit"]');
     this.debugFrameSkip = 0;
   }
 
@@ -50,5 +51,25 @@ export class Hud {
   showMessage(message) {
     // Gameplay message calls intentionally stay non-visual while the message panel is removed.
     if (message) console.debug(`[Dread Stone Black] ${message}`);
+  }
+
+  updateFieldKitStatus(snapshot, { visible = false } = {}) {
+    if (!this.fieldKitEl) return;
+
+    const inventory = snapshot?.inventory ?? {};
+    const hasAxe = Boolean(inventory.field_axe);
+    const wood = Math.max(0, Number(inventory.wood) || 0);
+    const hasFlint = Boolean(inventory.flint_stick);
+    const campfireBuilt = Boolean(snapshot?.campfireBuilt);
+    const shouldShow = visible && (hasAxe || wood > 0 || hasFlint || campfireBuilt);
+
+    this.fieldKitEl.hidden = !shouldShow;
+    this.fieldKitEl.classList.toggle('is-visible', shouldShow);
+    if (!shouldShow) {
+      this.fieldKitEl.textContent = '';
+      return;
+    }
+
+    this.fieldKitEl.textContent = `Field Kit: Axe ${hasAxe ? 'yes' : 'no'} | Wood x${wood} | Flint Stick ${hasFlint ? 'yes' : 'no'} | Campfire ${campfireBuilt ? 'built' : 'not built'}`;
   }
 }
