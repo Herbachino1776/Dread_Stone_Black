@@ -112,6 +112,22 @@ export class Interactions {
       return this.useCentralShrine(interaction);
     }
 
+    if (interaction.type === 'fieldSurvivalChest') {
+      return this.useFieldSurvivalChest(interaction);
+    }
+
+    if (interaction.type === 'fieldHarvestableTree') {
+      return this.useFieldHarvestableTree(interaction);
+    }
+
+    if (interaction.type === 'fieldCampfireCraft') {
+      return this.useFieldCampfireCraft(interaction);
+    }
+
+    if (interaction.type === 'fieldCampfire') {
+      return this.useFieldCampfire(interaction);
+    }
+
     this.setTemporaryHint(interaction.message, 1200);
 
     if (interaction.functional) {
@@ -252,6 +268,96 @@ export class Interactions {
     return false;
   }
 
+  useFieldSurvivalChest(interaction) {
+    if (this.dungeon.gameState?.hasOpenedFieldChest?.(interaction.id)) {
+      const repeatMessage = interaction.repeatMessage ?? 'The chest lies open and empty.';
+      this.setTemporaryHint(repeatMessage, 1200);
+      this.hud.showMessage(repeatMessage);
+      return false;
+    }
+
+    this.dungeon.gameState?.markFieldChestOpened?.(interaction.id);
+    this.dungeon.gameState?.addFieldItem?.(interaction.itemId);
+    const chest = this.dungeon.fieldSurvivalObjects?.get(interaction.id);
+    if (chest) {
+      chest.children.forEach((child) => {
+        if (child.geometry?.type === 'BoxGeometry' && child.position.y > 0.6) {
+          child.position.set(0, 0.92, -0.42);
+          child.rotation.x = -0.72;
+        }
+      });
+    }
+    interaction.hint = interaction.repeatHint ?? 'The chest lies open and empty.';
+    interaction.message = interaction.repeatMessage ?? 'The chest lies open and empty.';
+    const message = interaction.acquiredMessage ?? 'You acquire an item.';
+    this.setTemporaryHint(message, 1600);
+    this.hud.showMessage(message);
+    return false;
+  }
+
+  useFieldHarvestableTree(interaction) {
+    if (this.dungeon.gameState?.hasHarvestedFieldTree?.(interaction.id)) {
+      this.setTemporaryHint('The chopped stump is dry and bare.', 1200);
+      return false;
+    }
+
+    if (!this.dungeon.gameState?.hasFieldItem?.('field_axe')) {
+      this.setTemporaryHint('A tool is needed.', 1200);
+      this.hud.showMessage('A tool is needed.');
+      return false;
+    }
+
+    this.setTemporaryHint('Chop tree', 700);
+    this.dungeon.gameState?.markFieldTreeHarvested?.(interaction.id);
+    this.dungeon.gameState?.addFieldItem?.('wood', 1);
+    if (interaction.treeObject) interaction.treeObject.visible = false;
+    this.dungeon.addFieldStump?.(interaction.stumpPosition, interaction.id);
+    interaction.hint = 'The chopped stump is dry and bare.';
+    interaction.message = 'The chopped stump is dry and bare.';
+    window.setTimeout(() => {
+      this.setTemporaryHint('Harvested Wood.', 1500);
+      this.hud.showMessage('Harvested Wood.');
+    }, 250);
+    return false;
+  }
+
+  useFieldCampfireCraft() {
+    if (this.dungeon.gameState?.hasFieldCampfireBuilt?.()) {
+      this.setTemporaryHint('Use campfire', 900);
+      return false;
+    }
+
+    if (
+      this.dungeon.gameState?.getFieldItemCount?.('wood') < 1
+      || !this.dungeon.gameState?.hasFieldItem?.('flint_stick')
+    ) {
+      this.setTemporaryHint('Need Wood and Flint Stick.', 1400);
+      this.hud.showMessage('Need Wood and Flint Stick.');
+      return false;
+    }
+
+    if (!this.dungeon.gameState?.consumeFieldItems?.({ wood: 1, flint_stick: 1 })) {
+      this.setTemporaryHint('Need Wood and Flint Stick.', 1400);
+      return false;
+    }
+
+    const placeAt = this.player.position.clone();
+    placeAt.z -= 2.2;
+    placeAt.y = 0;
+    this.dungeon.gameState?.markFieldCampfireBuilt?.(placeAt);
+    this.dungeon.addFieldCampfire?.(placeAt);
+    this.setTemporaryHint('Built Campfire.', 1600);
+    this.hud.showMessage('Built Campfire.');
+    return false;
+  }
+
+  useFieldCampfire(interaction) {
+    // TODO: Route this interaction into the future cooking system once recipes exist.
+    this.setTemporaryHint(interaction.message ?? 'The fire is ready for cooking.', 1400);
+    this.hud.showMessage(interaction.message ?? 'The fire is ready for cooking.');
+    return false;
+  }
+
   pickUpKey() {
     if (!this.dungeon.collectKey()) return;
 
@@ -345,9 +451,30 @@ export class Interactions {
     if (!this.dungeon.outdoorInteractions?.length) return null;
 
     return this.dungeon.outdoorInteractions
-      .map((interaction) => ({ interaction, distance: this.horizontalDistanceTo(interaction.target) }))
+      .filter((interaction) => this.isOutdoorInteractionAvailable(interaction))
+      .map((interaction) => ({ interaction: this.decorateOutdoorInteraction(interaction), distance: this.horizontalDistanceTo(interaction.target) }))
       .filter(({ interaction, distance }) => distance <= (interaction.range ?? 4))
       .sort((a, b) => a.distance - b.distance)[0]?.interaction ?? null;
+  }
+
+  isOutdoorInteractionAvailable(interaction) {
+    if (interaction.type === 'fieldCampfireCraft') {
+      return this.dungeon.area === 'field' && !this.dungeon.gameState?.hasFieldCampfireBuilt?.();
+    }
+    return true;
+  }
+
+  decorateOutdoorInteraction(interaction) {
+    if (interaction.type === 'fieldHarvestableTree' && !this.dungeon.gameState?.hasHarvestedFieldTree?.(interaction.id)) {
+      interaction.hint = this.dungeon.gameState?.hasFieldItem?.('field_axe') ? 'Chop tree' : 'A tool is needed.';
+    }
+    if (interaction.type === 'fieldCampfireCraft') {
+      const hasIngredients = this.dungeon.gameState?.getFieldItemCount?.('wood') >= 1
+        && this.dungeon.gameState?.hasFieldItem?.('flint_stick');
+      interaction.hint = hasIngredients ? 'Build campfire' : 'Need Wood and Flint Stick.';
+      interaction.message = hasIngredients ? 'Built Campfire.' : 'Need Wood and Flint Stick.';
+    }
+    return interaction;
   }
 
   getNearbyIndoorExit() {
