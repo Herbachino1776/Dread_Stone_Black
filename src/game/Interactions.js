@@ -149,7 +149,7 @@ export class Interactions {
     }
 
     if (interaction.type === 'fieldFishing') {
-      return this.startHoldAction('fish', FISHING_HOLD_SECONDS, interaction);
+      return this.startFishingHold(interaction);
     }
 
     if (interaction.type === 'cookedFishPickup') {
@@ -465,6 +465,21 @@ export class Interactions {
     return false;
   }
 
+  startFishingHold(interaction = null) {
+    const fishingZone = this.dungeon.getNearbyFishingZone?.(this.player.position);
+    if (!fishingZone || this.equipmentRuntime?.getEquippedWeaponProfile?.().id !== 'fishing_rod') {
+      this.cancelCampfireHold();
+      return false;
+    }
+
+    return this.startHoldAction('fish', FISHING_HOLD_SECONDS, {
+      id: interaction?.id ?? fishingZone.id,
+      fishingZoneId: fishingZone.id,
+      origin: this.player.position.clone(),
+      originalZoneName: fishingZone.name,
+    });
+  }
+
   startHoldAction(type, duration, payload = {}) {
     this.activeHold = { type, duration, elapsed: 0, origin: payload.origin ?? this.player.position.clone(), label: type === 'cook' ? 'COOK' : type === 'fish' ? 'FISH' : 'BUILD', ...payload };
     this.campfireHold = this.activeHold.type === 'campfire' ? this.activeHold : null;
@@ -476,9 +491,16 @@ export class Interactions {
   shouldCancelActiveHold() {
     const hold = this.activeHold;
     if (!hold) return false;
-    if (this.player.position.distanceTo(hold.origin) > (hold.type === 'fish' ? 2.0 : 1.4)) return true;
+    if (hold.type === 'fish') {
+      const nearFishingZone = this.dungeon.getNearbyFishingZone?.(this.player.position);
+      const movedFromShoreline = this.horizontalDistanceTo(hold.origin) > 5.0;
+      return this.dungeon.area !== 'field'
+        || this.equipmentRuntime?.getEquippedWeaponProfile?.().id !== 'fishing_rod'
+        || !nearFishingZone
+        || movedFromShoreline;
+    }
+    if (this.player.position.distanceTo(hold.origin) > 1.4) return true;
     if (hold.type === 'campfire') return Boolean(this.getCampfireRequirementMessage({ placement: hold.placement }));
-    if (hold.type === 'fish') return this.equipmentRuntime?.getEquippedWeaponProfile?.().id !== 'fishing_rod' || !this.dungeon.getNearbyFishingZone?.(this.player.position);
     if (hold.type === 'cook') return this.dungeon.gameState?.getEquippedFieldItem?.() !== 'raw_fish' || this.dungeon.gameState?.getFieldItemCount?.('raw_fish') < 1 || this.horizontalDistanceTo(hold.target) > (hold.range ?? 4.25);
     return false;
   }
