@@ -6,10 +6,11 @@ import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
 import { ObjectiveRuntime } from '../engine/objectives/ObjectiveRuntime.js';
 import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
 import { Feedback } from './Feedback.js';
+import { FirstPersonArmsOverlay } from './FirstPersonArmsOverlay.js';
 import { EquipmentPanel } from './equipment/EquipmentPanel.js';
 import { equipmentRegistry } from './equipment/equipmentRegistry.js';
 import { startingEquipment } from './equipment/startingEquipment.js';
-import { FirstPersonViewModel } from './fpv/FirstPersonViewModel.js';
+import { FPVEquipmentRenderer } from './fpv/FPVEquipmentRenderer.js';
 import { GameState } from './GameState.js';
 import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
@@ -18,8 +19,6 @@ import { PlayerController } from './PlayerController.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 import { getObjectivePackForLocation } from './objectives/objectiveRegistry.js';
 import { objectiveMessages, resolveObjectiveMessage } from './objectives/objectiveMessages.js';
-import { ThirdPersonCameraController } from './player/ThirdPersonCameraController.js';
-import { ThirdPersonNeckmanPlayerAvatar } from './player/ThirdPersonNeckmanPlayerAvatar.js';
 import { ObjectivePanel } from './ui/ObjectivePanel.js';
 
 const PLAYER_TORCH_POINT_LIGHT = Object.freeze({
@@ -37,9 +36,6 @@ const PLAYER_TORCH_SPOT_LIGHT = Object.freeze({
   penumbra: 0.82,
   decay: 1.25,
 });
-
-const PLAYER_PRESENTATION_MODE = 'thirdPerson';
-const ENABLE_THIRD_PERSON_PLAYER = PLAYER_PRESENTATION_MODE === 'thirdPerson';
 
 export class Game {
   constructor(app) {
@@ -122,34 +118,18 @@ export class Game {
     });
     this.hud = new Hud(this.app, { debugEnabled: this.debugHudEnabled });
     this.feedback = new Feedback(this.camera);
-    this.armsOverlay = ENABLE_THIRD_PERSON_PLAYER ? null : new FirstPersonArmsOverlay(this.app);
+    this.armsOverlay = new FirstPersonArmsOverlay(this.app);
     this.objectivePanel = new ObjectivePanel({
       root: this.app,
       objectiveRuntime: this.objectiveRuntime,
       enabled: objectiveDebugUiEnabled,
     });
     this.createPlayerTorchLight();
-    this.thirdPersonPlayerAvatar = ENABLE_THIRD_PERSON_PLAYER
-      ? new ThirdPersonNeckmanPlayerAvatar({
-        scene: this.scene,
-        player: this.player,
-        equipmentRuntime: this.equipmentRuntime,
-      })
-      : null;
-    this.thirdPersonCamera = ENABLE_THIRD_PERSON_PLAYER
-      ? new ThirdPersonCameraController({
-        camera: this.camera,
-        player: this.player,
-        collisionWorld: this.dungeon.collision,
-      })
-      : null;
-    this.fpvEquipmentRenderer = ENABLE_THIRD_PERSON_PLAYER
-      ? this.thirdPersonPlayerAvatar
-      : new FPVEquipmentRenderer({
-        root: this.app,
-        armsOverlay: this.armsOverlay,
-        equipmentRuntime: this.equipmentRuntime,
-      });
+    this.fpvEquipmentRenderer = new FPVEquipmentRenderer({
+      root: this.app,
+      armsOverlay: this.armsOverlay,
+      equipmentRuntime: this.equipmentRuntime,
+    });
     this.dungeon.fpvEquipmentRenderer = this.fpvEquipmentRenderer;
     this.setPlayerTorchEnabled(this.equipmentRuntime.getEquippedOffhandId?.() === 'torch');
     this.controls = new MobileControls(this.app);
@@ -168,7 +148,7 @@ export class Game {
       hud: this.hud,
       controls: this.controls,
       equipmentRuntime: this.equipmentRuntime,
-      fpvEquipmentRenderer: this.firstPersonViewModel,
+      fpvEquipmentRenderer: this.fpvEquipmentRenderer,
     });
 
     this.preventMobilePageGestures();
@@ -371,10 +351,6 @@ export class Game {
     const debugReadout = this.debugHudEnabled
       ? '<p class="debug-readout" data-hud="debug" aria-label="Debug player position">POS 0.0, 0.0 · YAW 0° · PITCH 0°</p>'
       : '';
-    const fpvHidden = ENABLE_THIRD_PERSON_PLAYER ? ' hidden' : '';
-    const fpvClass = ENABLE_THIRD_PERSON_PLAYER
-      ? 'first-person-arms first-person-arms--legacy-disabled'
-      : 'first-person-arms';
 
     return `
       <main class="reliquary-shell" aria-label="Dread Stone Black handheld reliquary interface">
@@ -400,7 +376,7 @@ export class Game {
             <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
             <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
             <p class="field-kit-status" data-hud="field-kit" aria-live="polite" hidden></p>
-            <div class="${fpvClass}" data-arms-overlay aria-hidden="true" data-player-presentation-mode="${PLAYER_PRESENTATION_MODE}"${fpvHidden}>
+            <div class="first-person-arms" data-arms-overlay aria-hidden="true">
               <div class="first-person-arms__layer" data-arms-layer="base"></div>
               <div class="first-person-offhand first-person-offhand--torch" data-fpv-offhand-layer hidden></div>
               <div class="first-person-weapon" data-fpv-equipment-layer hidden></div>
@@ -476,13 +452,11 @@ export class Game {
     if (!this.combat.isPlayerDead) {
       this.player.update(deltaSeconds, this.controls);
     }
-    this.thirdPersonPlayerAvatar?.update(deltaSeconds);
-    this.thirdPersonCamera?.update(deltaSeconds);
     this.dungeon.update(deltaSeconds, this.player);
     this.combat.update(deltaSeconds);
     const hunger = this.gameState.updateHunger?.(deltaSeconds, { paused: this.equipmentPanel?.isOpen || this.isPaused, applyStarvationDamage: (amount) => this.combat.takeDamage?.(amount, 'Starvation') });
     if (hunger) this.hud.updateHunger?.(hunger);
-    this.armsOverlay?.update(deltaSeconds);
+    this.armsOverlay.update(deltaSeconds);
     this.updatePlayerTorchLight(deltaSeconds);
     this.updateObjectiveLocationTracking(deltaSeconds);
     this.interactions.updateHint();

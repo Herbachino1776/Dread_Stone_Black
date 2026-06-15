@@ -50,12 +50,12 @@ Enemy AI was not redesigned. Sheep Demon, Neck Man, and Black Grass Temple facti
 
 FPV equipment code lives in `src/game/fpv/`.
 
-- `FirstPersonViewModel.js` owns the normal gameplay 3D camera-space hands and weapon presentation.
-- `fpvWeaponProfiles.js` remains as legacy fallback profile data for the disabled DOM FPV path.
+- `fpvWeaponProfiles.js` maps equipment weapon profiles to first-person visual profiles.
+- `FPVEquipmentRenderer.js` listens for equipped weapon changes, keeps the existing unarmed arms strip active, and toggles a weapon layer.
 
-`unarmed` shows the Neckman prototype FPV hands/arms with no weapon. `rusted_sword` maps to the ritual broadsword GLB and attaches it to Neckman's `arm_right_hand` bone. The old DOM arms and placeholder weapon visuals are disabled in normal gameplay behind `ENABLE_LEGACY_DOM_FPV = false`.
+`unarmed` uses the existing arms idle strip. `rusted_sword` currently uses a procedural DOM/CSS placeholder blade because no dedicated sword FPV strip exists under `public/assets/`. This keeps the hook visible without baking in a fake image asset assumption.
 
-See `docs/architecture/FIRST_PERSON_3D_VIEWMODEL_RUNTIME.md` for the full 3D viewmodel architecture, asset paths, tuning constants, and future arms-only replacement path.
+Future FPV strips can add states such as `idle`, `attack`, `spell`, `block`, `hurt`, and `item_use` to the FPV profile map without changing combat input.
 
 ## Pickup and Chest
 
@@ -100,5 +100,5 @@ The panel shows the current weapon and available weapons. Selecting a row equips
 
 - Armor, shields, spells, durability, item stats, and quick item use are placeholders.
 - Equipment is serializable but not yet integrated with a full Save Game Runtime.
-- Rusted sword FPV uses the ritual broadsword GLB attached to the prototype Neckman right-hand socket; grip offsets still need visual polish.
+- Rusted sword FPV uses a procedural placeholder until a real first-person sword strip exists.
 - Attack windup/recovery are profile data only; combat currently applies cooldown immediately.

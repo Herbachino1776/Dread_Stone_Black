@@ -26,8 +26,6 @@ export class PlayerController {
     this.maxPitch = THREE.MathUtils.degToRad(35);
     this.pitch = 0;
     this.keyboard = new Set();
-    this.lastMoveInput = { x: 0, y: 0 };
-    this.lastMovementVector = new THREE.Vector3();
 
     this.bindKeyboard();
     this.syncCamera();
@@ -58,7 +56,6 @@ export class PlayerController {
     const keyboardMove = this.getKeyboardMove();
     const moveX = controls.move.x || keyboardMove.x;
     const moveY = controls.move.y || keyboardMove.y;
-    this.lastMoveInput = { x: moveX, y: moveY };
 
     const forward = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     // Keep positive X input as camera-relative right for both the touch stick and keyboard strafing.
@@ -67,7 +64,6 @@ export class PlayerController {
 
     movement.addScaledVector(forward, moveY * this.walkSpeed * deltaSeconds);
     movement.addScaledVector(right, moveX * this.strafeSpeed * deltaSeconds);
-    this.lastMovementVector.copy(movement);
 
     this.position = this.collisionWorld.moveWithCollision(this.position, movement);
 
@@ -105,11 +101,6 @@ export class PlayerController {
 
   getLookDirection() {
     return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).normalize();
-  }
-
-  getMovementDirection() {
-    if (this.lastMovementVector.lengthSq() <= 0.000001) return null;
-    return this.lastMovementVector.clone().normalize();
   }
 
   reset() {
