@@ -7,9 +7,10 @@ const LEVER_RANGE = 2.5;
 const INDOOR_EXIT_RANGE = 4.0;
 const SHORTCUT_DOOR_RANGE = 2.55;
 const SECRET_WALL_RANGE = 2.4;
-const CAMPFIRE_HOLD_SECONDS = 2;
-const FISHING_HOLD_SECONDS = 3;
-const COOKING_HOLD_SECONDS = 10;
+const CAMPFIRE_TIMED_ACTION_SECONDS = 2;
+const FISHING_TIMED_ACTION_SECONDS = 3;
+const COOKING_TIMED_ACTION_SECONDS = 10;
+const TIMED_ACTION_MOVE_CANCEL_DISTANCE = 1.4;
 
 export class Interactions {
   constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null, objectiveRuntime = null }) {
@@ -23,8 +24,7 @@ export class Interactions {
     this.currentHint = '';
     this.feedbackHint = '';
     this.feedbackUntil = 0;
-    this.activeHold = null;
-    this.campfireHold = null;
+    this.activeTimedAction = null;
   }
 
   updateHint() {
@@ -66,19 +66,19 @@ export class Interactions {
       };
     }
 
-    const fieldCampfireCraft = this.getOpenGroundCampfireCraftInteraction();
-    if (fieldCampfireCraft) {
-      return {
-        hint: fieldCampfireCraft.hint,
-        use: () => this.useOutdoorInteraction(fieldCampfireCraft),
-      };
-    }
-
     const outdoorInteraction = this.getNearbyOutdoorInteraction();
     if (outdoorInteraction) {
       return {
         hint: outdoorInteraction.hint,
         use: () => this.useOutdoorInteraction(outdoorInteraction),
+      };
+    }
+
+    const fieldCampfireCraft = this.getOpenGroundCampfireCraftInteraction();
+    if (fieldCampfireCraft) {
+      return {
+        hint: fieldCampfireCraft.hint,
+        use: () => this.useOutdoorInteraction(fieldCampfireCraft),
       };
     }
 
@@ -140,8 +140,12 @@ export class Interactions {
       return this.useFieldHarvestableTree(interaction);
     }
 
+    if (interaction.type === 'activeTimedAction') {
+      return false;
+    }
+
     if (interaction.type === 'fieldCampfireCraft') {
-      return this.tryStartFieldCampfireHold(interaction);
+      return this.tryStartFieldCampfireTimedAction(interaction);
     }
 
     if (interaction.type === 'fieldCampfire') {
@@ -149,7 +153,7 @@ export class Interactions {
     }
 
     if (interaction.type === 'fieldFishing') {
-      return this.startFishingHold(interaction);
+      return this.startFishingTimedAction(interaction);
     }
 
     if (interaction.type === 'cookedFishPickup') {
@@ -406,50 +410,77 @@ export class Interactions {
     return '';
   }
 
-  tryStartFieldCampfireHold(interaction = null) {
+  tryStartFieldCampfireTimedAction(interaction = null) {
     const missing = this.getCampfireRequirementMessage(interaction);
     if (missing) {
       this.setTemporaryHint(missing, 1400);
       this.hud.showMessage(missing);
-      this.cancelCampfireHold();
+      this.cancelTimedAction({ silent: true });
       return false;
     }
 
     const placement = interaction?.placement ?? this.dungeon.getFieldCampfirePlacement?.(this.player);
-    this.startHoldAction('campfire', CAMPFIRE_HOLD_SECONDS, { placement: placement.clone?.() ?? placement, origin: this.player.position.clone() });
-    this.setTemporaryHint('Hold Interact', 500);
-    return false;
+    return this.startTimedAction({
+      type: 'buildCampfire',
+      label: 'Building',
+      durationSeconds: CAMPFIRE_TIMED_ACTION_SECONDS,
+      startPosition: this.player.position.clone(),
+      placement: placement.clone?.() ?? placement,
+      cancelMessage: 'Building canceled.',
+      validate: (action) => this.dungeon.area === 'field'
+        && this.player.position.distanceTo(action.startPosition) <= TIMED_ACTION_MOVE_CANCEL_DISTANCE
+        && !this.getCampfireRequirementMessage({ placement: action.placement }),
+      complete: (action) => this.completeFieldCampfireCraft(action),
+    });
   }
 
-  updateHold(deltaSeconds, isInteractHeld, cancelRequested = false) {
-    if (!this.activeHold) { this.hud.updateHoldProgress?.(0); return; }
-    if (cancelRequested || !isInteractHeld || this.shouldCancelActiveHold()) { this.cancelCampfireHold(); return; }
-    this.activeHold.elapsed += deltaSeconds;
-    const progress = Math.min(1, this.activeHold.elapsed / this.activeHold.duration);
-    this.hud.updateHoldProgress?.(progress, this.activeHold.label);
-    if (progress >= 1) {
-      this.completeActiveHold();
+  updateTimedAction(deltaSeconds, cancelRequested = false) {
+    const action = this.activeTimedAction;
+    if (!action) { this.hud.updateTimedActionProgress?.(0); return; }
+    if (cancelRequested || action.validate?.(action) === false) {
+      this.cancelTimedAction();
+      return;
+    }
+    action.elapsedSeconds = Math.min(action.durationSeconds, action.elapsedSeconds + Math.max(0, deltaSeconds));
+    const progress = Math.min(1, action.elapsedSeconds / Math.max(0.001, action.durationSeconds));
+    this.hud.updateTimedActionProgress?.(progress, action.label);
+    if (progress >= 1 && !action.completed) {
+      action.completed = true;
+      this.activeTimedAction = null;
+      this.hud.updateTimedActionProgress?.(0);
+      action.complete?.(action);
+      this.updateHint();
     }
   }
 
-  cancelCampfireHold() {
-    this.activeHold = null;
-    this.campfireHold = null;
-    this.hud.updateHoldProgress?.(0);
+  updateHold(deltaSeconds, isInteractHeld, cancelRequested = false) {
+    this.updateTimedAction(deltaSeconds, cancelRequested);
   }
 
-  completeFieldCampfireCraft() {
-    const hold = this.activeHold;
-    this.cancelCampfireHold();
-    if (!hold || this.getCampfireRequirementMessage({ placement: hold.placement })) return false;
+  cancelTimedAction({ silent = false } = {}) {
+    const action = this.activeTimedAction;
+    this.activeTimedAction = null;
+    this.hud.updateTimedActionProgress?.(0);
+    if (action && !silent && action.cancelMessage) {
+      this.setTemporaryHint(action.cancelMessage, 1200);
+      this.hud.showMessage(action.cancelMessage);
+    }
+  }
+
+  cancelActiveTimedAction() {
+    this.cancelTimedAction();
+  }
+
+  completeFieldCampfireCraft(action = this.activeTimedAction) {
+    if (!action || this.getCampfireRequirementMessage({ placement: action.placement })) return false;
     if (!this.dungeon.gameState?.consumeFieldItems?.({ wood: 1 })) {
       this.setTemporaryHint('Need Wood.', 1400);
       return false;
     }
 
-    hold.placement.y = 0;
-    this.dungeon.gameState?.markFieldCampfireBuilt?.(hold.placement);
-    this.dungeon.addFieldCampfire?.(hold.placement);
+    action.placement.y = 0;
+    this.dungeon.gameState?.markFieldCampfireBuilt?.(action.placement);
+    this.dungeon.addFieldCampfire?.(action.placement);
     this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: false });
     this.setTemporaryHint('Campfire Built.', 1600);
     this.hud.showMessage('Campfire Built.');
@@ -458,75 +489,74 @@ export class Interactions {
 
   useFieldCampfire(interaction) {
     if (this.dungeon.gameState?.getEquippedFieldItem?.() === 'raw_fish' && this.dungeon.gameState?.getFieldItemCount?.('raw_fish') > 0) {
-      return this.startHoldAction('cook', COOKING_HOLD_SECONDS, { ...interaction, origin: this.player.position.clone() });
+      return this.startCookingTimedAction(interaction);
     }
     this.setTemporaryHint(interaction.message ?? 'The fire is ready for cooking.', 1400);
     this.hud.showMessage(interaction.message ?? 'The fire is ready for cooking.');
     return false;
   }
 
-  startFishingHold(interaction = null) {
+  startFishingTimedAction(interaction = null) {
     const fishingZone = this.dungeon.getNearbyFishingZone?.(this.player.position);
     if (!fishingZone || this.equipmentRuntime?.getEquippedWeaponProfile?.().id !== 'fishing_rod') {
-      this.cancelCampfireHold();
+      this.cancelTimedAction({ silent: true });
       return false;
     }
 
-    return this.startHoldAction('fish', FISHING_HOLD_SECONDS, {
-      id: interaction?.id ?? fishingZone.id,
+    return this.startTimedAction({
+      type: 'fish',
+      label: 'Fishing',
+      durationSeconds: FISHING_TIMED_ACTION_SECONDS,
+      startPosition: this.player.position.clone(),
       fishingZoneId: fishingZone.id,
-      origin: this.player.position.clone(),
-      originalZoneName: fishingZone.name,
+      cancelMessage: 'Fishing canceled.',
+      validate: (action) => this.dungeon.area === 'field'
+        && this.equipmentRuntime?.getEquippedWeaponProfile?.().id === 'fishing_rod'
+        && this.player.position.distanceTo(action.startPosition) <= TIMED_ACTION_MOVE_CANCEL_DISTANCE
+        && Boolean(this.dungeon.getNearbyFishingZone?.(this.player.position)),
+      complete: () => {
+        const pickup = this.dungeon.spawnRawFishPickupForPlayer?.(this.player);
+        if (pickup) {
+          this.setTemporaryHint('Fish Caught.', 1500);
+          this.hud.showMessage('Fish Caught.');
+        } else {
+          console.warn('[Dread Stone Black] Raw Fish pickup spawn failed.');
+          this.setTemporaryHint('No fish.', 1200);
+          this.hud.showMessage('No fish.');
+        }
+      },
     });
   }
 
-  startHoldAction(type, duration, payload = {}) {
-    this.activeHold = { type, duration, elapsed: 0, origin: payload.origin ?? this.player.position.clone(), label: type === 'cook' ? 'COOK' : type === 'fish' ? 'FISH' : 'BUILD', ...payload };
-    this.campfireHold = this.activeHold.type === 'campfire' ? this.activeHold : null;
-    this.hud.updateHoldProgress?.(0, this.activeHold.label);
-    this.setTemporaryHint('Hold Interact', 500);
-    return false;
+  startCookingTimedAction(interaction) {
+    return this.startTimedAction({
+      type: 'cookFish',
+      label: 'Cooking',
+      durationSeconds: COOKING_TIMED_ACTION_SECONDS,
+      startPosition: this.player.position.clone(),
+      target: interaction.target?.clone?.() ?? interaction.target,
+      range: interaction.range ?? 4.25,
+      cancelMessage: 'Cooking canceled.',
+      validate: (action) => this.dungeon.area === 'field'
+        && this.player.position.distanceTo(action.startPosition) <= TIMED_ACTION_MOVE_CANCEL_DISTANCE
+        && this.dungeon.gameState?.getEquippedFieldItem?.() === 'raw_fish'
+        && this.dungeon.gameState?.getFieldItemCount?.('raw_fish') > 0
+        && this.horizontalDistanceTo(action.target) <= action.range,
+      complete: (action) => {
+        if (this.dungeon.gameState?.consumeFieldItems?.({ raw_fish: 1 })) {
+          this.dungeon.spawnCookedFishPickup?.(action.target);
+          this.setTemporaryHint('Fish Cooked.', 1500);
+          this.hud.showMessage('Fish Cooked.');
+        }
+      },
+    });
   }
 
-  shouldCancelActiveHold() {
-    const hold = this.activeHold;
-    if (!hold) return false;
-    if (hold.type === 'fish') {
-      const nearFishingZone = this.dungeon.getNearbyFishingZone?.(this.player.position);
-      const movedFromShoreline = this.horizontalDistanceTo(hold.origin) > 5.0;
-      return this.dungeon.area !== 'field'
-        || this.equipmentRuntime?.getEquippedWeaponProfile?.().id !== 'fishing_rod'
-        || !nearFishingZone
-        || movedFromShoreline;
-    }
-    if (this.player.position.distanceTo(hold.origin) > 1.4) return true;
-    if (hold.type === 'campfire') return Boolean(this.getCampfireRequirementMessage({ placement: hold.placement }));
-    if (hold.type === 'cook') return this.dungeon.gameState?.getEquippedFieldItem?.() !== 'raw_fish' || this.dungeon.gameState?.getFieldItemCount?.('raw_fish') < 1 || this.horizontalDistanceTo(hold.target) > (hold.range ?? 4.25);
-    return false;
-  }
-
-  completeActiveHold() {
-    const hold = this.activeHold;
-    if (hold?.type === 'campfire') return this.completeFieldCampfireCraft();
-    this.cancelCampfireHold();
-    if (!hold) return false;
-    if (hold.type === 'fish') {
-      const pickup = this.dungeon.spawnRawFishPickupForPlayer?.(this.player);
-      if (pickup) {
-        this.setTemporaryHint('Fish Caught.', 1500);
-        this.hud.showMessage('Fish Caught.');
-      } else {
-        console.warn('[Dread Stone Black] Raw Fish pickup spawn failed.');
-        this.setTemporaryHint('No fish.', 1200);
-        this.hud.showMessage('No fish.');
-      }
-    } else if (hold.type === 'cook') {
-      if (this.dungeon.gameState?.consumeFieldItems?.({ raw_fish: 1 })) {
-        this.dungeon.spawnCookedFishPickup?.(hold.target);
-        this.setTemporaryHint('Fish Cooked.', 1500);
-        this.hud.showMessage('Fish Cooked.');
-      }
-    }
+  startTimedAction(action) {
+    if (this.activeTimedAction) return false;
+    this.activeTimedAction = { elapsedSeconds: 0, completed: false, ...action };
+    this.hud.updateTimedActionProgress?.(0.001, action.label);
+    this.setTemporaryHint(`${action.label}...`, 700);
     return false;
   }
 
@@ -655,7 +685,7 @@ export class Interactions {
       label: 'Campfire Crafting',
       target: placement ?? this.player.position,
       range: 99,
-      hint: placement ? 'Hold Interact' : 'Need open ground.',
+      hint: placement ? 'Build Campfire' : 'Need open ground.',
       message: placement ? 'Campfire Built.' : 'Need open ground.',
       type: 'fieldCampfireCraft',
       placement,
@@ -673,22 +703,45 @@ export class Interactions {
       .sort((a, b) => a.distance - b.distance)[0]?.interaction ?? null;
     if (pickupInteraction) return pickupInteraction;
 
-    const fishingZone = this.dungeon.getNearbyFishingZone?.(this.player.position);
-    if (fishingZone && this.equipmentRuntime?.getEquippedWeaponProfile?.().id === 'fishing_rod') {
-      return { id: fishingZone.id, label: 'River Fishing', target: fishingZone.position, range: fishingZone.interactPadding, hint: 'Fish', message: 'Fish Caught.', type: 'fieldFishing' };
+    if (this.activeTimedAction) {
+      return {
+        id: `active_${this.activeTimedAction.type}`,
+        hint: `${this.activeTimedAction.label}...`,
+        type: 'activeTimedAction',
+        use: () => false,
+      };
+    }
+
+    const nearbyOutdoorInteractions = outdoorInteractions
+      .filter((interaction) => this.isOutdoorInteractionAvailable(interaction))
+      .map((interaction) => ({ interaction: this.decorateOutdoorInteraction(interaction), distance: this.horizontalDistanceTo(interaction.target) }))
+      .filter(({ interaction, distance }) => distance <= (interaction.range ?? 4))
+      .sort((a, b) => a.distance - b.distance);
+
+    const campfireInteraction = nearbyOutdoorInteractions.find(({ interaction }) => interaction.type === 'fieldCampfire')?.interaction ?? null;
+    if (campfireInteraction && this.dungeon.gameState?.getEquippedFieldItem?.() === 'raw_fish' && this.dungeon.gameState?.getFieldItemCount?.('raw_fish') > 0) {
+      campfireInteraction.hint = 'Cook Fish';
+      return campfireInteraction;
     }
 
     const redwoodInteraction = this.dungeon.getNearbyFieldHarvestableRedwood?.(this.player.position);
     if (redwoodInteraction) return this.decorateOutdoorInteraction(redwoodInteraction);
 
-    return outdoorInteractions
-      .filter((interaction) => this.isOutdoorInteractionAvailable(interaction))
-      .map((interaction) => ({ interaction: this.decorateOutdoorInteraction(interaction), distance: this.horizontalDistanceTo(interaction.target) }))
-      .filter(({ interaction, distance }) => distance <= (interaction.range ?? 4))
-      .sort((a, b) => a.distance - b.distance)[0]?.interaction ?? null;
+    if (campfireInteraction) return campfireInteraction;
+
+    const fishingZone = this.dungeon.getNearbyFishingZone?.(this.player.position);
+    if (fishingZone && this.equipmentRuntime?.getEquippedWeaponProfile?.().id === 'fishing_rod') {
+      return { id: fishingZone.id, label: 'River Fishing', target: fishingZone.position, range: fishingZone.interactPadding, hint: 'Fish', message: 'Fish Caught.', type: 'fieldFishing' };
+    }
+
+    return nearbyOutdoorInteractions[0]?.interaction ?? null;
   }
 
   isOutdoorInteractionAvailable(interaction) {
+    if (interaction.type === 'activeTimedAction') {
+      return false;
+    }
+
     if (interaction.type === 'fieldCampfireCraft') {
       return this.dungeon.area === 'field' && !this.getCampfireRequirementMessage(interaction);
     }
@@ -703,9 +756,13 @@ export class Interactions {
         : this.dungeon.gameState?.getEquippedFieldTool?.() === 'wood_axe';
       interaction.hint = equippedAxe ? 'Chop redwood' : '';
     }
+    if (interaction.type === 'activeTimedAction') {
+      return false;
+    }
+
     if (interaction.type === 'fieldCampfireCraft') {
       const missing = this.getCampfireRequirementMessage(interaction);
-      interaction.hint = missing || 'Hold Interact';
+      interaction.hint = missing || 'Build Campfire';
       interaction.message = missing || 'Campfire Built.';
     }
     return interaction;
