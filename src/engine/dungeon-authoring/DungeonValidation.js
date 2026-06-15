@@ -37,6 +37,28 @@ function positionOf(value) {
   };
 }
 
+
+function xzPoint(value) {
+  if (!value) return null;
+  const x = Number(value.x ?? value[0]);
+  const z = Number(value.z ?? value[1]);
+  return Number.isFinite(x) && Number.isFinite(z) ? { x, z } : null;
+}
+
+function xzDistance(a, b) {
+  return Math.hypot(b.x - a.x, b.z - a.z);
+}
+
+function polygonArea(points) {
+  let area = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    const current = points[i];
+    const next = points[(i + 1) % points.length];
+    area += current.x * next.z - next.x * current.z;
+  }
+  return Math.abs(area) / 2;
+}
+
 function addIssue(target, severity, message, id = null) {
   target.push({ severity, message, id });
 }
@@ -69,6 +91,10 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   const connectors = asArray(definition.doors ?? definition.connectors);
   const encounterZones = asArray(definition.encounterZones);
   const exits = asArray(definition.exits);
+  const polygonFloors = asArray(definition.polygonFloors);
+  const wallSegments = asArray(definition.wallSegments);
+  const doorGaps = asArray(definition.doorGaps);
+  const wallPropAnchors = asArray(definition.wallPropAnchors);
   const roomIds = new Set(rooms.map((room) => room.id));
   const spawnIds = new Set(spawns.map((spawn) => spawn.id));
   const blockerIds = new Set(blockers.map((blocker) => blocker.id));
@@ -85,7 +111,60 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     { label: 'lights', items: definition.lights },
     { label: 'lightFixtures', items: definition.lightFixtures },
     { label: 'torchFixtures', items: definition.torchFixtures },
+    { label: 'polygonFloors', items: polygonFloors },
+    { label: 'wallSegments', items: wallSegments },
+    { label: 'doorGaps', items: doorGaps },
+    { label: 'wallPropAnchors', items: wallPropAnchors },
   ], errors);
+
+
+  polygonFloors.forEach((floor) => {
+    const points = asArray(floor.points).map(xzPoint);
+    if (points.length < 3) {
+      addIssue(errors, 'error', `polygonFloor ${floor.id} needs at least 3 points`, floor.id);
+      return;
+    }
+    if (points.some((point) => !point)) {
+      addIssue(errors, 'error', `polygonFloor ${floor.id} has non-finite points`, floor.id);
+      return;
+    }
+    if (polygonArea(points) <= 0.01) {
+      addIssue(errors, 'error', `polygonFloor ${floor.id} has near-zero area`, floor.id);
+    }
+  });
+
+  const wallSegmentById = new Map();
+  wallSegments.forEach((segment) => {
+    const from = xzPoint(segment.from);
+    const to = xzPoint(segment.to);
+    if (segment.id) wallSegmentById.set(segment.id, { segment, from, to, length: from && to ? xzDistance(from, to) : 0 });
+    if (!from || !to) {
+      addIssue(errors, 'error', `wallSegment ${segment.id} has invalid from/to points`, segment.id);
+      return;
+    }
+    if (xzDistance(from, to) <= 0.05) addIssue(errors, 'error', `wallSegment ${segment.id} is too short`, segment.id);
+    if ((segment.height ?? 3.5) <= 0) addIssue(errors, 'error', `wallSegment ${segment.id} height must be > 0`, segment.id);
+    if ((segment.thickness ?? 0.32) <= 0) addIssue(errors, 'error', `wallSegment ${segment.id} thickness must be > 0`, segment.id);
+  });
+
+  doorGaps.forEach((gap) => {
+    const wall = wallSegmentById.get(gap.wallSegmentId);
+    if (!wall) {
+      addIssue(errors, 'error', `doorGap ${gap.id} references missing wallSegmentId ${gap.wallSegmentId}`, gap.id);
+      return;
+    }
+    if (!Number.isFinite(gap.centerT) || gap.centerT < 0 || gap.centerT > 1) addIssue(errors, 'error', `doorGap ${gap.id} centerT must be between 0 and 1`, gap.id);
+    if (!Number.isFinite(gap.width) || gap.width <= 0) addIssue(errors, 'error', `doorGap ${gap.id} width must be > 0`, gap.id);
+    if (Number.isFinite(gap.width) && gap.width >= wall.length) addIssue(errors, 'error', `doorGap ${gap.id} width must be smaller than wall length`, gap.id);
+  });
+
+  const supportedAnchorKinds = new Set(['torchFixture', 'panel', 'marker']);
+  wallPropAnchors.forEach((anchor) => {
+    if (!wallSegmentById.has(anchor.wallSegmentId)) addIssue(errors, 'error', `wallPropAnchor ${anchor.id} references missing wallSegmentId ${anchor.wallSegmentId}`, anchor.id);
+    if (!Number.isFinite(anchor.t) || anchor.t < 0 || anchor.t > 1) addIssue(errors, 'error', `wallPropAnchor ${anchor.id} t must be between 0 and 1`, anchor.id);
+    if (!Number.isFinite(anchor.height ?? 0)) addIssue(errors, 'error', `wallPropAnchor ${anchor.id} height must be finite`, anchor.id);
+    if (anchor.kind && !supportedAnchorKinds.has(anchor.kind)) addIssue(warnings, 'warning', `wallPropAnchor ${anchor.id} uses unsupported kind ${anchor.kind}`, anchor.id);
+  });
 
   rooms.forEach((room) => {
     if (room.minX >= room.maxX || room.minZ >= room.maxZ) {

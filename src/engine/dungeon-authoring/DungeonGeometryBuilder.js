@@ -184,6 +184,128 @@ function addRoomGeometry({ definition, group, room, materialFactory }) {
   }
 }
 
+
+function point2(value) {
+  return new THREE.Vector2(Number(value?.x ?? value?.[0] ?? 0), Number(value?.z ?? value?.[1] ?? 0));
+}
+
+function point3FromXZ(value, y = 0) {
+  return new THREE.Vector3(Number(value?.x ?? value?.[0] ?? 0), y, Number(value?.z ?? value?.[1] ?? 0));
+}
+
+function segmentParts(segment, doorGaps) {
+  const from = point3FromXZ(segment.from, segment.y ?? 0);
+  const to = point3FromXZ(segment.to, segment.y ?? 0);
+  const length = from.distanceTo(to);
+  if (length <= 0.0001) return [];
+  const cuts = asArray(doorGaps)
+    .filter((gap) => gap.wallSegmentId === segment.id)
+    .map((gap) => {
+      const halfT = (gap.width ?? 0) / length / 2;
+      return {
+        start: THREE.MathUtils.clamp((gap.centerT ?? 0.5) - halfT, 0, 1),
+        end: THREE.MathUtils.clamp((gap.centerT ?? 0.5) + halfT, 0, 1),
+      };
+    })
+    .filter((gap) => gap.end > gap.start)
+    .sort((a, b) => a.start - b.start);
+  const ranges = [];
+  let cursor = 0;
+  cuts.forEach((gap) => {
+    if (gap.start - cursor > 0.02) ranges.push([cursor, gap.start]);
+    cursor = Math.max(cursor, gap.end);
+  });
+  if (1 - cursor > 0.02) ranges.push([cursor, 1]);
+  return ranges.map(([startT, endT]) => ({
+    startT,
+    endT,
+    from: from.clone().lerp(to, startT),
+    to: from.clone().lerp(to, endT),
+  }));
+}
+
+function addV2PolygonFloors({ definition, group, materialFactory }) {
+  return asArray(definition.polygonFloors).map((floor) => {
+    const points = asArray(floor.points).map(point2);
+    if (points.length < 3) return null;
+    const triangles = THREE.ShapeUtils.triangulateShape(points, []);
+    const y = floor.y ?? definition.defaultFloorY ?? 0;
+    const vertices = [];
+    const uvs = [];
+    points.forEach((point) => {
+      vertices.push(point.x, y, point.y);
+      uvs.push(point.x * 0.18, point.y * 0.18);
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(triangles.flat());
+    geometry.computeVertexNormals();
+    const material = makeMaterial(definition, floor.material ?? floor.textureProfile, materialFactory, definition.textures?.floor);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = `V2-FLOOR-${floor.id}`;
+    mesh.receiveShadow = true;
+    mesh.userData = { locationId: definition.id, roomId: floor.roomId, polygonFloorId: floor.id, generatedBy: 'DungeonGeometryBuilder:v2' };
+    group.add(mesh);
+    return mesh;
+  }).filter(Boolean);
+}
+
+function addV2WallSegments({ definition, group, materialFactory }) {
+  const walls = [];
+  asArray(definition.wallSegments).forEach((segment) => {
+    const material = makeMaterial(definition, segment.material ?? segment.textureProfile, materialFactory, definition.textures?.wall);
+    const height = segment.height ?? definition.geometry?.wallHeight ?? 3.5;
+    const thickness = segment.thickness ?? definition.geometry?.wallThickness ?? 0.32;
+    segmentParts(segment, definition.doorGaps).forEach((part, index) => {
+      const length = part.from.distanceTo(part.to);
+      const center = part.from.clone().lerp(part.to, 0.5);
+      const mesh = addBox({
+        group,
+        size: new THREE.Vector3(length, height, thickness),
+        position: new THREE.Vector3(center.x, (segment.y ?? 0) + height / 2, center.z),
+        material,
+        name: `V2-WALL-${segment.id}-${index}`,
+        userData: { locationId: definition.id, roomId: segment.roomId, wallSegmentId: segment.id, generatedBy: 'DungeonGeometryBuilder:v2' },
+      });
+      mesh.rotation.y = Math.atan2(part.to.z - part.from.z, part.to.x - part.from.x);
+      walls.push(mesh);
+    });
+  });
+  return walls;
+}
+
+function addV2WallPropAnchors({ definition, group }) {
+  const segments = new Map(asArray(definition.wallSegments).map((segment) => [segment.id, segment]));
+  return asArray(definition.wallPropAnchors).map((anchor) => {
+    const segment = segments.get(anchor.wallSegmentId);
+    if (!segment) return null;
+    const from = point3FromXZ(segment.from, segment.y ?? 0);
+    const to = point3FromXZ(segment.to, segment.y ?? 0);
+    const t = THREE.MathUtils.clamp(anchor.t ?? 0.5, 0, 1);
+    const direction = to.clone().sub(from).normalize();
+    const normal = new THREE.Vector3(-direction.z, 0, direction.x).normalize();
+    const position = from.clone().lerp(to, t).add(normal.clone().multiplyScalar(anchor.offset ?? 0.12));
+    position.y = (segment.y ?? 0) + (anchor.height ?? 1.8);
+    let object;
+    if (anchor.kind === 'torchFixture') {
+      const torch = new TorchFixture({ id: anchor.id, position, yaw: Math.atan2(normal.x, normal.z), roomId: anchor.roomId ?? segment.roomId });
+      object = torch.group;
+    } else {
+      object = new THREE.Mesh(
+        new THREE.BoxGeometry(anchor.width ?? 0.45, anchor.heightSize ?? 0.45, anchor.depth ?? 0.08),
+        makeFallbackMaterial({ color: anchor.color ?? 0x6b5540 }),
+      );
+      object.position.copy(position);
+      object.rotation.y = Math.atan2(normal.x, normal.z);
+    }
+    object.name = `V2-ANCHOR-${anchor.id}`;
+    object.userData = { ...object.userData, locationId: definition.id, roomId: anchor.roomId ?? segment.roomId, wallPropAnchorId: anchor.id, wallSegmentId: segment.id, generatedBy: 'DungeonGeometryBuilder:v2' };
+    group.add(object);
+    return object;
+  }).filter(Boolean);
+}
+
 function addProps({ definition, group, materialFactory }) {
   return asArray(definition.props).map((prop) => {
     if (prop.visibleGeometry === false || !prop.dimensions || !prop.position) return null;
@@ -281,10 +403,13 @@ export function buildDungeonGeometry(definition, { materialFactory = null, torch
   };
 
   asArray(definition.rooms).forEach((room) => addRoomGeometry({ definition, group, room, materialFactory }));
+  const v2Floors = addV2PolygonFloors({ definition, group, materialFactory });
+  const v2Walls = addV2WallSegments({ definition, group, materialFactory });
+  const v2Anchors = addV2WallPropAnchors({ definition, group });
   const props = addProps({ definition, group, materialFactory });
   const lights = addLights({ definition, group, lights: lightRegistry?.nonTorchLights, torchFactory });
   const torchObjects = addTorchFixtures({ group, torchFixtures: lightRegistry?.torchFixtures });
   const pointLights = collectPointLights([...lights, ...torchObjects]);
 
-  return { group, props, lights, torchObjects, pointLights };
+  return { group, props, lights, torchObjects, pointLights, v2Floors, v2Walls, v2Anchors };
 }

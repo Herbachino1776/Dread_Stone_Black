@@ -151,6 +151,62 @@ function buildWallBlockersForRoom(definition, room) {
   return blockers;
 }
 
+
+function pointXZ(value, y = 0) {
+  return {
+    x: Number(value?.x ?? value?.[0] ?? 0),
+    y,
+    z: Number(value?.z ?? value?.[1] ?? 0),
+  };
+}
+
+function lerpPoint(a, b, t) {
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+}
+
+function distanceXZ(a, b) {
+  return Math.hypot(b.x - a.x, b.z - a.z);
+}
+
+function segmentParts(segment, doorGaps) {
+  const from = pointXZ(segment.from, segment.y ?? 0);
+  const to = pointXZ(segment.to, segment.y ?? 0);
+  const length = distanceXZ(from, to);
+  if (length <= 0.0001) return [];
+  const gaps = asArray(doorGaps)
+    .filter((gap) => gap.wallSegmentId === segment.id)
+    .map((gap) => {
+      const halfT = (gap.width ?? 0) / length / 2;
+      return { start: Math.max(0, (gap.centerT ?? 0.5) - halfT), end: Math.min(1, (gap.centerT ?? 0.5) + halfT) };
+    })
+    .filter((gap) => gap.end > gap.start)
+    .sort((a, b) => a.start - b.start);
+  const ranges = [];
+  let cursor = 0;
+  gaps.forEach((gap) => {
+    if (gap.start - cursor > 0.02) ranges.push([cursor, gap.start]);
+    cursor = Math.max(cursor, gap.end);
+  });
+  if (1 - cursor > 0.02) ranges.push([cursor, 1]);
+  return ranges.map(([startT, endT]) => ({ from: lerpPoint(from, to, startT), to: lerpPoint(from, to, endT) }));
+}
+
+function buildV2WallBlockers(definition) {
+  return asArray(definition.wallSegments).flatMap((segment) => {
+    const thickness = segment.thickness ?? definition.geometry?.wallThickness ?? 0.32;
+    const height = segment.height ?? definition.geometry?.wallHeight ?? 3.5;
+    return segmentParts(segment, definition.doorGaps).map((part, index) => wallBlocker(
+      `V2-WALL-BLOCKER-${segment.id}-${index}`,
+      'wall',
+      Math.min(part.from.x, part.to.x) - thickness / 2,
+      Math.max(part.from.x, part.to.x) + thickness / 2,
+      Math.min(part.from.z, part.to.z) - thickness / 2,
+      Math.max(part.from.z, part.to.z) + thickness / 2,
+      height,
+    ));
+  });
+}
+
 function buildWallBlockers(definition) {
   if (definition.collision?.wallBlockers === false) return [];
   return asArray(definition.rooms).flatMap((room) => buildWallBlockersForRoom(definition, room));
@@ -167,7 +223,7 @@ export function buildDungeonCollision(definition) {
     tags: room.tags ?? [],
   }));
   const blockers = asArray(definition.blockers);
-  const wallBlockers = buildWallBlockers(definition);
+  const wallBlockers = buildWallBlockers(definition).concat(buildV2WallBlockers(definition));
   const blockerRects = blockers
     .filter((blocker) => blocker.blocksPlayer !== false)
     .map(blockerRect)

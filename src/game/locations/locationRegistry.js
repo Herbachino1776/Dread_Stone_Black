@@ -5,6 +5,7 @@ import { sumerianCityBlockV0Definition } from './generated/sumerianCityBlockV0.d
 import { sumerianSunPalaceDistrictV1Definition } from './generated/sumerianSunPalaceDistrictV1.definition.js';
 import { reliquaryFieldDefinition } from './reliquaryField.definition.js';
 import { southReliquaryCryptDefinition } from './southReliquaryCrypt.definition.js';
+import { v2TestShrineDefinition } from './v2TestShrine.definition.js';
 
 const locationDefinitions = Object.freeze({
   [blackGrassTempleDefinition.id]: blackGrassTempleDefinition,
@@ -14,6 +15,7 @@ const locationDefinitions = Object.freeze({
   [sumerianSunPalaceDistrictV1Definition.id]: sumerianSunPalaceDistrictV1Definition,
   [southReliquaryCryptDefinition.id]: southReliquaryCryptDefinition,
   [reliquaryFieldDefinition.id]: reliquaryFieldDefinition,
+  [v2TestShrineDefinition.id]: v2TestShrineDefinition,
 });
 
 export function getLocationDefinition(id) {
