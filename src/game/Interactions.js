@@ -156,6 +156,10 @@ export class Interactions {
       return this.pickupCookedFish(interaction);
     }
 
+    if (interaction.type === 'rawFishPickup') {
+      return this.pickupRawFish(interaction);
+    }
+
     this.setTemporaryHint(interaction.message, 1200);
 
     if (interaction.functional) {
@@ -483,7 +487,7 @@ export class Interactions {
     this.cancelCampfireHold();
     if (!hold) return false;
     if (hold.type === 'fish') {
-      this.dungeon.gameState?.addFieldItem?.('raw_fish', 1);
+      this.dungeon.spawnRawFishPickupForPlayer?.(this.player);
       this.setTemporaryHint('Fish Caught.', 1500);
       this.hud.showMessage('Fish Caught.');
     } else if (hold.type === 'cook') {
@@ -501,6 +505,14 @@ export class Interactions {
     this.dungeon.removeCookedFishPickup?.(interaction.pickup);
     this.setTemporaryHint('Cooked Fish Acquired.', 1400);
     this.hud.showMessage('Cooked Fish Acquired.');
+    return false;
+  }
+
+  pickupRawFish(interaction) {
+    this.dungeon.gameState?.addFieldItem?.('raw_fish', 1);
+    this.dungeon.removeRawFishPickup?.(interaction.pickup);
+    this.setTemporaryHint('Raw Fish Acquired.', 1400);
+    this.hud.showMessage('Raw Fish Acquired.');
     return false;
   }
 
@@ -622,17 +634,24 @@ export class Interactions {
   }
 
   getNearbyOutdoorInteraction() {
-    if (!this.dungeon.outdoorInteractions?.length) return null;
+    const outdoorInteractions = this.dungeon.outdoorInteractions ?? [];
+
+    const pickupInteraction = outdoorInteractions
+      .filter((interaction) => ['rawFishPickup', 'cookedFishPickup'].includes(interaction.type) && this.isOutdoorInteractionAvailable(interaction))
+      .map((interaction) => ({ interaction: this.decorateOutdoorInteraction(interaction), distance: this.horizontalDistanceTo(interaction.target) }))
+      .filter(({ interaction, distance }) => distance <= (interaction.range ?? 4))
+      .sort((a, b) => a.distance - b.distance)[0]?.interaction ?? null;
+    if (pickupInteraction) return pickupInteraction;
 
     const fishingZone = this.dungeon.getNearbyFishingZone?.(this.player.position);
     if (fishingZone && this.equipmentRuntime?.getEquippedWeaponProfile?.().id === 'fishing_rod') {
-      return { id: fishingZone.id, label: 'River Fishing', target: fishingZone.position, range: fishingZone.radius, hint: 'Fish', message: 'Fish Caught.', type: 'fieldFishing' };
+      return { id: fishingZone.id, label: 'River Fishing', target: fishingZone.position, range: fishingZone.interactPadding, hint: 'Fish', message: 'Fish Caught.', type: 'fieldFishing' };
     }
 
     const redwoodInteraction = this.dungeon.getNearbyFieldHarvestableRedwood?.(this.player.position);
     if (redwoodInteraction) return this.decorateOutdoorInteraction(redwoodInteraction);
 
-    return this.dungeon.outdoorInteractions
+    return outdoorInteractions
       .filter((interaction) => this.isOutdoorInteractionAvailable(interaction))
       .map((interaction) => ({ interaction: this.decorateOutdoorInteraction(interaction), distance: this.horizontalDistanceTo(interaction.target) }))
       .filter(({ interaction, distance }) => distance <= (interaction.range ?? 4))
