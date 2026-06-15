@@ -69,7 +69,7 @@ export const weaponProfiles = createWeaponProfileRegistry([
     windupTime: 0.12,
     recoveryTime: 0.34,
     staminaCost: 4,
-    fpvProfileId: 'rusted_sword',
+    fpvProfileId: 'broadsword_ritual_01',
     goreProfileId: 'sword',
     hitReactionType: 'slash_stagger',
     tags: ['weapon', 'melee', 'blade', 'black_grass_temple'],
