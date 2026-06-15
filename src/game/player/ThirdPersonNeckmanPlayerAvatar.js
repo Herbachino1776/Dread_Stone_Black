@@ -52,6 +52,21 @@ function makeSwordMaterialsSafe(root) {
   });
 }
 
+function removeRootMotionTracks(clip, rootName) {
+  if (!clip) return null;
+  const filteredTracks = clip.tracks.filter((track) => {
+    const trackName = track.name ?? '';
+    return !(
+      trackName === '.position'
+      || trackName === `${rootName}.position`
+      || trackName.endsWith(':position')
+      || (trackName.endsWith('.position') && trackName.includes(rootName))
+    );
+  });
+  if (filteredTracks.length === clip.tracks.length) return clip;
+  return new THREE.AnimationClip(`${clip.name}_NoRootMotion`, clip.duration, filteredTracks);
+}
+
 function isSwordProfile(profile) {
   return Boolean(
     profile
@@ -73,14 +88,15 @@ export const THIRD_PERSON_NECKMAN_PLAYER_CONFIG = Object.freeze({
   weaponModelUrl: `${import.meta.env.BASE_URL}assets/models/weapons/weapon_broadsword_ritual_01.glb`,
   attackAnimationState: 'attack',
   attackSourceAnimationName: 'punch_right',
-  avatarScale: 1,
+  avatarScale: 0.78,
   avatarPositionOffset: Object.freeze({ x: 0, y: 0, z: 0 }),
   avatarRotationOffset: 0,
   groundOffset: 0,
   playerEyeHeight: 1.55,
   targetHeight: neckManConfig.scale.targetHeight,
   maxWidth: neckManConfig.scale.maxWidth,
-  turnSmoothing: 16,
+  turnSmoothing: 10,
+  rootMotionEpsilon: 0.00001,
   runInputThreshold: 0.72,
   defaultFadeSeconds: 0.1,
   attackFallbackDuration: 0.72,
@@ -163,7 +179,8 @@ export class ThirdPersonNeckmanPlayerAvatar {
     makeAvatarMaterialsSafe(root);
 
     const mixer = new THREE.AnimationMixer(root);
-    const clip = chooseClipForState(sourceState, gltf.animations ?? []);
+    const sourceClip = chooseClipForState(sourceState, gltf.animations ?? []);
+    const clip = removeRootMotionTracks(sourceClip, root.name);
     const action = clip ? mixer.clipAction(clip) : null;
     const isAttack = state === this.config.attackAnimationState;
     if (action) {
@@ -296,11 +313,20 @@ export class ThirdPersonNeckmanPlayerAvatar {
     );
   }
 
+  neutralizeRootMotion() {
+    this.tracks.forEach((track) => {
+      if (track.root.position.lengthSq() > this.config.rootMotionEpsilon) {
+        track.root.position.set(0, 0, 0);
+      }
+    });
+  }
+
   update(deltaSeconds) {
     this.updatePosition();
     this.updateFacing(deltaSeconds);
 
     this.tracks.forEach((track) => track.mixer.update(deltaSeconds));
+    this.neutralizeRootMotion();
     if (this.isAttacking) {
       this.attackElapsed += deltaSeconds;
       const duration = this.tracks.get(this.config.attackAnimationState)?.clip?.duration ?? this.config.attackFallbackDuration;
@@ -320,6 +346,7 @@ export class ThirdPersonNeckmanPlayerAvatar {
       currentState: this.currentState,
       weaponVisible: isSwordProfile(this.currentWeaponProfile),
       animationAssets: this.config.animationFiles,
+      rootMotionNeutralized: true,
       loadedTracks: [...this.tracks.values()].map((track) => ({
         state: track.state,
         sourceState: track.sourceState,
