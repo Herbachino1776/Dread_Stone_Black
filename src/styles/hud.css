@@ -822,27 +822,6 @@
 }
 
 
-.hold-progress-ring {
-  --hold-progress: 0deg;
-  position: absolute;
-  inset: -7px;
-  border-radius: 50%;
-  background: conic-gradient(rgba(255, 255, 255, 0.96) var(--hold-progress), rgba(255, 255, 255, 0.14) 0deg);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 90ms ease;
-}
-
-.hold-progress-ring::after {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  background: rgba(21, 13, 10, 0.92);
-}
-
-.hold-progress-ring.is-visible { opacity: 1; }
-
 .action-button > span:not(.hold-progress-ring) {
   position: relative;
   z-index: 1;
@@ -900,24 +879,31 @@
 
 /* Centered global hold ring for campfires, fishing, and cooking. */
 .hold-progress-ring {
+  --hold-progress: 0deg;
   position: fixed;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
+  background: conic-gradient(rgba(255, 255, 255, 0.98) var(--hold-progress), rgba(255, 255, 255, 0.16) 0deg);
+  opacity: 0;
   pointer-events: none;
   z-index: 28;
-  box-shadow: 0 0 16px rgba(255,255,255,0.18);
+  box-shadow: 0 0 12px rgba(255,255,255,0.16);
+  transition: opacity 70ms linear;
 }
+
 .hold-progress-ring::before {
   content: "";
   position: absolute;
-  inset: 6px;
+  inset: 5px;
   border-radius: 50%;
-  background: rgba(5, 6, 7, 0.62);
+  background: rgba(5, 6, 7, 0.72);
 }
+
+.hold-progress-ring.is-visible { opacity: 1; }
 .stat-hunger strong { color: #d7c08b; }
 .first-person-weapon--fishing-rod::before {
   content: '';

@@ -427,7 +427,9 @@ export class Interactions {
     this.activeHold.elapsed += deltaSeconds;
     const progress = Math.min(1, this.activeHold.elapsed / this.activeHold.duration);
     this.hud.updateHoldProgress?.(progress, this.activeHold.label);
-    if (progress >= 1) this.completeActiveHold();
+    if (progress >= 1) {
+      this.completeActiveHold();
+    }
   }
 
   cancelCampfireHold() {
@@ -487,9 +489,15 @@ export class Interactions {
     this.cancelCampfireHold();
     if (!hold) return false;
     if (hold.type === 'fish') {
-      this.dungeon.spawnRawFishPickupForPlayer?.(this.player);
-      this.setTemporaryHint('Fish Caught.', 1500);
-      this.hud.showMessage('Fish Caught.');
+      const pickup = this.dungeon.spawnRawFishPickupForPlayer?.(this.player);
+      if (pickup) {
+        this.setTemporaryHint('Fish Caught.', 1500);
+        this.hud.showMessage('Fish Caught.');
+      } else {
+        console.warn('[Dread Stone Black] Raw Fish pickup spawn failed.');
+        this.setTemporaryHint('No fish.', 1200);
+        this.hud.showMessage('No fish.');
+      }
     } else if (hold.type === 'cook') {
       if (this.dungeon.gameState?.consumeFieldItems?.({ raw_fish: 1 })) {
         this.dungeon.spawnCookedFishPickup?.(hold.target);
