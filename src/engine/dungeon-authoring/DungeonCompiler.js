@@ -86,6 +86,7 @@ export function compileDungeonLocation(definition, options = {}) {
     group: geometry.group,
     rooms: asArray(definition.rooms),
     walkableRects: collision.walkableRects,
+    walkableSurfaces: collision.walkableSurfaces,
     blockerRects: collision.blockerRects,
     enemyBlockerRects: collision.enemyBlockerRects,
     lineOfMovementBlockerRects: collision.lineOfMovementBlockerRects,
@@ -113,6 +114,7 @@ export function compileDungeonLocation(definition, options = {}) {
     debugData: {
       rooms: asArray(definition.rooms),
       blockers: collision.blockerRects,
+      walkableSurfaces: collision.walkableSurfaces,
       doorwayWaypoints: navGraph.doorwayWaypoints,
       spawnAnchors,
       encounterZones,

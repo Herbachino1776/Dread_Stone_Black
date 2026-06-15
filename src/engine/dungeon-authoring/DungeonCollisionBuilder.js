@@ -247,6 +247,50 @@ function buildV21WalkableRects(definition) {
   return rects;
 }
 
+function walkableSurfacePoint(value) {
+  return [Number(value?.x ?? value?.[0] ?? 0), Number(value?.z ?? value?.[1] ?? 0)];
+}
+
+function buildWalkableSurfaces(definition) {
+  const surfaces = [];
+  const defaultY = definition.defaultFloorY ?? 0;
+  asArray(definition.polygonFloors).forEach((floor) => {
+    const footprint = asArray(floor.points).map(walkableSurfacePoint);
+    if (footprint.length >= 3) surfaces.push({
+      id: floor.walkableId ?? `${floor.id}_walkable`,
+      kind: 'flatPolygon',
+      footprint,
+      y: floor.y ?? defaultY,
+      priority: floor.priority ?? 0,
+      tags: ['v2-floor', ...(floor.tags ?? [])],
+    });
+  });
+  asArray(definition.platforms).forEach((platform) => {
+    const footprint = asArray(platform.footprint).map(walkableSurfacePoint);
+    if (footprint.length >= 3) surfaces.push({
+      id: platform.walkableId ?? `${platform.id}_top`,
+      kind: 'platformTop',
+      footprint,
+      y: (platform.y ?? defaultY) + (platform.height ?? 0),
+      priority: platform.priority ?? 20,
+      tags: ['v2-platform', ...(platform.tags ?? [])],
+    });
+  });
+  asArray(definition.ramps).forEach((ramp) => surfaces.push({
+    id: ramp.walkableId ?? `${ramp.id}_walkable`, kind: 'ramp', from: walkableSurfacePoint(ramp.from), to: walkableSurfacePoint(ramp.to),
+    width: ramp.width ?? 1, y0: ramp.y0 ?? defaultY, y1: ramp.y1 ?? defaultY, priority: ramp.priority ?? 30, tags: ['v2-ramp', ...(ramp.tags ?? [])],
+  }));
+  asArray(definition.stairs).forEach((stairs) => surfaces.push({
+    id: stairs.walkableId ?? `${stairs.id}_walkable`, kind: 'stairRamp', from: walkableSurfacePoint(stairs.from), to: walkableSurfacePoint(stairs.to),
+    width: stairs.width ?? 1, y0: stairs.y0 ?? defaultY, y1: stairs.y1 ?? defaultY, steps: stairs.steps ?? 1, priority: stairs.priority ?? 35, tags: ['v2-stairs', ...(stairs.tags ?? [])],
+  }));
+  asArray(definition.bridges).forEach((bridge) => surfaces.push({
+    id: bridge.walkableId ?? `${bridge.id}_walkable`, kind: 'bridgeDeck', from: walkableSurfacePoint(bridge.from), to: walkableSurfacePoint(bridge.to),
+    width: bridge.width ?? 1, y: bridge.y ?? defaultY, priority: bridge.priority ?? 25, tags: ['v2-bridge', ...(bridge.tags ?? [])],
+  }));
+  return surfaces;
+}
+
 function buildWallBlockers(definition) {
   if (definition.collision?.wallBlockers === false) return [];
   return asArray(definition.rooms).flatMap((room) => buildWallBlockersForRoom(definition, room));
@@ -264,6 +308,7 @@ export function buildDungeonCollision(definition) {
   })).concat(buildV21WalkableRects(definition));
   const blockers = asArray(definition.blockers);
   const wallBlockers = buildWallBlockers(definition).concat(buildV2WallBlockers(definition));
+  const walkableSurfaces = buildWalkableSurfaces(definition);
   const blockerRects = blockers
     .filter((blocker) => blocker.blocksPlayer !== false)
     .map(blockerRect)
@@ -279,6 +324,7 @@ export function buildDungeonCollision(definition) {
 
   return {
     walkableRects,
+    walkableSurfaces,
     blockerRects,
     enemyBlockerRects,
     lineOfMovementBlockerRects,
@@ -286,6 +332,8 @@ export function buildDungeonCollision(definition) {
       walkableRects,
       blockerRects,
       playerRadius: definition.collision?.playerRadius ?? 0.35,
+      walkableSurfaces,
+      defaultFloorY: definition.defaultFloorY ?? 0,
     }),
   };
 }

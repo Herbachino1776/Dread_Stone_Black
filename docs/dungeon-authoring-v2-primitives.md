@@ -104,3 +104,38 @@ bridges: [{ id: 'canal_bridge_01', from: [-6, 0], to: [6, 0], width: 3.4, y: 0.3
 ### Debug overlay
 
 In development builds, press `F2` to toggle the dungeon debug overlay and `F3` to cycle layers. The v2 layer includes polygon floor outlines, wall segments and normals, door/anchor markers, path ribbon centerlines, platform outlines, ramp/stair arrows, bridge spans, blockers, and spawn markers. The overlay is disabled by default and is gated behind `import.meta.env.DEV`.
+
+## DARB v2.2 walkable elevation
+
+Compiled v2 locations now include `walkableSurfaces` in addition to the legacy rectangular `walkableRects`. The player controller samples these surfaces after X/Z collision to decide the floor Y under the camera, so v2 visual architecture can be traversed without introducing a full physics engine.
+
+Supported runtime surface kinds:
+
+- `flatPolygon` — polygon floor at a constant `y`.
+- `platformTop` — platform footprint at `platform.y + platform.height`; the top wins over lower floor surfaces by priority.
+- `ramp` — oriented rectangle from `from` to `to`; height linearly interpolates from `y0` to `y1` along the ramp direction.
+- `stairRamp` — oriented rectangle sampled like a ramp but quantized by `steps`, giving stable stair-height movement while preserving simple collision.
+- `bridgeDeck` — oriented rectangle at constant `y`; bridge decks can pass over canal/void blockers when the sampled surface is the bridge.
+
+Surface priority resolves overlaps. Ramps/stairs use higher priority than base floors, bridges beat the canal floor/blocker zone, and platform tops beat the lower courtyard floor. Legacy rectangular dungeons that do not author v2 primitives keep the old flat fallback height.
+
+### Authoring notes
+
+- Align the top of a ramp or stair run with the edge of a `platformTop`. Directly stepping from a low floor onto a high platform is blocked by the lightweight max-step check, but arriving through a ramp/stair is allowed.
+- Use enough `width` on ramps/stairs/bridges for the player radius plus steering tolerance.
+- Keep canal/void blockers below bridge spans as normal blockers; the runtime ignores those blocker hits only while the sampled surface is a `bridgeDeck`.
+- The first pass is still a lightweight controller, not a rigid-body physics system. Platform side collision is approximated by the max-step rule, and stairs use sampled height rather than per-tread mesh collision.
+
+### Wall closure validation
+
+V2 `wallSegments` are grouped by `roomId` and checked for endpoint continuity. The validator warns when a segment end does not approximately connect to the next segment start, unless the gap is claimed by a `doorGap` or tagged intentionally. Use tags such as `intentional-gap`, `broken-wall-gap`, `open-courtyard`, or `connector` on the segment or room for authored openings.
+
+Example warning:
+
+```text
+V2 wall loop warning: v2_canal_shrine_courtyard has an unclaimed gap between wall_north and wall_west_high.
+```
+
+### Debug overlay
+
+In development builds, `F2` toggles the dungeon debug overlay and `F3` cycles layers. The new elevation layer draws platform top outlines, ramp/stair direction arrows, bridge deck footprints, the sampled floor Y under the player marker, and markers for wall closure warnings.

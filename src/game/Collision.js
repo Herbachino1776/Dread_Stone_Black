@@ -14,26 +14,86 @@ function circleIntersectsRect(point, radius, rect) {
   return dx * dx + dz * dz < radius * radius;
 }
 
+function pointInPolygon(point, footprint) {
+  let inside = false;
+  for (let i = 0, j = footprint.length - 1; i < footprint.length; j = i, i += 1) {
+    const xi = footprint[i][0]; const zi = footprint[i][1];
+    const xj = footprint[j][0]; const zj = footprint[j][1];
+    const intersects = ((zi > point.z) !== (zj > point.z))
+      && (point.x < ((xj - xi) * (point.z - zi)) / ((zj - zi) || Number.EPSILON) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function sampleSegmentSurface(point, surface) {
+  const [x0, z0] = surface.from;
+  const [x1, z1] = surface.to;
+  const dx = x1 - x0; const dz = z1 - z0;
+  const length = Math.hypot(dx, dz);
+  if (length <= 0.0001) return null;
+  const ux = dx / length; const uz = dz / length;
+  const px = point.x - x0; const pz = point.z - z0;
+  const along = px * ux + pz * uz;
+  const across = Math.abs(px * -uz + pz * ux);
+  if (along < 0 || along > length || across > (surface.width ?? 1) / 2) return null;
+  const t = THREE.MathUtils.clamp(along / length, 0, 1);
+  if (surface.kind === 'bridgeDeck') return { y: surface.y ?? 0, t };
+  const steppedT = surface.kind === 'stairRamp' && surface.steps > 0
+    ? Math.floor(t * surface.steps) / surface.steps
+    : t;
+  return { y: THREE.MathUtils.lerp(surface.y0 ?? 0, surface.y1 ?? 0, steppedT), t: steppedT };
+}
+
 export class CollisionWorld {
-  constructor({ walkableRects, blockerRects = [], playerRadius = 0.35 }) {
+  constructor({ walkableRects, blockerRects = [], playerRadius = 0.35, walkableSurfaces = [], defaultFloorY = 0 }) {
     this.walkableRects = walkableRects;
+    this.walkableSurfaces = walkableSurfaces;
     this.blockerRects = blockerRects;
     this.playerRadius = playerRadius;
+    this.defaultFloorY = defaultFloorY;
+    this.eyeHeight = 1.55;
+    this.maxStepUp = 0.38;
   }
 
   removeBlocker(blockerRect) {
     this.blockerRects = this.blockerRects.filter((rect) => rect !== blockerRect);
   }
 
+  sampleWalkableY(x, z, fallbackY = this.defaultFloorY) {
+    const point = { x, z };
+    let best = { y: fallbackY, priority: -Infinity, kind: 'fallback', surface: null };
+    this.walkableSurfaces.forEach((surface) => {
+      let sample = null;
+      if ((surface.kind === 'flatPolygon' || surface.kind === 'platformTop') && pointInPolygon(point, surface.footprint ?? [])) {
+        sample = { y: surface.y ?? fallbackY, t: 0 };
+      } else if (['ramp', 'stairRamp', 'bridgeDeck'].includes(surface.kind)) {
+        sample = sampleSegmentSurface(point, surface);
+      }
+      if (!sample) return;
+      const priority = surface.priority ?? 0;
+      if (priority > best.priority || (priority === best.priority && sample.y > best.y)) {
+        best = { y: sample.y, priority, kind: surface.kind, surface, t: sample.t };
+      }
+    });
+    return best;
+  }
+
   canStandAt(position) {
     const testPoint = { x: position.x, z: position.z };
     const inWalkableSpace = this.walkableRects.some((rect) => pointInRect(testPoint, rect));
 
-    if (!inWalkableSpace) {
-      return false;
-    }
+    if (!inWalkableSpace) return false;
 
-    return !this.blockerRects.some((rect) => circleIntersectsRect(testPoint, this.playerRadius, rect));
+    const targetSurface = this.sampleWalkableY(position.x, position.z, this.defaultFloorY);
+    const currentFloorY = Number.isFinite(position.y) ? position.y - this.eyeHeight : this.defaultFloorY;
+    const heightDelta = targetSurface.y - currentFloorY;
+    if (heightDelta > this.maxStepUp && !['ramp', 'stairRamp'].includes(targetSurface.kind)) return false;
+
+    return !this.blockerRects.some((rect) => {
+      if (rect.type === 'canal' && targetSurface.kind === 'bridgeDeck') return false;
+      return circleIntersectsRect(testPoint, this.playerRadius, rect);
+    });
   }
 
   moveWithCollision(position, movement) {

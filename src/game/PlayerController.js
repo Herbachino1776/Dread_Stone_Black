@@ -17,6 +17,8 @@ export class PlayerController {
     this.spawnPosition = spawnPosition.clone();
     this.spawnYaw = spawnYaw;
     this.position = this.spawnPosition.clone();
+    this.eyeHeight = Math.max(0.1, this.spawnPosition.y - (this.collisionWorld?.sampleWalkableY?.(this.spawnPosition.x, this.spawnPosition.z, 0)?.y ?? 0));
+    if (this.collisionWorld) this.collisionWorld.eyeHeight = this.eyeHeight;
     this.yaw = this.spawnYaw;
     this.walkSpeed = moveSpeed;
     this.strafeSpeed = strafeSpeed;
@@ -66,6 +68,12 @@ export class PlayerController {
     movement.addScaledVector(right, moveX * this.strafeSpeed * deltaSeconds);
 
     this.position = this.collisionWorld.moveWithCollision(this.position, movement);
+    const sampledFloor = this.collisionWorld.sampleWalkableY?.(this.position.x, this.position.z, this.position.y - this.eyeHeight);
+    if (sampledFloor) {
+      const targetY = sampledFloor.y + this.eyeHeight;
+      const smoothing = sampledFloor.kind === 'stairRamp' ? 0.35 : 0.55;
+      this.position.y = THREE.MathUtils.lerp(this.position.y, targetY, THREE.MathUtils.clamp(smoothing + deltaSeconds * 4, 0, 1));
+    }
 
     const look = controls.consumeLookDelta();
     if (typeof look === 'number') {
@@ -105,6 +113,8 @@ export class PlayerController {
 
   reset() {
     this.position.copy(this.spawnPosition);
+    const sampledFloor = this.collisionWorld?.sampleWalkableY?.(this.position.x, this.position.z, this.position.y - this.eyeHeight);
+    if (sampledFloor) this.position.y = sampledFloor.y + this.eyeHeight;
     this.yaw = this.spawnYaw;
     this.pitch = 0;
     this.syncCamera();
