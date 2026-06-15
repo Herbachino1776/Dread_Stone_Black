@@ -306,6 +306,113 @@ function addV2WallPropAnchors({ definition, group }) {
   }).filter(Boolean);
 }
 
+
+function addPolygonMesh({ group, points, y, material, name, userData = {} }) {
+  if (points.length < 3) return null;
+  const triangles = THREE.ShapeUtils.triangulateShape(points, []);
+  const vertices = [];
+  const uvs = [];
+  points.forEach((point) => {
+    vertices.push(point.x, y, point.y);
+    uvs.push(point.x * 0.18, point.y * 0.18);
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(triangles.flat());
+  geometry.computeVertexNormals();
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = name;
+  mesh.receiveShadow = true;
+  mesh.userData = { ...mesh.userData, ...userData };
+  group.add(mesh);
+  return mesh;
+}
+
+function ribbonQuad(a, b, width) {
+  const direction = b.clone().sub(a);
+  if (direction.lengthSq() <= 0.0001) return [];
+  direction.normalize();
+  const normal = new THREE.Vector2(-direction.y, direction.x).multiplyScalar(width / 2);
+  return [a.clone().add(normal), b.clone().add(normal), b.clone().sub(normal), a.clone().sub(normal)];
+}
+
+function addV2PathRibbons({ definition, group, materialFactory }) {
+  const meshes = [];
+  asArray(definition.pathRibbons).forEach((ribbon) => {
+    const points = asArray(ribbon.points).map(point2);
+    const material = makeMaterial(definition, ribbon.material ?? ribbon.textureProfile, materialFactory, definition.textures?.floor);
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const quad = ribbonQuad(points[i], points[i + 1], ribbon.width ?? 1);
+      const mesh = addPolygonMesh({ group, points: quad, y: ribbon.y ?? 0.02, material, name: `V2-PATH-${ribbon.id}-${i}`, userData: { locationId: definition.id, pathRibbonId: ribbon.id, generatedBy: 'DungeonGeometryBuilder:v2.1' } });
+      if (mesh) meshes.push(mesh);
+    }
+  });
+  return meshes;
+}
+
+function addV2Platforms({ definition, group, materialFactory }) {
+  const meshes = [];
+  asArray(definition.platforms).forEach((platform) => {
+    const footprint = asArray(platform.footprint).map(point2);
+    const y = platform.y ?? definition.defaultFloorY ?? 0;
+    const height = platform.height ?? 0.5;
+    const sideMaterial = makeMaterial(definition, platform.material ?? platform.textureProfile, materialFactory, definition.textures?.wall);
+    const topMaterial = makeMaterial(definition, platform.topMaterial ?? platform.material ?? platform.textureProfile, materialFactory, definition.textures?.floor);
+    const top = addPolygonMesh({ group, points: footprint, y: y + height, material: topMaterial, name: `V2-PLATFORM-TOP-${platform.id}`, userData: { locationId: definition.id, platformId: platform.id, generatedBy: 'DungeonGeometryBuilder:v2.1' } });
+    if (top) meshes.push(top);
+    footprint.forEach((from, index) => {
+      const to = footprint[(index + 1) % footprint.length];
+      const length = from.distanceTo(to);
+      if (length <= 0.0001) return;
+      const center = from.clone().lerp(to, 0.5);
+      const side = addBox({ group, size: new THREE.Vector3(length, height, 0.12), position: new THREE.Vector3(center.x, y + height / 2, center.y), material: sideMaterial, name: `V2-PLATFORM-SIDE-${platform.id}-${index}`, userData: { locationId: definition.id, platformId: platform.id, generatedBy: 'DungeonGeometryBuilder:v2.1' } });
+      side.rotation.y = Math.atan2(to.y - from.y, to.x - from.x);
+      meshes.push(side);
+    });
+  });
+  return meshes;
+}
+
+function segmentDeck(fromValue, toValue, width, y, material, group, name, userData = {}, thickness = 0.12) {
+  const from = point3FromXZ(fromValue, y);
+  const to = point3FromXZ(toValue, y);
+  const length = from.distanceTo(to);
+  if (length <= 0.0001) return null;
+  const center = from.clone().lerp(to, 0.5);
+  const mesh = addBox({ group, size: new THREE.Vector3(length, thickness, width), position: center, material, name, userData });
+  mesh.rotation.y = Math.atan2(to.z - from.z, to.x - from.x);
+  return mesh;
+}
+
+function addV2RampsStairsBridges({ definition, group, materialFactory }) {
+  const meshes = [];
+  asArray(definition.ramps).forEach((ramp) => {
+    const material = makeMaterial(definition, ramp.material ?? ramp.textureProfile, materialFactory, definition.textures?.floor);
+    const mesh = segmentDeck(ramp.from, ramp.to, ramp.width ?? 1, ((ramp.y0 ?? 0) + (ramp.y1 ?? 0)) / 2, material, group, `V2-RAMP-${ramp.id}`, { locationId: definition.id, rampId: ramp.id, generatedBy: 'DungeonGeometryBuilder:v2.1' }, 0.14);
+    if (mesh) { mesh.rotation.z = Math.atan2((ramp.y1 ?? 0) - (ramp.y0 ?? 0), point3FromXZ(ramp.from).distanceTo(point3FromXZ(ramp.to))); meshes.push(mesh); }
+  });
+  asArray(definition.stairs).forEach((stairs) => {
+    const material = makeMaterial(definition, stairs.material ?? stairs.textureProfile, materialFactory, definition.textures?.wall);
+    const count = Math.max(1, stairs.steps ?? 1);
+    const from = point3FromXZ(stairs.from, stairs.y0 ?? 0); const to = point3FromXZ(stairs.to, stairs.y1 ?? 0);
+    for (let i = 0; i < count; i += 1) {
+      const a = from.clone().lerp(to, i / count); const b = from.clone().lerp(to, (i + 1) / count);
+      const mesh = segmentDeck([a.x, a.z], [b.x, b.z], stairs.width ?? 1, (a.y + b.y) / 2, material, group, `V2-STAIR-${stairs.id}-${i}`, { locationId: definition.id, stairsId: stairs.id, generatedBy: 'DungeonGeometryBuilder:v2.1' }, Math.max(0.08, (b.y - (stairs.y0 ?? 0))));
+      if (mesh) meshes.push(mesh);
+    }
+  });
+  asArray(definition.bridges).forEach((bridge) => {
+    const material = makeMaterial(definition, bridge.material ?? bridge.textureProfile, materialFactory, definition.textures?.floor);
+    const deck = segmentDeck(bridge.from, bridge.to, bridge.width ?? 1, bridge.y ?? 0.2, material, group, `V2-BRIDGE-${bridge.id}`, { locationId: definition.id, bridgeId: bridge.id, generatedBy: 'DungeonGeometryBuilder:v2.1' }, bridge.thickness ?? 0.2);
+    if (deck) meshes.push(deck);
+    if (bridge.railing && deck) [-1, 1].forEach((side) => {
+      const rail = deck.clone(); rail.material = material; rail.name = `V2-BRIDGE-RAIL-${bridge.id}-${side}`; rail.scale.z = 0.08; rail.position.y += 0.45; rail.translateZ(side * (bridge.width ?? 1) / 2); group.add(rail); meshes.push(rail);
+    });
+  });
+  return meshes;
+}
+
 function addProps({ definition, group, materialFactory }) {
   return asArray(definition.props).map((prop) => {
     if (prop.visibleGeometry === false || !prop.dimensions || !prop.position) return null;
@@ -405,11 +512,14 @@ export function buildDungeonGeometry(definition, { materialFactory = null, torch
   asArray(definition.rooms).forEach((room) => addRoomGeometry({ definition, group, room, materialFactory }));
   const v2Floors = addV2PolygonFloors({ definition, group, materialFactory });
   const v2Walls = addV2WallSegments({ definition, group, materialFactory });
+  const v2Paths = addV2PathRibbons({ definition, group, materialFactory });
+  const v2Platforms = addV2Platforms({ definition, group, materialFactory });
+  const v2VerticalLinks = addV2RampsStairsBridges({ definition, group, materialFactory });
   const v2Anchors = addV2WallPropAnchors({ definition, group });
   const props = addProps({ definition, group, materialFactory });
   const lights = addLights({ definition, group, lights: lightRegistry?.nonTorchLights, torchFactory });
   const torchObjects = addTorchFixtures({ group, torchFixtures: lightRegistry?.torchFixtures });
   const pointLights = collectPointLights([...lights, ...torchObjects]);
 
-  return { group, props, lights, torchObjects, pointLights, v2Floors, v2Walls, v2Anchors };
+  return { group, props, lights, torchObjects, pointLights, v2Floors, v2Walls, v2Paths, v2Platforms, v2VerticalLinks, v2Anchors };
 }

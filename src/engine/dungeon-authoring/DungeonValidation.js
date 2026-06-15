@@ -95,6 +95,11 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   const wallSegments = asArray(definition.wallSegments);
   const doorGaps = asArray(definition.doorGaps);
   const wallPropAnchors = asArray(definition.wallPropAnchors);
+  const pathRibbons = asArray(definition.pathRibbons);
+  const platforms = asArray(definition.platforms);
+  const ramps = asArray(definition.ramps);
+  const stairs = asArray(definition.stairs);
+  const bridges = asArray(definition.bridges);
   const roomIds = new Set(rooms.map((room) => room.id));
   const spawnIds = new Set(spawns.map((spawn) => spawn.id));
   const blockerIds = new Set(blockers.map((blocker) => blocker.id));
@@ -115,6 +120,11 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     { label: 'wallSegments', items: wallSegments },
     { label: 'doorGaps', items: doorGaps },
     { label: 'wallPropAnchors', items: wallPropAnchors },
+    { label: 'pathRibbons', items: pathRibbons },
+    { label: 'platforms', items: platforms },
+    { label: 'ramps', items: ramps },
+    { label: 'stairs', items: stairs },
+    { label: 'bridges', items: bridges },
   ], errors);
 
 
@@ -164,6 +174,40 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     if (!Number.isFinite(anchor.t) || anchor.t < 0 || anchor.t > 1) addIssue(errors, 'error', `wallPropAnchor ${anchor.id} t must be between 0 and 1`, anchor.id);
     if (!Number.isFinite(anchor.height ?? 0)) addIssue(errors, 'error', `wallPropAnchor ${anchor.id} height must be finite`, anchor.id);
     if (anchor.kind && !supportedAnchorKinds.has(anchor.kind)) addIssue(warnings, 'warning', `wallPropAnchor ${anchor.id} uses unsupported kind ${anchor.kind}`, anchor.id);
+  });
+
+
+  pathRibbons.forEach((ribbon) => {
+    const points = asArray(ribbon.points).map(xzPoint);
+    if (points.length < 2) addIssue(errors, 'error', `pathRibbon ${ribbon.id} needs at least 2 points`, ribbon.id);
+    if (points.some((point) => !point)) addIssue(errors, 'error', `pathRibbon ${ribbon.id} has non-finite points`, ribbon.id);
+    if (!Number.isFinite(ribbon.width) || ribbon.width <= 0) addIssue(errors, 'error', `pathRibbon ${ribbon.id} width must be > 0`, ribbon.id);
+  });
+
+  platforms.forEach((platform) => {
+    const points = asArray(platform.footprint).map(xzPoint);
+    if (points.length < 3) addIssue(errors, 'error', `platform ${platform.id} needs at least 3 footprint points`, platform.id);
+    if (points.some((point) => !point)) addIssue(errors, 'error', `platform ${platform.id} has non-finite footprint points`, platform.id);
+    if (!Number.isFinite(platform.height) || platform.height <= 0) addIssue(errors, 'error', `platform ${platform.id} height must be > 0`, platform.id);
+  });
+
+  ramps.forEach((ramp) => {
+    if (!xzPoint(ramp.from) || !xzPoint(ramp.to)) addIssue(errors, 'error', `ramp ${ramp.id} has invalid from/to points`, ramp.id);
+    if (!Number.isFinite(ramp.width) || ramp.width <= 0) addIssue(errors, 'error', `ramp ${ramp.id} width must be > 0`, ramp.id);
+    if (!Number.isFinite(ramp.y0) || !Number.isFinite(ramp.y1)) addIssue(errors, 'error', `ramp ${ramp.id} y0/y1 must be finite`, ramp.id);
+  });
+
+  stairs.forEach((stepRun) => {
+    if (!xzPoint(stepRun.from) || !xzPoint(stepRun.to)) addIssue(errors, 'error', `stairs ${stepRun.id} has invalid from/to points`, stepRun.id);
+    if (!Number.isFinite(stepRun.width) || stepRun.width <= 0) addIssue(errors, 'error', `stairs ${stepRun.id} width must be > 0`, stepRun.id);
+    if (!Number.isFinite(stepRun.y0) || !Number.isFinite(stepRun.y1)) addIssue(errors, 'error', `stairs ${stepRun.id} y0/y1 must be finite`, stepRun.id);
+    if (!Number.isFinite(stepRun.steps) || stepRun.steps <= 0) addIssue(errors, 'error', `stairs ${stepRun.id} steps must be > 0`, stepRun.id);
+  });
+
+  bridges.forEach((bridge) => {
+    if (!xzPoint(bridge.from) || !xzPoint(bridge.to)) addIssue(errors, 'error', `bridge ${bridge.id} has invalid from/to points`, bridge.id);
+    if (!Number.isFinite(bridge.width) || bridge.width <= 0) addIssue(errors, 'error', `bridge ${bridge.id} width must be > 0`, bridge.id);
+    if (!Number.isFinite(bridge.thickness) || bridge.thickness <= 0) addIssue(errors, 'error', `bridge ${bridge.id} thickness must be > 0`, bridge.id);
   });
 
   rooms.forEach((room) => {

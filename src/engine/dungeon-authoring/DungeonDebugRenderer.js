@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { TorchDebugRenderer } from '../lighting/TorchDebugRenderer.js';
 import { addIntegrityDebugLayer } from './integrity/DungeonIntegrityDebug.js';
 
-const DEBUG_LAYERS = Object.freeze(['all', 'rooms', 'blockers', 'nav', 'spawns', 'encounters', 'exits', 'torches', 'integrity']);
+const DEBUG_LAYERS = Object.freeze(['all', 'rooms', 'blockers', 'nav', 'spawns', 'encounters', 'exits', 'torches', 'integrity', 'v2']);
 
 function rectMesh(rect, color, y = 0.035, opacity = 0.18) {
   const width = rect.maxX - rect.minX;
@@ -37,6 +37,26 @@ function lineBetween(a, b, color) {
     new THREE.Vector3(b.x, 0.16, b.z),
   ]);
   return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.78 }));
+}
+
+
+function xz(value, y = 0.2) {
+  return new THREE.Vector3(Number(value?.x ?? value?.[0] ?? 0), y, Number(value?.z ?? value?.[1] ?? 0));
+}
+
+function polyline(points, color, closed = false, y = 0.18) {
+  const vectors = points.map((point) => xz(point, y));
+  if (closed && vectors.length > 0) vectors.push(vectors[0].clone());
+  return new THREE.Line(new THREE.BufferGeometry().setFromPoints(vectors), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.88 }));
+}
+
+function arrow(from, to, color) {
+  const start = xz(from, 0.28);
+  const end = xz(to, 0.28);
+  const direction = end.clone().sub(start);
+  const length = direction.length();
+  if (length <= 0.0001) return new THREE.Group();
+  return new THREE.ArrowHelper(direction.normalize(), start, length, color, Math.min(0.8, length * 0.24), 0.35);
 }
 
 function ring(center, radius, color) {
@@ -130,6 +150,22 @@ export class DungeonDebugRenderer {
       mesh.userData = { locationId: this.runtime.locationId, exitId: exit.id, devOnly: true };
       this.layers.exits.add(mesh);
     });
+
+
+    const v2 = this.runtime.debugData?.v2Primitives ?? {};
+    v2.polygonFloors?.forEach((floor) => this.layers.v2.add(polyline(floor.points ?? [], 0x4ea4ff, true, (floor.y ?? 0) + 0.12)));
+    v2.wallSegments?.forEach((wall) => {
+      this.layers.v2.add(polyline([wall.from, wall.to], 0xff4d2f, false, (wall.y ?? 0) + 0.22));
+      const a = xz(wall.from, 0.38); const b = xz(wall.to, 0.38); const mid = a.clone().lerp(b, 0.5); const dir = b.clone().sub(a).normalize();
+      this.layers.v2.add(new THREE.ArrowHelper(new THREE.Vector3(-dir.z, 0, dir.x), mid, 0.8, 0xff9c2f, 0.25, 0.16));
+    });
+    v2.doorGaps?.forEach((gap) => this.layers.v2.add(marker({ x: 0, z: 0, ...(gap.position ?? {}) }, 0x3fe07e, 0.38)));
+    v2.wallPropAnchors?.forEach((anchor) => this.layers.v2.add(marker({ x: 0, z: 0 }, 0xffd36a, 0.28)));
+    v2.pathRibbons?.forEach((ribbon) => this.layers.v2.add(polyline(ribbon.points ?? [], 0xe6d15c, false, (ribbon.y ?? 0) + 0.2)));
+    v2.platforms?.forEach((platform) => this.layers.v2.add(polyline(platform.footprint ?? [], 0xc46cff, true, (platform.y ?? 0) + (platform.height ?? 0) + 0.16)));
+    v2.ramps?.forEach((ramp) => this.layers.v2.add(arrow(ramp.from, ramp.to, 0x49ddb1)));
+    v2.stairs?.forEach((stairs) => this.layers.v2.add(arrow(stairs.from, stairs.to, 0xffffff)));
+    v2.bridges?.forEach((bridge) => this.layers.v2.add(polyline([bridge.from, bridge.to], 0x8fd4ff, false, (bridge.y ?? 0) + 0.25)));
 
     const torchDebug = new TorchDebugRenderer({ runtime: this.runtime });
     this.layers.torches.add(torchDebug.group);
