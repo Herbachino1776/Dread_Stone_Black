@@ -98,7 +98,10 @@ const FIELD_REDWOOD_VISIBLE_DISTANCE = 260;
 const FIELD_FOLIAGE_VISIBLE_DISTANCE_SQ = FIELD_FOLIAGE_VISIBLE_DISTANCE * FIELD_FOLIAGE_VISIBLE_DISTANCE;
 const FIELD_REDWOOD_VISIBLE_DISTANCE_SQ = FIELD_REDWOOD_VISIBLE_DISTANCE * FIELD_REDWOOD_VISIBLE_DISTANCE;
 const FIELD_SIZE = 400;
+const FIELD_HALF_SIZE = FIELD_SIZE / 2;
 const FIELD_GRASS_REPEAT = [50, 50];
+const FIELD_FISHING_INTERACT_PADDING = 9;
+const MAX_FIELD_RAW_FISH_PICKUPS = 6;
 const OUTDOOR_DAWN_SKY_COLOR = 0x4d5660;
 const OUTDOOR_DAWN_FOG_COLOR = 0x8a8170;
 const OUTDOOR_FOG_NEAR = 42;
@@ -276,6 +279,7 @@ export class DungeonScene {
     this.fieldRedwoodHarvestables = [];
     this.fieldSurvivalObjects = new Map();
     this.fieldFishingZones = [];
+    this.fieldRawFishPickups = [];
     this.fieldCookedFishPickups = [];
     this.giantRamManFieldManifestation = null;
     this.giantRamManFieldManifestationLoading = false;
@@ -646,6 +650,7 @@ export class DungeonScene {
     this.updateBlackGrassFactionEnemies(deltaSeconds, player);
     this.updateSheepDemonEnemy(deltaSeconds, player);
     this.updateReliquaryFieldFoliage(player);
+    this.updateRawFishPickups(deltaSeconds);
     this.updateCookedFishPickups(deltaSeconds);
     this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
     this.dungeonDebugRenderer?.update(player?.position);
@@ -1046,18 +1051,47 @@ export class DungeonScene {
       mesh.userData = { collision: 'visual-only water boundary', fishing: true, performance: 'single static low-poly strip; no reflections, physics, or per-frame raycasts' };
       this.scene.add(mesh);
     });
-    this.fieldFishingZones = [
-      { id: 'field_river_fishing_nw', position: new THREE.Vector3(-158, 0, -132), radius: 13 },
-      { id: 'field_river_fishing_n', position: new THREE.Vector3(12, 0, -170), radius: 13 },
-      { id: 'field_river_fishing_ne', position: new THREE.Vector3(152, 0, -112), radius: 13 },
-      { id: 'field_river_fishing_w', position: new THREE.Vector3(-170, 0, 42), radius: 13 },
-      { id: 'field_river_fishing_s', position: new THREE.Vector3(80, 0, 170), radius: 13 },
-    ];
+    this.fieldFishingZones = specs.map((spec) => ({
+      id: `field_river_fishing_${spec.name}`,
+      name: spec.name,
+      minX: spec.pos[0] - spec.size[0] / 2,
+      maxX: spec.pos[0] + spec.size[0] / 2,
+      minZ: spec.pos[1] - spec.size[1] / 2,
+      maxZ: spec.pos[1] + spec.size[1] / 2,
+      interactPadding: FIELD_FISHING_INTERACT_PADDING,
+      position: new THREE.Vector3(spec.pos[0], 0, spec.pos[1]),
+    }));
   }
 
   getNearbyFishingZone(position) {
     if (this.area !== 'field' || !position) return null;
-    return this.fieldFishingZones.find((zone) => horizontalDistance(position, zone.position) <= zone.radius) ?? null;
+    return this.fieldFishingZones.find((zone) => (
+      position.x >= zone.minX - zone.interactPadding
+      && position.x <= zone.maxX + zone.interactPadding
+      && position.z >= zone.minZ - zone.interactPadding
+      && position.z <= zone.maxZ + zone.interactPadding
+    )) ?? null;
+  }
+
+  getRawFishLandingPosition(player) {
+    if (!player?.position) return null;
+    const forward = typeof player.getLookDirection === 'function'
+      ? player.getLookDirection().clone()
+      : new THREE.Vector3(Math.sin(player.yaw ?? 0), 0, Math.cos(player.yaw ?? 0));
+    forward.y = 0;
+    if (forward.lengthSq() < 0.001) forward.set(0, 0, 1);
+    forward.normalize();
+    const spawn = player.position.clone().addScaledVector(forward, 1.25);
+    spawn.y = 0;
+    spawn.x = THREE.MathUtils.clamp(spawn.x, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
+    spawn.z = THREE.MathUtils.clamp(spawn.z, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
+    if (this.getNearbyFishingZone(spawn)) {
+      spawn.copy(player.position).addScaledVector(forward, 0.85);
+      spawn.y = 0;
+      spawn.x = THREE.MathUtils.clamp(spawn.x, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
+      spawn.z = THREE.MathUtils.clamp(spawn.z, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
+    }
+    return spawn;
   }
 
   addOutdoorBoundary() {
@@ -1534,6 +1568,58 @@ export class DungeonScene {
     this.fieldCookedFishPickups.push(pickup);
     this.outdoorInteractions.push({ id: pickupId, label: 'Cooked Fish', target: landing.clone().setY(1), range: 2.4, hint: 'Pick up Cooked Fish', message: 'Cooked Fish Acquired.', type: 'cookedFishPickup', pickup });
     return pickup;
+  }
+
+  createRawFishPickupMesh() {
+    const group = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x6f766f, roughness: 0.82, emissive: 0x101413, emissiveIntensity: 0.12 });
+    const tailMat = new THREE.MeshStandardMaterial({ color: 0x4e5a55, roughness: 0.88, emissive: 0x090d0c, emissiveIntensity: 0.1 });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 8), bodyMat);
+    body.scale.set(1.55, 0.34, 0.52);
+    body.rotation.z = Math.PI / 2;
+    group.add(body);
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.28, 3), tailMat);
+    tail.position.x = -0.36;
+    tail.rotation.z = -Math.PI / 2;
+    tail.scale.z = 0.42;
+    group.add(tail);
+    return group;
+  }
+
+  spawnRawFishPickupForPlayer(player) {
+    if (this.area !== 'field') return null;
+    const landing = this.getRawFishLandingPosition(player);
+    if (!landing) return null;
+    if (this.fieldRawFishPickups.length >= MAX_FIELD_RAW_FISH_PICKUPS) {
+      this.removeRawFishPickup(this.fieldRawFishPickups[0]);
+    }
+    const pickupId = `field_raw_fish_${Date.now()}_${this.fieldRawFishPickups.length + 1}`;
+    const mesh = this.createRawFishPickupMesh();
+    mesh.name = `${pickupId}-gray-raw-fish-placeholder-pickup`;
+    mesh.position.set(landing.x, 0.9, landing.z);
+    mesh.rotation.y = player?.yaw ?? 0;
+    this.scene.add(mesh);
+    const pickup = { id: pickupId, mesh, start: mesh.position.clone(), target: landing.clone().setY(0.18), elapsed: 0, duration: 0.55 };
+    this.fieldRawFishPickups.push(pickup);
+    this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(0.75), range: 2.2, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup });
+    return pickup;
+  }
+
+  updateRawFishPickups(deltaSeconds) {
+    this.fieldRawFishPickups.forEach((pickup) => {
+      if (!pickup.mesh || pickup.elapsed >= pickup.duration) return;
+      pickup.elapsed = Math.min(pickup.duration, pickup.elapsed + deltaSeconds);
+      const t = pickup.elapsed / pickup.duration;
+      pickup.mesh.position.lerpVectors(pickup.start, pickup.target, t);
+      pickup.mesh.position.y = 0.18 + Math.sin(t * Math.PI) * 0.45;
+    });
+  }
+
+  removeRawFishPickup(pickup) {
+    if (!pickup) return;
+    if (pickup.mesh) this.scene.remove(pickup.mesh);
+    this.fieldRawFishPickups = this.fieldRawFishPickups.filter((entry) => entry !== pickup);
+    this.outdoorInteractions = this.outdoorInteractions.filter((entry) => entry.pickup !== pickup);
   }
 
   updateCookedFishPickups(deltaSeconds) {
