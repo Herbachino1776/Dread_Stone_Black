@@ -6,11 +6,10 @@ import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
 import { ObjectiveRuntime } from '../engine/objectives/ObjectiveRuntime.js';
 import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
 import { Feedback } from './Feedback.js';
-import { FirstPersonArmsOverlay } from './FirstPersonArmsOverlay.js';
 import { EquipmentPanel } from './equipment/EquipmentPanel.js';
 import { equipmentRegistry } from './equipment/equipmentRegistry.js';
 import { startingEquipment } from './equipment/startingEquipment.js';
-import { FPVEquipmentRenderer } from './fpv/FPVEquipmentRenderer.js';
+import { FirstPersonViewModel } from './fpv/FirstPersonViewModel.js';
 import { GameState } from './GameState.js';
 import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
@@ -169,7 +168,7 @@ export class Game {
       hud: this.hud,
       controls: this.controls,
       equipmentRuntime: this.equipmentRuntime,
-      fpvEquipmentRenderer: this.fpvEquipmentRenderer,
+      fpvEquipmentRenderer: this.firstPersonViewModel,
     });
 
     this.preventMobilePageGestures();

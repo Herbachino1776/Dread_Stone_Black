@@ -41,8 +41,13 @@ export const fpvWeaponProfiles = Object.freeze({
   rusted_sword: Object.freeze({
     id: 'rusted_sword',
     baseClip: ARM_OVERLAY_ASSETS.unarmedIdle,
-    weaponLayer: 'sword-placeholder',
-    placeholder: true,
-    note: 'Procedural DOM fallback until a dedicated FPV sword strip exists.',
+    weaponLayer: 'glb-model',
+    modelUrl: `${import.meta.env.BASE_URL}assets/models/weapons/weapon_broadsword_ritual_01.glb`,
+    modelKind: 'sword',
+    scale: 1.05,
+    normalizedHeight: 1.65,
+    position: { x: 0.34, y: -1.05, z: -2.35 },
+    rotation: { x: -0.90, y: -0.18, z: 0.28 },
+    note: 'Legacy DOM renderer fallback maps the rusted sword to the ritual broadsword GLB.',
   }),
 });
