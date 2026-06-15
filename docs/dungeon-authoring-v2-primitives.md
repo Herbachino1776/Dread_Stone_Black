@@ -48,3 +48,59 @@ A wall prop anchor resolves an authored `t` position along a wall segment plus t
 ## Compatibility
 
 All v2 fields are optional. Legacy maps using only rectangular rooms, connectors, doors, props, blockers, spawns, exits, and light fixtures continue to compile through the existing paths.
+
+## DARB v2.1 primitives
+
+All v2.1 fields are optional and coexist with legacy rectangular rooms plus the v2 polygon floor/wall fields.
+
+### `pathRibbons`
+
+Use path ribbons for streets, alleys, canal-side walks, curved corridors, trails, and future patrol hints. The first runtime pass renders each pair of points as a straight joined strip.
+
+```js
+pathRibbons: [{
+  id: 'market_spine',
+  points: [[-32, -10], [-18, -4], [-4, -7], [14, 2], [31, 8]],
+  width: 4.5,
+  y: 0.02,
+  material: 'floor_worn_stone_01',
+  tags: ['street', 'main-path'],
+}]
+```
+
+### `platforms`
+
+Platforms create an irregular raised footprint with a top floor and vertical side faces. They are suitable for shrine bases, ziggurat terraces, altars, docks, and plinths.
+
+```js
+platforms: [{
+  id: 'ziggurat_lower_terrace',
+  footprint: [[-10, -8], [12, -8], [14, 6], [-8, 9]],
+  y: 0,
+  height: 1.2,
+  material: 'stone_limestone_block_01',
+  topMaterial: 'floor_limestone_temple_01',
+  tags: ['raised', 'temple'],
+}]
+```
+
+### `ramps` and `stairs`
+
+Ramps connect authored elevation levels with a simple sloped deck. Stairs render visual step boxes over the same authored span; movement still uses the 2D collision/walkable approximation.
+
+```js
+ramps: [{ id: 'market_to_temple_ramp', from: [-4, 0], to: [4, 6], width: 3.2, y0: 0, y1: 1.2, material: 'floor_limestone_temple_01' }],
+stairs: [{ id: 'ziggurat_front_steps', from: [0, -8], to: [0, -2], width: 5, y0: 0, y1: 1.2, steps: 6, material: 'stone_limestone_block_01' }]
+```
+
+### `bridges`
+
+Bridges are rectangular decks along a line with optional simple railings. Use them for river, canal, and void crossings.
+
+```js
+bridges: [{ id: 'canal_bridge_01', from: [-6, 0], to: [6, 0], width: 3.4, y: 0.35, thickness: 0.25, material: 'wood_dark_aged_01', railing: true }]
+```
+
+### Debug overlay
+
+In development builds, press `F2` to toggle the dungeon debug overlay and `F3` to cycle layers. The v2 layer includes polygon floor outlines, wall segments and normals, door/anchor markers, path ribbon centerlines, platform outlines, ramp/stair arrows, bridge spans, blockers, and spawn markers. The overlay is disabled by default and is gated behind `import.meta.env.DEV`.

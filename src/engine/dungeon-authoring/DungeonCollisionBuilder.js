@@ -207,6 +207,46 @@ function buildV2WallBlockers(definition) {
   });
 }
 
+
+function boundsForPoints(id, points, tags = []) {
+  const xs = points.map((point) => point.x);
+  const zs = points.map((point) => point.z);
+  return { id, minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs), tags };
+}
+
+function rectForSegment(id, fromValue, toValue, width, tags = []) {
+  const from = pointXZ(fromValue);
+  const to = pointXZ(toValue);
+  return {
+    id,
+    minX: Math.min(from.x, to.x) - width / 2,
+    maxX: Math.max(from.x, to.x) + width / 2,
+    minZ: Math.min(from.z, to.z) - width / 2,
+    maxZ: Math.max(from.z, to.z) + width / 2,
+    tags,
+  };
+}
+
+function buildV21WalkableRects(definition) {
+  const rects = [];
+  asArray(definition.polygonFloors).forEach((floor) => {
+    const points = asArray(floor.points).map((point) => pointXZ(point)).filter((point) => Number.isFinite(point.x) && Number.isFinite(point.z));
+    if (points.length >= 3) rects.push(boundsForPoints(`V2-FLOOR-WALKABLE-${floor.id}`, points, ['v2-floor', ...(floor.tags ?? [])]));
+  });
+  asArray(definition.pathRibbons).forEach((ribbon) => {
+    const points = asArray(ribbon.points);
+    for (let i = 0; i < points.length - 1; i += 1) rects.push(rectForSegment(`V2-PATH-WALKABLE-${ribbon.id}-${i}`, points[i], points[i + 1], ribbon.width ?? 1, ['v2-path', ...(ribbon.tags ?? [])]));
+  });
+  asArray(definition.platforms).forEach((platform) => {
+    const points = asArray(platform.footprint).map((point) => pointXZ(point)).filter((point) => Number.isFinite(point.x) && Number.isFinite(point.z));
+    if (points.length >= 3) rects.push(boundsForPoints(`V2-PLATFORM-WALKABLE-${platform.id}`, points, ['v2-platform', ...(platform.tags ?? [])]));
+  });
+  asArray(definition.ramps).forEach((ramp) => rects.push(rectForSegment(`V2-RAMP-WALKABLE-${ramp.id}`, ramp.from, ramp.to, ramp.width ?? 1, ['v2-ramp'])));
+  asArray(definition.stairs).forEach((stairs) => rects.push(rectForSegment(`V2-STAIR-WALKABLE-${stairs.id}`, stairs.from, stairs.to, stairs.width ?? 1, ['v2-stairs'])));
+  asArray(definition.bridges).forEach((bridge) => rects.push(rectForSegment(`V2-BRIDGE-WALKABLE-${bridge.id}`, bridge.from, bridge.to, bridge.width ?? 1, ['v2-bridge'])));
+  return rects;
+}
+
 function buildWallBlockers(definition) {
   if (definition.collision?.wallBlockers === false) return [];
   return asArray(definition.rooms).flatMap((room) => buildWallBlockersForRoom(definition, room));
@@ -221,7 +261,7 @@ export function buildDungeonCollision(definition) {
     maxZ: room.maxZ,
     roomId: room.id,
     tags: room.tags ?? [],
-  }));
+  })).concat(buildV21WalkableRects(definition));
   const blockers = asArray(definition.blockers);
   const wallBlockers = buildWallBlockers(definition).concat(buildV2WallBlockers(definition));
   const blockerRects = blockers
