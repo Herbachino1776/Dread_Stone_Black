@@ -79,6 +79,8 @@ export class Game {
               ? 'sumerianSunPalaceDistrictV1Exit'
               : returnedFrom === 'v2-canal-shrine'
                 ? 'v2CanalShrineExit'
+                : returnedFrom === 'sumerian-canal-market-district-v2'
+                  ? 'sumerianCanalMarketDistrictV2Exit'
             : returnedFrom === 'dungeon'
               ? 'cryptAExit'
               : 'start';

@@ -235,6 +235,7 @@ export const reliquaryFieldDefinition = Object.freeze({
     { id: 'field_ddplus_level_1_return', kind: 'return', position: { x: 154, y: 1.55, z: 104 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'ddplus-test', 'level-1'] },
     { id: 'field_sumerian_city_block_v0_return', kind: 'return', position: { x: 122, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-city-block-v0'] },
     { id: 'field_sumerian_sun_palace_district_v1_return', kind: 'return', position: { x: 96, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-sun-palace-district-v1'] },
+    { id: 'field_sumerian_canal_market_district_v2_return', kind: 'return', position: { x: 110, y: 1.55, z: 128 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-canal-market-district-v2'] },
     { id: 'field_v2_test_shrine_return', kind: 'return', position: { x: 68, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'v2-test-shrine'] },
     { id: 'field_v2_canal_shrine_return', kind: 'return', position: { x: -166, y: 1.55, z: 38 }, yaw: -Math.PI / 2, roomId: 'FIELD01', tags: ['temporary', 'v2-canal-shrine', 'black-grass-temple-adjacent'] },
   ],
@@ -331,6 +332,22 @@ export const reliquaryFieldDefinition = Object.freeze({
       userData: {
         temporary: true,
         removalNote: 'Temporary direct-authored Sumerian Sun Palace District compiled-runtime smoke-test entrance.',
+      },
+    },
+
+    {
+      id: 'field_enter_sumerian_canal_market_district_v2',
+      fromLocation: 'reliquary-field',
+      toLocation: 'sumerian-canal-market-district-v2',
+      triggerRect: { minX: 106, maxX: 114, minZ: 124, maxZ: 132 },
+      position: { x: 110, y: 1, z: 128 },
+      destinationSpawnId: 'sumerian_canal_market_player_start',
+      promptText: 'Enter Sumerian Canal Market',
+      tags: ['temporary', 'sumerian-canal-market-district-v2'],
+      userData: {
+        temporary: true,
+        foliageClearRadius: 20,
+        placementNote: 'Placed in the southeast Sumerian entrance cluster, offset northwest of City Block v0 and northeast of Sun Palace so entrances do not overlap.',
       },
     },
     {
