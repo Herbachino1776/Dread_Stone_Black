@@ -236,6 +236,7 @@ export const reliquaryFieldDefinition = Object.freeze({
     { id: 'field_sumerian_city_block_v0_return', kind: 'return', position: { x: 122, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-city-block-v0'] },
     { id: 'field_sumerian_sun_palace_district_v1_return', kind: 'return', position: { x: 96, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-sun-palace-district-v1'] },
     { id: 'field_v2_test_shrine_return', kind: 'return', position: { x: 68, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'v2-test-shrine'] },
+    { id: 'field_v2_canal_shrine_return', kind: 'return', position: { x: -166, y: 1.55, z: 38 }, yaw: -Math.PI / 2, roomId: 'FIELD01', tags: ['temporary', 'v2-canal-shrine', 'black-grass-temple-adjacent'] },
   ],
   exits: [
     {
@@ -248,6 +249,22 @@ export const reliquaryFieldDefinition = Object.freeze({
       promptText: 'Tap INTERACT to enter the V2 Test Shrine.',
       tags: ['temporary', 'v2-test-shrine'],
       userData: { placementNote: 'Small unobtrusive runtime proof entrance near the temporary generated-location markers.' },
+    },
+
+    {
+      id: 'field_enter_v2_canal_shrine',
+      fromLocation: 'reliquary-field',
+      toLocation: 'v2-canal-shrine',
+      triggerRect: { minX: -170.75, maxX: -161.25, minZ: 34.25, maxZ: 41.75 },
+      position: { x: -166, y: 1, z: 38 },
+      destinationSpawnId: 'v2_canal_shrine_player_start',
+      promptText: 'Enter V2 Canal Shrine',
+      tags: ['temporary', 'v2-canal-shrine', 'black-grass-temple-adjacent'],
+      userData: {
+        placementNote: 'Placed east-northeast of the Black Grass Temple entrance; shifted from z 48 to z 38 to avoid the temple right wing geometry.',
+        blackGrassTempleEntrance: { x: -184, y: 1, z: 31 },
+        foliageClearRadius: 18,
+      },
     },
 
     {
