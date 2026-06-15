@@ -131,6 +131,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   const ramps = asArray(definition.ramps);
   const stairs = asArray(definition.stairs);
   const bridges = asArray(definition.bridges);
+  const architecturalPrimitives = asArray(definition.architecturalPrimitives);
   const roomIds = new Set(rooms.map((room) => room.id));
   const spawnIds = new Set(spawns.map((spawn) => spawn.id));
   const blockerIds = new Set(blockers.map((blocker) => blocker.id));
@@ -156,6 +157,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     { label: 'ramps', items: ramps },
     { label: 'stairs', items: stairs },
     { label: 'bridges', items: bridges },
+    { label: 'architecturalPrimitives', items: architecturalPrimitives },
   ], errors);
 
 
@@ -241,6 +243,28 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     if (!xzPoint(bridge.from) || !xzPoint(bridge.to)) addIssue(errors, 'error', `bridge ${bridge.id} has invalid from/to points`, bridge.id);
     if (!Number.isFinite(bridge.width) || bridge.width <= 0) addIssue(errors, 'error', `bridge ${bridge.id} width must be > 0`, bridge.id);
     if (!Number.isFinite(bridge.thickness) || bridge.thickness <= 0) addIssue(errors, 'error', `bridge ${bridge.id} thickness must be > 0`, bridge.id);
+  });
+
+  const supportedPrimitiveKinds = new Set(['pillar', 'brokenPillar', 'arch', 'doorFrame', 'lowWall', 'railing', 'altar', 'stela', 'obelisk', 'wallPanel', 'canalWater', 'curb']);
+  const positive = (primitive, field, fallback = undefined) => {
+    const value = primitive[field] ?? fallback;
+    if (!Number.isFinite(value) || value <= 0) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} ${field} must be > 0`, primitive.id);
+  };
+  architecturalPrimitives.forEach((primitive) => {
+    if (!supportedPrimitiveKinds.has(primitive.kind)) { addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} uses unsupported kind ${primitive.kind}`, primitive.id); return; }
+    const needsPosition = ['pillar', 'brokenPillar', 'arch', 'doorFrame', 'altar', 'stela', 'obelisk'].includes(primitive.kind);
+    const needsLine = ['lowWall', 'railing', 'canalWater', 'curb'].includes(primitive.kind);
+    if (needsPosition) {
+      const pos = positionOf(primitive.position);
+      if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} has invalid position`, primitive.id);
+    }
+    if (needsLine && (!xzPoint(primitive.from) || !xzPoint(primitive.to))) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} has invalid from/to points`, primitive.id);
+    if (['pillar', 'brokenPillar'].includes(primitive.kind)) { positive(primitive, 'radius', 0.3); positive(primitive, 'height', 2); }
+    if (['arch', 'doorFrame'].includes(primitive.kind)) { positive(primitive, 'width', 2); positive(primitive, 'height', 3); positive(primitive, 'thickness', 0.35); if ((primitive.width ?? 2) <= (primitive.thickness ?? 0.35) * 2) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} opening width is too small for side posts`, primitive.id); }
+    if (['lowWall', 'railing', 'canalWater', 'curb'].includes(primitive.kind)) { if (primitive.kind === 'canalWater') positive(primitive, 'width', 1); positive(primitive, 'height', primitive.kind === 'canalWater' ? 0.03 : (primitive.kind === 'curb' ? 0.22 : 0.7)); if (primitive.kind !== 'canalWater') positive(primitive, 'thickness', 0.2); }
+    if (['altar', 'stela'].includes(primitive.kind)) { positive(primitive, 'width', 1); positive(primitive, 'height', 1); positive(primitive, 'thickness', primitive.kind === 'stela' ? 0.2 : 0.1); }
+    if (primitive.kind === 'obelisk') { positive(primitive, 'height', 3); positive(primitive, 'baseWidth', 0.7); }
+    if (primitive.kind === 'wallPanel') { if (!wallSegmentById.has(primitive.wallSegmentId)) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} references missing wallSegmentId ${primitive.wallSegmentId}`, primitive.id); if (!Number.isFinite(primitive.t) || primitive.t < 0 || primitive.t > 1) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} t must be between 0 and 1`, primitive.id); positive(primitive, 'height', 1); positive(primitive, 'width', 1); }
   });
 
   rooms.forEach((room) => {

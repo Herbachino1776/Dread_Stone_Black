@@ -139,3 +139,50 @@ V2 wall loop warning: v2_canal_shrine_courtyard has an unclaimed gap between wal
 ### Debug overlay
 
 In development builds, `F2` toggles the dungeon debug overlay and `F3` cycles layers. The new elevation layer draws platform top outlines, ramp/stair direction arrows, bridge deck footprints, the sampled floor Y under the player marker, and markers for wall closure warnings.
+
+## DARB v2.3 Architectural Primitives
+
+`architecturalPrimitives` is an optional authored array for lightweight runtime-generated ancient-world architecture. It sits beside `polygonFloors`, `wallSegments`, `pathRibbons`, `platforms`, `ramps`, `stairs`, and `bridges`; legacy rectangular maps can omit it.
+
+Shared fields:
+
+```js
+architecturalPrimitives: [{
+  id: 'example_pillar',
+  kind: 'pillar',
+  position: [0, 0, 0],
+  yaw: 0,
+  material: 'wall',
+  roomId: 'courtyard',
+  tags: [],
+  userData: {},
+}]
+```
+
+Supported primitive kinds:
+
+- `pillar`: octagonal/cylindrical column (`position`, `radius`, `height`, optional `sides`). Blocks by default.
+- `brokenPillar`: shorter tilted column fragment (`position`, `radius`, `height`, optional `tilt`). Blocks by default.
+- `arch`: two posts plus lintel/cap (`position`, `width`, `height`, `thickness`, optional `depth`). Side posts block; center stays open.
+- `doorFrame`: two posts plus lintel for transitions. Side posts block; center stays open.
+- `lowWall`: low segment from `from` to `to` with `height` and `thickness`. Blocks by default.
+- `railing`: thin beam and repeated posts from `from` to `to`; visual-only unless `blocksPlayer: true`.
+- `altar`: stacked plinth box (`position`, `width`, `depth`, `height`, optional `topMaterial`). Blocks by default.
+- `stela`: upright slab (`position`, `width`, `height`, `thickness`). Blocks by default.
+- `obelisk`: simple stacked/taper-suggested landmark (`position`, `height`, `baseWidth`). Blocks by default.
+- `wallPanel`: slab attached to a `wallSegmentId` at `t` using the wall normal; visual-only by default.
+- `canalWater`: flat dark strip from `from` to `to` with `width` and optional `emissiveColor`; visual-only.
+- `curb`: very low path/causeway edge from `from` to `to`; visual-only unless `blocksPlayer: true`.
+
+Example line and wall-attached primitives:
+
+```js
+{ id: 'canal_water', kind: 'canalWater', from: [-12, 1.5], to: [-5.5, 1.5], width: 2.4, y: 0.03, material: 'water' }
+{ id: 'warning_panel', kind: 'wallPanel', wallSegmentId: 'east_wall', t: 0.65, width: 1.4, height: 1.8, offset: 0.08, material: 'temple' }
+```
+
+Validation checks that each primitive has an id, supported `kind`, required finite points/positions, positive dimensions, and valid `wallSegmentId` references for `wallPanel`. Unsupported optional fields should be ignored or warned about by future tooling rather than crashing runtime compilation.
+
+Debug overlay: in dev builds, `F2`/`F3` now includes primitive markers, line bounds for segment-style primitives, arch/door-frame opening guides, collision-colored markers, and wall-panel normal arrows.
+
+Known limitations: arches use a lintel/cap suggestion rather than true curved mesh, obelisks use simple box stacking instead of custom taper geometry, primitive collision is axis-aligned and approximate, and canal water is a flat material strip rather than a full water shader.

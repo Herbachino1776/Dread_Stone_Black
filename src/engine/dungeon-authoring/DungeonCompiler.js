@@ -109,6 +109,7 @@ export function compileDungeonLocation(definition, options = {}) {
       platforms: geometry.v2Platforms ?? [],
       verticalLinks: geometry.v2VerticalLinks ?? [],
       wallPropAnchors: geometry.v2Anchors ?? [],
+      architecturalPrimitives: geometry.v23Primitives ?? [],
     },
     integrityReport,
     debugData: {
@@ -130,6 +131,7 @@ export function compileDungeonLocation(definition, options = {}) {
         ramps: asArray(definition.ramps),
         stairs: asArray(definition.stairs),
         bridges: asArray(definition.bridges),
+        architecturalPrimitives: asArray(definition.architecturalPrimitives),
       },
       fixtureValidation,
       integrity: integrityReport,

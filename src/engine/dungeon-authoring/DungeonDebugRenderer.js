@@ -180,6 +180,26 @@ export class DungeonDebugRenderer {
     v2.ramps?.forEach((ramp) => this.layers.v2.add(arrow(ramp.from, ramp.to, 0x49ddb1)));
     v2.stairs?.forEach((stairs) => this.layers.v2.add(arrow(stairs.from, stairs.to, 0xffffff)));
     v2.bridges?.forEach((bridge) => this.layers.v2.add(polyline([bridge.from, bridge.to], 0x8fd4ff, false, (bridge.y ?? 0) + 0.25)));
+    v2.architecturalPrimitives?.forEach((primitive) => {
+      const color = primitive.blocksPlayer === false || ['railing', 'wallPanel', 'canalWater', 'curb'].includes(primitive.kind) ? 0x6ae6ff : 0xff6ad5;
+      if (primitive.from && primitive.to) this.layers.v2.add(polyline([primitive.from, primitive.to], color, false, (primitive.y ?? 0) + (primitive.height ?? 0.35) + 0.18));
+      if (primitive.position) {
+        const size = primitive.radius ? primitive.radius * 2 : Math.max(primitive.width ?? primitive.baseWidth ?? 0.8, primitive.depth ?? primitive.thickness ?? 0.4);
+        const pos = xz(primitive.position, (primitive.position?.y ?? primitive.position?.[1] ?? 0) + 0.4);
+        const m = marker(pos, color, Math.max(0.22, Math.min(0.8, size)));
+        m.name = `debug-primitive-${primitive.id}`;
+        m.userData = { primitiveId: primitive.id, primitiveKind: primitive.kind, label: primitive.id };
+        this.layers.v2.add(m);
+      }
+      if (['arch', 'doorFrame'].includes(primitive.kind)) {
+        const yaw = primitive.yaw ?? 0; const width = primitive.width ?? 2; const p = xz(primitive.position, 0.5); const dx = Math.cos(yaw) * width / 2; const dz = -Math.sin(yaw) * width / 2;
+        this.layers.v2.add(lineBetween({ x: p.x - dx, z: p.z - dz }, { x: p.x + dx, z: p.z + dz }, 0x3fe07e));
+      }
+      if (primitive.kind === 'wallPanel') {
+        const wall = v2.wallSegments?.find((candidate) => candidate.id === primitive.wallSegmentId);
+        if (wall) { const a = xz(wall.from, 0.65); const b = xz(wall.to, 0.65); const mid = a.clone().lerp(b, primitive.t ?? 0.5); const dir = b.clone().sub(a).normalize(); this.layers.v2.add(new THREE.ArrowHelper(new THREE.Vector3(-dir.z, 0, dir.x), mid, 0.7, 0x6ae6ff, 0.2, 0.12)); }
+      }
+    });
 
     this.runtime.walkableSurfaces?.forEach((surface) => {
       if (surface.footprint) this.layers.elevation.add(polyline(surface.footprint, surface.kind === 'platformTop' ? 0xc46cff : 0x49ddb1, true, (surface.y ?? 0) + 0.22));
