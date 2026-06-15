@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { TorchDebugRenderer } from '../lighting/TorchDebugRenderer.js';
 import { addIntegrityDebugLayer } from './integrity/DungeonIntegrityDebug.js';
 
-const DEBUG_LAYERS = Object.freeze(['all', 'rooms', 'blockers', 'nav', 'spawns', 'encounters', 'exits', 'torches', 'integrity', 'v2']);
+const DEBUG_LAYERS = Object.freeze(['all', 'rooms', 'blockers', 'nav', 'spawns', 'encounters', 'exits', 'torches', 'integrity', 'v2', 'elevation']);
 
 function rectMesh(rect, color, y = 0.035, opacity = 0.18) {
   const width = rect.maxX - rect.minX;
@@ -48,6 +48,20 @@ function polyline(points, color, closed = false, y = 0.18) {
   const vectors = points.map((point) => xz(point, y));
   if (closed && vectors.length > 0) vectors.push(vectors[0].clone());
   return new THREE.Line(new THREE.BufferGeometry().setFromPoints(vectors), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.88 }));
+}
+
+function surfaceRect(surface, color) {
+  const [x0, z0] = surface.from;
+  const [x1, z1] = surface.to;
+  const length = Math.hypot(x1 - x0, z1 - z0);
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(surface.width ?? 1, length),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.24, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.rotation.z = -Math.atan2(x1 - x0, z1 - z0);
+  mesh.position.set((x0 + x1) / 2, (surface.y ?? surface.y0 ?? 0) + 0.09, (z0 + z1) / 2);
+  return mesh;
 }
 
 function arrow(from, to, color) {
@@ -167,6 +181,19 @@ export class DungeonDebugRenderer {
     v2.stairs?.forEach((stairs) => this.layers.v2.add(arrow(stairs.from, stairs.to, 0xffffff)));
     v2.bridges?.forEach((bridge) => this.layers.v2.add(polyline([bridge.from, bridge.to], 0x8fd4ff, false, (bridge.y ?? 0) + 0.25)));
 
+    this.runtime.walkableSurfaces?.forEach((surface) => {
+      if (surface.footprint) this.layers.elevation.add(polyline(surface.footprint, surface.kind === 'platformTop' ? 0xc46cff : 0x49ddb1, true, (surface.y ?? 0) + 0.22));
+      if (surface.from && surface.to) {
+        this.layers.elevation.add(surfaceRect(surface, surface.kind === 'bridgeDeck' ? 0x8fd4ff : 0x49ddb1));
+        if (['ramp', 'stairRamp'].includes(surface.kind)) this.layers.elevation.add(arrow(surface.from, surface.to, surface.kind === 'stairRamp' ? 0xffffff : 0x49ddb1));
+      }
+    });
+    this.runtime.validation?.warnings?.filter((issue) => issue.message?.startsWith('V2 wall loop warning')).forEach((issue, index) => {
+      const mesh = marker({ x: -14 + index * 0.8, z: 10 }, 0xffea00, 0.32);
+      mesh.userData.warning = issue.message;
+      this.layers.elevation.add(mesh);
+    });
+
     const torchDebug = new TorchDebugRenderer({ runtime: this.runtime });
     this.layers.torches.add(torchDebug.group);
     addIntegrityDebugLayer({ runtime: this.runtime, group: this.layers.integrity });
@@ -205,6 +232,8 @@ export class DungeonDebugRenderer {
 
   update(playerPosition) {
     if (!this.enabledInBuild || !this.visible || !this.playerMarker || !playerPosition) return;
-    this.playerMarker.position.set(playerPosition.x, 0.55, playerPosition.z);
+    const sampled = this.runtime.collisionWorld?.sampleWalkableY?.(playerPosition.x, playerPosition.z, 0);
+    this.playerMarker.position.set(playerPosition.x, (sampled?.y ?? 0) + 0.55, playerPosition.z);
+    this.playerMarker.userData.sampledFloorY = sampled?.y ?? 0;
   }
 }

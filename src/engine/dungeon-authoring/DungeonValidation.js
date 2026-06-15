@@ -59,6 +59,37 @@ function polygonArea(points) {
   return Math.abs(area) / 2;
 }
 
+function hasIntentionalGapTag(item) {
+  return asArray(item?.tags).some((tag) => ['intentional-gap', 'broken-wall-gap', 'open-courtyard', 'connector'].includes(tag));
+}
+
+function validateWallClosure(wallSegments, doorGaps, rooms, warnings) {
+  const roomTags = new Map(rooms.map((room) => [room.id, room]));
+  const gapWallIds = new Set(doorGaps.map((gap) => gap.wallSegmentId));
+  const byRoom = new Map();
+  wallSegments.forEach((segment) => {
+    const roomId = segment.roomId ?? 'unassigned-v2-wall-loop';
+    if (!byRoom.has(roomId)) byRoom.set(roomId, []);
+    byRoom.get(roomId).push(segment);
+  });
+  byRoom.forEach((segments, roomId) => {
+    const room = roomTags.get(roomId);
+    if (hasIntentionalGapTag(room)) return;
+    segments.forEach((segment) => {
+      if (hasIntentionalGapTag(segment) || gapWallIds.has(segment.id)) return;
+      const end = xzPoint(segment.to);
+      if (!end) return;
+      const nearest = segments
+        .filter((candidate) => candidate.id !== segment.id)
+        .map((candidate) => ({ candidate, dist: xzDistance(end, xzPoint(candidate.from) ?? { x: Infinity, z: Infinity }) }))
+        .sort((a, b) => a.dist - b.dist)[0];
+      if (nearest && nearest.dist > 0.35 && !hasIntentionalGapTag(nearest.candidate)) {
+        addIssue(warnings, 'warning', `V2 wall loop warning: ${roomId} has an unclaimed gap between ${segment.id} and ${nearest.candidate.id}.`, segment.id);
+      }
+    });
+  });
+}
+
 function addIssue(target, severity, message, id = null) {
   target.push({ severity, message, id });
 }
@@ -156,6 +187,8 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     if ((segment.height ?? 3.5) <= 0) addIssue(errors, 'error', `wallSegment ${segment.id} height must be > 0`, segment.id);
     if ((segment.thickness ?? 0.32) <= 0) addIssue(errors, 'error', `wallSegment ${segment.id} thickness must be > 0`, segment.id);
   });
+
+  validateWallClosure(wallSegments, doorGaps, rooms, warnings);
 
   doorGaps.forEach((gap) => {
     const wall = wallSegmentById.get(gap.wallSegmentId);
