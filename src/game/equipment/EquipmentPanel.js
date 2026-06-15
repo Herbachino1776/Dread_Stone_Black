@@ -2,11 +2,22 @@ import { EQUIPMENT_SLOTS } from '../../engine/equipment/EquipmentSlot.js';
 import { EQUIPMENT_EVENTS } from '../../engine/equipment/EquipmentEvents.js';
 
 const POCKETS = Object.freeze([
-  { id: 'weapons', label: 'Weapons' },
-  { id: 'items', label: 'Items' },
-  { id: 'keyItems', label: 'Key Items' },
-  { id: 'offhand', label: 'Offhand' },
+  { id: 'weapons', label: 'Weapons', icon: '⚔' },
+  { id: 'items', label: 'Items', icon: '♟' },
+  { id: 'keyItems', label: 'Key Items', icon: '⚿' },
+  { id: 'offhand', label: 'Offhand', icon: '◈' },
 ]);
+
+const ITEM_DETAILS = Object.freeze({
+  wood_axe: { type: 'Axe', damage: '6–10', weight: '2.0', icon: '🪓' },
+  fishing_rod: { type: 'Tool', damage: '2', weight: '1.5', icon: '╱' },
+  rusted_sword: { type: 'Sword', damage: '8–14', weight: '3.5', icon: '⚔' },
+  wood: { type: 'Material', restore: null, icon: '▰' },
+  raw_fish: { type: 'Food', use: 'Cook at campfire', icon: '🐟' },
+  cooked_fish: { type: 'Food', restore: '50%', icon: '◒' },
+  flint_stick: { type: 'Key Item', use: 'Start campfires', icon: '⚿' },
+  torch: { type: 'Offhand', light: 'Yes', icon: '♨' },
+});
 
 export class EquipmentPanel {
   constructor({ root, equipmentRuntime, gameState = null }) {
@@ -18,9 +29,11 @@ export class EquipmentPanel {
     this.currentWeapon = root.querySelector('[data-equipment="current-weapon"]');
     this.pocketTabs = root.querySelector('[data-inventory="pocket-tabs"]');
     this.inventoryList = root.querySelector('[data-inventory="list"]');
+    this.detailCard = root.querySelector('[data-inventory="detail"]');
     this.toggleButton = root.querySelector('[data-action="equipment"]');
     this.closeButton = root.querySelector('[data-equipment="close"]');
     this.activePocket = 'weapons';
+    this.selectedByPocket = { weapons: null, items: null, keyItems: null, offhand: null };
     this.isOpen = false;
 
     this.bindEvents();
@@ -61,8 +74,8 @@ export class EquipmentPanel {
       const tab = document.createElement('button');
       tab.type = 'button';
       tab.className = 'inventory-tab';
-      tab.textContent = pocket.label;
       tab.setAttribute('aria-pressed', String(this.activePocket === pocket.id));
+      tab.innerHTML = `<span class="inventory-tab__icon" aria-hidden="true">${pocket.icon}</span><span>${pocket.label}</span>`;
       tab.addEventListener('pointerdown', (event) => {
         event.preventDefault();
         this.activePocket = pocket.id;
@@ -74,90 +87,129 @@ export class EquipmentPanel {
 
   renderPocket(equippedWeapon) {
     if (!this.inventoryList) return;
+    const entries = this.getPocketEntries(equippedWeapon);
+    if (!this.selectedByPocket[this.activePocket] || !entries.some((entry) => entry.id === this.selectedByPocket[this.activePocket])) {
+      this.selectedByPocket[this.activePocket] = entries[0]?.id ?? null;
+    }
+    this.renderDetail(entries.find((entry) => entry.id === this.selectedByPocket[this.activePocket]) ?? null);
     this.inventoryList.innerHTML = '';
-    if (this.activePocket === 'weapons') return this.renderWeapons(equippedWeapon);
-    if (this.activePocket === 'items') return this.renderItems();
-    if (this.activePocket === 'keyItems') return this.renderKeyItems();
-    return this.renderOffhand();
+    entries.forEach((entry) => this.inventoryList.append(this.createRow(entry)));
+    if (!entries.length) this.renderEmpty(this.getEmptyMessage());
   }
 
-  renderWeapons(equippedWeapon) {
-    this.equipmentRuntime.getAvailableWeapons().filter((weapon) => weapon.id !== 'unarmed').forEach((weapon) => {
-      this.inventoryList.append(this.createRow({
-        id: weapon.id,
-        name: weapon.displayName,
-        stats: equippedWeapon.id === weapon.id ? 'Equipped' : `${weapon.damage} DMG`,
-        description: weapon.description,
-        pressed: equippedWeapon.id === weapon.id,
-        onSelect: () => {
-          const isEquipped = this.equipmentRuntime.getEquippedWeaponProfile().id === weapon.id;
-          if (this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, isEquipped ? 'unarmed' : weapon.id)) {
-            this.gameState?.equipFieldTool?.(!isEquipped && ['wood_axe', 'fishing_rod'].includes(weapon.id) ? weapon.id : null);
-          }
-        },
-      }));
-    });
-    if (!this.inventoryList.children.length) this.renderEmpty('No weapons.');
+  getPocketEntries(equippedWeapon) {
+    if (this.activePocket === 'weapons') return this.equipmentRuntime.getAvailableWeapons()
+      .filter((weapon) => weapon.id !== 'unarmed')
+      .map((weapon) => this.createWeaponEntry(weapon, equippedWeapon));
+    if (this.activePocket === 'items') return this.createItemEntries();
+    if (this.activePocket === 'keyItems') return this.createKeyItemEntries();
+    return this.createOffhandEntries();
   }
 
-  renderItems() {
+  createWeaponEntry(weapon, equippedWeapon) {
+    const details = ITEM_DETAILS[weapon.id] ?? {};
+    const equipped = equippedWeapon.id === weapon.id;
+    return {
+      id: weapon.id,
+      name: weapon.displayName,
+      stats: equipped ? 'Equipped' : `${details.damage ?? weapon.damage} DMG`,
+      meta: details.weight ?? '—',
+      description: weapon.description,
+      equipped,
+      detail: { ...details, damage: details.damage ?? weapon.damage, type: details.type ?? weapon.weaponType ?? 'Weapon' },
+      onActivate: () => {
+        const isEquipped = this.equipmentRuntime.getEquippedWeaponProfile().id === weapon.id;
+        if (this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, isEquipped ? 'unarmed' : weapon.id)) {
+          this.gameState?.equipFieldTool?.(!isEquipped && ['wood_axe', 'fishing_rod'].includes(weapon.id) ? weapon.id : null);
+        }
+      },
+    };
+  }
+
+  createItemEntries() {
     const equippedItem = this.gameState?.getEquippedFieldItem?.();
     const items = [
       ['wood', 'Wood', 'Campfire fuel.'],
-      ['raw_fish', 'Raw Fish', 'Cook at a campfire.'],
-      ['cooked_fish', 'Cooked Fish', 'Eat with X to restore hunger.'],
+      ['raw_fish', 'Raw Fish', 'Can be cooked at a campfire.'],
+      ['cooked_fish', 'Cooked Fish', 'Restores hunger when eaten.'],
     ];
-    items.forEach(([id, name, description]) => {
+    return items.flatMap(([id, name, description]) => {
       const count = this.gameState?.getFieldItemCount?.(id) ?? 0;
-      if (count < 1) return;
-      this.inventoryList.append(this.createRow({ id, name, stats: equippedItem === id ? `Equipped · x${count}` : `x${count}`, description, pressed: equippedItem === id, onSelect: () => {
-        const nextItem = this.gameState?.getEquippedFieldItem?.() === id ? null : id;
-        if (!this.gameState?.equipFieldItem?.(nextItem)) this.gameState?.equipFieldItem?.(null);
-        window.dispatchEvent(new CustomEvent('field-item-equipped-changed'));
-      }}));
-    });
-    if (!this.inventoryList.children.length) this.renderEmpty('No items.');
-  }
-
-  renderOffhand() {
-    if (this.gameState?.hasFieldOffhandItem?.('torch') || this.equipmentRuntime?.hasItem?.('torch')) {
-      const equippedOffhand = this.equipmentRuntime?.getEquippedOffhandId?.() ?? this.gameState?.getEquippedFieldOffhand?.();
-      this.inventoryList.append(this.createRow({
-        id: 'torch',
-        name: 'Torch',
-        stats: equippedOffhand === 'torch' ? 'Equipped' : 'Offhand',
-        description: 'Left-hand utility light.',
-        pressed: equippedOffhand === 'torch',
-        onSelect: () => {
-          const isEquipped = this.equipmentRuntime?.getEquippedOffhandId?.() === 'torch';
-          if (this.equipmentRuntime?.equip(EQUIPMENT_SLOTS.offhand, isEquipped ? null : 'torch')) {
-            this.gameState?.equipFieldOffhand?.(isEquipped ? null : 'torch');
-            window.dispatchEvent(new CustomEvent('field-offhand-equipped-changed'));
-          }
+      if (count < 1) return [];
+      return [{
+        id, name, description, quantity: count,
+        stats: equippedItem === id ? `Equipped · x${count}` : `x${count}`,
+        meta: ITEM_DETAILS[id]?.use ?? ITEM_DETAILS[id]?.restore ?? '',
+        equipped: equippedItem === id,
+        detail: ITEM_DETAILS[id],
+        onActivate: () => {
+          const nextItem = this.gameState?.getEquippedFieldItem?.() === id ? null : id;
+          if (!this.gameState?.equipFieldItem?.(nextItem)) this.gameState?.equipFieldItem?.(null);
+          window.dispatchEvent(new CustomEvent('field-item-equipped-changed'));
         },
-      }));
-    } else {
-      this.renderEmpty('No offhand gear.');
-    }
+      }];
+    });
   }
 
-  renderKeyItems() {
-    if (this.gameState?.hasFieldKeyItem?.('flint_stick')) {
-      this.inventoryList.append(this.createRow({ id: 'flint_stick', name: 'Flint Stick', stats: 'Key Item', description: 'Reusable campfire starter.' }));
-    } else {
-      this.renderEmpty('No key items.');
-    }
+  createOffhandEntries() {
+    if (!this.gameState?.hasFieldOffhandItem?.('torch') && !this.equipmentRuntime?.hasItem?.('torch')) return [];
+    const equippedOffhand = this.equipmentRuntime?.getEquippedOffhandId?.() ?? this.gameState?.getEquippedFieldOffhand?.();
+    return [{
+      id: 'torch', name: 'Torch', stats: equippedOffhand === 'torch' ? 'Equipped' : 'Offhand', meta: 'Light',
+      description: 'A wooden torch wrapped in cloth. Provides light in dark places.', equipped: equippedOffhand === 'torch', detail: ITEM_DETAILS.torch,
+      onActivate: () => {
+        const isEquipped = this.equipmentRuntime?.getEquippedOffhandId?.() === 'torch';
+        if (this.equipmentRuntime?.equip(EQUIPMENT_SLOTS.offhand, isEquipped ? null : 'torch')) {
+          this.gameState?.equipFieldOffhand?.(isEquipped ? null : 'torch');
+          window.dispatchEvent(new CustomEvent('field-offhand-equipped-changed'));
+        }
+      },
+    }];
   }
 
-  createRow({ id, name, stats, description, pressed = false, onSelect = null }) {
-    const row = document.createElement(onSelect ? 'button' : 'div');
-    if (onSelect) row.type = 'button';
+  createKeyItemEntries() {
+    if (!this.gameState?.hasFieldKeyItem?.('flint_stick')) return [];
+    return [{ id: 'flint_stick', name: 'Flint Stick', stats: 'Key Item', meta: 'Campfire', description: 'Reusable campfire starter.', detail: ITEM_DETAILS.flint_stick }];
+  }
+
+  renderDetail(entry) {
+    if (!this.detailCard) return;
+    if (!entry) {
+      this.detailCard.innerHTML = '<p class="inventory-empty">No item selected.</p>';
+      return;
+    }
+    const detail = entry.detail ?? {};
+    const rows = [
+      ['TYPE', detail.type], ['DAMAGE', detail.damage], ['WEIGHT', detail.weight], ['LIGHT', detail.light], ['RESTORE', detail.restore], ['USE', detail.use],
+    ].filter(([, value]) => value);
+    this.detailCard.innerHTML = `
+      <div class="inventory-detail__icon" aria-hidden="true">${detail.icon ?? '◆'}</div>
+      <div class="inventory-detail__body">
+        <div class="inventory-detail__top"><h3>${entry.name}</h3>${entry.equipped ? '<span>Equipped</span>' : ''}</div>
+        <p>${entry.description}</p>
+        <dl>${rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>
+      </div>`;
+  }
+
+  createRow(entry) {
+    const row = document.createElement(entry.onActivate ? 'button' : 'div');
+    if (entry.onActivate) row.type = 'button';
     row.className = 'equipment-row';
-    row.dataset.itemId = id;
-    row.setAttribute('aria-pressed', String(pressed));
-    row.innerHTML = `<span class="equipment-row__name">${name}</span><span class="equipment-row__stats">${stats}</span><span class="equipment-row__description">${description}</span>`;
-    if (onSelect) row.addEventListener('click', (event) => { event.preventDefault(); onSelect(); });
+    row.dataset.itemId = entry.id;
+    const selected = this.selectedByPocket[this.activePocket] === entry.id;
+    row.setAttribute('aria-pressed', String(selected || entry.equipped));
+    row.innerHTML = `<span class="equipment-row__icon" aria-hidden="true">${entry.detail?.icon ?? '◆'}</span><span class="equipment-row__name">${entry.name}</span><span class="equipment-row__stats">${entry.stats}</span><span class="equipment-row__description">${entry.description}</span><span class="equipment-row__meta">${entry.meta ?? ''}</span>`;
+    if (entry.onActivate) row.addEventListener('click', (event) => {
+      event.preventDefault();
+      const wasSelected = this.selectedByPocket[this.activePocket] === entry.id;
+      this.selectedByPocket[this.activePocket] = entry.id;
+      if (wasSelected) entry.onActivate(); else this.render();
+    });
     return row;
+  }
+
+  getEmptyMessage() {
+    return { weapons: 'No weapons.', items: 'No items.', keyItems: 'No key items.', offhand: 'No offhand gear.' }[this.activePocket];
   }
 
   renderEmpty(message) {

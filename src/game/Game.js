@@ -362,8 +362,8 @@ export class Game {
             <div class="stat stat-hp"><span>HP</span><strong data-stat="hp">100</strong></div>
             <div class="stat stat-mp"><span>MP</span><strong>24</strong></div>
             <div class="stat stat-power"><span>POWER</span><strong data-stat="power">10</strong></div>
-            <div class="stat stat-hunger"><span>HUNGER</span><strong data-stat="hunger">3:00</strong></div>
             <div class="stat stat-magic"><span>MAGIC</span><strong>3</strong></div>
+            <div class="stat stat-hunger"><span>HUNGER</span><strong data-stat="hunger">3:00</strong></div>
           </section>
 
           <nav class="top-toolbar" aria-label="Game toolbar">
@@ -397,15 +397,17 @@ export class Game {
             </section>
             <section class="equipment-panel" data-equipment-panel aria-label="Inventory" aria-hidden="true">
               <div class="equipment-panel__header">
-                <div>
-                  <span class="equipment-panel__eyebrow">Inventory</span>
-                  <h2>Inventory</h2>
-                </div>
+                <h2>Inventory</h2>
                 <button class="equipment-close" data-equipment="close" type="button" aria-label="Close inventory">X</button>
               </div>
               <p class="equipment-current">Weapon: <strong data-equipment="current-weapon">Unarmed</strong></p>
-              <div class="inventory-tabs" data-inventory="pocket-tabs" role="tablist" aria-label="Inventory pockets"></div>
-              <div class="equipment-list" data-inventory="list"></div>
+              <div class="inventory-shell">
+                <div class="inventory-tabs" data-inventory="pocket-tabs" role="tablist" aria-label="Inventory pockets"></div>
+                <div class="inventory-content">
+                  <article class="inventory-detail" data-inventory="detail" aria-live="polite"></article>
+                  <div class="equipment-list" data-inventory="list"></div>
+                </div>
+              </div>
             </section>
           </div>
           <div class="viewport-ornament viewport-ornament-bottom" aria-hidden="true">◆</div>
