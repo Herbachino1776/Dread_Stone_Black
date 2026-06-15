@@ -413,6 +413,74 @@ function addV2RampsStairsBridges({ definition, group, materialFactory }) {
   return meshes;
 }
 
+function primitiveMaterial(definition, primitive, materialFactory, fallback = definition.textures?.wall) {
+  return makeMaterial(definition, primitive.material ?? primitive.textureProfile, materialFactory, fallback);
+}
+
+function yawOf(from, to) {
+  return Math.atan2(to.z - from.z, to.x - from.x);
+}
+
+function addCylinderPrimitive({ group, primitive, material, name, height, radius, sides = 8 }) {
+  const geometry = new THREE.CylinderGeometry(radius, radius, height, Math.max(6, sides));
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = name;
+  mesh.position.copy(toVector3(primitive.position));
+  mesh.position.y += height / 2;
+  mesh.rotation.y = primitive.yaw ?? 0;
+  if (primitive.tilt) mesh.rotation.z = primitive.tilt;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData = { locationId: primitive.locationId, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:v2.3' };
+  group.add(mesh);
+  return mesh;
+}
+
+function addLineBoxPrimitive({ definition, group, materialFactory, primitive, height, thickness, y = 0, name }) {
+  const material = primitiveMaterial(definition, primitive, materialFactory);
+  const mesh = segmentDeck(primitive.from, primitive.to, thickness, y + height / 2, material, group, name, { locationId: definition.id, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:v2.3' }, height);
+  return mesh;
+}
+
+function addV23ArchitecturalPrimitives({ definition, group, materialFactory }) {
+  const meshes = [];
+  const walls = new Map(asArray(definition.wallSegments).map((segment) => [segment.id, segment]));
+  const addPart = (mesh) => { if (mesh) meshes.push(mesh); };
+  asArray(definition.architecturalPrimitives).forEach((primitive) => {
+    primitive.locationId = definition.id;
+    const material = primitiveMaterial(definition, primitive, materialFactory, primitive.kind === 'canalWater' ? definition.textures?.water : definition.textures?.wall);
+    const base = { locationId: definition.id, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:v2.3' };
+    if (primitive.kind === 'pillar' || primitive.kind === 'brokenPillar') {
+      addPart(addCylinderPrimitive({ group, primitive, material, name: `V23-${primitive.kind}-${primitive.id}`, height: primitive.height ?? 2, radius: primitive.radius ?? 0.3, sides: primitive.sides ?? 8 }));
+    } else if (primitive.kind === 'arch' || primitive.kind === 'doorFrame') {
+      const pos = toVector3(primitive.position); const yaw = primitive.yaw ?? 0; const width = primitive.width ?? 2; const height = primitive.height ?? 3; const thickness = primitive.thickness ?? 0.35; const depth = primitive.depth ?? thickness;
+      [-1, 1].forEach((side) => { const offset = new THREE.Vector3(side * (width / 2 - thickness / 2), height / 2, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw); const post = addBox({ group, size: new THREE.Vector3(thickness, height, depth), position: pos.clone().add(offset), material, name: `V23-${primitive.kind}-POST-${primitive.id}-${side}`, userData: base }); post.rotation.y = yaw; addPart(post); });
+      const lintel = addBox({ group, size: new THREE.Vector3(width, thickness, depth), position: pos.clone().add(new THREE.Vector3(0, height - thickness / 2, 0)), material, name: `V23-${primitive.kind}-LINTEL-${primitive.id}`, userData: base }); lintel.rotation.y = yaw; addPart(lintel);
+      if (primitive.kind === 'arch') { const cap = addBox({ group, size: new THREE.Vector3(width * 0.72, thickness * 0.7, depth * 1.04), position: pos.clone().add(new THREE.Vector3(0, height + thickness * 0.18, 0)), material, name: `V23-arch-CAP-${primitive.id}`, userData: base }); cap.rotation.y = yaw; addPart(cap); }
+    } else if (['lowWall', 'curb'].includes(primitive.kind)) {
+      addPart(addLineBoxPrimitive({ definition, group, materialFactory, primitive, height: primitive.height ?? (primitive.kind === 'curb' ? 0.22 : 0.75), thickness: primitive.thickness ?? 0.25, y: primitive.y ?? 0, name: `V23-${primitive.kind}-${primitive.id}` }));
+    } else if (primitive.kind === 'railing') {
+      const from = point3FromXZ(primitive.from, primitive.y ?? 0); const to = point3FromXZ(primitive.to, primitive.y ?? 0); const length = from.distanceTo(to); const yaw = yawOf(from, to); const height = primitive.height ?? 0.8;
+      addPart(segmentDeck(primitive.from, primitive.to, 0.08, (primitive.y ?? 0) + height, material, group, `V23-railing-BEAM-${primitive.id}`, base, 0.08));
+      const count = Math.max(2, Math.floor(length / (primitive.postSpacing ?? 1.4)) + 1);
+      for (let i = 0; i < count; i += 1) { const t = count === 1 ? 0 : i / (count - 1); const p = from.clone().lerp(to, t); const post = addBox({ group, size: new THREE.Vector3(0.12, height, 0.12), position: new THREE.Vector3(p.x, (primitive.y ?? 0) + height / 2, p.z), material, name: `V23-railing-POST-${primitive.id}-${i}`, userData: base }); post.rotation.y = yaw; addPart(post); }
+    } else if (primitive.kind === 'altar') {
+      const pos = toVector3(primitive.position); const yaw = primitive.yaw ?? 0; const width = primitive.width ?? 1.6; const depth = primitive.depth ?? 1; const height = primitive.height ?? 0.8;
+      const bottom = addBox({ group, size: new THREE.Vector3(width, height * 0.65, depth), position: new THREE.Vector3(pos.x, pos.y + height * 0.325, pos.z), material, name: `V23-altar-BASE-${primitive.id}`, userData: base }); bottom.rotation.y = yaw; addPart(bottom);
+      const topMat = makeMaterial(definition, primitive.topMaterial ?? primitive.material, materialFactory, definition.textures?.floor); const top = addBox({ group, size: new THREE.Vector3(width * 1.12, height * 0.35, depth * 1.12), position: new THREE.Vector3(pos.x, pos.y + height * 0.825, pos.z), material: topMat, name: `V23-altar-TOP-${primitive.id}`, userData: base }); top.rotation.y = yaw; addPart(top);
+    } else if (primitive.kind === 'stela') {
+      const pos = toVector3(primitive.position); const slab = addBox({ group, size: new THREE.Vector3(primitive.width ?? 0.8, primitive.height ?? 2, primitive.thickness ?? 0.2), position: new THREE.Vector3(pos.x, pos.y + (primitive.height ?? 2) / 2, pos.z), material, name: `V23-stela-${primitive.id}`, userData: base }); slab.rotation.y = primitive.yaw ?? 0; addPart(slab);
+    } else if (primitive.kind === 'obelisk') {
+      const pos = toVector3(primitive.position); const height = primitive.height ?? 3; const width = primitive.baseWidth ?? 0.7; const baseBox = addBox({ group, size: new THREE.Vector3(width, height * 0.78, width), position: new THREE.Vector3(pos.x, pos.y + height * 0.39, pos.z), material, name: `V23-obelisk-SHAFT-${primitive.id}`, userData: base }); baseBox.rotation.y = primitive.yaw ?? 0; addPart(baseBox); const tip = addBox({ group, size: new THREE.Vector3(width * 0.65, height * 0.22, width * 0.65), position: new THREE.Vector3(pos.x, pos.y + height * 0.89, pos.z), material, name: `V23-obelisk-TIP-${primitive.id}`, userData: base }); tip.rotation.y = (primitive.yaw ?? 0) + Math.PI / 4; addPart(tip);
+    } else if (primitive.kind === 'wallPanel') {
+      const wall = walls.get(primitive.wallSegmentId); if (!wall) return; const from = point3FromXZ(wall.from, wall.y ?? 0); const to = point3FromXZ(wall.to, wall.y ?? 0); const dir = to.clone().sub(from).normalize(); const normal = new THREE.Vector3(-dir.z, 0, dir.x); const pos = from.clone().lerp(to, primitive.t ?? 0.5).add(normal.multiplyScalar(primitive.offset ?? 0.08)); pos.y = (wall.y ?? 0) + (primitive.height ?? 1.8) / 2 + (primitive.y ?? 0.8); const panel = addBox({ group, size: new THREE.Vector3(primitive.width ?? 1, primitive.height ?? 1.5, primitive.thickness ?? 0.08), position: pos, material, name: `V23-wallPanel-${primitive.id}`, userData: { ...base, wallSegmentId: primitive.wallSegmentId } }); panel.rotation.y = Math.atan2(dir.z, dir.x); addPart(panel);
+    } else if (primitive.kind === 'canalWater') {
+      const water = segmentDeck(primitive.from, primitive.to, primitive.width ?? 1, primitive.y ?? 0.03, material, group, `V23-canalWater-${primitive.id}`, base, 0.035); if (water) { if (primitive.emissiveColor && water.material?.emissive) water.material.emissive.setHex(primitive.emissiveColor); addPart(water); }
+    }
+  });
+  return meshes;
+}
+
 function addProps({ definition, group, materialFactory }) {
   return asArray(definition.props).map((prop) => {
     if (prop.visibleGeometry === false || !prop.dimensions || !prop.position) return null;
@@ -516,10 +584,11 @@ export function buildDungeonGeometry(definition, { materialFactory = null, torch
   const v2Platforms = addV2Platforms({ definition, group, materialFactory });
   const v2VerticalLinks = addV2RampsStairsBridges({ definition, group, materialFactory });
   const v2Anchors = addV2WallPropAnchors({ definition, group });
+  const v23Primitives = addV23ArchitecturalPrimitives({ definition, group, materialFactory });
   const props = addProps({ definition, group, materialFactory });
   const lights = addLights({ definition, group, lights: lightRegistry?.nonTorchLights, torchFactory });
   const torchObjects = addTorchFixtures({ group, torchFixtures: lightRegistry?.torchFixtures });
   const pointLights = collectPointLights([...lights, ...torchObjects]);
 
-  return { group, props, lights, torchObjects, pointLights, v2Floors, v2Walls, v2Paths, v2Platforms, v2VerticalLinks, v2Anchors };
+  return { group, props, lights, torchObjects, pointLights, v2Floors, v2Walls, v2Paths, v2Platforms, v2VerticalLinks, v2Anchors, v23Primitives };
 }

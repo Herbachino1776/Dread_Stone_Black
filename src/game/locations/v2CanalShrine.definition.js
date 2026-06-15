@@ -3,6 +3,7 @@ const textures = Object.freeze({
   floor: { path: './assets/textures/floor_worn_stone_01.png', repeat: [3, 3], color: 0x8f836f, roughness: 0.98, metalness: 0, emissive: 0x15100b, emissiveIntensity: 0.06 },
   temple: { path: './assets/textures/floor_worn_stone_01.png', repeat: [2, 2], color: 0xa49272, roughness: 0.97, metalness: 0, emissive: 0x1a1208, emissiveIntensity: 0.08 },
   wood: { path: './assets/textures/wall_black_stone_01.png', repeat: [1.5, 1], color: 0x5a3520, roughness: 0.92, metalness: 0, emissive: 0x0b0502, emissiveIntensity: 0.05 },
+  water: { color: 0x07131a, roughness: 0.72, metalness: 0, emissive: 0x07131a, emissiveIntensity: 0.35 },
 });
 
 const courtyard = Object.freeze([[-12, -9], [10, -9], [14, -2], [9, 9], [-7, 10], [-14, 2]]);
@@ -11,8 +12,8 @@ export const v2CanalShrineDefinition = Object.freeze({
   id: 'v2-canal-shrine',
   displayName: 'V2 Canal Shrine',
   type: 'shrine',
-  tags: ['interior', 'compiled-runtime', 'v2.1-authoring-test'],
-  notes: 'Proof location for DARB v2.1 path ribbons, raised platforms, ramps/stairs, bridges, and debug overlay metadata.',
+  tags: ['interior', 'compiled-runtime', 'v2.1-authoring-test', 'v2.3-architectural-primitives'],
+  notes: 'Proof location for DARB v2.3 architectural primitives layered over v2.1 walkable paths, platforms, ramps, stairs, bridges, and debug overlay metadata.',
   fog: { color: 0x17110c, near: 10, far: 52 },
   lighting: { background: 0x0d0a08 },
   textures,
@@ -40,6 +41,22 @@ export const v2CanalShrineDefinition = Object.freeze({
     { id: 'canal_shrine_wall_west_low', from: [-14, 2], to: [-12, -9], y: 0, height: 4.2, thickness: 0.35, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
   ],
   doorGaps: [{ id: 'canal_shrine_entry_gap', wallSegmentId: 'canal_shrine_wall_south', centerT: 0.48, width: 2.8 }],
+  architecturalPrimitives: [
+    { id: 'canal_shrine_entry_arch', kind: 'arch', position: [0, 0, -8.8], yaw: 0, width: 3.2, height: 4.0, thickness: 0.45, depth: 0.55, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_plinth_pillar_01', kind: 'pillar', position: [-3.5, 1.1, 3.1], radius: 0.32, height: 2.7, sides: 8, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_plinth_pillar_02', kind: 'pillar', position: [4.2, 1.1, 3.0], radius: 0.32, height: 2.7, sides: 8, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_plinth_pillar_03', kind: 'pillar', position: [-4.0, 1.1, 6.9], radius: 0.3, height: 2.4, sides: 8, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_canal_low_wall_01', kind: 'lowWall', from: [-12.2, 0.35], to: [-5.2, 0.35], height: 0.75, thickness: 0.28, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_canal_low_wall_02', kind: 'lowWall', from: [-12.2, 2.65], to: [-5.2, 2.65], height: 0.75, thickness: 0.28, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_bridge_railing_left', kind: 'railing', from: [-11, 0.18], to: [-5.5, 0.18], height: 0.8, postSpacing: 1.35, material: 'wood', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_bridge_railing_right', kind: 'railing', from: [-11, 2.82], to: [-5.5, 2.82], height: 0.8, postSpacing: 1.35, material: 'wood', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_water_strip', kind: 'canalWater', from: [-12.4, 1.5], to: [-4.4, 1.5], width: 2.0, y: 0.035, material: 'water', emissiveColor: 0x07131a, roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_plinth_altar', kind: 'altar', position: [0.5, 1.1, 5.2], yaw: 0.08, width: 1.8, depth: 1.1, height: 0.9, material: 'wall', topMaterial: 'temple', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_warning_panel_01', kind: 'wallPanel', wallSegmentId: 'canal_shrine_wall_east_high', t: 0.65, height: 1.8, width: 1.4, offset: 0.1, material: 'temple', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_broken_pillar_01', kind: 'brokenPillar', position: [6.8, 0, -1.2], radius: 0.34, height: 1.5, tilt: 0.16, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_causeway_curb_01', kind: 'curb', from: [-9.5, -4.7], to: [-4.8, -2.4], height: 0.22, thickness: 0.18, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
+    { id: 'canal_shrine_causeway_curb_02', kind: 'curb', from: [2.2, -3.0], to: [8.5, 1.7], height: 0.22, thickness: 0.18, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
+  ],
   wallPropAnchors: [{ id: 'canal_shrine_wall_torch', wallSegmentId: 'canal_shrine_wall_east_high', t: 0.42, height: 2.2, offset: 0.16, kind: 'torchFixture', roomId: 'v2_canal_shrine_courtyard' }],
   blockers: [
     { id: 'canal_void_south', type: 'canal', minX: -12.5, maxX: -4.2, minZ: -0.1, maxZ: 0.35, height: 0.2, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'v2-blocker', 'invisible'], invisible: true, purpose: 'canal water boundary' },

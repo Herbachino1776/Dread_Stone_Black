@@ -52,7 +52,7 @@ function collectWallGaps(definition, room) {
   return gaps;
 }
 
-function wallBlocker(id, type, minX, maxX, minZ, maxZ, height) {
+function wallBlocker(id, type, minX, maxX, minZ, maxZ, height, tags = ['compiled-wall']) {
   return {
     id,
     type,
@@ -61,7 +61,7 @@ function wallBlocker(id, type, minX, maxX, minZ, maxZ, height) {
     minZ,
     maxZ,
     height,
-    tags: ['compiled-wall'],
+    tags,
     userData: { generatedBy: 'DungeonCollisionBuilder' },
   };
 }
@@ -291,6 +291,45 @@ function buildWalkableSurfaces(definition) {
   return surfaces;
 }
 
+function rotatedRectBlocker(id, position, width, depth, height, yaw = 0, tags = []) {
+  const x = Number(position?.x ?? position?.[0] ?? 0);
+  const z = Number(position?.z ?? position?.[2] ?? 0);
+  const c = Math.abs(Math.cos(yaw)); const sn = Math.abs(Math.sin(yaw));
+  const aabbW = width * c + depth * sn;
+  const aabbD = width * sn + depth * c;
+  return wallBlocker(id, 'architecturalPrimitive', x - aabbW / 2, x + aabbW / 2, z - aabbD / 2, z + aabbD / 2, height, tags);
+}
+
+function primitivePostBlockers(primitive) {
+  const pos = toVector3(primitive.position); const yaw = primitive.yaw ?? 0; const width = primitive.width ?? 2; const height = primitive.height ?? 3; const thickness = primitive.thickness ?? 0.35; const depth = primitive.depth ?? thickness;
+  return [-1, 1].map((side) => {
+    const localX = side * (width / 2 - thickness / 2);
+    const x = pos.x + Math.cos(yaw) * localX;
+    const z = pos.z - Math.sin(yaw) * localX;
+    return rotatedRectBlocker(`V23-PRIMITIVE-BLOCKER-${primitive.id}-post-${side}`, { x, z }, thickness, depth, height, yaw, ['v2.3-primitive', primitive.kind, 'opening-post']);
+  });
+}
+
+function buildV23PrimitiveBlockers(definition) {
+  const blockers = [];
+  asArray(definition.architecturalPrimitives).forEach((primitive) => {
+    const blocks = primitive.blocksPlayer;
+    if (['railing', 'wallPanel', 'canalWater', 'curb'].includes(primitive.kind) && blocks !== true) return;
+    if (primitive.blocksPlayer === false) return;
+    if (['arch', 'doorFrame'].includes(primitive.kind)) { blockers.push(...primitivePostBlockers(primitive)); return; }
+    if (['pillar', 'brokenPillar'].includes(primitive.kind)) {
+      const radius = primitive.radius ?? 0.3; blockers.push(rotatedRectBlocker(`V23-PRIMITIVE-BLOCKER-${primitive.id}`, primitive.position, radius * 2, radius * 2, primitive.height ?? 2, primitive.yaw ?? 0, ['v2.3-primitive', primitive.kind])); return;
+    }
+    if (['lowWall', 'curb', 'railing'].includes(primitive.kind)) {
+      const b = rectForSegment(`V23-PRIMITIVE-BLOCKER-${primitive.id}`, primitive.from, primitive.to, primitive.thickness ?? 0.25, ['v2.3-primitive', primitive.kind]); b.height = primitive.height ?? 0.5; blockers.push(b); return;
+    }
+    if (primitive.kind === 'altar') { blockers.push(rotatedRectBlocker(`V23-PRIMITIVE-BLOCKER-${primitive.id}`, primitive.position, primitive.width ?? 1.6, primitive.depth ?? 1, primitive.height ?? 0.8, primitive.yaw ?? 0, ['v2.3-primitive', primitive.kind])); return; }
+    if (primitive.kind === 'stela') { blockers.push(rotatedRectBlocker(`V23-PRIMITIVE-BLOCKER-${primitive.id}`, primitive.position, primitive.width ?? 0.8, primitive.thickness ?? 0.2, primitive.height ?? 2, primitive.yaw ?? 0, ['v2.3-primitive', primitive.kind])); return; }
+    if (primitive.kind === 'obelisk') { const w = primitive.baseWidth ?? 0.7; blockers.push(rotatedRectBlocker(`V23-PRIMITIVE-BLOCKER-${primitive.id}`, primitive.position, w, w, primitive.height ?? 3, primitive.yaw ?? 0, ['v2.3-primitive', primitive.kind])); }
+  });
+  return blockers;
+}
+
 function buildWallBlockers(definition) {
   if (definition.collision?.wallBlockers === false) return [];
   return asArray(definition.rooms).flatMap((room) => buildWallBlockersForRoom(definition, room));
@@ -307,7 +346,7 @@ export function buildDungeonCollision(definition) {
     tags: room.tags ?? [],
   })).concat(buildV21WalkableRects(definition));
   const blockers = asArray(definition.blockers);
-  const wallBlockers = buildWallBlockers(definition).concat(buildV2WallBlockers(definition));
+  const wallBlockers = buildWallBlockers(definition).concat(buildV2WallBlockers(definition), buildV23PrimitiveBlockers(definition));
   const walkableSurfaces = buildWalkableSurfaces(definition);
   const blockerRects = blockers
     .filter((blocker) => blocker.blocksPlayer !== false)
