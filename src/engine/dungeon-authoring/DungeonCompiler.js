@@ -101,6 +101,11 @@ export function compileDungeonLocation(definition, options = {}) {
     fixtureValidation,
     lightBudget: lightRegistry.budget,
     props: geometry.props,
+    v2Geometry: {
+      polygonFloors: geometry.v2Floors ?? [],
+      wallSegments: geometry.v2Walls ?? [],
+      wallPropAnchors: geometry.v2Anchors ?? [],
+    },
     integrityReport,
     debugData: {
       rooms: asArray(definition.rooms),
@@ -110,6 +115,12 @@ export function compileDungeonLocation(definition, options = {}) {
       encounterZones,
       exits,
       torchFixtures: lightRegistry.torchFixtures,
+      v2Primitives: {
+        polygonFloors: asArray(definition.polygonFloors),
+        wallSegments: asArray(definition.wallSegments),
+        doorGaps: asArray(definition.doorGaps),
+        wallPropAnchors: asArray(definition.wallPropAnchors),
+      },
       fixtureValidation,
       integrity: integrityReport,
     },

@@ -235,8 +235,21 @@ export const reliquaryFieldDefinition = Object.freeze({
     { id: 'field_ddplus_level_1_return', kind: 'return', position: { x: 154, y: 1.55, z: 104 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'ddplus-test', 'level-1'] },
     { id: 'field_sumerian_city_block_v0_return', kind: 'return', position: { x: 122, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-city-block-v0'] },
     { id: 'field_sumerian_sun_palace_district_v1_return', kind: 'return', position: { x: 96, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-sun-palace-district-v1'] },
+    { id: 'field_v2_test_shrine_return', kind: 'return', position: { x: 68, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'v2-test-shrine'] },
   ],
   exits: [
+    {
+      id: 'field_enter_v2_test_shrine',
+      fromLocation: 'reliquary-field',
+      toLocation: 'v2-test-shrine',
+      triggerRect: { minX: 63, maxX: 73, minZ: 140, maxZ: 148 },
+      position: { x: 68, y: 1, z: 144 },
+      destinationSpawnId: 'v2_test_shrine_player_start',
+      promptText: 'Tap INTERACT to enter the V2 Test Shrine.',
+      tags: ['temporary', 'v2-test-shrine'],
+      userData: { placementNote: 'Small unobtrusive runtime proof entrance near the temporary generated-location markers.' },
+    },
+
     {
       id: 'field_enter_south_reliquary_crypt',
       fromLocation: 'reliquary-field',
