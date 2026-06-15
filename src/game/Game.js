@@ -6,11 +6,10 @@ import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
 import { ObjectiveRuntime } from '../engine/objectives/ObjectiveRuntime.js';
 import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
 import { Feedback } from './Feedback.js';
-import { FirstPersonArmsOverlay } from './FirstPersonArmsOverlay.js';
 import { EquipmentPanel } from './equipment/EquipmentPanel.js';
 import { equipmentRegistry } from './equipment/equipmentRegistry.js';
 import { startingEquipment } from './equipment/startingEquipment.js';
-import { FPVEquipmentRenderer } from './fpv/FPVEquipmentRenderer.js';
+import { FirstPersonViewModel } from './fpv/FirstPersonViewModel.js';
 import { GameState } from './GameState.js';
 import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
@@ -36,6 +35,8 @@ const PLAYER_TORCH_SPOT_LIGHT = Object.freeze({
   penumbra: 0.82,
   decay: 1.25,
 });
+
+const ENABLE_LEGACY_DOM_FPV = false;
 
 export class Game {
   constructor(app) {
@@ -118,19 +119,17 @@ export class Game {
     });
     this.hud = new Hud(this.app, { debugEnabled: this.debugHudEnabled });
     this.feedback = new Feedback(this.camera);
-    this.armsOverlay = new FirstPersonArmsOverlay(this.app);
     this.objectivePanel = new ObjectivePanel({
       root: this.app,
       objectiveRuntime: this.objectiveRuntime,
       enabled: objectiveDebugUiEnabled,
     });
     this.createPlayerTorchLight();
-    this.fpvEquipmentRenderer = new FPVEquipmentRenderer({
-      root: this.app,
-      armsOverlay: this.armsOverlay,
+    this.firstPersonViewModel = new FirstPersonViewModel({
+      camera: this.camera,
       equipmentRuntime: this.equipmentRuntime,
     });
-    this.dungeon.fpvEquipmentRenderer = this.fpvEquipmentRenderer;
+    this.dungeon.fpvEquipmentRenderer = this.firstPersonViewModel;
     this.setPlayerTorchEnabled(this.equipmentRuntime.getEquippedOffhandId?.() === 'torch');
     this.controls = new MobileControls(this.app);
     this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
@@ -148,7 +147,7 @@ export class Game {
       hud: this.hud,
       controls: this.controls,
       equipmentRuntime: this.equipmentRuntime,
-      fpvEquipmentRenderer: this.fpvEquipmentRenderer,
+      fpvEquipmentRenderer: this.firstPersonViewModel,
     });
 
     this.preventMobilePageGestures();
@@ -351,6 +350,7 @@ export class Game {
     const debugReadout = this.debugHudEnabled
       ? '<p class="debug-readout" data-hud="debug" aria-label="Debug player position">POS 0.0, 0.0 · YAW 0° · PITCH 0°</p>'
       : '';
+    const legacyFpvHidden = ENABLE_LEGACY_DOM_FPV ? '' : ' hidden';
 
     return `
       <main class="reliquary-shell" aria-label="Dread Stone Black handheld reliquary interface">
@@ -376,7 +376,7 @@ export class Game {
             <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
             <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
             <p class="field-kit-status" data-hud="field-kit" aria-live="polite" hidden></p>
-            <div class="first-person-arms" data-arms-overlay aria-hidden="true">
+            <div class="first-person-arms first-person-arms--legacy-disabled" data-arms-overlay aria-hidden="true" data-legacy-fpv-enabled="${ENABLE_LEGACY_DOM_FPV}"${legacyFpvHidden}>
               <div class="first-person-arms__layer" data-arms-layer="base"></div>
               <div class="first-person-offhand first-person-offhand--torch" data-fpv-offhand-layer hidden></div>
               <div class="first-person-weapon" data-fpv-equipment-layer hidden></div>
@@ -456,7 +456,7 @@ export class Game {
     this.combat.update(deltaSeconds);
     const hunger = this.gameState.updateHunger?.(deltaSeconds, { paused: this.equipmentPanel?.isOpen || this.isPaused, applyStarvationDamage: (amount) => this.combat.takeDamage?.(amount, 'Starvation') });
     if (hunger) this.hud.updateHunger?.(hunger);
-    this.armsOverlay.update(deltaSeconds);
+    this.firstPersonViewModel.update(deltaSeconds);
     this.updatePlayerTorchLight(deltaSeconds);
     this.updateObjectiveLocationTracking(deltaSeconds);
     this.interactions.updateHint();
