@@ -125,6 +125,8 @@ const FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_START = new THREE.Vector3(122, 1.55, 1
 const FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_YAW = Math.PI;
 const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_START = new THREE.Vector3(96, 1.55, 144.5);
 const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_YAW = Math.PI;
+const FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_START = new THREE.Vector3(110, 1.55, 128);
+const FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const GENERATED_ENEMY_ACTIVE_CAP = 3;
@@ -140,6 +142,7 @@ const FIELD_KEEPER_HOUSE_ENTRANCE_TARGET = new THREE.Vector3(142, 1, -77);
 const DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET = new THREE.Vector3(154, 1, 110);
 const SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET = new THREE.Vector3(122, 1, 149);
 const SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET = new THREE.Vector3(96, 1, 149);
+const SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET = new THREE.Vector3(110, 1, 128);
 const V2_CANAL_SHRINE_ENTRANCE_TARGET = new THREE.Vector3(-166, 1, 38);
 const FIELD_V2_CANAL_SHRINE_RETURN_START = new THREE.Vector3(-166, 1.55, 38);
 const FIELD_V2_CANAL_SHRINE_RETURN_YAW = -Math.PI / 2;
@@ -153,6 +156,7 @@ const FIELD_FOLIAGE_CLEAR_ZONES = Object.freeze([
   { x: DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET.x, z: DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET.z, radius: 18 },
   { x: SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET.x, z: SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET.z, radius: 18 },
   { x: SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET.x, z: SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET.z, radius: 18 },
+  { x: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.x, z: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.z, radius: 20 },
   { x: 35, z: 124, radius: 22 },
 ]);
 function getReliquaryFieldColliders() {
@@ -514,6 +518,10 @@ export class DungeonScene {
 
     if (this.fieldSpawn === 'v2CanalShrineExit') {
       return { spawnPosition: FIELD_V2_CANAL_SHRINE_RETURN_START, spawnYaw: FIELD_V2_CANAL_SHRINE_RETURN_YAW };
+    }
+
+    if (this.fieldSpawn === 'sumerianCanalMarketDistrictV2Exit') {
+      return { spawnPosition: FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_START, spawnYaw: FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_YAW };
     }
 
     return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
@@ -1380,6 +1388,7 @@ export class DungeonScene {
     this.addDdplusLevel1TestEntrance();
     this.addSumerianCityBlockV0TestEntrance();
     this.addSumerianSunPalaceDistrictV1TestEntrance();
+    this.addSumerianCanalMarketDistrictV2Entrance();
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
     this.addLowRuinWalls();
@@ -1944,6 +1953,45 @@ export class DungeonScene {
       type: 'areaEntrance',
     });
   }
+
+  addSumerianCanalMarketDistrictV2Entrance() {
+    const sandstoneMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/wall_sandstone_ritual_01.png', repeat: [1.7, 1.2], color: 0xb99761, roughness: 0.98, metalness: 0.0, emissive: 0x221306, emissiveIntensity: 0.14 });
+    const bronzeMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/metal_bronze_ritual_01.png', repeat: [1.0, 1.2], color: 0xb47b44, roughness: 0.84, metalness: 0.3, emissive: 0x201006, emissiveIntensity: 0.18 });
+    const floorMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/floor_limestone_temple_01.png', repeat: [2.8, 2.4], color: 0xc0a66f, roughness: 0.98, metalness: 0.0, emissive: 0x1c1207, emissiveIntensity: 0.1 });
+    const waterMat = new THREE.MeshBasicMaterial({ color: 0x07141b, transparent: true, opacity: 0.72, depthWrite: false });
+    const voidMat = new THREE.MeshBasicMaterial({ color: 0x020304 });
+    const group = new THREE.Group();
+    group.name = 'SUMERIAN_CANAL_MARKET_DISTRICT_V2-field-canal-gate-entrance';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(11, 0.28, 8), position: new THREE.Vector3(110, 0.14, 128), material: floorMat, name: 'SUMERIAN_CANAL_MARKET_DISTRICT_V2_BASE-pack1-floor_limestone_temple_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(8.5, 0.08, 1.35), position: new THREE.Vector3(110, 0.34, 125.2), material: waterMat, name: 'SUMERIAN_CANAL_MARKET_DISTRICT_V2_WATER-dark-canal-threshold' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.2, 4.5, 1.2), position: new THREE.Vector3(106.4, 2.25, 129.1), material: sandstoneMat, name: 'SUMERIAN_CANAL_MARKET_DISTRICT_V2_ARCH-left-sandstone-pier' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.2, 4.1, 1.2), position: new THREE.Vector3(113.6, 2.05, 129.1), material: sandstoneMat, name: 'SUMERIAN_CANAL_MARKET_DISTRICT_V2_ARCH-right-sandstone-pier' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(8.2, 1.0, 1.1), position: new THREE.Vector3(110, 4.35, 129.1), material: sandstoneMat, name: 'SUMERIAN_CANAL_MARKET_DISTRICT_V2_ARCH-warning-lintel' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.6, 2.7, 0.2), position: new THREE.Vector3(110, 1.5, 128.45), material: voidMat, name: 'SUMERIAN_CANAL_MARKET_DISTRICT_V2_DOOR-market-shadow' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(0.7, 2.3, 0.3), position: new THREE.Vector3(103.6, 1.15, 127.1), material: bronzeMat, name: 'SUMERIAN_CANAL_MARKET_DISTRICT_V2_STELA-left-bronze-warning' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(0.7, 2.0, 0.3), position: new THREE.Vector3(116.4, 1.0, 127.1), material: bronzeMat, name: 'SUMERIAN_CANAL_MARKET_DISTRICT_V2_STELA-right-bronze-warning' }));
+
+    const glow = new THREE.PointLight(0xd6974e, 1.1, 16, 1.45);
+    glow.name = 'SUMERIAN_CANAL_MARKET_DISTRICT_V2_GATE-warm-canal-market-light';
+    glow.position.set(110, 2.2, 126.8);
+    group.add(glow);
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'SUMERIAN_CANAL_MARKET_DISTRICT_V2_INT_ENTER',
+      label: 'Sumerian Canal Market',
+      target: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.clone(),
+      range: 5.0,
+      hint: 'Enter Sumerian Canal Market',
+      message: 'The canal market opens.',
+      functional: true,
+      area: 'sumerian-canal-market-district-v2',
+      type: 'areaEntrance',
+    });
+  }
+
 
   addSunkenCentralTomb() {
     const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.6, 2.0], color: 0x8d897f, roughness: 0.96, metalness: 0.0 });
