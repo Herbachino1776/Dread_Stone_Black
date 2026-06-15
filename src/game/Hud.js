@@ -68,7 +68,8 @@ export class Hud {
     if (!this.holdProgressEl) return;
     const clamped = Math.max(0, Math.min(1, Number(progress) || 0));
     this.holdProgressEl.style.setProperty('--hold-progress', `${clamped * 360}deg`);
-    this.holdProgressEl.dataset.label = label || this.holdProgressEl.dataset.label || '';
+    if (label) this.holdProgressEl.dataset.label = label;
+    else if (clamped <= 0) this.holdProgressEl.dataset.label = '';
     this.holdProgressEl.classList.toggle('is-visible', clamped > 0 && clamped < 1);
   }
 

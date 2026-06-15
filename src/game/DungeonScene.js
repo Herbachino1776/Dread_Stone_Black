@@ -1073,6 +1073,16 @@ export class DungeonScene {
     )) ?? null;
   }
 
+  isPositionInFishingWater(position, margin = 0.35) {
+    if (this.area !== 'field' || !position) return false;
+    return this.fieldFishingZones.some((zone) => (
+      position.x >= zone.minX - margin
+      && position.x <= zone.maxX + margin
+      && position.z >= zone.minZ - margin
+      && position.z <= zone.maxZ + margin
+    ));
+  }
+
   getRawFishLandingPosition(player) {
     if (!player?.position) return null;
     const forward = typeof player.getLookDirection === 'function'
@@ -1081,17 +1091,23 @@ export class DungeonScene {
     forward.y = 0;
     if (forward.lengthSq() < 0.001) forward.set(0, 0, 1);
     forward.normalize();
-    const spawn = player.position.clone().addScaledVector(forward, 1.25);
-    spawn.y = 0;
-    spawn.x = THREE.MathUtils.clamp(spawn.x, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
-    spawn.z = THREE.MathUtils.clamp(spawn.z, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
-    if (this.getNearbyFishingZone(spawn)) {
-      spawn.copy(player.position).addScaledVector(forward, 0.85);
-      spawn.y = 0;
-      spawn.x = THREE.MathUtils.clamp(spawn.x, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
-      spawn.z = THREE.MathUtils.clamp(spawn.z, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
-    }
-    return spawn;
+    const right = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
+    const base = player.position.clone();
+    const clampToField = (position) => {
+      position.x = THREE.MathUtils.clamp(position.x, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
+      position.z = THREE.MathUtils.clamp(position.z, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
+      position.y = 0.24;
+      return position;
+    };
+    const candidates = [
+      base.clone().addScaledVector(forward, 1.15),
+      base.clone().addScaledVector(forward, 1.35),
+      base.clone().addScaledVector(forward, 0.95).addScaledVector(right, 0.55),
+      base.clone().addScaledVector(forward, 0.95).addScaledVector(right, -0.55),
+      base.clone().addScaledVector(right, 0.75),
+      base.clone().addScaledVector(right, -0.75),
+    ].map(clampToField);
+    return candidates.find((candidate) => !this.isPositionInFishingWater(candidate)) ?? candidates[0] ?? null;
   }
 
   addOutdoorBoundary() {
@@ -1574,12 +1590,12 @@ export class DungeonScene {
     const group = new THREE.Group();
     const bodyMat = new THREE.MeshStandardMaterial({ color: 0x6f766f, roughness: 0.82, emissive: 0x101413, emissiveIntensity: 0.12 });
     const tailMat = new THREE.MeshStandardMaterial({ color: 0x4e5a55, roughness: 0.88, emissive: 0x090d0c, emissiveIntensity: 0.1 });
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 8), bodyMat);
-    body.scale.set(1.55, 0.34, 0.52);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 10), bodyMat);
+    body.scale.set(1.7, 0.38, 0.56);
     body.rotation.z = Math.PI / 2;
     group.add(body);
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.28, 3), tailMat);
-    tail.position.x = -0.36;
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.34, 3), tailMat);
+    tail.position.x = -0.47;
     tail.rotation.z = -Math.PI / 2;
     tail.scale.z = 0.42;
     group.add(tail);
@@ -1599,9 +1615,9 @@ export class DungeonScene {
     mesh.position.set(landing.x, 0.9, landing.z);
     mesh.rotation.y = player?.yaw ?? 0;
     this.scene.add(mesh);
-    const pickup = { id: pickupId, mesh, start: mesh.position.clone(), target: landing.clone().setY(0.18), elapsed: 0, duration: 0.55 };
+    const pickup = { id: pickupId, mesh, start: mesh.position.clone(), target: landing.clone().setY(0.26), elapsed: 0, duration: 0.55 };
     this.fieldRawFishPickups.push(pickup);
-    this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(0.75), range: 2.2, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup });
+    this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(0.9), range: 2.85, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup });
     return pickup;
   }
 
@@ -1611,7 +1627,7 @@ export class DungeonScene {
       pickup.elapsed = Math.min(pickup.duration, pickup.elapsed + deltaSeconds);
       const t = pickup.elapsed / pickup.duration;
       pickup.mesh.position.lerpVectors(pickup.start, pickup.target, t);
-      pickup.mesh.position.y = 0.18 + Math.sin(t * Math.PI) * 0.45;
+      pickup.mesh.position.y = 0.26 + Math.sin(t * Math.PI) * 0.45;
     });
   }
 
