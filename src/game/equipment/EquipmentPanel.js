@@ -14,6 +14,7 @@ export class EquipmentPanel {
     this.equipmentRuntime = equipmentRuntime;
     this.gameState = gameState;
     this.panel = root.querySelector('[data-equipment-panel]');
+    this.stopPanelEvent = (event) => event.stopPropagation();
     this.currentWeapon = root.querySelector('[data-equipment="current-weapon"]');
     this.pocketTabs = root.querySelector('[data-inventory="pocket-tabs"]');
     this.inventoryList = root.querySelector('[data-inventory="list"]');
@@ -33,6 +34,9 @@ export class EquipmentPanel {
       if (event.code !== 'KeyE' && event.code !== 'Tab') return;
       event.preventDefault();
       this.toggle();
+    });
+    ['pointerdown', 'pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend', 'wheel'].forEach((eventName) => {
+      this.panel?.addEventListener(eventName, this.stopPanelEvent, { passive: eventName !== 'wheel' });
     });
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, () => this.render());
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.render());
@@ -152,7 +156,7 @@ export class EquipmentPanel {
     row.dataset.itemId = id;
     row.setAttribute('aria-pressed', String(pressed));
     row.innerHTML = `<span class="equipment-row__name">${name}</span><span class="equipment-row__stats">${stats}</span><span class="equipment-row__description">${description}</span>`;
-    if (onSelect) row.addEventListener('pointerdown', (event) => { event.preventDefault(); onSelect(); });
+    if (onSelect) row.addEventListener('click', (event) => { event.preventDefault(); onSelect(); });
     return row;
   }
 

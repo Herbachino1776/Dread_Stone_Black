@@ -379,6 +379,7 @@ export class Game {
             <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
             <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
             <p class="field-kit-status" data-hud="field-kit" aria-live="polite" hidden></p>
+            <div class="timed-action-progress-ring" data-hud="timed-action-progress" aria-hidden="true"></div>
             <div class="first-person-arms" data-arms-overlay aria-hidden="true">
               <div class="first-person-arms__layer" data-arms-layer="base"></div>
               <div class="first-person-offhand first-person-offhand--torch" data-fpv-offhand-layer hidden></div>
@@ -422,7 +423,7 @@ export class Game {
           </div>
 
           <div class="action-cluster" aria-label="Action buttons">
-            <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact"><span>X</span><span class="timed-action-progress-ring" data-hud="timed-action-progress" aria-hidden="true"></span></button>
+            <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact"><span>X</span></button>
             <button class="attack-button action-button" data-action="attack" type="button" aria-label="Attack"><span>A</span></button>
           </div>
 
