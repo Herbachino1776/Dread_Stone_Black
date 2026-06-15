@@ -140,11 +140,15 @@ const FIELD_KEEPER_HOUSE_ENTRANCE_TARGET = new THREE.Vector3(142, 1, -77);
 const DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET = new THREE.Vector3(154, 1, 110);
 const SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET = new THREE.Vector3(122, 1, 149);
 const SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET = new THREE.Vector3(96, 1, 149);
+const V2_CANAL_SHRINE_ENTRANCE_TARGET = new THREE.Vector3(-166, 1, 38);
+const FIELD_V2_CANAL_SHRINE_RETURN_START = new THREE.Vector3(-166, 1.55, 38);
+const FIELD_V2_CANAL_SHRINE_RETURN_YAW = -Math.PI / 2;
 const FIELD_FOLIAGE_CLEAR_ZONES = Object.freeze([
   { x: FIELD_PLAYER_START.x, z: FIELD_PLAYER_START.z, radius: 22 },
   { x: 0, z: -8, radius: 18 },
   { x: -60, z: -107, radius: 24 },
   { x: BGT_EXTERIOR_ENTRANCE_TARGET.x, z: BGT_EXTERIOR_ENTRANCE_TARGET.z, radius: 28 },
+  { x: V2_CANAL_SHRINE_ENTRANCE_TARGET.x, z: V2_CANAL_SHRINE_ENTRANCE_TARGET.z, radius: 18 },
   { x: FIELD_KEEPER_HOUSE_ENTRANCE_TARGET.x, z: FIELD_KEEPER_HOUSE_ENTRANCE_TARGET.z, radius: 24 },
   { x: DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET.x, z: DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET.z, radius: 18 },
   { x: SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET.x, z: SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET.z, radius: 18 },
@@ -506,6 +510,10 @@ export class DungeonScene {
 
     if (this.fieldSpawn === 'sumerianSunPalaceDistrictV1Exit') {
       return { spawnPosition: FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_START, spawnYaw: FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_YAW };
+    }
+
+    if (this.fieldSpawn === 'v2CanalShrineExit') {
+      return { spawnPosition: FIELD_V2_CANAL_SHRINE_RETURN_START, spawnYaw: FIELD_V2_CANAL_SHRINE_RETURN_YAW };
     }
 
     return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
@@ -1367,6 +1375,7 @@ export class DungeonScene {
     this.addBrokenShrine();
     this.addSouthReliquaryCrypt();
     this.addBlackGrassTempleExterior();
+    this.addV2CanalShrineEntrance();
     this.addFieldKeeperHouseExterior();
     this.addDdplusLevel1TestEntrance();
     this.addSumerianCityBlockV0TestEntrance();
@@ -2008,6 +2017,45 @@ export class DungeonScene {
     });
   }
 
+
+
+  addV2CanalShrineEntrance() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.6, 1.15], color: 0x353a35, roughness: 0.98, metalness: 0.0, emissive: 0x06100d, emissiveIntensity: 0.12 });
+    const sandstoneMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/wall_sandstone_ritual_01.png', repeat: [1.25, 1.0], color: 0x8e7757, roughness: 0.98, metalness: 0.0, emissive: 0x0c120f, emissiveIntensity: 0.12 });
+    const plinthMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [2.4, 2.0], color: 0x6f6b62, roughness: 0.98, metalness: 0.0, emissive: 0x07120f, emissiveIntensity: 0.1 });
+    const waterMat = new THREE.MeshBasicMaterial({ color: 0x0a3835, transparent: true, opacity: 0.68, depthWrite: false });
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0x46d5bd, transparent: true, opacity: 0.32, depthWrite: false });
+    const voidMat = new THREE.MeshBasicMaterial({ color: 0x020304 });
+    const group = new THREE.Group();
+    group.name = 'V2_CANAL_SHRINE-field-entrance-near-black-grass-temple';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(9.5, 0.34, 7.5), position: new THREE.Vector3(-166, 0.17, 38), material: plinthMat, name: 'V2_CANAL_SHRINE_BASE-low-canal-stone-plinth-floor_worn_stone_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(6.8, 0.08, 1.25), position: new THREE.Vector3(-166, 0.38, 35.8), material: waterMat, name: 'V2_CANAL_SHRINE_WATER-dark-canal-hint' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(6.0, 0.05, 1.0), position: new THREE.Vector3(-166, 0.43, 35.8), material: glowMat, name: 'V2_CANAL_SHRINE_GLOW-blue-green-water-sheen' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.05, 3.4, 1.05), position: new THREE.Vector3(-168.45, 1.7, 39.2), material: stoneMat, name: 'V2_CANAL_SHRINE_ARCH-left-broken-black-stone-pier' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.05, 2.65, 1.05), position: new THREE.Vector3(-163.55, 1.325, 39.2), material: sandstoneMat, name: 'V2_CANAL_SHRINE_ARCH-right-broken-sandstone-pier' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.6, 0.82, 1.0), position: new THREE.Vector3(-166, 3.42, 39.2), material: stoneMat, name: 'V2_CANAL_SHRINE_ARCH-cracked-low-lintel' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(3.0, 2.2, 0.18), position: new THREE.Vector3(-166, 1.45, 38.72), material: voidMat, name: 'V2_CANAL_SHRINE_DOOR-dark-shrine-mouth' }));
+
+    const glow = new THREE.PointLight(0x4fd8c7, 1.0, 14, 1.55);
+    glow.name = 'V2_CANAL_SHRINE_GATE-subtle-blue-green-threshold-light';
+    glow.position.set(-166, 1.8, 37.5);
+    group.add(glow);
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'V2_CANAL_SHRINE_INT_ENTER',
+      label: 'V2 Canal Shrine',
+      target: V2_CANAL_SHRINE_ENTRANCE_TARGET.clone(),
+      range: 4.75,
+      hint: 'Enter V2 Canal Shrine',
+      message: 'The canal shrine opens.',
+      functional: true,
+      area: 'v2-canal-shrine',
+      type: 'areaEntrance',
+    });
+  }
 
   addBlackGrassTempleExterior() {
     const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [3.4, 2.1], color: 0x34312d, roughness: 0.98, metalness: 0.0, emissive: 0x050403, emissiveIntensity: 0.08 });

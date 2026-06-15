@@ -50,7 +50,7 @@ export const v2CanalShrineDefinition = Object.freeze({
     { id: 'v2_canal_shrine_player_start', kind: 'player', position: { x: 0, y: 1.55, z: -6.6 }, yaw: 0, roomId: 'v2_canal_shrine_courtyard', tags: ['entry', 'playerStart'] },
     { id: 'v2_canal_shrine_return_threshold', kind: 'return', position: { x: 0, y: 1.2, z: -8.2 }, yaw: Math.PI, roomId: 'v2_canal_shrine_courtyard', tags: ['exit', 'allow-near-wall'] },
   ],
-  exits: [{ id: 'v2_canal_shrine_exit_to_reliquary_field', fromLocation: 'v2-canal-shrine', toLocation: 'reliquary-field', triggerRect: { minX: -1.6, maxX: 1.6, minZ: -9.4, maxZ: -8.0 }, position: { x: 0, y: 1.2, z: -8.6 }, destinationSpawnId: 'field_v2_test_shrine_return', promptText: 'Tap INTERACT to return to Reliquary Field.', roomId: 'v2_canal_shrine_courtyard', wallGaps: [{ roomId: 'v2_canal_shrine_courtyard', position: { x: -0.8, y: 0, z: -9 }, width: 3.2 }], tags: ['field-return', 'v2.1-test'] }],
+  exits: [{ id: 'v2_canal_shrine_exit_to_reliquary_field', fromLocation: 'v2-canal-shrine', toLocation: 'reliquary-field', triggerRect: { minX: -1.6, maxX: 1.6, minZ: -9.4, maxZ: -8.0 }, position: { x: 0, y: 1.2, z: -8.6 }, destinationSpawnId: 'field_v2_canal_shrine_return', promptText: 'Tap INTERACT to return to Reliquary Field.', roomId: 'v2_canal_shrine_courtyard', wallGaps: [{ roomId: 'v2_canal_shrine_courtyard', position: { x: -0.8, y: 0, z: -9 }, width: 3.2 }], tags: ['field-return', 'v2.1-test'] }],
   lights: [
     { id: 'v2_canal_shrine_ambient', kind: 'ambient', skyColor: 0x4c3a29, groundColor: 0x080504, intensity: 0.44 },
     { id: 'v2_canal_shrine_plinth_glow', kind: 'point', color: 0xd79a58, intensity: 0.9, distance: 9, decay: 1.5, position: { x: 0, y: 1.8, z: 5 }, roomId: 'v2_canal_shrine_courtyard' },
