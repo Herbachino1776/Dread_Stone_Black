@@ -147,6 +147,10 @@ export class MobileControls {
     this.attackPressed = true;
   }
 
+  hasAttackQueued() {
+    return this.attackPressed;
+  }
+
   consumeAttack() {
     const wasPressed = this.attackPressed;
     this.attackPressed = false;

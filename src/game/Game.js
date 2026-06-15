@@ -142,6 +142,9 @@ export class Game {
       equipmentRuntime: this.equipmentRuntime,
       objectiveRuntime: this.objectiveRuntime,
     });
+    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.interactions.cancelActiveTimedAction?.());
+    window.addEventListener('field-item-equipped-changed', () => this.interactions.cancelActiveTimedAction?.());
+    window.addEventListener('field-offhand-equipped-changed', () => this.interactions.cancelActiveTimedAction?.());
     this.combat = new Combat({
       player: this.player,
       dungeon: this.dungeon,
@@ -419,7 +422,7 @@ export class Game {
           </div>
 
           <div class="action-cluster" aria-label="Action buttons">
-            <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact"><span>X</span><span class="hold-progress-ring" data-hud="hold-progress" aria-hidden="true"></span></button>
+            <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact"><span>X</span><span class="timed-action-progress-ring" data-hud="timed-action-progress" aria-hidden="true"></span></button>
             <button class="attack-button action-button" data-action="attack" type="button" aria-label="Attack"><span>A</span></button>
           </div>
 
@@ -463,7 +466,7 @@ export class Game {
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
     const interactHeld = (this.controls.isInteractHeld?.() ?? false) || keyboardInteractHeld;
     const keyboardInteractPressed = keyboardInteractHeld && !this.wasKeyboardInteractHeld;
-    this.interactions.updateHold(deltaSeconds, interactHeld, this.equipmentPanel?.isOpen || this.isPaused);
+    this.interactions.updateTimedAction(deltaSeconds, this.equipmentPanel?.isOpen || this.isPaused || this.combat.isPlayerDead || this.controls.hasAttackQueued?.());
 
     if (this.controls.consumeInteract() || keyboardInteractPressed) {
       if (!this.interactions.useEquippedConsumable?.()) this.interactions.interact();

@@ -11,7 +11,7 @@ export class Hud {
     this.hungerEl = root.querySelector('[data-stat="hunger"]');
     this.damageEl = root.querySelector('[data-hud="damage"]');
     this.fieldKitEl = root.querySelector('[data-hud="field-kit"]');
-    this.holdProgressEl = root.querySelector('[data-hud="hold-progress"]');
+    this.timedActionProgressEl = root.querySelector('[data-hud="timed-action-progress"]') ?? root.querySelector('[data-hud="hold-progress"]');
     this.debugFrameSkip = 0;
   }
 
@@ -64,13 +64,17 @@ export class Hud {
     this.hungerEl.parentElement?.style.setProperty('--hunger-ratio', String(Math.max(0, Math.min(1, seconds / Math.max(1, hungerMaxSeconds)))));
   }
 
-  updateHoldProgress(progress = 0, label = '') {
-    if (!this.holdProgressEl) return;
+  updateTimedActionProgress(progress = 0, label = '') {
+    if (!this.timedActionProgressEl) return;
     const clamped = Math.max(0, Math.min(1, Number(progress) || 0));
-    this.holdProgressEl.style.setProperty('--hold-progress', `${clamped * 360}deg`);
-    if (label) this.holdProgressEl.dataset.label = label;
-    else if (clamped <= 0) this.holdProgressEl.dataset.label = '';
-    this.holdProgressEl.classList.toggle('is-visible', clamped > 0 && clamped < 1);
+    this.timedActionProgressEl.style.setProperty('--timed-action-progress', `${clamped * 360}deg`);
+    if (label) this.timedActionProgressEl.dataset.label = label;
+    else if (clamped <= 0) this.timedActionProgressEl.dataset.label = '';
+    this.timedActionProgressEl.classList.toggle('is-visible', clamped > 0 && clamped < 1);
+  }
+
+  updateHoldProgress(progress = 0, label = '') {
+    this.updateTimedActionProgress(progress, label);
   }
 
   updateFieldKitStatus() {
