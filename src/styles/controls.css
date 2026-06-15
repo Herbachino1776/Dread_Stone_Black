@@ -286,7 +286,7 @@
   height: clamp(58px, 15vw, 70px);
 }
 
-.action-button span {
+.action-button span:not(.timed-action-progress-ring) {
   display: grid;
   place-items: center;
   width: 72%;
