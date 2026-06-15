@@ -5,8 +5,8 @@
   grid-template-columns: minmax(82px, 1fr) minmax(172px, auto) minmax(82px, 1fr);
   align-items: center;
   gap: clamp(8px, 2.8vw, 16px);
-  min-height: clamp(116px, 17vh, 146px);
-  padding: 8px 10px 9px;
+  min-height: clamp(96px, 14dvh, 124px);
+  padding: 6px 8px 7px;
   border: 1px solid rgba(203, 165, 88, 0.52);
   border-radius: 24px 24px 20px 20px;
   background:
@@ -73,7 +73,7 @@
   display: grid;
   place-items: center;
   min-width: 0;
-  min-height: 100px;
+  min-height: 82px;
   color: rgba(238, 222, 180, 0.68);
   font-size: clamp(0.56rem, 2vw, 0.66rem);
   font-weight: 800;
@@ -88,8 +88,8 @@
 
 .stick-ring {
   position: relative;
-  width: clamp(74px, 20vw, 94px);
-  height: clamp(74px, 20vw, 94px);
+  width: clamp(64px, 17vw, 82px);
+  height: clamp(64px, 17vw, 82px);
   border: 1.5px solid rgba(215, 181, 101, 0.58);
   border-radius: 999px;
   background:
@@ -122,9 +122,9 @@
   left: 50%;
   top: 50%;
   z-index: 2;
-  width: clamp(32px, 8.8vw, 40px);
-  height: clamp(32px, 8.8vw, 40px);
-  margin: clamp(-20px, -4.4vw, -16px) 0 0 clamp(-20px, -4.4vw, -16px);
+  width: clamp(28px, 7.5vw, 36px);
+  height: clamp(28px, 7.5vw, 36px);
+  margin: clamp(-18px, -3.75vw, -14px) 0 0 clamp(-18px, -3.75vw, -14px);
   border: 1px solid rgba(255, 229, 157, 0.52);
   border-radius: 999px;
   background:
@@ -167,8 +167,8 @@
 .action-button {
   display: grid;
   place-items: center;
-  width: clamp(58px, 16vw, 72px);
-  height: clamp(58px, 16vw, 72px);
+  width: clamp(50px, 13.5vw, 62px);
+  height: clamp(50px, 13.5vw, 62px);
   border: 1.5px solid rgba(232, 222, 196, 0.54);
   border-radius: 999px;
   color: rgba(255, 250, 235, 0.94);
@@ -254,24 +254,24 @@
 
 @media (max-height: 700px) {
   .control-deck {
-    min-height: 108px;
-    padding-block: 7px;
+    min-height: 78px;
+    padding-block: 5px;
   }
 
   .stick-zone {
-    min-height: 92px;
+    min-height: 78px;
   }
 
   .action-button {
-    width: clamp(52px, 14vw, 64px);
-    height: clamp(52px, 14vw, 64px);
+    width: clamp(48px, 12.5vw, 58px);
+    height: clamp(48px, 12.5vw, 58px);
   }
 }
 
 .control-deck {
   grid-template-columns: minmax(76px, 1fr) minmax(132px, auto) minmax(76px, 1fr);
-  min-height: clamp(112px, 16vh, 136px);
-  padding: 7px 9px calc(env(safe-area-inset-bottom) + 8px);
+  min-height: clamp(96px, 14dvh, 124px);
+  padding: 5px 8px calc(env(safe-area-inset-bottom) + 6px);
   border-radius: 20px;
 }
 
@@ -282,8 +282,8 @@
 }
 
 .action-button {
-  width: clamp(58px, 15vw, 70px);
-  height: clamp(58px, 15vw, 70px);
+  width: clamp(50px, 13vw, 60px);
+  height: clamp(50px, 13vw, 60px);
 }
 
 .action-button span:not(.timed-action-progress-ring) {
