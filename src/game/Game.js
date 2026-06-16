@@ -37,6 +37,18 @@ const PLAYER_TORCH_SPOT_LIGHT = Object.freeze({
   decay: 1.25,
 });
 
+const FIELD_RETURN_SPAWNS_BY_LOCATION = Object.freeze({
+  'black-grass-temple': 'blackGrassTempleExit',
+  'field-keeper-house': 'fieldKeeperHouseExit',
+  'level-1': 'ddplusLevel1Exit',
+  'sumerian-city-block-v0': 'sumerianCityBlockV0Exit',
+  'sumerian-sun-palace-district-v1': 'sumerianSunPalaceDistrictV1Exit',
+  'v2-canal-shrine': 'v2CanalShrineExit',
+  'sumerian-canal-market-district-v2': 'sumerianCanalMarketDistrictV2Exit',
+  balthazan: 'balthazanExit',
+  dungeon: 'cryptAExit',
+});
+
 export class Game {
   constructor(app) {
     this.app = app;
@@ -67,23 +79,7 @@ export class Game {
     const requestedArea = query.get('area');
     const returnedFrom = query.get('from');
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
-    const fieldSpawn = returnedFrom === 'black-grass-temple'
-      ? 'blackGrassTempleExit'
-      : returnedFrom === 'field-keeper-house'
-        ? 'fieldKeeperHouseExit'
-        : returnedFrom === 'level-1'
-          ? 'ddplusLevel1Exit'
-          : returnedFrom === 'sumerian-city-block-v0'
-            ? 'sumerianCityBlockV0Exit'
-            : returnedFrom === 'sumerian-sun-palace-district-v1'
-              ? 'sumerianSunPalaceDistrictV1Exit'
-              : returnedFrom === 'v2-canal-shrine'
-                ? 'v2CanalShrineExit'
-                : returnedFrom === 'sumerian-canal-market-district-v2'
-                  ? 'sumerianCanalMarketDistrictV2Exit'
-            : returnedFrom === 'dungeon'
-              ? 'cryptAExit'
-              : 'start';
+    const fieldSpawn = FIELD_RETURN_SPAWNS_BY_LOCATION[returnedFrom] ?? 'start';
     const requestedLocation = getLocationDefinition(requestedArea);
     const area = ['dungeon', 'black-grass-temple'].includes(requestedArea) || requestedLocation?.tags?.includes('compiled-runtime') ? requestedArea : 'field';
     this.gameState = new GameState();

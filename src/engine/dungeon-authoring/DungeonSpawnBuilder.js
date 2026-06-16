@@ -19,6 +19,7 @@ export function buildDungeonSpawns(definition) {
     position: toVector3(spawn.position),
     yaw: spawn.yaw ?? 0,
     roomId: spawn.roomId,
+    scale: spawn.scale,
     minDistanceFromPlayer: spawn.minDistanceFromPlayer,
     allowedForInitialWave: Boolean(spawn.allowedForInitialWave),
     initialWave: Boolean(spawn.allowedForInitialWave),
