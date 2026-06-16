@@ -121,12 +121,19 @@ export class DungeonDebugRenderer {
     });
 
     this.runtime.blockerRects.forEach((rect) => {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(rect.maxX - rect.minX, Math.max(rect.height ?? 1.2, 0.25), rect.maxZ - rect.minZ),
-        new THREE.MeshBasicMaterial({ color: 0xff4d2f, transparent: true, opacity: 0.28, depthWrite: false }),
-      );
-      mesh.position.set((rect.minX + rect.maxX) / 2, Math.max(rect.height ?? 1.2, 0.25) / 2, (rect.minZ + rect.maxZ) / 2);
-      mesh.userData = { locationId: this.runtime.locationId, blockerId: rect.id, devOnly: true };
+      const height = Math.max(rect.height ?? 1.2, 0.25);
+      const material = new THREE.MeshBasicMaterial({ color: rect.blockerShape === 'segment' ? 0xffc02f : 0xff4d2f, transparent: true, opacity: 0.28, depthWrite: false });
+      let mesh;
+      if (rect.blockerShape === 'segment' && rect.from && rect.to) {
+        const length = Math.hypot(rect.to.x - rect.from.x, rect.to.z - rect.from.z);
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(length, height, rect.thickness ?? 0.32), material);
+        mesh.position.set((rect.from.x + rect.to.x) / 2, height / 2, (rect.from.z + rect.to.z) / 2);
+        mesh.rotation.y = Math.atan2(rect.to.z - rect.from.z, rect.to.x - rect.from.x);
+      } else {
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(rect.maxX - rect.minX, height, rect.maxZ - rect.minZ), material);
+        mesh.position.set((rect.minX + rect.maxX) / 2, height / 2, (rect.minZ + rect.maxZ) / 2);
+      }
+      mesh.userData = { locationId: this.runtime.locationId, blockerId: rect.id, blockerShape: rect.blockerShape ?? 'aabb', devOnly: true };
       this.layers.blockers.add(mesh);
     });
 
