@@ -486,16 +486,104 @@ export class DungeonScene {
         transparent: profile.transparent,
         opacity: profile.opacity,
       });
-      material.userData.definitionProfile = { animated: profile.animated, scrollSpeed: profile.scrollSpeed, shimmerIntensity: profile.shimmerIntensity, baseEmissiveIntensity: profile.emissiveIntensity ?? 0 };
+      this.applyBalthazanTextureDiagnosticMap(material, profile);
+      material.userData.definitionProfile = {
+        ...profile,
+        baseEmissiveIntensity: profile.emissiveIntensity ?? 0,
+      };
       return material;
     }
 
-    return new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: profile.color ?? 0xffffff,
       roughness: profile.roughness ?? 0.9,
       metalness: profile.metalness ?? 0,
       emissive: profile.emissive ?? 0x000000,
       emissiveIntensity: profile.emissiveIntensity ?? 0,
+    });
+    material.userData.definitionProfile = {
+      ...profile,
+      baseEmissiveIntensity: profile.emissiveIntensity ?? 0,
+    };
+    return material;
+  }
+
+  isBalthazanTextureDiagnosticEnabled() {
+    if (!import.meta.env.DEV || this.area !== 'balthazan') return false;
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('balthazanTextureQa') === 'checker';
+  }
+
+  getBalthazanTextureDiagnosticTexture() {
+    if (this.balthazanTextureDiagnosticTexture) return this.balthazanTextureDiagnosticTexture;
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext('2d');
+    const colors = ['#ffffff', '#111111', '#ff40d0', '#18d8ff'];
+    for (let y = 0; y < 4; y += 1) {
+      for (let x = 0; x < 4; x += 1) {
+        context.fillStyle = colors[(x + y) % colors.length];
+        context.fillRect(x * 16, y * 16, 16, 16);
+      }
+    }
+    context.fillStyle = '#ffff00';
+    context.fillRect(0, 0, size, 3);
+    context.fillRect(0, 0, 3, size);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.name = 'balthazan-dev-uv-checker';
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1, 1);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 8;
+    texture.needsUpdate = true;
+    this.balthazanTextureDiagnosticTexture = texture;
+    return texture;
+  }
+
+  applyBalthazanTextureDiagnosticMap(material, profile = {}) {
+    if (!this.isBalthazanTextureDiagnosticEnabled()) return;
+    const targets = ['floor', 'stone', 'roof', 'wood', 'grass'];
+    const path = String(profile.path ?? '').toLowerCase();
+    if (!targets.some((target) => path.includes(target))) return;
+    material.map = this.getBalthazanTextureDiagnosticTexture();
+    material.color.setHex(0xffffff);
+    material.needsUpdate = true;
+  }
+
+  logBalthazanTextureQa(runtime) {
+    if (!import.meta.env.DEV || runtime?.locationId !== 'balthazan') return;
+    const names = [
+      'V2-FLOOR-balthazan_market_court_floor',
+      'V2-FLOOR-balthazan_shrine_court_floor',
+      'V23-ceilingSlab-balthazan_shrine_overhead_slab',
+      'V23-ceilingSlab-balthazan_admin_overhead_slab',
+      'V2-BRIDGE-balthazan_canal_bridge_south',
+    ];
+    names.forEach((name) => {
+      const mesh = runtime.group.getObjectByName(name);
+      if (!mesh?.isMesh) {
+        console.info(`[Balthazan texture QA] ${name} missing`);
+        return;
+      }
+      const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      const profile = material?.userData?.definitionProfile ?? {};
+      const uv = mesh.geometry?.getAttribute('uv');
+      let uvRange = 'none';
+      if (uv?.count) {
+        let minU = Infinity; let maxU = -Infinity; let minV = Infinity; let maxV = -Infinity;
+        for (let i = 0; i < uv.count; i += 1) {
+          const u = uv.getX(i); const v = uv.getY(i);
+          minU = Math.min(minU, u); maxU = Math.max(maxU, u);
+          minV = Math.min(minV, v); maxV = Math.max(maxV, v);
+        }
+        uvRange = `[${minU.toFixed(2)}..${maxU.toFixed(2)}, ${minV.toFixed(2)}..${maxV.toFixed(2)}]`;
+      }
+      const repeat = material?.map?.repeat ? `[${material.map.repeat.x},${material.map.repeat.y}]` : 'none';
+      console.info(`[Balthazan texture QA] ${mesh.name} map=${Boolean(material?.map)} path=${profile.path ?? 'none'} polygonUvScale=${JSON.stringify(profile.polygonUvScale ?? null)} boxUvScale=${JSON.stringify(profile.boxUvScale ?? null)} repeat=${repeat} uv=${Boolean(uv)} uvRange=${uvRange}`);
     });
   }
 
@@ -2287,6 +2375,7 @@ export class DungeonScene {
       runtime.definition.fog?.far ?? 52,
     );
     this.scene.add(runtime.group);
+    this.logBalthazanTextureQa(runtime);
     this.torchFlickerController.registerFromObject(runtime.group);
     this.dungeonDebugRenderer = new DungeonDebugRenderer({ scene: this.scene, runtime });
     this.addCompiledLocationEnemies(runtime);
@@ -2623,6 +2712,7 @@ export class DungeonScene {
     texture.repeat.set(repeat[0], repeat[1]);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 8;
+    texture.needsUpdate = true;
     return texture;
   }
 

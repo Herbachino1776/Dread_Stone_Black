@@ -29,11 +29,10 @@ function makeMaterial(definition, reference, materialFactory, fallbackProfile) {
   return material;
 }
 
-function makeBoxGeometry(size, material) {
-  const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
-  const profile = material?.userData?.definitionProfile ?? {};
-  const scale = profile.boxUvScale;
-  if (!Array.isArray(scale) || scale.length < 2) return geometry;
+function applyBoxWorldUvs(geometry, size, profile = {}) {
+  const scale = Array.isArray(profile.boxUvScale) && profile.boxUvScale.length >= 2
+    ? profile.boxUvScale
+    : [0.2, 0.2];
 
   const uv = geometry.getAttribute('uv');
   const position = geometry.getAttribute('position');
@@ -60,6 +59,11 @@ function makeBoxGeometry(size, material) {
 
   uv.needsUpdate = true;
   return geometry;
+}
+
+function makeBoxGeometry(size, material) {
+  const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+  return applyBoxWorldUvs(geometry, size, material?.userData?.definitionProfile ?? {});
 }
 
 function addBox({ group, size, position, material, name, userData = {} }) {
