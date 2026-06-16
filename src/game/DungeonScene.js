@@ -475,7 +475,7 @@ export class DungeonScene {
 
   makeDefinitionMaterial(profile = {}) {
     if (profile.path) {
-      return this.makeTexturedMaterial({
+      const material = this.makeTexturedMaterial({
         path: profile.path,
         repeat: profile.repeat ?? [1, 1],
         color: profile.color ?? 0xffffff,
@@ -483,7 +483,11 @@ export class DungeonScene {
         metalness: profile.metalness ?? 0,
         emissive: profile.emissive ?? 0x000000,
         emissiveIntensity: profile.emissiveIntensity ?? 0,
+        transparent: profile.transparent,
+        opacity: profile.opacity,
       });
+      material.userData.definitionProfile = { animated: profile.animated, scrollSpeed: profile.scrollSpeed, shimmerIntensity: profile.shimmerIntensity, baseEmissiveIntensity: profile.emissiveIntensity ?? 0 };
+      return material;
     }
 
     return new THREE.MeshStandardMaterial({
@@ -677,6 +681,7 @@ export class DungeonScene {
     this.updateRawFishPickups(deltaSeconds);
     this.updateCookedFishPickups(deltaSeconds);
     this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
+    this.updateAnimatedDungeonMaterials(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
   }
 
@@ -2621,13 +2626,33 @@ export class DungeonScene {
     return texture;
   }
 
-  makeTexturedMaterial({ path, repeat, color = 0xffffff, roughness = 0.92, metalness = 0.02, emissive, emissiveIntensity } = {}) {
+  makeTexturedMaterial({ path, repeat, color = 0xffffff, roughness = 0.92, metalness = 0.02, emissive, emissiveIntensity, transparent = false, opacity = 1 } = {}) {
     return new THREE.MeshStandardMaterial({
       color,
       map: this.loadRepeatingTexture(path, repeat),
       roughness,
       metalness,
+      transparent,
+      opacity,
       ...(emissive !== undefined ? { emissive, emissiveIntensity } : {}),
+    });
+  }
+
+  updateAnimatedDungeonMaterials(deltaSeconds) {
+    if (!this.scene) return;
+    this.scene.traverse((object) => {
+      if (!object.isMesh || object.userData?.animated !== 'canalWater') return;
+      const material = object.material;
+      const texture = material?.map;
+      if (!texture) return;
+      const profile = material.userData?.definitionProfile ?? {};
+      const speed = object.userData.scrollSpeed ?? profile.scrollSpeed ?? [0.025, 0.008];
+      texture.offset.x = (texture.offset.x + deltaSeconds * (speed[0] ?? 0.025)) % 1;
+      texture.offset.y = (texture.offset.y + deltaSeconds * (speed[1] ?? 0.008)) % 1;
+      if (material.emissiveIntensity !== undefined) {
+        const shimmer = profile.shimmerIntensity ?? 0.025;
+        material.emissiveIntensity = (profile.baseEmissiveIntensity ?? 0.42) + Math.sin(performance.now() * 0.0017 + object.id) * shimmer;
+      }
     });
   }
 
