@@ -11,22 +11,59 @@ function toVector3(value, fallbackY = 0) {
 }
 
 function makeFallbackMaterial(profile = {}) {
-  return new THREE.MeshStandardMaterial({
+  const material = new THREE.MeshStandardMaterial({
     color: profile.color ?? 0xffffff,
     roughness: profile.roughness ?? 0.9,
     metalness: profile.metalness ?? 0,
     emissive: profile.emissive ?? 0x000000,
     emissiveIntensity: profile.emissiveIntensity ?? 0,
   });
+  material.userData.definitionProfile = { ...(material.userData.definitionProfile ?? {}), ...profile };
+  return material;
 }
 
 function makeMaterial(definition, reference, materialFactory, fallbackProfile) {
   const profile = resolveTextureProfile(definition, reference, fallbackProfile) ?? fallbackProfile ?? {};
-  return materialFactory ? materialFactory(profile) : makeFallbackMaterial(profile);
+  const material = materialFactory ? materialFactory(profile) : makeFallbackMaterial(profile);
+  material.userData.definitionProfile = { ...(material.userData.definitionProfile ?? {}), ...profile };
+  return material;
+}
+
+function makeBoxGeometry(size, material) {
+  const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+  const profile = material?.userData?.definitionProfile ?? {};
+  const scale = profile.boxUvScale;
+  if (!Array.isArray(scale) || scale.length < 2) return geometry;
+
+  const uv = geometry.getAttribute('uv');
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  const uScale = Number(scale[0]) || 1;
+  const vScale = Number(scale[1]) || uScale;
+
+  for (let i = 0; i < uv.count; i += 1) {
+    const nx = normal.getX(i);
+    const ny = normal.getY(i);
+    const nz = normal.getZ(i);
+    const x = position.getX(i) + size.x / 2;
+    const y = position.getY(i) + size.y / 2;
+    const z = position.getZ(i) + size.z / 2;
+
+    if (Math.abs(ny) > 0.5) {
+      uv.setXY(i, x * uScale, z * vScale);
+    } else if (Math.abs(nx) > 0.5) {
+      uv.setXY(i, z * uScale, y * vScale);
+    } else if (Math.abs(nz) > 0.5) {
+      uv.setXY(i, x * uScale, y * vScale);
+    }
+  }
+
+  uv.needsUpdate = true;
+  return geometry;
 }
 
 function addBox({ group, size, position, material, name, userData = {} }) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), material);
+  const mesh = new THREE.Mesh(makeBoxGeometry(size, material), material);
   mesh.name = name;
   mesh.position.copy(position);
   mesh.castShadow = true;
@@ -232,16 +269,19 @@ function addV2PolygonFloors({ definition, group, materialFactory }) {
     const y = floor.y ?? definition.defaultFloorY ?? 0;
     const vertices = [];
     const uvs = [];
+    const material = makeMaterial(definition, floor.material ?? floor.textureProfile, materialFactory, definition.textures?.floor);
+    const uvScale = material?.userData?.definitionProfile?.polygonUvScale ?? [0.18, 0.18];
+    const uScale = Number(uvScale?.[0]) || 0.18;
+    const vScale = Number(uvScale?.[1]) || uScale;
     points.forEach((point) => {
       vertices.push(point.x, y, point.y);
-      uvs.push(point.x * 0.18, point.y * 0.18);
+      uvs.push(point.x * uScale, point.y * vScale);
     });
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(triangles.flat());
     geometry.computeVertexNormals();
-    const material = makeMaterial(definition, floor.material ?? floor.textureProfile, materialFactory, definition.textures?.floor);
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = `V2-FLOOR-${floor.id}`;
     mesh.receiveShadow = true;
@@ -312,9 +352,12 @@ function addPolygonMesh({ group, points, y, material, name, userData = {} }) {
   const triangles = THREE.ShapeUtils.triangulateShape(points, []);
   const vertices = [];
   const uvs = [];
+  const uvScale = material?.userData?.definitionProfile?.polygonUvScale ?? [0.18, 0.18];
+  const uScale = Number(uvScale?.[0]) || 0.18;
+  const vScale = Number(uvScale?.[1]) || uScale;
   points.forEach((point) => {
     vertices.push(point.x, y, point.y);
-    uvs.push(point.x * 0.18, point.y * 0.18);
+    uvs.push(point.x * uScale, point.y * vScale);
   });
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -393,7 +436,7 @@ function addV2RampsStairsBridges({ definition, group, materialFactory }) {
     if (mesh) { mesh.rotation.z = Math.atan2((ramp.y1 ?? 0) - (ramp.y0 ?? 0), point3FromXZ(ramp.from).distanceTo(point3FromXZ(ramp.to))); meshes.push(mesh); }
   });
   asArray(definition.stairs).forEach((stairs) => {
-    const material = makeMaterial(definition, stairs.material ?? stairs.textureProfile, materialFactory, definition.textures?.wall);
+    const material = makeMaterial(definition, stairs.material ?? stairs.textureProfile, materialFactory, definition.textures?.floor);
     const count = Math.max(1, stairs.steps ?? 1);
     const from = point3FromXZ(stairs.from, stairs.y0 ?? 0); const to = point3FromXZ(stairs.to, stairs.y1 ?? 0);
     for (let i = 0; i < count; i += 1) {
