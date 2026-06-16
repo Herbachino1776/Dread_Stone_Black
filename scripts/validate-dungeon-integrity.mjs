@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
 import { validateDungeonDefinition } from '../src/engine/dungeon-authoring/DungeonValidation.js';
 import { validateDungeonIntegrity } from '../src/engine/dungeon-authoring/integrity/DungeonIntegrityValidator.js';
@@ -5,6 +8,21 @@ import { formatIntegrityIssue } from '../src/engine/dungeon-authoring/integrity/
 import { buildLightObjectRegistry } from '../src/engine/lighting/LightObjectRegistry.js';
 import { validateTorchPlacements } from '../src/engine/lighting/TorchPlacementValidator.js';
 import { listLocationDefinitions } from '../src/game/locations/locationRegistry.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, '..');
+
+function resolvePublicTexturePath(texturePath) {
+  if (typeof texturePath !== 'string') return null;
+  if (texturePath.startsWith('./assets/')) return path.join(repoRoot, 'public', texturePath.slice(2));
+  if (texturePath.startsWith('/assets/')) return path.join(repoRoot, 'public', texturePath);
+  return null;
+}
+
+function textureAssetExists(texturePath) {
+  const resolved = resolvePublicTexturePath(texturePath);
+  return resolved ? fs.existsSync(resolved) : null;
+}
 
 const definitions = listLocationDefinitions();
 const spawnIdsByLocation = new Map(definitions.map((definition) => [
@@ -31,7 +49,7 @@ let totalWarnings = 0;
 console.log('Dungeon integrity validation');
 
 targets.forEach(({ label, definition }) => {
-  const baseReport = validateDungeonDefinition(definition, { destinationSpawnIds: destinationSpawnIdsFor(definition) });
+  const baseReport = validateDungeonDefinition(definition, { destinationSpawnIds: destinationSpawnIdsFor(definition), textureAssetExists });
   const integrityReport = validateDungeonIntegrity(definition);
   const lightRegistry = buildLightObjectRegistry(definition);
   const torchReport = validateTorchPlacements(definition, lightRegistry.torchFixtures);

@@ -94,6 +94,33 @@ function addIssue(target, severity, message, id = null) {
   target.push({ severity, message, id });
 }
 
+function defaultTextureAssetExists() {
+  return null;
+}
+
+function textureAssetLabel(path) {
+  if (typeof path !== 'string') return null;
+  const publicPrefix = './assets/';
+  if (path.startsWith(publicPrefix)) return `public/assets/${path.slice(publicPrefix.length)}`;
+  if (path.startsWith('/assets/')) return `public${path}`;
+  return null;
+}
+
+function validateTextureProfiles(definition, warnings, textureAssetExists = defaultTextureAssetExists) {
+  Object.entries(definition.textures ?? {}).forEach(([profileName, profile]) => {
+    const texturePath = profile?.path;
+    if (typeof texturePath !== 'string' || !texturePath.trim()) return;
+    const exists = textureAssetExists(texturePath, profileName, definition);
+    if (exists === false) {
+      addIssue(warnings, 'warning', `[${definition.id}] texture profile "${profileName}" points to missing asset "${texturePath}"`, profileName);
+      return;
+    }
+    if (exists === null && !textureAssetLabel(texturePath)) {
+      addIssue(warnings, 'warning', `[${definition.id}] texture profile "${profileName}" uses a path that cannot be resolved for validation: "${texturePath}"`, profileName);
+    }
+  });
+}
+
 function collectIds(collections, issues) {
   const seen = new Map();
   collections.forEach(({ label, items }) => {
@@ -112,7 +139,7 @@ function collectIds(collections, issues) {
   });
 }
 
-export function validateDungeonDefinition(definition, { destinationSpawnIds = new Set() } = {}) {
+export function validateDungeonDefinition(definition, { destinationSpawnIds = new Set(), textureAssetExists = defaultTextureAssetExists } = {}) {
   const errors = [];
   const warnings = [];
   const rooms = asArray(definition.rooms);
@@ -136,6 +163,8 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   const spawnIds = new Set(spawns.map((spawn) => spawn.id));
   const blockerIds = new Set(blockers.map((blocker) => blocker.id));
   const validatesGeneratedEnemyRuntime = asArray(definition.tags).some((tag) => ['ai-authored-location', 'ddplus-export'].includes(tag));
+
+  validateTextureProfiles(definition, warnings, textureAssetExists);
 
   collectIds([
     { label: 'rooms', items: rooms },
