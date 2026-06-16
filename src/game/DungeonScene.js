@@ -554,37 +554,74 @@ export class DungeonScene {
     material.needsUpdate = true;
   }
 
+  averageMeshNormalY(mesh) {
+    const normals = mesh?.geometry?.getAttribute?.('normal');
+    if (!normals?.count) return 0;
+    let sum = 0;
+    for (let i = 0; i < normals.count; i += 1) sum += normals.getY(i);
+    return sum / normals.count;
+  }
+
+  materialSideName(side) {
+    if (side === THREE.DoubleSide) return 'DoubleSide';
+    if (side === THREE.BackSide) return 'BackSide';
+    return 'FrontSide';
+  }
+
   logBalthazanTextureQa(runtime) {
     if (!import.meta.env.DEV || runtime?.locationId !== 'balthazan') return;
     const names = [
+      'V2-FLOOR-balthazan_entry_court_floor',
       'V2-FLOOR-balthazan_market_court_floor',
       'V2-FLOOR-balthazan_shrine_court_floor',
+      'V2-FLOOR-balthazan_collapsed_court_floor',
+      'V2-PATH-balthazan_main_processional_path-0',
       'V23-ceilingSlab-balthazan_shrine_overhead_slab',
-      'V23-ceilingSlab-balthazan_admin_overhead_slab',
-      'V2-BRIDGE-balthazan_canal_bridge_south',
     ];
     names.forEach((name) => {
       const mesh = runtime.group.getObjectByName(name);
       if (!mesh?.isMesh) {
-        console.info(`[Balthazan texture QA] ${name} missing`);
+        console.info(`[Balthazan floor QA] ${name} exists=false`);
         return;
       }
       const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-      const profile = material?.userData?.definitionProfile ?? {};
       const uv = mesh.geometry?.getAttribute('uv');
-      let uvRange = 'none';
-      if (uv?.count) {
-        let minU = Infinity; let maxU = -Infinity; let minV = Infinity; let maxV = -Infinity;
-        for (let i = 0; i < uv.count; i += 1) {
-          const u = uv.getX(i); const v = uv.getY(i);
-          minU = Math.min(minU, u); maxU = Math.max(maxU, u);
-          minV = Math.min(minV, v); maxV = Math.max(maxV, v);
-        }
-        uvRange = `[${minU.toFixed(2)}..${maxU.toFixed(2)}, ${minV.toFixed(2)}..${maxV.toFixed(2)}]`;
-      }
-      const repeat = material?.map?.repeat ? `[${material.map.repeat.x},${material.map.repeat.y}]` : 'none';
-      console.info(`[Balthazan texture QA] ${mesh.name} map=${Boolean(material?.map)} path=${profile.path ?? 'none'} polygonUvScale=${JSON.stringify(profile.polygonUvScale ?? null)} boxUvScale=${JSON.stringify(profile.boxUvScale ?? null)} repeat=${repeat} uv=${Boolean(uv)} uvRange=${uvRange}`);
+      const position = mesh.getWorldPosition(new THREE.Vector3());
+      const indexCount = mesh.geometry?.index?.count ?? 0;
+      console.info(`[Balthazan floor QA] ${mesh.name} exists=true map=${Boolean(material?.map)} side=${this.materialSideName(material?.side)} avgNormalY=${this.averageMeshNormalY(mesh).toFixed(2)} uv=${Boolean(uv)} triangles=${Math.floor(indexCount / 3)} position=[${position.x.toFixed(2)},${position.y.toFixed(2)},${position.z.toFixed(2)}]`);
     });
+
+    runtime.blockerRects
+      ?.filter((rect) => rect.id?.startsWith('V2-WALL-BLOCKER-'))
+      .forEach((rect) => {
+        const footprint = rect.blockerShape === 'segment' && rect.from && rect.to
+          ? `from=[${rect.from.x.toFixed(2)},${rect.from.z.toFixed(2)}] to=[${rect.to.x.toFixed(2)},${rect.to.z.toFixed(2)}] thickness=${(rect.thickness ?? 0).toFixed(2)}`
+          : `aabb=[${rect.minX.toFixed(2)},${rect.minZ.toFixed(2)}..${rect.maxX.toFixed(2)},${rect.maxZ.toFixed(2)}]`;
+        console.info(`[Balthazan collision QA] ${rect.id} shape=${rect.blockerShape ?? 'aabb'} ${footprint}`);
+      });
+  }
+
+  updateBalthazanFloorCoverageQa(player = null) {
+    if (!import.meta.env.DEV || this.compiledLocationRuntime?.locationId !== 'balthazan' || !player?.position) return;
+    const now = performance.now();
+    if (now - (this.lastBalthazanFloorCoverageQaAt ?? 0) < 3500) return;
+    this.lastBalthazanFloorCoverageQaAt = now;
+    const position = player.position;
+    const floorMeshes = [];
+    this.compiledLocationRuntime.group.traverse((object) => {
+      if (object.isMesh && (object.name.startsWith('V2-FLOOR-') || object.name.startsWith('V2-PATH-') || object.name.startsWith('V2-PLATFORM-TOP-'))) floorMeshes.push(object);
+    });
+    const visibleFloorUnderfoot = floorMeshes.some((mesh) => {
+      mesh.geometry.computeBoundingBox();
+      const box = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
+      return position.x >= box.min.x - 0.15 && position.x <= box.max.x + 0.15 && position.z >= box.min.z - 0.15 && position.z <= box.max.z + 0.15;
+    });
+    const floorPosition = { x: position.x, y: position.y - (this.collision?.eyeHeight ?? 1.55), z: position.z };
+    const walkable = this.collision?.canStandAtFloorPosition?.(floorPosition) ?? false;
+    if (walkable && !visibleFloorUnderfoot) {
+      const sampled = this.collision?.sampleWalkableY?.(position.x, position.z, 0);
+      console.warn(`[Balthazan floor coverage QA] walkable player position has no visible floor/path/platform bounds underneath x=${position.x.toFixed(2)} z=${position.z.toFixed(2)} sampledSurface=${sampled?.surface?.id ?? sampled?.kind ?? 'none'}`);
+    }
   }
 
   getFieldPlayerSpawn() {
@@ -771,6 +808,7 @@ export class DungeonScene {
     this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
     this.updateAnimatedDungeonMaterials(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
+    this.updateBalthazanFloorCoverageQa(player);
   }
 
   updateReliquaryFieldFoliage(player = null) {

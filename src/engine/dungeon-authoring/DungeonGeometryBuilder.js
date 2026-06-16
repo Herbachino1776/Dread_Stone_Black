@@ -265,15 +265,43 @@ function segmentParts(segment, doorGaps) {
   }));
 }
 
+function horizontalPolygonArea(points) {
+  let area = 0;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+    area += points[j].x * points[i].y - points[i].x * points[j].y;
+  }
+  return area / 2;
+}
+
+function ensureHorizontalPolygonFacesUp(points, triangles) {
+  const shouldReverse = horizontalPolygonArea(points) < 0;
+  return triangles.map((triangle) => (shouldReverse ? [triangle[0], triangle[2], triangle[1]] : triangle));
+}
+
+function averageNormalY(geometry) {
+  const normals = geometry.getAttribute('normal');
+  if (!normals?.count) return 0;
+  let y = 0;
+  for (let i = 0; i < normals.count; i += 1) y += normals.getY(i);
+  return y / normals.count;
+}
+
+function guardHorizontalMaterial(material) {
+  if (!material || material.side === THREE.DoubleSide) return material;
+  material.side = THREE.DoubleSide;
+  material.needsUpdate = true;
+  return material;
+}
+
 function addV2PolygonFloors({ definition, group, materialFactory }) {
   return asArray(definition.polygonFloors).map((floor) => {
     const points = asArray(floor.points).map(point2);
     if (points.length < 3) return null;
-    const triangles = THREE.ShapeUtils.triangulateShape(points, []);
+    const triangles = ensureHorizontalPolygonFacesUp(points, THREE.ShapeUtils.triangulateShape(points, []));
     const y = floor.y ?? definition.defaultFloorY ?? 0;
     const vertices = [];
     const uvs = [];
-    const material = makeMaterial(definition, floor.material ?? floor.textureProfile, materialFactory, definition.textures?.floor);
+    const material = guardHorizontalMaterial(makeMaterial(definition, floor.material ?? floor.textureProfile, materialFactory, definition.textures?.floor));
     const uvScale = material?.userData?.definitionProfile?.polygonUvScale ?? [0.18, 0.18];
     const uScale = Number(uvScale?.[0]) || 0.18;
     const vScale = Number(uvScale?.[1]) || uScale;
@@ -286,6 +314,10 @@ function addV2PolygonFloors({ definition, group, materialFactory }) {
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(triangles.flat());
     geometry.computeVertexNormals();
+    if (averageNormalY(geometry) < 0) {
+      geometry.setIndex(triangles.map((triangle) => [triangle[0], triangle[2], triangle[1]]).flat());
+      geometry.computeVertexNormals();
+    }
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = `V2-FLOOR-${floor.id}`;
     mesh.receiveShadow = true;
@@ -353,7 +385,7 @@ function addV2WallPropAnchors({ definition, group }) {
 
 function addPolygonMesh({ group, points, y, material, name, userData = {} }) {
   if (points.length < 3) return null;
-  const triangles = THREE.ShapeUtils.triangulateShape(points, []);
+  const triangles = ensureHorizontalPolygonFacesUp(points, THREE.ShapeUtils.triangulateShape(points, []));
   const vertices = [];
   const uvs = [];
   const uvScale = material?.userData?.definitionProfile?.polygonUvScale ?? [0.18, 0.18];
@@ -368,6 +400,11 @@ function addPolygonMesh({ group, points, y, material, name, userData = {} }) {
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(triangles.flat());
   geometry.computeVertexNormals();
+  if (averageNormalY(geometry) < 0) {
+    geometry.setIndex(triangles.map((triangle) => [triangle[0], triangle[2], triangle[1]]).flat());
+    geometry.computeVertexNormals();
+  }
+  guardHorizontalMaterial(material);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = name;
   mesh.receiveShadow = true;

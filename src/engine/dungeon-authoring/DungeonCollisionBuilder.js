@@ -18,6 +18,10 @@ function blockerRect(blocker) {
     maxZ: blocker.maxZ,
     height: blocker.height,
     type: blocker.type,
+    blockerShape: blocker.blockerShape ?? 'aabb',
+    from: blocker.from,
+    to: blocker.to,
+    thickness: blocker.thickness,
     tags: blocker.tags ?? [],
     userData: blocker.userData ?? {},
   };
@@ -191,19 +195,41 @@ function segmentParts(segment, doorGaps) {
   return ranges.map(([startT, endT]) => ({ from: lerpPoint(from, to, startT), to: lerpPoint(from, to, endT) }));
 }
 
+function orientedWallBlocker(id, from, to, thickness, height, tags = ['compiled-wall']) {
+  const minX = Math.min(from.x, to.x) - thickness / 2;
+  const maxX = Math.max(from.x, to.x) + thickness / 2;
+  const minZ = Math.min(from.z, to.z) - thickness / 2;
+  const maxZ = Math.max(from.z, to.z) + thickness / 2;
+  return {
+    id, type: 'wall', minX, maxX, minZ, maxZ, height, tags,
+    blockerShape: 'segment',
+    from: { x: from.x, z: from.z },
+    to: { x: to.x, z: to.z },
+    thickness,
+    userData: { generatedBy: 'DungeonCollisionBuilder', collisionStrategy: 'oriented-segment', wallSegmentId: id.replace(/^V2-WALL-BLOCKER-/, '').replace(/-\d+$/, '') },
+  };
+}
+
 function buildV2WallBlockers(definition) {
   return asArray(definition.wallSegments).flatMap((segment) => {
     const thickness = segment.thickness ?? definition.geometry?.wallThickness ?? 0.32;
     const height = segment.height ?? definition.geometry?.wallHeight ?? 3.5;
-    return segmentParts(segment, definition.doorGaps).map((part, index) => wallBlocker(
-      `V2-WALL-BLOCKER-${segment.id}-${index}`,
-      'wall',
-      Math.min(part.from.x, part.to.x) - thickness / 2,
-      Math.max(part.from.x, part.to.x) + thickness / 2,
-      Math.min(part.from.z, part.to.z) - thickness / 2,
-      Math.max(part.from.z, part.to.z) + thickness / 2,
-      height,
-    ));
+    return segmentParts(segment, definition.doorGaps).map((part, index) => {
+      const id = `V2-WALL-BLOCKER-${segment.id}-${index}`;
+      const tags = ['compiled-wall', 'v2-wall', ...(segment.tags ?? [])];
+      const axisAligned = Math.abs(part.from.x - part.to.x) < 0.001 || Math.abs(part.from.z - part.to.z) < 0.001;
+      if (!axisAligned) return orientedWallBlocker(id, part.from, part.to, thickness, height, tags);
+      return wallBlocker(
+        id,
+        'wall',
+        Math.min(part.from.x, part.to.x) - thickness / 2,
+        Math.max(part.from.x, part.to.x) + thickness / 2,
+        Math.min(part.from.z, part.to.z) - thickness / 2,
+        Math.max(part.from.z, part.to.z) + thickness / 2,
+        height,
+        tags,
+      );
+    });
   });
 }
 

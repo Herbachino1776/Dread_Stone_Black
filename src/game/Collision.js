@@ -14,6 +14,21 @@ function circleIntersectsRect(point, radius, rect) {
   return dx * dx + dz * dz < radius * radius;
 }
 
+function circleIntersectsSegment(point, radius, rect) {
+  const from = rect.from; const to = rect.to;
+  if (!from || !to) return circleIntersectsRect(point, radius, rect);
+  const dx = to.x - from.x; const dz = to.z - from.z;
+  const lengthSq = dx * dx + dz * dz;
+  if (lengthSq <= 0.0001) return circleIntersectsRect(point, radius, rect);
+  const t = THREE.MathUtils.clamp(((point.x - from.x) * dx + (point.z - from.z) * dz) / lengthSq, 0, 1);
+  const closestX = from.x + dx * t;
+  const closestZ = from.z + dz * t;
+  const px = point.x - closestX;
+  const pz = point.z - closestZ;
+  const combinedRadius = radius + (rect.thickness ?? 0) / 2;
+  return px * px + pz * pz < combinedRadius * combinedRadius;
+}
+
 function pointInPolygon(point, footprint) {
   let inside = false;
   for (let i = 0, j = footprint.length - 1; i < footprint.length; j = i, i += 1) {
@@ -92,7 +107,9 @@ export class CollisionWorld {
 
     return !this.blockerRects.some((rect) => {
       if (rect.type === 'canal' && targetSurface.kind === 'bridgeDeck') return false;
-      return circleIntersectsRect(testPoint, this.playerRadius, rect);
+      return rect.blockerShape === 'segment'
+        ? circleIntersectsSegment(testPoint, this.playerRadius, rect)
+        : circleIntersectsRect(testPoint, this.playerRadius, rect);
     });
   }
 
