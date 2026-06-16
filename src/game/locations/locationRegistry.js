@@ -1,6 +1,7 @@
 import { blackGrassTempleDefinition } from './blackGrassTemple.definition.js';
 import { fieldKeeperHouseDefinition } from './fieldKeeperHouse.definition.js';
 import { level1Definition } from './generated/level1.definition.js';
+import { balthazanDefinition } from './generated/balthazan.definition.js';
 import { sumerianCityBlockV0Definition } from './generated/sumerianCityBlockV0.definition.js';
 import { sumerianSunPalaceDistrictV1Definition } from './generated/sumerianSunPalaceDistrictV1.definition.js';
 import { sumerianCanalMarketDistrictV2Definition } from './generated/sumerianCanalMarketDistrictV2.definition.js';
@@ -13,6 +14,7 @@ const locationDefinitions = Object.freeze({
   [blackGrassTempleDefinition.id]: blackGrassTempleDefinition,
   [fieldKeeperHouseDefinition.id]: fieldKeeperHouseDefinition,
   [level1Definition.id]: level1Definition,
+  [balthazanDefinition.id]: balthazanDefinition,
   [sumerianCityBlockV0Definition.id]: sumerianCityBlockV0Definition,
   [sumerianSunPalaceDistrictV1Definition.id]: sumerianSunPalaceDistrictV1Definition,
   [sumerianCanalMarketDistrictV2Definition.id]: sumerianCanalMarketDistrictV2Definition,

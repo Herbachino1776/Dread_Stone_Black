@@ -127,6 +127,8 @@ const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_START = new THREE.Vector3(96,
 const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_YAW = Math.PI;
 const FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_START = new THREE.Vector3(110, 1.55, 128);
 const FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_YAW = Math.PI;
+const FIELD_BALTHAZAN_RETURN_START = new THREE.Vector3(72, 1.55, 126);
+const FIELD_BALTHAZAN_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const GENERATED_ENEMY_ACTIVE_CAP = 3;
@@ -143,6 +145,7 @@ const DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET = new THREE.Vector3(154, 1, 110);
 const SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET = new THREE.Vector3(122, 1, 149);
 const SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET = new THREE.Vector3(96, 1, 149);
 const SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET = new THREE.Vector3(110, 1, 128);
+const BALTHAZAN_ENTRANCE_TARGET = new THREE.Vector3(72, 1, 126);
 const V2_CANAL_SHRINE_ENTRANCE_TARGET = new THREE.Vector3(-166, 1, 38);
 const FIELD_V2_CANAL_SHRINE_RETURN_START = new THREE.Vector3(-166, 1.55, 38);
 const FIELD_V2_CANAL_SHRINE_RETURN_YAW = -Math.PI / 2;
@@ -157,6 +160,7 @@ const FIELD_FOLIAGE_CLEAR_ZONES = Object.freeze([
   { x: SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET.x, z: SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET.z, radius: 18 },
   { x: SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET.x, z: SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET.z, radius: 18 },
   { x: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.x, z: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.z, radius: 20 },
+  { x: BALTHAZAN_ENTRANCE_TARGET.x, z: BALTHAZAN_ENTRANCE_TARGET.z, radius: 24 },
   { x: 35, z: 124, radius: 22 },
 ]);
 function getReliquaryFieldColliders() {
@@ -522,6 +526,10 @@ export class DungeonScene {
 
     if (this.fieldSpawn === 'sumerianCanalMarketDistrictV2Exit') {
       return { spawnPosition: FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_START, spawnYaw: FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_YAW };
+    }
+
+    if (this.fieldSpawn === 'balthazanExit') {
+      return { spawnPosition: FIELD_BALTHAZAN_RETURN_START, spawnYaw: FIELD_BALTHAZAN_RETURN_YAW };
     }
 
     return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
@@ -1389,6 +1397,7 @@ export class DungeonScene {
     this.addSumerianCityBlockV0TestEntrance();
     this.addSumerianSunPalaceDistrictV1TestEntrance();
     this.addSumerianCanalMarketDistrictV2Entrance();
+    this.addBalthazanEntrance();
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
     this.addLowRuinWalls();
@@ -1992,6 +2001,47 @@ export class DungeonScene {
     });
   }
 
+  addBalthazanEntrance() {
+    const blackStoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.6, 1.2], color: 0x39342f, roughness: 0.99, metalness: 0.0, emissive: 0x050404, emissiveIntensity: 0.13 });
+    const sandstoneMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/wall_sandstone_ritual_01.png', repeat: [1.45, 1.05], color: 0xb9955f, roughness: 0.98, metalness: 0.0, emissive: 0x1d1005, emissiveIntensity: 0.16 });
+    const bronzeMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/metal_bronze_ritual_01.png', repeat: [1.0, 1.1], color: 0xa66d3d, roughness: 0.84, metalness: 0.32, emissive: 0x1f0f05, emissiveIntensity: 0.18 });
+    const floorMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/floor_limestone_temple_01.png', repeat: [2.8, 2.4], color: 0xb69a63, roughness: 0.98, metalness: 0.0, emissive: 0x171006, emissiveIntensity: 0.11 });
+    const waterMat = new THREE.MeshBasicMaterial({ color: 0x07131a, transparent: true, opacity: 0.66, depthWrite: false });
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xd6a75a, transparent: true, opacity: 0.26, depthWrite: false });
+    const voidMat = new THREE.MeshBasicMaterial({ color: 0x020304 });
+    const group = new THREE.Group();
+    group.name = 'BALTHAZAN-field-canal-city-gate-entrance';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(10.5, 0.28, 8), position: new THREE.Vector3(72, 0.14, 126), material: floorMat, name: 'BALTHAZAN_BASE-sandstone-canal-threshold-floor_limestone_temple_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(7.5, 0.08, 1.2), position: new THREE.Vector3(72, 0.36, 123.35), material: waterMat, name: 'BALTHAZAN_WATER-dark-canal-threshold' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(5.8, 0.05, 0.88), position: new THREE.Vector3(72, 0.42, 123.35), material: glowMat, name: 'BALTHAZAN_WATER-subtle-gold-sheen' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.25, 5.4, 1.25), position: new THREE.Vector3(68.7, 2.7, 127.2), material: blackStoneMat, name: 'BALTHAZAN_ARCH-left-black-stone-pier' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.25, 5.4, 1.25), position: new THREE.Vector3(75.3, 2.7, 127.2), material: blackStoneMat, name: 'BALTHAZAN_ARCH-right-black-stone-pier' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(7.8, 1.05, 1.18), position: new THREE.Vector3(72, 5.15, 127.2), material: sandstoneMat, name: 'BALTHAZAN_ARCH-tall-sandstone-lintel' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.7, 3.45, 0.22), position: new THREE.Vector3(72, 1.72, 126.63), material: voidMat, name: 'BALTHAZAN_GATE-black-canal-city-mouth' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(0.58, 2.25, 0.32), position: new THREE.Vector3(66.9, 1.13, 125.15), material: bronzeMat, name: 'BALTHAZAN_STELA-left-bronze-warning' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(0.58, 2.25, 0.32), position: new THREE.Vector3(77.1, 1.13, 125.15), material: bronzeMat, name: 'BALTHAZAN_STELA-right-bronze-warning' }));
+
+    const glow = new THREE.PointLight(0xd79a58, 0.95, 15, 1.55);
+    glow.name = 'BALTHAZAN_GATE-subtle-gold-threshold-light';
+    glow.position.set(72, 2.55, 124.65);
+    group.add(glow);
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'BALTHAZAN_INT_ENTER',
+      label: 'Balthazan',
+      target: BALTHAZAN_ENTRANCE_TARGET.clone(),
+      range: 5.0,
+      hint: 'Enter Balthazan',
+      message: 'The gates of Balthazan open.',
+      functional: true,
+      area: 'balthazan',
+      type: 'areaEntrance',
+    });
+  }
+
 
   addSunkenCentralTomb() {
     const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.6, 2.0], color: 0x8d897f, roughness: 0.96, metalness: 0.0 });
@@ -2361,15 +2411,21 @@ export class DungeonScene {
       console.warn(`Skipping generated enemy spawn ${spawn.id}: no safe walkable point found.`);
       return null;
     }
+    const preferredFaction = ['sheep_demon', 'neck_man'].includes(spawn.preferredFaction)
+      ? spawn.preferredFaction
+      : ['sheep_demon', 'neck_man'].includes(spawn.faction)
+        ? spawn.faction
+        : spawn.species;
     const patrolPoints = (spawn.patrolPoints?.length ? spawn.patrolPoints : this.createFallbackPatrolPoints(safePosition))
       .map((point) => this.findSafeCompiledEnemySpawnPosition({ ...spawn, id: `${spawn.id}:patrol`, position: point }, runtime) ?? safePosition.clone());
     return {
       id: spawn.id,
-      preferredFaction: spawn.faction ?? spawn.preferredFaction ?? spawn.species,
+      preferredFaction,
       faction: spawn.faction,
       species: spawn.species,
       position: safePosition,
       yaw: spawn.yaw,
+      scale: spawn.scale,
       roomId: spawn.roomId ?? this.findCompiledRoomIdForPoint(safePosition, runtime),
       initialWave: spawn.initialWave || spawn.allowedForInitialWave || spawn.tags?.includes('initial-wave'),
       allowedForInitialWave: spawn.allowedForInitialWave,
@@ -2384,8 +2440,8 @@ export class DungeonScene {
 
   findSafeCompiledEnemySpawnPosition(spawn, runtime) {
     const position = spawn.position?.clone?.() ?? this.toVector3(spawn.position, 0);
-    position.y = 0;
-    if (this.collision?.canStandAt(position)) return position;
+    position.y = this.collision?.sampleWalkableY?.(position.x, position.z, position.y)?.y ?? position.y;
+    if (this.collision?.canStandAtFloorPosition?.(position) ?? this.collision?.canStandAt(position)) return position;
     const room = runtime.navGraph?.rooms?.[spawn.roomId] ?? this.findCompiledRoomForPoint(position, runtime);
     const candidates = [];
     if (room) {
@@ -2395,7 +2451,7 @@ export class DungeonScene {
       candidates.push(clamped, room.center?.clone?.());
     }
     candidates.push(...this.createFallbackPatrolPoints(position, 1.5));
-    return candidates.find((candidate) => candidate && this.collision?.canStandAt(candidate))?.clone() ?? null;
+    return candidates.find((candidate) => candidate && (this.collision?.canStandAtFloorPosition?.(candidate) ?? this.collision?.canStandAt(candidate)))?.clone() ?? null;
   }
 
   findCompiledRoomForPoint(point, runtime) {

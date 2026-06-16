@@ -96,6 +96,11 @@ export class CollisionWorld {
     });
   }
 
+  canStandAtFloorPosition(position) {
+    if (!position) return false;
+    return this.canStandAt(new THREE.Vector3(position.x, position.y + this.eyeHeight, position.z));
+  }
+
   moveWithCollision(position, movement) {
     const distance = movement.length();
     const steps = Math.max(1, Math.ceil(distance / MAX_COLLISION_STEP_DISTANCE));

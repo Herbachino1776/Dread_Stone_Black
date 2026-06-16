@@ -120,6 +120,58 @@ const FACTION_STATE_MACHINE = Object.freeze([
   'dead',
 ]);
 
+const CREATURE_CONFIGS_BY_SPECIES = Object.freeze({
+  sheep_demon: sheepDemonConfig,
+  neck_man: neckManConfig,
+});
+
+const SCALE_SENSITIVE_TEMPLATE_KEYS = Object.freeze([
+  'targetHeight',
+  'maxWidth',
+  'playerAttackRange',
+  'attackRange',
+  'visualContactRange',
+  'attackCommitRange',
+  'attackImpactRange',
+  'attackLungeDistance',
+  'minimumBodySeparation',
+  'desiredCombatDistance',
+  'tooCloseDistance',
+  'combatEngageDistance',
+]);
+
+function finitePositiveNumber(value, fallback = null) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function resolveSpawnScaleMultiplier(spawnAnchor = {}) {
+  return finitePositiveNumber(spawnAnchor.scale)
+    ?? finitePositiveNumber(spawnAnchor.userData?.scaleMultiplier)
+    ?? 1;
+}
+
+function createScaledFactionTemplate(template, scaleMultiplier) {
+  if (scaleMultiplier === 1) return template;
+  const scaled = { ...template, spawnScaleMultiplier: scaleMultiplier };
+  SCALE_SENSITIVE_TEMPLATE_KEYS.forEach((key) => {
+    if (Number.isFinite(template[key])) scaled[key] = template[key] * scaleMultiplier;
+  });
+  return Object.freeze(scaled);
+}
+
+function createScaledCreatureConfig(species, scaleMultiplier) {
+  const baseConfig = CREATURE_CONFIGS_BY_SPECIES[species];
+  if (!baseConfig || scaleMultiplier === 1) return null;
+  return {
+    ...baseConfig,
+    scale: Object.freeze({
+      ...baseConfig.scale,
+      scaleMultiplier: (baseConfig.scale?.scaleMultiplier ?? 1) * scaleMultiplier,
+    }),
+  };
+}
+
 const RETARGET_INTERVAL_SECONDS = 0.38;
 const TARGET_LOCK_SECONDS = 1.25;
 const WAYPOINT_LOCK_SECONDS = 0.72;
@@ -400,7 +452,9 @@ class BlackGrassFactionEnemy {
     this.collision = collision;
     this.navigationGraph = navigationGraph;
     this.species = species;
-    this.template = FACTIONS[species];
+    this.spawnScaleMultiplier = resolveSpawnScaleMultiplier(spawnAnchor);
+    this.template = createScaledFactionTemplate(FACTIONS[species], this.spawnScaleMultiplier);
+    this.creatureConfigOverride = createScaledCreatureConfig(species, this.spawnScaleMultiplier);
     this.id = id;
     this.spawnAnchor = spawnAnchor;
     this.actor = null;
@@ -481,6 +535,7 @@ class BlackGrassFactionEnemy {
       position: this.spawnAnchor.position,
       yaw: this.spawnAnchor.yaw ?? 0,
       name: this.id,
+      config: this.creatureConfigOverride,
     });
 
     return this.actor.load({ initialStates: [idleState], lazyStates: [...priorityRemaining, ...optionalRemaining] })
@@ -503,6 +558,7 @@ class BlackGrassFactionEnemy {
           assetUrls: this.template.assets,
           expectedAnimationStates: Object.keys(this.template.assets),
           health: this.health,
+          spawnScaleMultiplier: this.spawnScaleMultiplier,
         };
 
         this.setBehaviorState('spawn', { force: true });
@@ -1519,13 +1575,18 @@ class BlackGrassFactionEnemy {
   }
 
   isWaypointWalkable(point, clearanceRadius = NAV_CLEARANCE_RADIUS) {
-    if (!point || !this.collision?.canStandAt(point)) return false;
+    if (!this.canStandAtFloorPosition(point)) return false;
     const offsets = [
       [clearanceRadius, 0], [-clearanceRadius, 0], [0, clearanceRadius], [0, -clearanceRadius],
       [clearanceRadius * 0.7, clearanceRadius * 0.7], [-clearanceRadius * 0.7, clearanceRadius * 0.7],
       [clearanceRadius * 0.7, -clearanceRadius * 0.7], [-clearanceRadius * 0.7, -clearanceRadius * 0.7],
     ];
-    return offsets.every(([x, z]) => this.collision.canStandAt(new THREE.Vector3(point.x + x, point.y, point.z + z)));
+    return offsets.every(([x, z]) => this.canStandAtFloorPosition(new THREE.Vector3(point.x + x, point.y, point.z + z)));
+  }
+
+  canStandAtFloorPosition(point) {
+    if (!point) return false;
+    return this.collision?.canStandAtFloorPosition?.(point) ?? this.collision?.canStandAt(point) ?? false;
   }
 
   triggerUnstuck() {
@@ -1565,7 +1626,7 @@ class BlackGrassFactionEnemy {
     const movementDirection = this.getAdjustedMovementDirection(direction, stepDistance, desiredTarget);
     const next = this.group.position.clone().add(movementDirection.clone().multiplyScalar(stepDistance));
     next.y = this.spawnAnchor.position.y;
-    if (this.collision.canStandAt(next)) {
+    if (this.canStandAtFloorPosition(next)) {
       this.group.position.copy(next);
       this.setBehaviorState(movingState);
     } else {
@@ -1573,7 +1634,7 @@ class BlackGrassFactionEnemy {
       if (probeDirection) {
         const probeNext = this.group.position.clone().add(probeDirection.clone().multiplyScalar(stepDistance));
         probeNext.y = this.spawnAnchor.position.y;
-        if (this.collision.canStandAt(probeNext)) {
+        if (this.canStandAtFloorPosition(probeNext)) {
           this.group.position.copy(probeNext);
           this.steeringProbeDirection.copy(probeDirection);
           this.steeringProbeTimer = STEERING_PROBE_SECONDS;
@@ -1585,10 +1646,10 @@ class BlackGrassFactionEnemy {
         slideX.x = next.x;
         const slideZ = this.group.position.clone();
         slideZ.z = next.z;
-        if (this.collision.canStandAt(slideX)) {
+        if (this.canStandAtFloorPosition(slideX)) {
           this.group.position.copy(slideX);
           this.setBehaviorState(movingState);
-        } else if (this.collision.canStandAt(slideZ)) {
+        } else if (this.canStandAtFloorPosition(slideZ)) {
           this.group.position.copy(slideZ);
           this.setBehaviorState(movingState);
         } else {
@@ -1889,7 +1950,7 @@ export class BlackGrassTempleFactionManager {
   getEncounterPoint(zone, species) {
     const offset = species === 'sheep_demon' ? zone.sheepOffset : zone.neckOffset;
     const point = zone.center.clone().add(offset);
-    return this.collision?.canStandAt(point) ? point : zone.center.clone();
+    return (this.collision?.canStandAtFloorPosition?.(point) ?? this.collision?.canStandAt(point)) ? point : zone.center.clone();
   }
 
   updateBattleDirector(deltaSeconds, playerPosition) {
@@ -1989,7 +2050,7 @@ export class BlackGrassTempleFactionManager {
     for (let i = 1; i <= steps; i += 1) {
       const probe = start.clone().add(direction.clone().multiplyScalar((distance * i) / steps));
       probe.y = 0;
-      if (!this.collision?.canStandAt(probe)) return false;
+      if (!(this.collision?.canStandAtFloorPosition?.(probe) ?? this.collision?.canStandAt(probe))) return false;
     }
     return true;
   }
