@@ -311,6 +311,7 @@ function walkableSurfacePoint(value) {
 }
 
 const STAIR_PRIMITIVE_KINDS = new Set(['straightStair', 'wideSacredStair', 'narrowCryptStair', 'brokenStair', 'sunkenSteps', 'daisStair', 'splitStair', 'bridgeStair', 'cornerStair', 'processionalStair']);
+const DOORWAY_PRIMITIVE_KINDS = new Set(['thickStoneDoorway', 'openArchPortal', 'bronzeSealedGate', 'lockedRitualGate', 'brokenGateFrame', 'doubleTempleDoor', 'returnPortalFrame', 'sunDiskThreshold', 'narrowCryptPortal', 'grandProcessionalGate']);
 
 function stairPrimitiveEndpoints(primitive) {
   const pos = toVector3(primitive.position);
@@ -410,12 +411,23 @@ function primitivePostBlockers(primitive) {
   });
 }
 
+
+function doorwayBlockers(primitive) {
+  const pos = toVector3(primitive.position); const yaw = primitive.yaw ?? primitive.rotation ?? 0; const width = primitive.width ?? (primitive.kind === 'narrowCryptPortal' ? 1.25 : primitive.kind === 'grandProcessionalGate' ? 5.5 : 2.8); const height = primitive.height ?? 3.4; const depth = primitive.depth ?? primitive.thickness ?? 0.45; const postWidth = Math.min(width * 0.22, Math.max(0.22, primitive.frameWidth ?? primitive.thickness ?? 0.45));
+  const blockers = [-1, 1].map((side) => { const localX = side * (width / 2 - postWidth / 2); const x = pos.x + Math.cos(yaw) * localX; const z = pos.z - Math.sin(yaw) * localX; return rotatedRectBlocker(`V24-PRIMITIVE-BLOCKER-${primitive.id}-post-${side}`, { x, z }, postWidth, depth, height, yaw, ['v2.4-primitive', primitive.kind, 'doorway-frame']); });
+  const state = primitive.state ?? (primitive.open === true || primitive.passable === true ? 'open' : undefined) ?? (primitive.blocked ? 'blocked' : 'closed');
+  const blocksOpening = primitive.blocksOpening === true || primitive.blocker === true || primitive.passable === false || ['closed', 'locked', 'blocked', 'sealed'].includes(state);
+  if (blocksOpening) blockers.push(rotatedRectBlocker(`V24-PRIMITIVE-BLOCKER-${primitive.id}-door`, primitive.position, Math.max(0.2, width - postWidth * 2.15), Math.min(depth * 0.45, 0.28), height, yaw, ['v2.4-primitive', primitive.kind, 'doorway-door', state]));
+  return blockers;
+}
+
 function buildV23PrimitiveBlockers(definition) {
   const blockers = [];
   asArray(definition.architecturalPrimitives).forEach((primitive) => {
     const blocks = primitive.blocksPlayer;
     if (['railing', 'wallPanel', 'canalWater', 'curb'].includes(primitive.kind) && blocks !== true) return;
     if (primitive.blocksPlayer === false) return;
+    if (DOORWAY_PRIMITIVE_KINDS.has(primitive.kind)) { blockers.push(...doorwayBlockers(primitive)); return; }
     if (['arch', 'doorFrame'].includes(primitive.kind)) { blockers.push(...primitivePostBlockers(primitive)); return; }
     if (STAIR_PRIMITIVE_KINDS.has(primitive.kind)) {
       if (primitive.railings) {

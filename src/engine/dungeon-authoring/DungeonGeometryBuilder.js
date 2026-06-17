@@ -616,6 +616,7 @@ function addV2RampsStairsBridges({ definition, group, materialFactory }) {
 
 
 const STAIR_PRIMITIVE_KINDS = new Set(['straightStair', 'wideSacredStair', 'narrowCryptStair', 'brokenStair', 'sunkenSteps', 'daisStair', 'splitStair', 'bridgeStair', 'cornerStair', 'processionalStair']);
+const DOORWAY_PRIMITIVE_KINDS = new Set(['thickStoneDoorway', 'openArchPortal', 'bronzeSealedGate', 'lockedRitualGate', 'brokenGateFrame', 'doubleTempleDoor', 'returnPortalFrame', 'sunDiskThreshold', 'narrowCryptPortal', 'grandProcessionalGate']);
 
 function stairMaterial(definition, primitive, slot, materialFactory, fallback) {
   return makeMaterial(definition, primitive[slot] ?? primitive.material ?? primitive.textureProfile, materialFactory, fallback);
@@ -677,6 +678,46 @@ function addStairPrimitive({ definition, group, materialFactory, primitive, addP
   }
 }
 
+
+function doorwayMaterial(definition, primitive, slot, materialFactory, fallback) {
+  return makeMaterial(definition, primitive[slot] ?? primitive.material ?? primitive.textureProfile, materialFactory, fallback);
+}
+
+function addDoorwayPrimitive({ definition, group, materialFactory, primitive, addPart }) {
+  const pos = toVector3(primitive.position);
+  const yaw = primitive.yaw ?? primitive.rotation ?? 0;
+  const width = primitive.width ?? (primitive.kind === 'narrowCryptPortal' ? 1.25 : primitive.kind === 'grandProcessionalGate' ? 5.5 : 2.8);
+  const height = primitive.height ?? (primitive.kind === 'grandProcessionalGate' ? 5.4 : 3.4);
+  const thickness = primitive.thickness ?? primitive.depth ?? 0.45;
+  const depth = primitive.depth ?? thickness;
+  const postWidth = Math.min(width * 0.22, Math.max(0.22, primitive.frameWidth ?? thickness));
+  const lintelHeight = Math.min(height * 0.22, Math.max(0.22, primitive.lintelHeight ?? thickness));
+  const state = primitive.state ?? (primitive.open === true || primitive.passable === true ? 'open' : undefined) ?? (primitive.blocked ? 'blocked' : 'closed');
+  const frameMat = doorwayMaterial(definition, primitive, 'frameMaterial', materialFactory, definition.textures?.wall);
+  const doorMat = doorwayMaterial(definition, primitive, 'doorMaterial', materialFactory, definition.textures?.wall);
+  const trimMat = doorwayMaterial(definition, primitive, 'trimMaterial', materialFactory, definition.textures?.wall);
+  const emblemMat = doorwayMaterial(definition, primitive, 'emblemMaterial', materialFactory, definition.textures?.wall);
+  const base = { locationId: definition.id, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:doorway-primitives', interaction: primitive.interaction, state, debugFootprint: { width, height, depth, thickness, state } };
+  const addLocalBox = (suffix, size, local, material, data = {}) => {
+    const offset = new THREE.Vector3(local.x, local.y, local.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    const mesh = addBox({ group, size, position: pos.clone().add(offset), material, name: `V24-${primitive.kind}-${suffix}-${primitive.id}`, userData: { ...base, ...data } });
+    mesh.rotation.y = yaw; addPart(mesh); return mesh;
+  };
+  [-1, 1].forEach((side) => addLocalBox(`POST-${side}`, new THREE.Vector3(postWidth, height, depth), { x: side * (width / 2 - postWidth / 2), y: height / 2, z: 0 }, frameMat, { doorwayPart: 'post' }));
+  if (primitive.kind !== 'brokenGateFrame') addLocalBox('LINTEL', new THREE.Vector3(width, lintelHeight, depth), { x: 0, y: height - lintelHeight / 2, z: 0 }, frameMat, { doorwayPart: 'lintel' });
+  if (['openArchPortal', 'returnPortalFrame', 'grandProcessionalGate', 'narrowCryptPortal'].includes(primitive.kind)) addLocalBox('ARCH-CAP', new THREE.Vector3(width * 0.72, lintelHeight * 0.72, depth * 1.06), { x: 0, y: height + lintelHeight * 0.16, z: 0 }, frameMat, { doorwayPart: 'archCap' });
+  if (['bronzeSealedGate', 'lockedRitualGate', 'doubleTempleDoor'].includes(primitive.kind) || ['closed', 'locked', 'blocked'].includes(state)) {
+    const slabW = Math.max(0.2, width - postWidth * 2.15);
+    if (primitive.kind === 'doubleTempleDoor') {
+      [-1, 1].forEach((side) => addLocalBox(`DOOR-${side}`, new THREE.Vector3(slabW / 2 - 0.03, height - lintelHeight * 1.15, Math.min(depth * 0.38, 0.22)), { x: side * slabW / 4, y: (height - lintelHeight) / 2, z: -depth * 0.04 }, doorMat, { doorwayPart: 'door', collisionBlockingPart: true }));
+    } else addLocalBox('DOOR', new THREE.Vector3(slabW, height - lintelHeight * 1.15, Math.min(depth * 0.42, 0.24)), { x: 0, y: (height - lintelHeight) / 2, z: -depth * 0.04 }, doorMat, { doorwayPart: 'door', collisionBlockingPart: true });
+  }
+  if (primitive.kind !== 'thickStoneDoorway') {
+    addLocalBox('THRESHOLD', new THREE.Vector3(width, 0.14, depth * 1.18), { x: 0, y: 0.07, z: 0 }, trimMat, { doorwayPart: 'threshold' });
+    addLocalBox('EMBLEM', new THREE.Vector3(Math.min(width * 0.35, 1.25), Math.min(height * 0.16, 0.55), 0.08), { x: 0, y: height * 0.62, z: -depth / 2 - 0.045 }, emblemMat, { doorwayPart: 'emblem' });
+  }
+}
+
 function primitiveMaterial(definition, primitive, materialFactory, fallback = definition.textures?.wall) {
   return makeMaterial(definition, primitive.material ?? primitive.textureProfile, materialFactory, fallback);
 }
@@ -716,6 +757,8 @@ function addV23ArchitecturalPrimitives({ definition, group, materialFactory }) {
     const base = { locationId: definition.id, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:v2.3' };
     if (STAIR_PRIMITIVE_KINDS.has(primitive.kind)) {
       addStairPrimitive({ definition, group, materialFactory, primitive, addPart });
+    } else if (DOORWAY_PRIMITIVE_KINDS.has(primitive.kind)) {
+      addDoorwayPrimitive({ definition, group, materialFactory, primitive, addPart });
     } else if (primitive.kind === 'pillar' || primitive.kind === 'brokenPillar') {
       addPart(addCylinderPrimitive({ group, primitive, material, name: `V23-${primitive.kind}-${primitive.id}`, height: primitive.height ?? 2, radius: primitive.radius ?? 0.3, sides: primitive.sides ?? 8 }));
     } else if (primitive.kind === 'arch' || primitive.kind === 'doorFrame') {

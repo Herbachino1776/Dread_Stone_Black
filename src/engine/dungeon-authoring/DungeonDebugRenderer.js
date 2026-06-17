@@ -211,8 +211,8 @@ export class DungeonDebugRenderer {
         footprint.userData = { primitiveId: primitive.id, primitiveKind: primitive.kind, label: `${primitive.id} footprint` };
         this.layers.v2.add(footprint);
       }
-      if (['arch', 'doorFrame'].includes(primitive.kind)) {
-        const yaw = primitive.yaw ?? 0; const width = primitive.width ?? 2; const p = xz(primitive.position, 0.5); const dx = Math.cos(yaw) * width / 2; const dz = -Math.sin(yaw) * width / 2;
+      if (['arch', 'doorFrame', 'thickStoneDoorway', 'openArchPortal', 'bronzeSealedGate', 'lockedRitualGate', 'brokenGateFrame', 'doubleTempleDoor', 'returnPortalFrame', 'sunDiskThreshold', 'narrowCryptPortal', 'grandProcessionalGate'].includes(primitive.kind)) {
+        const yaw = primitive.yaw ?? primitive.rotation ?? 0; const width = primitive.width ?? 2; const p = xz(primitive.position, 0.5); const dx = Math.cos(yaw) * width / 2; const dz = -Math.sin(yaw) * width / 2;
         this.layers.v2.add(lineBetween({ x: p.x - dx, z: p.z - dz }, { x: p.x + dx, z: p.z + dz }, 0x3fe07e));
       }
       if (primitive.kind === 'wallPanel') {
