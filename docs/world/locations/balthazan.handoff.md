@@ -164,7 +164,7 @@ Lighting hierarchy:
 17. Black Grass Temple still loads.
 18. Sumerian City Block v0 still loads.
 19. Sumerian Sun Palace District v1 still loads.
-20. V2 Canal Shrine still loads.
+20. Kerovac still loads, including the permanent Geometry Expo Center in the Civic Reliquary Court.
 
 ## Known limitations
 

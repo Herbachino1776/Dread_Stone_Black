@@ -59,4 +59,4 @@ Architecture is the focus. The district only defines four conservative spawn anc
 - Confirm blocking walls, pillars, altar, and canal blockers prevent unintended traversal.
 - Toggle debug overlay and inspect polygon floors, wall segments, door gaps, path ribbons, platforms, ramps, stairs, bridges, primitives, blockers, and spawn anchors.
 - Use `Return to Reliquary Field` and confirm return at `x: 110`, `y: 1.55`, `z: 128`.
-- Regression check Black Grass Temple, V2 Canal Shrine, Sumerian City Block v0, Sumerian Sun Palace District v1, HUD/inventory, mobile controls, fishing/cooking/hunger, and performance.
+- Regression check Black Grass Temple, Kerovac, Sumerian City Block v0, Sumerian Sun Palace District v1, HUD/inventory, mobile controls, fishing/cooking/hunger, and performance.
