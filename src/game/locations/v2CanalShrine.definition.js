@@ -13,7 +13,7 @@ export const v2CanalShrineDefinition = Object.freeze({
   displayName: 'V2 Canal Shrine',
   type: 'shrine',
   tags: ['interior', 'compiled-runtime', 'v2.1-authoring-test', 'v2.3-architectural-primitives'],
-  notes: 'Proof location for DARB v2.3 architectural primitives layered over v2.1 walkable paths, platforms, ramps, stairs, bridges, and debug overlay metadata.',
+  notes: 'Proof location for DARB v2.3 architectural primitives layered over v2.1 walkable paths, platforms, ramps, stairs, bridges, and debug overlay metadata. Includes a compact bright proving strip for all ten reusable DARB staircase primitives.',
   fog: { color: 0x17110c, near: 10, far: 52 },
   lighting: { background: 0x0d0a08 },
   textures,
@@ -42,6 +42,18 @@ export const v2CanalShrineDefinition = Object.freeze({
   ],
   doorGaps: [{ id: 'canal_shrine_entry_gap', wallSegmentId: 'canal_shrine_wall_south', centerT: 0.48, width: 2.8 }],
   architecturalPrimitives: [
+
+    // Compact DARB staircase primitive proving strip: all ten reusable staircase kinds are authored as location data.
+    { id: 'proving_straightStair', kind: 'straightStair', position: [-10, 0, -6], yaw: 0, width: 2.0, height: 1.0, length: 3.0, stepCount: 5, treadMaterial: 'temple', riserMaterial: 'wall', sideMaterial: 'wall', trimMaterial: 'temple', railingMaterial: 'wood', railings: false, missingSteps: [], roomId: 'v2_canal_shrine_courtyard', tags: ['darb-stair-proving'] },
+    { id: 'proving_wideSacredStair', kind: 'wideSacredStair', position: [-5, 0, -6], yaw: 0, width: 3.2, height: 1.2, length: 3.0, stepCount: 6, treadMaterial: 'temple', riserMaterial: 'wall', sideMaterial: 'wall', trimMaterial: 'temple', railingMaterial: 'wood', railings: true, missingSteps: [], roomId: 'v2_canal_shrine_courtyard', tags: ['darb-stair-proving'] },
+    { id: 'proving_narrowCryptStair', kind: 'narrowCryptStair', position: [0, 0, -6], yaw: 0, width: 1.2, height: 1.0, length: 3.2, stepCount: 7, treadMaterial: 'temple', riserMaterial: 'wall', sideMaterial: 'wall', trimMaterial: 'temple', railingMaterial: 'wood', railings: false, missingSteps: [], roomId: 'v2_canal_shrine_courtyard', tags: ['darb-stair-proving'] },
+    { id: 'proving_brokenStair', kind: 'brokenStair', position: [5, 0, -6], yaw: 0, width: 2.0, height: 1.1, length: 3.0, stepCount: 6, treadMaterial: 'temple', riserMaterial: 'wall', sideMaterial: 'wall', trimMaterial: 'temple', railingMaterial: 'wood', railings: false, missingSteps: [1, 4], roomId: 'v2_canal_shrine_courtyard', tags: ['darb-stair-proving'] },
+    { id: 'proving_sunkenSteps', kind: 'sunkenSteps', position: [10, 0, -6], yaw: 0, width: 2.0, height: 0.8, length: 2.8, stepCount: 5, treadMaterial: 'temple', riserMaterial: 'wall', sideMaterial: 'wall', trimMaterial: 'temple', railingMaterial: 'wood', railings: false, missingSteps: [], roomId: 'v2_canal_shrine_courtyard', tags: ['darb-stair-proving'] },
+    { id: 'proving_daisStair', kind: 'daisStair', position: [-10, 0.2, -1], yaw: 0, width: 2.5, height: 1.0, length: 2.6, stepCount: 5, treadMaterial: 'temple', riserMaterial: 'wall', sideMaterial: 'wall', trimMaterial: 'temple', railingMaterial: 'wood', railings: true, missingSteps: [], roomId: 'v2_canal_shrine_courtyard', tags: ['darb-stair-proving'] },
+    { id: 'proving_splitStair', kind: 'splitStair', position: [-5, 0, -1], yaw: 0, width: 3.2, height: 1.2, length: 3.2, stepCount: 6, treadMaterial: 'temple', riserMaterial: 'wall', sideMaterial: 'wall', trimMaterial: 'temple', railingMaterial: 'wood', railings: false, missingSteps: [], roomId: 'v2_canal_shrine_courtyard', tags: ['darb-stair-proving'] },
+    { id: 'proving_bridgeStair', kind: 'bridgeStair', position: [0, 0.35, -1], yaw: 0, width: 2.0, height: 1.0, length: 3.3, stepCount: 6, treadMaterial: 'temple', riserMaterial: 'wall', sideMaterial: 'wall', trimMaterial: 'temple', railingMaterial: 'wood', railings: true, missingSteps: [], roomId: 'v2_canal_shrine_courtyard', tags: ['darb-stair-proving'] },
+    { id: 'proving_cornerStair', kind: 'cornerStair', position: [5, 0, -1], yaw: 0, width: 2.0, height: 1.0, length: 2.6, stepCount: 5, treadMaterial: 'temple', riserMaterial: 'wall', sideMaterial: 'wall', trimMaterial: 'temple', railingMaterial: 'wood', railings: false, missingSteps: [], roomId: 'v2_canal_shrine_courtyard', tags: ['darb-stair-proving'] },
+    { id: 'proving_processionalStair', kind: 'processionalStair', position: [10, 0, -1], yaw: 0, width: 4.0, height: 1.4, length: 3.4, stepCount: 7, treadMaterial: 'temple', riserMaterial: 'wall', sideMaterial: 'wall', trimMaterial: 'temple', railingMaterial: 'wood', railings: true, missingSteps: [], roomId: 'v2_canal_shrine_courtyard', tags: ['darb-stair-proving'] },
     { id: 'canal_shrine_entry_arch', kind: 'arch', position: [0, 0, -8.8], yaw: 0, width: 3.2, height: 4.0, thickness: 0.45, depth: 0.55, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
     { id: 'canal_shrine_plinth_pillar_01', kind: 'pillar', position: [-3.5, 1.1, 3.1], radius: 0.32, height: 2.7, sides: 8, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },
     { id: 'canal_shrine_plinth_pillar_02', kind: 'pillar', position: [4.2, 1.1, 3.0], radius: 0.32, height: 2.7, sides: 8, material: 'wall', roomId: 'v2_canal_shrine_courtyard' },

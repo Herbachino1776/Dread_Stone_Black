@@ -288,6 +288,11 @@ function buildV21WalkableRects(definition) {
   asArray(definition.ramps).forEach((ramp) => rects.push(rectForSegment(`V2-RAMP-WALKABLE-${ramp.id}`, ramp.from, ramp.to, ramp.width ?? 1, ['v2-ramp'])));
   asArray(definition.stairs).forEach((stairs) => rects.push(rectForSegment(`V2-STAIR-WALKABLE-${stairs.id}`, stairs.from, stairs.to, stairs.width ?? 1, ['v2-stairs'])));
   asArray(definition.bridges).forEach((bridge) => rects.push(rectForSegment(`V2-BRIDGE-WALKABLE-${bridge.id}`, bridge.from, bridge.to, bridge.width ?? 1, ['v2-bridge'])));
+  asArray(definition.architecturalPrimitives).forEach((primitive) => {
+    if (!STAIR_PRIMITIVE_KINDS.has(primitive.kind) || primitive.walkable === false) return;
+    const endpoints = stairPrimitiveEndpoints(primitive);
+    rects.push(rectForSegment(`V23-STAIR-WALKABLE-${primitive.id}`, endpoints.from, endpoints.to, primitive.width ?? 2.4, ['v2.3-primitive', 'stair-primitive', primitive.kind, ...(primitive.tags ?? [])]));
+  });
   asArray(definition.horizontalSurfaces).forEach((surface) => {
     if (surface.walkable === false || ['ceiling', 'roof'].includes(surface.kind)) return;
     if (surface.shape === 'polygon') {
@@ -303,6 +308,17 @@ function buildV21WalkableRects(definition) {
 
 function walkableSurfacePoint(value) {
   return [Number(value?.x ?? value?.[0] ?? 0), Number(value?.z ?? value?.[1] ?? 0)];
+}
+
+const STAIR_PRIMITIVE_KINDS = new Set(['straightStair', 'wideSacredStair', 'narrowCryptStair', 'brokenStair', 'sunkenSteps', 'daisStair', 'splitStair', 'bridgeStair', 'cornerStair', 'processionalStair']);
+
+function stairPrimitiveEndpoints(primitive) {
+  const pos = toVector3(primitive.position);
+  const yaw = primitive.yaw ?? primitive.rotation ?? 0;
+  const length = primitive.length ?? primitive.depth ?? 4;
+  const dx = Math.sin(yaw) * length / 2;
+  const dz = Math.cos(yaw) * length / 2;
+  return { from: [pos.x - dx, pos.z - dz], to: [pos.x + dx, pos.z + dz] };
 }
 
 function buildWalkableSurfaces(definition) {
@@ -342,6 +358,19 @@ function buildWalkableSurfaces(definition) {
     id: bridge.walkableId ?? `${bridge.id}_walkable`, kind: 'bridgeDeck', from: walkableSurfacePoint(bridge.from), to: walkableSurfacePoint(bridge.to),
     width: bridge.width ?? 1, y: bridge.y ?? defaultY, priority: bridge.priority ?? 25, tags: ['v2-bridge', ...(bridge.tags ?? [])],
   }));
+  asArray(definition.architecturalPrimitives).forEach((primitive) => {
+    if (!STAIR_PRIMITIVE_KINDS.has(primitive.kind) || primitive.walkable === false) return;
+    const endpoints = stairPrimitiveEndpoints(primitive);
+    const y0 = primitive.y0 ?? primitive.position?.y ?? primitive.position?.[1] ?? 0;
+    const h = primitive.height ?? 1.2;
+    surfaces.push({
+      id: primitive.walkableId ?? `${primitive.id}_walkable`, kind: 'stairRamp', from: endpoints.from, to: endpoints.to,
+      width: primitive.width ?? 2.4, y0: primitive.kind === 'sunkenSteps' ? y0 : y0, y1: primitive.kind === 'sunkenSteps' ? y0 - h : y0 + h,
+      steps: primitive.stepCount ?? primitive.steps ?? 6, priority: primitive.priority ?? 38,
+      tags: ['v2.3-primitive', 'stair-primitive', primitive.kind, ...(primitive.tags ?? [])],
+      userData: { primitiveId: primitive.id, missingSteps: primitive.missingSteps ?? primitive.brokenSteps ?? [] },
+    });
+  });
   asArray(definition.horizontalSurfaces).forEach((surface) => {
     if (surface.walkable === false || ['ceiling', 'roof'].includes(surface.kind)) return;
     let footprint = [];
@@ -388,6 +417,21 @@ function buildV23PrimitiveBlockers(definition) {
     if (['railing', 'wallPanel', 'canalWater', 'curb'].includes(primitive.kind) && blocks !== true) return;
     if (primitive.blocksPlayer === false) return;
     if (['arch', 'doorFrame'].includes(primitive.kind)) { blockers.push(...primitivePostBlockers(primitive)); return; }
+    if (STAIR_PRIMITIVE_KINDS.has(primitive.kind)) {
+      if (primitive.railings) {
+        const endpoints = stairPrimitiveEndpoints(primitive);
+        const width = primitive.width ?? 2.4;
+        const yaw = primitive.yaw ?? primitive.rotation ?? 0;
+        const nx = Math.cos(yaw); const nz = -Math.sin(yaw);
+        [-1, 1].forEach((side) => {
+          const off = side * (width / 2 + 0.24);
+          const from = { x: endpoints.from[0] + nx * off, z: endpoints.from[1] + nz * off };
+          const to = { x: endpoints.to[0] + nx * off, z: endpoints.to[1] + nz * off };
+          const b = rectForSegment(`V23-PRIMITIVE-BLOCKER-${primitive.id}-railing-${side}`, from, to, 0.18, ['v2.3-primitive', primitive.kind, 'stair-railing']); b.height = (primitive.height ?? 1.2) + 1; blockers.push(b);
+        });
+      }
+      return;
+    }
     if (['pillar', 'brokenPillar'].includes(primitive.kind)) {
       const radius = primitive.radius ?? 0.3; blockers.push(rotatedRectBlocker(`V23-PRIMITIVE-BLOCKER-${primitive.id}`, primitive.position, radius * 2, radius * 2, primitive.height ?? 2, primitive.yaw ?? 0, ['v2.3-primitive', primitive.kind])); return;
     }
