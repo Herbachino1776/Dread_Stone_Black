@@ -375,13 +375,13 @@ Debug overlays should be quiet by default and useful when enabled.
 
 ## First Proof Location
 
-Create a small dedicated test location after the primitive expansion begins.
+Use the permanent Geometry Expo Center inside Kerovac after the primitive expansion begins.
 
 Suggested name:
 
-# DARB Geometry Proving Hall
+# Kerovac Geometry Expo Center
 
-Purpose: test playable geometry primitives in one controlled, bright interior.
+Purpose: test playable geometry primitives in Kerovac's early Civic Reliquary Court as an intentional architectural exhibit, not a separate debug map.
 
 Required contents:
 
@@ -411,7 +411,7 @@ The milestone is successful when:
 - ceilings render as real overhead geometry
 - debug overlays identify primitive geometry and blockers clearly
 - validation catches common mistakes
-- DARB Geometry Proving Hall is enterable and returnable from Reliquary Field
+- Kerovac is enterable and returnable from Reliquary Field, and the Geometry Expo Center remains clear of the main route
 - existing locations still build and validate
 - Balthazan remains intact
 - Kerovac remains intact
@@ -444,7 +444,7 @@ This milestone is about the reusable runtime library.
 3. Add collision builder support for those primitives.
 4. Add validation rules.
 5. Add debug renderer support.
-6. Add DARB Geometry Proving Hall.
+6. Use Kerovac's Geometry Expo Center as the swappable preview zone; retire previous preview objects there before inserting a new batch.
 7. Wire field entrance and return.
 8. Run bounded verification.
 

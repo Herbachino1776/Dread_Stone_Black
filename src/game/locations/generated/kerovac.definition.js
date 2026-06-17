@@ -89,12 +89,41 @@ function sunstone(id, roomId, x, y, z, intensity = 1.35, distance = 24) {
   return { id, kind: 'point', color: 0xffc875, intensity, distance, decay: 1.35, position: { x, y, z }, roomId };
 }
 
+function expoStair(id, kind, x, z, overrides = {}) {
+  return {
+    id,
+    kind,
+    position: [x, 0, z],
+    yaw: overrides.yaw ?? 0,
+    width: overrides.width ?? 2.4,
+    height: overrides.height ?? 1.2,
+    length: overrides.length ?? 4.2,
+    stepCount: overrides.stepCount ?? 6,
+    treadMaterial: overrides.treadMaterial ?? 'limestoneFloor',
+    riserMaterial: overrides.riserMaterial ?? 'limestoneWall',
+    sideMaterial: overrides.sideMaterial ?? 'ritualWall',
+    trimMaterial: overrides.trimMaterial ?? 'bronze',
+    railingMaterial: overrides.railingMaterial ?? 'bronze',
+    railings: overrides.railings ?? false,
+    missingSteps: overrides.missingSteps ?? [],
+    roomId: 'K03',
+    tags: ['geometry-expo-center', 'darb-staircase-preview', kind, ...(overrides.tags ?? [])],
+    userData: {
+      purpose: 'Permanent Kerovac Geometry Expo Center swappable preview zone. For future DARB primitive batches, remove this batch of preview objects and insert the new batch here rather than creating a separate debug location.',
+      displayChamber: 'K03 Civic Reliquary Court',
+      basePlacedOnCityFloor: true,
+      authoredAsLocationDefinitionData: true,
+      ...(overrides.userData ?? {}),
+    },
+  };
+}
+
 export const kerovacDefinition = Object.freeze({
   id: 'kerovac',
   displayName: 'Kerovac',
   type: 'interior-city',
   tags: ['generated', 'compiled-runtime', 'darb-v2', 'darb-v2.3', 'kerovac', 'bright-interior-city', 'sacred-sun-city'],
-  notes: 'Bright first-pass interior sacred city test: simple rectangular chambers, explicit floors and ceilings, clear route, visible canal edges, and high warm fill lighting.',
+  notes: 'Bright first-pass interior sacred city test: simple rectangular chambers, explicit floors and ceilings, clear route, visible canal edges, high warm fill lighting, and the permanent Kerovac Geometry Expo Center in the early Civic Reliquary Court for swappable DARB primitive previews.',
   fog: { color: 0xd9c69a, near: 72, far: 185 },
   lighting: { background: 0xc7b583 },
   textures,
@@ -169,6 +198,19 @@ export const kerovacDefinition = Object.freeze({
     pillar('K_court_pillar_nw', 'K03', -16, 26, 9.2, 0.58, 'ritualWall'),
     pillar('K_court_pillar_ne', 'K03', 16, 26, 9.2, 0.58, 'ritualWall'),
     { id: 'K_court_central_sunstone_altar', kind: 'altar', position: [0, 0, 17], yaw: 0, width: 4.6, depth: 3.2, height: 1.2, material: 'limestoneWall', topMaterial: 'bronze', roomId: 'K03', tags: ['central-sunstone', 'visible-blocker'] },
+
+    // Permanent Kerovac Geometry Expo Center: this early civic-court chamber is the swappable preview zone for DARB primitive batches.
+    // When a future primitive batch needs a display, retire the previous expo preview objects here and replace them in this chamber.
+    expoStair('K_expo_straight_stair', 'straightStair', -17, 8, { width: 2.2, height: 1.0, length: 4.0, stepCount: 5, yaw: Math.PI / 2 }),
+    expoStair('K_expo_wide_sacred_stair', 'wideSacredStair', -10, 8, { width: 4.2, height: 1.25, length: 4.4, stepCount: 6, yaw: Math.PI / 2, railings: true, treadMaterial: 'wornCivicFloor' }),
+    expoStair('K_expo_narrow_crypt_stair', 'narrowCryptStair', 10, 8, { width: 1.35, height: 1.05, length: 4.0, stepCount: 7, yaw: -Math.PI / 2, treadMaterial: 'wornCivicFloor', riserMaterial: 'sandstoneWall' }),
+    expoStair('K_expo_broken_stair', 'brokenStair', 17, 8, { width: 2.3, height: 1.15, length: 4.1, stepCount: 6, yaw: -Math.PI / 2, missingSteps: [1, 4], sideMaterial: 'sandstoneWall', userData: { missingStepVariation: 'Two authored gaps demonstrate optional broken-step variation.' } }),
+    expoStair('K_expo_sunken_steps', 'sunkenSteps', -17, 17, { width: 2.4, height: 0.75, length: 3.6, stepCount: 5, yaw: Math.PI / 2, treadMaterial: 'wornCivicFloor' }),
+    expoStair('K_expo_dais_stair', 'daisStair', -10, 25, { width: 3.0, height: 1.15, length: 3.8, stepCount: 5, yaw: Math.PI / 2, railings: true, trimMaterial: 'bronze' }),
+    expoStair('K_expo_split_stair', 'splitStair', 10, 25, { width: 4.0, height: 1.2, length: 4.4, stepCount: 6, yaw: -Math.PI / 2, sideMaterial: 'limestoneWall' }),
+    expoStair('K_expo_bridge_stair', 'bridgeStair', 17, 17, { width: 2.4, height: 1.0, length: 4.5, stepCount: 6, yaw: -Math.PI / 2, railings: true, treadMaterial: 'bronze', riserMaterial: 'limestoneWall' }),
+    expoStair('K_expo_corner_stair', 'cornerStair', -17, 25, { width: 2.4, height: 1.0, length: 3.5, stepCount: 5, yaw: Math.PI / 2, trimMaterial: 'bronze' }),
+    expoStair('K_expo_processional_stair', 'processionalStair', 17, 25, { width: 4.6, height: 1.4, length: 4.8, stepCount: 7, yaw: -Math.PI / 2, railings: true, treadMaterial: 'limestoneFloor', riserMaterial: 'ritualWall' }),
 
     { id: 'K_canal_water_trench', kind: 'canalWater', from: [-18, 45], to: [18, 45], width: 5.2, y: 0.035, height: 0.035, material: 'turquoiseWater', emissiveColor: 0x2fb8b7, roomId: 'K04', tags: ['visible-water-boundary'] },
     { id: 'K_canal_south_curb_west', kind: 'curb', from: [-18, 42.1], to: [-4.1, 42.1], y: 0.04, height: 0.28, thickness: 0.2, material: 'limestoneWall', blocksPlayer: false, roomId: 'K04' },
