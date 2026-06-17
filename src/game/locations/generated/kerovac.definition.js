@@ -89,6 +89,38 @@ function sunstone(id, roomId, x, y, z, intensity = 1.35, distance = 24) {
   return { id, kind: 'point', color: 0xffc875, intensity, distance, decay: 1.35, position: { x, y, z }, roomId };
 }
 
+function expoDoorway(id, kind, x, z, overrides = {}) {
+  const state = overrides.state ?? (overrides.passable === true ? 'open' : 'closed');
+  return {
+    id,
+    kind,
+    position: [x, 0, z],
+    yaw: overrides.yaw ?? 0,
+    width: overrides.width ?? 2.8,
+    height: overrides.height ?? 3.4,
+    depth: overrides.depth ?? overrides.thickness ?? 0.48,
+    thickness: overrides.thickness ?? overrides.depth ?? 0.48,
+    frameMaterial: overrides.frameMaterial ?? 'limestoneWall',
+    doorMaterial: overrides.doorMaterial ?? 'wood',
+    trimMaterial: overrides.trimMaterial ?? 'bronze',
+    emblemMaterial: overrides.emblemMaterial ?? 'bronze',
+    state,
+    passable: overrides.passable ?? state === 'open',
+    blocksOpening: overrides.blocksOpening ?? !['open'].includes(state),
+    interaction: overrides.interaction,
+    roomId: 'K03',
+    tags: ['geometry-expo-center', 'darb-doorway-gate-portal-preview', kind, ...(overrides.tags ?? [])],
+    userData: {
+      purpose: 'Permanent Kerovac Geometry Expo Center swappable preview zone. Batch 1 displays DARB doorway, gate, and portal primitives generated from location definition data.',
+      displayChamber: 'K03 Civic Reliquary Court',
+      authoredAsLocationDefinitionData: true,
+      collisionTruth: state === 'open' ? 'frame posts block and the opening is passable' : 'frame posts plus visible door/gate slab block the opening',
+      debugOverlay: 'Primitive footprint and generated blocker metadata identify this doorway batch item.',
+      ...(overrides.userData ?? {}),
+    },
+  };
+}
+
 function expoStair(id, kind, x, z, overrides = {}) {
   return {
     id,
@@ -200,17 +232,17 @@ export const kerovacDefinition = Object.freeze({
     { id: 'K_court_central_sunstone_altar', kind: 'altar', position: [0, 0, 17], yaw: 0, width: 4.6, depth: 3.2, height: 1.2, material: 'limestoneWall', topMaterial: 'bronze', roomId: 'K03', tags: ['central-sunstone', 'visible-blocker'] },
 
     // Permanent Kerovac Geometry Expo Center: this early civic-court chamber is the swappable preview zone for DARB primitive batches.
-    // When a future primitive batch needs a display, retire the previous expo preview objects here and replace them in this chamber.
-    expoStair('K_expo_straight_stair', 'straightStair', -17, 8, { width: 2.2, height: 1.0, length: 4.0, stepCount: 5, yaw: Math.PI / 2 }),
-    expoStair('K_expo_wide_sacred_stair', 'wideSacredStair', -10, 8, { width: 4.2, height: 1.25, length: 4.4, stepCount: 6, yaw: Math.PI / 2, railings: true, treadMaterial: 'wornCivicFloor' }),
-    expoStair('K_expo_narrow_crypt_stair', 'narrowCryptStair', 10, 8, { width: 1.35, height: 1.05, length: 4.0, stepCount: 7, yaw: -Math.PI / 2, treadMaterial: 'wornCivicFloor', riserMaterial: 'sandstoneWall' }),
-    expoStair('K_expo_broken_stair', 'brokenStair', 17, 8, { width: 2.3, height: 1.15, length: 4.1, stepCount: 6, yaw: -Math.PI / 2, missingSteps: [1, 4], sideMaterial: 'sandstoneWall', userData: { missingStepVariation: 'Two authored gaps demonstrate optional broken-step variation.' } }),
-    expoStair('K_expo_sunken_steps', 'sunkenSteps', -17, 17, { width: 2.4, height: 0.75, length: 3.6, stepCount: 5, yaw: Math.PI / 2, treadMaterial: 'wornCivicFloor' }),
-    expoStair('K_expo_dais_stair', 'daisStair', -10, 25, { width: 3.0, height: 1.15, length: 3.8, stepCount: 5, yaw: Math.PI / 2, railings: true, trimMaterial: 'bronze' }),
-    expoStair('K_expo_split_stair', 'splitStair', 10, 25, { width: 4.0, height: 1.2, length: 4.4, stepCount: 6, yaw: -Math.PI / 2, sideMaterial: 'limestoneWall' }),
-    expoStair('K_expo_bridge_stair', 'bridgeStair', 17, 17, { width: 2.4, height: 1.0, length: 4.5, stepCount: 6, yaw: -Math.PI / 2, railings: true, treadMaterial: 'bronze', riserMaterial: 'limestoneWall' }),
-    expoStair('K_expo_corner_stair', 'cornerStair', -17, 25, { width: 2.4, height: 1.0, length: 3.5, stepCount: 5, yaw: Math.PI / 2, trimMaterial: 'bronze' }),
-    expoStair('K_expo_processional_stair', 'processionalStair', 17, 25, { width: 4.6, height: 1.4, length: 4.8, stepCount: 7, yaw: -Math.PI / 2, railings: true, treadMaterial: 'limestoneFloor', riserMaterial: 'ritualWall' }),
+    // Batch 1 replaces the previous staircase previews with doorway, gate, and portal primitives.
+    expoDoorway('K_expo_thick_stone_doorway', 'thickStoneDoorway', -17, 8, { width: 2.6, height: 3.25, depth: 0.72, yaw: Math.PI / 2, state: 'open', passable: true, frameMaterial: 'ritualWall' }),
+    expoDoorway('K_expo_open_arch_portal', 'openArchPortal', -8.5, 8, { width: 3.0, height: 3.8, depth: 0.46, yaw: Math.PI / 2, state: 'open', passable: true, frameMaterial: 'limestoneWall', trimMaterial: 'turquoiseGlow', emblemMaterial: 'astralGateway' }),
+    expoDoorway('K_expo_bronze_sealed_gate', 'bronzeSealedGate', 0, 8, { width: 3.1, height: 3.6, depth: 0.52, yaw: Math.PI / 2, state: 'sealed', doorMaterial: 'bronze', frameMaterial: 'sandstoneWall', interaction: { prompt: 'Sealed bronze gate', locked: true } }),
+    expoDoorway('K_expo_locked_ritual_gate', 'lockedRitualGate', 8.5, 8, { width: 2.8, height: 3.55, depth: 0.5, yaw: -Math.PI / 2, state: 'locked', frameMaterial: 'ritualWall', doorMaterial: 'warningSumerian', interaction: { prompt: 'Requires ritual key', requiredItem: 'ritualKey' } }),
+    expoDoorway('K_expo_broken_gate_frame', 'brokenGateFrame', 17, 8, { width: 3.0, height: 3.3, depth: 0.44, yaw: -Math.PI / 2, state: 'open', passable: true, frameMaterial: 'sandstoneWall', trimMaterial: 'limestoneWall' }),
+    expoDoorway('K_expo_double_temple_door', 'doubleTempleDoor', -17, 24, { width: 4.2, height: 4.4, depth: 0.58, yaw: Math.PI / 2, state: 'closed', frameMaterial: 'pyramidWall', doorMaterial: 'wood', trimMaterial: 'bronze', interaction: { prompt: 'Open double temple doors' } }),
+    expoDoorway('K_expo_return_portal_frame', 'returnPortalFrame', -8.5, 24, { width: 2.9, height: 3.8, depth: 0.42, yaw: Math.PI / 2, state: 'open', passable: true, frameMaterial: 'limestoneWall', trimMaterial: 'turquoiseGlow', emblemMaterial: 'turquoiseGlow', interaction: { prompt: 'Return portal frame metadata' } }),
+    expoDoorway('K_expo_sun_disk_threshold', 'sunDiskThreshold', 0, 24, { width: 3.6, height: 3.2, depth: 0.5, yaw: 0, state: 'open', passable: true, frameMaterial: 'limestoneWall', trimMaterial: 'bronze', emblemMaterial: 'bronze' }),
+    expoDoorway('K_expo_narrow_crypt_portal', 'narrowCryptPortal', 8.5, 24, { width: 1.35, height: 2.9, depth: 0.62, yaw: -Math.PI / 2, state: 'open', passable: true, frameMaterial: 'ritualWall', trimMaterial: 'sandstoneWall' }),
+    expoDoorway('K_expo_grand_processional_gate', 'grandProcessionalGate', 17, 24, { width: 5.3, height: 5.2, depth: 0.72, yaw: -Math.PI / 2, state: 'blocked', frameMaterial: 'pyramidWall', doorMaterial: 'bronze', trimMaterial: 'bronze', interaction: { prompt: 'Grand gate is ceremonially blocked' } }),
 
     { id: 'K_canal_water_trench', kind: 'canalWater', from: [-18, 45], to: [18, 45], width: 5.2, y: 0.035, height: 0.035, material: 'turquoiseWater', emissiveColor: 0x2fb8b7, roomId: 'K04', tags: ['visible-water-boundary'] },
     { id: 'K_canal_south_curb_west', kind: 'curb', from: [-18, 42.1], to: [-4.1, 42.1], y: 0.04, height: 0.28, thickness: 0.2, material: 'limestoneWall', blocksPlayer: false, roomId: 'K04' },

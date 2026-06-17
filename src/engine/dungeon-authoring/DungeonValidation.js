@@ -306,14 +306,15 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   });
 
   const stairPrimitiveKinds = new Set(['straightStair', 'wideSacredStair', 'narrowCryptStair', 'brokenStair', 'sunkenSteps', 'daisStair', 'splitStair', 'bridgeStair', 'cornerStair', 'processionalStair']);
-  const supportedPrimitiveKinds = new Set(['pillar', 'brokenPillar', 'arch', 'doorFrame', 'lowWall', 'railing', 'altar', 'stela', 'obelisk', 'wallPanel', 'canalWater', 'curb', 'ceilingSlab', ...stairPrimitiveKinds]);
+  const doorwayPrimitiveKinds = new Set(['thickStoneDoorway', 'openArchPortal', 'bronzeSealedGate', 'lockedRitualGate', 'brokenGateFrame', 'doubleTempleDoor', 'returnPortalFrame', 'sunDiskThreshold', 'narrowCryptPortal', 'grandProcessionalGate']);
+  const supportedPrimitiveKinds = new Set(['pillar', 'brokenPillar', 'arch', 'doorFrame', 'lowWall', 'railing', 'altar', 'stela', 'obelisk', 'wallPanel', 'canalWater', 'curb', 'ceilingSlab', ...stairPrimitiveKinds, ...doorwayPrimitiveKinds]);
   const positive = (primitive, field, fallback = undefined) => {
     const value = primitive[field] ?? fallback;
     if (!Number.isFinite(value) || value <= 0) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} ${field} must be > 0`, primitive.id);
   };
   architecturalPrimitives.forEach((primitive) => {
     if (!supportedPrimitiveKinds.has(primitive.kind)) { addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} uses unsupported kind ${primitive.kind}`, primitive.id); return; }
-    const needsPosition = ['pillar', 'brokenPillar', 'arch', 'doorFrame', 'altar', 'stela', 'obelisk', 'ceilingSlab'].includes(primitive.kind) || stairPrimitiveKinds.has(primitive.kind);
+    const needsPosition = ['pillar', 'brokenPillar', 'arch', 'doorFrame', 'altar', 'stela', 'obelisk', 'ceilingSlab'].includes(primitive.kind) || stairPrimitiveKinds.has(primitive.kind) || doorwayPrimitiveKinds.has(primitive.kind);
     const needsLine = ['lowWall', 'railing', 'canalWater', 'curb'].includes(primitive.kind);
     if (needsPosition) {
       const pos = positionOf(primitive.position);
@@ -322,6 +323,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     if (needsLine && (!xzPoint(primitive.from) || !xzPoint(primitive.to))) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} has invalid from/to points`, primitive.id);
     if (['pillar', 'brokenPillar'].includes(primitive.kind)) { positive(primitive, 'radius', 0.3); positive(primitive, 'height', 2); }
     if (['arch', 'doorFrame'].includes(primitive.kind)) { positive(primitive, 'width', 2); positive(primitive, 'height', 3); positive(primitive, 'thickness', 0.35); if ((primitive.width ?? 2) <= (primitive.thickness ?? 0.35) * 2) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} opening width is too small for side posts`, primitive.id); }
+    if (doorwayPrimitiveKinds.has(primitive.kind)) { positive(primitive, 'width', primitive.kind === 'narrowCryptPortal' ? 1.25 : 2.8); positive(primitive, 'height', 3.2); positive(primitive, primitive.depth === undefined ? 'thickness' : 'depth', 0.4); if (!Number.isFinite(primitive.yaw ?? primitive.rotation ?? 0)) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} yaw must be finite`, primitive.id); const state = primitive.state ?? (primitive.open === true || primitive.passable === true ? 'open' : undefined) ?? (primitive.blocked ? 'blocked' : 'closed'); if (!['open', 'closed', 'locked', 'blocked', 'sealed'].includes(state)) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} has invalid doorway state ${state}`, primitive.id); ['frameMaterial', 'doorMaterial', 'trimMaterial', 'emblemMaterial'].forEach((slot) => { if (primitive[slot] && typeof primitive[slot] === 'string' && !definition.textures?.[primitive[slot]]) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} references missing texture profile ${primitive[slot]} in ${slot}`, primitive.id); }); if ((primitive.width ?? 2.8) <= Math.max(0.22, primitive.frameWidth ?? primitive.thickness ?? primitive.depth ?? 0.45) * 2) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} opening width is too small for doorway frame`, primitive.id); }
     if (['lowWall', 'railing', 'canalWater', 'curb'].includes(primitive.kind)) { if (primitive.kind === 'canalWater') positive(primitive, 'width', 1); positive(primitive, 'height', primitive.kind === 'canalWater' ? 0.03 : (primitive.kind === 'curb' ? 0.22 : 0.7)); if (primitive.kind !== 'canalWater') positive(primitive, 'thickness', 0.2); }
     if (['altar', 'stela'].includes(primitive.kind)) { positive(primitive, 'width', 1); positive(primitive, 'height', 1); positive(primitive, 'thickness', primitive.kind === 'stela' ? 0.2 : 0.1); }
     if (primitive.kind === 'obelisk') { positive(primitive, 'height', 3); positive(primitive, 'baseWidth', 0.7); }
