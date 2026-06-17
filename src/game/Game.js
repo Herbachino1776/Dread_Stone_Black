@@ -46,6 +46,7 @@ const FIELD_RETURN_SPAWNS_BY_LOCATION = Object.freeze({
   'v2-canal-shrine': 'v2CanalShrineExit',
   'sumerian-canal-market-district-v2': 'sumerianCanalMarketDistrictV2Exit',
   balthazan: 'balthazanExit',
+  kerovac: 'kerovacExit',
   dungeon: 'cryptAExit',
 });
 

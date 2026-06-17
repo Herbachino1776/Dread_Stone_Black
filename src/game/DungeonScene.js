@@ -129,6 +129,8 @@ const FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_START = new THREE.Vector3(1
 const FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_YAW = Math.PI;
 const FIELD_BALTHAZAN_RETURN_START = new THREE.Vector3(72, 1.55, 126);
 const FIELD_BALTHAZAN_RETURN_YAW = Math.PI;
+const FIELD_KEROVAC_RETURN_START = new THREE.Vector3(60, 1.55, 139);
+const FIELD_KEROVAC_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const GENERATED_ENEMY_ACTIVE_CAP = 3;
@@ -146,6 +148,7 @@ const SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET = new THREE.Vector3(122, 1, 14
 const SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET = new THREE.Vector3(96, 1, 149);
 const SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET = new THREE.Vector3(110, 1, 128);
 const BALTHAZAN_ENTRANCE_TARGET = new THREE.Vector3(72, 1, 126);
+const KEROVAC_ENTRANCE_TARGET = new THREE.Vector3(60, 1, 146);
 const V2_CANAL_SHRINE_ENTRANCE_TARGET = new THREE.Vector3(-166, 1, 38);
 const FIELD_V2_CANAL_SHRINE_RETURN_START = new THREE.Vector3(-166, 1.55, 38);
 const FIELD_V2_CANAL_SHRINE_RETURN_YAW = -Math.PI / 2;
@@ -161,6 +164,7 @@ const FIELD_FOLIAGE_CLEAR_ZONES = Object.freeze([
   { x: SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET.x, z: SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET.z, radius: 18 },
   { x: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.x, z: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.z, radius: 20 },
   { x: BALTHAZAN_ENTRANCE_TARGET.x, z: BALTHAZAN_ENTRANCE_TARGET.z, radius: 24 },
+  { x: KEROVAC_ENTRANCE_TARGET.x, z: KEROVAC_ENTRANCE_TARGET.z, radius: 18 },
   { x: 35, z: 124, radius: 22 },
 ]);
 function getReliquaryFieldColliders() {
@@ -676,6 +680,10 @@ export class DungeonScene {
 
     if (this.fieldSpawn === 'balthazanExit') {
       return { spawnPosition: FIELD_BALTHAZAN_RETURN_START, spawnYaw: FIELD_BALTHAZAN_RETURN_YAW };
+    }
+
+    if (this.fieldSpawn === 'kerovacExit') {
+      return { spawnPosition: FIELD_KEROVAC_RETURN_START, spawnYaw: FIELD_KEROVAC_RETURN_YAW };
     }
 
     return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
@@ -1545,6 +1553,7 @@ export class DungeonScene {
     this.addSumerianCityBlockV0TestEntrance();
     this.addSumerianSunPalaceDistrictV1TestEntrance();
     this.addSumerianCanalMarketDistrictV2Entrance();
+    this.addKerovacEntrance();
     this.addBalthazanEntrance();
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
@@ -2145,6 +2154,52 @@ export class DungeonScene {
       message: 'The canal market opens.',
       functional: true,
       area: 'sumerian-canal-market-district-v2',
+      type: 'areaEntrance',
+    });
+  }
+
+  addKerovacEntrance() {
+    const limestoneMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/stone_limestone_block_01.png', repeat: [1.7, 1.25], color: 0xe3d0a1, roughness: 0.97, metalness: 0.0, emissive: 0x2d210f, emissiveIntensity: 0.16 });
+    const sandstoneMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/wall_sandstone_ritual_01.png', repeat: [1.5, 1.1], color: 0xd8b875, roughness: 0.98, metalness: 0.0, emissive: 0x2b1a08, emissiveIntensity: 0.18 });
+    const bronzeMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/metal_bronze_ritual_01.png', repeat: [1.0, 1.0], color: 0xd09445, roughness: 0.76, metalness: 0.38, emissive: 0x3a1c06, emissiveIntensity: 0.32 });
+    const floorMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/floor_limestone_temple_01.png', repeat: [2.6, 2.4], color: 0xe0c78a, roughness: 0.98, metalness: 0.0, emissive: 0x2d1d0a, emissiveIntensity: 0.14 });
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xffc56d, transparent: true, opacity: 0.38, depthWrite: false });
+    const group = new THREE.Group();
+    group.name = 'KEROVAC-field-bright-sun-city-gate-entrance';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(11, 0.3, 8), position: new THREE.Vector3(60, 0.15, 146), material: floorMat, name: 'KEROVAC_EXT_BASE-limestone-threshold-floor_limestone_temple_01' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.2, 5.2, 5), position: new THREE.Vector3(57, 2.6, 146), material: limestoneMat, name: 'KEROVAC_EXT_LEFT_PIER-limestone-sun-gate' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.2, 5.2, 5), position: new THREE.Vector3(63, 2.6, 146), material: limestoneMat, name: 'KEROVAC_EXT_RIGHT_PIER-limestone-sun-gate' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(8.4, 1.05, 1.1), position: new THREE.Vector3(60, 5.05, 148.05), material: sandstoneMat, name: 'KEROVAC_EXT_LINTEL-sun-sealed-sandstone-ritual-slab' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(5.4, 3.2, 0.18), position: new THREE.Vector3(60, 1.72, 147.46), material: glowMat, name: 'KEROVAC_EXT_GATE-warm-lit-sun-sealed-mouth' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(2.7, 2.7, 0.2), position: new THREE.Vector3(60, 3.25, 147.34), material: bronzeMat, name: 'KEROVAC_EXT_BRONZE_SUN_DISK-visible-ritual-marker' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(0.5, 2.2, 0.35), position: new THREE.Vector3(55.2, 1.1, 143.9), material: bronzeMat, name: 'KEROVAC_EXT_LEFT_BRONZE_LAMP-ritual-flame-marker' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(0.5, 2.2, 0.35), position: new THREE.Vector3(64.8, 1.1, 143.9), material: bronzeMat, name: 'KEROVAC_EXT_RIGHT_BRONZE_LAMP-ritual-flame-marker' }));
+
+    const leftLamp = new THREE.PointLight(0xffb76a, 1.25, 16, 1.4);
+    leftLamp.name = 'KEROVAC_EXT_LEFT_LAMP-bright-warm-field-light';
+    leftLamp.position.set(55.2, 2.5, 143.9);
+    group.add(leftLamp);
+    const rightLamp = new THREE.PointLight(0xffb76a, 1.25, 16, 1.4);
+    rightLamp.name = 'KEROVAC_EXT_RIGHT_LAMP-bright-warm-field-light';
+    rightLamp.position.set(64.8, 2.5, 143.9);
+    group.add(rightLamp);
+    const diskGlow = new THREE.PointLight(0xffd08a, 1.55, 20, 1.35);
+    diskGlow.name = 'KEROVAC_EXT_SUN_DISK-bright-threshold-light';
+    diskGlow.position.set(60, 3.2, 144.8);
+    group.add(diskGlow);
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'KEROVAC_INT_ENTER',
+      label: 'Kerovac',
+      target: KEROVAC_ENTRANCE_TARGET.clone(),
+      range: 5.0,
+      hint: 'Enter Kerovac',
+      message: 'The sun-sealed city of Kerovac opens beneath the field.',
+      functional: true,
+      area: 'kerovac',
       type: 'areaEntrance',
     });
   }
