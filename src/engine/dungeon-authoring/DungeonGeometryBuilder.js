@@ -614,6 +614,69 @@ function addV2RampsStairsBridges({ definition, group, materialFactory }) {
   return meshes;
 }
 
+
+const STAIR_PRIMITIVE_KINDS = new Set(['straightStair', 'wideSacredStair', 'narrowCryptStair', 'brokenStair', 'sunkenSteps', 'daisStair', 'splitStair', 'bridgeStair', 'cornerStair', 'processionalStair']);
+
+function stairMaterial(definition, primitive, slot, materialFactory, fallback) {
+  return makeMaterial(definition, primitive[slot] ?? primitive.material ?? primitive.textureProfile, materialFactory, fallback);
+}
+
+function stairMissingSteps(primitive) {
+  return new Set(asArray(primitive.missingSteps ?? primitive.brokenSteps).map((step) => Number(step)).filter((step) => Number.isInteger(step) && step >= 0));
+}
+
+function addStairPrimitive({ definition, group, materialFactory, primitive, addPart }) {
+  const pos = toVector3(primitive.position);
+  const yaw = primitive.yaw ?? primitive.rotation ?? 0;
+  const width = primitive.width ?? (primitive.kind === 'wideSacredStair' || primitive.kind === 'processionalStair' ? 4 : primitive.kind === 'narrowCryptStair' ? 1.2 : 2.4);
+  const length = primitive.length ?? primitive.depth ?? 4;
+  const height = primitive.height ?? 1.2;
+  const steps = Math.max(1, Math.floor(primitive.stepCount ?? primitive.steps ?? 6));
+  const missing = stairMissingSteps(primitive);
+  const treadMat = stairMaterial(definition, primitive, 'treadMaterial', materialFactory, definition.textures?.floor);
+  const riserMat = stairMaterial(definition, primitive, 'riserMaterial', materialFactory, definition.textures?.wall);
+  const sideMat = stairMaterial(definition, primitive, 'sideMaterial', materialFactory, definition.textures?.wall);
+  const trimMat = stairMaterial(definition, primitive, 'trimMaterial', materialFactory, definition.textures?.wall);
+  const railingMat = stairMaterial(definition, primitive, 'railingMaterial', materialFactory, definition.textures?.wall);
+  const base = { locationId: definition.id, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:stair-primitives', debugFootprint: { width, length, height, steps } };
+  const stepDepth = length / steps;
+  const stepHeight = height / steps;
+  const laneCount = primitive.kind === 'splitStair' ? 2 : 1;
+  const gap = primitive.kind === 'splitStair' ? Math.min(0.6, width * 0.12) : 0;
+  const laneWidth = laneCount === 2 ? (width - gap) / 2 : width;
+  const addLocalBox = (name, size, local, material, extra = {}) => {
+    const world = pos.clone().add(new THREE.Vector3(local.x, local.y, local.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw));
+    const mesh = addBox({ group, size, position: world, material, name, userData: { ...base, ...extra } });
+    mesh.rotation.y = yaw;
+    addPart(mesh);
+    return mesh;
+  };
+  for (let i = 0; i < steps; i += 1) {
+    if (missing.has(i)) continue;
+    const brokenScale = primitive.kind === 'brokenStair' && i % 3 === 1 ? 0.72 : 1;
+    const yTop = primitive.kind === 'sunkenSteps' ? -stepHeight * (i + 1) : stepHeight * (i + 1);
+    const centerZ = -length / 2 + stepDepth * (i + 0.5);
+    for (let lane = 0; lane < laneCount; lane += 1) {
+      const laneX = laneCount === 1 ? 0 : (lane === 0 ? -(laneWidth + gap) / 2 : (laneWidth + gap) / 2);
+      addLocalBox(`V23-${primitive.kind}-TREAD-${primitive.id}-${i}-${lane}`, new THREE.Vector3(laneWidth * brokenScale, 0.08, stepDepth * 0.96), { x: laneX, y: yTop - 0.04, z: centerZ }, treadMat, { stairStepIndex: i, stairPart: 'tread' });
+      addLocalBox(`V23-${primitive.kind}-RISER-${primitive.id}-${i}-${lane}`, new THREE.Vector3(laneWidth * brokenScale, Math.abs(stepHeight), 0.08), { x: laneX, y: yTop - stepHeight / 2, z: centerZ - stepDepth / 2 }, riserMat, { stairStepIndex: i, stairPart: 'riser' });
+    }
+  }
+  if (['wideSacredStair', 'daisStair', 'processionalStair', 'cornerStair'].includes(primitive.kind)) {
+    addLocalBox(`V23-${primitive.kind}-TRIM-${primitive.id}-top`, new THREE.Vector3(width + 0.35, 0.16, 0.18), { x: 0, y: height + 0.08, z: length / 2 + 0.09 }, trimMat, { stairPart: 'trim' });
+  }
+  if (primitive.sideWalls !== false) {
+    [-1, 1].forEach((side) => addLocalBox(`V23-${primitive.kind}-SIDE-${primitive.id}-${side}`, new THREE.Vector3(0.16, Math.max(0.25, Math.abs(height)), length), { x: side * (width / 2 + 0.08), y: height / 2, z: 0 }, sideMat, { stairPart: 'side' }));
+  }
+  if (primitive.railings) {
+    [-1, 1].forEach((side) => addLocalBox(`V23-${primitive.kind}-RAIL-${primitive.id}-${side}`, new THREE.Vector3(0.1, 0.9, length), { x: side * (width / 2 + 0.24), y: height + 0.45, z: 0 }, railingMat, { stairPart: 'railing' }));
+  }
+  if (primitive.kind === 'cornerStair') {
+    const landing = addLocalBox(`V23-cornerStair-LANDING-${primitive.id}`, new THREE.Vector3(width, 0.12, width), { x: width / 2, y: height + 0.06, z: length / 2 }, treadMat, { stairPart: 'landing' });
+    landing.rotation.y = yaw + Math.PI / 2;
+  }
+}
+
 function primitiveMaterial(definition, primitive, materialFactory, fallback = definition.textures?.wall) {
   return makeMaterial(definition, primitive.material ?? primitive.textureProfile, materialFactory, fallback);
 }
@@ -651,7 +714,9 @@ function addV23ArchitecturalPrimitives({ definition, group, materialFactory }) {
     primitive.locationId = definition.id;
     const material = primitiveMaterial(definition, primitive, materialFactory, primitive.kind === 'canalWater' ? definition.textures?.water : definition.textures?.wall);
     const base = { locationId: definition.id, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:v2.3' };
-    if (primitive.kind === 'pillar' || primitive.kind === 'brokenPillar') {
+    if (STAIR_PRIMITIVE_KINDS.has(primitive.kind)) {
+      addStairPrimitive({ definition, group, materialFactory, primitive, addPart });
+    } else if (primitive.kind === 'pillar' || primitive.kind === 'brokenPillar') {
       addPart(addCylinderPrimitive({ group, primitive, material, name: `V23-${primitive.kind}-${primitive.id}`, height: primitive.height ?? 2, radius: primitive.radius ?? 0.3, sides: primitive.sides ?? 8 }));
     } else if (primitive.kind === 'arch' || primitive.kind === 'doorFrame') {
       const pos = toVector3(primitive.position); const yaw = primitive.yaw ?? 0; const width = primitive.width ?? 2; const height = primitive.height ?? 3; const thickness = primitive.thickness ?? 0.35; const depth = primitive.depth ?? thickness;

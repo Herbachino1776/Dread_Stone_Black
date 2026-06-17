@@ -198,6 +198,19 @@ export class DungeonDebugRenderer {
         m.userData = { primitiveId: primitive.id, primitiveKind: primitive.kind, label: primitive.id };
         this.layers.v2.add(m);
       }
+      if (['straightStair', 'wideSacredStair', 'narrowCryptStair', 'brokenStair', 'sunkenSteps', 'daisStair', 'splitStair', 'bridgeStair', 'cornerStair', 'processionalStair'].includes(primitive.kind)) {
+        const p = xz(primitive.position, (primitive.position?.y ?? primitive.position?.[1] ?? 0) + (primitive.height ?? 1.2) + 0.22);
+        const yaw = primitive.yaw ?? primitive.rotation ?? 0;
+        const width = primitive.width ?? 2.4;
+        const depth = primitive.length ?? primitive.depth ?? 4;
+        const c = Math.cos(yaw); const sn = Math.sin(yaw);
+        const corners = [[-width / 2, -depth / 2], [width / 2, -depth / 2], [width / 2, depth / 2], [-width / 2, depth / 2]]
+          .map(([x, z]) => ({ x: p.x + x * c - z * sn, z: p.z + x * sn + z * c }));
+        const footprint = polyline(corners, 0xffffff, true, p.y);
+        footprint.name = `debug-stair-footprint-${primitive.id}`;
+        footprint.userData = { primitiveId: primitive.id, primitiveKind: primitive.kind, label: `${primitive.id} footprint` };
+        this.layers.v2.add(footprint);
+      }
       if (['arch', 'doorFrame'].includes(primitive.kind)) {
         const yaw = primitive.yaw ?? 0; const width = primitive.width ?? 2; const p = xz(primitive.position, 0.5); const dx = Math.cos(yaw) * width / 2; const dz = -Math.sin(yaw) * width / 2;
         this.layers.v2.add(lineBetween({ x: p.x - dx, z: p.z - dz }, { x: p.x + dx, z: p.z + dz }, 0x3fe07e));

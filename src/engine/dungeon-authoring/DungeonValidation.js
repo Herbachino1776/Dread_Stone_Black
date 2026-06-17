@@ -305,14 +305,15 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     }
   });
 
-  const supportedPrimitiveKinds = new Set(['pillar', 'brokenPillar', 'arch', 'doorFrame', 'lowWall', 'railing', 'altar', 'stela', 'obelisk', 'wallPanel', 'canalWater', 'curb', 'ceilingSlab']);
+  const stairPrimitiveKinds = new Set(['straightStair', 'wideSacredStair', 'narrowCryptStair', 'brokenStair', 'sunkenSteps', 'daisStair', 'splitStair', 'bridgeStair', 'cornerStair', 'processionalStair']);
+  const supportedPrimitiveKinds = new Set(['pillar', 'brokenPillar', 'arch', 'doorFrame', 'lowWall', 'railing', 'altar', 'stela', 'obelisk', 'wallPanel', 'canalWater', 'curb', 'ceilingSlab', ...stairPrimitiveKinds]);
   const positive = (primitive, field, fallback = undefined) => {
     const value = primitive[field] ?? fallback;
     if (!Number.isFinite(value) || value <= 0) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} ${field} must be > 0`, primitive.id);
   };
   architecturalPrimitives.forEach((primitive) => {
     if (!supportedPrimitiveKinds.has(primitive.kind)) { addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} uses unsupported kind ${primitive.kind}`, primitive.id); return; }
-    const needsPosition = ['pillar', 'brokenPillar', 'arch', 'doorFrame', 'altar', 'stela', 'obelisk', 'ceilingSlab'].includes(primitive.kind);
+    const needsPosition = ['pillar', 'brokenPillar', 'arch', 'doorFrame', 'altar', 'stela', 'obelisk', 'ceilingSlab'].includes(primitive.kind) || stairPrimitiveKinds.has(primitive.kind);
     const needsLine = ['lowWall', 'railing', 'canalWater', 'curb'].includes(primitive.kind);
     if (needsPosition) {
       const pos = positionOf(primitive.position);
@@ -325,6 +326,20 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     if (['altar', 'stela'].includes(primitive.kind)) { positive(primitive, 'width', 1); positive(primitive, 'height', 1); positive(primitive, 'thickness', primitive.kind === 'stela' ? 0.2 : 0.1); }
     if (primitive.kind === 'obelisk') { positive(primitive, 'height', 3); positive(primitive, 'baseWidth', 0.7); }
     if (primitive.kind === 'ceilingSlab') { positive(primitive, 'width', 4); positive(primitive, 'depth', 4); positive(primitive, 'thickness', 0.2); }
+    if (stairPrimitiveKinds.has(primitive.kind)) {
+      positive(primitive, 'width', primitive.kind === 'narrowCryptStair' ? 1.2 : 2.4);
+      positive(primitive, 'height', 1.2);
+      positive(primitive, primitive.length === undefined ? 'depth' : 'length', 4);
+      const steps = primitive.stepCount ?? primitive.steps ?? 6;
+      if (!Number.isInteger(steps) || steps < 1 || steps > 64) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} stepCount must be an integer from 1 to 64`, primitive.id);
+      if (!Number.isFinite(primitive.yaw ?? primitive.rotation ?? 0)) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} yaw must be finite`, primitive.id);
+      ['treadMaterial', 'riserMaterial', 'sideMaterial', 'trimMaterial', 'railingMaterial'].forEach((slot) => {
+        if (primitive[slot] && typeof primitive[slot] === 'string' && !definition.textures?.[primitive[slot]]) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} references missing texture profile ${primitive[slot]} in ${slot}`, primitive.id);
+      });
+      asArray(primitive.missingSteps ?? primitive.brokenSteps).forEach((step) => {
+        if (!Number.isInteger(step) || step < 0 || step >= steps) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} missing step ${step} is outside stepCount`, primitive.id);
+      });
+    }
     if (primitive.kind === 'wallPanel') { if (!wallSegmentById.has(primitive.wallSegmentId)) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} references missing wallSegmentId ${primitive.wallSegmentId}`, primitive.id); if (!Number.isFinite(primitive.t) || primitive.t < 0 || primitive.t > 1) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} t must be between 0 and 1`, primitive.id); positive(primitive, 'height', 1); positive(primitive, 'width', 1); }
   });
 
