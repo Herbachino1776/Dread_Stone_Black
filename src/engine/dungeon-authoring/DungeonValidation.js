@@ -2,6 +2,8 @@ import { asArray, hasUsableId } from './DungeonDefinitionTypes.js';
 
 const loggedValidationKeys = new Set();
 const RUNTIME_ENEMY_SPECIES = new Set(['sheep_demon', 'neck_man']);
+const HORIZONTAL_SURFACE_KINDS = new Set(['floor', 'ceiling', 'roof', 'path', 'platformTop']);
+const HORIZONTAL_SURFACE_SHAPES = new Set(['rect', 'polygon']);
 
 function pointInRect(point, rect, padding = 0) {
   return point.x >= rect.minX - padding && point.x <= rect.maxX + padding
@@ -158,6 +160,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   const ramps = asArray(definition.ramps);
   const stairs = asArray(definition.stairs);
   const bridges = asArray(definition.bridges);
+  const horizontalSurfaces = asArray(definition.horizontalSurfaces);
   const architecturalPrimitives = asArray(definition.architecturalPrimitives);
   const roomIds = new Set(rooms.map((room) => room.id));
   const spawnIds = new Set(spawns.map((spawn) => spawn.id));
@@ -186,6 +189,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     { label: 'ramps', items: ramps },
     { label: 'stairs', items: stairs },
     { label: 'bridges', items: bridges },
+    { label: 'horizontalSurfaces', items: horizontalSurfaces },
     { label: 'architecturalPrimitives', items: architecturalPrimitives },
   ], errors);
 
@@ -272,6 +276,33 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     if (!xzPoint(bridge.from) || !xzPoint(bridge.to)) addIssue(errors, 'error', `bridge ${bridge.id} has invalid from/to points`, bridge.id);
     if (!Number.isFinite(bridge.width) || bridge.width <= 0) addIssue(errors, 'error', `bridge ${bridge.id} width must be > 0`, bridge.id);
     if (!Number.isFinite(bridge.thickness) || bridge.thickness <= 0) addIssue(errors, 'error', `bridge ${bridge.id} thickness must be > 0`, bridge.id);
+  });
+
+  horizontalSurfaces.forEach((surface) => {
+    if (!HORIZONTAL_SURFACE_KINDS.has(surface.kind)) addIssue(errors, 'error', `horizontalSurface ${surface.id} uses unsupported kind ${surface.kind}`, surface.id);
+    if (!HORIZONTAL_SURFACE_SHAPES.has(surface.shape)) addIssue(errors, 'error', `horizontalSurface ${surface.id} uses unsupported shape ${surface.shape}`, surface.id);
+    if (surface.roomId && !roomIds.has(surface.roomId)) addIssue(errors, 'error', `horizontalSurface ${surface.id} references missing room ${surface.roomId}`, surface.id);
+    if (typeof surface.material !== 'string' || !definition.textures?.[surface.material]) {
+      addIssue(errors, 'error', `horizontalSurface ${surface.id} references missing texture profile ${surface.material}`, surface.id);
+    }
+    if (!Number.isFinite(surface.y ?? surface.center?.[1] ?? surface.center?.y ?? 0)) addIssue(errors, 'error', `horizontalSurface ${surface.id} y must be finite`, surface.id);
+    if ((surface.thickness ?? 0.08) <= 0) addIssue(errors, 'error', `horizontalSurface ${surface.id} thickness must be > 0`, surface.id);
+    if (surface.shape === 'polygon') {
+      const points = asArray(surface.points).map(xzPoint);
+      if (points.length < 3) {
+        addIssue(errors, 'error', `horizontalSurface ${surface.id} polygon needs at least 3 points`, surface.id);
+      } else if (points.some((point) => !point)) {
+        addIssue(errors, 'error', `horizontalSurface ${surface.id} has non-finite points`, surface.id);
+      } else if (polygonArea(points) <= 0.01) {
+        addIssue(errors, 'error', `horizontalSurface ${surface.id} has near-zero area`, surface.id);
+      }
+    } else if (surface.shape === 'rect') {
+      const center = positionOf(surface.center);
+      if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.z)) addIssue(errors, 'error', `horizontalSurface ${surface.id} rect needs a finite center`, surface.id);
+      if (!Number.isFinite(surface.width) || surface.width <= 0) addIssue(errors, 'error', `horizontalSurface ${surface.id} width must be > 0`, surface.id);
+      if (!Number.isFinite(surface.depth) || surface.depth <= 0) addIssue(errors, 'error', `horizontalSurface ${surface.id} depth must be > 0`, surface.id);
+      if (!Number.isFinite(surface.yaw ?? 0)) addIssue(errors, 'error', `horizontalSurface ${surface.id} yaw must be finite`, surface.id);
+    }
   });
 
   const supportedPrimitiveKinds = new Set(['pillar', 'brokenPillar', 'arch', 'doorFrame', 'lowWall', 'railing', 'altar', 'stela', 'obelisk', 'wallPanel', 'canalWater', 'curb', 'ceilingSlab']);

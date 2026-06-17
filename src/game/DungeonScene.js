@@ -568,27 +568,42 @@ export class DungeonScene {
     return 'FrontSide';
   }
 
+  meshUvRange(mesh) {
+    const uv = mesh?.geometry?.getAttribute?.('uv');
+    if (!uv?.count) return null;
+    let minU = Infinity; let maxU = -Infinity; let minV = Infinity; let maxV = -Infinity;
+    for (let i = 0; i < uv.count; i += 1) {
+      const u = uv.getX(i);
+      const v = uv.getY(i);
+      minU = Math.min(minU, u);
+      maxU = Math.max(maxU, u);
+      minV = Math.min(minV, v);
+      maxV = Math.max(maxV, v);
+    }
+    return { minU, maxU, minV, maxV };
+  }
+
+  meshWorldSize(mesh) {
+    mesh.geometry?.computeBoundingBox?.();
+    const box = mesh.geometry?.boundingBox?.clone?.();
+    if (!box) return null;
+    box.applyMatrix4(mesh.matrixWorld);
+    return { width: box.max.x - box.min.x, height: box.max.y - box.min.y, depth: box.max.z - box.min.z };
+  }
+
   logBalthazanTextureQa(runtime) {
     if (!import.meta.env.DEV || runtime?.locationId !== 'balthazan') return;
-    const names = [
-      'V2-FLOOR-balthazan_entry_court_floor',
-      'V2-FLOOR-balthazan_market_court_floor',
-      'V2-FLOOR-balthazan_shrine_court_floor',
-      'V2-FLOOR-balthazan_collapsed_court_floor',
-      'V2-PATH-balthazan_main_processional_path-0',
-      'V23-ceilingSlab-balthazan_shrine_overhead_slab',
-    ];
-    names.forEach((name) => {
-      const mesh = runtime.group.getObjectByName(name);
-      if (!mesh?.isMesh) {
-        console.info(`[Balthazan floor QA] ${name} exists=false`);
-        return;
-      }
+    const surfaces = [];
+    runtime.group.traverse((object) => {
+      if (object.isMesh && object.userData?.horizontalSurfaceId) surfaces.push(object);
+    });
+    surfaces.forEach((mesh) => {
       const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
       const uv = mesh.geometry?.getAttribute('uv');
-      const position = mesh.getWorldPosition(new THREE.Vector3());
-      const indexCount = mesh.geometry?.index?.count ?? 0;
-      console.info(`[Balthazan floor QA] ${mesh.name} exists=true map=${Boolean(material?.map)} side=${this.materialSideName(material?.side)} avgNormalY=${this.averageMeshNormalY(mesh).toFixed(2)} uv=${Boolean(uv)} triangles=${Math.floor(indexCount / 3)} position=[${position.x.toFixed(2)},${position.y.toFixed(2)},${position.z.toFixed(2)}]`);
+      const uvRange = this.meshUvRange(mesh);
+      const size = this.meshWorldSize(mesh) ?? mesh.userData.horizontalSurfaceWorldSize;
+      const materialPath = mesh.userData.horizontalSurfaceMaterialPath ?? material?.userData?.definitionProfile?.path ?? 'none';
+      console.info(`[Balthazan horizontal QA] id=${mesh.userData.horizontalSurfaceId} kind=${mesh.userData.horizontalSurfaceKind} material=${materialPath} map=${Boolean(material?.map)} uv=${Boolean(uv)} uvRange=${uvRange ? `[${uvRange.minU.toFixed(2)},${uvRange.minV.toFixed(2)}..${uvRange.maxU.toFixed(2)},${uvRange.maxV.toFixed(2)}]` : 'none'} normalY=${Number(mesh.userData.horizontalSurfaceNormalY ?? this.averageMeshNormalY(mesh)).toFixed(2)} worldSize=${size ? `[${size.width.toFixed(2)}x${size.depth.toFixed(2)}]` : 'unknown'}`);
     });
 
     runtime.blockerRects
@@ -609,7 +624,9 @@ export class DungeonScene {
     const position = player.position;
     const floorMeshes = [];
     this.compiledLocationRuntime.group.traverse((object) => {
-      if (object.isMesh && (object.name.startsWith('V2-FLOOR-') || object.name.startsWith('V2-PATH-') || object.name.startsWith('V2-PLATFORM-TOP-'))) floorMeshes.push(object);
+      if (!object.isMesh) return;
+      if (object.name.startsWith('V2-FLOOR-') || object.name.startsWith('V2-PATH-') || object.name.startsWith('V2-PLATFORM-TOP-')) floorMeshes.push(object);
+      if (object.userData?.horizontalSurfaceId && !['ceiling', 'roof'].includes(object.userData.horizontalSurfaceKind)) floorMeshes.push(object);
     });
     const visibleFloorUnderfoot = floorMeshes.some((mesh) => {
       mesh.geometry.computeBoundingBox();
