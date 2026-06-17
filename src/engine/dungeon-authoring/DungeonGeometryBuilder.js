@@ -327,6 +327,121 @@ function addV2PolygonFloors({ definition, group, materialFactory }) {
   }).filter(Boolean);
 }
 
+function horizontalSurfaceFacesDown(surface) {
+  return surface.kind === 'ceiling' || surface.kind === 'roof';
+}
+
+function horizontalSurfaceY(surface) {
+  return Number(surface.y ?? surface.center?.[1] ?? surface.center?.y ?? 0);
+}
+
+function horizontalSurfaceCenter(surface) {
+  const center = toVector3(surface.center, horizontalSurfaceY(surface));
+  center.y = horizontalSurfaceY(surface);
+  return center;
+}
+
+function setSurfaceMaterialSide(material) {
+  if (!material) return material;
+  material.side = THREE.DoubleSide;
+  material.needsUpdate = true;
+  return material;
+}
+
+function horizontalSurfaceUserData(definition, surface, material, normalY, worldSize) {
+  return {
+    locationId: definition.id,
+    roomId: surface.roomId,
+    horizontalSurfaceId: surface.id,
+    horizontalSurfaceKind: surface.kind,
+    horizontalSurfaceShape: surface.shape,
+    horizontalSurfaceMaterial: surface.material ?? surface.textureProfile,
+    horizontalSurfaceMaterialPath: material?.userData?.definitionProfile?.path,
+    horizontalSurfaceNormalY: normalY,
+    horizontalSurfaceWorldSize: worldSize,
+    tags: surface.tags ?? [],
+    generatedBy: 'DungeonGeometryBuilder:horizontalSurfaces',
+  };
+}
+
+function addRectHorizontalSurface({ definition, group, surface, material }) {
+  const width = Number(surface.width ?? 0);
+  const depth = Number(surface.depth ?? 0);
+  if (width <= 0 || depth <= 0) return null;
+  const thickness = Math.max(0.01, Number(surface.thickness ?? definition.geometry?.floorThickness ?? 0.08));
+  const facesDown = horizontalSurfaceFacesDown(surface);
+  const normalY = facesDown ? -1 : 1;
+  const center = horizontalSurfaceCenter(surface);
+  const positionY = center.y + (facesDown ? thickness / 2 : -thickness / 2);
+  const mesh = addBox({
+    group,
+    size: new THREE.Vector3(width, thickness, depth),
+    position: new THREE.Vector3(center.x, positionY, center.z),
+    material,
+    name: `HSURFACE-${surface.kind}-${surface.id}`,
+    userData: horizontalSurfaceUserData(definition, surface, material, normalY, { width, depth }),
+  });
+  mesh.rotation.y = Number(surface.yaw ?? 0);
+  return mesh;
+}
+
+function addPolygonHorizontalSurface({ definition, group, surface, material }) {
+  const points = asArray(surface.points).map(point2);
+  if (points.length < 3) return null;
+  const y = horizontalSurfaceY(surface);
+  const facesDown = horizontalSurfaceFacesDown(surface);
+  const baseTriangles = ensureHorizontalPolygonFacesUp(points, THREE.ShapeUtils.triangulateShape(points, []));
+  const triangles = facesDown
+    ? baseTriangles.map((triangle) => [triangle[0], triangle[2], triangle[1]])
+    : baseTriangles;
+  const vertices = [];
+  const uvs = [];
+  const uvScale = material?.userData?.definitionProfile?.polygonUvScale
+    ?? material?.userData?.definitionProfile?.boxUvScale
+    ?? [0.18, 0.18];
+  const uScale = Number(uvScale?.[0]) || 0.18;
+  const vScale = Number(uvScale?.[1]) || uScale;
+  let minX = Infinity; let maxX = -Infinity; let minZ = Infinity; let maxZ = -Infinity;
+  points.forEach((point) => {
+    vertices.push(point.x, y, point.y);
+    uvs.push(point.x * uScale, point.y * vScale);
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minZ = Math.min(minZ, point.y);
+    maxZ = Math.max(maxZ, point.y);
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(triangles.flat());
+  geometry.computeVertexNormals();
+  const expectedNormalY = facesDown ? -1 : 1;
+  if (Math.sign(averageNormalY(geometry) || expectedNormalY) !== expectedNormalY) {
+    geometry.setIndex(triangles.map((triangle) => [triangle[0], triangle[2], triangle[1]]).flat());
+    geometry.computeVertexNormals();
+  }
+  setSurfaceMaterialSide(material);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = `HSURFACE-${surface.kind}-${surface.id}`;
+  mesh.receiveShadow = true;
+  mesh.userData = {
+    ...mesh.userData,
+    ...horizontalSurfaceUserData(definition, surface, material, expectedNormalY, { width: maxX - minX, depth: maxZ - minZ }),
+  };
+  group.add(mesh);
+  return mesh;
+}
+
+function addHorizontalSurfaces({ definition, group, materialFactory }) {
+  return asArray(definition.horizontalSurfaces).map((surface) => {
+    const material = makeMaterial(definition, surface.material ?? surface.textureProfile, materialFactory, definition.textures?.floor);
+    if (surface.shape === 'polygon') {
+      return addPolygonHorizontalSurface({ definition, group, surface, material });
+    }
+    return addRectHorizontalSurface({ definition, group, surface, material });
+  }).filter(Boolean);
+}
+
 function addV2WallSegments({ definition, group, materialFactory }) {
   const walls = [];
   asArray(definition.wallSegments).forEach((segment) => {
@@ -443,8 +558,10 @@ function addV2Platforms({ definition, group, materialFactory }) {
     const height = platform.height ?? 0.5;
     const sideMaterial = makeMaterial(definition, platform.material ?? platform.textureProfile, materialFactory, definition.textures?.wall);
     const topMaterial = makeMaterial(definition, platform.topMaterial ?? platform.material ?? platform.textureProfile, materialFactory, definition.textures?.floor);
-    const top = addPolygonMesh({ group, points: footprint, y: y + height, material: topMaterial, name: `V2-PLATFORM-TOP-${platform.id}`, userData: { locationId: definition.id, platformId: platform.id, generatedBy: 'DungeonGeometryBuilder:v2.1' } });
-    if (top) meshes.push(top);
+    if (platform.topVisible !== false) {
+      const top = addPolygonMesh({ group, points: footprint, y: y + height, material: topMaterial, name: `V2-PLATFORM-TOP-${platform.id}`, userData: { locationId: definition.id, platformId: platform.id, generatedBy: 'DungeonGeometryBuilder:v2.1' } });
+      if (top) meshes.push(top);
+    }
     footprint.forEach((from, index) => {
       const to = footprint[(index + 1) % footprint.length];
       const length = from.distanceTo(to);
@@ -666,6 +783,7 @@ export function buildDungeonGeometry(definition, { materialFactory = null, torch
 
   asArray(definition.rooms).forEach((room) => addRoomGeometry({ definition, group, room, materialFactory }));
   const v2Floors = addV2PolygonFloors({ definition, group, materialFactory });
+  const horizontalSurfaces = addHorizontalSurfaces({ definition, group, materialFactory });
   const v2Walls = addV2WallSegments({ definition, group, materialFactory });
   const v2Paths = addV2PathRibbons({ definition, group, materialFactory });
   const v2Platforms = addV2Platforms({ definition, group, materialFactory });
@@ -677,5 +795,5 @@ export function buildDungeonGeometry(definition, { materialFactory = null, torch
   const torchObjects = addTorchFixtures({ group, torchFixtures: lightRegistry?.torchFixtures });
   const pointLights = collectPointLights([...lights, ...torchObjects]);
 
-  return { group, props, lights, torchObjects, pointLights, v2Floors, v2Walls, v2Paths, v2Platforms, v2VerticalLinks, v2Anchors, v23Primitives };
+  return { group, props, lights, torchObjects, pointLights, v2Floors, horizontalSurfaces, v2Walls, v2Paths, v2Platforms, v2VerticalLinks, v2Anchors, v23Primitives };
 }

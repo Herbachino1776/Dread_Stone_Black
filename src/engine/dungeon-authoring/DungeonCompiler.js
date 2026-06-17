@@ -104,6 +104,7 @@ export function compileDungeonLocation(definition, options = {}) {
     props: geometry.props,
     v2Geometry: {
       polygonFloors: geometry.v2Floors ?? [],
+      horizontalSurfaces: geometry.horizontalSurfaces ?? [],
       wallSegments: geometry.v2Walls ?? [],
       pathRibbons: geometry.v2Paths ?? [],
       platforms: geometry.v2Platforms ?? [],
@@ -123,6 +124,7 @@ export function compileDungeonLocation(definition, options = {}) {
       torchFixtures: lightRegistry.torchFixtures,
       v2Primitives: {
         polygonFloors: asArray(definition.polygonFloors),
+        horizontalSurfaces: asArray(definition.horizontalSurfaces),
         wallSegments: asArray(definition.wallSegments),
         doorGaps: asArray(definition.doorGaps),
         wallPropAnchors: asArray(definition.wallPropAnchors),

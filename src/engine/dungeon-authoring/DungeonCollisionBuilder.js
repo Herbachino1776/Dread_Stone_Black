@@ -240,6 +240,24 @@ function boundsForPoints(id, points, tags = []) {
   return { id, minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs), tags };
 }
 
+function rectFootprint(centerValue, width = 0, depth = 0, yaw = 0) {
+  const center = toVector3(centerValue);
+  const halfWidth = width / 2;
+  const halfDepth = depth / 2;
+  const cos = Math.cos(yaw);
+  const sin = Math.sin(yaw);
+  return [
+    [-halfWidth, -halfDepth],
+    [halfWidth, -halfDepth],
+    [halfWidth, halfDepth],
+    [-halfWidth, halfDepth],
+  ].map(([x, z]) => ({
+    x: center.x + x * cos - z * sin,
+    y: center.y,
+    z: center.z + x * sin + z * cos,
+  }));
+}
+
 function rectForSegment(id, fromValue, toValue, width, tags = []) {
   const from = pointXZ(fromValue);
   const to = pointXZ(toValue);
@@ -270,6 +288,16 @@ function buildV21WalkableRects(definition) {
   asArray(definition.ramps).forEach((ramp) => rects.push(rectForSegment(`V2-RAMP-WALKABLE-${ramp.id}`, ramp.from, ramp.to, ramp.width ?? 1, ['v2-ramp'])));
   asArray(definition.stairs).forEach((stairs) => rects.push(rectForSegment(`V2-STAIR-WALKABLE-${stairs.id}`, stairs.from, stairs.to, stairs.width ?? 1, ['v2-stairs'])));
   asArray(definition.bridges).forEach((bridge) => rects.push(rectForSegment(`V2-BRIDGE-WALKABLE-${bridge.id}`, bridge.from, bridge.to, bridge.width ?? 1, ['v2-bridge'])));
+  asArray(definition.horizontalSurfaces).forEach((surface) => {
+    if (surface.walkable === false || ['ceiling', 'roof'].includes(surface.kind)) return;
+    if (surface.shape === 'polygon') {
+      const points = asArray(surface.points).map((point) => pointXZ(point)).filter((point) => Number.isFinite(point.x) && Number.isFinite(point.z));
+      if (points.length >= 3) rects.push(boundsForPoints(`HSURFACE-WALKABLE-${surface.id}`, points, ['horizontal-surface', surface.kind, ...(surface.tags ?? [])]));
+      return;
+    }
+    const points = rectFootprint(surface.center, surface.width ?? 0, surface.depth ?? 0, surface.yaw ?? 0);
+    if (points.length >= 3) rects.push(boundsForPoints(`HSURFACE-WALKABLE-${surface.id}`, points, ['horizontal-surface', surface.kind, ...(surface.tags ?? [])]));
+  });
   return rects;
 }
 
@@ -314,6 +342,23 @@ function buildWalkableSurfaces(definition) {
     id: bridge.walkableId ?? `${bridge.id}_walkable`, kind: 'bridgeDeck', from: walkableSurfacePoint(bridge.from), to: walkableSurfacePoint(bridge.to),
     width: bridge.width ?? 1, y: bridge.y ?? defaultY, priority: bridge.priority ?? 25, tags: ['v2-bridge', ...(bridge.tags ?? [])],
   }));
+  asArray(definition.horizontalSurfaces).forEach((surface) => {
+    if (surface.walkable === false || ['ceiling', 'roof'].includes(surface.kind)) return;
+    let footprint = [];
+    if (surface.shape === 'polygon') {
+      footprint = asArray(surface.points).map(walkableSurfacePoint);
+    } else {
+      footprint = rectFootprint(surface.center, surface.width ?? 0, surface.depth ?? 0, surface.yaw ?? 0).map((point) => [point.x, point.z]);
+    }
+    if (footprint.length >= 3) surfaces.push({
+      id: surface.walkableId ?? `${surface.id}_walkable`,
+      kind: surface.kind === 'platformTop' ? 'platformTop' : 'flatPolygon',
+      footprint,
+      y: surface.y ?? surface.center?.[1] ?? surface.center?.y ?? defaultY,
+      priority: surface.priority ?? (surface.kind === 'platformTop' ? 24 : 10),
+      tags: ['horizontal-surface', surface.kind, ...(surface.tags ?? [])],
+    });
+  });
   return surfaces;
 }
 

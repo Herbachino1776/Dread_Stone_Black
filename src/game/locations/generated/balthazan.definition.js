@@ -22,6 +22,31 @@ const shrineCourt = Object.freeze([[4, 22], [36, 22], [45, 43], [27, 58], [-2, 4
 const adminAlley = Object.freeze([[38, -16], [58, -9], [62, 20], [45, 31], [32, 17], [42, 1]]);
 const collapsedCourt = Object.freeze([[-43, 24], [-14, 19], [-3, 47], [-27, 62], [-53, 45]]);
 const westBank = Object.freeze([[-40, -9], [-13, -14], [-10, 7], [-31, 22], [-45, 9]]);
+const shrineTerrace = Object.freeze([[9, 34], [31, 33], [35, 48], [15, 54], [3, 45]]);
+const adminPlatform = Object.freeze([[43, 7], [58, 11], [58, 23], [45, 27], [38, 17]]);
+
+function horizontalSurfaceSegment({ id, kind = 'path', from, to, width, y, thickness = 0.06, material, roomId, walkable = true, priority = 18, tags = [] }) {
+  const dx = to[0] - from[0];
+  const dz = to[1] - from[1];
+  const length = Math.hypot(dx, dz);
+  return {
+    id,
+    kind,
+    shape: 'rect',
+    center: [(from[0] + to[0]) / 2, y, (from[1] + to[1]) / 2],
+    width: length,
+    depth: width,
+    y,
+    thickness,
+    yaw: Math.atan2(dz, dx),
+    material,
+    roomId,
+    walkable,
+    priority,
+    blocksPlayer: false,
+    tags,
+  };
+}
 
 export const balthazanDefinition = Object.freeze({
   id: 'balthazan',
@@ -42,25 +67,41 @@ export const balthazanDefinition = Object.freeze({
     { id: 'balthazan_bounds_admin', label: 'Administrative Alley bounds', minX: 30, maxX: 66, minZ: -18, maxZ: 34, floorY: 0, ceilingY: 8.8, visibleGeometry: false, wallGeometry: false, safeForSpawn: true, encounterWeight: 1, tags: ['v2-bounds', 'open-courtyard'], integrity: { edgePolicy: 'connector' } },
     { id: 'balthazan_bounds_collapsed', label: 'Collapsed Court bounds', minX: -56, maxX: 0, minZ: 16, maxZ: 66, floorY: 0, ceilingY: 9.2, visibleGeometry: false, wallGeometry: false, safeForSpawn: true, encounterWeight: 0, tags: ['v2-bounds', 'open-courtyard', 'broken-wall-gap'], integrity: { edgePolicy: 'connector' } },
   ],
-  polygonFloors: [
-    { id: 'balthazan_entry_court_floor', points: entryCourt, y: 0, material: 'wornFloor', roomId: 'balthazan_bounds_entry' },
-    { id: 'balthazan_market_court_floor', points: marketCourt, y: 0, material: 'wornFloor', roomId: 'balthazan_bounds_market' },
-    { id: 'balthazan_west_bank_floor', points: westBank, y: 0, material: 'wornFloor', roomId: 'balthazan_bounds_collapsed' },
-    { id: 'balthazan_shrine_court_floor', points: shrineCourt, y: 0, material: 'templeFloor', roomId: 'balthazan_bounds_shrine' },
-    { id: 'balthazan_admin_alley_floor', points: adminAlley, y: 0, material: 'wornFloor', roomId: 'balthazan_bounds_admin' },
-    { id: 'balthazan_entry_market_infill_floor', points: [[-20, -42], [-4, -34], [2, -23], [-4, -14], [-12, 5], [-10, 7], [-31, 22], [-31, -18], [-7, -20]], y: 0.01, material: 'wornFloor', roomId: 'balthazan_bounds_market' },
-    { id: 'balthazan_market_admin_infill_floor', points: [[29, -16], [38, -16], [42, 1], [39, 0]], y: 0.012, material: 'wornFloor', roomId: 'balthazan_bounds_admin' },
-    { id: 'balthazan_market_shrine_infill_floor', points: [[24, 20], [36, 22], [31, 33], [18, 26], [20, 20]], y: 0.012, material: 'templeFloor', roomId: 'balthazan_bounds_shrine' },
-    { id: 'balthazan_collapsed_court_floor', points: collapsedCourt, y: 0, material: 'wornFloor', roomId: 'balthazan_bounds_collapsed' },
+  polygonFloors: [],
+  horizontalSurfaces: [
+    { id: 'balthazan_entry_court_floor', kind: 'floor', shape: 'polygon', points: entryCourt, y: 0.012, thickness: 0.06, material: 'wornFloor', roomId: 'balthazan_bounds_entry', walkable: true, priority: 10, blocksPlayer: false, tags: ['plaza', 'entry-court'] },
+    { id: 'balthazan_market_court_floor', kind: 'floor', shape: 'polygon', points: marketCourt, y: 0.012, thickness: 0.06, material: 'wornFloor', roomId: 'balthazan_bounds_market', walkable: true, priority: 10, blocksPlayer: false, tags: ['plaza', 'canal-market'] },
+    { id: 'balthazan_west_bank_floor', kind: 'floor', shape: 'polygon', points: westBank, y: 0.012, thickness: 0.06, material: 'wornFloor', roomId: 'balthazan_bounds_collapsed', walkable: true, priority: 10, blocksPlayer: false, tags: ['west-bank'] },
+    { id: 'balthazan_shrine_court_floor', kind: 'floor', shape: 'polygon', points: shrineCourt, y: 0.014, thickness: 0.06, material: 'templeFloor', roomId: 'balthazan_bounds_shrine', walkable: true, priority: 10, blocksPlayer: false, tags: ['plaza', 'shrine-court'] },
+    { id: 'balthazan_admin_alley_floor', kind: 'floor', shape: 'polygon', points: adminAlley, y: 0.012, thickness: 0.06, material: 'wornFloor', roomId: 'balthazan_bounds_admin', walkable: true, priority: 10, blocksPlayer: false, tags: ['admin-alley'] },
+    { id: 'balthazan_collapsed_court_floor', kind: 'floor', shape: 'polygon', points: collapsedCourt, y: 0.012, thickness: 0.06, material: 'wornFloor', roomId: 'balthazan_bounds_collapsed', walkable: true, priority: 10, blocksPlayer: false, tags: ['plaza', 'collapsed-court'] },
+    horizontalSurfaceSegment({ id: 'balthazan_main_path_entry', from: [-38, -29], to: [-22, -29], width: 5.6, y: 0.06, material: 'templeFloor', roomId: 'balthazan_bounds_entry', tags: ['main-route', 'wide-giant-clearance'] }),
+    horizontalSurfaceSegment({ id: 'balthazan_main_path_entry_market', from: [-22, -29], to: [-5, -24], width: 5.6, y: 0.06, material: 'templeFloor', roomId: 'balthazan_bounds_entry', tags: ['main-route', 'wide-giant-clearance'] }),
+    horizontalSurfaceSegment({ id: 'balthazan_main_path_market_south', from: [-5, -24], to: [8, -20], width: 5.6, y: 0.06, material: 'templeFloor', roomId: 'balthazan_bounds_market', tags: ['main-route', 'wide-giant-clearance'] }),
+    horizontalSurfaceSegment({ id: 'balthazan_main_path_market', from: [8, -20], to: [24, -9], width: 5.6, y: 0.06, material: 'templeFloor', roomId: 'balthazan_bounds_market', tags: ['main-route', 'wide-giant-clearance'] }),
+    horizontalSurfaceSegment({ id: 'balthazan_main_path_canal_north', from: [30, 8], to: [24, 27], width: 5.6, y: 0.06, material: 'templeFloor', roomId: 'balthazan_bounds_market', tags: ['main-route', 'wide-giant-clearance'] }),
+    horizontalSurfaceSegment({ id: 'balthazan_main_path_shrine', from: [24, 27], to: [16, 41], width: 5.6, y: 0.07, material: 'templeFloor', roomId: 'balthazan_bounds_shrine', tags: ['main-route', 'wide-giant-clearance'] }),
+    horizontalSurfaceSegment({ id: 'balthazan_west_bank_path_south', from: [-35, -2], to: [-27, 8], width: 4.5, y: 0.045, material: 'wornFloor', roomId: 'balthazan_bounds_collapsed', priority: 16, tags: ['alternate-route'] }),
+    horizontalSurfaceSegment({ id: 'balthazan_west_bank_path_north', from: [-27, 8], to: [-18, 45], width: 4.5, y: 0.045, material: 'wornFloor', roomId: 'balthazan_bounds_collapsed', priority: 16, tags: ['alternate-route'] }),
+    horizontalSurfaceSegment({ id: 'balthazan_admin_cut_path_south', from: [31, -7], to: [48, 0], width: 3.9, y: 0.045, material: 'wornFloor', roomId: 'balthazan_bounds_admin', priority: 16, tags: ['side-route'] }),
+    horizontalSurfaceSegment({ id: 'balthazan_admin_cut_path_north', from: [48, 0], to: [39, 27], width: 3.9, y: 0.045, material: 'wornFloor', roomId: 'balthazan_bounds_admin', priority: 16, tags: ['side-route'] }),
+    { id: 'balthazan_shrine_high_terrace_top', kind: 'platformTop', shape: 'polygon', points: shrineTerrace, y: 1.675, thickness: 0.06, material: 'templeFloor', roomId: 'balthazan_bounds_shrine', walkable: true, priority: 26, blocksPlayer: false, tags: ['raised', 'shrine', 'giant-clearance'] },
+    { id: 'balthazan_admin_watch_platform_top', kind: 'platformTop', shape: 'polygon', points: adminPlatform, y: 0.925, thickness: 0.06, material: 'wornFloor', roomId: 'balthazan_bounds_admin', walkable: true, priority: 24, blocksPlayer: false, tags: ['raised', 'admin'] },
+    horizontalSurfaceSegment({ id: 'balthazan_canal_bridge_south_top', kind: 'platformTop', from: [-7, -1], to: [7, -1], width: 4.2, y: 0.535, thickness: 0.035, material: 'bridgeDeck', roomId: 'balthazan_bounds_market', walkable: false, priority: 28, tags: ['bridgeDeck', 'giant-passable'] }),
+    horizontalSurfaceSegment({ id: 'balthazan_canal_bridge_north_top', kind: 'platformTop', from: [-4, 16], to: [13, 16], width: 4.4, y: 0.585, thickness: 0.035, material: 'bridgeDeck', roomId: 'balthazan_bounds_market', walkable: false, priority: 28, tags: ['bridgeDeck', 'giant-passable'] }),
+    { id: 'balthazan_grass_patch_entry_edge', kind: 'floor', shape: 'rect', center: [-38, 0.07, -20], width: 4.2, depth: 1.7, y: 0.07, thickness: 0.025, yaw: -0.22, material: 'grassPatch', roomId: 'balthazan_bounds_entry', walkable: false, blocksPlayer: false, tags: ['grass', 'reclaimed-edge'] },
+    { id: 'balthazan_grass_patch_canal_crack', kind: 'floor', shape: 'rect', center: [28, 0.075, 5.25], width: 3.5, depth: 1.1, y: 0.075, thickness: 0.025, yaw: 0.18, material: 'grassPatch', roomId: 'balthazan_bounds_market', walkable: false, blocksPlayer: false, tags: ['grass', 'canal-side-crack'] },
+    { id: 'balthazan_grass_patch_shrine_courtyard', kind: 'platformTop', shape: 'rect', center: [7, 1.735, 48], width: 4.8, depth: 1.5, y: 1.735, thickness: 0.025, yaw: -0.4, material: 'grassPatch', roomId: 'balthazan_bounds_shrine', walkable: false, blocksPlayer: false, tags: ['grass', 'shrine-edge'] },
+    { id: 'balthazan_grass_patch_collapsed_corner', kind: 'floor', shape: 'rect', center: [-33, 0.07, 55], width: 5.2, depth: 1.9, y: 0.07, thickness: 0.025, yaw: 0.5, material: 'grassPatch', roomId: 'balthazan_bounds_collapsed', walkable: false, blocksPlayer: false, tags: ['grass', 'ruined-corner'] },
+    { id: 'balthazan_grass_patch_admin_crack', kind: 'platformTop', shape: 'rect', center: [41, 0.975, 22], width: 3.2, depth: 1.0, y: 0.975, thickness: 0.025, yaw: -0.15, material: 'grassPatch', roomId: 'balthazan_bounds_admin', walkable: false, blocksPlayer: false, tags: ['grass', 'admin-crack'] },
+    { id: 'balthazan_shrine_canopy_underside', kind: 'ceiling', shape: 'rect', center: [20, 7.18, 44], width: 24, depth: 16, y: 7.18, thickness: 0.34, yaw: 0.18, material: 'roofStone', roomId: 'balthazan_bounds_shrine', walkable: false, blocksPlayer: false, tags: ['overhead-closure', 'shrine-canopy'] },
+    { id: 'balthazan_admin_roof_underside', kind: 'ceiling', shape: 'rect', center: [50, 6.19, 17], width: 18, depth: 15, y: 6.19, thickness: 0.32, yaw: -0.22, material: 'blackStone', roomId: 'balthazan_bounds_admin', walkable: false, blocksPlayer: false, tags: ['overhead-closure', 'admin-roof'] },
+    { id: 'balthazan_entry_gate_cap_underside', kind: 'roof', shape: 'rect', center: [-29, 7.01, -35], width: 17, depth: 7, y: 7.01, thickness: 0.28, yaw: -0.25, material: 'limestone', roomId: 'balthazan_bounds_entry', walkable: false, blocksPlayer: false, tags: ['overhead-closure', 'gate-cap'] },
   ],
-  pathRibbons: [
-    { id: 'balthazan_main_processional_path', points: [[-38, -29], [-22, -29], [-5, -24], [8, -20], [24, -9], [30, 8], [24, 27], [16, 41]], width: 5.4, y: 0.045, material: 'templeFloor', tags: ['main-route', 'wide-giant-clearance'] },
-    { id: 'balthazan_west_bank_path', points: [[-35, -2], [-27, 8], [-25, 26], [-18, 45]], width: 4.4, y: 0.035, material: 'wornFloor', tags: ['alternate-route'] },
-    { id: 'balthazan_admin_cut_path', points: [[31, -7], [48, 0], [52, 18], [39, 27]], width: 3.8, y: 0.035, material: 'wornFloor', tags: ['side-route'] },
-  ],
+  pathRibbons: [],
   platforms: [
-    { id: 'balthazan_shrine_high_terrace', footprint: [[9, 34], [31, 33], [35, 48], [15, 54], [3, 45]], y: 0, height: 1.65, material: 'sandstone', topMaterial: 'templeFloor', tags: ['raised', 'shrine', 'giant-clearance'] },
-    { id: 'balthazan_admin_watch_platform', footprint: [[43, 7], [58, 11], [58, 23], [45, 27], [38, 17]], y: 0, height: 0.9, material: 'blackStone', topMaterial: 'wornFloor', tags: ['raised', 'admin'] },
+    { id: 'balthazan_shrine_high_terrace', footprint: shrineTerrace, y: 0, height: 1.65, material: 'sandstone', topMaterial: 'templeFloor', topVisible: false, tags: ['raised', 'shrine', 'giant-clearance'] },
+    { id: 'balthazan_admin_watch_platform', footprint: adminPlatform, y: 0, height: 0.9, material: 'blackStone', topMaterial: 'wornFloor', topVisible: false, tags: ['raised', 'admin'] },
   ],
   ramps: [
     { id: 'balthazan_shrine_sloped_approach', from: [18, 26], to: [18, 35], width: 6.0, y0: 0, y1: 1.65, material: 'templeFloor', tags: ['wide-ramp', 'giant-clearance'] },
@@ -135,20 +176,12 @@ export const balthazanDefinition = Object.freeze({
     { id: 'balthazan_market_stall_wall_02', kind: 'lowWall', from: [18, -8], to: [24, -4], height: 1.25, thickness: 0.28, material: 'wood', blocksPlayer: true, tags: ['market-stall'] },
     { id: 'balthazan_processional_curb_left', kind: 'curb', from: [-34, -32], to: [21, -15], height: 0.24, thickness: 0.18, material: 'limestone', blocksPlayer: false },
     { id: 'balthazan_processional_curb_right', kind: 'curb', from: [-37, -26], to: [19, -9], height: 0.24, thickness: 0.18, material: 'limestone', blocksPlayer: false },
-    { id: 'balthazan_shrine_overhead_slab', kind: 'ceilingSlab', position: [20, 7.35, 44], yaw: 0.18, width: 24, depth: 16, thickness: 0.34, material: 'roofStone', topMaterial: 'roofStone', tags: ['overhead-closure', 'shrine-canopy'] },
-    { id: 'balthazan_admin_overhead_slab', kind: 'ceilingSlab', position: [50, 6.35, 17], yaw: -0.22, width: 18, depth: 15, thickness: 0.32, material: 'roofStone', tags: ['overhead-closure', 'admin-roof'] },
-    { id: 'balthazan_entry_gate_overhead_cap', kind: 'ceilingSlab', position: [-29, 7.15, -35], yaw: -0.25, width: 17, depth: 7, thickness: 0.28, material: 'roofStone', tags: ['overhead-closure', 'gate-cap'] },
   ],
   blockers: [
     { id: 'balthazan_canal_void_main', type: 'canal', minX: -11.8, maxX: 31.8, minZ: -0.95, maxZ: 4.55, height: 0.2, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'invisible'], invisible: true },
     { id: 'balthazan_canal_void_north', type: 'canal', minX: -3.8, maxX: 29.8, minZ: 14.9, maxZ: 20.1, height: 0.2, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'invisible'], invisible: true },
   ],
   props: [
-    { id: 'balthazan_grass_patch_entry_edge', position: { x: -38, y: 0.055, z: -20 }, rotation: { x: 0, y: -0.22, z: 0 }, dimensions: { width: 4.2, height: 0.035, depth: 1.7 }, material: 'grassPatch', roomId: 'balthazan_bounds_entry', tags: ['grass', 'reclaimed-edge'] },
-    { id: 'balthazan_grass_patch_canal_crack', position: { x: 28, y: 0.06, z: 5.25 }, rotation: { x: 0, y: 0.18, z: 0 }, dimensions: { width: 3.5, height: 0.035, depth: 1.1 }, material: 'grassPatch', roomId: 'balthazan_bounds_market', tags: ['grass', 'canal-side-crack'] },
-    { id: 'balthazan_grass_patch_shrine_courtyard', position: { x: 7, y: 1.715, z: 48 }, rotation: { x: 0, y: -0.4, z: 0 }, dimensions: { width: 4.8, height: 0.035, depth: 1.5 }, material: 'grassPatch', roomId: 'balthazan_bounds_shrine', tags: ['grass', 'shrine-edge'] },
-    { id: 'balthazan_grass_patch_collapsed_corner', position: { x: -33, y: 0.055, z: 55 }, rotation: { x: 0, y: 0.5, z: 0 }, dimensions: { width: 5.2, height: 0.035, depth: 1.9 }, material: 'grassPatch', roomId: 'balthazan_bounds_collapsed', tags: ['grass', 'ruined-corner'] },
-    { id: 'balthazan_grass_patch_admin_crack', position: { x: 41, y: 0.955, z: 22 }, rotation: { x: 0, y: -0.15, z: 0 }, dimensions: { width: 3.2, height: 0.035, depth: 1.0 }, material: 'grassPatch', roomId: 'balthazan_bounds_admin', tags: ['grass', 'admin-crack'] },
     { id: 'balthazan_sacred_reclaimed_tree_trunk', position: { x: 12.5, y: 2.25, z: 51.5 }, rotation: { x: 0, y: 0.18, z: 0 }, dimensions: { width: 0.55, height: 1.2, depth: 0.55 }, material: 'wood', roomId: 'balthazan_bounds_shrine', tags: ['sacred-tree', 'single-reclaimed-accent'] },
     { id: 'balthazan_sacred_reclaimed_tree_canopy', position: { x: 12.5, y: 3.05, z: 51.5 }, rotation: { x: 0, y: 0.55, z: 0 }, dimensions: { width: 2.4, height: 0.75, depth: 2.0 }, material: 'grassPatch', roomId: 'balthazan_bounds_shrine', tags: ['sacred-tree', 'single-reclaimed-accent'] },
   ],
