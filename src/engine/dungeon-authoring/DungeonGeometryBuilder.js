@@ -679,6 +679,61 @@ function addStairPrimitive({ definition, group, materialFactory, primitive, addP
 }
 
 
+const BRIDGE_PRIMITIVE_KINDS = new Set(['narrowStoneBridge', 'wideCeremonialBridge', 'brokenBridge', 'plankBridge', 'raisedWalkway', 'canalCrossing', 'bridgeWithRailings', 'archedStoneBridge', 'ritualSpanBridge', 'collapsedWalkway']);
+
+function bridgeMaterial(definition, primitive, slot, materialFactory, fallback) {
+  return makeMaterial(definition, primitive[slot] ?? primitive.material ?? primitive.textureProfile, materialFactory, fallback);
+}
+
+function bridgeBrokenGaps(primitive, length) {
+  const gapLength = Math.max(0.35, Math.min(length * 0.38, primitive.gapLength ?? length * 0.22));
+  if (primitive.kind === 'collapsedWalkway') return [{ center: 0, length: gapLength }];
+  if (primitive.kind === 'brokenBridge' || primitive.broken === true || primitive.state === 'broken') return [{ center: primitive.gapOffset ?? length * 0.12, length: gapLength }];
+  return [];
+}
+
+function addBridgePrimitive({ definition, group, materialFactory, primitive, addPart }) {
+  const pos = toVector3(primitive.position);
+  const yaw = primitive.yaw ?? primitive.rotation ?? 0;
+  const width = primitive.width ?? (primitive.kind === 'wideCeremonialBridge' ? 5 : primitive.kind === 'narrowStoneBridge' ? 1.6 : 2.6);
+  const length = primitive.length ?? primitive.depth ?? 6;
+  const deckY = primitive.deckY ?? pos.y ?? 0.18;
+  const height = primitive.height ?? Math.max(0.18, deckY);
+  const thickness = primitive.thickness ?? 0.22;
+  const railings = primitive.railings ?? ['bridgeWithRailings', 'wideCeremonialBridge', 'ritualSpanBridge', 'raisedWalkway'].includes(primitive.kind);
+  const curbs = primitive.curbs ?? ['canalCrossing', 'archedStoneBridge', 'narrowStoneBridge'].includes(primitive.kind);
+  const deckMat = bridgeMaterial(definition, primitive, 'deckMaterial', materialFactory, definition.textures?.floor);
+  const sideMat = bridgeMaterial(definition, primitive, 'sideMaterial', materialFactory, definition.textures?.wall);
+  const trimMat = bridgeMaterial(definition, primitive, 'trimMaterial', materialFactory, definition.textures?.wall);
+  const railMat = bridgeMaterial(definition, primitive, 'railingMaterial', materialFactory, definition.textures?.wall);
+  const underMat = bridgeMaterial(definition, primitive, 'undersideMaterial', materialFactory, definition.textures?.wall);
+  const base = { locationId: definition.id, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:bridge-primitives', debugFootprint: { width, length, height, deckY, railings, curbs, gaps: bridgeBrokenGaps(primitive, length) }, blockerBehavior: primitive.blockerBehavior ?? 'generated railings/curbs/gaps/canal-edge blockers' };
+  const addLocalBox = (suffix, size, local, material, data = {}) => {
+    const offset = new THREE.Vector3(local.x, local.y, local.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    const mesh = addBox({ group, size, position: pos.clone().add(offset), material, name: `V25-${primitive.kind}-${suffix}-${primitive.id}`, userData: { ...base, ...data } });
+    mesh.rotation.y = yaw; addPart(mesh); return mesh;
+  };
+  const gaps = bridgeBrokenGaps(primitive, length);
+  let cursor = -length / 2;
+  gaps.sort((a,b)=>a.center-b.center).forEach((gap, i) => {
+    const start = Math.max(-length / 2, gap.center - gap.length / 2);
+    const end = Math.min(length / 2, gap.center + gap.length / 2);
+    if (start - cursor > 0.1) addLocalBox(`DECK-${i}`, new THREE.Vector3(width, thickness, start - cursor), { x: 0, y: deckY - thickness / 2, z: (cursor + start) / 2 }, deckMat, { bridgePart: 'walkableDeck' });
+    cursor = Math.max(cursor, end);
+  });
+  if (length / 2 - cursor > 0.1) addLocalBox('DECK-end', new THREE.Vector3(width, thickness, length / 2 - cursor), { x: 0, y: deckY - thickness / 2, z: (cursor + length / 2) / 2 }, deckMat, { bridgePart: 'walkableDeck' });
+  if (height > thickness) addLocalBox('UNDERSIDE', new THREE.Vector3(width * 0.86, Math.max(0.12, height), length * 0.92), { x: 0, y: deckY - thickness - height / 2, z: 0 }, underMat, { bridgePart: primitive.kind === 'archedStoneBridge' ? 'archedUndersideMass' : 'underside' });
+  if (['plankBridge', 'raisedWalkway', 'collapsedWalkway'].includes(primitive.kind)) {
+    const count = Math.max(3, Math.floor(length / 0.7));
+    for (let i=0;i<count;i+=1) addLocalBox(`PLANK-${i}`, new THREE.Vector3(width * 0.94, 0.055, 0.08), { x: 0, y: deckY + 0.035, z: -length/2 + (i+0.5)*length/count }, trimMat, { bridgePart: 'plankSeam' });
+  }
+  if (curbs) [-1,1].forEach((side)=>addLocalBox(`CURB-${side}`, new THREE.Vector3(0.18, 0.24, length), { x: side*(width/2+0.09), y: deckY+0.12, z:0 }, sideMat, { bridgePart:'curb', blocksPlayer:true }));
+  if (railings) [-1,1].forEach((side)=>{ addLocalBox(`RAIL-${side}`, new THREE.Vector3(0.12, 0.9, length), { x: side*(width/2+0.22), y: deckY+0.45, z:0 }, railMat, { bridgePart:'railing', blocksPlayer:true }); });
+  if (primitive.kind === 'canalCrossing' || primitive.canalContext) {
+    addLocalBox('WATER', new THREE.Vector3(width + 2.8, 0.035, Math.min(length * 0.72, 4.2)), { x: 0, y: Math.max(0.025, deckY - 0.32), z: 0 }, makeMaterial(definition, primitive.waterMaterial ?? 'turquoiseWater', materialFactory, definition.textures?.water), { bridgePart: 'compactCanalContext', blocksPlayer: false });
+  }
+}
+
 function doorwayMaterial(definition, primitive, slot, materialFactory, fallback) {
   return makeMaterial(definition, primitive[slot] ?? primitive.material ?? primitive.textureProfile, materialFactory, fallback);
 }
@@ -755,7 +810,9 @@ function addV23ArchitecturalPrimitives({ definition, group, materialFactory }) {
     primitive.locationId = definition.id;
     const material = primitiveMaterial(definition, primitive, materialFactory, primitive.kind === 'canalWater' ? definition.textures?.water : definition.textures?.wall);
     const base = { locationId: definition.id, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:v2.3' };
-    if (STAIR_PRIMITIVE_KINDS.has(primitive.kind)) {
+    if (BRIDGE_PRIMITIVE_KINDS.has(primitive.kind)) {
+      addBridgePrimitive({ definition, group, materialFactory, primitive, addPart });
+    } else if (STAIR_PRIMITIVE_KINDS.has(primitive.kind)) {
       addStairPrimitive({ definition, group, materialFactory, primitive, addPart });
     } else if (DOORWAY_PRIMITIVE_KINDS.has(primitive.kind)) {
       addDoorwayPrimitive({ definition, group, materialFactory, primitive, addPart });
