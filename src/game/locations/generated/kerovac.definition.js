@@ -30,6 +30,7 @@ const textures = Object.freeze({
   pack2OxidizedArchTrim: { path: './assets/textures/pack2/metal_oxidized_arch_trim_01.png', repeat: [2, 1.2], color: 0x6a8377, roughness: 0.68, metalness: 0.48, emissive: 0x113b35, emissiveIntensity: 0.2, boxUvScale: [0.24, 0.2], cylinderUvScale: [0.34, 0.18] },
   pack2RitualGlyphPanel: { path: './assets/textures/pack2/panel_ritual_glyph_column_01.png', repeat: [1, 1], color: 0xe0bd77, roughness: 0.88, metalness: 0, emissive: 0x56310c, emissiveIntensity: 0.38, boxUvScale: [0.18, 0.18] },
   turquoiseGlow: { color: 0x31c6c2, roughness: 0.65, metalness: 0, emissive: 0x20a9a4, emissiveIntensity: 0.56 },
+  expoBlackInk: { color: 0x050403, roughness: 0.92, metalness: 0, emissive: 0x000000, emissiveIntensity: 0 },
 });
 
 function room({
@@ -119,6 +120,59 @@ function expoPad(id, label, zone, x, z, width, depth, material = 'wornCivicFloor
     tags: ['geometry-expo-center', 'display-pad', `display-pad-${zone}`, label],
     userData: { displayPadId: label, displayZone: zone, officialDarbExpoPad: true, swappablePreviewSlot: true, lowProfileWalkableMarker: true },
   };
+}
+
+
+function expoFloorStroke(id, from, to, thickness = 0.34) {
+  return { id: `K_expo_floor_mark_${id}`, kind: 'lowWall', from, to, y: 0.235, height: 0.032, thickness, material: 'expoBlackInk', blocksPlayer: false, roomId: 'K10', tags: ['geometry-expo-center', 'bold-floor-lettering', 'display-pad-id-marking'] };
+}
+
+const LETTER_SEGMENTS = Object.freeze({
+  A: ['top', 'upperLeft', 'upperRight', 'middle', 'lowerLeft', 'lowerRight'],
+  B: ['upperLeft', 'upperRight', 'middle', 'lowerLeft', 'lowerRight', 'bottom'],
+  C: ['top', 'upperLeft', 'lowerLeft', 'bottom'],
+  D: ['upperLeft', 'upperRight', 'lowerLeft', 'lowerRight', 'bottom'],
+});
+
+const DIGIT_SEGMENTS = Object.freeze({
+  1: ['upperRight', 'lowerRight'],
+  2: ['top', 'upperRight', 'middle', 'lowerLeft', 'bottom'],
+  3: ['top', 'upperRight', 'middle', 'lowerRight', 'bottom'],
+  4: ['upperLeft', 'upperRight', 'middle', 'lowerRight'],
+  5: ['top', 'upperLeft', 'middle', 'lowerRight', 'bottom'],
+});
+
+function expoSevenSegmentGlyph(prefix, char, cx, z, scale = 1, thickness = 0.28) {
+  const segments = LETTER_SEGMENTS[char] ?? DIGIT_SEGMENTS[char] ?? [];
+  const w = 1.15 * scale;
+  const h = 1.8 * scale;
+  const yTop = z - h / 2;
+  const yMid = z;
+  const yBot = z + h / 2;
+  const xL = cx - w / 2;
+  const xR = cx + w / 2;
+  const strokes = [];
+  const add = (name, from, to) => strokes.push(expoFloorStroke(`${prefix}_${char}_${name}`, from, to, thickness));
+  if (segments.includes('top')) add('top', [xL, yTop], [xR, yTop]);
+  if (segments.includes('middle')) add('mid', [xL, yMid], [xR, yMid]);
+  if (segments.includes('bottom')) add('bottom', [xL, yBot], [xR, yBot]);
+  if (segments.includes('upperLeft')) add('upper_left', [xL, yTop], [xL, yMid]);
+  if (segments.includes('upperRight')) add('upper_right', [xR, yTop], [xR, yMid]);
+  if (segments.includes('lowerLeft')) add('lower_left', [xL, yMid], [xL, yBot]);
+  if (segments.includes('lowerRight')) add('lower_right', [xR, yMid], [xR, yBot]);
+  return strokes;
+}
+
+function expoPadIdMark(label, x, z) {
+  const scale = 0.9;
+  return [
+    ...expoSevenSegmentGlyph(`${label}_section`, label[0], x - 0.62, z + 1.55, scale, 0.22),
+    ...expoSevenSegmentGlyph(`${label}_number`, label.slice(1), x + 0.62, z + 1.55, scale, 0.22),
+  ];
+}
+
+function expoSectionLetterMark(letter, x, z) {
+  return expoSevenSegmentGlyph(`${letter}_row_letter`, letter, x, z, 1.55, 0.38);
 }
 
 function expoMarker(id, x, z, width, depth, material = 'bronze') {
@@ -303,6 +357,11 @@ export const kerovacDefinition = Object.freeze({
     expoRail('large_zone_west', [85, -34], [85, 17]),
     expoRail('water_lane_south', [51, 54.4], [99, 54.4], 'pack2TurquoiseInlay'),
     expoRail('water_lane_north', [51, 61.6], [99, 61.6], 'pack2TurquoiseInlay'),
+    ...['A1','A2','A3','B1','B2','B3','C1','C2','C3','C4','D1','D2','D3'].flatMap((label) => { const row = label.charCodeAt(0) - 65; const col = Number(label.slice(1)) - 1; return expoPadIdMark(label, 48 + col * 8, -26 + row * 10); }),
+    ...expoSectionLetterMark('A', 43.9, -26),
+    ...expoSectionLetterMark('B', 43.9, -16),
+    ...expoSectionLetterMark('C', 43.9, -6),
+    ...expoSectionLetterMark('D', 43.9, 4),
 
     { id: 'K_expo_west_observation_tier_01', kind: 'lowWall', from: [40.5, -36], to: [40.5, 70], height: 1.05, thickness: 2.0, material: 'pack2DirtyBaseStone', blocksPlayer: true, roomId: 'K10', tags: ['geometry-expo-center', 'raised-observation-tier'] },
     { id: 'K_expo_east_observation_tier_01', kind: 'lowWall', from: [118, -36], to: [118, 70], height: 1.05, thickness: 2.0, material: 'pack2DirtyBaseStone', blocksPlayer: true, roomId: 'K10', tags: ['geometry-expo-center', 'raised-observation-tier'] },
