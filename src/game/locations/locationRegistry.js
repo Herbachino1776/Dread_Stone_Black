@@ -11,29 +11,69 @@ import { southReliquaryCryptDefinition } from './southReliquaryCrypt.definition.
 import { v2TestShrineDefinition } from './v2TestShrine.definition.js';
 
 const KEROVAC_EXPO_ENTRANCE_BLOCKER_ID = 'K_expo_west_observation_tier_01';
+const KEROVAC_EXPO_OVERLAY_Y = 0.055;
 
-const kerovacDefinitionWithExpoEntranceFix = Object.freeze({
-  ...kerovacDefinition,
-  architecturalPrimitives: (kerovacDefinition.architecturalPrimitives ?? []).map((primitive) => {
-    if (primitive?.id !== KEROVAC_EXPO_ENTRANCE_BLOCKER_ID) {
-      return primitive;
-    }
+function withPositionY(position, y) {
+  if (!Array.isArray(position)) return position;
+  return [position[0], Math.max(Number(position[1] ?? 0), y), position[2]];
+}
 
-    return {
-      ...primitive,
+function isKerovacExpoGroundOverlay(primitive) {
+  if (primitive?.roomId !== 'K10') return false;
+  const id = primitive.id ?? '';
+  const tags = new Set(primitive.tags ?? []);
+  return id.startsWith('K_expo_pad_')
+    || id.startsWith('K_expo_marker_')
+    || id.startsWith('K_expo_rail_')
+    || tags.has('display-pad')
+    || tags.has('display-grid-marker')
+    || tags.has('low-profile-display-trim');
+}
+
+function normalizeKerovacPrimitive(primitive) {
+  if (!primitive) return primitive;
+
+  let next = primitive;
+
+  if (primitive.id === KEROVAC_EXPO_ENTRANCE_BLOCKER_ID) {
+    next = {
+      ...next,
       blocksPlayer: false,
       blocksEnemies: false,
       tags: [
-        ...(primitive.tags ?? []),
+        ...(next.tags ?? []),
         'expo-entrance-clearance-fix',
         'non-blocking-entrance-trim',
       ],
       userData: {
-        ...(primitive.userData ?? {}),
+        ...(next.userData ?? {}),
         entranceClearanceFix: 'Disabled blocking on this west observation tier because it crosses the K09-to-K10 Expo entrance path.',
       },
     };
-  }),
+  }
+
+  if (isKerovacExpoGroundOverlay(primitive)) {
+    next = {
+      ...next,
+      y: Math.max(Number(next.y ?? 0), KEROVAC_EXPO_OVERLAY_Y),
+      position: withPositionY(next.position, KEROVAC_EXPO_OVERLAY_Y),
+      tags: [
+        ...(next.tags ?? []),
+        'z-fight-clearance-fix',
+      ],
+      userData: {
+        ...(next.userData ?? {}),
+        zFightClearanceFix: `Raised low-profile Expo floor overlay to y=${KEROVAC_EXPO_OVERLAY_Y} so it no longer renders coplanar with the room floor.`,
+      },
+    };
+  }
+
+  return next;
+}
+
+const kerovacDefinitionWithRuntimeFixes = Object.freeze({
+  ...kerovacDefinition,
+  architecturalPrimitives: (kerovacDefinition.architecturalPrimitives ?? []).map(normalizeKerovacPrimitive),
 });
 
 const locationDefinitions = Object.freeze({
@@ -44,7 +84,7 @@ const locationDefinitions = Object.freeze({
   [sumerianCityBlockV0Definition.id]: sumerianCityBlockV0Definition,
   [sumerianSunPalaceDistrictV1Definition.id]: sumerianSunPalaceDistrictV1Definition,
   [sumerianCanalMarketDistrictV2Definition.id]: sumerianCanalMarketDistrictV2Definition,
-  [kerovacDefinitionWithExpoEntranceFix.id]: kerovacDefinitionWithExpoEntranceFix,
+  [kerovacDefinitionWithRuntimeFixes.id]: kerovacDefinitionWithRuntimeFixes,
   [southReliquaryCryptDefinition.id]: southReliquaryCryptDefinition,
   [reliquaryFieldDefinition.id]: reliquaryFieldDefinition,
   [v2TestShrineDefinition.id]: v2TestShrineDefinition,
