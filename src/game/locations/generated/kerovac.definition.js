@@ -30,7 +30,7 @@ const textures = Object.freeze({
   pack2OxidizedArchTrim: { path: './assets/textures/pack2/metal_oxidized_arch_trim_01.png', repeat: [2, 1.2], color: 0x6a8377, roughness: 0.68, metalness: 0.48, emissive: 0x113b35, emissiveIntensity: 0.2, boxUvScale: [0.24, 0.2], cylinderUvScale: [0.34, 0.18] },
   pack2RitualGlyphPanel: { path: './assets/textures/pack2/panel_ritual_glyph_column_01.png', repeat: [1, 1], color: 0xe0bd77, roughness: 0.88, metalness: 0, emissive: 0x56310c, emissiveIntensity: 0.38, boxUvScale: [0.18, 0.18] },
   turquoiseGlow: { color: 0x31c6c2, roughness: 0.65, metalness: 0, emissive: 0x20a9a4, emissiveIntensity: 0.56 },
-  jakeBirthdayBanner: { path: './assets/textures/kerovac/happy_31st_jake_banner.svg', repeat: [1, 1], color: 0xffffff, roughness: 0.86, metalness: 0, emissive: 0xf2b94a, emissiveIntensity: 0.48 },
+  jakeBirthdayBanner: { path: './assets/textures/kerovac/happy_31st_jake_banner.svg', repeat: [1, 1], color: 0xffffff, roughness: 0.82, metalness: 0, emissive: 0xffcc66, emissiveIntensity: 0.58 },
   expoBlackInk: { color: 0x050403, roughness: 0.92, metalness: 0, emissive: 0x000000, emissiveIntensity: 0 },
   fishFinAmber: { path: './assets/textures/fish/fish_fin_membrane_amber_01.png', repeat: [1, 1], color: 0xd18a35, roughness: 0.82, metalness: 0, emissive: 0x2f1606, emissiveIntensity: 0.08 },
   fishFinDark: { path: './assets/textures/fish/fish_fin_membrane_dark_01.png', repeat: [1, 1], color: 0x242825, roughness: 0.86, metalness: 0, emissive: 0x050604, emissiveIntensity: 0.04 },
@@ -333,7 +333,6 @@ export const kerovacDefinition = Object.freeze({
     wallPanel('K_panel_threshold_sumerian', 'K_PANEL_WALL_early_southwest', 'warningSumerian', 0.5, 2.0, 3.0),
     wallPanel('K_panel_avenue_hieroglyph', 'K_PANEL_WALL_early_southeast', 'warningHieroglyphB', 0.5, 2.0, 3.0),
     wallPanel('K_panel_court_celestial_map', 'K_PANEL_WALL_court_west', 'celestialMap', 0.5, 2.5, 3.3),
-    wallPanel('K_panel_jake_birthday_banner', 'K_PANEL_WALL_jake_birthday_east', 'jakeBirthdayBanner', 0.5, 7.2, 2.7),
     wallPanel('K_panel_market_priesthood_rite', 'K_PANEL_WALL_market_east', 'priesthoodRite', 0.36, 2.2, 3.2),
     wallPanel('K_panel_market_astral_warning', 'K_PANEL_WALL_market_east', 'astralGateway', 0.72, 2.2, 3.2),
     wallPanel('K_panel_vestibule_threat', 'K_PANEL_WALL_vestibule_west', 'extradimensionalThreat', 0.5, 2.4, 3.4),
@@ -349,6 +348,7 @@ export const kerovacDefinition = Object.freeze({
     pillar('K_court_pillar_nw', 'K03', -16, 26, 9.2, 0.58, 'ritualWall'),
     pillar('K_court_pillar_ne', 'K03', 16, 26, 9.2, 0.58, 'ritualWall'),
     { id: 'K_court_central_sunstone_altar', kind: 'altar', position: [0, 0, 17], yaw: 0, width: 4.6, depth: 3.2, height: 1.2, material: 'limestoneWall', topMaterial: 'bronze', roomId: 'K03', tags: ['central-sunstone', 'visible-blocker'] },
+    { id: 'K_court_jake_birthday_hanging_scoreboard', kind: 'hangingSign', position: [0, 5.8, 23.8], yaw: Math.PI, width: 12.6, height: 3.8, thickness: 0.34, material: 'jakeBirthdayBanner', frameMaterial: 'bronze', chainMaterial: 'pack2OxidizedArchTrim', chainTopY: 9.45, chainWidth: 0.12, blocksPlayer: false, roomId: 'K03', tags: ['jake-birthday', 'hanging-scoreboard', 'ceiling-suspended', 'expo-entrance-clear'], userData: { message: 'HAPPY 31ST JAKE', placement: 'Suspended over the Civic Reliquary Court sightline near the Expo entrance without touching the K09 route.', readableFromEntry: true } },
 
     // Permanent Kerovac Geometry Expo Center: official swappable DARB showroom annex. Keep K09/K10 structure intact; future batches should replace only preview objects assigned to display pad IDs.
     // Workflow: remove previous preview set, insert new primitive/object batch into pads A1-D5, M1-M8, LARGE-01-LARGE-04, VLARGE-01-VLARGE-02, and preserve the wide aisles, water-demo lane, roof, lighting, return route, and metadata.

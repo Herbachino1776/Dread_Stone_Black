@@ -1106,6 +1106,29 @@ function addV23ArchitecturalPrimitives({ definition, group, materialFactory }) {
     } else if (primitive.kind === 'ceilingSlab') {
       const pos = toVector3(primitive.position); const yaw = primitive.yaw ?? 0; const width = primitive.width ?? 4; const depth = primitive.depth ?? 4; const thickness = primitive.thickness ?? 0.2;
       const slab = addBox({ group, size: new THREE.Vector3(width, thickness, depth), position: pos, material, name: `V23-ceilingSlab-${primitive.id}`, userData: { ...base, animated: primitive.animated } }); slab.rotation.y = yaw; addPart(slab);
+    } else if (primitive.kind === 'hangingSign') {
+      const pos = toVector3(primitive.position); const yaw = primitive.yaw ?? 0; const width = primitive.width ?? 8; const height = primitive.height ?? 3; const thickness = primitive.thickness ?? 0.22;
+      const frameMaterial = makeMaterial(definition, primitive.frameMaterial ?? primitive.material, materialFactory, definition.textures?.wall);
+      const chainMaterial = makeMaterial(definition, primitive.chainMaterial ?? primitive.frameMaterial ?? primitive.material, materialFactory, definition.textures?.wall);
+      const panel = addBox({ group, size: new THREE.Vector3(width, height, thickness), position: pos, material: frameMaterial, name: `V23-hangingSign-PANEL-${primitive.id}`, userData: base }); panel.rotation.y = yaw; addPart(panel);
+      const faceGeometry = new THREE.PlaneGeometry(width * 0.86, height * 0.68);
+      const face = new THREE.Mesh(faceGeometry, material);
+      face.name = `V23-hangingSign-FACE-${primitive.id}`;
+      const front = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+      face.position.copy(pos.clone().add(front.multiplyScalar(thickness / 2 + 0.012)));
+      face.rotation.y = yaw;
+      face.castShadow = true; face.receiveShadow = true; face.userData = { ...base, hangingSignFace: true }; group.add(face); addPart(face);
+      const trimY = height / 2 - 0.12;
+      [-1, 1].forEach((side) => {
+        const railOffset = new THREE.Vector3(0, side * trimY, thickness / 2 + 0.025).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+        const rail = addBox({ group, size: new THREE.Vector3(width * 0.96, 0.14, 0.12), position: pos.clone().add(railOffset), material: frameMaterial, name: `V23-hangingSign-RAIL-${primitive.id}-${side}`, userData: base }); rail.rotation.y = yaw; addPart(rail);
+      });
+      const chainTopY = primitive.chainTopY ?? 9.2; const chainWidth = primitive.chainWidth ?? 0.08; const anchorX = width * 0.42;
+      [-1, 1].forEach((xSide) => {
+        const anchor = new THREE.Vector3(xSide * anchorX, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(pos);
+        const chainHeight = Math.max(0.2, chainTopY - (pos.y + height / 2));
+        const chain = addBox({ group, size: new THREE.Vector3(chainWidth, chainHeight, chainWidth), position: new THREE.Vector3(anchor.x, pos.y + height / 2 + chainHeight / 2, anchor.z), material: chainMaterial, name: `V23-hangingSign-CHAIN-${primitive.id}-${xSide}`, userData: base }); chain.rotation.y = yaw; addPart(chain);
+      });
     } else if (primitive.kind === 'obelisk') {
       const pos = toVector3(primitive.position); const height = primitive.height ?? 3; const width = primitive.baseWidth ?? 0.7; const baseBox = addBox({ group, size: new THREE.Vector3(width, height * 0.78, width), position: new THREE.Vector3(pos.x, pos.y + height * 0.39, pos.z), material, name: `V23-obelisk-SHAFT-${primitive.id}`, userData: base }); baseBox.rotation.y = primitive.yaw ?? 0; addPart(baseBox); const tip = addBox({ group, size: new THREE.Vector3(width * 0.65, height * 0.22, width * 0.65), position: new THREE.Vector3(pos.x, pos.y + height * 0.89, pos.z), material, name: `V23-obelisk-TIP-${primitive.id}`, userData: base }); tip.rotation.y = (primitive.yaw ?? 0) + Math.PI / 4; addPart(tip);
     } else if (primitive.kind === 'wallPanel') {
