@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="768" viewBox="0 0 2048 768">
+  <rect width="2048" height="768" fill="#1b1208"/>
+  <rect x="40" y="40" width="1968" height="688" rx="28" fill="#d9b45f"/>
+  <rect x="82" y="82" width="1884" height="604" rx="18" fill="#2a1909"/>
+  <rect x="118" y="118" width="1812" height="532" rx="12" fill="#f2d17d"/>
+  <path d="M154 180 H1894 M154 588 H1894" stroke="#6d350f" stroke-width="18" stroke-linecap="round"/>
+  <text x="1024" y="438" text-anchor="middle" font-family="Arial Black, Impact, sans-serif" font-size="176" font-weight="900" letter-spacing="8" fill="#170d04" stroke="#fff0b8" stroke-width="8" paint-order="stroke fill">HAPPY 31ST JAKE</text>
+  <g fill="#6d350f">
+    <circle cx="190" cy="384" r="36"/>
+    <circle cx="1858" cy="384" r="36"/>
+    <path d="M250 384 l70 -42 l70 42 l-70 42z"/>
+    <path d="M1658 384 l70 -42 l70 42 l-70 42z"/>
+  </g>
+</svg>

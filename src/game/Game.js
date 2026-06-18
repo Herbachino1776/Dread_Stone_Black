@@ -81,7 +81,7 @@ export class Game {
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
     const fieldSpawn = FIELD_RETURN_SPAWNS_BY_LOCATION[returnedFrom] ?? 'start';
     const requestedLocation = getLocationDefinition(requestedArea);
-    const area = ['dungeon', 'black-grass-temple'].includes(requestedArea) || requestedLocation?.tags?.includes('compiled-runtime') ? requestedArea : 'field';
+    const area = ['dungeon', 'black-grass-temple'].includes(requestedArea) || requestedLocation?.tags?.includes('compiled-runtime') ? requestedArea : 'kerovac';
     this.gameState = new GameState();
     this.equipmentRuntime = new EquipmentRuntime({
       weaponProfiles: equipmentRegistry.weapons,
