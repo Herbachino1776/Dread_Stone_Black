@@ -623,14 +623,31 @@ const ROD_SPECS = {
 };
 
 const FISH_SPECS = {
-  smallRiverFish: { l: 1.25, h: 0.32, w: 0.22, color: 0x53635a, fin: 0x39433e, tail: 0.28, eye: 0.035 },
-  broadCarpFish: { l: 1.65, h: 0.62, w: 0.38, color: 0x6d6043, fin: 0x443a2b, tail: 0.32, whiskers: true, eye: 0.045 },
-  longEelFish: { l: 2.35, h: 0.22, w: 0.18, color: 0x273026, fin: 0x1a211b, tail: 0.2, eel: true, eye: 0.03 },
-  spineBackFish: { l: 1.75, h: 0.42, w: 0.28, color: 0x3f4b44, fin: 0x232b28, tail: 0.32, spines: 8, eye: 0.04 },
-  flatMarshFish: { l: 1.55, h: 0.18, w: 0.78, color: 0x4a4232, fin: 0x29251d, tail: 0.24, flat: true, eye: 0.04 },
-  jawHunterFish: { l: 1.95, h: 0.46, w: 0.32, color: 0x2f3432, fin: 0x1b1f1e, tail: 0.38, jaw: true, eye: 0.055 },
-  sacredGlowFish: { l: 1.65, h: 0.38, w: 0.27, color: 0x203733, fin: 0x1c514d, tail: 0.34, glow: true, eye: 0.045 },
+  smallRiverFish: { l: 1.25, h: 0.32, w: 0.22, bodyMaterial: 'fishScaleSilver', finMaterial: 'fishFinAmber', tailMaterial: 'fishFinAmber', tail: 0.28, eye: 0.035, dorsal: 0.22, ventral: 0.16, pectoral: 0.16 },
+  broadCarpFish: { l: 1.65, h: 0.62, w: 0.38, bodyMaterial: 'fishScaleKoiCreamOrange', finMaterial: 'fishFinAmber', tailMaterial: 'fishFinAmber', tail: 0.34, whiskers: true, eye: 0.045, dorsal: 0.32, ventral: 0.22, pectoral: 0.2 },
+  longEelFish: { l: 2.35, h: 0.22, w: 0.18, bodyMaterial: 'fishScaleEelSkinDark', finMaterial: 'fishFinDark', tailMaterial: 'fishFinDark', tail: 0.2, eel: true, eye: 0.03, dorsal: 0.16, ventral: 0.1, pectoral: 0.11 },
+  spineBackFish: { l: 1.75, h: 0.42, w: 0.28, bodyMaterial: 'fishScaleZebraOlive', finMaterial: 'fishFinDark', tailMaterial: 'fishFinDark', spineMaterial: 'fishFinDark', tail: 0.32, spines: 8, eye: 0.04, dorsal: 0.28, ventral: 0.18, pectoral: 0.17 },
+  flatMarshFish: { l: 1.55, h: 0.18, w: 0.78, bodyMaterial: 'fishScaleMottledDark', finMaterial: 'fishFinSpottedTeal', tailMaterial: 'fishFinSpottedTeal', tail: 0.26, flat: true, eye: 0.04, dorsal: 0.18, ventral: 0.14, pectoral: 0.28 },
+  jawHunterFish: { l: 1.95, h: 0.46, w: 0.32, bodyMaterial: 'fishScaleMottledDark', headMaterial: 'fishScaleMottledDark', finMaterial: 'fishFinDark', tailMaterial: 'fishFinDark', tail: 0.38, jaw: true, eye: 0.055, dorsal: 0.3, ventral: 0.2, pectoral: 0.18 },
+  sacredGlowFish: { l: 1.65, h: 0.38, w: 0.27, bodyMaterial: 'fishScaleIridescentTeal', finMaterial: 'fishFinSpottedTeal', tailMaterial: 'fishFinSpottedTeal', tail: 0.34, glow: true, eye: 0.045, dorsal: 0.26, ventral: 0.18, pectoral: 0.18 },
 };
+
+function fishMaterial(definition, primitive, slot, spec, materialFactory, fallbackColor, options = {}) {
+  const reference = primitive[slot] ?? spec[slot];
+  const fallback = { color: fallbackColor, roughness: options.roughness ?? 0.84, metalness: options.metalness ?? 0.02, emissive: options.emissive ?? 0x000000, emissiveIntensity: options.emissiveIntensity ?? 0 };
+  return makeMaterial(definition, reference, materialFactory, fallback);
+}
+
+function addTriFin({ group, origin, yaw, local, radius, material, name, userData, roll = 0, scale = [1, 1, 1] }) {
+  const fin = new THREE.Mesh(new THREE.ConeGeometry(radius, 0.5, 3), material);
+  fin.name = name;
+  fin.position.copy(localPoint(origin, yaw, local.x, local.y, local.z));
+  fin.rotation.set(Math.PI / 2, yaw, roll);
+  fin.scale.set(scale[0], scale[1], scale[2]);
+  fin.userData = userData;
+  group.add(fin);
+  return fin;
+}
 
 function addFishingRodDisplay({ definition, group, primitive }) {
   const spec = ROD_SPECS[primitive.variant] ?? ROD_SPECS.reedPoleRod;
@@ -659,23 +676,34 @@ function addFishingRodDisplay({ definition, group, primitive }) {
   return meshes.filter(Boolean);
 }
 
-function addFishDisplay({ definition, group, primitive }) {
+function addFishDisplay({ definition, group, primitive, materialFactory }) {
   const spec = FISH_SPECS[primitive.variant] ?? FISH_SPECS.smallRiverFish;
   const origin = toVector3(primitive.position); const yaw = primitive.yaw ?? 0;
-  const base = { locationId: definition.id, roomId: primitive.roomId, itemId: primitive.itemId, displayPadId: primitive.userData?.displayPadId, objectCategory: 'fish', generatedBy: 'DungeonGeometryBuilder:fishingExpoObject', ...primitive.userData };
-  const slabMat = basicMat(0x2d2922); const bodyMat = basicMat(spec.color, 0.82, 0.02, spec.glow ? 0x1fb8aa : 0, spec.glow ? 0.45 : 0); const finMat = basicMat(spec.fin, 0.86, 0.01, spec.glow ? 0x14736d : 0, spec.glow ? 0.28 : 0); const boneMat = basicMat(0xd8caa2);
+  const base = { locationId: definition.id, roomId: primitive.roomId, itemId: primitive.itemId, displayPadId: primitive.userData?.displayPadId, objectCategory: 'fish', generatedBy: 'DungeonGeometryBuilder:fishingExpoObject', materialSlots: { bodyMaterial: spec.bodyMaterial, headMaterial: spec.headMaterial ?? spec.bodyMaterial, finMaterial: spec.finMaterial, tailMaterial: spec.tailMaterial, spineMaterial: spec.spineMaterial ?? spec.finMaterial, eyeMaterial: 'glossyDarkEye' }, cohesiveMainBodyGeometry: true, ...primitive.userData };
+  const slabMat = basicMat(0x2d2922);
+  const bodyMat = fishMaterial(definition, primitive, 'bodyMaterial', spec, materialFactory, 0x53635a, { emissive: spec.glow ? 0x1fb8aa : 0, emissiveIntensity: spec.glow ? 0.38 : 0 });
+  const finMat = fishMaterial(definition, primitive, 'finMaterial', spec, materialFactory, 0x39433e, { emissive: spec.glow ? 0x14736d : 0, emissiveIntensity: spec.glow ? 0.22 : 0 });
+  const tailMat = fishMaterial(definition, primitive, 'tailMaterial', spec, materialFactory, 0x39433e, { emissive: spec.glow ? 0x14736d : 0, emissiveIntensity: spec.glow ? 0.22 : 0 });
+  const spineMat = fishMaterial(definition, primitive, 'spineMaterial', spec, materialFactory, 0x232b28);
   const meshes=[]; const slab=addBox({group,size:new THREE.Vector3(2.8,0.16,1.55),position:new THREE.Vector3(origin.x,0.18,origin.z),material:slabMat,name:`V23-fishDisplay-PLINTH-${primitive.id}`,userData:base}); slab.rotation.y=yaw; meshes.push(slab);
   const bodyY = 0.58;
-  const body=new THREE.Mesh(new THREE.SphereGeometry(0.5,28,16),bodyMat); body.name=`V23-fishDisplay-BODY-${primitive.id}`; body.position.copy(localPoint(origin,yaw,0,bodyY,0)); body.scale.set(spec.l, spec.h, spec.w); body.rotation.y=yaw; body.userData=base; group.add(body); meshes.push(body);
-  const shoulder=new THREE.Mesh(new THREE.SphereGeometry(0.5,20,12),bodyMat); shoulder.name=`V23-fishDisplay-SHOULDER-BLEND-${primitive.id}`; shoulder.position.copy(localPoint(origin,yaw,spec.l*0.28,bodyY+0.005,0)); shoulder.scale.set(spec.l*0.46, spec.h*0.94, spec.w*0.96); shoulder.rotation.y=yaw; shoulder.userData=base; group.add(shoulder); meshes.push(shoulder);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.34,20,12),bodyMat); head.name=`V23-fishDisplay-HEAD-${primitive.id}`; head.position.copy(localPoint(origin,yaw,spec.l*0.46,bodyY+0.005,0)); head.scale.set(spec.jaw?1.15:0.98,spec.h*1.02,spec.w*1.02); head.rotation.y=yaw; head.userData=base; group.add(head); meshes.push(head);
-  const tailRoot=new THREE.Mesh(new THREE.SphereGeometry(0.5,16,10),bodyMat); tailRoot.name=`V23-fishDisplay-TAIL-ROOT-${primitive.id}`; tailRoot.position.copy(localPoint(origin,yaw,-spec.l*0.43,bodyY,0)); tailRoot.scale.set(spec.l*0.22, spec.h*0.72, spec.w*0.72); tailRoot.rotation.y=yaw; tailRoot.userData=base; group.add(tailRoot); meshes.push(tailRoot);
-  const tail=new THREE.Mesh(new THREE.ConeGeometry(spec.tail,0.5,3),finMat); tail.name=`V23-fishDisplay-TAIL-${primitive.id}`; tail.position.copy(localPoint(origin,yaw,-spec.l*0.55,bodyY,0)); tail.rotation.set(0,yaw-Math.PI/2,Math.PI/2); tail.scale.set(1,1,spec.flat ? 1.75 : 1.08); tail.userData=base; group.add(tail); meshes.push(tail);
-  [['DORSAL',-0.08,bodyY+spec.h*0.46,0,0.28],['VENTRAL',-0.02,bodyY-spec.h*0.43,0,0.22],['SIDE',0.18,bodyY-0.01,spec.w*0.46,0.2]].forEach(([label,x,y,z,r],i)=>{ const fin=new THREE.Mesh(new THREE.ConeGeometry(r,0.5,3),finMat); fin.name=`V23-fishDisplay-ATTACHED-FIN-${primitive.id}-${label}`; fin.position.copy(localPoint(origin,yaw,x,y,z)); fin.rotation.set(Math.PI/2,yaw, i===1?Math.PI:0); fin.scale.set(spec.flat && label==='SIDE' ? 1.45 : 1, 1, 1); fin.userData=base; group.add(fin); meshes.push(fin); });
-  const eyeMat=basicMat(0x050505,0.5); [-1,1].forEach((side)=>{ const eye=new THREE.Mesh(new THREE.SphereGeometry(spec.eye,10,8),eyeMat); eye.name=`V23-fishDisplay-EYE-${primitive.id}-${side}`; eye.position.copy(localPoint(origin,yaw,spec.l*0.55,bodyY+spec.h*0.22,side*spec.w*0.36)); eye.userData=base; group.add(eye); meshes.push(eye); });
-  if (spec.spines) for(let i=0;i<spec.spines;i+=1){ const x=-spec.l*0.34+i*(spec.l*0.64/(spec.spines-1)); meshes.push(addCylinderBetween({group,from:localPoint(origin,yaw,x,bodyY+spec.h*0.42,0),to:localPoint(origin,yaw,x+0.02,bodyY+spec.h*0.42+0.28,0),radius:0.028,material:boneMat,name:`V23-fishDisplay-ATTACHED-SPINE-${primitive.id}-${i}`,userData:base,segments:5})); }
-  if (spec.whiskers) [-1,1].forEach((side)=>meshes.push(addCylinderBetween({group,from:localPoint(origin,yaw,spec.l*0.58,bodyY-0.02,side*0.08),to:localPoint(origin,yaw,spec.l*0.82,bodyY-0.08,side*0.28),radius:0.012,material:boneMat,name:`V23-fishDisplay-ATTACHED-WHISKER-${primitive.id}-${side}`,userData:base,segments:5})));
-  if (spec.jaw) { const jaw=addBox({group,size:new THREE.Vector3(0.46,0.1,0.3),position:localPoint(origin,yaw,spec.l*0.6,bodyY-spec.h*0.2,0),material:boneMat,name:`V23-fishDisplay-INTEGRATED-JAW-${primitive.id}`,userData:base}); jaw.rotation.y=yaw; meshes.push(jaw); }
+  const bodyGeometry = new THREE.SphereGeometry(0.5, 32, 18);
+  const body = new THREE.Mesh(bodyGeometry, bodyMat);
+  body.name = `V23-fishDisplay-COHESIVE-BODY-${primitive.id}`;
+  body.position.copy(localPoint(origin, yaw, spec.jaw ? 0.04 : 0, bodyY, 0));
+  body.scale.set(spec.l, spec.h, spec.w);
+  body.rotation.y = yaw;
+  body.userData = { ...base, fishPart: 'oneCohesiveMainBody', materialSlot: 'bodyMaterial' };
+  group.add(body); meshes.push(body);
+
+  const tail = addTriFin({ group, origin, yaw, local: { x: -spec.l * 0.5, y: bodyY, z: 0 }, radius: spec.tail, material: tailMat, name: `V23-fishDisplay-ATTACHED-TAIL-${primitive.id}`, userData: { ...base, fishPart: 'attachedTail', materialSlot: 'tailMaterial' }, roll: Math.PI / 2, scale: [spec.flat ? 1.25 : 1, 1, spec.flat ? 1.65 : 1.05] }); meshes.push(tail);
+  const dorsal = addTriFin({ group, origin, yaw, local: { x: -spec.l * 0.05, y: bodyY + spec.h * 0.43, z: 0 }, radius: spec.dorsal, material: finMat, name: `V23-fishDisplay-ATTACHED-DORSAL-FIN-${primitive.id}`, userData: { ...base, fishPart: 'attachedDorsalFin', materialSlot: 'finMaterial' }, scale: [spec.eel ? 1.25 : 1, 1, 1] }); meshes.push(dorsal);
+  const ventral = addTriFin({ group, origin, yaw, local: { x: 0.02, y: bodyY - spec.h * 0.42, z: 0 }, radius: spec.ventral, material: finMat, name: `V23-fishDisplay-ATTACHED-VENTRAL-FIN-${primitive.id}`, userData: { ...base, fishPart: 'attachedVentralFin', materialSlot: 'finMaterial' }, roll: Math.PI }); meshes.push(ventral);
+  [-1, 1].forEach((side) => { const pectoral = addTriFin({ group, origin, yaw, local: { x: spec.l * 0.18, y: bodyY - spec.h * 0.02, z: side * spec.w * 0.47 }, radius: spec.pectoral, material: finMat, name: `V23-fishDisplay-ATTACHED-PECTORAL-FIN-${primitive.id}-${side}`, userData: { ...base, fishPart: 'attachedPectoralFin', materialSlot: 'finMaterial' }, roll: side > 0 ? -Math.PI / 2 : Math.PI / 2, scale: [spec.flat ? 1.35 : 1, 1, 1] }); meshes.push(pectoral); });
+  const eyeMat=basicMat(0x050505,0.42,0.02); [-1,1].forEach((side)=>{ const eye=new THREE.Mesh(new THREE.SphereGeometry(spec.eye,10,8),eyeMat); eye.name=`V23-fishDisplay-EYE-${primitive.id}-${side}`; eye.position.copy(localPoint(origin,yaw,spec.l*0.42,bodyY+spec.h*0.2,side*spec.w*0.38)); eye.userData={ ...base, fishPart: 'simpleEye', materialSlot: 'eyeMaterial' }; group.add(eye); meshes.push(eye); });
+  if (spec.spines) for(let i=0;i<spec.spines;i+=1){ const x=-spec.l*0.32+i*(spec.l*0.58/(spec.spines-1)); meshes.push(addCylinderBetween({group,from:localPoint(origin,yaw,x,bodyY+spec.h*0.38,0),to:localPoint(origin,yaw,x+0.02,bodyY+spec.h*0.38+0.24,0),radius:0.024,material:spineMat,name:`V23-fishDisplay-ATTACHED-SPINE-${primitive.id}-${i}`,userData:{ ...base, fishPart: 'attachedBackSpine', materialSlot: 'spineMaterial' },segments:5})); }
+  if (spec.whiskers) [-1,1].forEach((side)=>meshes.push(addCylinderBetween({group,from:localPoint(origin,yaw,spec.l*0.43,bodyY-0.02,side*0.08),to:localPoint(origin,yaw,spec.l*0.66,bodyY-0.08,side*0.28),radius:0.012,material:finMat,name:`V23-fishDisplay-ATTACHED-WHISKER-${primitive.id}-${side}`,userData:{ ...base, fishPart: 'attachedWhisker', materialSlot: 'finMaterial' },segments:5})));
+  if (spec.jaw) { const jaw=addBox({group,size:new THREE.Vector3(0.36,0.08,0.24),position:localPoint(origin,yaw,spec.l*0.42,bodyY-spec.h*0.24,0),material:bodyMat,name:`V23-fishDisplay-INTEGRATED-TEXTURED-JAW-${primitive.id}`,userData:{ ...base, fishPart: 'interlockedTexturedJaw', materialSlot: 'headMaterial' }}); jaw.rotation.y=yaw; meshes.push(jaw); }
   return meshes.filter(Boolean);
 }
 
@@ -1010,7 +1038,7 @@ function addV23ArchitecturalPrimitives({ definition, group, materialFactory }) {
     } else if (primitive.kind === 'fishingRodDisplay') {
       addFishingRodDisplay({ definition, group, primitive }).forEach(addPart);
     } else if (primitive.kind === 'fishDisplay') {
-      addFishDisplay({ definition, group, primitive }).forEach(addPart);
+      addFishDisplay({ definition, group, primitive, materialFactory }).forEach(addPart);
     } else if (primitive.kind === 'canalWater') {
       const waterMaterial = material.clone ? material.clone() : material; const water = segmentDeck(primitive.from, primitive.to, primitive.width ?? 1, primitive.y ?? 0.03, waterMaterial, group, `V23-canalWater-${primitive.id}`, { ...base, animated: 'canalWater', scrollSpeed: primitive.scrollSpeed }, 0.035); if (water) { if (primitive.emissiveColor && water.material?.emissive) water.material.emissive.setHex(primitive.emissiveColor); addPart(water); }
     }

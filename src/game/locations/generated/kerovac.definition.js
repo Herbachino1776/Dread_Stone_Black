@@ -31,6 +31,16 @@ const textures = Object.freeze({
   pack2RitualGlyphPanel: { path: './assets/textures/pack2/panel_ritual_glyph_column_01.png', repeat: [1, 1], color: 0xe0bd77, roughness: 0.88, metalness: 0, emissive: 0x56310c, emissiveIntensity: 0.38, boxUvScale: [0.18, 0.18] },
   turquoiseGlow: { color: 0x31c6c2, roughness: 0.65, metalness: 0, emissive: 0x20a9a4, emissiveIntensity: 0.56 },
   expoBlackInk: { color: 0x050403, roughness: 0.92, metalness: 0, emissive: 0x000000, emissiveIntensity: 0 },
+  fishFinAmber: { path: './assets/textures/fish/fish_fin_membrane_amber_01.png', repeat: [1, 1], color: 0xd18a35, roughness: 0.82, metalness: 0, emissive: 0x2f1606, emissiveIntensity: 0.08 },
+  fishFinDark: { path: './assets/textures/fish/fish_fin_membrane_dark_01.png', repeat: [1, 1], color: 0x242825, roughness: 0.86, metalness: 0, emissive: 0x050604, emissiveIntensity: 0.04 },
+  fishFinSpottedTeal: { path: './assets/textures/fish/fish_fin_spotted_teal_01.png', repeat: [1, 1], color: 0x2a817c, roughness: 0.82, metalness: 0, emissive: 0x0b3d3a, emissiveIntensity: 0.12 },
+  fishScaleEelSkinDark: { path: './assets/textures/fish/fish_scale_eel_skin_dark_01.png', repeat: [2, 1], color: 0x293126, roughness: 0.88, metalness: 0.02, emissive: 0x040604, emissiveIntensity: 0.04 },
+  fishScaleGold: { path: './assets/textures/fish/fish_scale_gold_01.png', repeat: [2, 1], color: 0xc8a14b, roughness: 0.8, metalness: 0.04, emissive: 0x2f1f07, emissiveIntensity: 0.08 },
+  fishScaleIridescentTeal: { path: './assets/textures/fish/fish_scale_iridescent_teal_01.png', repeat: [2, 1], color: 0x35b7aa, roughness: 0.74, metalness: 0.05, emissive: 0x16766f, emissiveIntensity: 0.28 },
+  fishScaleKoiCreamOrange: { path: './assets/textures/fish/fish_scale_koi_cream_orange_01.png', repeat: [2, 1], color: 0xd9b474, roughness: 0.84, metalness: 0.01, emissive: 0x331908, emissiveIntensity: 0.06 },
+  fishScaleMottledDark: { path: './assets/textures/fish/fish_scale_mottled_dark_01.png', repeat: [2, 1], color: 0x3d3a31, roughness: 0.9, metalness: 0.01, emissive: 0x050504, emissiveIntensity: 0.04 },
+  fishScaleSilver: { path: './assets/textures/fish/fish_scale_silver_01.png', repeat: [2, 1], color: 0xaeb8b4, roughness: 0.78, metalness: 0.06, emissive: 0x101918, emissiveIntensity: 0.06 },
+  fishScaleZebraOlive: { path: './assets/textures/fish/fish_scale_zebra_olive_01.png', repeat: [2, 1], color: 0x66704a, roughness: 0.86, metalness: 0.01, emissive: 0x0b0d07, emissiveIntensity: 0.05 },
 });
 
 function room({
