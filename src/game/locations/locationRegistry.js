@@ -3,7 +3,7 @@ import { fieldKeeperHouseDefinition } from './fieldKeeperHouse.definition.js';
 import { level1Definition } from './generated/level1.definition.js';
 import { balthazanDefinition } from './generated/balthazan.definition.js';
 import { sumerianCityBlockV0Definition } from './generated/sumerianCityBlockV0.definition.js';
-import { sumerianSunPalaceDistrictV1Definition } from './generated/sumerianSunPalaceDistrictV1Definition.js';
+import { sumerianSunPalaceDistrictV1Definition } from './generated/sumerianSunPalaceDistrictV1.definition.js';
 import { sumerianCanalMarketDistrictV2Definition } from './generated/sumerianCanalMarketDistrictV2.definition.js';
 import { kerovacDefinition } from './generated/kerovac.definition.js';
 import { reliquaryFieldDefinition } from './reliquaryField.definition.js';
