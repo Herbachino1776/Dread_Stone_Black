@@ -680,6 +680,7 @@ function addStairPrimitive({ definition, group, materialFactory, primitive, addP
 
 
 const BRIDGE_PRIMITIVE_KINDS = new Set(['narrowStoneBridge', 'wideCeremonialBridge', 'brokenBridge', 'plankBridge', 'raisedWalkway', 'canalCrossing', 'bridgeWithRailings', 'archedStoneBridge', 'ritualSpanBridge', 'collapsedWalkway']);
+const COLUMN_PRIMITIVE_KINDS = new Set(['roundTempleColumn', 'squareStonePillar', 'brokenColumn', 'crackedSupportPillar', 'bronzeBandedColumn', 'glyphCarvedColumn', 'twinColumnFrame', 'massiveHallColumn', 'ruinedColumnBase', 'sacredObeliskColumn']);
 
 function bridgeMaterial(definition, primitive, slot, materialFactory, fallback) {
   return makeMaterial(definition, primitive[slot] ?? primitive.material ?? primitive.textureProfile, materialFactory, fallback);
@@ -773,6 +774,57 @@ function addDoorwayPrimitive({ definition, group, materialFactory, primitive, ad
   }
 }
 
+
+function columnMaterial(definition, primitive, slot, materialFactory, fallback) {
+  return makeMaterial(definition, primitive[slot] ?? primitive.material ?? primitive.textureProfile, materialFactory, fallback);
+}
+
+function addColumnPrimitive({ definition, group, materialFactory, primitive, addPart }) {
+  const pos = toVector3(primitive.position);
+  const yaw = primitive.yaw ?? primitive.rotation ?? 0;
+  const height = primitive.height ?? (primitive.kind === 'ruinedColumnBase' ? 1.1 : primitive.kind === 'massiveHallColumn' ? 8.8 : 4.2);
+  const radius = primitive.radius ?? (primitive.kind === 'massiveHallColumn' ? 0.82 : 0.48);
+  const width = primitive.width ?? radius * 2;
+  const depth = primitive.depth ?? width;
+  const segments = primitive.segments ?? primitive.sides ?? (primitive.kind === 'roundTempleColumn' || primitive.kind === 'bronzeBandedColumn' || primitive.kind === 'massiveHallColumn' ? 18 : 10);
+  const baseSize = primitive.baseSize ?? Math.max(width, radius * 2) * 1.35;
+  const capitalSize = primitive.capitalSize ?? Math.max(width, radius * 2) * 1.28;
+  const baseHeight = Math.min(height * 0.18, primitive.baseHeight ?? 0.42);
+  const capitalHeight = Math.min(height * 0.18, primitive.capitalHeight ?? 0.38);
+  const shaftHeight = Math.max(0.2, height - baseHeight - capitalHeight);
+  const shaftMat = columnMaterial(definition, primitive, 'shaftMaterial', materialFactory, definition.textures?.wall);
+  const baseMat = columnMaterial(definition, primitive, 'baseMaterial', materialFactory, definition.textures?.wall);
+  const capMat = columnMaterial(definition, primitive, 'capitalMaterial', materialFactory, definition.textures?.wall);
+  const bandMat = columnMaterial(definition, primitive, 'bandMaterial', materialFactory, definition.textures?.bronze ?? definition.textures?.wall);
+  const glyphMat = columnMaterial(definition, primitive, 'glyphMaterial', materialFactory, definition.textures?.wall);
+  const trimMat = columnMaterial(definition, primitive, 'trimMaterial', materialFactory, definition.textures?.wall);
+  const state = primitive.state ?? (primitive.broken ? 'broken' : primitive.cracked ? 'cracked' : primitive.ruined ? 'ruined' : 'intact');
+  const baseData = { locationId: definition.id, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:column-primitives', state, debugFootprint: { width, depth, radius, height, baseSize, capitalSize, segments, blocksPlayer: primitive.blocksPlayer !== false, blocksEnemies: primitive.blocksEnemies !== false } };
+  const addLocalBox = (suffix, size, local, material, data = {}) => { const off = new THREE.Vector3(local.x, local.y, local.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw); const mesh = addBox({ group, size, position: pos.clone().add(off), material, name: `V26-${primitive.kind}-${suffix}-${primitive.id}`, userData: { ...baseData, ...data } }); mesh.rotation.y = yaw; addPart(mesh); return mesh; };
+  const addLocalCyl = (suffix, h, r, local, material, data = {}) => { const off = new THREE.Vector3(local.x ?? 0, local.y ?? 0, local.z ?? 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw); const mesh = addCylinderPrimitive({ group, primitive: { ...primitive, position: [pos.x + off.x, pos.y + off.y, pos.z + off.z], yaw }, material, name: `V26-${primitive.kind}-${suffix}-${primitive.id}`, height: h, radius: r, sides: segments, userData: { ...baseData, ...data } }); addPart(mesh); return mesh; };
+  const squareKinds = ['squareStonePillar', 'crackedSupportPillar', 'glyphCarvedColumn', 'twinColumnFrame', 'sacredObeliskColumn'];
+  if (primitive.kind === 'sacredObeliskColumn') {
+    addLocalBox('BASE', new THREE.Vector3(baseSize, baseHeight, baseSize), { x: 0, y: baseHeight / 2, z: 0 }, baseMat, { columnPart: 'base' });
+    addLocalBox('SHAFT', new THREE.Vector3(width * 0.72, height * 0.72, depth * 0.72), { x: 0, y: baseHeight + height * 0.36, z: 0 }, shaftMat, { columnPart: 'obeliskShaft' });
+    addLocalBox('TIP', new THREE.Vector3(width * 0.48, height * 0.14, depth * 0.48), { x: 0, y: height * 0.93, z: 0 }, capMat, { columnPart: 'pyramidion' });
+    return;
+  }
+  if (primitive.kind === 'twinColumnFrame') {
+    const spacing = primitive.columnSpacing ?? width * 2.2;
+    [-1, 1].forEach((side) => { addLocalBox(`BASE-${side}`, new THREE.Vector3(baseSize, baseHeight, baseSize), { x: side * spacing / 2, y: baseHeight / 2, z: 0 }, baseMat, { columnPart: 'base' }); addLocalCyl(`SHAFT-${side}`, shaftHeight, radius, { x: side * spacing / 2, y: baseHeight, z: 0 }, shaftMat, { columnPart: 'shaft' }); addLocalBox(`CAPITAL-${side}`, new THREE.Vector3(capitalSize, capitalHeight, capitalSize), { x: side * spacing / 2, y: baseHeight + shaftHeight + capitalHeight / 2, z: 0 }, capMat, { columnPart: 'capital' }); });
+    addLocalBox('LINTEL', new THREE.Vector3(spacing + capitalSize, capitalHeight * 1.2, depth * 0.9), { x: 0, y: height - capitalHeight * 0.4, z: 0 }, trimMat, { columnPart: 'lintel' });
+    return;
+  }
+  addLocalBox('BASE', new THREE.Vector3(baseSize, baseHeight, baseSize), { x: 0, y: baseHeight / 2, z: 0 }, baseMat, { columnPart: 'base' });
+  if (squareKinds.includes(primitive.kind)) addLocalBox('SHAFT', new THREE.Vector3(width, shaftHeight, depth), { x: 0, y: baseHeight + shaftHeight / 2, z: 0 }, shaftMat, { columnPart: 'shaft' });
+  else addLocalCyl('SHAFT', shaftHeight, radius, { x: 0, y: baseHeight, z: 0 }, shaftMat, { columnPart: 'shaft' });
+  if (!['brokenColumn', 'ruinedColumnBase'].includes(primitive.kind)) addLocalBox('CAPITAL', new THREE.Vector3(capitalSize, capitalHeight, capitalSize), { x: 0, y: baseHeight + shaftHeight + capitalHeight / 2, z: 0 }, capMat, { columnPart: 'capital' });
+  if (['bronzeBandedColumn', 'massiveHallColumn'].includes(primitive.kind)) [0.28, 0.62, 0.86].forEach((t, i) => addLocalBox(`BAND-${i}`, new THREE.Vector3(width * 1.12, 0.12, depth * 1.12), { x: 0, y: baseHeight + shaftHeight * t, z: 0 }, bandMat, { columnPart: 'band' }));
+  if (['glyphCarvedColumn', 'crackedSupportPillar'].includes(primitive.kind)) addLocalBox('GLYPH-PANEL', new THREE.Vector3(width * 1.02, shaftHeight * 0.46, 0.08), { x: 0, y: baseHeight + shaftHeight * 0.56, z: -depth / 2 - 0.045 }, glyphMat, { columnPart: 'glyphPanel' });
+  if (state !== 'intact') addLocalBox('DAMAGE-SCAR', new THREE.Vector3(width * 0.72, Math.max(0.12, shaftHeight * 0.08), 0.1), { x: width * 0.12, y: baseHeight + shaftHeight * 0.72, z: -depth / 2 - 0.06 }, trimMat, { columnPart: 'damageMarker' });
+}
+
+
 function primitiveMaterial(definition, primitive, materialFactory, fallback = definition.textures?.wall) {
   return makeMaterial(definition, primitive.material ?? primitive.textureProfile, materialFactory, fallback);
 }
@@ -781,8 +833,25 @@ function yawOf(from, to) {
   return Math.atan2(to.z - from.z, to.x - from.x);
 }
 
-function addCylinderPrimitive({ group, primitive, material, name, height, radius, sides = 8 }) {
-  const geometry = new THREE.CylinderGeometry(radius, radius, height, Math.max(6, sides));
+function applyCylinderWorldUvs(geometry, radius, height, profile = {}) {
+  const uv = geometry.getAttribute('uv');
+  const pos = geometry.getAttribute('position');
+  if (!uv || !pos) return geometry;
+  const scale = profile.cylinderUvScale ?? profile.boxUvScale ?? [0.25, 0.18];
+  const uScale = Number(scale[0]) || 0.25;
+  const vScale = Number(scale[1]) || 0.18;
+  for (let i = 0; i < uv.count; i += 1) {
+    const x = pos.getX(i); const y = pos.getY(i) + height / 2; const z = pos.getZ(i);
+    const theta = Math.atan2(z, x);
+    const around = ((theta + Math.PI) / (Math.PI * 2)) * Math.PI * 2 * radius;
+    uv.setXY(i, around * uScale, y * vScale);
+  }
+  uv.needsUpdate = true;
+  return geometry;
+}
+
+function addCylinderPrimitive({ group, primitive, material, name, height, radius, sides = 8, userData = {} }) {
+  const geometry = applyCylinderWorldUvs(new THREE.CylinderGeometry(radius, radius, height, Math.max(6, sides)), radius, height, material?.userData?.definitionProfile ?? {});
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = name;
   mesh.position.copy(toVector3(primitive.position));
@@ -791,7 +860,7 @@ function addCylinderPrimitive({ group, primitive, material, name, height, radius
   if (primitive.tilt) mesh.rotation.z = primitive.tilt;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  mesh.userData = { locationId: primitive.locationId, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:v2.3' };
+  mesh.userData = { locationId: primitive.locationId, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:v2.3', ...userData };
   group.add(mesh);
   return mesh;
 }
@@ -810,7 +879,9 @@ function addV23ArchitecturalPrimitives({ definition, group, materialFactory }) {
     primitive.locationId = definition.id;
     const material = primitiveMaterial(definition, primitive, materialFactory, primitive.kind === 'canalWater' ? definition.textures?.water : definition.textures?.wall);
     const base = { locationId: definition.id, roomId: primitive.roomId, architecturalPrimitiveId: primitive.id, primitiveKind: primitive.kind, generatedBy: 'DungeonGeometryBuilder:v2.3' };
-    if (BRIDGE_PRIMITIVE_KINDS.has(primitive.kind)) {
+    if (COLUMN_PRIMITIVE_KINDS.has(primitive.kind)) {
+      addColumnPrimitive({ definition, group, materialFactory, primitive, addPart });
+    } else if (BRIDGE_PRIMITIVE_KINDS.has(primitive.kind)) {
       addBridgePrimitive({ definition, group, materialFactory, primitive, addPart });
     } else if (STAIR_PRIMITIVE_KINDS.has(primitive.kind)) {
       addStairPrimitive({ definition, group, materialFactory, primitive, addPart });
