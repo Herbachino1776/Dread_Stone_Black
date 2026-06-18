@@ -75,7 +75,7 @@ const kerovacBirthdayGreeting = Object.freeze({
   id: 'K_jake_31st_birthday_greeting',
   kind: 'stela',
   // K03's east wall is the player’s right-hand side on entering from K02. The Expo doorway is farther north on this wall.
-  position: [21.55, 0, 7.15],
+  position: [21.68, 0, 7.15],
   yaw: Math.PI / 2,
   width: 10.2,
   height: 4.55,
