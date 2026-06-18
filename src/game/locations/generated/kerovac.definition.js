@@ -102,13 +102,42 @@ function sunstone(id, roomId, x, y, z, intensity = 1.35, distance = 24) {
 
 
 
+
+function expoPad(id, label, zone, x, z, width, depth, material = 'wornCivicFloor') {
+  return {
+    id: `K_expo_pad_${id}`,
+    kind: 'altar',
+    position: [x, 0, z],
+    yaw: 0,
+    width,
+    depth,
+    height: 0.055,
+    material,
+    topMaterial: material,
+    roomId: 'K10',
+    blocksPlayer: false,
+    tags: ['geometry-expo-center', 'display-pad', `display-pad-${zone}`, label],
+    userData: { displayPadId: label, displayZone: zone, officialDarbExpoPad: true, swappablePreviewSlot: true, lowProfileWalkableMarker: true },
+  };
+}
+
+function expoMarker(id, x, z, width, depth, material = 'bronze') {
+  const horizontal = width >= depth;
+  const half = (horizontal ? width : depth) / 2;
+  return { id: `K_expo_marker_${id}`, kind: 'lowWall', from: horizontal ? [x - half, z] : [x, z - half], to: horizontal ? [x + half, z] : [x, z + half], height: 0.08, thickness: Math.max(0.08, Math.min(width, depth)), material, blocksPlayer: false, roomId: 'K10', tags: ['geometry-expo-center', 'display-grid-marker'] };
+}
+
+function expoRail(id, from, to, material = 'pack2OxidizedArchTrim') {
+  return { id: `K_expo_rail_${id}`, kind: 'lowWall', from, to, height: 0.34, thickness: 0.16, material, blocksPlayer: false, roomId: 'K10', tags: ['geometry-expo-center', 'low-profile-display-trim'] };
+}
+
 function expoColumn(id, kind, x, z, overrides = {}) {
   return {
     id, kind, position: [x, 0, z], yaw: overrides.yaw ?? 0, height: overrides.height ?? 4.2, radius: overrides.radius, width: overrides.width, depth: overrides.depth, segments: overrides.segments, baseSize: overrides.baseSize, capitalSize: overrides.capitalSize, columnSpacing: overrides.columnSpacing, state: overrides.state, broken: overrides.broken, cracked: overrides.cracked, ruined: overrides.ruined,
     shaftMaterial: overrides.shaftMaterial ?? 'pack2SandstoneWorn', baseMaterial: overrides.baseMaterial ?? 'pack2DirtyBaseStone', capitalMaterial: overrides.capitalMaterial ?? 'pack2CrackedMarbleTrim', bandMaterial: overrides.bandMaterial ?? 'pack2BronzeTurquoiseBand', glyphMaterial: overrides.glyphMaterial ?? 'pack2RitualGlyphPanel', trimMaterial: overrides.trimMaterial ?? 'pack2ChippedBlackstoneTrim',
-    blocksPlayer: overrides.blocksPlayer ?? true, blocksEnemies: overrides.blocksEnemies ?? true, roomId: 'K03',
+    blocksPlayer: overrides.blocksPlayer ?? true, blocksEnemies: overrides.blocksEnemies ?? true, roomId: overrides.roomId ?? 'K03',
     tags: ['geometry-expo-center', 'darb-column-pillar-support-preview', kind, ...(overrides.tags ?? [])],
-    userData: { purpose: 'Permanent Kerovac Geometry Expo Center swappable preview zone. Batch 4 displays DARB pillar, column, and structural support primitives using pack2 texture profiles.', displayChamber: 'K03 Civic Reliquary Court', authoredAsLocationDefinitionData: true, collisionTruth: 'Column primitives generate compact collision blockers from their visible footprint unless blocksPlayer is false.', debugOverlay: 'Primitive userData includes debugFootprint with dimensions, state, material slots, and blocker behavior.', ...(overrides.userData ?? {}) },
+    userData: { purpose: 'Permanent Kerovac Geometry Expo Center swappable preview zone. Batch 4 displays DARB pillar, column, and structural support primitives using pack2 texture profiles.', displayChamber: overrides.displayChamber ?? 'K03 Civic Reliquary Court', authoredAsLocationDefinitionData: true, collisionTruth: 'Column primitives generate compact collision blockers from their visible footprint unless blocksPlayer is false.', debugOverlay: 'Primitive userData includes debugFootprint with dimensions, state, material slots, and blocker behavior.', ...(overrides.userData ?? {}) },
   };
 }
 
@@ -138,11 +167,11 @@ function expoBridge(id, kind, x, z, overrides = {}) {
     canalContext: overrides.canalContext ?? kind === 'canalCrossing',
     walkable: true,
     blocksPlayer: true,
-    roomId: 'K03',
+    roomId: overrides.roomId ?? 'K03',
     tags: ['geometry-expo-center', 'darb-bridge-crossing-walkway-preview', kind, ...(overrides.tags ?? [])],
     userData: {
       purpose: 'Permanent Kerovac Geometry Expo Center swappable preview zone. Batch 2 displays DARB bridge, canal crossing, and walkway primitives generated from location definition data.',
-      displayChamber: 'K03 Civic Reliquary Court',
+      displayChamber: overrides.displayChamber ?? 'K03 Civic Reliquary Court',
       basePlacedOnCityFloor: true,
       physicallyUsable: true,
       authoredAsLocationDefinitionData: true,
@@ -185,6 +214,8 @@ export const kerovacDefinition = Object.freeze({
     room({ id: 'K01', label: 'Sun-Sealed Threshold', minX: -12, maxX: 12, minZ: -44, maxZ: -26, ceilingY: 8, wallTexture: 'sandstoneWall', tags: ['entry', 'threshold'] }),
     room({ id: 'K02', label: 'Alabaster Processional Avenue', minX: -10, maxX: 10, minZ: -26, maxZ: 2, ceilingY: 9, wallTexture: 'limestoneWall', tags: ['avenue', 'processional'] }),
     room({ id: 'K03', label: 'Civic Reliquary Court', minX: -22, maxX: 22, minZ: 2, maxZ: 32, ceilingY: 10.5, wallTexture: 'ritualWall', tags: ['civic-court', 'reliquary'] }),
+    room({ id: 'K09', label: 'Kerovac Expo Megalithic Entrance', minX: 22, maxX: 38, minZ: 7, maxZ: 27, ceilingY: 12, floorTexture: 'limestoneFloor', wallTexture: 'pack2LimestoneCarved', ceilingTexture: 'ceilingCoffer', tags: ['geometry-expo-center', 'expo-entrance', 'optional-side-district'], encounterWeight: 0 }),
+    room({ id: 'K10', label: 'DARB Geometry Expo Stadium', minX: 38, maxX: 120, minZ: -38, maxZ: 72, ceilingY: 16, floorTexture: 'wornCivicFloor', wallTexture: 'pack2SandstoneWorn', ceilingTexture: 'ceilingCoffer', tags: ['geometry-expo-center', 'massive-expo-stadium', 'optional-side-district'], encounterWeight: 0 }),
     room({ id: 'K04', label: 'Turquoise Canal Hall', minX: -20, maxX: 20, minZ: 32, maxZ: 58, ceilingY: 9.2, wallTexture: 'limestoneWall', tags: ['canal', 'bridges'] }),
     room({ id: 'K05', label: 'Market of Solar Warnings', minX: -24, maxX: 24, minZ: 58, maxZ: 88, ceilingY: 9.4, floorTexture: 'wornCivicFloor', wallTexture: 'sandstoneWall', tags: ['market', 'warning-panels'] }),
     room({ id: 'K06', label: 'High Sun Temple Approach', minX: -18, maxX: 18, minZ: 88, maxZ: 114, ceilingY: 10.2, wallTexture: 'pyramidWall', tags: ['stairs', 'temple-approach'] }),
@@ -196,6 +227,8 @@ export const kerovacDefinition = Object.freeze({
     door('K_D01_threshold_to_avenue', 'K01', 'K02', 0, -26, 7.0),
     door('K_D02_avenue_to_court', 'K02', 'K03', 0, 2, 7.2),
     door('K_D03_court_to_canal', 'K03', 'K04', 0, 32, 7.4),
+    door('K_D_EXPO_01_court_to_entrance', 'K03', 'K09', 22, 17, 8.2, ['geometry-expo-center', 'optional-side-district', 'return-path']),
+    door('K_D_EXPO_02_entrance_to_stadium', 'K09', 'K10', 38, 17, 10.4, ['geometry-expo-center', 'optional-side-district', 'monumental-entrance']),
     door('K_D04_canal_to_market', 'K04', 'K05', 0, 58, 7.0),
     door('K_D05_market_to_approach', 'K05', 'K06', 0, 88, 7.0),
     door('K_D06_approach_to_vestibule', 'K06', 'K07', 0, 114, 7.4),
@@ -234,18 +267,38 @@ export const kerovacDefinition = Object.freeze({
     pillar('K_court_pillar_ne', 'K03', 16, 26, 9.2, 0.58, 'ritualWall'),
     { id: 'K_court_central_sunstone_altar', kind: 'altar', position: [0, 0, 17], yaw: 0, width: 4.6, depth: 3.2, height: 1.2, material: 'limestoneWall', topMaterial: 'bronze', roomId: 'K03', tags: ['central-sunstone', 'visible-blocker'] },
 
-    // Permanent Kerovac Geometry Expo Center: this early civic-court chamber is the swappable preview zone for DARB primitive batches.
-    // Batch 4 replaces the previous bridge/crossing/walkway previews with pillar, column, and structural support primitives using pack2 textures.
-    expoColumn('K_expo_ruined_column_base', 'ruinedColumnBase', -13.5, 7, { height: 1.15, width: 1.25, depth: 1.15, ruined: true, state: 'ruined', shaftMaterial: 'pack2DirtyBaseStone', baseMaterial: 'pack2ChippedBlackstoneTrim', trimMaterial: 'pack2CrackedMarbleTrim' }),
-    expoColumn('K_expo_broken_column', 'brokenColumn', -6.5, 7.4, { height: 2.65, radius: 0.48, segments: 14, broken: true, state: 'broken', shaftMaterial: 'pack2SandstoneWorn', baseMaterial: 'pack2DirtyBaseStone', trimMaterial: 'pack2ChippedBlackstoneTrim' }),
-    expoColumn('K_expo_cracked_support_pillar', 'crackedSupportPillar', 1, 7.2, { height: 3.7, width: 1.05, depth: 1.05, cracked: true, state: 'cracked', shaftMaterial: 'pack2CrackedMarbleTrim', baseMaterial: 'pack2DirtyBaseStone', glyphMaterial: 'pack2BlackBasaltGlyph', trimMaterial: 'pack2ChippedBlackstoneTrim' }),
-    expoColumn('K_expo_square_stone_pillar', 'squareStonePillar', 8.5, 7.4, { height: 4.2, width: 1.05, depth: 1.05, yaw: 0.22, shaftMaterial: 'pack2LimestoneCarved', baseMaterial: 'pack2DirtyBaseStone', capitalMaterial: 'pack2CrackedMarbleTrim' }),
-    expoColumn('K_expo_round_temple_column', 'roundTempleColumn', 16, 7.6, { height: 4.8, radius: 0.48, segments: 20, shaftMaterial: 'pack2SandstoneWorn', baseMaterial: 'pack2DirtyBaseStone', capitalMaterial: 'pack2LimestoneCarved' }),
-    expoColumn('K_expo_bronze_banded_column', 'bronzeBandedColumn', -14, 17, { height: 5.2, radius: 0.5, segments: 20, shaftMaterial: 'pack2LimestoneCarved', bandMaterial: 'pack2BronzeTurquoiseBand', baseMaterial: 'pack2DirtyBaseStone', capitalMaterial: 'pack2OxidizedArchTrim' }),
-    expoColumn('K_expo_glyph_carved_column', 'glyphCarvedColumn', -6, 17.4, { height: 4.9, width: 1.05, depth: 1.05, yaw: -0.18, shaftMaterial: 'pack2BlackBasaltGlyph', glyphMaterial: 'pack2RitualGlyphPanel', baseMaterial: 'pack2ChippedBlackstoneTrim', capitalMaterial: 'pack2TurquoiseInlay' }),
-    expoColumn('K_expo_sacred_obelisk_column', 'sacredObeliskColumn', 2.2, 17.4, { height: 5.6, width: 1.25, depth: 1.25, yaw: 0.78, shaftMaterial: 'pack2TurquoiseInlay', baseMaterial: 'pack2DirtyBaseStone', capitalMaterial: 'pack2OxidizedArchTrim' }),
-    expoColumn('K_expo_massive_hall_column', 'massiveHallColumn', 10.5, 24.6, { height: 7.8, radius: 0.78, segments: 24, shaftMaterial: 'pack2BlackBasaltGlyph', bandMaterial: 'pack2BronzeTurquoiseBand', baseMaterial: 'pack2ChippedBlackstoneTrim', capitalMaterial: 'pack2OxidizedArchTrim' }),
-    expoColumn('K_expo_twin_column_frame', 'twinColumnFrame', -10.5, 25, { height: 6.2, radius: 0.42, width: 0.84, depth: 0.84, segments: 18, columnSpacing: 3.0, shaftMaterial: 'pack2LimestoneCarved', baseMaterial: 'pack2DirtyBaseStone', capitalMaterial: 'pack2CrackedMarbleTrim', trimMaterial: 'pack2OxidizedArchTrim' }),
+    // Permanent Kerovac Geometry Expo Center: official swappable DARB showroom annex. Keep K09/K10 structure intact; future batches should replace only preview objects assigned to display pad IDs.
+    // Workflow: remove previous preview set, insert new primitive/object batch into pads A1-D5, M1-M8, LARGE-01-LARGE-04, VLARGE-01-VLARGE-02, and preserve the wide aisles, water-demo lane, roof, lighting, return route, and metadata.
+    { id: 'K_expo_entry_title_stela', kind: 'stela', position: [30, 0, 8.1], yaw: 0, width: 7.2, height: 4.4, thickness: 0.28, material: 'pack2RitualGlyphPanel', blocksPlayer: false, roomId: 'K09', tags: ['geometry-expo-center', 'expo-title-panel'], userData: { label: 'DARB GEOMETRY EXPO CENTER', route: 'Optional east annex from K03 Civic Reliquary Court; return west to Kerovac main route.' } },
+    pillar('K_expo_entry_megalith_column_sw', 'K09', 25.5, 11, 10.8, 0.92, 'pack2BlackBasaltGlyph'),
+    pillar('K_expo_entry_megalith_column_nw', 'K09', 25.5, 23, 10.8, 0.92, 'pack2BlackBasaltGlyph'),
+    pillar('K_expo_entry_megalith_column_se', 'K09', 34.5, 11, 10.8, 0.92, 'pack2LimestoneCarved'),
+    pillar('K_expo_entry_megalith_column_ne', 'K09', 34.5, 23, 10.8, 0.92, 'pack2LimestoneCarved'),
+    { id: 'K_expo_entry_ceiling_beam', kind: 'ceilingSlab', position: [30, 11.72, 17], yaw: 0, width: 14, depth: 18, thickness: 0.28, material: 'pack2OxidizedArchTrim', roomId: 'K09', blocksPlayer: false, tags: ['geometry-expo-center', 'sealed-roof'] },
+
+    ...Array.from({ length: 20 }, (_, i) => expoPad(`small_${i + 1}`, `${String.fromCharCode(65 + Math.floor(i / 5))}${(i % 5) + 1}`, 'small', 48 + (i % 5) * 8, -26 + Math.floor(i / 5) * 10, 5.6, 5.6)),
+    ...Array.from({ length: 8 }, (_, i) => expoPad(`medium_${i + 1}`, `M${i + 1}`, 'medium', 48 + (i % 4) * 12, 22 + Math.floor(i / 4) * 14, 8.4, 8.4, 'limestoneFloor')),
+    ...Array.from({ length: 4 }, (_, i) => expoPad(`large_${i + 1}`, `LARGE-0${i + 1}`, 'large', 92 + (i % 2) * 18, -23 + Math.floor(i / 2) * 24, 13.8, 15.8, 'limestoneFloor')),
+    ...Array.from({ length: 2 }, (_, i) => expoPad(`vlarge_${i + 1}`, `VLARGE-0${i + 1}`, 'very-large', 94 + i * 18, 50, 17.2, 22.0, 'wornCivicFloor')),
+    expoPad('water_lane', 'WATER-DEMO-LANE', 'reserved-water-demo', 75, 58, 48, 6.4, 'turquoiseWater'),
+    ...[-34, -6, 16, 38, 70].map((z, i) => expoMarker(`cross_aisle_${i + 1}`, 79, z, 76, 0.18)),
+    ...[44, 84, 116].map((x, i) => expoMarker(`long_aisle_${i + 1}`, x, 17, 0.18, 104)),
+    expoRail('small_zone_south', [42, -32], [82, -32]),
+    expoRail('small_zone_north', [42, 13], [82, 13]),
+    expoRail('large_zone_west', [85, -34], [85, 17]),
+    expoRail('water_lane_south', [51, 54.4], [99, 54.4], 'pack2TurquoiseInlay'),
+    expoRail('water_lane_north', [51, 61.6], [99, 61.6], 'pack2TurquoiseInlay'),
+
+    { id: 'K_expo_west_observation_tier_01', kind: 'lowWall', from: [40.5, -36], to: [40.5, 70], height: 1.05, thickness: 2.0, material: 'pack2DirtyBaseStone', blocksPlayer: true, roomId: 'K10', tags: ['geometry-expo-center', 'raised-observation-tier'] },
+    { id: 'K_expo_east_observation_tier_01', kind: 'lowWall', from: [118, -36], to: [118, 70], height: 1.05, thickness: 2.0, material: 'pack2DirtyBaseStone', blocksPlayer: true, roomId: 'K10', tags: ['geometry-expo-center', 'raised-observation-tier'] },
+    { id: 'K_expo_ceiling_coffer_stadium', kind: 'ceilingSlab', position: [79, 15.72, 17], yaw: 0, width: 74, depth: 102, thickness: 0.3, material: 'ceilingCoffer', roomId: 'K10', blocksPlayer: false, tags: ['geometry-expo-center', 'high-sealed-ceiling'] },
+    { id: 'K_expo_north_banner', kind: 'stela', position: [79, 0, 70.4], yaw: Math.PI, width: 13, height: 5.2, thickness: 0.3, material: 'pack2RitualGlyphPanel', blocksPlayer: false, roomId: 'K10', tags: ['geometry-expo-center', 'expo-banner'], userData: { label: 'OFFICIAL SWAPPABLE DARB DISPLAY GRID' } },
+
+    expoColumn('K_expo_starter_A1_round_column', 'roundTempleColumn', 48, -26, { roomId: 'K10', displayChamber: 'DARB Geometry Expo Stadium', height: 5.4, radius: 0.55, segments: 20, userData: { displayPadId: 'A1', label: 'DARB EXPO — A1 / Round Column Candidate' } }),
+    expoColumn('K_expo_starter_A2_bronze_column', 'bronzeBandedColumn', 56, -26, { roomId: 'K10', displayChamber: 'DARB Geometry Expo Stadium', height: 5.8, radius: 0.55, segments: 20, userData: { displayPadId: 'A2', label: 'DARB EXPO — A2 / Bronze-Banded Column Candidate' } }),
+    expoColumn('K_expo_starter_M1_twin_frame', 'twinColumnFrame', 48, 22, { roomId: 'K10', displayChamber: 'DARB Geometry Expo Stadium', height: 6.6, columnSpacing: 3.2, userData: { displayPadId: 'M1', label: 'DARB EXPO — M1 / Gate-Frame Candidate' } }),
+    { id: 'K_expo_starter_large_platform', kind: 'altar', position: [92, 0, -23], yaw: 0, width: 8.6, depth: 10.2, height: 0.8, material: 'pack2DirtyBaseStone', topMaterial: 'pack2CrackedMarbleTrim', roomId: 'K10', tags: ['geometry-expo-center', 'starter-display-object'], userData: { displayPadId: 'LARGE-01', label: 'DARB EXPO — LARGE-01 / Future Building Demo Slot' } },
+    { id: 'K_expo_water_demo_canal_strip', kind: 'canalWater', from: [53, 58], to: [97, 58], width: 4.8, y: 0.08, height: 0.035, material: 'turquoiseWater', emissiveColor: 0x2fb8b7, roomId: 'K10', tags: ['geometry-expo-center', 'reserved-water-demo-lane'], userData: { displayPadId: 'WATER-DEMO-LANE', futureUse: 'boat, fishing, water, dock, and bridge tests' } },
 
     { id: 'K_canal_water_trench', kind: 'canalWater', from: [-18, 45], to: [18, 45], width: 5.2, y: 0.035, height: 0.035, material: 'turquoiseWater', emissiveColor: 0x2fb8b7, roomId: 'K04', tags: ['visible-water-boundary'] },
     { id: 'K_canal_south_curb_west', kind: 'curb', from: [-18, 42.1], to: [-4.1, 42.1], y: 0.04, height: 0.28, thickness: 0.2, material: 'limestoneWall', blocksPlayer: false, roomId: 'K04' },
@@ -312,6 +365,11 @@ export const kerovacDefinition = Object.freeze({
     sunstone('K_light_threshold_sun_disk', 'K01', 0, 4.2, -39, 1.35, 24),
     sunstone('K_light_avenue_overhead', 'K02', 0, 6.2, -12, 1.05, 28),
     sunstone('K_light_court_sunstone', 'K03', 0, 5.3, 17, 1.55, 34),
+    sunstone('K_light_expo_entry_gold', 'K09', 30, 8.2, 17, 1.55, 34),
+    sunstone('K_light_expo_stadium_center', 'K10', 79, 11.5, 17, 2.1, 92),
+    { id: 'K_light_expo_small_grid_readability', kind: 'point', color: 0xffdca0, intensity: 1.25, distance: 54, decay: 1.2, position: { x: 58, y: 7.2, z: -10 }, roomId: 'K10' },
+    { id: 'K_light_expo_large_grid_readability', kind: 'point', color: 0xffdca0, intensity: 1.25, distance: 58, decay: 1.2, position: { x: 101, y: 7.5, z: 10 }, roomId: 'K10' },
+    { id: 'K_light_expo_water_lane_turquoise', kind: 'point', color: 0x57d2cb, intensity: 1.1, distance: 48, decay: 1.35, position: { x: 75, y: 3.2, z: 58 }, roomId: 'K10' },
     { id: 'K_light_canal_turquoise_fill', kind: 'point', color: 0x57d2cb, intensity: 1.0, distance: 30, decay: 1.45, position: { x: 0, y: 2.2, z: 45 }, roomId: 'K04' },
     sunstone('K_light_market_warning_lamps', 'K05', 0, 5.6, 72, 1.18, 32),
     sunstone('K_light_temple_stairs', 'K06', 0, 6.6, 103, 1.28, 30),
@@ -320,13 +378,30 @@ export const kerovacDefinition = Object.freeze({
     { id: 'K_light_sanctum_panel_readability', kind: 'point', color: 0xffb56a, intensity: 1.0, distance: 20, decay: 1.5, position: { x: 0, y: 4.4, z: 164 }, roomId: 'K08' },
   ],
 
+
+  displayPads: {
+    officialSwappableDisplayArea: true,
+    location: 'Optional east annex from K03 Civic Reliquary Court through K09 Megalithic Entrance into K10 DARB Geometry Expo Stadium.',
+    futureWorkflow: ['Remove previous preview display set only.', 'Insert new DARB primitive/object batches onto declared displayPad IDs.', 'Keep K09/K10 expo architecture, roof, lighting, aisles, observation tiers, and return path intact.', 'Use pad IDs for best-in-show review and permanent DARB library selection.'],
+    zones: {
+      small: { count: 20, ids: ['A1','A2','A3','A4','A5','B1','B2','B3','B4','B5','C1','C2','C3','C4','C5','D1','D2','D3','D4','D5'], padSize: [5.6, 5.6] },
+      medium: { count: 8, ids: ['M1','M2','M3','M4','M5','M6','M7','M8'], padSize: [8.4, 8.4] },
+      large: { count: 4, ids: ['LARGE-01','LARGE-02','LARGE-03','LARGE-04'], padSize: [13.8, 15.8] },
+      veryLarge: { count: 2, ids: ['VLARGE-01','VLARGE-02'], padSize: [17.2, 22.0] },
+      reservedWaterDemoLane: { ids: ['WATER-DEMO-LANE'], capacity: 'Future canal, fishing rod/fish, boat, dock, water, bridge, and torch reflection demos.' },
+    },
+    pack2TexturesUsed: true,
+  },
+
   navigation: {
     roomGraph: {
-      roomIds: ['K01', 'K02', 'K03', 'K04', 'K05', 'K06', 'K07', 'K08'],
+      roomIds: ['K01', 'K02', 'K03', 'K09', 'K10', 'K04', 'K05', 'K06', 'K07', 'K08'],
       links: [
         { id: 'K_NAV_01', fromRoom: 'K01', toRoom: 'K02', navWaypoint: { x: 0, y: 0, z: -26 } },
         { id: 'K_NAV_02', fromRoom: 'K02', toRoom: 'K03', navWaypoint: { x: 0, y: 0, z: 2 } },
         { id: 'K_NAV_03', fromRoom: 'K03', toRoom: 'K04', navWaypoint: { x: 0, y: 0, z: 32 } },
+        { id: 'K_NAV_EXPO_01', fromRoom: 'K03', toRoom: 'K09', navWaypoint: { x: 22, y: 0, z: 17 } },
+        { id: 'K_NAV_EXPO_02', fromRoom: 'K09', toRoom: 'K10', navWaypoint: { x: 38, y: 0, z: 17 } },
         { id: 'K_NAV_04', fromRoom: 'K04', toRoom: 'K05', navWaypoint: { x: 0, y: 0, z: 58 } },
         { id: 'K_NAV_05', fromRoom: 'K05', toRoom: 'K06', navWaypoint: { x: 0, y: 0, z: 88 } },
         { id: 'K_NAV_06', fromRoom: 'K06', toRoom: 'K07', navWaypoint: { x: 0, y: 0, z: 114 } },
