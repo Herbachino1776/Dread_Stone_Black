@@ -10,6 +10,32 @@ import { reliquaryFieldDefinition } from './reliquaryField.definition.js';
 import { southReliquaryCryptDefinition } from './southReliquaryCrypt.definition.js';
 import { v2TestShrineDefinition } from './v2TestShrine.definition.js';
 
+const KEROVAC_EXPO_ENTRANCE_BLOCKER_ID = 'K_expo_west_observation_tier_01';
+
+const kerovacDefinitionWithExpoEntranceFix = Object.freeze({
+  ...kerovacDefinition,
+  architecturalPrimitives: (kerovacDefinition.architecturalPrimitives ?? []).map((primitive) => {
+    if (primitive?.id !== KEROVAC_EXPO_ENTRANCE_BLOCKER_ID) {
+      return primitive;
+    }
+
+    return {
+      ...primitive,
+      blocksPlayer: false,
+      blocksEnemies: false,
+      tags: [
+        ...(primitive.tags ?? []),
+        'expo-entrance-clearance-fix',
+        'non-blocking-entrance-trim',
+      ],
+      userData: {
+        ...(primitive.userData ?? {}),
+        entranceClearanceFix: 'Disabled blocking on this west observation tier because it crosses the K09-to-K10 Expo entrance path.',
+      },
+    };
+  }),
+});
+
 const locationDefinitions = Object.freeze({
   [blackGrassTempleDefinition.id]: blackGrassTempleDefinition,
   [fieldKeeperHouseDefinition.id]: fieldKeeperHouseDefinition,
@@ -18,7 +44,7 @@ const locationDefinitions = Object.freeze({
   [sumerianCityBlockV0Definition.id]: sumerianCityBlockV0Definition,
   [sumerianSunPalaceDistrictV1Definition.id]: sumerianSunPalaceDistrictV1Definition,
   [sumerianCanalMarketDistrictV2Definition.id]: sumerianCanalMarketDistrictV2Definition,
-  [kerovacDefinition.id]: kerovacDefinition,
+  [kerovacDefinitionWithExpoEntranceFix.id]: kerovacDefinitionWithExpoEntranceFix,
   [southReliquaryCryptDefinition.id]: southReliquaryCryptDefinition,
   [reliquaryFieldDefinition.id]: reliquaryFieldDefinition,
   [v2TestShrineDefinition.id]: v2TestShrineDefinition,
