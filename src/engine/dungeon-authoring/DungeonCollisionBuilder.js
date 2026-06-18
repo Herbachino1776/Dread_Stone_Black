@@ -289,9 +289,15 @@ function buildV21WalkableRects(definition) {
   asArray(definition.stairs).forEach((stairs) => rects.push(rectForSegment(`V2-STAIR-WALKABLE-${stairs.id}`, stairs.from, stairs.to, stairs.width ?? 1, ['v2-stairs'])));
   asArray(definition.bridges).forEach((bridge) => rects.push(rectForSegment(`V2-BRIDGE-WALKABLE-${bridge.id}`, bridge.from, bridge.to, bridge.width ?? 1, ['v2-bridge'])));
   asArray(definition.architecturalPrimitives).forEach((primitive) => {
-    if (!STAIR_PRIMITIVE_KINDS.has(primitive.kind) || primitive.walkable === false) return;
-    const endpoints = stairPrimitiveEndpoints(primitive);
-    rects.push(rectForSegment(`V23-STAIR-WALKABLE-${primitive.id}`, endpoints.from, endpoints.to, primitive.width ?? 2.4, ['v2.3-primitive', 'stair-primitive', primitive.kind, ...(primitive.tags ?? [])]));
+    if (STAIR_PRIMITIVE_KINDS.has(primitive.kind) && primitive.walkable !== false) {
+      const endpoints = stairPrimitiveEndpoints(primitive);
+      rects.push(rectForSegment(`V23-STAIR-WALKABLE-${primitive.id}`, endpoints.from, endpoints.to, primitive.width ?? 2.4, ['v2.3-primitive', 'stair-primitive', primitive.kind, ...(primitive.tags ?? [])]));
+      return;
+    }
+    if (BRIDGE_PRIMITIVE_KINDS.has(primitive.kind) && primitive.walkable !== false) {
+      const endpoints = stairPrimitiveEndpoints(primitive);
+      rects.push(rectForSegment(`V25-BRIDGE-WALKABLE-${primitive.id}`, endpoints.from, endpoints.to, primitive.width ?? 2.4, ['v2.5-primitive', 'bridge-primitive', primitive.kind, ...(primitive.tags ?? [])]));
+    }
   });
   asArray(definition.horizontalSurfaces).forEach((surface) => {
     if (surface.walkable === false || ['ceiling', 'roof'].includes(surface.kind)) return;
@@ -311,6 +317,7 @@ function walkableSurfacePoint(value) {
 }
 
 const STAIR_PRIMITIVE_KINDS = new Set(['straightStair', 'wideSacredStair', 'narrowCryptStair', 'brokenStair', 'sunkenSteps', 'daisStair', 'splitStair', 'bridgeStair', 'cornerStair', 'processionalStair']);
+const BRIDGE_PRIMITIVE_KINDS = new Set(['narrowStoneBridge', 'wideCeremonialBridge', 'brokenBridge', 'plankBridge', 'raisedWalkway', 'canalCrossing', 'bridgeWithRailings', 'archedStoneBridge', 'ritualSpanBridge', 'collapsedWalkway']);
 const DOORWAY_PRIMITIVE_KINDS = new Set(['thickStoneDoorway', 'openArchPortal', 'bronzeSealedGate', 'lockedRitualGate', 'brokenGateFrame', 'doubleTempleDoor', 'returnPortalFrame', 'sunDiskThreshold', 'narrowCryptPortal', 'grandProcessionalGate']);
 
 function stairPrimitiveEndpoints(primitive) {
@@ -372,6 +379,12 @@ function buildWalkableSurfaces(definition) {
       userData: { primitiveId: primitive.id, missingSteps: primitive.missingSteps ?? primitive.brokenSteps ?? [] },
     });
   });
+  asArray(definition.architecturalPrimitives).forEach((primitive) => {
+    if (!BRIDGE_PRIMITIVE_KINDS.has(primitive.kind) || primitive.walkable === false) return;
+    const endpoints = stairPrimitiveEndpoints(primitive);
+    const y = primitive.deckY ?? primitive.position?.y ?? primitive.position?.[1] ?? defaultY;
+    surfaces.push({ id: primitive.walkableId ?? `${primitive.id}_walkable`, kind: 'bridgeDeck', from: endpoints.from, to: endpoints.to, width: primitive.width ?? 2.4, y, priority: primitive.priority ?? 42, tags: ['v2.5-primitive', 'bridge-primitive', primitive.kind, ...(primitive.tags ?? [])], userData: { primitiveId: primitive.id, brokenGaps: primitive.brokenGaps ?? primitive.gaps ?? [] } });
+  });
   asArray(definition.horizontalSurfaces).forEach((surface) => {
     if (surface.walkable === false || ['ceiling', 'roof'].includes(surface.kind)) return;
     let footprint = [];
@@ -421,12 +434,21 @@ function doorwayBlockers(primitive) {
   return blockers;
 }
 
+function bridgePrimitiveBlockers(primitive) {
+  const blockers = []; const endpoints = stairPrimitiveEndpoints(primitive); const width = primitive.width ?? 2.4; const length = primitive.length ?? primitive.depth ?? 6; const yaw = primitive.yaw ?? primitive.rotation ?? 0; const deckY = primitive.deckY ?? primitive.position?.y ?? primitive.position?.[1] ?? 0.18; const railings = primitive.railings ?? ['bridgeWithRailings','wideCeremonialBridge','ritualSpanBridge','raisedWalkway'].includes(primitive.kind); const curbs = primitive.curbs ?? ['canalCrossing','archedStoneBridge','narrowStoneBridge'].includes(primitive.kind); const nx = Math.cos(yaw); const nz = -Math.sin(yaw);
+  if (railings || curbs) [-1,1].forEach((side)=>{ const off = side * (width/2 + (railings ? 0.22 : 0.09)); const from = { x:endpoints.from[0]+nx*off, z:endpoints.from[1]+nz*off }; const to = { x:endpoints.to[0]+nx*off, z:endpoints.to[1]+nz*off }; const b = rectForSegment(`V25-PRIMITIVE-BLOCKER-${primitive.id}-${railings?'railing':'curb'}-${side}`, from, to, railings ? 0.18 : 0.24, ['v2.5-primitive', primitive.kind, railings?'railing':'curb']); b.height = deckY + (railings ? 1 : 0.35); blockers.push(b); });
+  if (primitive.kind === 'brokenBridge' || primitive.kind === 'collapsedWalkway' || primitive.broken === true || primitive.state === 'broken') { const gapLength = Math.max(0.35, Math.min(length*0.38, primitive.gapLength ?? length*0.22)); const center = primitive.kind === 'collapsedWalkway' ? 0 : (primitive.gapOffset ?? length*0.12); const dz = Math.cos(yaw) * center; const dx = Math.sin(yaw) * center; const b = rotatedRectBlocker(`V25-PRIMITIVE-BLOCKER-${primitive.id}-broken-gap`, { x:(primitive.position?.x ?? primitive.position?.[0] ?? 0)+dx, z:(primitive.position?.z ?? primitive.position?.[2] ?? 0)+dz }, width, gapLength, deckY+0.8, yaw, ['v2.5-primitive', primitive.kind, 'broken-gap']); blockers.push(b); }
+  if (primitive.kind === 'canalCrossing' || primitive.canalContext) { const b = rotatedRectBlocker(`V25-PRIMITIVE-BLOCKER-${primitive.id}-canal-edge`, primitive.position, width + 3.2, Math.min(length*0.72,4.2), 0.25, yaw, ['v2.5-primitive', primitive.kind, 'canal-edge-context']); b.blocksPlayer = false; blockers.push(b); }
+  return blockers;
+}
+
 function buildV23PrimitiveBlockers(definition) {
   const blockers = [];
   asArray(definition.architecturalPrimitives).forEach((primitive) => {
     const blocks = primitive.blocksPlayer;
     if (['railing', 'wallPanel', 'canalWater', 'curb'].includes(primitive.kind) && blocks !== true) return;
     if (primitive.blocksPlayer === false) return;
+    if (BRIDGE_PRIMITIVE_KINDS.has(primitive.kind)) { blockers.push(...bridgePrimitiveBlockers(primitive)); return; }
     if (DOORWAY_PRIMITIVE_KINDS.has(primitive.kind)) { blockers.push(...doorwayBlockers(primitive)); return; }
     if (['arch', 'doorFrame'].includes(primitive.kind)) { blockers.push(...primitivePostBlockers(primitive)); return; }
     if (STAIR_PRIMITIVE_KINDS.has(primitive.kind)) {
