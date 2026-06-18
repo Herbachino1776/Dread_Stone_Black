@@ -3,7 +3,7 @@ import { fieldKeeperHouseDefinition } from './fieldKeeperHouse.definition.js';
 import { level1Definition } from './generated/level1.definition.js';
 import { balthazanDefinition } from './generated/balthazan.definition.js';
 import { sumerianCityBlockV0Definition } from './generated/sumerianCityBlockV0.definition.js';
-import { sumerianSunPalaceDistrictV1Definition } from './generated/sumerianSunPalaceDistrictV1.definition.js';
+import { sumerianSunPalaceDistrictV1Definition } from './generated/sumerianSunPalaceDistrictV1Definition.js';
 import { sumerianCanalMarketDistrictV2Definition } from './generated/sumerianCanalMarketDistrictV2.definition.js';
 import { kerovacDefinition } from './generated/kerovac.definition.js';
 import { reliquaryFieldDefinition } from './reliquaryField.definition.js';
@@ -71,9 +71,46 @@ function normalizeKerovacPrimitive(primitive) {
   return next;
 }
 
+const kerovacBirthdayGreeting = Object.freeze({
+  id: 'K_jake_31st_birthday_greeting',
+  kind: 'stela',
+  // K03's east wall is the player’s right-hand side on entering from K02. The Expo doorway is farther north on this wall.
+  position: [21.55, 0, 7.15],
+  yaw: Math.PI / 2,
+  width: 10.2,
+  height: 4.55,
+  thickness: 0.14,
+  material: 'birthdayJakeGreeting',
+  blocksPlayer: false,
+  blocksEnemies: false,
+  roomId: 'K03',
+  tags: ['kerovac-birthday-greeting', 'jake-31st', 'right-wall-welcome'],
+  userData: {
+    message: 'Happy 31st Jake',
+    purpose: 'Birthday welcome sign on the right-hand wall before the Kerovac Expo entrance.',
+    visualOnly: true,
+  },
+});
+
 const kerovacDefinitionWithRuntimeFixes = Object.freeze({
   ...kerovacDefinition,
-  architecturalPrimitives: (kerovacDefinition.architecturalPrimitives ?? []).map(normalizeKerovacPrimitive),
+  textures: {
+    ...(kerovacDefinition.textures ?? {}),
+    birthdayJakeGreeting: {
+      path: './assets/textures/kerovac/happy_31st_jake.svg',
+      repeat: [1, 1],
+      color: 0xffffff,
+      roughness: 0.76,
+      metalness: 0.08,
+      emissive: 0x4b2b0d,
+      emissiveIntensity: 0.24,
+      boxUvScale: [1, 1],
+    },
+  },
+  architecturalPrimitives: [
+    ...(kerovacDefinition.architecturalPrimitives ?? []).map(normalizeKerovacPrimitive),
+    kerovacBirthdayGreeting,
+  ],
 });
 
 const locationDefinitions = Object.freeze({
