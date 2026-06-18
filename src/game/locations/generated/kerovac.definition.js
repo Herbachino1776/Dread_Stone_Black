@@ -269,7 +269,6 @@ export const kerovacDefinition = Object.freeze({
 
     // Permanent Kerovac Geometry Expo Center: official swappable DARB showroom annex. Keep K09/K10 structure intact; future batches should replace only preview objects assigned to display pad IDs.
     // Workflow: remove previous preview set, insert new primitive/object batch into pads A1-D5, M1-M8, LARGE-01-LARGE-04, VLARGE-01-VLARGE-02, and preserve the wide aisles, water-demo lane, roof, lighting, return route, and metadata.
-    { id: 'K_expo_entry_title_stela', kind: 'stela', position: [30, 0, 8.1], yaw: 0, width: 7.2, height: 4.4, thickness: 0.28, material: 'pack2RitualGlyphPanel', blocksPlayer: false, roomId: 'K09', tags: ['geometry-expo-center', 'expo-title-panel'], userData: { label: 'DARB GEOMETRY EXPO CENTER', route: 'Optional east annex from K03 Civic Reliquary Court; return west to Kerovac main route.' } },
     pillar('K_expo_entry_megalith_column_sw', 'K09', 25.5, 11, 10.8, 0.92, 'pack2BlackBasaltGlyph'),
     pillar('K_expo_entry_megalith_column_nw', 'K09', 25.5, 23, 10.8, 0.92, 'pack2BlackBasaltGlyph'),
     pillar('K_expo_entry_megalith_column_se', 'K09', 34.5, 11, 10.8, 0.92, 'pack2LimestoneCarved'),
