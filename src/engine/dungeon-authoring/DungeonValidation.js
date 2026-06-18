@@ -309,14 +309,14 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   const doorwayPrimitiveKinds = new Set(['thickStoneDoorway', 'openArchPortal', 'bronzeSealedGate', 'lockedRitualGate', 'brokenGateFrame', 'doubleTempleDoor', 'returnPortalFrame', 'sunDiskThreshold', 'narrowCryptPortal', 'grandProcessionalGate']);
   const bridgePrimitiveKinds = new Set(['narrowStoneBridge', 'wideCeremonialBridge', 'brokenBridge', 'plankBridge', 'raisedWalkway', 'canalCrossing', 'bridgeWithRailings', 'archedStoneBridge', 'ritualSpanBridge', 'collapsedWalkway']);
   const columnPrimitiveKinds = new Set(['roundTempleColumn', 'squareStonePillar', 'brokenColumn', 'crackedSupportPillar', 'bronzeBandedColumn', 'glyphCarvedColumn', 'twinColumnFrame', 'massiveHallColumn', 'ruinedColumnBase', 'sacredObeliskColumn']);
-  const supportedPrimitiveKinds = new Set(['pillar', 'brokenPillar', 'arch', 'doorFrame', 'lowWall', 'railing', 'altar', 'stela', 'obelisk', 'wallPanel', 'canalWater', 'curb', 'ceilingSlab', ...stairPrimitiveKinds, ...doorwayPrimitiveKinds, ...bridgePrimitiveKinds, ...columnPrimitiveKinds]);
+  const supportedPrimitiveKinds = new Set(['pillar', 'brokenPillar', 'arch', 'doorFrame', 'lowWall', 'railing', 'altar', 'stela', 'obelisk', 'wallPanel', 'canalWater', 'curb', 'ceilingSlab', 'fishingRodDisplay', 'fishDisplay', ...stairPrimitiveKinds, ...doorwayPrimitiveKinds, ...bridgePrimitiveKinds, ...columnPrimitiveKinds]);
   const positive = (primitive, field, fallback = undefined) => {
     const value = primitive[field] ?? fallback;
     if (!Number.isFinite(value) || value <= 0) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} ${field} must be > 0`, primitive.id);
   };
   architecturalPrimitives.forEach((primitive) => {
     if (!supportedPrimitiveKinds.has(primitive.kind)) { addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} uses unsupported kind ${primitive.kind}`, primitive.id); return; }
-    const needsPosition = ['pillar', 'brokenPillar', 'arch', 'doorFrame', 'altar', 'stela', 'obelisk', 'ceilingSlab'].includes(primitive.kind) || columnPrimitiveKinds.has(primitive.kind) || stairPrimitiveKinds.has(primitive.kind) || doorwayPrimitiveKinds.has(primitive.kind) || bridgePrimitiveKinds.has(primitive.kind);
+    const needsPosition = ['pillar', 'brokenPillar', 'arch', 'doorFrame', 'altar', 'stela', 'obelisk', 'ceilingSlab', 'fishingRodDisplay', 'fishDisplay'].includes(primitive.kind) || columnPrimitiveKinds.has(primitive.kind) || stairPrimitiveKinds.has(primitive.kind) || doorwayPrimitiveKinds.has(primitive.kind) || bridgePrimitiveKinds.has(primitive.kind);
     const needsLine = ['lowWall', 'railing', 'canalWater', 'curb'].includes(primitive.kind);
     if (needsPosition) {
       const pos = positionOf(primitive.position);

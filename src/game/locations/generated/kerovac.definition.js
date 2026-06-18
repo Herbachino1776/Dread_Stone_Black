@@ -141,6 +141,22 @@ function expoColumn(id, kind, x, z, overrides = {}) {
   };
 }
 
+function expoFishingRod(id, itemId, padId, x, z, variant, overrides = {}) {
+  return {
+    id, kind: 'fishingRodDisplay', itemId, variant, position: [x, 0, z], yaw: overrides.yaw ?? -0.72, roomId: 'K10', blocksPlayer: false,
+    tags: ['geometry-expo-center', 'fishing-rod-expo-batch', 'reusable-fishing-rod-asset', itemId],
+    userData: { itemId, displayPadId: padId, objectCategory: 'fishingRod', expoBatchPurpose: 'Kerovac fishing rod and fish expo batch', futureReuse: ['held fishing rod tuning', 'inventory references', 'fishing system integration'], label: overrides.label ?? `ROD-${String(overrides.index ?? 0).padStart(2, '0')}` },
+  };
+}
+
+function expoFish(id, itemId, padId, x, z, variant, overrides = {}) {
+  return {
+    id, kind: 'fishDisplay', itemId, variant, position: [x, 0, z], yaw: overrides.yaw ?? 0.45, roomId: 'K10', blocksPlayer: false,
+    tags: ['geometry-expo-center', 'fish-expo-batch', 'reusable-fish-asset', itemId],
+    userData: { itemId, displayPadId: padId, objectCategory: 'fish', expoBatchPurpose: 'Kerovac fishing rod and fish expo batch', futureReuse: ['catchable fish items', 'cooked fish pipeline', 'inventory references'], label: overrides.label ?? `FISH-${String(overrides.index ?? 0).padStart(2, '0')}` },
+  };
+}
+
 function expoBridge(id, kind, x, z, overrides = {}) {
   const state = overrides.state ?? (overrides.broken ? 'broken' : kind === 'collapsedWalkway' ? 'collapsed' : 'intact');
   return {
@@ -293,9 +309,20 @@ export const kerovacDefinition = Object.freeze({
     { id: 'K_expo_ceiling_coffer_stadium', kind: 'ceilingSlab', position: [79, 15.72, 17], yaw: 0, width: 74, depth: 102, thickness: 0.3, material: 'ceilingCoffer', roomId: 'K10', blocksPlayer: false, tags: ['geometry-expo-center', 'high-sealed-ceiling'] },
     { id: 'K_expo_north_banner', kind: 'stela', position: [79, 0, 70.4], yaw: Math.PI, width: 13, height: 5.2, thickness: 0.3, material: 'pack2RitualGlyphPanel', blocksPlayer: false, roomId: 'K10', tags: ['geometry-expo-center', 'expo-banner'], userData: { label: 'OFFICIAL SWAPPABLE DARB DISPLAY GRID' } },
 
-    expoColumn('K_expo_starter_A1_round_column', 'roundTempleColumn', 48, -26, { roomId: 'K10', displayChamber: 'DARB Geometry Expo Stadium', height: 5.4, radius: 0.55, segments: 20, userData: { displayPadId: 'A1', label: 'DARB EXPO — A1 / Round Column Candidate' } }),
-    expoColumn('K_expo_starter_A2_bronze_column', 'bronzeBandedColumn', 56, -26, { roomId: 'K10', displayChamber: 'DARB Geometry Expo Stadium', height: 5.8, radius: 0.55, segments: 20, userData: { displayPadId: 'A2', label: 'DARB EXPO — A2 / Bronze-Banded Column Candidate' } }),
-    expoColumn('K_expo_starter_M1_twin_frame', 'twinColumnFrame', 48, 22, { roomId: 'K10', displayChamber: 'DARB Geometry Expo Stadium', height: 6.6, columnSpacing: 3.2, userData: { displayPadId: 'M1', label: 'DARB EXPO — M1 / Gate-Frame Candidate' } }),
+    // Fishing Rod and Fish Expo Batch: rods occupy A1-A3/B1-B3; fish occupy C1-C4/D1-D3. These reusable preview objects replace starter display candidates only.
+    expoFishingRod('K_expo_rod_A1_reed_pole', 'reedPoleRod', 'A1', 48, -26, 'reedPoleRod', { index: 1, label: 'ROD-01 / reedPoleRod' }),
+    expoFishingRod('K_expo_rod_A2_hooked_branch', 'hookedBranchRod', 'A2', 56, -26, 'hookedBranchRod', { index: 2, label: 'ROD-02 / hookedBranchRod', yaw: -0.35 }),
+    expoFishingRod('K_expo_rod_A3_bronze_spined', 'bronzeSpinedRod', 'A3', 64, -26, 'bronzeSpinedRod', { index: 3, label: 'ROD-03 / bronzeSpinedRod', yaw: -0.86 }),
+    expoFishingRod('K_expo_rod_B1_ritual_bone', 'ritualBoneRod', 'B1', 48, -16, 'ritualBoneRod', { index: 4, label: 'ROD-04 / ritualBoneRod', yaw: -0.95 }),
+    expoFishingRod('K_expo_rod_B2_traveler_wood', 'travelerWoodRod', 'B2', 56, -16, 'travelerWoodRod', { index: 5, label: 'ROD-05 / travelerWoodRod', yaw: -0.62 }),
+    expoFishingRod('K_expo_rod_B3_heavy_river', 'heavyRiverRod', 'B3', 64, -16, 'heavyRiverRod', { index: 6, label: 'ROD-06 / heavyRiverRod', yaw: -0.48 }),
+    expoFish('K_expo_fish_C1_small_river', 'smallRiverFish', 'C1', 48, -6, 'smallRiverFish', { index: 1, label: 'FISH-01 / smallRiverFish' }),
+    expoFish('K_expo_fish_C2_broad_carp', 'broadCarpFish', 'C2', 56, -6, 'broadCarpFish', { index: 2, label: 'FISH-02 / broadCarpFish', yaw: 0.12 }),
+    expoFish('K_expo_fish_C3_long_eel', 'longEelFish', 'C3', 64, -6, 'longEelFish', { index: 3, label: 'FISH-03 / longEelFish', yaw: 0.78 }),
+    expoFish('K_expo_fish_C4_spine_back', 'spineBackFish', 'C4', 72, -6, 'spineBackFish', { index: 4, label: 'FISH-04 / spineBackFish', yaw: 0.28 }),
+    expoFish('K_expo_fish_D1_flat_marsh', 'flatMarshFish', 'D1', 48, 4, 'flatMarshFish', { index: 5, label: 'FISH-05 / flatMarshFish', yaw: -0.2 }),
+    expoFish('K_expo_fish_D2_jaw_hunter', 'jawHunterFish', 'D2', 56, 4, 'jawHunterFish', { index: 6, label: 'FISH-06 / jawHunterFish', yaw: 0.5 }),
+    expoFish('K_expo_fish_D3_sacred_glow', 'sacredGlowFish', 'D3', 64, 4, 'sacredGlowFish', { index: 7, label: 'FISH-07 / sacredGlowFish', yaw: -0.5 }),
     { id: 'K_expo_starter_large_platform', kind: 'altar', position: [92, 0, -23], yaw: 0, width: 8.6, depth: 10.2, height: 0.8, material: 'pack2DirtyBaseStone', topMaterial: 'pack2CrackedMarbleTrim', roomId: 'K10', tags: ['geometry-expo-center', 'starter-display-object'], userData: { displayPadId: 'LARGE-01', label: 'DARB EXPO — LARGE-01 / Future Building Demo Slot' } },
     { id: 'K_expo_water_demo_canal_strip', kind: 'canalWater', from: [53, 58], to: [97, 58], width: 4.8, y: 0.08, height: 0.035, material: 'turquoiseWater', emissiveColor: 0x2fb8b7, roomId: 'K10', tags: ['geometry-expo-center', 'reserved-water-demo-lane'], userData: { displayPadId: 'WATER-DEMO-LANE', futureUse: 'boat, fishing, water, dock, and bridge tests' } },
 

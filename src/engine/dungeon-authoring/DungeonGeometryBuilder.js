@@ -586,6 +586,96 @@ function segmentDeck(fromValue, toValue, width, y, material, group, name, userDa
   return mesh;
 }
 
+function addCylinderBetween({ group, from, to, radius = 0.05, material, name, userData = {}, segments = 8 }) {
+  const start = toVector3(from);
+  const end = toVector3(to);
+  const midpoint = start.clone().lerp(end, 0.5);
+  const direction = end.clone().sub(start);
+  const length = direction.length();
+  if (length <= 0.0001) return null;
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, segments), material);
+  mesh.name = name;
+  mesh.position.copy(midpoint);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData = { ...mesh.userData, ...userData };
+  group.add(mesh);
+  return mesh;
+}
+
+function localPoint(origin, yaw, x, y, z) {
+  const c = Math.cos(yaw); const sn = Math.sin(yaw);
+  return new THREE.Vector3(origin.x + x * c - z * sn, origin.y + y, origin.z + x * sn + z * c);
+}
+
+function basicMat(color, roughness = 0.9, metalness = 0, emissive = 0x000000, emissiveIntensity = 0) {
+  return new THREE.MeshStandardMaterial({ color, roughness, metalness, emissive, emissiveIntensity });
+}
+
+const ROD_SPECS = {
+  reedPoleRod: { len: 4.5, r: 0.035, curve: 0.2, wood: 0x8a7442, grip: 0x3d2617, metal: 0x7a5b2b, noReel: true, wraps: 5, hook: 'bone' },
+  hookedBranchRod: { len: 3.7, r: 0.07, curve: 0.62, wood: 0x4a2d1b, grip: 0x20140f, metal: 0x5f4a34, branch: true, wraps: 3, hook: 'thorn' },
+  bronzeSpinedRod: { len: 4.25, r: 0.05, curve: 0.12, wood: 0x2c2118, grip: 0x16100c, metal: 0xb07a35, reel: true, spines: 7, turquoise: true, wraps: 4 },
+  ritualBoneRod: { len: 3.95, r: 0.052, curve: -0.16, wood: 0xd3c7a1, grip: 0x271716, metal: 0x6b5c4d, bone: true, glyph: true, wraps: 6, hook: 'bone' },
+  travelerWoodRod: { len: 4.0, r: 0.046, curve: 0.04, wood: 0x6d4525, grip: 0x4a2b19, metal: 0x5b4633, pack: true, wraps: 8 },
+  heavyRiverRod: { len: 3.55, r: 0.095, curve: 0.08, wood: 0x33251b, grip: 0x211611, metal: 0x6b5035, reel: true, stout: true, wraps: 5 },
+};
+
+const FISH_SPECS = {
+  smallRiverFish: { l: 1.25, h: 0.32, w: 0.22, color: 0x53635a, fin: 0x39433e, tail: 0.28, eye: 0.035 },
+  broadCarpFish: { l: 1.65, h: 0.62, w: 0.38, color: 0x6d6043, fin: 0x443a2b, tail: 0.32, whiskers: true, eye: 0.045 },
+  longEelFish: { l: 2.35, h: 0.22, w: 0.18, color: 0x273026, fin: 0x1a211b, tail: 0.2, eel: true, eye: 0.03 },
+  spineBackFish: { l: 1.75, h: 0.42, w: 0.28, color: 0x3f4b44, fin: 0x232b28, tail: 0.32, spines: 8, eye: 0.04 },
+  flatMarshFish: { l: 1.55, h: 0.18, w: 0.78, color: 0x4a4232, fin: 0x29251d, tail: 0.24, flat: true, eye: 0.04 },
+  jawHunterFish: { l: 1.95, h: 0.46, w: 0.32, color: 0x2f3432, fin: 0x1b1f1e, tail: 0.38, jaw: true, eye: 0.055 },
+  sacredGlowFish: { l: 1.65, h: 0.38, w: 0.27, color: 0x203733, fin: 0x1c514d, tail: 0.34, glow: true, eye: 0.045 },
+};
+
+function addFishingRodDisplay({ definition, group, primitive }) {
+  const spec = ROD_SPECS[primitive.variant] ?? ROD_SPECS.reedPoleRod;
+  const origin = toVector3(primitive.position); origin.y += 0.72;
+  const yaw = primitive.yaw ?? 0;
+  const meshes = [];
+  const wood = basicMat(spec.wood);
+  const grip = basicMat(spec.grip);
+  const metal = basicMat(spec.metal, 0.72, spec.reel ? 0.45 : 0.15);
+  const bone = basicMat(0xd6caa3);
+  const cord = basicMat(0x1a130f);
+  const base = { locationId: definition.id, roomId: primitive.roomId, itemId: primitive.itemId, displayPadId: primitive.userData?.displayPadId, objectCategory: 'fishingRod', generatedBy: 'DungeonGeometryBuilder:fishingExpoObject', ...primitive.userData };
+  const p0 = localPoint(origin, yaw, -spec.len / 2, 0.16, 0);
+  const p1 = localPoint(origin, yaw, -spec.len * 0.15, 0.22 + spec.curve * 0.12, spec.curve * 0.16);
+  const p2 = localPoint(origin, yaw, spec.len * 0.25, 0.28 + spec.curve * 0.18, spec.curve * 0.25);
+  const p3 = localPoint(origin, yaw, spec.len / 2, 0.34 + spec.curve * 0.28, spec.curve * 0.34);
+  [[p0,p1],[p1,p2],[p2,p3]].forEach(([a,b], i) => meshes.push(addCylinderBetween({ group, from:a, to:b, radius: spec.r * (1 - i * 0.15), material: spec.bone ? bone : wood, name:`V23-fishingRod-SHAFT-${primitive.id}-${i}`, userData: base, segments: spec.branch ? 7 : 10 })));
+  meshes.push(addCylinderBetween({ group, from: localPoint(origin,yaw,-spec.len/2-0.15,0.16,0), to: localPoint(origin,yaw,-spec.len/2+0.72,0.17,0), radius: spec.r*1.35, material: grip, name:`V23-fishingRod-GRIP-${primitive.id}`, userData: base, segments: 8 }));
+  for (let i=0;i<spec.wraps;i+=1) meshes.push(addCylinderBetween({ group, from: localPoint(origin,yaw,-spec.len/2+0.08+i*0.13,0.22,-0.16), to: localPoint(origin,yaw,-spec.len/2+0.08+i*0.13,0.22,0.16), radius: 0.018, material: cord, name:`V23-fishingRod-WRAP-${primitive.id}-${i}`, userData: base, segments: 6 }));
+  const tip = p3; const hookEnd = localPoint(origin, yaw, spec.len/2+0.25, -0.26, spec.curve*0.34+0.12);
+  meshes.push(addCylinderBetween({ group, from: tip, to: hookEnd, radius: 0.008, material: basicMat(0x151515), name:`V23-fishingRod-LINE-${primitive.id}`, userData: base, segments: 5 }));
+  meshes.push(addCylinderBetween({ group, from: hookEnd, to: localPoint(origin,yaw,spec.len/2+0.36,-0.06,spec.curve*0.34+0.16), radius: 0.018, material: spec.hook === 'bone' ? bone : metal, name:`V23-fishingRod-HOOK-${primitive.id}`, userData: base, segments: 6 }));
+  if (spec.reel) { const reel = new THREE.Mesh(new THREE.TorusGeometry(0.18,0.035,8,18), metal); reel.name=`V23-fishingRod-REEL-${primitive.id}`; reel.position.copy(localPoint(origin,yaw,-spec.len/2+0.9,0.18,0.2)); reel.rotation.set(Math.PI/2, yaw, 0); reel.userData=base; group.add(reel); meshes.push(reel); }
+  if (spec.spines) for (let i=0;i<spec.spines;i+=1) meshes.push(addCylinderBetween({ group, from: localPoint(origin,yaw,-0.3+i*0.35,0.34,0.03), to: localPoint(origin,yaw,-0.24+i*0.35,0.58,0.03), radius: 0.025, material: metal, name:`V23-fishingRod-SPINE-${primitive.id}-${i}`, userData: base, segments: 5 }));
+  if (spec.turquoise || spec.glyph || spec.pack) { const beadMat = basicMat(spec.turquoise ? 0x26a6a0 : 0xb9a26d, 0.65, 0.05, spec.turquoise ? 0x0b4d4a : 0x000000, spec.turquoise ? 0.25 : 0); for (let i=0;i<3;i+=1){ const bead=new THREE.Mesh(new THREE.SphereGeometry(0.07,10,8), beadMat); bead.name=`V23-fishingRod-ORNAMENT-${primitive.id}-${i}`; bead.position.copy(localPoint(origin,yaw,-0.2+i*0.42,0.42,0.12)); bead.userData=base; group.add(bead); meshes.push(bead); } }
+  return meshes.filter(Boolean);
+}
+
+function addFishDisplay({ definition, group, primitive }) {
+  const spec = FISH_SPECS[primitive.variant] ?? FISH_SPECS.smallRiverFish;
+  const origin = toVector3(primitive.position); const yaw = primitive.yaw ?? 0;
+  const base = { locationId: definition.id, roomId: primitive.roomId, itemId: primitive.itemId, displayPadId: primitive.userData?.displayPadId, objectCategory: 'fish', generatedBy: 'DungeonGeometryBuilder:fishingExpoObject', ...primitive.userData };
+  const slabMat = basicMat(0x2d2922); const bodyMat = basicMat(spec.color, 0.82, 0.02, spec.glow ? 0x1fb8aa : 0, spec.glow ? 0.45 : 0); const finMat = basicMat(spec.fin, 0.86, 0.01, spec.glow ? 0x14736d : 0, spec.glow ? 0.28 : 0); const boneMat = basicMat(0xd8caa2);
+  const meshes=[]; const slab=addBox({group,size:new THREE.Vector3(2.8,0.16,1.55),position:new THREE.Vector3(origin.x,0.18,origin.z),material:slabMat,name:`V23-fishDisplay-PLINTH-${primitive.id}`,userData:base}); slab.rotation.y=yaw; meshes.push(slab);
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.5,24,14),bodyMat); body.name=`V23-fishDisplay-BODY-${primitive.id}`; body.position.copy(localPoint(origin,yaw,0,0.55,0)); body.scale.set(spec.l, spec.h, spec.w); body.rotation.y=yaw; body.userData=base; group.add(body); meshes.push(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.34,18,10),bodyMat); head.name=`V23-fishDisplay-HEAD-${primitive.id}`; head.position.copy(localPoint(origin,yaw,spec.l*0.42,0.56,0)); head.scale.set(spec.jaw?1.25:0.9,spec.h*1.1,spec.w*1.05); head.rotation.y=yaw; head.userData=base; group.add(head); meshes.push(head);
+  const tail=new THREE.Mesh(new THREE.ConeGeometry(spec.tail,0.42,3),finMat); tail.name=`V23-fishDisplay-TAIL-${primitive.id}`; tail.position.copy(localPoint(origin,yaw,-spec.l*0.58,0.55,0)); tail.rotation.set(0,yaw-Math.PI/2,Math.PI/2); tail.scale.z= spec.flat ? 1.6 : 1; tail.userData=base; group.add(tail); meshes.push(tail);
+  [['DORSAL',0,0.9,0,0.36],['VENTRAL',0,0.28,0,0.28],['SIDE',0.05,0.52,spec.w*0.52,0.24]].forEach(([label,x,y,z,r],i)=>{ const fin=new THREE.Mesh(new THREE.ConeGeometry(r,0.48,3),finMat); fin.name=`V23-fishDisplay-FIN-${primitive.id}-${label}`; fin.position.copy(localPoint(origin,yaw,x,y,z)); fin.rotation.set(Math.PI/2,yaw, i===1?Math.PI:0); fin.userData=base; group.add(fin); meshes.push(fin); });
+  const eyeMat=basicMat(0x050505,0.5); [-1,1].forEach((side)=>{ const eye=new THREE.Mesh(new THREE.SphereGeometry(spec.eye,8,6),eyeMat); eye.name=`V23-fishDisplay-EYE-${primitive.id}-${side}`; eye.position.copy(localPoint(origin,yaw,spec.l*0.52,0.68,side*spec.w*0.42)); eye.userData=base; group.add(eye); meshes.push(eye); });
+  if (spec.spines) for(let i=0;i<spec.spines;i+=1){ const x=-spec.l*0.35+i*(spec.l*0.7/(spec.spines-1)); meshes.push(addCylinderBetween({group,from:localPoint(origin,yaw,x,0.82,0),to:localPoint(origin,yaw,x+0.02,1.08,0),radius:0.025,material:boneMat,name:`V23-fishDisplay-SPINE-${primitive.id}-${i}`,userData:base,segments:5})); }
+  if (spec.whiskers) [-1,1].forEach((side)=>meshes.push(addCylinderBetween({group,from:localPoint(origin,yaw,spec.l*0.7,0.52,side*0.12),to:localPoint(origin,yaw,spec.l*0.98,0.46,side*0.36),radius:0.01,material:boneMat,name:`V23-fishDisplay-WHISKER-${primitive.id}-${side}`,userData:base,segments:5})));
+  if (spec.jaw) { const jaw=addBox({group,size:new THREE.Vector3(0.42,0.08,0.34),position:localPoint(origin,yaw,spec.l*0.75,0.43,0),material:boneMat,name:`V23-fishDisplay-JAW-${primitive.id}`,userData:base}); jaw.rotation.y=yaw; meshes.push(jaw); }
+  return meshes.filter(Boolean);
+}
+
 function addV2RampsStairsBridges({ definition, group, materialFactory }) {
   const meshes = [];
   asArray(definition.ramps).forEach((ramp) => {
@@ -914,6 +1004,10 @@ function addV23ArchitecturalPrimitives({ definition, group, materialFactory }) {
       const pos = toVector3(primitive.position); const height = primitive.height ?? 3; const width = primitive.baseWidth ?? 0.7; const baseBox = addBox({ group, size: new THREE.Vector3(width, height * 0.78, width), position: new THREE.Vector3(pos.x, pos.y + height * 0.39, pos.z), material, name: `V23-obelisk-SHAFT-${primitive.id}`, userData: base }); baseBox.rotation.y = primitive.yaw ?? 0; addPart(baseBox); const tip = addBox({ group, size: new THREE.Vector3(width * 0.65, height * 0.22, width * 0.65), position: new THREE.Vector3(pos.x, pos.y + height * 0.89, pos.z), material, name: `V23-obelisk-TIP-${primitive.id}`, userData: base }); tip.rotation.y = (primitive.yaw ?? 0) + Math.PI / 4; addPart(tip);
     } else if (primitive.kind === 'wallPanel') {
       const wall = walls.get(primitive.wallSegmentId); if (!wall) return; const from = point3FromXZ(wall.from, wall.y ?? 0); const to = point3FromXZ(wall.to, wall.y ?? 0); const dir = to.clone().sub(from).normalize(); const normal = new THREE.Vector3(-dir.z, 0, dir.x); const pos = from.clone().lerp(to, primitive.t ?? 0.5).add(normal.multiplyScalar(primitive.offset ?? 0.08)); pos.y = (wall.y ?? 0) + (primitive.height ?? 1.8) / 2 + (primitive.y ?? 0.8); const panel = addBox({ group, size: new THREE.Vector3(primitive.width ?? 1, primitive.height ?? 1.5, primitive.thickness ?? 0.08), position: pos, material, name: `V23-wallPanel-${primitive.id}`, userData: { ...base, wallSegmentId: primitive.wallSegmentId } }); panel.rotation.y = Math.atan2(dir.z, dir.x); addPart(panel);
+    } else if (primitive.kind === 'fishingRodDisplay') {
+      addFishingRodDisplay({ definition, group, primitive }).forEach(addPart);
+    } else if (primitive.kind === 'fishDisplay') {
+      addFishDisplay({ definition, group, primitive }).forEach(addPart);
     } else if (primitive.kind === 'canalWater') {
       const waterMaterial = material.clone ? material.clone() : material; const water = segmentDeck(primitive.from, primitive.to, primitive.width ?? 1, primitive.y ?? 0.03, waterMaterial, group, `V23-canalWater-${primitive.id}`, { ...base, animated: 'canalWater', scrollSpeed: primitive.scrollSpeed }, 0.035); if (water) { if (primitive.emissiveColor && water.material?.emissive) water.material.emissive.setHex(primitive.emissiveColor); addPart(water); }
     }
