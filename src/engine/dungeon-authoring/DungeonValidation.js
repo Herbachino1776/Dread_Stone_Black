@@ -309,14 +309,14 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   const doorwayPrimitiveKinds = new Set(['thickStoneDoorway', 'openArchPortal', 'bronzeSealedGate', 'lockedRitualGate', 'brokenGateFrame', 'doubleTempleDoor', 'returnPortalFrame', 'sunDiskThreshold', 'narrowCryptPortal', 'grandProcessionalGate']);
   const bridgePrimitiveKinds = new Set(['narrowStoneBridge', 'wideCeremonialBridge', 'brokenBridge', 'plankBridge', 'raisedWalkway', 'canalCrossing', 'bridgeWithRailings', 'archedStoneBridge', 'ritualSpanBridge', 'collapsedWalkway']);
   const columnPrimitiveKinds = new Set(['roundTempleColumn', 'squareStonePillar', 'brokenColumn', 'crackedSupportPillar', 'bronzeBandedColumn', 'glyphCarvedColumn', 'twinColumnFrame', 'massiveHallColumn', 'ruinedColumnBase', 'sacredObeliskColumn']);
-  const supportedPrimitiveKinds = new Set(['pillar', 'brokenPillar', 'arch', 'doorFrame', 'lowWall', 'railing', 'altar', 'stela', 'obelisk', 'wallPanel', 'canalWater', 'curb', 'ceilingSlab', 'fishingRodDisplay', 'fishDisplay', ...stairPrimitiveKinds, ...doorwayPrimitiveKinds, ...bridgePrimitiveKinds, ...columnPrimitiveKinds]);
+  const supportedPrimitiveKinds = new Set(['pillar', 'brokenPillar', 'arch', 'doorFrame', 'lowWall', 'railing', 'altar', 'stela', 'obelisk', 'wallPanel', 'canalWater', 'curb', 'ceilingSlab', 'hangingSign', 'fishingRodDisplay', 'fishDisplay', ...stairPrimitiveKinds, ...doorwayPrimitiveKinds, ...bridgePrimitiveKinds, ...columnPrimitiveKinds]);
   const positive = (primitive, field, fallback = undefined) => {
     const value = primitive[field] ?? fallback;
     if (!Number.isFinite(value) || value <= 0) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} ${field} must be > 0`, primitive.id);
   };
   architecturalPrimitives.forEach((primitive) => {
     if (!supportedPrimitiveKinds.has(primitive.kind)) { addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} uses unsupported kind ${primitive.kind}`, primitive.id); return; }
-    const needsPosition = ['pillar', 'brokenPillar', 'arch', 'doorFrame', 'altar', 'stela', 'obelisk', 'ceilingSlab', 'fishingRodDisplay', 'fishDisplay'].includes(primitive.kind) || columnPrimitiveKinds.has(primitive.kind) || stairPrimitiveKinds.has(primitive.kind) || doorwayPrimitiveKinds.has(primitive.kind) || bridgePrimitiveKinds.has(primitive.kind);
+    const needsPosition = ['pillar', 'brokenPillar', 'arch', 'doorFrame', 'altar', 'stela', 'obelisk', 'ceilingSlab', 'hangingSign', 'fishingRodDisplay', 'fishDisplay'].includes(primitive.kind) || columnPrimitiveKinds.has(primitive.kind) || stairPrimitiveKinds.has(primitive.kind) || doorwayPrimitiveKinds.has(primitive.kind) || bridgePrimitiveKinds.has(primitive.kind);
     const needsLine = ['lowWall', 'railing', 'canalWater', 'curb'].includes(primitive.kind);
     if (needsPosition) {
       const pos = positionOf(primitive.position);
@@ -344,6 +344,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     if (['altar', 'stela'].includes(primitive.kind)) { positive(primitive, 'width', 1); positive(primitive, 'height', 1); positive(primitive, 'thickness', primitive.kind === 'stela' ? 0.2 : 0.1); }
     if (primitive.kind === 'obelisk') { positive(primitive, 'height', 3); positive(primitive, 'baseWidth', 0.7); }
     if (primitive.kind === 'ceilingSlab') { positive(primitive, 'width', 4); positive(primitive, 'depth', 4); positive(primitive, 'thickness', 0.2); }
+    if (primitive.kind === 'hangingSign') { positive(primitive, 'width', 4); positive(primitive, 'height', 1.5); positive(primitive, 'thickness', 0.12); if (!Number.isFinite(primitive.yaw ?? 0)) addIssue(errors, 'error', `architecturalPrimitive ${primitive.id} yaw must be finite`, primitive.id); }
     if (stairPrimitiveKinds.has(primitive.kind)) {
       positive(primitive, 'width', primitive.kind === 'narrowCryptStair' ? 1.2 : 2.4);
       positive(primitive, 'height', 1.2);
