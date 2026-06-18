@@ -694,20 +694,29 @@ function buildSimpleFish({ id, bodyLength, bodyHeight, bodyWidth, bodyMaterial, 
 
   const body = addFishMesh(root, new THREE.SphereGeometry(0.5, 18, 12), bodyMaterial, `V25-fishDisplay-CLOSED-ELLIPSOID-BODY-${id}`, new THREE.Vector3(0, 0, 0), { ...baseUserData, fishPart: 'singleClosedEllipsoidBody', materialSlot: 'bodyMaterial', textureRole: 'scaleTexture', headTaper });
   body.scale.set(bodyLength * 0.5 * headTaper, bodyHeight * 0.5, bodyWidth * 0.5);
+  const silhouetteBodyLength = bodyLength * 0.5 * headTaper;
 
-  const tail = addFishMesh(root, makeTailDiamondGeometry({ length: bodyLength * 0.24 * tailScale, height: bodyHeight * 0.95 * tailScale, width: bodyWidth * 0.38 }), finMaterial, `V25-fishDisplay-CLOSED-ATTACHED-TAIL-${id}`, new THREE.Vector3(-bodyLength * 0.49, 0, 0), { ...baseUserData, fishPart: 'closedAttachedTail', materialSlot: 'finMaterial', textureRole: 'finTexture', attachesToBody: true });
-  const dorsal = addFishMesh(root, makeClosedWedgeGeometry({ length: bodyLength * 0.28, height: bodyHeight * 0.42 * dorsalScale, width: bodyWidth * 0.28, pointDirection: 1 }), finMaterial, `V25-fishDisplay-CLOSED-ATTACHED-DORSAL-FIN-${id}`, new THREE.Vector3(-bodyLength * 0.04, bodyHeight * 0.43, 0), { ...baseUserData, fishPart: 'closedAttachedDorsalFin', materialSlot: 'finMaterial', textureRole: 'finTexture', attachesToBody: true });
+  const tailLength = bodyLength * 0.24 * tailScale;
+  const tailHeight = bodyHeight * 0.95 * tailScale;
+  const tailWidth = bodyWidth * 0.38;
+  const tailEmbed = silhouetteBodyLength * 0.15;
+  const tailFrontX = tailLength * 0.34;
+  const tail = addFishMesh(root, makeTailDiamondGeometry({ length: tailLength, height: tailHeight, width: tailWidth }), finMaterial, `V25-fishDisplay-CLOSED-ATTACHED-TAIL-${id}`, new THREE.Vector3(-silhouetteBodyLength * 0.5 + tailEmbed - tailFrontX, 0, 0), { ...baseUserData, fishPart: 'closedAttachedTail', materialSlot: 'finMaterial', textureRole: 'finTexture', attachesToBody: true, bodyEmbed: tailEmbed });
+
+  const dorsalHeight = bodyHeight * Math.min(0.34 * dorsalScale, 0.42);
+  const dorsal = addFishMesh(root, makeClosedWedgeGeometry({ length: silhouetteBodyLength * 0.24, height: dorsalHeight, width: bodyWidth * 0.24, pointDirection: 1 }), finMaterial, `V25-fishDisplay-CLOSED-ATTACHED-DORSAL-FIN-${id}`, new THREE.Vector3(-silhouetteBodyLength * 0.04, bodyHeight * 0.3, 0), { ...baseUserData, fishPart: 'closedAttachedDorsalFin', materialSlot: 'finMaterial', textureRole: 'finTexture', attachesToBody: true, bodyEmbed: bodyHeight * 0.16 });
 
   [-1, 1].forEach((side) => {
-    const pectoral = addFishMesh(root, makeClosedWedgeGeometry({ length: bodyLength * 0.2 * pectoralScale, height: bodyHeight * 0.42 * pectoralScale, width: bodyWidth * 0.2, pointDirection: 1 }), finMaterial, `V25-fishDisplay-CLOSED-MIRRORED-PECTORAL-FIN-${id}-${side}`, new THREE.Vector3(bodyLength * 0.13, -bodyHeight * 0.04, side * bodyWidth * 0.43), { ...baseUserData, fishPart: 'closedMirroredPectoralFin', mirrorSide: side, materialSlot: 'finMaterial', textureRole: 'finTexture', attachesToBody: true });
+    const pectoral = addFishMesh(root, makeClosedWedgeGeometry({ length: silhouetteBodyLength * 0.16 * pectoralScale, height: bodyHeight * 0.3 * pectoralScale, width: bodyWidth * 0.16, pointDirection: 1 }), finMaterial, `V25-fishDisplay-CLOSED-MIRRORED-PECTORAL-FIN-${id}-${side}`, new THREE.Vector3(silhouetteBodyLength * 0.12, -bodyHeight * 0.03, side * bodyWidth * 0.34), { ...baseUserData, fishPart: 'closedMirroredPectoralFin', mirrorSide: side, materialSlot: 'finMaterial', textureRole: 'finTexture', attachesToBody: true, bodyEmbed: bodyWidth * 0.16 });
     pectoral.rotation.y = side * 0.18;
   });
 
+  const eyeRadius = Math.min(bodyHeight, bodyWidth) * 0.09;
   [-1, 1].forEach((side) => {
-    addFishMesh(root, new THREE.SphereGeometry(Math.min(bodyHeight, bodyWidth) * 0.09, 8, 6), eyeMaterial, `V25-fishDisplay-TINY-MIRRORED-BLACK-EYE-${id}-${side}`, new THREE.Vector3(bodyLength * 0.32, bodyHeight * 0.12, side * bodyWidth * 0.36), { ...baseUserData, fishPart: 'tinyMirroredBlackEye', mirrorSide: side, materialSlot: 'eyeMaterial' });
+    addFishMesh(root, new THREE.SphereGeometry(eyeRadius, 8, 6), eyeMaterial, `V25-fishDisplay-TINY-MIRRORED-BLACK-EYE-${id}-${side}`, new THREE.Vector3(silhouetteBodyLength * 0.32, bodyHeight * 0.12, side * bodyWidth * 0.24), { ...baseUserData, fishPart: 'tinyMirroredBlackEye', mirrorSide: side, materialSlot: 'eyeMaterial', bodyEmbed: eyeRadius * 0.25 });
   });
 
-  root.userData.fishSanity = { bodyLength, bodyHeight, bodyWidth, childCount: root.children.length, tailOverlapsBody: tail.position.x > -bodyLength * 0.5, dorsalOverlapsBody: dorsal.position.y < bodyHeight * 0.5 };
+  root.userData.fishSanity = { bodyLength: silhouetteBodyLength, authoredBodyLength: bodyLength, bodyHeight, bodyWidth, childCount: root.children.length, tailEmbed, tailOverlapsBody: tail.position.x + tailFrontX > -silhouetteBodyLength * 0.5, dorsalOverlapsBody: dorsal.position.y - dorsalHeight * 0.5 < bodyHeight * 0.5 };
   return root;
 }
 
