@@ -319,6 +319,7 @@ function walkableSurfacePoint(value) {
 const STAIR_PRIMITIVE_KINDS = new Set(['straightStair', 'wideSacredStair', 'narrowCryptStair', 'brokenStair', 'sunkenSteps', 'daisStair', 'splitStair', 'bridgeStair', 'cornerStair', 'processionalStair']);
 const BRIDGE_PRIMITIVE_KINDS = new Set(['narrowStoneBridge', 'wideCeremonialBridge', 'brokenBridge', 'plankBridge', 'raisedWalkway', 'canalCrossing', 'bridgeWithRailings', 'archedStoneBridge', 'ritualSpanBridge', 'collapsedWalkway']);
 const DOORWAY_PRIMITIVE_KINDS = new Set(['thickStoneDoorway', 'openArchPortal', 'bronzeSealedGate', 'lockedRitualGate', 'brokenGateFrame', 'doubleTempleDoor', 'returnPortalFrame', 'sunDiskThreshold', 'narrowCryptPortal', 'grandProcessionalGate']);
+const COLUMN_PRIMITIVE_KINDS = new Set(['roundTempleColumn', 'squareStonePillar', 'brokenColumn', 'crackedSupportPillar', 'bronzeBandedColumn', 'glyphCarvedColumn', 'twinColumnFrame', 'massiveHallColumn', 'ruinedColumnBase', 'sacredObeliskColumn']);
 
 function stairPrimitiveEndpoints(primitive) {
   const pos = toVector3(primitive.position);
@@ -442,12 +443,33 @@ function bridgePrimitiveBlockers(primitive) {
   return blockers;
 }
 
+
+function columnPrimitiveBlockers(primitive) {
+  const height = primitive.height ?? (primitive.kind === 'ruinedColumnBase' ? 1.1 : primitive.kind === 'massiveHallColumn' ? 8.8 : 4.2);
+  const radius = primitive.radius ?? (primitive.kind === 'massiveHallColumn' ? 0.82 : 0.48);
+  const width = primitive.width ?? radius * 2;
+  const depth = primitive.depth ?? width;
+  const yaw = primitive.yaw ?? primitive.rotation ?? 0;
+  if (primitive.kind === 'twinColumnFrame') {
+    const pos = toVector3(primitive.position);
+    const spacing = primitive.columnSpacing ?? width * 2.2;
+    return [-1, 1].map((side) => {
+      const localX = side * spacing / 2;
+      const x = pos.x + Math.cos(yaw) * localX;
+      const z = pos.z - Math.sin(yaw) * localX;
+      return rotatedRectBlocker(`V26-PRIMITIVE-BLOCKER-${primitive.id}-column-${side}`, { x, z }, width, depth, height, yaw, ['v2.6-primitive', primitive.kind, 'column-footprint']);
+    });
+  }
+  return [rotatedRectBlocker(`V26-PRIMITIVE-BLOCKER-${primitive.id}`, primitive.position, width, depth, height, yaw, ['v2.6-primitive', primitive.kind, 'column-footprint'])];
+}
+
 function buildV23PrimitiveBlockers(definition) {
   const blockers = [];
   asArray(definition.architecturalPrimitives).forEach((primitive) => {
     const blocks = primitive.blocksPlayer;
     if (['railing', 'wallPanel', 'canalWater', 'curb'].includes(primitive.kind) && blocks !== true) return;
     if (primitive.blocksPlayer === false) return;
+    if (COLUMN_PRIMITIVE_KINDS.has(primitive.kind)) { blockers.push(...columnPrimitiveBlockers(primitive)); return; }
     if (BRIDGE_PRIMITIVE_KINDS.has(primitive.kind)) { blockers.push(...bridgePrimitiveBlockers(primitive)); return; }
     if (DOORWAY_PRIMITIVE_KINDS.has(primitive.kind)) { blockers.push(...doorwayBlockers(primitive)); return; }
     if (['arch', 'doorFrame'].includes(primitive.kind)) { blockers.push(...primitivePostBlockers(primitive)); return; }

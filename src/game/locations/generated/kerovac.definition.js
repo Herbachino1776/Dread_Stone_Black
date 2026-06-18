@@ -18,6 +18,17 @@ const textures = Object.freeze({
   extradimensionalThreat: { path: './assets/textures/pack1/panel_extradimensional_threat_01.png', repeat: [1, 1], color: 0xe7bd78, roughness: 0.9, metalness: 0, emissive: 0x643012, emissiveIntensity: 0.44 },
   watcherFace: { path: './assets/textures/pack1/panel_watcher_face_01.png', repeat: [1, 1], color: 0xe7cd94, roughness: 0.9, metalness: 0, emissive: 0x4c2a13, emissiveIntensity: 0.4 },
   turquoiseWater: { color: 0x38b9bd, roughness: 0.42, metalness: 0, emissive: 0x1e7f87, emissiveIntensity: 0.72 },
+
+  pack2SandstoneWorn: { path: './assets/textures/pack2/column_sandstone_worn_01.png', repeat: [3, 2], color: 0xd0ae76, roughness: 0.96, metalness: 0, emissive: 0x2f1e0d, emissiveIntensity: 0.16, boxUvScale: [0.2, 0.2], cylinderUvScale: [0.32, 0.18] },
+  pack2LimestoneCarved: { path: './assets/textures/pack2/column_limestone_carved_01.png', repeat: [3, 2], color: 0xdfd0a5, roughness: 0.95, metalness: 0, emissive: 0x302613, emissiveIntensity: 0.18, boxUvScale: [0.18, 0.2], cylinderUvScale: [0.3, 0.18] },
+  pack2BlackBasaltGlyph: { path: './assets/textures/pack2/column_black_basalt_glyph_01.png', repeat: [2.4, 1.8], color: 0x3c3837, roughness: 0.9, metalness: 0, emissive: 0x100f17, emissiveIntensity: 0.24, boxUvScale: [0.18, 0.18], cylinderUvScale: [0.28, 0.17] },
+  pack2BronzeTurquoiseBand: { path: './assets/textures/pack2/column_bronze_turquoise_band_01.png', repeat: [1.8, 1.2], color: 0xb98a55, roughness: 0.72, metalness: 0.42, emissive: 0x0c3f42, emissiveIntensity: 0.24, boxUvScale: [0.24, 0.2], cylinderUvScale: [0.36, 0.18] },
+  pack2ChippedBlackstoneTrim: { path: './assets/textures/pack2/column_chipped_blackstone_trim_01.png', repeat: [2.4, 1.2], color: 0x4b4640, roughness: 0.94, metalness: 0, emissive: 0x15110f, emissiveIntensity: 0.14, boxUvScale: [0.22, 0.18], cylinderUvScale: [0.3, 0.16] },
+  pack2CrackedMarbleTrim: { path: './assets/textures/pack2/column_cracked_marble_trim_01.png', repeat: [2.5, 1.4], color: 0xd8d0bd, roughness: 0.88, metalness: 0, emissive: 0x2c271d, emissiveIntensity: 0.14, boxUvScale: [0.2, 0.18], cylinderUvScale: [0.3, 0.16] },
+  pack2DirtyBaseStone: { path: './assets/textures/pack2/column_dirty_base_stone_01.png', repeat: [2.6, 1.4], color: 0x8f8067, roughness: 0.98, metalness: 0, emissive: 0x21180f, emissiveIntensity: 0.12, boxUvScale: [0.2, 0.18], cylinderUvScale: [0.28, 0.16] },
+  pack2TurquoiseInlay: { path: './assets/textures/pack2/column_turquoise_inlay_01.png', repeat: [2.2, 1.5], color: 0x74b9ad, roughness: 0.74, metalness: 0.08, emissive: 0x135d5d, emissiveIntensity: 0.34, boxUvScale: [0.22, 0.18], cylinderUvScale: [0.32, 0.17] },
+  pack2OxidizedArchTrim: { path: './assets/textures/pack2/metal_oxidized_arch_trim_01.png', repeat: [2, 1.2], color: 0x6a8377, roughness: 0.68, metalness: 0.48, emissive: 0x113b35, emissiveIntensity: 0.2, boxUvScale: [0.24, 0.2], cylinderUvScale: [0.34, 0.18] },
+  pack2RitualGlyphPanel: { path: './assets/textures/pack2/panel_ritual_glyph_column_01.png', repeat: [1, 1], color: 0xe0bd77, roughness: 0.88, metalness: 0, emissive: 0x56310c, emissiveIntensity: 0.38, boxUvScale: [0.18, 0.18] },
   turquoiseGlow: { color: 0x31c6c2, roughness: 0.65, metalness: 0, emissive: 0x20a9a4, emissiveIntensity: 0.56 },
 });
 
@@ -89,6 +100,17 @@ function sunstone(id, roomId, x, y, z, intensity = 1.35, distance = 24) {
   return { id, kind: 'point', color: 0xffc875, intensity, distance, decay: 1.35, position: { x, y, z }, roomId };
 }
 
+
+
+function expoColumn(id, kind, x, z, overrides = {}) {
+  return {
+    id, kind, position: [x, 0, z], yaw: overrides.yaw ?? 0, height: overrides.height ?? 4.2, radius: overrides.radius, width: overrides.width, depth: overrides.depth, segments: overrides.segments, baseSize: overrides.baseSize, capitalSize: overrides.capitalSize, columnSpacing: overrides.columnSpacing, state: overrides.state, broken: overrides.broken, cracked: overrides.cracked, ruined: overrides.ruined,
+    shaftMaterial: overrides.shaftMaterial ?? 'pack2SandstoneWorn', baseMaterial: overrides.baseMaterial ?? 'pack2DirtyBaseStone', capitalMaterial: overrides.capitalMaterial ?? 'pack2CrackedMarbleTrim', bandMaterial: overrides.bandMaterial ?? 'pack2BronzeTurquoiseBand', glyphMaterial: overrides.glyphMaterial ?? 'pack2RitualGlyphPanel', trimMaterial: overrides.trimMaterial ?? 'pack2ChippedBlackstoneTrim',
+    blocksPlayer: overrides.blocksPlayer ?? true, blocksEnemies: overrides.blocksEnemies ?? true, roomId: 'K03',
+    tags: ['geometry-expo-center', 'darb-column-pillar-support-preview', kind, ...(overrides.tags ?? [])],
+    userData: { purpose: 'Permanent Kerovac Geometry Expo Center swappable preview zone. Batch 4 displays DARB pillar, column, and structural support primitives using pack2 texture profiles.', displayChamber: 'K03 Civic Reliquary Court', authoredAsLocationDefinitionData: true, collisionTruth: 'Column primitives generate compact collision blockers from their visible footprint unless blocksPlayer is false.', debugOverlay: 'Primitive userData includes debugFootprint with dimensions, state, material slots, and blocker behavior.', ...(overrides.userData ?? {}) },
+  };
+}
 
 function expoBridge(id, kind, x, z, overrides = {}) {
   const state = overrides.state ?? (overrides.broken ? 'broken' : kind === 'collapsedWalkway' ? 'collapsed' : 'intact');
@@ -213,17 +235,17 @@ export const kerovacDefinition = Object.freeze({
     { id: 'K_court_central_sunstone_altar', kind: 'altar', position: [0, 0, 17], yaw: 0, width: 4.6, depth: 3.2, height: 1.2, material: 'limestoneWall', topMaterial: 'bronze', roomId: 'K03', tags: ['central-sunstone', 'visible-blocker'] },
 
     // Permanent Kerovac Geometry Expo Center: this early civic-court chamber is the swappable preview zone for DARB primitive batches.
-    // Batch 2 replaces the previous doorway/gate/portal previews with bridge, canal crossing, and walkway primitives.
-    expoBridge('K_expo_narrow_stone_bridge', 'narrowStoneBridge', -17, 8, { width: 1.65, length: 6.2, deckMaterial: 'limestoneFloor', sideMaterial: 'ritualWall', curbs: true }),
-    expoBridge('K_expo_wide_ceremonial_bridge', 'wideCeremonialBridge', -8.5, 8, { width: 4.6, length: 6.8, railings: true, deckMaterial: 'wornCivicFloor', trimMaterial: 'bronze' }),
-    expoBridge('K_expo_broken_bridge', 'brokenBridge', 0, 8, { width: 2.8, length: 6.4, broken: true, state: 'broken', gapLength: 1.1, gapOffset: 0.7, sideMaterial: 'sandstoneWall' }),
-    expoBridge('K_expo_plank_bridge', 'plankBridge', 8.5, 8, { width: 2.2, length: 6.0, deckMaterial: 'wood', trimMaterial: 'wood', undersideMaterial: 'wood', railings: false }),
-    expoBridge('K_expo_raised_walkway', 'raisedWalkway', 17, 8, { width: 2.3, length: 6.2, deckY: 0.34, height: 0.45, deckMaterial: 'wood', railings: true }),
-    expoBridge('K_expo_canal_crossing', 'canalCrossing', -17, 24, { width: 3.0, length: 6.4, canalContext: true, curbs: true, deckMaterial: 'limestoneFloor' }),
-    expoBridge('K_expo_bridge_with_railings', 'bridgeWithRailings', -8.5, 24, { width: 3.0, length: 6.4, railings: true, railingMaterial: 'bronze' }),
-    expoBridge('K_expo_arched_stone_bridge', 'archedStoneBridge', 0, 24, { width: 3.4, length: 6.8, height: 0.65, curbs: true, undersideMaterial: 'pyramidWall' }),
-    expoBridge('K_expo_ritual_span_bridge', 'ritualSpanBridge', 8.5, 24, { width: 3.6, length: 6.8, railings: true, deckMaterial: 'ritualWall', trimMaterial: 'turquoiseGlow', railingMaterial: 'bronze' }),
-    expoBridge('K_expo_collapsed_walkway', 'collapsedWalkway', 17, 24, { width: 2.4, length: 6.2, state: 'collapsed', broken: true, gapLength: 1.35, deckMaterial: 'wood', trimMaterial: 'wood', railings: false }),
+    // Batch 4 replaces the previous bridge/crossing/walkway previews with pillar, column, and structural support primitives using pack2 textures.
+    expoColumn('K_expo_ruined_column_base', 'ruinedColumnBase', -13.5, 7, { height: 1.15, width: 1.25, depth: 1.15, ruined: true, state: 'ruined', shaftMaterial: 'pack2DirtyBaseStone', baseMaterial: 'pack2ChippedBlackstoneTrim', trimMaterial: 'pack2CrackedMarbleTrim' }),
+    expoColumn('K_expo_broken_column', 'brokenColumn', -6.5, 7.4, { height: 2.65, radius: 0.48, segments: 14, broken: true, state: 'broken', shaftMaterial: 'pack2SandstoneWorn', baseMaterial: 'pack2DirtyBaseStone', trimMaterial: 'pack2ChippedBlackstoneTrim' }),
+    expoColumn('K_expo_cracked_support_pillar', 'crackedSupportPillar', 1, 7.2, { height: 3.7, width: 1.05, depth: 1.05, cracked: true, state: 'cracked', shaftMaterial: 'pack2CrackedMarbleTrim', baseMaterial: 'pack2DirtyBaseStone', glyphMaterial: 'pack2BlackBasaltGlyph', trimMaterial: 'pack2ChippedBlackstoneTrim' }),
+    expoColumn('K_expo_square_stone_pillar', 'squareStonePillar', 8.5, 7.4, { height: 4.2, width: 1.05, depth: 1.05, yaw: 0.22, shaftMaterial: 'pack2LimestoneCarved', baseMaterial: 'pack2DirtyBaseStone', capitalMaterial: 'pack2CrackedMarbleTrim' }),
+    expoColumn('K_expo_round_temple_column', 'roundTempleColumn', 16, 7.6, { height: 4.8, radius: 0.48, segments: 20, shaftMaterial: 'pack2SandstoneWorn', baseMaterial: 'pack2DirtyBaseStone', capitalMaterial: 'pack2LimestoneCarved' }),
+    expoColumn('K_expo_bronze_banded_column', 'bronzeBandedColumn', -14, 17, { height: 5.2, radius: 0.5, segments: 20, shaftMaterial: 'pack2LimestoneCarved', bandMaterial: 'pack2BronzeTurquoiseBand', baseMaterial: 'pack2DirtyBaseStone', capitalMaterial: 'pack2OxidizedArchTrim' }),
+    expoColumn('K_expo_glyph_carved_column', 'glyphCarvedColumn', -6, 17.4, { height: 4.9, width: 1.05, depth: 1.05, yaw: -0.18, shaftMaterial: 'pack2BlackBasaltGlyph', glyphMaterial: 'pack2RitualGlyphPanel', baseMaterial: 'pack2ChippedBlackstoneTrim', capitalMaterial: 'pack2TurquoiseInlay' }),
+    expoColumn('K_expo_sacred_obelisk_column', 'sacredObeliskColumn', 2.2, 17.4, { height: 5.6, width: 1.25, depth: 1.25, yaw: 0.78, shaftMaterial: 'pack2TurquoiseInlay', baseMaterial: 'pack2DirtyBaseStone', capitalMaterial: 'pack2OxidizedArchTrim' }),
+    expoColumn('K_expo_massive_hall_column', 'massiveHallColumn', 10.5, 24.6, { height: 7.8, radius: 0.78, segments: 24, shaftMaterial: 'pack2BlackBasaltGlyph', bandMaterial: 'pack2BronzeTurquoiseBand', baseMaterial: 'pack2ChippedBlackstoneTrim', capitalMaterial: 'pack2OxidizedArchTrim' }),
+    expoColumn('K_expo_twin_column_frame', 'twinColumnFrame', -10.5, 25, { height: 6.2, radius: 0.42, width: 0.84, depth: 0.84, segments: 18, columnSpacing: 3.0, shaftMaterial: 'pack2LimestoneCarved', baseMaterial: 'pack2DirtyBaseStone', capitalMaterial: 'pack2CrackedMarbleTrim', trimMaterial: 'pack2OxidizedArchTrim' }),
 
     { id: 'K_canal_water_trench', kind: 'canalWater', from: [-18, 45], to: [18, 45], width: 5.2, y: 0.035, height: 0.035, material: 'turquoiseWater', emissiveColor: 0x2fb8b7, roomId: 'K04', tags: ['visible-water-boundary'] },
     { id: 'K_canal_south_curb_west', kind: 'curb', from: [-18, 42.1], to: [-4.1, 42.1], y: 0.04, height: 0.28, thickness: 0.2, material: 'limestoneWall', blocksPlayer: false, roomId: 'K04' },
