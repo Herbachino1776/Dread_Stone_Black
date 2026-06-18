@@ -9,7 +9,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "validate:bgt": "node scripts/validate-black-grass-temple.mjs",
     "validate:integrity": "node scripts/validate-dungeon-integrity.mjs",
-    "validate:dungeons": "npm run validate:integrity"
+    "validate:dungeons": "npm run validate:integrity",
+    "validate:fish": "node scripts/validate-fish-geometry.mjs"
   },
   "dependencies": {
     "three": "^0.184.0",
