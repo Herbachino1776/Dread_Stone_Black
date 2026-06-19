@@ -293,6 +293,7 @@ export class DungeonScene {
     this.fieldSurvivalObjects = new Map();
     this.fieldFishingZones = [];
     this.fieldRawFishPickups = [];
+    this.outdoorTerrainRuntime = null;
     this.fieldCookedFishPickups = [];
     this.giantRamManFieldManifestation = null;
     this.giantRamManFieldManifestationLoading = false;
@@ -384,7 +385,7 @@ export class DungeonScene {
       this.configureCompiledLocationRuntime(this.area);
     } else {
       this.collision = this.area === 'field'
-        ? new CollisionWorld({ walkableRects: [FIELD_WALKABLE_RECT], blockerRects: this.createOutdoorBlockers(), playerRadius: 0.5 })
+        ? new CollisionWorld({ walkableRects: [FIELD_WALKABLE_RECT], blockerRects: this.createOutdoorBlockers(), playerRadius: 0.5, outdoorTerrainSampler: this.outdoorTerrainRuntime })
         : new CollisionWorld({
           walkableRects: indoorWalkableRects,
           blockerRects: [this.gateBlocker, ...indoorWallBlockers],
@@ -1208,8 +1209,10 @@ export class DungeonScene {
       blueprint: 'docs/DARB_OUTDOOR_AUTHORING_RUNTIME_MILESTONE.md',
       legacyFieldBlueprint: 'docs/world/overworld/reliquary_field_v01.md',
       longTermBlueprintSize: 800,
-      playerGroundingChanged: false,
+      playerGroundingChanged: true,
     };
+    this.outdoorTerrainRuntime = terrain.userData.terrainSampler;
+    if (this.collision && this.area === 'field') this.collision.outdoorTerrainSampler = this.outdoorTerrainRuntime;
     this.scene.add(terrain);
   }
 
