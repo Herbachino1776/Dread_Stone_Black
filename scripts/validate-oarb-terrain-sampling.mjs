@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createOutdoorTerrainMesh, createOutdoorTerrainSampler } from '../src/engine/outdoor-authoring/OutdoorTerrainBuilder.js';
+import { createOutdoorSplineTrailMesh, createOutdoorSplineTrailMeshes } from '../src/engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { CollisionWorld } from '../src/game/Collision.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 
@@ -56,6 +57,46 @@ for (let index = 0; index < meshPosition.count; index += 1) {
   assert.equal(meshWorldY, stampedSampler.heightData[index], `mesh vertex ${index} uses sampler height data.`);
 }
 assert.equal(stampedMesh.userData.sampleOutdoorY(-80, -80), stampedMesh.userData.terrainSampler.sampleOutdoorY(-80, -80), 'mesh and its sampler expose the same sampled stamped height.');
+
+const trail = {
+  id: 'validation_hunter_path',
+  points: [[-90, 40], [-40, 55], [5, 48], [55, 70]],
+  width: 5,
+  material: 'mudTrail',
+  flatten: true,
+};
+const trailTextures = { mudTrail: reliquaryFieldDefinition.textures.mudTrail };
+const trailMesh = createOutdoorSplineTrailMesh(trail, { terrainSampler: stampedSampler, textures: trailTextures });
+assert.ok(trailMesh, 'a spline trail ribbon mesh is generated.');
+assert.equal(trailMesh.userData.kind, 'oarbSplineTrail', 'trail records OARB spline metadata.');
+assert.equal(trailMesh.userData.id, trail.id, 'trail records its stable id.');
+assert.equal(trailMesh.userData.width, trail.width, 'trail records authored width.');
+assert.equal(trailMesh.userData.materialKey, 'mudTrail', 'trail records resolved material key.');
+assert.equal(trailMesh.userData.materialFallbackUsed, false, 'trail material/profile resolution uses the authored mudTrail profile.');
+assert.equal(trailMesh.userData.flattenRequested, true, 'trail preserves flatten metadata without terrain deformation.');
+assert.match(trailMesh.userData.collisionNote, /No collision/, 'trail records that no collision is generated yet.');
+assert.equal(trailMesh.userData.sampledTerrainSource, stampedSampler.kind, 'trail records sampled terrain source.');
+assert.equal(stampedSampler.heightStampsApplied, stampedTerrain.heightStamps.length, 'trail generation does not alter stamped terrain data.');
+assert.equal(createOutdoorSplineTrailMeshes([trail], { terrainSampler: stampedSampler, textures: trailTextures }).length, 1, 'batch spline trail builder returns generated meshes.');
+
+const trailPosition = trailMesh.geometry.attributes.position;
+const trailUv = trailMesh.geometry.attributes.uv;
+assert.equal(trailPosition.count, trail.points.length * 2, 'trail creates two ribbon edge vertices per authored point.');
+for (let index = 0; index < trailPosition.count; index += 1) {
+  assert.equal(Number.isFinite(trailPosition.getX(index)), true, `trail vertex ${index} x is finite.`);
+  assert.equal(Number.isFinite(trailPosition.getY(index)), true, `trail vertex ${index} y is finite.`);
+  assert.equal(Number.isFinite(trailPosition.getZ(index)), true, `trail vertex ${index} z is finite.`);
+  assert.equal(Number.isFinite(trailUv.getX(index)), true, `trail uv ${index} u is finite.`);
+  assert.equal(Number.isFinite(trailUv.getY(index)), true, `trail uv ${index} v is finite.`);
+}
+trail.points.forEach(([x, z], pointIndex) => {
+  const leftY = trailPosition.getY(pointIndex * 2);
+  const rightY = trailPosition.getY(pointIndex * 2 + 1);
+  const sampledY = stampedSampler.sampleOutdoorY(x, z);
+  assert.ok(Math.abs(leftY - sampledY - trailMesh.userData.yOffset) < 0.001, `trail point ${pointIndex} follows sampled terrain Y.`);
+  assert.ok(Math.abs(rightY - leftY) < 0.001, `trail point ${pointIndex} ribbon edge heights match.`);
+});
+assert.equal(trailMesh.userData.collision, undefined, 'no collision object is generated from trails yet.');
 
 const outdoorCollision = new CollisionWorld({
   walkableRects: [{ minX: -200, maxX: 200, minZ: -200, maxZ: 200 }],

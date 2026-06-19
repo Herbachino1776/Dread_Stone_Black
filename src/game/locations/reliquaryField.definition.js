@@ -81,6 +81,7 @@ export const reliquaryFieldDefinition = Object.freeze({
   textures: {
     fieldGrass: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [50, 50] },
     forestGround: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [50, 50], color: 0xb0aa91, roughness: 0.98, metalness: 0.0, emissive: 0x20232a, emissiveIntensity: 0.08 },
+    mudTrail: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [18, 3], color: 0x5f4b37, roughness: 1.0, metalness: 0.0, emissive: 0x140e09, emissiveIntensity: 0.04, worldTileLength: 8, worldTileWidth: 3 },
     wall: { path: './assets/textures/wall_black_stone_01.png' },
     floor: { path: './assets/textures/floor_worn_stone_01.png' },
     gate: { path: './assets/textures/metal_gate_rusted_01.png' },
