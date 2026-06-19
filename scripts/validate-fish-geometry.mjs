@@ -2,7 +2,31 @@ import * as THREE from 'three';
 import { buildDungeonGeometry } from '../src/engine/dungeon-authoring/DungeonGeometryBuilder.js';
 import { kerovacDefinition } from '../src/game/locations/generated/kerovac.definition.js';
 
-const { group } = buildDungeonGeometry(kerovacDefinition);
+const testMaterialFactory = (profile = {}) => {
+  const material = new THREE.MeshStandardMaterial({
+    color: profile.color ?? 0xffffff,
+    roughness: profile.roughness ?? 0.9,
+    metalness: profile.metalness ?? 0,
+    emissive: profile.emissive ?? 0x000000,
+    emissiveIntensity: profile.emissiveIntensity ?? 0,
+  });
+
+  if (profile.path) {
+    const map = new THREE.Texture();
+    map.name = profile.path;
+    map.userData = { path: profile.path, repeat: [...(profile.repeat ?? [1, 1])] };
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.wrapS = THREE.RepeatWrapping;
+    map.wrapT = THREE.RepeatWrapping;
+    map.repeat.set(...(profile.repeat ?? [1, 1]));
+    material.map = map;
+  }
+
+  material.userData.definitionProfile = { ...profile };
+  return material;
+};
+
+const { group } = buildDungeonGeometry(kerovacDefinition, { materialFactory: testMaterialFactory });
 group.updateMatrixWorld(true);
 
 const fishRoots = [];
@@ -56,6 +80,28 @@ for (const root of fishRoots) {
 
   const [leftEye, rightEye] = eyes;
   if (!nearly(leftEye.position.x, rightEye.position.x) || !nearly(leftEye.position.y, rightEye.position.y) || !nearly(leftEye.position.z, -rightEye.position.z)) fail(`${root.name} eyes are not mirrored.`);
+
+
+  const expectedFinTexture = kerovacDefinition.textures[root.userData.materialSlots?.finMaterial]?.path;
+  if (!expectedFinTexture) fail(`${root.name} is missing an expected fin texture profile.`);
+
+  for (const fin of [tail, dorsal, ...pectorals]) {
+    const mapPath = fin.material?.map?.userData?.path ?? fin.material?.map?.name;
+    if (mapPath !== expectedFinTexture) fail(`${fin.name} does not use expected fin texture map ${expectedFinTexture}; found ${mapPath ?? 'none'}.`);
+    if (fin.material?.map?.colorSpace !== THREE.SRGBColorSpace) fail(`${fin.name} fin texture map is not configured for sRGB color space.`);
+    if (fin.material?.color?.getHex() !== 0xffffff) fail(`${fin.name} fin material color still tints/overrides the assigned texture.`);
+    const uv = fin.geometry?.getAttribute('uv');
+    const position = fin.geometry?.getAttribute('position');
+    if (!uv || !position || uv.count !== position.count) fail(`${fin.name} is missing stable UVs for its fin texture.`);
+    const uniqueUvs = new Set();
+    for (let i = 0; i < uv.count; i += 1) {
+      const u = uv.getX(i);
+      const v = uv.getY(i);
+      if (!Number.isFinite(u) || !Number.isFinite(v)) fail(`${fin.name} has non-finite UV coordinates.`);
+      uniqueUvs.add(`${u.toFixed(3)},${v.toFixed(3)}`);
+    }
+    if (uniqueUvs.size < 3) fail(`${fin.name} UVs collapse the assigned fin texture into a flat sample.`);
+  }
 
   const bodyBounds = localMeshBox(body);
   const tailBounds = localMeshBox(tail);
