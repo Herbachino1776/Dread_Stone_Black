@@ -10,7 +10,8 @@
     "validate:bgt": "node scripts/validate-black-grass-temple.mjs",
     "validate:integrity": "node scripts/validate-dungeon-integrity.mjs",
     "validate:dungeons": "npm run validate:integrity",
-    "validate:fish": "node scripts/validate-fish-geometry.mjs"
+    "validate:fish": "node scripts/validate-fish-geometry.mjs",
+    "validate:oarb-terrain": "node scripts/validate-oarb-terrain-sampling.mjs"
   },
   "dependencies": {
     "three": "^0.184.0",

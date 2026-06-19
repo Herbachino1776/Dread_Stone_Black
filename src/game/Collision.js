@@ -61,12 +61,13 @@ function sampleSegmentSurface(point, surface) {
 }
 
 export class CollisionWorld {
-  constructor({ walkableRects, blockerRects = [], playerRadius = 0.35, walkableSurfaces = [], defaultFloorY = 0 }) {
+  constructor({ walkableRects, blockerRects = [], playerRadius = 0.35, walkableSurfaces = [], defaultFloorY = 0, outdoorTerrainSampler = null }) {
     this.walkableRects = walkableRects;
     this.walkableSurfaces = walkableSurfaces;
     this.blockerRects = blockerRects;
     this.playerRadius = playerRadius;
     this.defaultFloorY = defaultFloorY;
+    this.outdoorTerrainSampler = outdoorTerrainSampler;
     this.eyeHeight = 1.55;
     this.maxStepUp = 0.38;
   }
@@ -77,7 +78,9 @@ export class CollisionWorld {
 
   sampleWalkableY(x, z, fallbackY = this.defaultFloorY) {
     const point = { x, z };
-    let best = { y: fallbackY, priority: -Infinity, kind: 'fallback', surface: null };
+    const outdoorY = this.outdoorTerrainSampler?.sampleOutdoorY?.(x, z);
+    const resolvedFallbackY = Number.isFinite(outdoorY) ? outdoorY : fallbackY;
+    let best = { y: resolvedFallbackY, priority: -Infinity, kind: Number.isFinite(outdoorY) ? 'oarbTerrain' : 'fallback', surface: this.outdoorTerrainSampler ?? null };
     this.walkableSurfaces.forEach((surface) => {
       let sample = null;
       if ((surface.kind === 'flatPolygon' || surface.kind === 'platformTop') && pointInPolygon(point, surface.footprint ?? [])) {

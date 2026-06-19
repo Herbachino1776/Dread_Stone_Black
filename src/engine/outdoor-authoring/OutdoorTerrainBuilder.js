@@ -69,12 +69,65 @@ function assertGeneratedGeometrySafe(geometry) {
   }
 }
 
+function createFlatHeightData({ segmentsX, segmentsZ, baseY }) {
+  return new Float32Array((segmentsX + 1) * (segmentsZ + 1)).fill(baseY);
+}
+
+function sampleHeightDataBilinear(heightData, { sizeX, sizeZ, segmentsX, segmentsZ, baseY }, x, z) {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return baseY;
+  const halfX = sizeX * 0.5;
+  const halfZ = sizeZ * 0.5;
+  const localX = THREE.MathUtils.clamp(x + halfX, 0, sizeX);
+  const localZ = THREE.MathUtils.clamp(z + halfZ, 0, sizeZ);
+  const gridX = (localX / sizeX) * segmentsX;
+  const gridZ = (localZ / sizeZ) * segmentsZ;
+  const x0 = Math.min(Math.floor(gridX), segmentsX);
+  const z0 = Math.min(Math.floor(gridZ), segmentsZ);
+  const x1 = Math.min(x0 + 1, segmentsX);
+  const z1 = Math.min(z0 + 1, segmentsZ);
+  const tx = THREE.MathUtils.clamp(gridX - x0, 0, 1);
+  const tz = THREE.MathUtils.clamp(gridZ - z0, 0, 1);
+  const stride = segmentsX + 1;
+  const h00 = heightData[z0 * stride + x0] ?? baseY;
+  const h10 = heightData[z0 * stride + x1] ?? baseY;
+  const h01 = heightData[z1 * stride + x0] ?? baseY;
+  const h11 = heightData[z1 * stride + x1] ?? baseY;
+  const hx0 = THREE.MathUtils.lerp(h00, h10, tx);
+  const hx1 = THREE.MathUtils.lerp(h01, h11, tx);
+  const y = THREE.MathUtils.lerp(hx0, hx1, tz);
+  return Number.isFinite(y) ? y : baseY;
+}
+
+export function createOutdoorTerrainSampler(terrain) {
+  const safe = sanitizeTerrain(terrain);
+  const heightData = createFlatHeightData(safe);
+  const bounds = Object.freeze({
+    minX: -safe.sizeX * 0.5,
+    maxX: safe.sizeX * 0.5,
+    minZ: -safe.sizeZ * 0.5,
+    maxZ: safe.sizeZ * 0.5,
+  });
+  const sampleOutdoorY = (x, z) => sampleHeightDataBilinear(heightData, safe, x, z);
+  return Object.freeze({
+    authoringRuntime: 'OARB',
+    kind: 'oarbTerrainSampler',
+    baseY: safe.baseY,
+    size: Object.freeze([safe.sizeX, safe.sizeZ]),
+    segments: Object.freeze([safe.segmentsX, safe.segmentsZ]),
+    bounds,
+    heightData,
+    heightStampsApplied: 0,
+    sampleOutdoorY,
+  });
+}
+
 export function createOutdoorTerrainMesh(terrain, {
   textures = {},
   makeMaterial,
   name = 'OARB-terrain-heightfield-mesh',
 } = {}) {
   const safe = sanitizeTerrain(terrain);
+  const terrainSampler = createOutdoorTerrainSampler(terrain);
   const { materialKey, profile, usedFallback } = resolveTerrainMaterialProfile(terrain, textures);
   const geometry = new THREE.PlaneGeometry(safe.sizeX, safe.sizeZ, safe.segmentsX, safe.segmentsZ);
   const uvMetadata = applyWorldScaleUvs(geometry, safe, profile);
@@ -103,7 +156,9 @@ export function createOutdoorTerrainMesh(terrain, {
     uvMode: 'world-scale-xz-distance',
     uvTileSize: uvMetadata.tileSize,
     heightStampsApplied: 0,
-    collisionNote: 'Visual terrain mesh only; terrain height sampling and player grounding are deferred to a later OARB PR.',
+    terrainSampler,
+    sampleOutdoorY: terrainSampler.sampleOutdoorY,
+    collisionNote: 'OARB terrain mesh and runtime sampler share the same generated height data.',
   };
   return mesh;
 }
