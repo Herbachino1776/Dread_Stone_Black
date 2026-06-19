@@ -637,7 +637,48 @@ const FISH_SPECS = {
 function fishMaterial(definition, primitive, slot, spec, materialFactory, fallbackColor, options = {}) {
   const reference = primitive[slot] ?? spec[slot];
   const fallback = { color: fallbackColor, roughness: options.roughness ?? 0.84, metalness: options.metalness ?? 0.02, emissive: options.emissive ?? 0x000000, emissiveIntensity: options.emissiveIntensity ?? 0 };
-  return makeMaterial(definition, reference, materialFactory, fallback);
+  const material = makeMaterial(definition, reference, materialFactory, fallback);
+
+  if (slot === 'finMaterial' && material?.map) {
+    material.color?.setHex(0xffffff);
+    material.map.colorSpace = THREE.SRGBColorSpace;
+    material.map.needsUpdate = true;
+    material.needsUpdate = true;
+    material.userData.fishFinTextureReadable = true;
+  }
+
+  return material;
+}
+
+function applyFishFinUvProjection(geometry, { length = 1, height = 1, pointDirection = -1 } = {}) {
+  const position = geometry.getAttribute('position');
+  const uv = new THREE.Float32BufferAttribute(position.count * 2, 2);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  for (let i = 0; i < position.count; i += 1) {
+    const projectedX = pointDirection > 0 ? position.getX(i) : -position.getX(i);
+    minX = Math.min(minX, projectedX);
+    maxX = Math.max(maxX, projectedX);
+    minY = Math.min(minY, position.getY(i));
+    maxY = Math.max(maxY, position.getY(i));
+  }
+
+  const xSpan = Math.max(maxX - minX, length, Number.EPSILON);
+  const ySpan = Math.max(maxY - minY, height, Number.EPSILON);
+
+  for (let i = 0; i < position.count; i += 1) {
+    const projectedX = pointDirection > 0 ? position.getX(i) : -position.getX(i);
+    const u = (projectedX - minX) / xSpan;
+    const v = (position.getY(i) - minY) / ySpan;
+    uv.setXY(i, THREE.MathUtils.clamp(u, 0, 1), THREE.MathUtils.clamp(v, 0, 1));
+  }
+
+  geometry.setAttribute('uv', uv);
+  geometry.userData.fishFinUvProjection = 'stable-local-x-y-0-to-1';
+  return geometry;
 }
 
 function makeClosedWedgeGeometry({ length = 0.28, height = 0.16, width = 0.08, pointDirection = -1 } = {}) {
@@ -655,6 +696,7 @@ function makeClosedWedgeGeometry({ length = 0.28, height = 0.16, width = 0.08, p
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setIndex(indices);
+  applyFishFinUvProjection(geometry, { length, height, pointDirection });
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   geometry.userData.closedVolumetricFishWedge = true;
@@ -672,6 +714,7 @@ function makeTailDiamondGeometry({ length = 0.34, height = 0.34, width = 0.1 } =
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setIndex(indices);
+  applyFishFinUvProjection(geometry, { length, height, pointDirection: -1 });
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   geometry.userData.closedVolumetricFishTail = true;
