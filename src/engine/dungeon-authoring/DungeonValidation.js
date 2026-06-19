@@ -1,5 +1,6 @@
 import { asArray, hasUsableId } from './DungeonDefinitionTypes.js';
 import { OARB_TERRAIN_FALLBACK_MATERIAL_KEY, OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS, OARB_TERRAIN_MAX_TOTAL_CELLS } from '../outdoor-authoring/OutdoorTerrainBuilder.js';
+import { OARB_SPLINE_TRAIL_FALLBACK_MATERIAL_KEY, OARB_SPLINE_TRAIL_MAX_WIDTH } from '../outdoor-authoring/OutdoorSplineBuilder.js';
 
 const loggedValidationKeys = new Set();
 const RUNTIME_ENEMY_SPECIES = new Set(['sheep_demon', 'neck_man']);
@@ -40,6 +41,8 @@ function validateOutdoorMaterial(definition, material, label, id, errors, warnin
   } else if (!definition.textures?.[material]) {
     if (material === OARB_TERRAIN_FALLBACK_MATERIAL_KEY) {
       addIssue(warnings, 'warning', `${label} references fallback material profile ${material}; runtime will use the safe built-in outdoor grass fallback`, id);
+    } else if (material === OARB_SPLINE_TRAIL_FALLBACK_MATERIAL_KEY) {
+      addIssue(warnings, 'warning', `${label} references fallback spline trail material profile ${material}; runtime will use the built-in outdoor trail fallback when needed`, id);
     } else {
       addIssue(warnings, 'warning', `${label} references material profile ${material} that is not defined in textures yet and will use the safe OARB fallback if rendered`, id);
     }
@@ -89,13 +92,16 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
   }
 
   [['splineTrails', definition.splineTrails], ['riverSplines', definition.riverSplines], ['creekBeds', definition.creekBeds]].forEach(([label, items]) => {
+    if (items !== undefined && !Array.isArray(items)) addIssue(errors, 'error', `${label} must be an array when present`, label);
     asArray(items).forEach((spline, index) => {
       const id = spline.id ?? `${label}[${index}]`;
       if (!hasUsableId(spline)) addIssue(errors, 'error', `${label}[${index}] is missing a stable id`, id);
       if (!pointArrayIsFinite(spline.points, 2)) addIssue(errors, 'error', `${label} ${id} needs at least two finite [x, z] points`, id);
       if (!isFinitePositive(spline.width)) addIssue(errors, 'error', `${label} ${id} width must be > 0`, id);
+      if (label === 'splineTrails' && isFinitePositive(spline.width) && spline.width > OARB_SPLINE_TRAIL_MAX_WIDTH) addIssue(errors, 'error', `${label} ${id} width must be <= ${OARB_SPLINE_TRAIL_MAX_WIDTH} for mobile-safe ribbon generation`, id);
       validateOutdoorMaterial(definition, spline.material, `${label} ${id}`, id, errors, warnings);
       if (spline.flatten !== undefined && typeof spline.flatten !== 'boolean') addIssue(errors, 'error', `${label} ${id} flatten must be boolean when present`, id);
+      if (spline.collision || spline.blocksPlayer || spline.blocksEnemies || spline.deformTerrain) addIssue(errors, 'error', `${label} ${id} cannot claim collision, blocking, or terrain deformation behavior yet`, id);
       Object.keys(spline).filter((key) => !OUTDOOR_SPLINE_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `${label} ${id} uses unsupported field ${key}; rendering/collision behavior is not implemented in this foundation PR`, id));
     });
   });

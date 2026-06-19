@@ -3,6 +3,7 @@ import { compileDungeonLocation } from '../engine/dungeon-authoring/DungeonCompi
 import { DungeonDebugRenderer } from '../engine/dungeon-authoring/DungeonDebugRenderer.js';
 import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRuntimeRegistry.js';
 import { createOutdoorTerrainMesh } from '../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
+import { createOutdoorSplineTrailMeshes } from '../engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
 import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
 import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
@@ -718,7 +719,7 @@ export class DungeonScene {
     this.scene.fog = new THREE.Fog(OUTDOOR_DAWN_FOG_COLOR, OUTDOOR_FOG_NEAR, OUTDOOR_FOG_FAR);
     this.addOutdoorLights();
     this.addReliquaryFieldSkyDome();
-    this.addOutdoorTerrain(reliquaryFieldDefinition.terrain, reliquaryFieldDefinition.textures);
+    this.addOutdoorTerrain(reliquaryFieldDefinition.terrain, reliquaryFieldDefinition.textures, reliquaryFieldDefinition);
     this.addReliquaryFieldRiverBoundary();
     this.addReliquaryFieldHorizonSystem();
     this.addOutdoorBoundary();
@@ -1182,7 +1183,7 @@ export class DungeonScene {
     return group;
   }
 
-  addOutdoorTerrain(terrainDefinition, textureProfiles = {}) {
+  addOutdoorTerrain(terrainDefinition, textureProfiles = {}, outdoorDefinition = {}) {
     const terrain = createOutdoorTerrainMesh(terrainDefinition ?? {
       size: [FIELD_SIZE, FIELD_SIZE],
       segments: [1, 1],
@@ -1214,6 +1215,22 @@ export class DungeonScene {
     this.outdoorTerrainRuntime = terrain.userData.terrainSampler;
     if (this.collision && this.area === 'field') this.collision.outdoorTerrainSampler = this.outdoorTerrainRuntime;
     this.scene.add(terrain);
+
+    createOutdoorSplineTrailMeshes(outdoorDefinition.splineTrails, {
+      terrainSampler: this.outdoorTerrainRuntime,
+      textures: textureProfiles,
+      makeMaterial: (profile, metadata) => {
+        const material = this.makeTexturedMaterial(profile);
+        material.userData = {
+          ...(material.userData ?? {}),
+          oarbSplineTrailMaterial: true,
+          materialKey: metadata.materialKey,
+          materialFallbackUsed: metadata.usedFallback,
+          sourceProfile: metadata.profile,
+        };
+        return material;
+      },
+    }).forEach((trailMesh) => this.scene.add(trailMesh));
   }
 
   addReliquaryFieldRiverBoundary() {
