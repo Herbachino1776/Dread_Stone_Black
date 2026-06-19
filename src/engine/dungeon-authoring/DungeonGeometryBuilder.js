@@ -622,7 +622,7 @@ const ROD_SPECS = {
   heavyRiverRod: { len: 3.55, r: 0.095, curve: 0.08, wood: 0x33251b, grip: 0x211611, metal: 0x6b5035, reel: true, stout: true, wraps: 5 },
 };
 
-const FISH_TAIL_GEOMETRY_SCALE = 0.35;
+const FISH_TAIL_GEOMETRY_SCALE = 0.55;
 
 const FISH_SPECS = {
   smallRiverFish: { bodyLength: 1.25, bodyHeight: 0.3, bodyWidth: 0.22, bodyMaterial: 'fishScaleSilver', finMaterial: 'fishFinAmber', tailScale: 0.92, dorsalScale: 0.82, pectoralScale: 0.86, headTaper: 1 },
