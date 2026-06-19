@@ -622,6 +622,8 @@ const ROD_SPECS = {
   heavyRiverRod: { len: 3.55, r: 0.095, curve: 0.08, wood: 0x33251b, grip: 0x211611, metal: 0x6b5035, reel: true, stout: true, wraps: 5 },
 };
 
+const FISH_TAIL_GEOMETRY_SCALE = 0.35;
+
 const FISH_SPECS = {
   smallRiverFish: { bodyLength: 1.25, bodyHeight: 0.3, bodyWidth: 0.22, bodyMaterial: 'fishScaleSilver', finMaterial: 'fishFinAmber', tailScale: 0.92, dorsalScale: 0.82, pectoralScale: 0.86, headTaper: 1 },
   broadCarpFish: { bodyLength: 1.55, bodyHeight: 0.58, bodyWidth: 0.36, bodyMaterial: 'fishScaleKoiCreamOrange', finMaterial: 'fishFinAmber', tailScale: 1.18, dorsalScale: 1.06, pectoralScale: 1.0, headTaper: 1 },
@@ -696,9 +698,9 @@ function buildSimpleFish({ id, bodyLength, bodyHeight, bodyWidth, bodyMaterial, 
   body.scale.set(bodyLength * 0.5 * headTaper, bodyHeight * 0.5, bodyWidth * 0.5);
   const silhouetteBodyLength = bodyLength * 0.5 * headTaper;
 
-  const tailLength = bodyLength * 0.24 * tailScale;
-  const tailHeight = bodyHeight * 0.95 * tailScale;
-  const tailWidth = bodyWidth * 0.38;
+  const tailLength = bodyLength * 0.24 * tailScale * FISH_TAIL_GEOMETRY_SCALE;
+  const tailHeight = bodyHeight * 0.95 * tailScale * FISH_TAIL_GEOMETRY_SCALE;
+  const tailWidth = bodyWidth * 0.38 * FISH_TAIL_GEOMETRY_SCALE;
   const tailEmbed = silhouetteBodyLength * 0.15;
   const tailFrontX = tailLength * 0.34;
   const tail = addFishMesh(root, makeTailDiamondGeometry({ length: tailLength, height: tailHeight, width: tailWidth }), finMaterial, `V25-fishDisplay-CLOSED-ATTACHED-TAIL-${id}`, new THREE.Vector3(-silhouetteBodyLength * 0.5 + tailEmbed - tailFrontX, 0, 0), { ...baseUserData, fishPart: 'closedAttachedTail', materialSlot: 'finMaterial', textureRole: 'finTexture', attachesToBody: true, bodyEmbed: tailEmbed });
