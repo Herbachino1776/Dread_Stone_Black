@@ -5,6 +5,124 @@ const RUNTIME_ENEMY_SPECIES = new Set(['sheep_demon', 'neck_man']);
 const HORIZONTAL_SURFACE_KINDS = new Set(['floor', 'ceiling', 'roof', 'path', 'platformTop']);
 const HORIZONTAL_SURFACE_SHAPES = new Set(['rect', 'polygon']);
 
+
+const OUTDOOR_TERRAIN_MAX_SEGMENTS_PER_AXIS = 160;
+const OUTDOOR_TERRAIN_MAX_TOTAL_CELLS = 16384;
+const TERRAIN_STAMP_KINDS = new Set(['hill', 'hollow', 'ridge', 'ravine', 'flatten']);
+const OUTDOOR_SPLINE_FIELDS = new Set(['id', 'points', 'width', 'material', 'flatten', 'metadata', 'tags', 'userData']);
+const CURVED_BLOCKER_KINDS = new Set(['capsule', 'spline', 'circle', 'hazard', 'cliff']);
+const DECORATION_ZONE_KINDS = new Set(['treeClusterZone', 'shrubPatchZone', 'grassPatchZone', 'mistVolume', 'fallenBranchScatter', 'standingStoneScatter']);
+const OUTDOOR_PRIMITIVE_KINDS = new Set([
+  'terrainPatch', 'heightStamp', 'forestClearing', 'sunkenGrove', 'raisedRidge', 'ravineCut', 'mudTrail', 'riverBed', 'creekBank',
+  'cliffWall', 'mountainSkirt', 'stoneOutcrop', 'boulderCluster', 'fallenTreeBarrier', 'rootWall', 'denseThicketBlocker',
+  'fallenTreeBridge', 'rootArch', 'steppingStones', 'logCrossing', 'slopeTrail', 'caveMouth', 'ledgePath',
+  'forestBowl', 'ambushClearing', 'ritualGrove', 'ruinedFoundation', 'hiddenAlcove', 'spawnHollow', 'fogPocket',
+]);
+
+function isFinitePositive(value) {
+  return Number.isFinite(value) && value > 0;
+}
+
+function pointArrayIsFinite(points, minPoints = 2) {
+  const parsed = asArray(points).map(xzPoint);
+  return parsed.length >= minPoints && parsed.every(Boolean);
+}
+
+function validateOutdoorMaterial(definition, material, label, id, errors, warnings, { required = false } = {}) {
+  if (material === undefined || material === null || material === '') {
+    if (required) addIssue(errors, 'error', `${label} is missing material`, id);
+    return;
+  }
+  if (typeof material !== 'string') {
+    addIssue(errors, 'error', `${label} material must be a texture profile key`, id);
+  } else if (!definition.textures?.[material]) {
+    addIssue(warnings, 'warning', `${label} references material profile ${material} that is not defined in textures yet`, id);
+  }
+}
+
+function validateOutdoorAuthoring(definition, errors, warnings) {
+  const terrain = definition.terrain;
+  if (terrain !== undefined) {
+    const size = Array.isArray(terrain?.size) ? terrain.size : [];
+    const segments = Array.isArray(terrain?.segments) ? terrain.segments : [];
+    if (size.length !== 2 || !size.every(isFinitePositive)) addIssue(errors, 'error', 'terrain.size must be two finite positive numbers', 'terrain');
+    if (segments.length !== 2 || !segments.every((value) => Number.isInteger(value) && value > 0)) {
+      addIssue(errors, 'error', 'terrain.segments must be two finite positive integers', 'terrain');
+    } else {
+      if (segments.some((value) => value > OUTDOOR_TERRAIN_MAX_SEGMENTS_PER_AXIS) || segments[0] * segments[1] > OUTDOOR_TERRAIN_MAX_TOTAL_CELLS) {
+        addIssue(errors, 'error', `terrain.segments must remain mobile-safe (<= ${OUTDOOR_TERRAIN_MAX_SEGMENTS_PER_AXIS} per axis and <= ${OUTDOOR_TERRAIN_MAX_TOTAL_CELLS} cells)`, 'terrain');
+      }
+    }
+    if (!Number.isFinite(terrain?.baseY ?? 0)) addIssue(errors, 'error', 'terrain.baseY must be finite', 'terrain');
+    validateOutdoorMaterial(definition, terrain?.material, 'terrain', 'terrain', errors, warnings, { required: true });
+    if (terrain?.heightStamps !== undefined && !Array.isArray(terrain.heightStamps)) addIssue(errors, 'error', 'terrain.heightStamps must be an array when present', 'terrain');
+
+    asArray(terrain?.heightStamps).forEach((stamp, index) => {
+      const id = stamp.id ?? `terrain.heightStamps[${index}]`;
+      if (!TERRAIN_STAMP_KINDS.has(stamp.kind)) addIssue(errors, 'error', `heightStamp ${id} uses unsupported kind ${stamp.kind}`, id);
+      const radial = ['hill', 'hollow', 'flatten'].includes(stamp.kind);
+      const pathBased = ['ridge', 'ravine'].includes(stamp.kind);
+      if (radial && !xzPoint(stamp.center)) addIssue(errors, 'error', `heightStamp ${id} needs a finite center`, id);
+      if (pathBased && !pointArrayIsFinite(stamp.path, 2)) addIssue(errors, 'error', `heightStamp ${id} needs a path with at least two finite [x, z] points`, id);
+      if (radial && !isFinitePositive(stamp.radius)) addIssue(errors, 'error', `heightStamp ${id} radius must be > 0`, id);
+      if (pathBased && !isFinitePositive(stamp.width)) addIssue(errors, 'error', `heightStamp ${id} width must be > 0`, id);
+      if (['hill', 'ridge'].includes(stamp.kind) && !isFinitePositive(stamp.height)) addIssue(errors, 'error', `heightStamp ${id} height must be > 0`, id);
+      if (['hollow', 'ravine'].includes(stamp.kind) && !isFinitePositive(stamp.depth)) addIssue(errors, 'error', `heightStamp ${id} depth must be > 0`, id);
+      if (stamp.kind === 'flatten' && !Number.isFinite(stamp.y)) addIssue(errors, 'error', `heightStamp ${id} y must be finite`, id);
+      const vertical = Math.abs(stamp.height ?? stamp.depth ?? 0);
+      const run = stamp.radius ?? stamp.width ?? 0;
+      if (vertical > 8) addIssue(warnings, 'warning', `heightStamp ${id} has an extreme height/depth for mobile outdoor traversal`, id);
+      if (Number.isFinite(vertical) && Number.isFinite(run) && run > 0 && vertical / run > 0.35) addIssue(warnings, 'warning', `heightStamp ${id} may create an overly steep authored slope`, id);
+    });
+  }
+
+  [['splineTrails', definition.splineTrails], ['riverSplines', definition.riverSplines], ['creekBeds', definition.creekBeds]].forEach(([label, items]) => {
+    asArray(items).forEach((spline, index) => {
+      const id = spline.id ?? `${label}[${index}]`;
+      if (!hasUsableId(spline)) addIssue(errors, 'error', `${label}[${index}] is missing a stable id`, id);
+      if (!pointArrayIsFinite(spline.points, 2)) addIssue(errors, 'error', `${label} ${id} needs at least two finite [x, z] points`, id);
+      if (!isFinitePositive(spline.width)) addIssue(errors, 'error', `${label} ${id} width must be > 0`, id);
+      validateOutdoorMaterial(definition, spline.material, `${label} ${id}`, id, errors, warnings);
+      if (spline.flatten !== undefined && typeof spline.flatten !== 'boolean') addIssue(errors, 'error', `${label} ${id} flatten must be boolean when present`, id);
+      Object.keys(spline).filter((key) => !OUTDOOR_SPLINE_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `${label} ${id} uses unsupported field ${key}; rendering/collision behavior is not implemented in this foundation PR`, id));
+    });
+  });
+
+  asArray(definition.curvedBlockers).forEach((blocker, index) => {
+    const id = blocker.id ?? `curvedBlockers[${index}]`;
+    if (!hasUsableId(blocker)) addIssue(errors, 'error', `curvedBlockers[${index}] is missing a stable id`, id);
+    if (!CURVED_BLOCKER_KINDS.has(blocker.kind)) addIssue(errors, 'error', `curvedBlocker ${id} uses unsupported kind ${blocker.kind}`, id);
+    if (['capsule', 'cliff'].includes(blocker.kind) && (!xzPoint(blocker.from) || !xzPoint(blocker.to))) addIssue(errors, 'error', `curvedBlocker ${id} needs finite from/to points`, id);
+    if (blocker.kind === 'spline' && !pointArrayIsFinite(blocker.points, 2)) addIssue(errors, 'error', `curvedBlocker ${id} needs at least two finite points`, id);
+    if (['circle', 'hazard'].includes(blocker.kind) && !xzPoint(blocker.center)) addIssue(errors, 'error', `curvedBlocker ${id} needs a finite center`, id);
+    if (['capsule', 'spline', 'cliff'].includes(blocker.kind) && !isFinitePositive(blocker.thickness ?? blocker.width)) addIssue(errors, 'error', `curvedBlocker ${id} thickness or width must be > 0`, id);
+    if (['circle', 'hazard'].includes(blocker.kind) && !isFinitePositive(blocker.radius)) addIssue(errors, 'error', `curvedBlocker ${id} radius must be > 0`, id);
+    if (!blocker.visibleStructureId && blocker.metadata?.intentionallyInvisible !== true) addIssue(warnings, 'warning', `curvedBlocker ${id} has no visibleStructureId; add metadata.intentionallyInvisible when this is deliberate`, id);
+  });
+
+  asArray(definition.outdoorPrimitives).forEach((primitive, index) => {
+    const id = primitive.id ?? `outdoorPrimitives[${index}]`;
+    if (!hasUsableId(primitive)) addIssue(errors, 'error', `outdoorPrimitives[${index}] is missing a stable id`, id);
+    if (!OUTDOOR_PRIMITIVE_KINDS.has(primitive.kind)) addIssue(errors, 'error', `outdoorPrimitive ${id} uses unsupported kind ${primitive.kind}`, id);
+    if (primitive.position) {
+      const position = positionOf(primitive.position);
+      if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(position.z)) addIssue(errors, 'error', `outdoorPrimitive ${id} has invalid position`, id);
+    }
+    validateOutdoorMaterial(definition, primitive.material, `outdoorPrimitive ${id}`, id, errors, warnings);
+  });
+
+  asArray(definition.decorationZones).forEach((zone, index) => {
+    const id = zone.id ?? `decorationZones[${index}]`;
+    if (!hasUsableId(zone)) addIssue(errors, 'error', `decorationZones[${index}] is missing a stable id`, id);
+    if (!DECORATION_ZONE_KINDS.has(zone.kind)) addIssue(errors, 'error', `decorationZone ${id} uses unsupported kind ${zone.kind}`, id);
+    if (zone.center && !xzPoint(zone.center)) addIssue(errors, 'error', `decorationZone ${id} has a non-finite center`, id);
+    if (zone.points && !pointArrayIsFinite(zone.points, 3)) addIssue(errors, 'error', `decorationZone ${id} polygon needs at least three finite points`, id);
+    if (zone.radius !== undefined && !isFinitePositive(zone.radius)) addIssue(errors, 'error', `decorationZone ${id} radius must be > 0`, id);
+    if ((zone.width !== undefined && !isFinitePositive(zone.width)) || (zone.depth !== undefined && !isFinitePositive(zone.depth))) addIssue(errors, 'error', `decorationZone ${id} width/depth must be > 0 when present`, id);
+    if (zone.blocksPlayer || zone.blocksEnemies || zone.collision || zone.collisionRef) addIssue(errors, 'error', `decorationZone ${id} cannot claim collision/blocking behavior; add a paired curvedBlocker instead`, id);
+  });
+}
+
 function pointInRect(point, rect, padding = 0) {
   return point.x >= rect.minX - padding && point.x <= rect.maxX + padding
     && point.z >= rect.minZ - padding && point.z <= rect.maxZ + padding;
@@ -166,6 +284,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   const spawnIds = new Set(spawns.map((spawn) => spawn.id));
   const blockerIds = new Set(blockers.map((blocker) => blocker.id));
   const validatesGeneratedEnemyRuntime = asArray(definition.tags).some((tag) => ['ai-authored-location', 'ddplus-export'].includes(tag));
+  const usesOutdoorTerrain = definition.terrain !== undefined;
 
   validateTextureProfiles(definition, warnings, textureAssetExists);
 
@@ -191,7 +310,15 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     { label: 'bridges', items: bridges },
     { label: 'horizontalSurfaces', items: horizontalSurfaces },
     { label: 'architecturalPrimitives', items: architecturalPrimitives },
+    { label: 'splineTrails', items: definition.splineTrails },
+    { label: 'riverSplines', items: definition.riverSplines },
+    { label: 'creekBeds', items: definition.creekBeds },
+    { label: 'curvedBlockers', items: definition.curvedBlockers },
+    { label: 'outdoorPrimitives', items: definition.outdoorPrimitives },
+    { label: 'decorationZones', items: definition.decorationZones },
   ], errors);
+
+  validateOutdoorAuthoring(definition, errors, warnings);
 
 
   polygonFloors.forEach((floor) => {
@@ -391,7 +518,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     if (spawn.roomId && !roomIds.has(spawn.roomId)) {
       addIssue(errors, 'error', `spawn ${spawn.id} references missing room ${spawn.roomId}`, spawn.id);
     }
-    if (['player', 'return', 'enemy'].includes(spawn.kind) && !containingWalkable) {
+    if (['player', 'return', 'enemy'].includes(spawn.kind) && !containingWalkable && !usesOutdoorTerrain) {
       addIssue(errors, 'error', `${spawn.kind} spawn ${spawn.id} is outside walkable room rectangles`, spawn.id);
     }
     if (['player', 'return', 'enemy'].includes(spawn.kind) && overlappingBlocker) {
@@ -416,7 +543,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
         }
       });
     }
-    if (['player', 'return', 'enemy'].includes(spawn.kind) && !allowsNearWall && clearance < 0.7) {
+    if (['player', 'return', 'enemy'].includes(spawn.kind) && !usesOutdoorTerrain && !allowsNearWall && clearance < 0.7) {
       addIssue(warnings, 'warning', `spawn ${spawn.id} is close to a wall`, spawn.id);
     }
   });
