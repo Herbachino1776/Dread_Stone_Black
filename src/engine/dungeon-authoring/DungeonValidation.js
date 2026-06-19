@@ -1,4 +1,5 @@
 import { asArray, hasUsableId } from './DungeonDefinitionTypes.js';
+import { OARB_TERRAIN_FALLBACK_MATERIAL_KEY, OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS, OARB_TERRAIN_MAX_TOTAL_CELLS } from '../outdoor-authoring/OutdoorTerrainBuilder.js';
 
 const loggedValidationKeys = new Set();
 const RUNTIME_ENEMY_SPECIES = new Set(['sheep_demon', 'neck_man']);
@@ -6,8 +7,9 @@ const HORIZONTAL_SURFACE_KINDS = new Set(['floor', 'ceiling', 'roof', 'path', 'p
 const HORIZONTAL_SURFACE_SHAPES = new Set(['rect', 'polygon']);
 
 
-const OUTDOOR_TERRAIN_MAX_SEGMENTS_PER_AXIS = 160;
-const OUTDOOR_TERRAIN_MAX_TOTAL_CELLS = 16384;
+const OUTDOOR_TERRAIN_WARN_SEGMENTS_PER_AXIS = 96;
+const OUTDOOR_TERRAIN_WARN_TOTAL_CELLS = 9216;
+const OUTDOOR_TERRAIN_MAX_SIZE_PER_AXIS = 2000;
 const TERRAIN_STAMP_KINDS = new Set(['hill', 'hollow', 'ridge', 'ravine', 'flatten']);
 const OUTDOOR_SPLINE_FIELDS = new Set(['id', 'points', 'width', 'material', 'flatten', 'metadata', 'tags', 'userData']);
 const CURVED_BLOCKER_KINDS = new Set(['capsule', 'spline', 'circle', 'hazard', 'cliff']);
@@ -36,7 +38,11 @@ function validateOutdoorMaterial(definition, material, label, id, errors, warnin
   if (typeof material !== 'string') {
     addIssue(errors, 'error', `${label} material must be a texture profile key`, id);
   } else if (!definition.textures?.[material]) {
-    addIssue(warnings, 'warning', `${label} references material profile ${material} that is not defined in textures yet`, id);
+    if (material === OARB_TERRAIN_FALLBACK_MATERIAL_KEY) {
+      addIssue(warnings, 'warning', `${label} references fallback material profile ${material}; runtime will use the safe built-in outdoor grass fallback`, id);
+    } else {
+      addIssue(warnings, 'warning', `${label} references material profile ${material} that is not defined in textures yet and will use the safe OARB fallback if rendered`, id);
+    }
   }
 }
 
@@ -45,12 +51,18 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
   if (terrain !== undefined) {
     const size = Array.isArray(terrain?.size) ? terrain.size : [];
     const segments = Array.isArray(terrain?.segments) ? terrain.segments : [];
-    if (size.length !== 2 || !size.every(isFinitePositive)) addIssue(errors, 'error', 'terrain.size must be two finite positive numbers', 'terrain');
+    if (size.length !== 2 || !size.every(isFinitePositive)) {
+      addIssue(errors, 'error', 'terrain.size must be two finite positive numbers', 'terrain');
+    } else if (size.some((value) => value > OUTDOOR_TERRAIN_MAX_SIZE_PER_AXIS)) {
+      addIssue(errors, 'error', `terrain.size must remain within generation-safe bounds (<= ${OUTDOOR_TERRAIN_MAX_SIZE_PER_AXIS} per axis)`, 'terrain');
+    }
     if (segments.length !== 2 || !segments.every((value) => Number.isInteger(value) && value > 0)) {
       addIssue(errors, 'error', 'terrain.segments must be two finite positive integers', 'terrain');
     } else {
-      if (segments.some((value) => value > OUTDOOR_TERRAIN_MAX_SEGMENTS_PER_AXIS) || segments[0] * segments[1] > OUTDOOR_TERRAIN_MAX_TOTAL_CELLS) {
-        addIssue(errors, 'error', `terrain.segments must remain mobile-safe (<= ${OUTDOOR_TERRAIN_MAX_SEGMENTS_PER_AXIS} per axis and <= ${OUTDOOR_TERRAIN_MAX_TOTAL_CELLS} cells)`, 'terrain');
+      if (segments.some((value) => value > OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS) || segments[0] * segments[1] > OARB_TERRAIN_MAX_TOTAL_CELLS) {
+        addIssue(errors, 'error', `terrain.segments must remain mobile-safe (<= ${OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS} per axis and <= ${OARB_TERRAIN_MAX_TOTAL_CELLS} cells)`, 'terrain');
+      } else if (segments.some((value) => value > OUTDOOR_TERRAIN_WARN_SEGMENTS_PER_AXIS) || segments[0] * segments[1] > OUTDOOR_TERRAIN_WARN_TOTAL_CELLS) {
+        addIssue(warnings, 'warning', `terrain.segments are high for mobile; prefer <= ${OUTDOOR_TERRAIN_WARN_SEGMENTS_PER_AXIS} per axis unless the location needs the extra vertices`, 'terrain');
       }
     }
     if (!Number.isFinite(terrain?.baseY ?? 0)) addIssue(errors, 'error', 'terrain.baseY must be finite', 'terrain');

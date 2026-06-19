@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { compileDungeonLocation } from '../engine/dungeon-authoring/DungeonCompiler.js';
 import { DungeonDebugRenderer } from '../engine/dungeon-authoring/DungeonDebugRenderer.js';
 import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRuntimeRegistry.js';
+import { createOutdoorTerrainMesh } from '../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
 import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
 import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
@@ -716,7 +717,7 @@ export class DungeonScene {
     this.scene.fog = new THREE.Fog(OUTDOOR_DAWN_FOG_COLOR, OUTDOOR_FOG_NEAR, OUTDOOR_FOG_FAR);
     this.addOutdoorLights();
     this.addReliquaryFieldSkyDome();
-    this.addOutdoorTerrain();
+    this.addOutdoorTerrain(reliquaryFieldDefinition.terrain, reliquaryFieldDefinition.textures);
     this.addReliquaryFieldRiverBoundary();
     this.addReliquaryFieldHorizonSystem();
     this.addOutdoorBoundary();
@@ -1180,28 +1181,34 @@ export class DungeonScene {
     return group;
   }
 
-  addOutdoorTerrain() {
-    const grassMaterial = this.makeTexturedMaterial({
-      path: TEXTURE_PATHS.fieldGrass,
-      repeat: FIELD_GRASS_REPEAT,
-      color: 0xb0aa91,
-      roughness: 0.98,
-      metalness: 0.0,
-      emissive: 0x20232a,
-      emissiveIntensity: 0.08,
+  addOutdoorTerrain(terrainDefinition, textureProfiles = {}) {
+    const terrain = createOutdoorTerrainMesh(terrainDefinition ?? {
+      size: [FIELD_SIZE, FIELD_SIZE],
+      segments: [1, 1],
+      baseY: 0,
+      material: 'fieldGrass',
+      heightStamps: [],
+    }, {
+      textures: textureProfiles,
+      name: 'TERRAIN01-reliquary-field-oarb-heightfield-terrain',
+      makeMaterial: (profile, metadata) => {
+        const material = this.makeTexturedMaterial(profile);
+        material.userData = {
+          ...(material.userData ?? {}),
+          oarbTerrainMaterial: true,
+          materialKey: metadata.materialKey,
+          materialFallbackUsed: metadata.usedFallback,
+          sourceProfile: metadata.profile,
+        };
+        return material;
+      },
     });
-    const geometry = new THREE.PlaneGeometry(FIELD_SIZE, FIELD_SIZE);
-    geometry.rotateX(-Math.PI / 2);
-
-    const terrain = new THREE.Mesh(geometry, grassMaterial);
-    terrain.name = 'TERRAIN01-reliquary-field-400x400-dead-grass-repeat-50x50';
-    terrain.receiveShadow = true;
     terrain.userData = {
-      blueprint: 'docs/world/overworld/reliquary_field_v01.md',
-      implementedFieldSize: FIELD_SIZE,
+      ...terrain.userData,
+      blueprint: 'docs/DARB_OUTDOOR_AUTHORING_RUNTIME_MILESTONE.md',
+      legacyFieldBlueprint: 'docs/world/overworld/reliquary_field_v01.md',
       longTermBlueprintSize: 800,
-      textureRepeat: FIELD_GRASS_REPEAT,
-      collisionNote: 'Flat first-slice terrain plane; boundaries and landmark blockers define navigation.',
+      playerGroundingChanged: false,
     };
     this.scene.add(terrain);
   }

@@ -80,11 +80,19 @@ export const reliquaryFieldDefinition = Object.freeze({
   lighting: { background: 0x4d5660 },
   textures: {
     fieldGrass: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [50, 50] },
+    forestGround: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [50, 50], color: 0xb0aa91, roughness: 0.98, metalness: 0.0, emissive: 0x20232a, emissiveIntensity: 0.08 },
     wall: { path: './assets/textures/wall_black_stone_01.png' },
     floor: { path: './assets/textures/floor_worn_stone_01.png' },
     gate: { path: './assets/textures/metal_gate_rusted_01.png' },
   },
   defaultFloorY: 0,
+  terrain: {
+    size: [400, 400],
+    segments: [96, 96],
+    baseY: 0,
+    material: 'forestGround',
+    heightStamps: [],
+  },
   fieldManifestations: [
     {
       id: 'giant_ram_man_field_altar_manifestation',
