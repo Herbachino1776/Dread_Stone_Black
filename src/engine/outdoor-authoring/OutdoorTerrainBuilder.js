@@ -69,8 +69,98 @@ function assertGeneratedGeometrySafe(geometry) {
   }
 }
 
+function smoothFalloff01(distance, radius) {
+  if (!finitePositive(radius)) return 0;
+  const t = THREE.MathUtils.clamp(1 - distance / radius, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+function distanceToSegment2D(px, pz, ax, az, bx, bz) {
+  const abx = bx - ax;
+  const abz = bz - az;
+  const lengthSq = abx * abx + abz * abz;
+  if (lengthSq <= Number.EPSILON) {
+    const dx = px - ax;
+    const dz = pz - az;
+    return Math.hypot(dx, dz);
+  }
+  const t = THREE.MathUtils.clamp(((px - ax) * abx + (pz - az) * abz) / lengthSq, 0, 1);
+  const closestX = ax + abx * t;
+  const closestZ = az + abz * t;
+  return Math.hypot(px - closestX, pz - closestZ);
+}
+
+function distanceToPolyline2D(x, z, path) {
+  let closest = Infinity;
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const [ax, az] = path[index];
+    const [bx, bz] = path[index + 1];
+    closest = Math.min(closest, distanceToSegment2D(x, z, ax, az, bx, bz));
+  }
+  return closest;
+}
+
+function applyHeightStampAtPoint(currentY, stamp, x, z) {
+  switch (stamp?.kind) {
+    case 'hill': {
+      const [cx, cz] = Array.isArray(stamp.center) ? stamp.center : [];
+      const falloff = smoothFalloff01(Math.hypot(x - cx, z - cz), stamp.radius);
+      return currentY + (stamp.height * falloff);
+    }
+    case 'hollow': {
+      const [cx, cz] = Array.isArray(stamp.center) ? stamp.center : [];
+      const falloff = smoothFalloff01(Math.hypot(x - cx, z - cz), stamp.radius);
+      return currentY - (stamp.depth * falloff);
+    }
+    case 'ridge': {
+      const falloff = smoothFalloff01(distanceToPolyline2D(x, z, stamp.path), stamp.width);
+      return currentY + (stamp.height * falloff);
+    }
+    case 'ravine': {
+      const falloff = smoothFalloff01(distanceToPolyline2D(x, z, stamp.path), stamp.width);
+      return currentY - (stamp.depth * falloff);
+    }
+    case 'flatten': {
+      const [cx, cz] = Array.isArray(stamp.center) ? stamp.center : [];
+      const falloff = smoothFalloff01(Math.hypot(x - cx, z - cz), stamp.radius);
+      return THREE.MathUtils.lerp(currentY, stamp.y, falloff);
+    }
+    default:
+      return currentY;
+  }
+}
+
+function pointForHeightIndex(index, { sizeX, sizeZ, segmentsX, segmentsZ }) {
+  const stride = segmentsX + 1;
+  const gridX = index % stride;
+  const gridZ = Math.floor(index / stride);
+  return [
+    (gridX / segmentsX) * sizeX - sizeX * 0.5,
+    (gridZ / segmentsZ) * sizeZ - sizeZ * 0.5,
+  ];
+}
+
 function createFlatHeightData({ segmentsX, segmentsZ, baseY }) {
   return new Float32Array((segmentsX + 1) * (segmentsZ + 1)).fill(baseY);
+}
+
+function createStampedHeightData(safe, heightStamps = []) {
+  const heightData = createFlatHeightData(safe);
+  if (!Array.isArray(heightStamps) || heightStamps.length === 0) return heightData;
+
+  for (let index = 0; index < heightData.length; index += 1) {
+    const [x, z] = pointForHeightIndex(index, safe);
+    let y = safe.baseY;
+    for (const stamp of heightStamps) {
+      y = applyHeightStampAtPoint(y, stamp, x, z);
+      if (!Number.isFinite(y)) {
+        y = safe.baseY;
+        break;
+      }
+    }
+    heightData[index] = y;
+  }
+  return heightData;
 }
 
 function sampleHeightDataBilinear(heightData, { sizeX, sizeZ, segmentsX, segmentsZ, baseY }, x, z) {
@@ -100,7 +190,7 @@ function sampleHeightDataBilinear(heightData, { sizeX, sizeZ, segmentsX, segment
 
 export function createOutdoorTerrainSampler(terrain) {
   const safe = sanitizeTerrain(terrain);
-  const heightData = createFlatHeightData(safe);
+  const heightData = createStampedHeightData(safe, terrain?.heightStamps);
   const bounds = Object.freeze({
     minX: -safe.sizeX * 0.5,
     maxX: safe.sizeX * 0.5,
@@ -116,7 +206,7 @@ export function createOutdoorTerrainSampler(terrain) {
     segments: Object.freeze([safe.segmentsX, safe.segmentsZ]),
     bounds,
     heightData,
-    heightStampsApplied: 0,
+    heightStampsApplied: Array.isArray(terrain?.heightStamps) ? terrain.heightStamps.length : 0,
     sampleOutdoorY,
   });
 }
@@ -132,6 +222,13 @@ export function createOutdoorTerrainMesh(terrain, {
   const geometry = new THREE.PlaneGeometry(safe.sizeX, safe.sizeZ, safe.segmentsX, safe.segmentsZ);
   const uvMetadata = applyWorldScaleUvs(geometry, safe, profile);
   geometry.rotateX(-Math.PI / 2);
+
+  const position = geometry.attributes.position;
+  for (let index = 0; index < position.count; index += 1) {
+    position.setY(index, terrainSampler.heightData[index] - safe.baseY);
+  }
+  position.needsUpdate = true;
+  geometry.computeVertexNormals();
   assertGeneratedGeometrySafe(geometry);
 
   const material = typeof makeMaterial === 'function'
@@ -155,7 +252,7 @@ export function createOutdoorTerrainMesh(terrain, {
     vertexCount: geometry.attributes.position.count,
     uvMode: 'world-scale-xz-distance',
     uvTileSize: uvMetadata.tileSize,
-    heightStampsApplied: 0,
+    heightStampsApplied: Array.isArray(terrain?.heightStamps) ? terrain.heightStamps.length : 0,
     terrainSampler,
     sampleOutdoorY: terrainSampler.sampleOutdoorY,
     collisionNote: 'OARB terrain mesh and runtime sampler share the same generated height data.',
