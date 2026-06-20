@@ -43,7 +43,7 @@ function createOrganicPondDiscGeometry(segments = 80, wobble = 0.08) {
   return geometry;
 }
 
-function createOrganicPondRingGeometry(segments = 80, wobble = 0.08) {
+function createOrganicPondRingGeometry(segments = 80, wobble = 0.08, innerScaleX = 0.74, innerScaleZ = 0.74) {
   const vertices = [];
   const uvs = [];
   const indices = [];
@@ -51,8 +51,7 @@ function createOrganicPondRingGeometry(segments = 80, wobble = 0.08) {
     const angle = (index / segments) * Math.PI * 2;
     const edge = 1 + Math.sin(angle * 3.0 + 0.45) * wobble + Math.sin(angle * 5.0 - 0.8) * wobble * 0.45;
     const outer = edge * 1.0;
-    const inner = edge * 0.74;
-    vertices.push(Math.cos(angle) * inner, 0, Math.sin(angle) * inner, Math.cos(angle) * outer, 0, Math.sin(angle) * outer);
+    vertices.push(Math.cos(angle) * edge * innerScaleX, 0, Math.sin(angle) * edge * innerScaleZ, Math.cos(angle) * outer, 0, Math.sin(angle) * outer);
     uvs.push(0.5, 0, 1, 1);
     if (index > 0) {
       const a = (index - 1) * 2;
@@ -1442,13 +1441,32 @@ export class DungeonScene {
       const y = Number(body.y);
       if (![cx, cz, rx, rz, y].every(Number.isFinite) || rx <= 0 || rz <= 0) return;
       const shoreWidth = Number.isFinite(body.shoreWidth) ? Math.max(0, body.shoreWidth) : 0;
+      const footprint = body.footprint ?? {};
+      const [bedRx, bedRz] = Array.isArray(body.bedRadius) ? body.bedRadius : [rx + shoreWidth, rz + shoreWidth];
+      const [outerShoreRx, outerShoreRz] = Array.isArray(footprint.outerShoreRadius) ? footprint.outerShoreRadius : [rx + shoreWidth, rz + shoreWidth];
+      const wobble = Number.isFinite(footprint.wobble) ? footprint.wobble : 0.075;
+      if (body.bedMaterial && Number.isFinite(bedRx) && Number.isFinite(bedRz) && bedRx > rx && bedRz > rz) {
+        const bedMaterial = this.makeTexturedMaterial(textureProfiles[body.bedMaterial] ?? textureProfiles.mudChurnedWet ?? { color: 0xb58b5d, roughness: 1 });
+        bedMaterial.name = `OARB-water-bed-material-${body.bedMaterial}`;
+        bedMaterial.side = THREE.DoubleSide;
+        const bed = new THREE.Mesh(createOrganicPondDiscGeometry(88, wobble), bedMaterial);
+        bed.name = `OARB-water-bright-mud-bed-${body.id}`;
+        bed.position.set(cx, y + 0.006, cz);
+        bed.scale.set(bedRx, 1, bedRz);
+        bed.receiveShadow = true;
+        bed.userData = { id: body.id, kind: 'pondMudBed', materialKey: body.bedMaterial, collision: 'visual-only terrain-hugging bright mud bed' };
+        this.scene.add(bed);
+      }
       const shoreMaterial = this.makeTexturedMaterial(textureProfiles[body.shoreMaterial] ?? textureProfiles.mudWetDark ?? { color: 0x60462f, roughness: 1 });
       shoreMaterial.name = `OARB-water-shore-material-${body.shoreMaterial ?? 'mud'}`;
-      const shoreGeometry = createOrganicPondRingGeometry(88, 0.075);
+      shoreMaterial.side = THREE.DoubleSide;
+      const innerScaleX = Math.min(0.98, Math.max(0.05, rx / outerShoreRx));
+      const innerScaleZ = Math.min(0.98, Math.max(0.05, rz / outerShoreRz));
+      const shoreGeometry = createOrganicPondRingGeometry(88, wobble, innerScaleX, innerScaleZ);
       const shore = new THREE.Mesh(shoreGeometry, shoreMaterial);
       shore.name = `OARB-water-shore-${body.id}`;
-      shore.position.set(cx, y + 0.012, cz);
-      shore.scale.set(rx + shoreWidth, 1, rz + shoreWidth);
+      shore.position.set(cx, y + 0.018, cz);
+      shore.scale.set(outerShoreRx, 1, outerShoreRz);
       shore.receiveShadow = true;
       shore.userData = { id: body.id, kind: 'pondShore', materialKey: body.shoreMaterial, collision: 'visual-only muddy shoreline' };
       this.scene.add(shore);
@@ -1459,6 +1477,7 @@ export class DungeonScene {
         transparent: profile.transparent ?? true, opacity: profile.opacity ?? 0.78, emissive: profile.emissive ?? 0x0b4858, emissiveIntensity: profile.emissiveIntensity ?? 0.34, depthWrite: false,
       });
       waterMat.name = `OARB-water-material-${body.material ?? 'pondWater'}`;
+      waterMat.side = THREE.DoubleSide;
       const waterGeometry = createOrganicPondDiscGeometry(88, 0.075);
       const water = new THREE.Mesh(waterGeometry, waterMat);
       water.name = `OARB-water-body-${body.id}`;

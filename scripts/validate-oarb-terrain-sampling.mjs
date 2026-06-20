@@ -309,6 +309,7 @@ expectedPonds.forEach(([pondExpoId, id], index) => {
   assert.equal(pointInsideRoom([cx, cz], expoBounds, Math.max(rx, rz) + (pond.shoreWidth ?? 0)), true, `${id} stays inside OARB Outdoor Expo bounds.`);
   assert.ok(oarbOutdoorExpoDefinition.textures[pond.material], `${id} water material ${pond.material} resolves.`);
   assert.ok(oarbOutdoorExpoDefinition.textures[pond.shoreMaterial], `${id} shore material ${pond.shoreMaterial} resolves.`);
+  if (pond.bedMaterial) assert.ok(oarbOutdoorExpoDefinition.textures[pond.bedMaterial], `${id} bed material ${pond.bedMaterial} resolves.`);
   assert.ok((pond.userData.terrainStampIds ?? []).length >= 2, `${id} has supporting terrain stamp metadata.`);
   pond.userData.terrainStampIds.forEach((stampId) => assert.equal(terrainStampIds.has(stampId), true, `${id} terrain stamp ${stampId} exists.`));
   const floorY = oarbOutdoorExpoSampler.sampleOutdoorY(cx, cz);
@@ -321,6 +322,32 @@ expectedPonds.forEach(([pondExpoId, id], index) => {
     assert.ok(clearance >= 1.5, `${id} has walking clearance from ${other.id}.`);
   }
 });
+
+const pond06 = pondBodies.find((pond) => pond.id === 'pond_expo_06_gully_repair');
+assert.ok(pond06, 'POND 06 keeper-candidate pond exists.');
+assert.equal(pond06.userData?.visibleMarker?.label, 'POND 06', 'POND 06 keeps the visible number marker metadata.');
+assert.equal(pond06.userData?.keeperCandidate, true, 'POND 06 is marked as the current keeper candidate.');
+assert.equal(pond06.bedMaterial, 'pondBrightMud', 'POND 06 uses the bright mud pond-bed material profile.');
+assert.ok(oarbOutdoorExpoDefinition.textures.pondBrightMud, 'POND 06 bright mud material profile resolves.');
+assert.equal(pond06.footprint?.recipe, 'shared-organic-oval', 'POND 06 uses a shared pond footprint recipe.');
+assert.deepEqual(pond06.footprint?.center, pond06.center, 'POND 06 footprint center matches the water center.');
+assert.deepEqual(pond06.footprint?.waterRadius, pond06.radius, 'POND 06 footprint water radius matches the water body radius.');
+assert.deepEqual(pond06.footprint?.mudBedRadius, pond06.bedRadius, 'POND 06 mud bed radius derives from the shared footprint.');
+const [pond06WaterRx, pond06WaterRz] = pond06.radius;
+const [pond06BedRx, pond06BedRz] = pond06.bedRadius;
+const [pond06OuterRx, pond06OuterRz] = pond06.footprint.outerShoreRadius;
+assert.ok(pond06BedRx > pond06WaterRx && pond06BedRz > pond06WaterRz, 'POND 06 mud bed footprint is larger than the water footprint.');
+assert.ok(pond06OuterRx > pond06BedRx && pond06OuterRz > pond06BedRz, 'POND 06 dark shore rim expands beyond the bright mud bed.');
+assert.equal(pointInsideRoom(pond06.center, pondReserve, Math.max(pond06OuterRx, pond06OuterRz)), true, 'POND 06 shared footprint stays inside Pond Expo bounds.');
+(pond06.userData.terrainStampIds ?? []).forEach((stampId) => {
+  const stamp = oarbOutdoorExpoDefinition.terrain.heightStamps.find((candidate) => candidate.id === stampId);
+  const finiteValues = [...(stamp?.center ?? []), ...(stamp?.path ?? []).flat(), stamp?.radius, stamp?.width, stamp?.y, stamp?.height, stamp?.depth].filter((value) => value !== undefined);
+  assert.ok(finiteValues.every(Number.isFinite), `POND 06 terrain support stamp ${stampId} has finite values.`);
+});
+assert.ok((pond06.footprint?.outerShoreRadius ?? []).every(Number.isFinite), 'POND 06 shared footprint radii are finite.');
+assert.ok(pond06.userData.recipe.includes('shared footprint'), 'POND 06 recipe documents that the shore ring derives from the same footprint.');
+assert.equal(pond06.userData.noDownwardFacingTopNormals, true, 'POND 06 pond geometry is authored for two-sided/top-visible normals.');
+
 assert.equal(pondBodies.find((pond) => pond.id === 'pond_expo_08_fishing_hole')?.userData?.futureFishable, true, 'POND 08 is marked as a future fishable pond without enabling fishing gameplay.');
 const pondTerrainStamps = oarbOutdoorExpoDefinition.terrain.heightStamps.filter((stamp) => stamp.tags?.includes('pond-expo'));
 assert.ok(pondTerrainStamps.length >= 20, 'Pond Expo has supporting terrain stamps for bowls, shelves, banks, and gully repair.');
