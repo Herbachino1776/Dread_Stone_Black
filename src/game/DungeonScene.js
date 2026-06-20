@@ -15,6 +15,7 @@ import { BlackGrassTempleFactionManager } from './BlackGrassTempleFactions.js';
 import { SheepDemonEnemy } from './SheepDemonEnemy.js';
 import { createGameGoreRegistry } from './gore/goreRegistry.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
+import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
 import './creatures/creatureRegistry.js';
 import { RAM_MAN_FRIENDLY_ANIMATION_FILES } from './creatures/ramManFriendly.config.js';
 
@@ -137,27 +138,6 @@ const FIELD_KEROVAC_RETURN_YAW = Math.PI;
 const FIELD_OARB_FEATURE_YARD_RETURN_START = new THREE.Vector3(84, 1.55, 137);
 const FIELD_OARB_FEATURE_YARD_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
-
-const FIELD_SPAWN_IDS_BY_RUNTIME_KEY = Object.freeze({
-  start: 'field_player_start',
-  cryptAExit: 'field_south_reliquary_crypt_return',
-  blackGrassTempleExit: 'field_black_grass_temple_return',
-  fieldKeeperHouseExit: 'field_keeper_house_return',
-  ddplusLevel1Exit: 'field_ddplus_level_1_return',
-  sumerianCityBlockV0Exit: 'field_sumerian_city_block_v0_return',
-  sumerianSunPalaceDistrictV1Exit: 'field_sumerian_sun_palace_district_v1_return',
-  sumerianCanalMarketDistrictV2Exit: 'field_sumerian_canal_market_district_v2_return',
-  balthazanExit: 'field_balthazan_return',
-  kerovacExit: 'field_kerovac_return',
-  oarbFeatureYardExit: 'field_oarb_feature_yard_return',
-});
-
-function isFiniteAuthoredPosition(position) {
-  return position
-    && Number.isFinite(position.x)
-    && Number.isFinite(position.y ?? 1.55)
-    && Number.isFinite(position.z);
-}
 
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const GENERATED_ENEMY_ACTIVE_CAP = 3;
@@ -668,19 +648,11 @@ export class DungeonScene {
   }
 
   getFieldPlayerSpawn() {
-    const spawnKey = FIELD_SPAWN_IDS_BY_RUNTIME_KEY[this.fieldSpawn] ? this.fieldSpawn : 'start';
-    const spawnId = FIELD_SPAWN_IDS_BY_RUNTIME_KEY[spawnKey];
-    const spawn = getLocationDefinition('reliquary-field')?.spawns?.find((candidate) => candidate.id === spawnId);
-
-    if (isFiniteAuthoredPosition(spawn?.position)) {
-      return {
-        spawnPosition: this.toVector3(spawn.position, 1.55),
-        spawnYaw: Number.isFinite(spawn.yaw) ? spawn.yaw : FIELD_PLAYER_YAW,
-      };
-    }
-
-    console.error(`[Dread Stone Black] Reliquary Field startup spawn ${spawnId} is missing or invalid; falling back to FIELD_PLAYER_START.`);
-    return { spawnPosition: FIELD_PLAYER_START.clone(), spawnYaw: FIELD_PLAYER_YAW };
+    return resolveFieldPlayerSpawn(this.fieldSpawn, {
+      fallbackPosition: FIELD_PLAYER_START,
+      fallbackYaw: FIELD_PLAYER_YAW,
+      logger: console,
+    });
   }
 
   build() {
