@@ -450,7 +450,7 @@ export const reliquaryFieldDefinition = Object.freeze({
       triggerRect: { minX: 86, maxX: 90, minZ: 182, maxZ: 190 },
       position: { x: 88, y: 1, z: 186 },
       destinationSpawnId: 'oarb_outdoor_expo_player_start',
-      promptText: 'Tap INTERACT to enter the OARB Outdoor Expo Center.',
+      promptText: 'X: Enter OARB Outdoor Expo Center',
       tags: ['temporary', 'oarb-outdoor-expo', 'kerovac-approach'],
       userData: {
         temporary: true,

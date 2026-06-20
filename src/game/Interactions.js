@@ -25,13 +25,13 @@ export class Interactions {
     this.feedbackHint = '';
     this.feedbackUntil = 0;
     this.activeTimedAction = null;
-    this.debugKerovacGateState = null;
+    this.debugAreaGateStates = new Map();
   }
 
   updateHint() {
     this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: false });
     const nearbyInteraction = this.getNearbyInteraction();
-    this.logKerovacGatePromptState(nearbyInteraction);
+    this.logAreaEntranceGatePromptState(nearbyInteraction);
     const hint = Date.now() < this.feedbackUntil
       ? this.feedbackHint
       : nearbyInteraction?.hint ?? '';
@@ -170,7 +170,7 @@ export class Interactions {
     this.setTemporaryHint(interaction.message, 1200);
 
     if (interaction.functional) {
-      this.logKerovacGateInteract(interaction);
+      this.logAreaEntranceGateInteract(interaction);
       this.hud.showMessage(interaction.message);
       this.emitObjectiveEvent(OBJECTIVE_EVENTS.locationExited, {
         interactionId: interaction.id,
@@ -203,30 +203,40 @@ export class Interactions {
   }
 
 
-  logKerovacGatePromptState(nearbyInteraction) {
-    if (!import.meta.env.DEV) return;
-    const kerovacGate = this.dungeon.outdoorInteractions?.find((interaction) => interaction.debugGateId === 'kerovac');
-    if (!kerovacGate?.target) return;
-    const distance = this.horizontalDistanceTo(kerovacGate.gatePosition ?? kerovacGate.target);
-    const promptActive = nearbyInteraction?.id === kerovacGate.id;
-    const state = `${distance.toFixed(2)}|${promptActive}`;
-    if (state === this.debugKerovacGateState) return;
-    this.debugKerovacGateState = state;
-    console.debug('[KerovacGate]', {
-      nearestGateDistance: Number(distance.toFixed(2)),
-      promptActive,
-      selectedDestinationLocationId: kerovacGate.area ?? kerovacGate.toLocation ?? 'kerovac',
+  getDebugAreaEntranceGates() {
+    if (!import.meta.env.DEV) return [];
+    return (this.dungeon.outdoorInteractions ?? []).filter((interaction) => interaction.type === 'areaEntrance' && interaction.debugGateId);
+  }
+
+  logAreaEntranceGatePromptState(nearbyInteraction) {
+    this.getDebugAreaEntranceGates().forEach((gate) => {
+      if (!gate?.target) return;
+      const distance = this.horizontalDistanceTo(gate.gatePosition ?? gate.target);
+      const promptActive = nearbyInteraction?.id === gate.id;
+      const state = `${distance.toFixed(2)}|${promptActive}`;
+      if (state === this.debugAreaGateStates.get(gate.debugGateId)) return;
+      this.debugAreaGateStates.set(gate.debugGateId, state);
+      console.debug('[AreaEntranceGate]', {
+        gateId: gate.debugGateId,
+        nearestGateDistance: Number(distance.toFixed(2)),
+        promptActive,
+        selectedDestinationLocationId: gate.targetLocationId ?? gate.area ?? gate.toLocation ?? 'dungeon',
+        destinationSpawnId: gate.targetSpawnId ?? gate.destinationSpawnId ?? null,
+        visibleMarkerPosition: gate.visibleMarkerPosition ?? gate.gatePosition ?? null,
+      });
     });
   }
 
-  logKerovacGateInteract(interaction) {
-    if (!import.meta.env.DEV || interaction.debugGateId !== 'kerovac') return;
-    console.debug('[KerovacGate]', {
+  logAreaEntranceGateInteract(interaction) {
+    if (!import.meta.env.DEV || interaction.type !== 'areaEntrance' || !interaction.debugGateId) return;
+    console.debug('[AreaEntranceGate]', {
+      gateId: interaction.debugGateId,
       interactFired: true,
       nearestGateDistance: Number(this.horizontalDistanceTo(interaction.gatePosition ?? interaction.target).toFixed(2)),
       promptActive: true,
-      selectedDestinationLocationId: interaction.area ?? interaction.toLocation ?? 'kerovac',
-      destinationSpawnId: interaction.destinationSpawnId ?? 'kerovac_player_start',
+      selectedDestinationLocationId: interaction.targetLocationId ?? interaction.area ?? interaction.toLocation ?? 'dungeon',
+      destinationSpawnId: interaction.targetSpawnId ?? interaction.destinationSpawnId ?? null,
+      visibleMarkerPosition: interaction.visibleMarkerPosition ?? interaction.gatePosition ?? null,
     });
   }
 

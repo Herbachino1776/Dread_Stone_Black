@@ -326,8 +326,30 @@ function validateCompiledOutdoorFieldRuntime(definitions) {
     errors.push('oarb_outdoor_expo_player_start is outside terrain bounds');
   }
   const expoEntry = byId.get('reliquary-field')?.exits?.find((exit) => exit.id === 'oarb_outdoor_expo_gate');
-  if (!expoEntry) errors.push('oarb_outdoor_expo_gate is missing from Reliquary Field');
-  else if (!expo.spawns?.some((spawn) => spawn.id === expoEntry.destinationSpawnId)) errors.push(`oarb_outdoor_expo_gate destination spawn ${expoEntry.destinationSpawnId} does not resolve`);
+  if (!expoEntry) {
+    errors.push('oarb_outdoor_expo_gate is missing from Reliquary Field');
+  } else {
+    const target = byId.get(expoEntry.toLocation);
+    if (!target) errors.push(`oarb_outdoor_expo_gate target location ${expoEntry.toLocation} does not resolve`);
+    if (!expo.spawns?.some((spawn) => spawn.id === expoEntry.destinationSpawnId)) errors.push(`oarb_outdoor_expo_gate destination spawn ${expoEntry.destinationSpawnId} does not resolve`);
+    if (!expoEntry.userData?.visibleMarker?.ids?.length) errors.push('oarb_outdoor_expo_gate needs visible marker metadata');
+    const expoFieldReturn = byId.get('reliquary-field')?.spawns?.find((spawn) => spawn.id === expoEntry.userData?.returnSpawnId);
+    if (!isFinitePosition(expoFieldReturn?.position)) errors.push(`oarb_outdoor_expo_gate return spawn ${expoEntry.userData?.returnSpawnId ?? '<none>'} does not resolve`);
+    else if (pointInRect(expoFieldReturn.position, expoEntry.triggerRect)) errors.push(`${expoFieldReturn.id} lands inside oarb_outdoor_expo_gate.triggerRect`);
+    const runtimeSnippets = [
+      'OARB_OUTDOOR_EXPO_INT_ENTER',
+      "area: 'oarbOutdoorExpo'",
+      "type: 'areaEntrance'",
+      "hint: 'X: Enter OARB Outdoor Expo Center'",
+      'OARB_OUTDOOR_EXPO_INTERACT_RANGE = 7.0',
+      "debugGateId: 'oarb_outdoor_expo_gate'",
+      "targetSpawnId: 'oarb_outdoor_expo_player_start'",
+      'visibleMarkerPosition',
+    ];
+    runtimeSnippets.forEach((snippet) => {
+      if (!dungeonSceneSource.includes(snippet)) errors.push(`oarb_outdoor_expo_gate runtime interaction is missing ${snippet}`);
+    });
+  }
   const expoReturn = (expo.exits ?? []).find((exit) => exit.id === 'oarb_outdoor_expo_return_gate');
   if (!expoReturn) errors.push('oarb_outdoor_expo_return_gate is missing');
   else if (!byId.get(expoReturn.toLocation)?.spawns?.some((spawn) => spawn.id === expoReturn.destinationSpawnId)) errors.push(`oarb_outdoor_expo_return_gate destination spawn ${expoReturn.destinationSpawnId} does not resolve`);

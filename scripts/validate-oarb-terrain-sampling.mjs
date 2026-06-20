@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -208,7 +209,7 @@ const expoFieldGate = reliquaryFieldDefinition.exits.find((candidate) => candida
 assert.ok(expoFieldGate, 'Reliquary Field keeps the OARB Outdoor Expo entrance trigger.');
 assert.equal(expoFieldGate.toLocation, 'oarbOutdoorExpo', 'OARB Outdoor Expo entrance still routes to oarbOutdoorExpo.');
 assert.equal(expoFieldGate.destinationSpawnId, 'oarb_outdoor_expo_player_start', 'OARB Outdoor Expo entrance still targets the expo player spawn.');
-assert.equal(expoFieldGate.promptText, 'Tap INTERACT to enter the OARB Outdoor Expo Center.', 'OARB Outdoor Expo entrance prompt remains unchanged.');
+assert.equal(expoFieldGate.promptText, 'X: Enter OARB Outdoor Expo Center', 'OARB Outdoor Expo entrance prompt matches the runtime desktop/mobile interaction prompt.');
 assert.deepEqual(expoFieldGate.position, { x: 88, y: 1, z: 186 }, 'OARB Outdoor Expo entrance remains at the authored x 88 z 186 gate position.');
 const expoReturnSpawn = reliquaryFieldDefinition.spawns.find((candidate) => candidate.id === 'field_oarb_outdoor_expo_return');
 assert.ok(expoReturnSpawn && [expoReturnSpawn.position.x, expoReturnSpawn.position.y, expoReturnSpawn.position.z].every(Number.isFinite), 'Reliquary Field OARB Outdoor Expo return spawn resolves and remains finite.');
@@ -224,6 +225,20 @@ const expoVisibleIds = new Set(expoFieldGate.userData?.visibleMarker?.ids ?? [])
   assert.equal(expoVisibleIds.has(id), true, `OARB Outdoor Expo visible marker metadata includes ${id}.`);
 });
 assert.deepEqual(expoFieldGate.userData?.visibleMarker?.gatePosition, { x: 88, y: 1, z: 186 }, 'OARB Outdoor Expo visible marker metadata records the exact gate position.');
+
+const dungeonSceneSource = readFileSync(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
+[
+  'OARB_OUTDOOR_EXPO_INT_ENTER',
+  "area: 'oarbOutdoorExpo'",
+  "type: 'areaEntrance'",
+  "hint: 'X: Enter OARB Outdoor Expo Center'",
+  'OARB_OUTDOOR_EXPO_INTERACT_RANGE = 7.0',
+  "debugGateId: 'oarb_outdoor_expo_gate'",
+  "targetSpawnId: 'oarb_outdoor_expo_player_start'",
+  'visibleMarkerPosition',
+].forEach((snippet) => {
+  assert.ok(dungeonSceneSource.includes(snippet), `OARB Outdoor Expo runtime interaction includes ${snippet}.`);
+});
 const expoPath = reliquaryFieldDefinition.splineTrails.find((trailCandidate) => trailCandidate.id === 'oarb_outdoor_expo_approach_path');
 assert.ok(expoPath, 'Reliquary Field has an authored Outdoor Expo approach path.');
 expoPath.points.forEach((point, index) => {
