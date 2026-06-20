@@ -370,6 +370,25 @@ function validateCompiledOutdoorFieldRuntime(definitions) {
     if (!expo.textures?.[body.material]) errors.push(`oarbOutdoorExpo ${body.id} water material ${body.material} is missing`);
     if (!expo.textures?.[body.shoreMaterial]) errors.push(`oarbOutdoorExpo ${body.id} shore material ${body.shoreMaterial} is missing`);
   });
+  const pond06 = waterBodies.find((body) => body.id === 'pond_expo_06_gully_repair');
+  if (!pond06) errors.push('oarbOutdoorExpo POND 06 water surface is missing');
+  else {
+    const animatedProfile = expo.textures?.[pond06.material];
+    if (pond06.material !== 'pondWaterAnimated') errors.push(`oarbOutdoorExpo POND 06 should use pondWaterAnimated, found ${pond06.material}`);
+    if (!animatedProfile) errors.push('oarbOutdoorExpo POND 06 animated water material key does not resolve');
+    else {
+      if ((animatedProfile.animatedFrames ?? []).length !== 6) errors.push('oarbOutdoorExpo POND 06 animated water must author exactly 6 frames');
+      if (!Number.isFinite(animatedProfile.frameDurationMs) || animatedProfile.frameDurationMs <= 0) errors.push('oarbOutdoorExpo POND 06 animated water frameDurationMs must be finite and positive');
+      (animatedProfile.animatedFrames ?? []).forEach((framePath) => {
+        const publicPath = framePath.replace(/^\.\//, 'public/');
+        if (!fs.existsSync(path.resolve(repoRoot, publicPath))) errors.push(`oarbOutdoorExpo POND 06 animated water frame path is missing: ${framePath}`);
+      });
+    }
+    const animatedPondUsers = waterBodies.filter((body) => body.material === 'pondWaterAnimated').map((body) => body.id);
+    if (animatedPondUsers.length !== 1 || animatedPondUsers[0] !== 'pond_expo_06_gully_repair') errors.push(`oarbOutdoorExpo animated pond water should only be applied to POND 06, found ${animatedPondUsers.join(', ')}`);
+    if ((pond06.footprint?.waterOutline ?? []).length < 3) errors.push('oarbOutdoorExpo POND 06 water mesh must keep an irregular water surface outline');
+    if (pond06.userData?.noDownwardFacingTopNormals !== true) errors.push('oarbOutdoorExpo POND 06 should keep top-visible/two-sided water geometry metadata');
+  }
   const visibleIds = new Set((expo.outdoorPrimitives ?? []).map((primitive) => primitive.id));
   (expo.curvedBlockers ?? []).forEach((blocker) => {
     if (!blocker.visibleStructureId || !visibleIds.has(blocker.visibleStructureId)) errors.push(`oarbOutdoorExpo blocker ${blocker.id} is not paired to a visible primitive`);

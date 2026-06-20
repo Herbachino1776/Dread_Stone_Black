@@ -399,6 +399,7 @@ export class DungeonScene {
     this.fieldFishingZones = [];
     this.fieldRawFishPickups = [];
     this.outdoorTerrainRuntime = null;
+    this.animatedTextureFlipbooks = [];
     this.fieldCookedFishPickups = [];
     this.giantRamManFieldManifestation = null;
     this.giantRamManFieldManifestationLoading = false;
@@ -1528,6 +1529,7 @@ export class DungeonScene {
       });
       waterMat.name = `OARB-water-material-${body.material ?? 'pondWater'}`;
       waterMat.side = THREE.DoubleSide;
+      if (Array.isArray(profile.animatedFrames)) this.registerAnimatedTextureFlipbook(waterMat, profile);
       const waterGeometry = waterOutline?.length >= 3
         ? createPondOutlineDiscGeometry(waterOutline, [cx, cz])
         : createOrganicPondDiscGeometry(88, 0.075);
@@ -3195,6 +3197,27 @@ export class DungeonScene {
     return texture;
   }
 
+  loadPondWaterAnimationFrames(profile = {}) {
+    const framePaths = Array.isArray(profile.animatedFrames) ? profile.animatedFrames : [];
+    const repeat = Array.isArray(profile.repeat) ? profile.repeat : [1, 1];
+    return framePaths.map((path) => this.loadRepeatingTexture(path, repeat));
+  }
+
+  registerAnimatedTextureFlipbook(material, profile = {}) {
+    const frames = this.loadPondWaterAnimationFrames(profile);
+    const frameDurationMs = Number(profile.frameDurationMs);
+    if (!material || frames.length === 0 || !Number.isFinite(frameDurationMs) || frameDurationMs <= 0) return;
+    material.map = frames[0];
+    material.needsUpdate = true;
+    this.animatedTextureFlipbooks.push({
+      material,
+      frames,
+      frameDurationMs,
+      elapsedMs: 0,
+      frameIndex: 0,
+    });
+  }
+
   makeTexturedMaterial({ path, repeat, color = 0xffffff, roughness = 0.92, metalness = 0.02, emissive, emissiveIntensity, transparent = false, opacity = 1 } = {}) {
     return new THREE.MeshStandardMaterial({
       color,
@@ -3208,6 +3231,15 @@ export class DungeonScene {
   }
 
   updateAnimatedDungeonMaterials(deltaSeconds) {
+    this.animatedTextureFlipbooks.forEach((flipbook) => {
+      flipbook.elapsedMs += deltaSeconds * 1000;
+      const nextFrameIndex = Math.floor(flipbook.elapsedMs / flipbook.frameDurationMs) % flipbook.frames.length;
+      if (nextFrameIndex === flipbook.frameIndex) return;
+      flipbook.frameIndex = nextFrameIndex;
+      flipbook.material.map = flipbook.frames[nextFrameIndex];
+      flipbook.material.map.needsUpdate = true;
+      flipbook.material.needsUpdate = true;
+    });
     if (!this.scene) return;
     this.scene.traverse((object) => {
       if (!object.isMesh || object.userData?.animated !== 'canalWater') return;
