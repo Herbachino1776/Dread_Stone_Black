@@ -318,6 +318,12 @@ function polygonCentroid(points) {
 function averageRadiusFrom(points, center) {
   return points.reduce((sum, point) => sum + Math.hypot(point[0] - center[0], point[1] - center[1]), 0) / points.length;
 }
+function correspondingRadialWidths(inner, outer, center) {
+  return inner.map((point, index) => (
+    Math.hypot(outer[index][0] - center[0], outer[index][1] - center[1])
+    - Math.hypot(point[0] - center[0], point[1] - center[1])
+  ));
+}
 expectedPonds.forEach(([pondExpoId, id], index) => {
   const pond = pondBodies.find((candidate) => candidate.id === id);
   assert.ok(pond, `${pondExpoId} water body ${id} exists.`);
@@ -373,7 +379,7 @@ pond06AnimatedProfile.animatedFrames.forEach((framePath, index) => {
 });
 const animatedPondUsers = pondBodies.filter((pond) => pond.material === 'pondWaterAnimated');
 assert.deepEqual(animatedPondUsers.map((pond) => pond.id), ['pond_expo_06_gully_repair'], 'Animated pond water is applied only to POND 06.');
-assert.equal(pond06.footprint?.recipe, 'radial-expansion-irregular-polygon', 'POND 06 uses the shared radial-expansion footprint recipe.');
+assert.equal(pond06.footprint?.recipe, 'per-vertex-expansion-irregular-polygon', 'POND 06 uses the shared per-vertex expansion footprint recipe.');
 assert.deepEqual(pond06.footprint?.center, pond06.center, 'POND 06 footprint center matches the water center.');
 assert.deepEqual(pond06.footprint?.waterRadius, pond06.radius, 'POND 06 footprint water radius matches the water body radius.');
 const waterOutline = pond06.footprint?.waterOutline ?? [];
@@ -393,8 +399,14 @@ assert.ok(Math.hypot(pond06OutlineCenter[0] - pond06.center[0], pond06OutlineCen
 const waterAverageRadius = averageRadiusFrom(waterOutline, pond06.center);
 const mudAverageRadius = averageRadiusFrom(mudBedOutline, pond06.center);
 const outerAverageRadius = averageRadiusFrom(outerShoreOutline, pond06.center);
-assert.ok(mudAverageRadius - waterAverageRadius > 2.5 && mudAverageRadius - waterAverageRadius < 2.7, 'POND 06 bright mud bed is a balanced radial expansion from the water outline.');
-assert.ok(outerAverageRadius - mudAverageRadius > 1.4 && outerAverageRadius - mudAverageRadius < 1.6, 'POND 06 outer wet shore band is a restrained second radial expansion.');
+const brightMudWidths = correspondingRadialWidths(waterOutline, mudBedOutline, pond06.center);
+const wetShoreWidths = correspondingRadialWidths(mudBedOutline, outerShoreOutline, pond06.center);
+assert.ok(brightMudWidths.every((width) => width >= 0.999 && width <= 1.401), 'POND 06 bright mud per-vertex widths stay within the narrow 1.0-1.4 world-unit target.');
+assert.ok(Math.max(...brightMudWidths) - Math.min(...brightMudWidths) >= 0.3, 'POND 06 bright mud width visibly varies around the shoreline.');
+assert.ok(wetShoreWidths.every((width) => width >= 0.399 && width <= 0.701), 'POND 06 dark wet-mud per-vertex widths stay within the subtle 0.4-0.7 world-unit target.');
+assert.ok(Math.max(...wetShoreWidths) - Math.min(...wetShoreWidths) >= 0.2, 'POND 06 dark wet-mud width visibly varies around the shoreline.');
+assert.ok(mudAverageRadius - waterAverageRadius > 1.15 && mudAverageRadius - waterAverageRadius < 1.25, 'POND 06 bright mud averages roughly 1.2 world units instead of a broad exposed bed.');
+assert.ok(outerAverageRadius - mudAverageRadius > 0.5 && outerAverageRadius - mudAverageRadius < 0.6, 'POND 06 outer wet shore averages roughly 0.55 world units and remains thinner than bright mud.');
 assert.equal(pointInsideRoom(pond06.center, pondReserve, Math.ceil(outerAverageRadius)), true, 'POND 06 offset footprint stays inside Pond Expo bounds.');
 (pond06.userData.terrainStampIds ?? []).forEach((stampId) => {
   const stamp = oarbOutdoorExpoDefinition.terrain.heightStamps.find((candidate) => candidate.id === stampId);
@@ -410,12 +422,12 @@ assert.equal(pond06WaterFloorStamp?.kind, 'flattenOutline', 'POND 06 water floor
 assert.deepEqual(pond06WaterFloorStamp?.outline, waterOutline, 'POND 06 terrain water floor uses the exact rendered water outline.');
 assert.ok([pond06.footprint?.mudOffset, pond06.footprint?.outerShoreOffset].every(Number.isFinite), 'POND 06 offset distances are finite.');
 assert.ok(Object.values(pond06.footprint?.layerHeights ?? {}).every(Number.isFinite), 'POND 06 explicit terrain, mud, shore, and water height gaps are finite.');
-assert.ok(pond06.userData.recipe.includes('single-source radial-expansion'), 'POND 06 recipe documents that every visible layer derives from one water outline.');
+assert.ok(pond06.userData.recipe.includes('single-source per-vertex expansion'), 'POND 06 recipe documents non-uniform shoreline layers derived from one water outline.');
 assert.equal(pond06.userData.noDownwardFacingTopNormals, true, 'POND 06 pond geometry is authored for two-sided/top-visible normals.');
-const pond06Validation = assertValidPondFootprint(pond06, oarbOutdoorExpoDefinition, { minMudMarginWorld: 2.0, minVisibleMudBandWorld: 1.0, shorelineSampleStepWorld: 0.5, sampleStepWorld: 0.75 });
-assert.equal(pond06Validation.minMudMarginWorld, 2.0, 'POND 06 pond-builder validation enforces a 2.0 world-unit minimum bright-mud margin.');
-assert.equal(pond06Validation.minVisibleMudBandWorld, 1.0, 'POND 06 shoreline-band validation enforces the restrained wet-shore band.');
-assert.equal(pond06Validation.shorelineSampleStepWorld, 0.5, 'POND 06 shoreline-band validation samples the visible edge every 0.5 world units.');
+const pond06Validation = assertValidPondFootprint(pond06, oarbOutdoorExpoDefinition, { minMudMarginWorld: 0.8, minVisibleMudBandWorld: 0.8, shorelineSampleStepWorld: 0.2, sampleStepWorld: 0.75 });
+assert.equal(pond06Validation.minMudMarginWorld, 0.8, 'POND 06 pond-builder validation preserves a guaranteed bright-mud overlap beneath water.');
+assert.equal(pond06Validation.minVisibleMudBandWorld, 0.8, 'POND 06 shoreline-band validation preserves a narrow visible bright-mud edge.');
+assert.equal(pond06Validation.shorelineSampleStepWorld, 0.2, 'POND 06 shoreline-band validation samples the refined edge every 0.2 world units.');
 assert.equal(pond06.userData.waterMeshSource, 'waterOutline', 'POND 06 rendered water mesh uses waterOutline.');
 assert.equal(pond06.userData.brightMudMeshSource, 'mudBedOutline', 'POND 06 rendered bright mud mesh uses mudBedOutline.');
 assert.equal(pond06.userData.wetShoreMeshSource, 'outerShoreOutline', 'POND 06 rendered wet shore mesh uses outerShoreOutline.');

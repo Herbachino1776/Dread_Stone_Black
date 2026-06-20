@@ -395,7 +395,7 @@ function validateCompiledOutdoorFieldRuntime(definitions) {
     const animatedPondUsers = waterBodies.filter((body) => body.material === 'pondWaterAnimated').map((body) => body.id);
     if (animatedPondUsers.length !== 1 || animatedPondUsers[0] !== 'pond_expo_06_gully_repair') errors.push(`oarbOutdoorExpo animated pond water should only be applied to POND 06, found ${animatedPondUsers.join(', ')}`);
     if ((pond06.footprint?.waterOutline ?? []).length < 3) errors.push('oarbOutdoorExpo POND 06 water mesh must keep an irregular water surface outline');
-    const pond06FootprintValidation = validatePondFootprint(pond06, expo, { minMudMarginWorld: 2.0, sampleStepWorld: 0.75 });
+    const pond06FootprintValidation = validatePondFootprint(pond06, expo, { minMudMarginWorld: 0.8, minVisibleMudBandWorld: 0.8, shorelineSampleStepWorld: 0.2, sampleStepWorld: 0.75 });
     pond06FootprintValidation.errors.forEach((error) => errors.push(`oarbOutdoorExpo ${error}`));
     if (pond06.userData?.noDownwardFacingTopNormals !== true) errors.push('oarbOutdoorExpo POND 06 should keep top-visible/two-sided water geometry metadata');
   }
