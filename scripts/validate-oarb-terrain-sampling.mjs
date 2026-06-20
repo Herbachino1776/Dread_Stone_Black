@@ -7,11 +7,12 @@ import { createOutdoorTerrainMesh, createOutdoorTerrainSampler } from '../src/en
 import { createOutdoorSplineTrailMesh, createOutdoorSplineTrailMeshes } from '../src/engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { createOutdoorCurvedBlockers } from '../src/engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 import { createOutdoorPrimitiveMeshes } from '../src/engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
+import { createPondDecorGroup } from '../src/engine/outdoor-authoring/PondDecorBuilder.js';
 import { CollisionWorld } from '../src/game/Collision.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { oarbFeatureYardDefinition } from '../src/game/locations/oarbFeatureYard.definition.js';
 import { oarbOutdoorExpoDefinition } from '../src/game/locations/oarbOutdoorExpo.definition.js';
-import { assertValidPondFootprint, assertValidRenderedPondComposite } from './pond-footprint-validation.mjs';
+import { assertValidPondDecor, assertValidPondFootprint, assertValidRenderedPondComposite } from './pond-footprint-validation.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
@@ -435,6 +436,26 @@ const pond06RenderedValidation = assertValidRenderedPondComposite(pond06, oarbOu
 assert.equal(pond06RenderedValidation.geometry.materialKeys.water, 'pondWaterAnimated', 'POND 06 generated water mesh resolves the animated material.');
 assert.equal(pond06RenderedValidation.geometry.materialKeys.mudBed, 'pondBrightMud', 'POND 06 generated mud mesh resolves bright pond mud.');
 assert.ok(pond06RenderedValidation.geometry.maxTerrainY <= pond06.footprint.layerHeights.mudBedY - pond06.footprint.layerHeights.terrainSafetyGap, 'POND 06 generated mesh validation proves grass terrain remains below the visible mud composite.');
+const pond06DecorValidation = assertValidPondDecor(pond06, oarbOutdoorExpoDefinition, {
+  assetExists: (assetPath) => existsSync(resolve(repoRoot, assetPath.replace(/^\.\//, 'public/'))),
+});
+const pond06DecorRepeat = assertValidPondDecor(pond06, oarbOutdoorExpoDefinition, {
+  assetExists: (assetPath) => existsSync(resolve(repoRoot, assetPath.replace(/^\.\//, 'public/'))),
+});
+assert.deepEqual(pond06DecorValidation.decorations, pond06DecorRepeat.decorations, 'POND 06 decoration placement is deterministic for its pond seed.');
+assert.ok(pond06DecorValidation.decorations.boulders.length >= 2 && pond06DecorValidation.decorations.boulders.length <= 4, 'POND 06 generates 2-4 textured boulders.');
+assert.ok(pond06DecorValidation.decorations.vegetation.every((placement) => !`${placement.spriteId} ${placement.spritePath}`.toLowerCase().includes('redwood')), 'POND 06 vegetation excludes redwood sprites.');
+['01', '02', '03', '04'].forEach((suffix) => {
+  const key = `pondBoulderRock${suffix}`;
+  assert.equal(oarbOutdoorExpoDefinition.textures[key]?.path, `./assets/textures/rock/rock_wall_dark_cliff_${suffix}.png`, `POND 06 rock material ${key} uses the discovered rock texture.`);
+});
+const pond06DecorGroup = createPondDecorGroup(pond06, { terrainSampler: oarbOutdoorExpoSampler, textures: oarbOutdoorExpoDefinition.textures });
+const pond06BoulderMeshes = pond06DecorGroup.children.filter((child) => child.userData.kind === 'boulder');
+const pond06VegetationSprites = pond06DecorGroup.children.filter((child) => child.userData.kind === 'vegetation');
+assert.equal(pond06BoulderMeshes.length, pond06DecorValidation.decorations.boulders.length, 'POND 06 runtime creates one 3D mesh per generated boulder.');
+assert.ok(pond06BoulderMeshes.every((mesh) => mesh.isMesh && mesh.geometry?.type === 'DodecahedronGeometry'), 'POND 06 boulders use real low-poly dodecahedron geometry.');
+assert.ok(pond06VegetationSprites.every((sprite) => sprite.isSprite), 'POND 06 vegetation uses lightweight camera-facing foliage sprites.');
+assert.ok(pond06DecorGroup.children.every((child) => child.position.toArray().every(Number.isFinite)), 'POND 06 runtime decor positions are finite after terrain grounding.');
 
 assert.equal(pondBodies.find((pond) => pond.id === 'pond_expo_08_fishing_hole')?.userData?.futureFishable, true, 'POND 08 is marked as a future fishable pond without enabling fishing gameplay.');
 const pondTerrainStamps = oarbOutdoorExpoDefinition.terrain.heightStamps.filter((stamp) => stamp.tags?.includes('pond-expo'));

@@ -1,5 +1,6 @@
 import { createPondCompositeGeometry, geometryWorldXZ } from '../src/engine/outdoor-authoring/PondCompositeBuilder.js';
 import { createOutdoorTerrainSampler } from '../src/engine/outdoor-authoring/OutdoorTerrainBuilder.js';
+import { generatePondDecorPlacements, pointInPondDecorClearZone, pointInPondPolygon, POND_VEGETATION_SPRITES } from '../src/engine/outdoor-authoring/PondDecorBuilder.js';
 
 const DEFAULT_MIN_MUD_MARGIN_WORLD = 2.0;
 const DEFAULT_MIN_VISIBLE_MUD_BAND_WORLD = 2.0;
@@ -106,6 +107,77 @@ function sampleOutlineBand(innerOutline, outerOutline, minBandWidth, step, fail,
 
 function labelFor(pond) {
   return pond?.userData?.pondExpoId ?? pond?.id ?? 'pond';
+}
+
+function countInRange(count, range) {
+  return Array.isArray(range) && range.length >= 2 && Number.isFinite(range[0]) && Number.isFinite(range[1])
+    && count >= range[0] && count <= range[1];
+}
+
+export function validatePondDecor(pond, definition, options = {}) {
+  const errors = [];
+  const label = labelFor(pond);
+  const fail = (message) => errors.push(`${label} invalid: ${message}`);
+  const recipe = pond?.pondDecor;
+  if (!recipe) return { valid: true, errors, decorations: { boulders: [], vegetation: [] } };
+  const decorations = generatePondDecorPlacements(pond);
+  const assetExists = typeof options.assetExists === 'function' ? options.assetExists : null;
+  const waterOutline = pond?.footprint?.waterOutline ?? [];
+  const clearZones = recipe.clearZones ?? [];
+
+  const boulderRecipe = recipe.boulders;
+  if (boulderRecipe) {
+    if (!countInRange(decorations.boulders.length, boulderRecipe.countRange)) {
+      fail(`generated ${decorations.boulders.length} boulders outside requested range ${JSON.stringify(boulderRecipe.countRange)}.`);
+    }
+    (boulderRecipe.texturePool ?? []).forEach((materialKey) => {
+      const profile = definition?.textures?.[materialKey];
+      if (!profile) fail(`boulder material ${materialKey} does not resolve.`);
+      else if (typeof profile.path !== 'string') fail(`boulder material ${materialKey} has no texture path.`);
+      else if (assetExists && !assetExists(profile.path)) fail(`boulder texture path does not resolve: ${profile.path}.`);
+    });
+    decorations.boulders.forEach((boulder) => {
+      if (![...(boulder.position ?? []), ...(boulder.scale ?? []), ...(boulder.rotation ?? []), boulder.sinkRatio].every(Number.isFinite)) {
+        fail(`boulder ${boulder.id} has non-finite placement values.`);
+      }
+      if (!definition?.textures?.[boulder.materialKey]) fail(`boulder ${boulder.id} uses missing material ${boulder.materialKey}.`);
+      if (!(boulderRecipe.texturePool ?? []).includes(boulder.materialKey)) fail(`boulder ${boulder.id} uses material ${boulder.materialKey} outside its texture pool.`);
+      const insideWater = pointInPondPolygon(boulder.position, waterOutline);
+      if (insideWater && !(boulder.partiallySubmerged && boulder.placementZone === 'water-edge')) {
+        fail(`boulder ${boulder.id} placed inside water footprint.`);
+      }
+      if (pointInPondDecorClearZone(boulder.position, clearZones)) fail(`boulder ${boulder.id} overlaps a marker, label, or inspection-path clear zone.`);
+    });
+  }
+
+  const vegetationRecipe = recipe.vegetation;
+  if (vegetationRecipe) {
+    const bushes = decorations.vegetation.filter((placement) => placement.layer === 'bush');
+    const smallTrees = decorations.vegetation.filter((placement) => placement.layer === 'small-tree');
+    if (!countInRange(bushes.length, vegetationRecipe.bushesRange)) fail(`generated ${bushes.length} bushes outside requested range ${JSON.stringify(vegetationRecipe.bushesRange)}.`);
+    if (!countInRange(smallTrees.length, vegetationRecipe.smallTreesRange)) fail(`generated ${smallTrees.length} small trees outside requested range ${JSON.stringify(vegetationRecipe.smallTreesRange)}.`);
+    decorations.vegetation.forEach((placement) => {
+      const registryEntry = POND_VEGETATION_SPRITES.find((sprite) => sprite.id === placement.spriteId);
+      const assetLabel = `${placement.spriteId ?? ''} ${placement.spritePath ?? ''}`.toLowerCase();
+      if (![...(placement.position ?? []), placement.scale, placement.sinkRatio, placement.width].every(Number.isFinite)) fail(`vegetation ${placement.id} has non-finite placement values.`);
+      if (assetLabel.includes('redwood')) fail(`vegetation asset ${placement.spriteId} is forbidden for pond vegetation.`);
+      (vegetationRecipe.excludeTags ?? []).forEach((tag) => {
+        if (assetLabel.includes(String(tag).toLowerCase())) fail(`vegetation asset ${placement.spriteId} matches excluded tag ${tag}.`);
+      });
+      if (!registryEntry) fail(`vegetation asset ${placement.spriteId} does not resolve in the outdoor foliage registry.`);
+      else if (registryEntry.path !== placement.spritePath) fail(`vegetation asset ${placement.spriteId} resolves to an unexpected sprite path.`);
+      if (assetExists && placement.spritePath && !assetExists(placement.spritePath)) fail(`vegetation sprite path does not resolve: ${placement.spritePath}.`);
+      if (pointInPondPolygon(placement.position, waterOutline)) fail(`vegetation ${placement.id} placed inside water footprint.`);
+      if (pointInPondDecorClearZone(placement.position, clearZones)) fail(`vegetation ${placement.id} overlaps a marker, label, or inspection-path clear zone.`);
+    });
+  }
+  return { valid: errors.length === 0, errors, decorations };
+}
+
+export function assertValidPondDecor(pond, definition, options = {}) {
+  const result = validatePondDecor(pond, definition, options);
+  if (!result.valid) throw new Error(result.errors.join('\n'));
+  return result;
 }
 
 export function validatePondFootprint(pond, definition, options = {}) {

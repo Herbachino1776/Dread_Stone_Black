@@ -149,6 +149,25 @@ export const oarbOutdoorExpoDefinition = Object.freeze({
       bedMaterial: 'pondBrightMud',
       shoreMaterial: 'mudShoreDark',
       shoreWidth: 3.4,
+      pondDecor: {
+        seed: 'pond_expo_06',
+        boulders: {
+          countRange: [2, 4],
+          placement: 'shoreline-and-near-bank',
+          texturePool: ['pondBoulderRock01', 'pondBoulderRock02', 'pondBoulderRock03', 'pondBoulderRock04'],
+        },
+        vegetation: {
+          bushesRange: [4, 8],
+          smallTreesRange: [1, 3],
+          placement: 'outer-bank-and-nearby-grass',
+          excludeTags: ['redwood'],
+        },
+        clearZones: [
+          { id: 'pond06_numbered_marker', center: [-92, 34], radius: 4.5 },
+          { id: 'pond06_visible_label', center: [-90, 38], radius: 3.5 },
+          { id: 'pond06_inspection_path', bounds: { minX: -88, maxX: -80, minZ: 32, maxZ: 40 } },
+        ],
+      },
       footprint: { recipe: 'per-vertex-expansion-irregular-polygon', center: pond06Center, waterRadius: pond06Radius, waterOutline: pond06WaterOutline, mudBedOutline: pond06MudBedOutline, mudOffset: pond06MudOffset, mudOffsets: pond06MudOffsets, minMudMarginWorld: 0.8, minVisibleMudBandWorld: 0.8, shorelineSampleStepWorld: 0.2, outerShoreOutline: pond06WetShoreOutline, outerShoreOffset: pond06WetShoreOffset, outerShoreOffsets: pond06WetShoreOffsets, terrainSupportOutline: pond06TerrainSupportOutline, terrainSafetyMargin: pond06TerrainSafetyMargin, terrainMaxY: -0.26, layerHeights: { mudBedY: -0.215, wetShoreY: -0.21, waterY: -0.17, terrainSafetyGap: 0.04, waterAboveMud: 0.045 }, debug: { showWaterOutline: true, showMudBedOutline: true, showWetShoreOutline: true } },
       tags: ['pond-expo', 'POND 06', 'gully-repair-keeper-candidate'],
       userData: { pondExpoId: 'POND 06', name: 'Gully Repair / Bright Mud Bed Pond', keeperCandidate: true, recipe: 'single-source per-vertex expansion pond recipe: asymmetric water, narrow bright pond mud, subtle wet shore, and terrain support all derive from waterOutline with explicit grass < mud < water heights', terrainStampIds: ['pond_expo_06_composite_support', 'pond_expo_06_supported_water_floor'], visibleMarker: { id: 'pond_expo_marker_06', label: 'POND 06' }, noDownwardFacingTopNormals: true, usesSquareDecalFallback: false, waterMeshSource: 'waterOutline', brightMudMeshSource: 'mudBedOutline', wetShoreMeshSource: 'outerShoreOutline' }

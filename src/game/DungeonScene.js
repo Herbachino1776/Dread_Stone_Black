@@ -7,6 +7,8 @@ import { createPondCompositeGeometry, createPondOutlineDiscGeometry, createPondO
 import { createOutdoorSplineTrailMeshes } from '../engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { createOutdoorCurvedBlockers } from '../engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 import { createOutdoorPrimitiveMeshes } from '../engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
+import { createPondDecorGroups } from '../engine/outdoor-authoring/PondDecorBuilder.js';
+import { OUTDOOR_FOLIAGE_SPRITES, OUTDOOR_REDWOOD_FOLIAGE_SPRITES, OUTDOOR_SMALL_FOLIAGE_SPRITES } from '../engine/outdoor-authoring/OutdoorFoliageRegistry.js';
 import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
 import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
 import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
@@ -109,25 +111,9 @@ const TEXTURE_PATHS = {
   fieldGrass: './assets/textures/outdoor/field_dead_grass_01.png',
 };
 
-const FIELD_SMALL_FOLIAGE_SPRITES = Object.freeze([
-  { id: 'billboard_tree_windswept_field_01', path: './assets/sprites/foliage/billboard_tree_windswept_field_01.png', type: 'tree', width: 0.78 },
-  { id: 'billboard_bush_ritual_seedpod_01', path: './assets/sprites/foliage/billboard_bush_ritual_seedpod_01.png', type: 'bush', width: 0.98 },
-  { id: 'billboard_bush_dead_scrub_01', path: './assets/sprites/foliage/billboard_bush_dead_scrub_01.png', type: 'bush', width: 1.12 },
-  { id: 'billboard_bush_dark_bramble_01', path: './assets/sprites/foliage/billboard_bush_dark_bramble_01.png', type: 'bush', width: 1.08 },
-  { id: 'billboard_tree_pale_ashen_willow_01', path: './assets/sprites/foliage/billboard_tree_pale_ashen_willow_01.png', type: 'tree', width: 0.86 },
-  { id: 'billboard_tree_black_cypress_01', path: './assets/sprites/foliage/billboard_tree_black_cypress_01.png', type: 'tree', width: 0.72 },
-  { id: 'billboard_tree_gnarled_ritual_01', path: './assets/sprites/foliage/billboard_tree_gnarled_ritual_01.png', type: 'tree', width: 0.92 },
-  { id: 'billboard_tree_thorn_crowned_01', path: './assets/sprites/foliage/billboard_tree_thorn_crowned_01.png', type: 'tree', width: 0.88 },
-]);
-const FIELD_REDWOOD_SPRITES = Object.freeze([
-  { id: 'billboard_tree_redwood_tiered_sacred_01', path: './assets/sprites/foliage/billboard_tree_redwood_tiered_sacred_01.png', type: 'redwood', width: 0.66 },
-  { id: 'billboard_tree_redwood_umbrella_crown_01', path: './assets/sprites/foliage/billboard_tree_redwood_umbrella_crown_01.png', type: 'redwood', width: 0.74 },
-  { id: 'billboard_tree_redwood_cathedral_01', path: './assets/sprites/foliage/billboard_tree_redwood_cathedral_01.png', type: 'redwood', width: 0.7 },
-  { id: 'billboard_tree_redwood_moss_draped_01', path: './assets/sprites/foliage/billboard_tree_redwood_moss_draped_01.png', type: 'redwood', width: 0.76 },
-  { id: 'billboard_tree_redwood_ancient_carved_01', path: './assets/sprites/foliage/billboard_tree_redwood_ancient_carved_01.png', type: 'redwood', width: 0.68 },
-  { id: 'billboard_tree_redwood_runic_giant_01', path: './assets/sprites/foliage/billboard_tree_redwood_runic_giant_01.png', type: 'redwood', width: 0.72 },
-]);
-const FIELD_FOLIAGE_SPRITES = Object.freeze([...FIELD_SMALL_FOLIAGE_SPRITES, ...FIELD_REDWOOD_SPRITES]);
+const FIELD_SMALL_FOLIAGE_SPRITES = OUTDOOR_SMALL_FOLIAGE_SPRITES;
+const FIELD_REDWOOD_SPRITES = OUTDOOR_REDWOOD_FOLIAGE_SPRITES;
+const FIELD_FOLIAGE_SPRITES = OUTDOOR_FOLIAGE_SPRITES;
 const FIELD_FOREST_DENSITY = 0.95;
 const FIELD_TREE_WALL_ENABLED = true;
 const FIELD_TREE_WALL_REDWOOD_COUNT = 120;
@@ -1372,6 +1358,23 @@ export class DungeonScene {
     }).forEach((trailMesh) => this.scene.add(trailMesh));
 
     this.addAuthoredWaterBodies(outdoorDefinition.waterBodies, textureProfiles);
+
+    createPondDecorGroups(outdoorDefinition.waterBodies, {
+      terrainSampler: this.outdoorTerrainRuntime,
+      textures: textureProfiles,
+      makeMaterial: (profile, metadata) => {
+        const material = this.makeTexturedMaterial(profile);
+        material.userData = {
+          ...(material.userData ?? {}),
+          oarbPondDecorMaterial: true,
+          materialKey: metadata.materialKey,
+          materialFallbackUsed: metadata.usedFallback,
+          sourceProfile: metadata.profile,
+        };
+        return material;
+      },
+      loadFoliageTexture: (path) => this.loadFoliageTexture(path),
+    }).forEach((decorGroup) => this.scene.add(decorGroup));
 
     createOutdoorPrimitiveMeshes(outdoorDefinition.outdoorPrimitives, {
       terrainSampler: this.outdoorTerrainRuntime,

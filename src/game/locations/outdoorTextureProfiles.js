@@ -7,4 +7,8 @@ export const outdoorTextureProfiles = Object.freeze({
   mudCrackedDry: { path: './assets/textures/outdoor/mud_cracked_dry_02.png', repeat: [20, 5], color: 0x705a3e, roughness: 1.0, metalness: 0.0, emissive: 0x1d140b, emissiveIntensity: 0.04, worldTileLength: 9, worldTileWidth: 3 },
   mudChurnedWet: { path: './assets/textures/outdoor/mud_churned_wet_03.png', repeat: [16, 4], color: 0x5b4632, roughness: 1.0, metalness: 0.0, emissive: 0x140b06, emissiveIntensity: 0.05, worldTileLength: 7, worldTileWidth: 3 },
   mudPebblyEarth: { path: './assets/textures/outdoor/mud_pebbly_earth_04.png', repeat: [18, 5], color: 0x66503a, roughness: 1.0, metalness: 0.0, emissive: 0x181008, emissiveIntensity: 0.04, worldTileLength: 8, worldTileWidth: 3.5 },
+  pondBoulderRock01: { path: './assets/textures/rock/rock_wall_dark_cliff_01.png', repeat: [1.2, 1.2], color: 0x77736b, roughness: 0.99, metalness: 0.0, emissive: 0x0d0c0b, emissiveIntensity: 0.04 },
+  pondBoulderRock02: { path: './assets/textures/rock/rock_wall_dark_cliff_02.png', repeat: [1.2, 1.2], color: 0x706c65, roughness: 0.99, metalness: 0.0, emissive: 0x0c0b0a, emissiveIntensity: 0.04 },
+  pondBoulderRock03: { path: './assets/textures/rock/rock_wall_dark_cliff_03.png', repeat: [1.2, 1.2], color: 0x7d7970, roughness: 0.99, metalness: 0.0, emissive: 0x0e0d0c, emissiveIntensity: 0.04 },
+  pondBoulderRock04: { path: './assets/textures/rock/rock_wall_dark_cliff_04.png', repeat: [1.2, 1.2], color: 0x68655f, roughness: 0.99, metalness: 0.0, emissive: 0x0b0a09, emissiveIntensity: 0.04 },
 });
