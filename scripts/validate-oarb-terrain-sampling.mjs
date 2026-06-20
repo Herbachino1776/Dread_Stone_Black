@@ -360,7 +360,13 @@ assert.equal(pond06.material, 'pondWaterAnimated', 'POND 06 uses the animated po
 const pond06AnimatedProfile = oarbOutdoorExpoDefinition.textures[pond06.material];
 assert.ok(pond06AnimatedProfile, 'POND 06 animated water material key resolves.');
 assert.equal(pond06AnimatedProfile.animatedFrames?.length, 6, 'POND 06 animated water frame count is exactly 6.');
+assert.ok(['loop', 'pingPong'].includes(pond06AnimatedProfile.playbackMode ?? 'loop'), 'POND 06 animated water playback mode is valid.');
+assert.equal(pond06AnimatedProfile.playbackMode, 'pingPong', 'POND 06 animated water uses ping-pong playback.');
 assert.ok(Number.isFinite(pond06AnimatedProfile.frameDurationMs) && pond06AnimatedProfile.frameDurationMs > 0, 'POND 06 animated water frameDurationMs is finite and positive.');
+assert.equal(pond06AnimatedProfile.frameDurationMs, 220, 'POND 06 animated water frameDurationMs is slowed to 220ms.');
+const pond06PingPongSequence = pond06AnimatedProfile.animatedFrames.concat(pond06AnimatedProfile.animatedFrames.slice(1, -1).reverse());
+assert.ok(pond06PingPongSequence.length > 0, 'POND 06 animated water ping-pong sequence is non-empty.');
+assert.deepEqual(pond06PingPongSequence.map((framePath) => pond06AnimatedProfile.animatedFrames.indexOf(framePath) + 1), [1, 2, 3, 4, 5, 6, 5, 4, 3, 2], 'POND 06 animated water ping-pong sequence avoids jumping directly from frame 6 to frame 1.');
 assert.deepEqual(pond06AnimatedProfile.repeat, [3.2, 2.6], 'POND 06 animated water uses one consistent repeat for every frame.');
 pond06AnimatedProfile.animatedFrames.forEach((framePath, index) => {
   assert.equal(framePath, `./assets/textures/water/pond/pond_water_anim_0${index + 1}.png`, `POND 06 animated water frame ${index + 1} resolves to the expected pond path.`);
