@@ -476,10 +476,10 @@ export const reliquaryFieldDefinition = Object.freeze({
       id: 'field_enter_kerovac',
       fromLocation: 'reliquary-field',
       toLocation: 'kerovac',
-      triggerRect: { minX: 57.8, maxX: 62.2, minZ: 142, maxZ: 150 },
-      position: { x: 60, y: 1, z: 146 },
+      triggerRect: { minX: 53, maxX: 67, minZ: 139, maxZ: 150 },
+      position: { x: 60, y: 1, z: 142.5 },
       destinationSpawnId: 'kerovac_player_start',
-      promptText: 'Enter Kerovac',
+      promptText: 'X: Enter Kerovac',
       tags: ['temporary', 'kerovac', 'bright-interior-city', 'sacred-sun-city'],
       userData: {
         temporary: true,

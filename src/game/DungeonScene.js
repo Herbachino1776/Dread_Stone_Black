@@ -206,7 +206,9 @@ const SUMERIAN_CITY_BLOCK_V0_TEST_ENTRANCE_TARGET = new THREE.Vector3(122, 1, 14
 const SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET = new THREE.Vector3(96, 1, 149);
 const SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET = new THREE.Vector3(110, 1, 128);
 const BALTHAZAN_ENTRANCE_TARGET = new THREE.Vector3(72, 1, 126);
-const KEROVAC_ENTRANCE_TARGET = new THREE.Vector3(60, 1, 146);
+const KEROVAC_GATE_POSITION = Object.freeze({ x: 60, y: 1, z: 146 });
+const KEROVAC_ENTRANCE_TARGET = new THREE.Vector3(60, 1, 142.5);
+const KEROVAC_INTERACT_RANGE = 7.0;
 const OARB_PROVING_GROUNDS_ENTRANCE_TARGET = new THREE.Vector3(70, 1, 164);
 const FIELD_FOLIAGE_CLEAR_ZONES = Object.freeze([
   { x: FIELD_PLAYER_START.x, z: FIELD_PLAYER_START.z, radius: 22 },
@@ -2429,12 +2431,15 @@ export class DungeonScene {
       id: 'KEROVAC_INT_ENTER',
       label: 'Kerovac',
       target: KEROVAC_ENTRANCE_TARGET.clone(),
-      range: 5.0,
-      hint: 'Enter Kerovac',
+      range: KEROVAC_INTERACT_RANGE,
+      hint: 'X: Enter Kerovac',
       message: 'The sun-sealed city of Kerovac opens beneath the field.',
       functional: true,
       area: 'kerovac',
       type: 'areaEntrance',
+      destinationSpawnId: 'kerovac_player_start',
+      debugGateId: 'kerovac',
+      gatePosition: new THREE.Vector3(KEROVAC_GATE_POSITION.x, KEROVAC_GATE_POSITION.y, KEROVAC_GATE_POSITION.z),
     });
   }
 
