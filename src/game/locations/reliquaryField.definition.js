@@ -1,3 +1,5 @@
+import { outdoorTextureProfiles } from './outdoorTextureProfiles.js';
+
 function exteriorBlocker(id, minX, maxX, minZ, maxZ, {
   height = 3,
   type = 'exterior',
@@ -79,9 +81,10 @@ export const reliquaryFieldDefinition = Object.freeze({
   fog: { color: 0x8a8170, near: 42, far: 335 },
   lighting: { background: 0x4d5660 },
   textures: {
-    fieldGrass: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [50, 50] },
-    forestGround: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [50, 50], color: 0xb0aa91, roughness: 0.98, metalness: 0.0, emissive: 0x20232a, emissiveIntensity: 0.08 },
-    mudTrail: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [18, 3], color: 0x5f4b37, roughness: 1.0, metalness: 0.0, emissive: 0x140e09, emissiveIntensity: 0.04, worldTileLength: 8, worldTileWidth: 3 },
+    ...outdoorTextureProfiles,
+    fieldGrass: { ...outdoorTextureProfiles.grassDryStraw, repeat: [50, 50] },
+    forestGround: { ...outdoorTextureProfiles.grassPatchyDirt, repeat: [50, 50], color: 0xb0aa91, emissive: 0x20232a, emissiveIntensity: 0.08 },
+    mudTrail: { ...outdoorTextureProfiles.mudCrackedDry, repeat: [18, 3], color: 0x5f4b37, emissive: 0x140e09, emissiveIntensity: 0.04, worldTileLength: 8, worldTileWidth: 3 },
     rockWall: { path: './assets/textures/wall_black_stone_01.png', repeat: [2.5, 1.5], color: 0x514d49, roughness: 0.98, metalness: 0.0, emissive: 0x12100f, emissiveIntensity: 0.08 },
     stoneOutcrop: { path: './assets/textures/wall_black_stone_01.png', repeat: [1.4, 1.2], color: 0x68645c, roughness: 0.99, metalness: 0.0, emissive: 0x141210, emissiveIntensity: 0.06 },
     darkRoot: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [2.0, 1.0], color: 0x2a160f, roughness: 1.0, metalness: 0.0, emissive: 0x090403, emissiveIntensity: 0.05 },
