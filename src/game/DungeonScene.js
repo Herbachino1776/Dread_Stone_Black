@@ -3,6 +3,7 @@ import { compileDungeonLocation } from '../engine/dungeon-authoring/DungeonCompi
 import { DungeonDebugRenderer } from '../engine/dungeon-authoring/DungeonDebugRenderer.js';
 import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRuntimeRegistry.js';
 import { createOutdoorTerrainMesh } from '../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
+import { createPondCompositeGeometry, createPondOutlineDiscGeometry, createPondOutlineRingGeometry } from '../engine/outdoor-authoring/PondCompositeBuilder.js';
 import { createOutdoorSplineTrailMeshes } from '../engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { createOutdoorCurvedBlockers } from '../engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 import { createOutdoorPrimitiveMeshes } from '../engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
@@ -60,48 +61,6 @@ function createOrganicPondRingGeometry(segments = 80, wobble = 0.08, innerScaleX
       const d = c + 1;
       indices.push(a, b, c, c, b, d);
     }
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function createPondOutlineDiscGeometry(outline = [], center = [0, 0]) {
-  const vertices = [0, 0, 0];
-  const uvs = [0.5, 0.5];
-  const indices = [];
-  outline.forEach(([x, z], index) => {
-    vertices.push(x - center[0], 0, z - center[1]);
-    uvs.push(0.5 + (x - center[0]) * 0.04, 0.5 + (z - center[1]) * 0.04);
-    indices.push(0, index + 1, ((index + 1) % outline.length) + 1);
-  });
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function createPondOutlineRingGeometry(innerOutline = [], outerOutline = [], center = [0, 0]) {
-  const vertices = [];
-  const uvs = [];
-  const indices = [];
-  const count = Math.min(innerOutline.length, outerOutline.length);
-  for (let index = 0; index < count; index += 1) {
-    const inner = innerOutline[index];
-    const outer = outerOutline[index];
-    vertices.push(inner[0] - center[0], 0, inner[1] - center[1], outer[0] - center[0], 0, outer[1] - center[1]);
-    uvs.push(0, 0, 1, 1);
-    const next = (index + 1) % count;
-    const a = index * 2;
-    const b = a + 1;
-    const c = next * 2;
-    const d = c + 1;
-    indices.push(a, b, c, c, b, d);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -1488,6 +1447,8 @@ export class DungeonScene {
       const waterOutline = Array.isArray(footprint.waterOutline) ? footprint.waterOutline : null;
       const mudBedOutline = Array.isArray(footprint.mudBedOutline) ? footprint.mudBedOutline : null;
       const outerShoreOutline = Array.isArray(footprint.outerShoreOutline) ? footprint.outerShoreOutline : null;
+      const usesSharedComposite = footprint.recipe === 'radial-expansion-irregular-polygon' && waterOutline?.length >= 3 && mudBedOutline?.length >= 3;
+      const composite = usesSharedComposite ? createPondCompositeGeometry(body) : null;
       const [bedRx, bedRz] = Array.isArray(body.bedRadius) ? body.bedRadius : [rx + shoreWidth, rz + shoreWidth];
       const [outerShoreRx, outerShoreRz] = Array.isArray(footprint.outerShoreRadius) ? footprint.outerShoreRadius : [rx + shoreWidth, rz + shoreWidth];
       const wobble = Number.isFinite(footprint.wobble) ? footprint.wobble : 0.075;
@@ -1495,15 +1456,16 @@ export class DungeonScene {
         const bedMaterial = this.makeTexturedMaterial(textureProfiles[body.bedMaterial] ?? textureProfiles.mudChurnedWet ?? { color: 0xb58b5d, roughness: 1 });
         bedMaterial.name = `OARB-water-bed-material-${body.bedMaterial}`;
         bedMaterial.side = THREE.DoubleSide;
-        const bedGeometry = mudBedOutline?.length >= 3
+        const bedGeometry = composite?.mudBed.geometry ?? (mudBedOutline?.length >= 3
           ? createPondOutlineDiscGeometry(mudBedOutline, [cx, cz])
-          : createOrganicPondDiscGeometry(88, wobble);
+          : createOrganicPondDiscGeometry(88, wobble));
         const bed = new THREE.Mesh(bedGeometry, bedMaterial);
         bed.name = `OARB-water-bright-mud-bed-${body.id}`;
-        bed.position.set(cx, y + 0.006, cz);
+        bed.position.set(...(composite?.mudBed.position ?? [cx, y + 0.006, cz]));
         if (!mudBedOutline?.length) bed.scale.set(bedRx, 1, bedRz);
         bed.receiveShadow = true;
-        bed.userData = { id: body.id, kind: 'pondMudBed', materialKey: body.bedMaterial, footprintRecipe: footprint.recipe, collision: 'visual-only terrain-hugging bright mud bed' };
+        bed.renderOrder = 11;
+        bed.userData = { id: body.id, kind: 'pondMudBed', materialKey: body.bedMaterial, footprintRecipe: footprint.recipe, geometrySource: composite?.mudBed.source, coordinateBasis: composite?.coordinateBasis, collision: 'visual-only terrain-hugging bright mud bed' };
         this.scene.add(bed);
       }
       const shoreMaterial = this.makeTexturedMaterial(textureProfiles[body.shoreMaterial] ?? textureProfiles.mudWetDark ?? { color: 0x60462f, roughness: 1 });
@@ -1511,15 +1473,16 @@ export class DungeonScene {
       shoreMaterial.side = THREE.DoubleSide;
       const innerScaleX = Math.min(0.98, Math.max(0.05, rx / outerShoreRx));
       const innerScaleZ = Math.min(0.98, Math.max(0.05, rz / outerShoreRz));
-      const shoreGeometry = mudBedOutline?.length >= 3 && outerShoreOutline?.length >= 3
+      const shoreGeometry = composite?.wetShore?.geometry ?? (mudBedOutline?.length >= 3 && outerShoreOutline?.length >= 3
         ? createPondOutlineRingGeometry(mudBedOutline, outerShoreOutline, [cx, cz])
-        : createOrganicPondRingGeometry(88, wobble, innerScaleX, innerScaleZ);
+        : createOrganicPondRingGeometry(88, wobble, innerScaleX, innerScaleZ));
       const shore = new THREE.Mesh(shoreGeometry, shoreMaterial);
       shore.name = `OARB-water-shore-${body.id}`;
-      shore.position.set(cx, y + 0.018, cz);
+      shore.position.set(...(composite?.wetShore?.position ?? [cx, y + 0.018, cz]));
       if (!(mudBedOutline?.length >= 3 && outerShoreOutline?.length >= 3)) shore.scale.set(outerShoreRx, 1, outerShoreRz);
       shore.receiveShadow = true;
-      shore.userData = { id: body.id, kind: 'pondShore', materialKey: body.shoreMaterial, collision: 'visual-only muddy shoreline' };
+      shore.renderOrder = 10;
+      shore.userData = { id: body.id, kind: 'pondShore', materialKey: body.shoreMaterial, geometrySource: composite?.wetShore?.source, coordinateBasis: composite?.coordinateBasis, collision: 'visual-only muddy shoreline' };
       this.scene.add(shore);
 
       const profile = textureProfiles[body.material] ?? { color: 0x2d7f92, roughness: 0.5, metalness: 0, transparent: true, opacity: 0.78, emissive: 0x0b4858, emissiveIntensity: 0.34 };
@@ -1530,16 +1493,17 @@ export class DungeonScene {
       waterMat.name = `OARB-water-material-${body.material ?? 'pondWater'}`;
       waterMat.side = THREE.DoubleSide;
       if (Array.isArray(profile.animatedFrames)) this.registerAnimatedTextureFlipbook(waterMat, profile);
-      const waterGeometry = waterOutline?.length >= 3
+      const waterGeometry = composite?.water.geometry ?? (waterOutline?.length >= 3
         ? createPondOutlineDiscGeometry(waterOutline, [cx, cz])
-        : createOrganicPondDiscGeometry(88, 0.075);
+        : createOrganicPondDiscGeometry(88, 0.075));
       const water = new THREE.Mesh(waterGeometry, waterMat);
       water.name = `OARB-water-body-${body.id}`;
-      water.position.set(cx, y + 0.035, cz);
+      water.position.set(...(composite?.water.position ?? [cx, y + 0.035, cz]));
       if (!waterOutline?.length) water.scale.set(rx, 1, rz);
-      water.userData = { id: body.id, kind: body.kind, tags: body.tags ?? [], fishable: Boolean(body.fishable), footprintRecipe: footprint.recipe, collision: 'visual-only pond water; shore remains walkable' };
+      water.renderOrder = 12;
+      water.userData = { id: body.id, kind: body.kind, tags: body.tags ?? [], fishable: Boolean(body.fishable), footprintRecipe: footprint.recipe, geometrySource: composite?.water.source, coordinateBasis: composite?.coordinateBasis, materialKey: body.material, collision: 'visual-only pond water; shore remains walkable' };
       this.scene.add(water);
-      this.addPondExpoLabel(body, cx, y, cz);
+      this.addPondExpoLabel(body, cx, composite?.water.position[1] ?? y, cz);
       if (body.fishable) {
         const fishableRadius = Number.isFinite(body.fishableRadius) ? body.fishableRadius : Math.max(rx, rz) + 4;
         this.fieldFishingZones.push({
