@@ -5,6 +5,7 @@ import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRunti
 import { createOutdoorTerrainMesh } from '../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 import { createOutdoorSplineTrailMeshes } from '../engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { createOutdoorCurvedBlockers } from '../engine/outdoor-authoring/OutdoorBlockerBuilder.js';
+import { createOutdoorPrimitiveMeshes } from '../engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
 import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
 import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
 import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
@@ -49,7 +50,6 @@ const INDOOR_TORCH_COLOR = 0xffa85a;
 const INDOOR_TORCH_INTENSITY = 2.65;
 const INDOOR_TORCH_DISTANCE = 8.4;
 const INDOOR_TORCH_DECAY = 1.28;
-
 
 const TEXTURE_PATHS = {
   wall: './assets/textures/wall_black_stone_01.png',
@@ -186,7 +186,6 @@ const TEXTURE_REPEATS = {
   gateBars: [0.45, 2.5],
   gateBeams: [2.75, 0.45],
 };
-
 
 const BABY_LABYRINTH_WALL_SEGMENTS = [
   // R01 entry corridor with an open field-return threshold and open north split-hall connection.
@@ -394,7 +393,6 @@ export class DungeonScene {
         });
     }
   }
-
 
   getIndoorPlayerSpawn() {
     const definition = getLocationDefinition(this.area);
@@ -1027,7 +1025,6 @@ export class DungeonScene {
     this.scene.add(tombMouthFill);
   }
 
-
   addReliquaryFieldSkyDome() {
     const skyUniforms = {
       upperColor: { value: new THREE.Color(0x252b33) },
@@ -1236,6 +1233,22 @@ export class DungeonScene {
         return material;
       },
     }).forEach((trailMesh) => this.scene.add(trailMesh));
+
+    createOutdoorPrimitiveMeshes(outdoorDefinition.outdoorPrimitives, {
+      terrainSampler: this.outdoorTerrainRuntime,
+      textures: textureProfiles,
+      makeMaterial: (profile, metadata) => {
+        const material = this.makeTexturedMaterial(profile);
+        material.userData = {
+          ...(material.userData ?? {}),
+          oarbOutdoorPrimitiveMaterial: true,
+          materialKey: metadata.materialKey,
+          materialFallbackUsed: metadata.usedFallback,
+          sourceProfile: metadata.profile,
+        };
+        return material;
+      },
+    }).forEach((primitiveGroup) => this.scene.add(primitiveGroup));
   }
 
   addReliquaryFieldRiverBoundary() {
@@ -1404,7 +1417,6 @@ export class DungeonScene {
       });
       return true;
     };
-
 
     if (FIELD_TREE_WALL_ENABLED) {
       for (let i = 0; i < FIELD_TREE_WALL_REDWOOD_COUNT; i += 1) {
@@ -1651,7 +1663,6 @@ export class DungeonScene {
     });
     return group;
   }
-
 
   createRedwoodHarvestable(placement, mesh) {
     const isHero = Boolean(placement.hero);
@@ -2003,7 +2014,6 @@ export class DungeonScene {
     });
   }
 
-
   addFieldKeeperHouseExterior() {
     const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.2, 1.6], color: 0x6f695f, roughness: 0.97, metalness: 0.0, emissive: 0x080605, emissiveIntensity: 0.08 });
     const darkStoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.8, 1.3], color: 0x4e4942, roughness: 0.98, metalness: 0.0, emissive: 0x050403, emissiveIntensity: 0.09 });
@@ -2108,7 +2118,6 @@ export class DungeonScene {
       type: 'areaEntrance',
     });
   }
-
 
   addSumerianSunPalaceDistrictV1TestEntrance() {
     const stoneMat = this.makeTexturedMaterial({ path: './assets/textures/pack1/wall_sandstone_ritual_01.png', repeat: [1.8, 1.3], color: 0xc9a763, roughness: 0.98, metalness: 0.0, emissive: 0x2b1a08, emissiveIntensity: 0.18 });
@@ -2268,7 +2277,6 @@ export class DungeonScene {
     });
   }
 
-
   addSunkenCentralTomb() {
     const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [2.6, 2.0], color: 0x8d897f, roughness: 0.96, metalness: 0.0 });
     const floorMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.floor, repeat: [4.0, 3.0], color: 0x8f887b, roughness: 0.95, metalness: 0.0 });
@@ -2340,8 +2348,6 @@ export class DungeonScene {
       child.receiveShadow = true;
     });
   }
-
-
 
   addBlackGrassTempleExterior() {
     const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [3.4, 2.1], color: 0x34312d, roughness: 0.98, metalness: 0.0, emissive: 0x050403, emissiveIntensity: 0.08 });
@@ -2476,8 +2482,6 @@ export class DungeonScene {
     this.addCompiledLocationEnemies(runtime);
     if (runtime.locationId === 'sumerian-sun-palace-district-v1') this.addSumerianSunPalaceTorchChest();
   }
-
-
 
   addSumerianSunPalaceTorchChest() {
     const id = 'sumerian_sun_palace_spawn_torch_chest';
@@ -2851,7 +2855,6 @@ export class DungeonScene {
     return mesh;
   }
 
-
   addBabyLabyrinthInterior() {
     const wallMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: TEXTURE_REPEATS.longWall, color: 0xffffff, roughness: 0.94, metalness: 0.01, emissive: INDOOR_STONE_EMISSIVE, emissiveIntensity: INDOOR_STONE_EMISSIVE_INTENSITY });
 
@@ -3195,11 +3198,9 @@ export class DungeonScene {
     return rig;
   }
 
-
   updateTorchFlicker(deltaSeconds) {
     this.torchFlickerController.update(deltaSeconds);
   }
-
 
   updateRamManNpcPatrol(deltaSeconds) {
     this.ramManNpcActor?.update(deltaSeconds, { behaviorState: this.ramManNpcAnimation?.state ?? 'idle' });
@@ -3327,8 +3328,6 @@ export class DungeonScene {
         );
       });
   }
-
-
 
   addSheepDemonEnemy() {
     if (this.area !== 'dungeon') return;

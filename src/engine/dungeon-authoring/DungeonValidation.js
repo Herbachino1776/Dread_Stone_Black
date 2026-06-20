@@ -2,6 +2,7 @@ import { asArray, hasUsableId } from './DungeonDefinitionTypes.js';
 import { OARB_TERRAIN_FALLBACK_MATERIAL_KEY, OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS, OARB_TERRAIN_MAX_TOTAL_CELLS } from '../outdoor-authoring/OutdoorTerrainBuilder.js';
 import { OARB_SPLINE_TRAIL_FALLBACK_MATERIAL_KEY, OARB_SPLINE_TRAIL_MAX_WIDTH } from '../outdoor-authoring/OutdoorSplineBuilder.js';
 import { OARB_CURVED_BLOCKER_MAX_COORDINATE, OARB_CURVED_BLOCKER_MAX_RADIUS, OARB_CURVED_BLOCKER_MAX_THICKNESS } from '../outdoor-authoring/OutdoorBlockerBuilder.js';
+import { OARB_OUTDOOR_PRIMITIVE_FALLBACK_MATERIAL_PROFILES, OARB_OUTDOOR_PRIMITIVE_KINDS, OARB_OUTDOOR_PRIMITIVE_MAX_COORDINATE, OARB_OUTDOOR_PRIMITIVE_MAX_HEIGHT, OARB_OUTDOOR_PRIMITIVE_MAX_POINTS, OARB_OUTDOOR_PRIMITIVE_MAX_RADIUS, OARB_OUTDOOR_PRIMITIVE_MAX_THICKNESS } from '../outdoor-authoring/OutdoorPrimitiveBuilder.js';
 
 const loggedValidationKeys = new Set();
 const RUNTIME_ENEMY_SPECIES = new Set(['sheep_demon', 'neck_man']);
@@ -15,14 +16,10 @@ const OUTDOOR_TERRAIN_MAX_SIZE_PER_AXIS = 2000;
 const TERRAIN_STAMP_KINDS = new Set(['hill', 'hollow', 'ridge', 'ravine', 'flatten']);
 const OUTDOOR_SPLINE_FIELDS = new Set(['id', 'points', 'width', 'material', 'flatten', 'metadata', 'tags', 'userData']);
 const CURVED_BLOCKER_FIELDS = new Set(['id', 'kind', 'points', 'thickness', 'center', 'radius', 'from', 'to', 'visibleStructureId', 'metadata', 'tags', 'userData', 'intentionallyInvisible']);
+const OUTDOOR_PRIMITIVE_FIELDS = new Set(['id', 'kind', 'points', 'height', 'thickness', 'from', 'to', 'center', 'radius', 'material', 'metadata', 'tags', 'userData']);
 const CURVED_BLOCKER_KINDS = new Set(['capsule', 'spline', 'circle', 'hazard', 'cliff']);
 const DECORATION_ZONE_KINDS = new Set(['treeClusterZone', 'shrubPatchZone', 'grassPatchZone', 'mistVolume', 'fallenBranchScatter', 'standingStoneScatter']);
-const OUTDOOR_PRIMITIVE_KINDS = new Set([
-  'terrainPatch', 'heightStamp', 'forestClearing', 'sunkenGrove', 'raisedRidge', 'ravineCut', 'mudTrail', 'riverBed', 'creekBank',
-  'cliffWall', 'mountainSkirt', 'stoneOutcrop', 'boulderCluster', 'fallenTreeBarrier', 'rootWall', 'denseThicketBlocker',
-  'fallenTreeBridge', 'rootArch', 'steppingStones', 'logCrossing', 'slopeTrail', 'caveMouth', 'ledgePath',
-  'forestBowl', 'ambushClearing', 'ritualGrove', 'ruinedFoundation', 'hiddenAlcove', 'spawnHollow', 'fogPocket',
-]);
+const OUTDOOR_PRIMITIVE_KINDS = new Set(OARB_OUTDOOR_PRIMITIVE_KINDS);
 
 function isFinitePositive(value) {
   return Number.isFinite(value) && value > 0;
@@ -45,6 +42,8 @@ function validateOutdoorMaterial(definition, material, label, id, errors, warnin
       addIssue(warnings, 'warning', `${label} references fallback material profile ${material}; runtime will use the safe built-in outdoor grass fallback`, id);
     } else if (material === OARB_SPLINE_TRAIL_FALLBACK_MATERIAL_KEY) {
       addIssue(warnings, 'warning', `${label} references fallback spline trail material profile ${material}; runtime will use the built-in outdoor trail fallback when needed`, id);
+    } else if (OARB_OUTDOOR_PRIMITIVE_FALLBACK_MATERIAL_PROFILES[material]) {
+      addIssue(warnings, 'warning', `${label} references fallback outdoor primitive material profile ${material}; runtime will use the built-in visible boundary fallback when needed`, id);
     } else {
       addIssue(warnings, 'warning', `${label} references material profile ${material} that is not defined in textures yet and will use the safe OARB fallback if rendered`, id);
     }
@@ -127,15 +126,40 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
     Object.keys(blocker).filter((key) => !CURVED_BLOCKER_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `curvedBlocker ${id} uses unsupported field ${key}; rendering, damage, or advanced gameplay behavior is not implemented yet`, id));
   });
 
+  if (definition.outdoorPrimitives !== undefined && !Array.isArray(definition.outdoorPrimitives)) addIssue(errors, 'error', 'outdoorPrimitives must be an array when present', 'outdoorPrimitives');
+  const outdoorPrimitiveIds = new Set(asArray(definition.outdoorPrimitives).map((primitive) => primitive?.id).filter((id) => typeof id === 'string' && id.trim()));
+  const visibleStructureIds = new Set(asArray(definition.curvedBlockers).map((blocker) => blocker?.visibleStructureId).filter((id) => typeof id === 'string' && id.trim()));
+  visibleStructureIds.forEach((visibleStructureId) => {
+    if (!outdoorPrimitiveIds.has(visibleStructureId)) addIssue(warnings, 'warning', `curvedBlockers.visibleStructureId ${visibleStructureId} has no matching outdoorPrimitives.id yet`, visibleStructureId);
+  });
+
   asArray(definition.outdoorPrimitives).forEach((primitive, index) => {
     const id = primitive.id ?? `outdoorPrimitives[${index}]`;
     if (!hasUsableId(primitive)) addIssue(errors, 'error', `outdoorPrimitives[${index}] is missing a stable id`, id);
     if (!OUTDOOR_PRIMITIVE_KINDS.has(primitive.kind)) addIssue(errors, 'error', `outdoorPrimitive ${id} uses unsupported kind ${primitive.kind}`, id);
-    if (primitive.position) {
-      const position = positionOf(primitive.position);
-      if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(position.z)) addIssue(errors, 'error', `outdoorPrimitive ${id} has invalid position`, id);
+    if (['cliffWall', 'rootWall'].includes(primitive.kind)) {
+      if (!pointArrayIsFinite(primitive.points, 2)) addIssue(errors, 'error', `outdoorPrimitive ${id} needs at least two finite [x, z] points`, id);
+      if (asArray(primitive.points).length > OARB_OUTDOOR_PRIMITIVE_MAX_POINTS) addIssue(errors, 'error', `outdoorPrimitive ${id} points must stay <= ${OARB_OUTDOOR_PRIMITIVE_MAX_POINTS} for mobile-safe generation`, id);
+      if (!isFinitePositive(primitive.height)) addIssue(errors, 'error', `outdoorPrimitive ${id} height must be > 0`, id);
+      if (!isFinitePositive(primitive.thickness)) addIssue(errors, 'error', `outdoorPrimitive ${id} thickness must be > 0`, id);
     }
+    if (primitive.kind === 'fallenTreeBarrier') {
+      if (!xzPoint(primitive.from) || !xzPoint(primitive.to)) addIssue(errors, 'error', `outdoorPrimitive ${id} needs finite from/to points`, id);
+      if (!isFinitePositive(primitive.radius)) addIssue(errors, 'error', `outdoorPrimitive ${id} radius must be > 0`, id);
+    }
+    if (primitive.kind === 'boulderCluster') {
+      if (!xzPoint(primitive.center)) addIssue(errors, 'error', `outdoorPrimitive ${id} needs a finite center`, id);
+      if (!isFinitePositive(primitive.radius)) addIssue(errors, 'error', `outdoorPrimitive ${id} radius must be > 0`, id);
+    }
+    if (Number.isFinite(primitive.height) && primitive.height > OARB_OUTDOOR_PRIMITIVE_MAX_HEIGHT) addIssue(errors, 'error', `outdoorPrimitive ${id} height must be <= ${OARB_OUTDOOR_PRIMITIVE_MAX_HEIGHT}`, id);
+    if (Number.isFinite(primitive.thickness) && primitive.thickness > OARB_OUTDOOR_PRIMITIVE_MAX_THICKNESS) addIssue(errors, 'error', `outdoorPrimitive ${id} thickness must be <= ${OARB_OUTDOOR_PRIMITIVE_MAX_THICKNESS}`, id);
+    if (Number.isFinite(primitive.radius) && primitive.radius > OARB_OUTDOOR_PRIMITIVE_MAX_RADIUS) addIssue(errors, 'error', `outdoorPrimitive ${id} radius must be <= ${OARB_OUTDOOR_PRIMITIVE_MAX_RADIUS}`, id);
+    const authoredPoints = [...asArray(primitive.points), primitive.center, primitive.from, primitive.to].filter(Boolean).map(xzPoint).filter(Boolean);
+    if (authoredPoints.some((point) => Math.abs(point.x) > OARB_OUTDOOR_PRIMITIVE_MAX_COORDINATE || Math.abs(point.z) > OARB_OUTDOOR_PRIMITIVE_MAX_COORDINATE)) addIssue(errors, 'error', `outdoorPrimitive ${id} coordinates must stay within +/-${OARB_OUTDOOR_PRIMITIVE_MAX_COORDINATE}`, id);
     validateOutdoorMaterial(definition, primitive.material, `outdoorPrimitive ${id}`, id, errors, warnings);
+    if (primitive.collision || primitive.blocksPlayer || primitive.blocksEnemies || primitive.damage || primitive.hazard || primitive.gameplay) addIssue(errors, 'error', `outdoorPrimitive ${id} cannot claim collision, blocking, hazard, damage, or gameplay behavior yet; pair visible geometry with curvedBlockers instead`, id);
+    if (!visibleStructureIds.has(primitive.id)) addIssue(warnings, 'warning', `outdoor boundary primitive ${id} has no curvedBlocker visibleStructureId referencing it yet`, id);
+    Object.keys(primitive).filter((key) => !OUTDOOR_PRIMITIVE_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `outdoorPrimitive ${id} uses unsupported field ${key}; visible boundary rendering only is implemented in this PR`, id));
   });
 
   asArray(definition.decorationZones).forEach((zone, index) => {
