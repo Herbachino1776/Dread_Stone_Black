@@ -386,7 +386,12 @@ pondBodies.forEach((pond) => {
   const group = createPondDecorGroup(pond, { terrainSampler: oarbOutdoorExpoSampler, textures: oarbOutdoorExpoDefinition.textures });
   assert.equal(group.children.filter((child) => child.userData.kind === 'boulder').length, decor.decorations.boulders.length, `${pond.id} creates one real 3D mesh per boulder.`);
   assert.ok(group.children.filter((child) => child.userData.kind === 'boulder').every((mesh) => mesh.isMesh && mesh.geometry?.type === 'DodecahedronGeometry'), `${pond.id} boulders are irregular low-poly meshes.`);
-  assert.ok(group.children.filter((child) => child.userData.kind === 'vegetation').every((sprite) => sprite.isSprite), `${pond.id} vegetation uses mobile-safe billboards.`);
+  const vegetationSprites = group.children.filter((child) => child.userData.kind === 'vegetation');
+  assert.ok(vegetationSprites.every((sprite) => sprite.isSprite), `${pond.id} vegetation uses mobile-safe billboards.`);
+  assert.ok(vegetationSprites.every((sprite) => sprite.material.alphaTest >= 0.35 && sprite.material.depthTest === true && sprite.material.depthWrite === true && sprite.material.transparent === false), `${pond.id} vegetation billboards use alpha-cutout materials that write depth over pond water.`);
+  assert.ok(vegetationSprites.every((sprite) => sprite.userData.alphaCutoutDepthWrite === true), `${pond.id} vegetation records depth-writing alpha-cutout metadata.`);
+  assert.equal(profile.transparent, true, `${pond.id} pond water remains transparent over its mud bed.`);
+  assert.ok(profile.opacity > 0 && profile.opacity < 1, `${pond.id} pond water remains semi-transparent.`);
 });
 ['01', '02', '03', '04'].forEach((suffix) => {
   const key = `pondBoulderRock${suffix}`;
