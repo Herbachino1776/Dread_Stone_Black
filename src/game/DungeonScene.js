@@ -33,7 +33,7 @@ function createOrganicPondDiscGeometry(segments = 80, wobble = 0.08) {
     const z = Math.sin(angle) * edge;
     vertices.push(x, 0, z);
     uvs.push(0.5 + x * 0.5, 0.5 + z * 0.5);
-    if (index > 0) indices.push(0, index + 1, index);
+    if (index > 0) indices.push(0, index, index + 1);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -58,7 +58,7 @@ function createOrganicPondRingGeometry(segments = 80, wobble = 0.08, innerScaleX
       const b = a + 1;
       const c = index * 2;
       const d = c + 1;
-      indices.push(a, c, b, c, d, b);
+      indices.push(a, b, c, c, b, d);
     }
   }
   const geometry = new THREE.BufferGeometry();
@@ -76,7 +76,7 @@ function createPondOutlineDiscGeometry(outline = [], center = [0, 0]) {
   outline.forEach(([x, z], index) => {
     vertices.push(x - center[0], 0, z - center[1]);
     uvs.push(0.5 + (x - center[0]) * 0.04, 0.5 + (z - center[1]) * 0.04);
-    indices.push(0, ((index + 1) % outline.length) + 1, index + 1);
+    indices.push(0, index + 1, ((index + 1) % outline.length) + 1);
   });
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -101,7 +101,7 @@ function createPondOutlineRingGeometry(innerOutline = [], outerOutline = [], cen
     const b = a + 1;
     const c = next * 2;
     const d = c + 1;
-    indices.push(a, c, b, c, d, b);
+    indices.push(a, b, c, c, b, d);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));

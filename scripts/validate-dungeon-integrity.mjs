@@ -10,6 +10,7 @@ import { validateTorchPlacements } from '../src/engine/lighting/TorchPlacementVa
 import { listLocationDefinitions } from '../src/game/locations/locationRegistry.js';
 import { resolveFieldPlayerSpawn } from '../src/game/fieldSpawnResolution.js';
 import { resolveStartupArea } from '../src/game/locationRouting.js';
+import { validatePondFootprint } from './pond-footprint-validation.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -387,6 +388,8 @@ function validateCompiledOutdoorFieldRuntime(definitions) {
     const animatedPondUsers = waterBodies.filter((body) => body.material === 'pondWaterAnimated').map((body) => body.id);
     if (animatedPondUsers.length !== 1 || animatedPondUsers[0] !== 'pond_expo_06_gully_repair') errors.push(`oarbOutdoorExpo animated pond water should only be applied to POND 06, found ${animatedPondUsers.join(', ')}`);
     if ((pond06.footprint?.waterOutline ?? []).length < 3) errors.push('oarbOutdoorExpo POND 06 water mesh must keep an irregular water surface outline');
+    const pond06FootprintValidation = validatePondFootprint(pond06, expo, { minMudMarginWorld: 2.0, sampleStepWorld: 0.75 });
+    pond06FootprintValidation.errors.forEach((error) => errors.push(`oarbOutdoorExpo ${error}`));
     if (pond06.userData?.noDownwardFacingTopNormals !== true) errors.push('oarbOutdoorExpo POND 06 should keep top-visible/two-sided water geometry metadata');
   }
   const visibleIds = new Set((expo.outdoorPrimitives ?? []).map((primitive) => primitive.id));
