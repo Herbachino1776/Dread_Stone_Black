@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { FISH_SPECIES_IDS, FISH_SPECS } from '../src/game/fishing/FishMeshFactory.js';
 import { readFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -217,6 +218,14 @@ assert.equal(pondChest.itemId, 'fishing_rod', 'OARB fishing rod chest still gran
 
 const dungeonSceneSource = readFileSync(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
 const lockedFishSpecies = new Set(['smallRiverFish', 'broadCarpFish', 'longEelFish', 'spineBackFish', 'flatMarshFish', 'jawHunterFish', 'sacredGlowFish']);
+assert.deepEqual(new Set(FISH_SPECIES_IDS), lockedFishSpecies, 'Shared fish registry must expose exactly the seven permanent Kerovac fish species.');
+lockedFishSpecies.forEach((species) => assert.ok(FISH_SPECS[species], `Shared fish registry missing ${species}.`));
+assert.equal(/FIELD_FISH_SPECIES\s*=/.test(dungeonSceneSource), false, 'DungeonScene.js must not define a duplicate FIELD_FISH_SPECIES shortcut table.');
+assert.equal(/FIELD_FISH_SPECIES/.test(dungeonSceneSource), false, 'DungeonScene.js must not reference the retired FIELD_FISH_SPECIES shortcut table.');
+assert.match(dungeonSceneSource, /createFishMesh\(resolvedSpecies/, 'Raw fish pickups must be built by the shared Kerovac fish mesh factory.');
+assert.match(dungeonSceneSource, /visualSource:\s*'sharedKerovacFishSpeciesFactory'/, 'Raw fish pickup metadata must identify the shared Kerovac fish factory.');
+assert.equal(/new THREE\.ConeGeometry\(0\.2, 0\.34, 3\)/.test(dungeonSceneSource), false, 'Raw fish pickups must not use the old simple cone-tail placeholder.');
+assert.equal(/brown-placeholder-pickup/.test(dungeonSceneSource), true, 'Cooked fish placeholder may remain, but raw fish placeholder naming must stay removed.');
 const pondExpoPonds = oarbOutdoorExpoDefinition.waterBodies.filter((body) => body.tags?.includes('pond-expo'));
 assert.equal(pondExpoPonds.length, 8, 'Pond Expo has exactly 8 generated pond water bodies.');
 const seenPondSpecies = new Set();
@@ -227,6 +236,7 @@ pondExpoPonds.forEach((pond) => {
   assert.ok(pond.fishSpeciesPool.length >= 2, `${label} invalid: fishSpeciesPool is empty or has fewer than 2 species.`);
   pond.fishSpeciesPool.forEach((species) => {
     assert.equal(lockedFishSpecies.has(species), true, `${label} invalid: fishSpeciesPool includes unknown species ${species}.`);
+    assert.ok(FISH_SPECS[species], `${label} invalid: fishSpeciesPool species ${species} is missing from shared FISH_SPECS.`);
     seenPondSpecies.add(species);
   });
   assert.equal(typeof pond.fishCatchSeed, 'string', `${label} invalid: fishCatchSeed must be deterministic string metadata.`);
@@ -259,7 +269,7 @@ pondExpoChests.forEach((chest) => {
   });
 });
 assert.ok(dungeonSceneSource.includes('selectFishSpeciesForZone'), 'Pond Expo caught fish chooses a species from the active fishing zone.');
-assert.ok(dungeonSceneSource.includes("visualSource: 'Kerovac fish species pickup'"), 'Pond Expo raw fish pickup uses species-based fish visual metadata.');
+assert.ok(dungeonSceneSource.includes("visualSource: 'sharedKerovacFishSpeciesFactory'"), 'Pond Expo raw fish pickup uses shared Kerovac fish factory metadata.');
 assert.equal(dungeonSceneSource.includes('gray-raw-fish-placeholder-pickup'), false, 'No placeholder caught fish pickup name remains for Pond Expo catches.');
 
 const reliquaryBounds = reliquaryFieldDefinition.integrity.walkableBounds;

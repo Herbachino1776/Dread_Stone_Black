@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildDungeonGeometry } from '../src/engine/dungeon-authoring/DungeonGeometryBuilder.js';
 import { kerovacDefinition } from '../src/game/locations/generated/kerovac.definition.js';
+import { FISH_SPECIES_IDS, FISH_SPECS } from '../src/game/fishing/FishMeshFactory.js';
 
 const testMaterialFactory = (profile = {}) => {
   const material = new THREE.MeshStandardMaterial({
@@ -26,6 +27,12 @@ const testMaterialFactory = (profile = {}) => {
   return material;
 };
 
+const fail = (message) => { throw new Error(message); };
+
+const expectedSpecies = ['smallRiverFish', 'broadCarpFish', 'longEelFish', 'spineBackFish', 'flatMarshFish', 'jawHunterFish', 'sacredGlowFish'];
+if (JSON.stringify(FISH_SPECIES_IDS) !== JSON.stringify(expectedSpecies)) fail(`Shared fish registry must expose the permanent species ids in Kerovac order.`);
+expectedSpecies.forEach((species) => { if (!FISH_SPECS[species]) fail(`Shared FISH_SPECS missing ${species}.`); });
+
 const { group } = buildDungeonGeometry(kerovacDefinition, { materialFactory: testMaterialFactory });
 group.updateMatrixWorld(true);
 
@@ -34,7 +41,6 @@ group.traverse((child) => {
   if (child?.userData?.objectCategory === 'fish' && child?.userData?.fishConstruction === 'single-reusable-symmetrical-volumetric-template') fishRoots.push(child);
 });
 
-const fail = (message) => { throw new Error(message); };
 const nearly = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 const localMeshBox = (mesh) => {
   mesh.updateMatrix();
@@ -43,10 +49,14 @@ const localMeshBox = (mesh) => {
 };
 
 if (fishRoots.length !== 7) fail(`Expected 7 volumetric fish roots, found ${fishRoots.length}.`);
+const kerovacSpecies = new Set(fishRoots.map((root) => root.userData?.fishSpecies));
+expectedSpecies.forEach((species) => { if (!kerovacSpecies.has(species)) fail(`Kerovac fish display missing shared species ${species}.`); });
 
 for (const root of fishRoots) {
   root.updateMatrixWorld(true);
 
+  if (root.userData?.visualSource !== 'sharedKerovacFishSpeciesFactory') fail(`${root.name} was not created by the shared Kerovac fish factory.`);
+  if (!FISH_SPECS[root.userData?.fishSpecies]) fail(`${root.name} uses a species outside the shared fish registry.`);
   if (!nearly(root.rotation.x, 0) || !nearly(root.rotation.z, 0)) fail(`${root.name} has non-Y display rotation.`);
   if (!root.children.every((child) => child.parent === root)) fail(`${root.name} has a child mesh parented outside the fish root.`);
 
