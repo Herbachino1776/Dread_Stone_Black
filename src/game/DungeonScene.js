@@ -686,11 +686,12 @@ export class DungeonScene {
   }
 
   buildOutdoorField() {
+    const fieldDefinition = getLocationDefinition('reliquary-field');
     this.scene.background = new THREE.Color(OUTDOOR_DAWN_SKY_COLOR);
     this.scene.fog = new THREE.Fog(OUTDOOR_DAWN_FOG_COLOR, OUTDOOR_FOG_NEAR, OUTDOOR_FOG_FAR);
     this.addOutdoorLights();
     this.addReliquaryFieldSkyDome();
-    this.addOutdoorTerrain(reliquaryFieldDefinition.terrain, reliquaryFieldDefinition.textures, reliquaryFieldDefinition);
+    this.addOutdoorTerrain(fieldDefinition.terrain, fieldDefinition.textures, fieldDefinition);
     this.addReliquaryFieldRiverBoundary();
     this.addReliquaryFieldHorizonSystem();
     this.addOutdoorBoundary();
@@ -946,6 +947,7 @@ export class DungeonScene {
   }
 
   createOutdoorBlockers() {
+    const fieldDefinition = getLocationDefinition('reliquary-field');
     const rectangularBlockers = getReliquaryFieldColliders()
       .filter((blocker) => blocker.blocksPlayer !== false)
       .map(({ id, minX, maxX, minZ, maxZ, height, type, tags, userData }) => ({
@@ -961,7 +963,7 @@ export class DungeonScene {
       }));
     return [
       ...rectangularBlockers,
-      ...createOutdoorCurvedBlockers(reliquaryFieldDefinition.curvedBlockers),
+      ...createOutdoorCurvedBlockers(fieldDefinition.curvedBlockers),
     ];
   }
 
