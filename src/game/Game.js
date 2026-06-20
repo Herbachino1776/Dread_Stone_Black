@@ -59,6 +59,14 @@ export class Game {
   }
 
   start() {
+    try {
+      this.startUnsafe();
+    } catch (error) {
+      this.handleStartupError(error);
+    }
+  }
+
+  startUnsafe() {
     const query = new URLSearchParams(window.location.search);
     this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
     this.isPaused = false;
@@ -167,6 +175,21 @@ export class Game {
     this.playFieldReturnReactionIfNeeded({ query });
 
     this.renderer.setAnimationLoop((time) => this.update(time));
+  }
+
+  handleStartupError(error) {
+    console.error('[Dread Stone Black] Startup failed before the scene became playable.', error);
+    this.renderer?.setAnimationLoop?.(null);
+
+    if (import.meta.env.DEV) {
+      if (!this.app.innerHTML) this.app.innerHTML = this.renderShell();
+      const viewport = this.app.querySelector('[data-game="viewport"]');
+      const message = document.createElement('p');
+      message.setAttribute('role', 'alert');
+      message.style.cssText = 'position:absolute;inset:auto 1rem 1rem 1rem;z-index:20;margin:0;padding:0.75rem;background:rgba(32,8,8,0.92);color:#ffd8c2;border:1px solid #a45f3a;font:12px/1.4 monospace;';
+      message.textContent = `Startup failed: ${error?.message ?? error}`;
+      viewport?.append(message);
+    }
   }
 
   resolveLocationId(area) {

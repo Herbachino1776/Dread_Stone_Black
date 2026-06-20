@@ -182,6 +182,54 @@ function validateTransitionSafety(definitions) {
   return errors;
 }
 
+function validateReliquaryFieldStartupRuntime(definitions) {
+  const errors = [];
+  const field = definitions.find((definition) => definition.id === 'reliquary-field');
+  if (!field) return ['Reliquary Field definition is missing'];
+  if (field.type !== 'field') errors.push(`Reliquary Field type is ${field.type}; expected field`);
+
+  const playerSpawn = (field.spawns ?? []).find((spawn) => spawn.id === 'field_player_start' && spawn.kind === 'player');
+  if (!isFinitePosition(playerSpawn?.position)) errors.push('field_player_start is missing or not finite');
+
+  const terrain = field.terrain;
+  const [terrainSizeX, terrainSizeZ] = Array.isArray(terrain?.size) ? terrain.size : [];
+  const [terrainSegmentsX, terrainSegmentsZ] = Array.isArray(terrain?.segments) ? terrain.segments : [];
+  if (!terrain || !Number.isFinite(terrainSizeX) || !Number.isFinite(terrainSizeZ) || !Number.isInteger(terrainSegmentsX) || !Number.isInteger(terrainSegmentsZ)) {
+    errors.push('Reliquary Field terrain setup is missing finite size/segment values');
+  }
+  const terrainMaterialKey = terrain?.material;
+  if (!terrainMaterialKey || !field.textures?.[terrainMaterialKey]) {
+    errors.push(`Reliquary Field terrain material ${terrainMaterialKey ?? '<none>'} is not defined in textures`);
+  }
+
+  const runtimeReturnSpawns = new Map([
+    ['FIELD_CRYPT_A_RETURN_START', 'field_south_reliquary_crypt_return'],
+    ['FIELD_BLACK_GRASS_TEMPLE_RETURN_START', 'field_black_grass_temple_return'],
+    ['FIELD_KEEPER_HOUSE_RETURN_START', 'field_keeper_house_return'],
+    ['FIELD_DDPLUS_LEVEL1_RETURN_START', 'field_ddplus_level_1_return'],
+    ['FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_START', 'field_sumerian_city_block_v0_return'],
+    ['FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_START', 'field_sumerian_sun_palace_district_v1_return'],
+    ['FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_START', 'field_sumerian_canal_market_district_v2_return'],
+    ['FIELD_BALTHAZAN_RETURN_START', 'field_balthazan_return'],
+    ['FIELD_KEROVAC_RETURN_START', 'field_kerovac_return'],
+    ['FIELD_OARB_FEATURE_YARD_RETURN_START', 'field_oarb_feature_yard_return'],
+  ]);
+  const dungeonSceneSource = fs.readFileSync(path.join(repoRoot, 'src/game/DungeonScene.js'), 'utf8');
+  runtimeReturnSpawns.forEach((spawnId, constantName) => {
+    const spawn = (field.spawns ?? []).find((candidate) => candidate.id === spawnId);
+    if (!isFinitePosition(spawn?.position)) {
+      errors.push(`${spawnId} is missing or not finite`);
+      return;
+    }
+    const expectedVector = `const ${constantName} = new THREE.Vector3(${spawn.position.x}, ${spawn.position.y}, ${spawn.position.z});`;
+    if (!dungeonSceneSource.includes(expectedVector)) {
+      errors.push(`${constantName} does not match authored ${spawnId} position (${spawn.position.x}, ${spawn.position.y}, ${spawn.position.z})`);
+    }
+  });
+
+  return errors;
+}
+
 const targets = definitions
   .filter((definition) => definition.type !== 'field' || definition.integrity?.facades?.length)
   .map((definition) => ({
@@ -193,7 +241,8 @@ let totalErrors = 0;
 let totalWarnings = 0;
 const startupRoutingErrors = validateStartupRouting(definitions);
 const transitionSafetyErrors = validateTransitionSafety(definitions);
-totalErrors += startupRoutingErrors.length + transitionSafetyErrors.length;
+const reliquaryFieldStartupErrors = validateReliquaryFieldStartupRuntime(definitions);
+totalErrors += startupRoutingErrors.length + transitionSafetyErrors.length + reliquaryFieldStartupErrors.length;
 
 console.log('Dungeon integrity validation');
 if (startupRoutingErrors.length) {
@@ -203,6 +252,10 @@ if (startupRoutingErrors.length) {
 if (transitionSafetyErrors.length) {
   console.log('\nTransition safety');
   transitionSafetyErrors.forEach((error) => console.log(`- error: ${error}`));
+}
+if (reliquaryFieldStartupErrors.length) {
+  console.log('\nReliquary Field startup runtime');
+  reliquaryFieldStartupErrors.forEach((error) => console.log(`- error: ${error}`));
 }
 
 targets.forEach(({ label, definition }) => {

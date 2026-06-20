@@ -128,15 +128,37 @@ const FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_START = new THREE.Vector3(122, 1.55, 1
 const FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_YAW = Math.PI;
 const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_START = new THREE.Vector3(96, 1.55, 144.5);
 const FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_YAW = Math.PI;
-const FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_START = new THREE.Vector3(110, 1.55, 128);
+const FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_START = new THREE.Vector3(110, 1.55, 118);
 const FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_YAW = Math.PI;
-const FIELD_BALTHAZAN_RETURN_START = new THREE.Vector3(72, 1.55, 126);
+const FIELD_BALTHAZAN_RETURN_START = new THREE.Vector3(72, 1.55, 116);
 const FIELD_BALTHAZAN_RETURN_YAW = Math.PI;
-const FIELD_KEROVAC_RETURN_START = new THREE.Vector3(60, 1.55, 139);
+const FIELD_KEROVAC_RETURN_START = new THREE.Vector3(60, 1.55, 134);
 const FIELD_KEROVAC_RETURN_YAW = Math.PI;
 const FIELD_OARB_FEATURE_YARD_RETURN_START = new THREE.Vector3(84, 1.55, 137);
 const FIELD_OARB_FEATURE_YARD_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
+
+const FIELD_SPAWN_IDS_BY_RUNTIME_KEY = Object.freeze({
+  start: 'field_player_start',
+  cryptAExit: 'field_south_reliquary_crypt_return',
+  blackGrassTempleExit: 'field_black_grass_temple_return',
+  fieldKeeperHouseExit: 'field_keeper_house_return',
+  ddplusLevel1Exit: 'field_ddplus_level_1_return',
+  sumerianCityBlockV0Exit: 'field_sumerian_city_block_v0_return',
+  sumerianSunPalaceDistrictV1Exit: 'field_sumerian_sun_palace_district_v1_return',
+  sumerianCanalMarketDistrictV2Exit: 'field_sumerian_canal_market_district_v2_return',
+  balthazanExit: 'field_balthazan_return',
+  kerovacExit: 'field_kerovac_return',
+  oarbFeatureYardExit: 'field_oarb_feature_yard_return',
+});
+
+function isFiniteAuthoredPosition(position) {
+  return position
+    && Number.isFinite(position.x)
+    && Number.isFinite(position.y ?? 1.55)
+    && Number.isFinite(position.z);
+}
+
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const GENERATED_ENEMY_ACTIVE_CAP = 3;
 const GENERATED_ENEMY_INITIAL_CAP = 2;
@@ -646,47 +668,19 @@ export class DungeonScene {
   }
 
   getFieldPlayerSpawn() {
-    if (this.fieldSpawn === 'cryptAExit') {
-      return { spawnPosition: FIELD_CRYPT_A_RETURN_START, spawnYaw: FIELD_CRYPT_A_RETURN_YAW };
+    const spawnKey = FIELD_SPAWN_IDS_BY_RUNTIME_KEY[this.fieldSpawn] ? this.fieldSpawn : 'start';
+    const spawnId = FIELD_SPAWN_IDS_BY_RUNTIME_KEY[spawnKey];
+    const spawn = getLocationDefinition('reliquary-field')?.spawns?.find((candidate) => candidate.id === spawnId);
+
+    if (isFiniteAuthoredPosition(spawn?.position)) {
+      return {
+        spawnPosition: this.toVector3(spawn.position, 1.55),
+        spawnYaw: Number.isFinite(spawn.yaw) ? spawn.yaw : FIELD_PLAYER_YAW,
+      };
     }
 
-    if (this.fieldSpawn === 'blackGrassTempleExit') {
-      return { spawnPosition: FIELD_BLACK_GRASS_TEMPLE_RETURN_START, spawnYaw: FIELD_BLACK_GRASS_TEMPLE_RETURN_YAW };
-    }
-
-    if (this.fieldSpawn === 'fieldKeeperHouseExit') {
-      return { spawnPosition: FIELD_KEEPER_HOUSE_RETURN_START, spawnYaw: FIELD_KEEPER_HOUSE_RETURN_YAW };
-    }
-
-    if (this.fieldSpawn === 'ddplusLevel1Exit') {
-      return { spawnPosition: FIELD_DDPLUS_LEVEL1_RETURN_START, spawnYaw: FIELD_DDPLUS_LEVEL1_RETURN_YAW };
-    }
-
-    if (this.fieldSpawn === 'sumerianCityBlockV0Exit') {
-      return { spawnPosition: FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_START, spawnYaw: FIELD_SUMERIAN_CITY_BLOCK_V0_RETURN_YAW };
-    }
-
-    if (this.fieldSpawn === 'sumerianSunPalaceDistrictV1Exit') {
-      return { spawnPosition: FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_START, spawnYaw: FIELD_SUMERIAN_SUN_PALACE_DISTRICT_V1_RETURN_YAW };
-    }
-
-    if (this.fieldSpawn === 'sumerianCanalMarketDistrictV2Exit') {
-      return { spawnPosition: FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_START, spawnYaw: FIELD_SUMERIAN_CANAL_MARKET_DISTRICT_V2_RETURN_YAW };
-    }
-
-    if (this.fieldSpawn === 'balthazanExit') {
-      return { spawnPosition: FIELD_BALTHAZAN_RETURN_START, spawnYaw: FIELD_BALTHAZAN_RETURN_YAW };
-    }
-
-    if (this.fieldSpawn === 'kerovacExit') {
-      return { spawnPosition: FIELD_KEROVAC_RETURN_START, spawnYaw: FIELD_KEROVAC_RETURN_YAW };
-    }
-
-    if (this.fieldSpawn === 'oarbFeatureYardExit') {
-      return { spawnPosition: FIELD_OARB_FEATURE_YARD_RETURN_START, spawnYaw: FIELD_OARB_FEATURE_YARD_RETURN_YAW };
-    }
-
-    return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
+    console.error(`[Dread Stone Black] Reliquary Field startup spawn ${spawnId} is missing or invalid; falling back to FIELD_PLAYER_START.`);
+    return { spawnPosition: FIELD_PLAYER_START.clone(), spawnYaw: FIELD_PLAYER_YAW };
   }
 
   build() {
