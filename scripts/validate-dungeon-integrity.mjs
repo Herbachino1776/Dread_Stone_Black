@@ -370,12 +370,22 @@ function validateCompiledOutdoorFieldRuntime(definitions) {
     else if (!pondMarkerIds.has(marker.id)) errors.push(`oarbOutdoorExpo ${body.id} visible marker ${marker.id} does not resolve`);
     if (!expo.textures?.[body.material]) errors.push(`oarbOutdoorExpo ${body.id} water material ${body.material} is missing`);
     if (!expo.textures?.[body.shoreMaterial]) errors.push(`oarbOutdoorExpo ${body.id} shore material ${body.shoreMaterial} is missing`);
+    if (!expo.textures?.[body.bedMaterial]) errors.push(`oarbOutdoorExpo ${body.id} bright mud material ${body.bedMaterial} is missing`);
+    if (body.userData?.generatedBy !== 'OutdoorPondBuilder') errors.push(`oarbOutdoorExpo ${body.id} is not compiled by OutdoorPondBuilder`);
+    const animatedProfile = expo.textures?.[body.material];
+    if ((animatedProfile?.animatedFrames ?? []).length !== 6) errors.push(`oarbOutdoorExpo ${body.id} must resolve all 6 animated water frames`);
+    if (!['loop', 'pingPong'].includes(animatedProfile?.playbackMode)) errors.push(`oarbOutdoorExpo ${body.id} has invalid water playback mode`);
+    (animatedProfile?.animatedFrames ?? []).forEach((framePath) => {
+      const publicPath = framePath.replace(/^\.\//, 'public/');
+      if (!fs.existsSync(path.resolve(repoRoot, publicPath))) errors.push(`oarbOutdoorExpo ${body.id} animated water frame path is missing: ${framePath}`);
+    });
+    validatePondFootprint(body, expo).errors.forEach((error) => errors.push(`oarbOutdoorExpo ${error}`));
+    validatePondDecor(body, expo, { assetExists: textureAssetExists }).errors.forEach((error) => errors.push(`oarbOutdoorExpo ${error}`));
   });
   const pond06 = waterBodies.find((body) => body.id === 'pond_expo_06_gully_repair');
   if (!pond06) errors.push('oarbOutdoorExpo POND 06 water surface is missing');
   else {
     const animatedProfile = expo.textures?.[pond06.material];
-    if (pond06.material !== 'pondWaterAnimated') errors.push(`oarbOutdoorExpo POND 06 should use pondWaterAnimated, found ${pond06.material}`);
     if (!animatedProfile) errors.push('oarbOutdoorExpo POND 06 animated water material key does not resolve');
     else {
       const animatedFrames = animatedProfile.animatedFrames ?? [];
@@ -392,13 +402,7 @@ function validateCompiledOutdoorFieldRuntime(definitions) {
         if (!fs.existsSync(path.resolve(repoRoot, publicPath))) errors.push(`oarbOutdoorExpo POND 06 animated water frame path is missing: ${framePath}`);
       });
     }
-    const animatedPondUsers = waterBodies.filter((body) => body.material === 'pondWaterAnimated').map((body) => body.id);
-    if (animatedPondUsers.length !== 1 || animatedPondUsers[0] !== 'pond_expo_06_gully_repair') errors.push(`oarbOutdoorExpo animated pond water should only be applied to POND 06, found ${animatedPondUsers.join(', ')}`);
     if ((pond06.footprint?.waterOutline ?? []).length < 3) errors.push('oarbOutdoorExpo POND 06 water mesh must keep an irregular water surface outline');
-    const pond06FootprintValidation = validatePondFootprint(pond06, expo, { minMudMarginWorld: 0.8, minVisibleMudBandWorld: 0.8, shorelineSampleStepWorld: 0.2, sampleStepWorld: 0.75 });
-    pond06FootprintValidation.errors.forEach((error) => errors.push(`oarbOutdoorExpo ${error}`));
-    const pond06DecorValidation = validatePondDecor(pond06, expo, { assetExists: textureAssetExists });
-    pond06DecorValidation.errors.forEach((error) => errors.push(`oarbOutdoorExpo ${error}`));
     if (pond06.userData?.noDownwardFacingTopNormals !== true) errors.push('oarbOutdoorExpo POND 06 should keep top-visible/two-sided water geometry metadata');
   }
   const visibleIds = new Set((expo.outdoorPrimitives ?? []).map((primitive) => primitive.id));

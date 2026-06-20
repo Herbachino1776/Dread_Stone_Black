@@ -233,7 +233,7 @@ export function validatePondFootprint(pond, definition, options = {}) {
   if (!definition?.textures?.[pond?.material]) fail(`water material ${pond?.material} does not resolve.`);
   if (!definition?.textures?.[pond?.bedMaterial]) fail(`bright mud material ${pond?.bedMaterial} does not resolve; water would fall back to grass/unknown bed.`);
   if (pond?.shoreMaterial && !definition?.textures?.[pond.shoreMaterial]) fail(`wet shore material ${pond.shoreMaterial} does not resolve.`);
-  if (pond?.bedMaterial !== 'pondBrightMud') fail(`uses ${pond?.bedMaterial} under water instead of bright pond mud.`);
+  if (pond?.userData?.generatedBy !== 'OutdoorPondBuilder') fail('must be compiled by OutdoorPondBuilder from a deterministic recipe.');
   if (pond?.userData?.noDownwardFacingTopNormals !== true) fail('geometry metadata must confirm top-visible/two-sided normals.');
   if (pond?.userData?.usesSquareDecalFallback === true) fail('square decal fallback is forbidden for polished pond recipes.');
   if (pond?.userData?.waterMeshSource !== 'waterOutline') fail('water mesh must use waterOutline instead of an ellipse fallback.');
@@ -280,8 +280,11 @@ export function validateRenderedPondComposite(pond, definition, options = {}) {
   if (!samePointList(mudVertices, footprint.mudBedOutline ?? [])) fail('generated bright-mud BufferGeometry vertices do not match mudBedOutline in world coordinates.');
   if (composite.wetShore && !samePointList(shoreOuterVertices, footprint.outerShoreOutline ?? [])) fail('generated wet-shore BufferGeometry vertices do not match outerShoreOutline in world coordinates.');
   if ([composite.water, composite.mudBed, composite.wetShore].filter(Boolean).some((layer) => layer.position[0] !== center[0] || layer.position[2] !== center[1])) fail('water, mud, and shore meshes do not share the authored world-coordinate basis.');
-  if (composite.water.materialKey !== 'pondWaterAnimated') fail(`runtime water material resolves to ${composite.water.materialKey}, expected pondWaterAnimated.`);
-  if (composite.mudBed.materialKey !== 'pondBrightMud') fail(`runtime mud material resolves to ${composite.mudBed.materialKey}, expected pondBrightMud.`);
+  if (composite.water.materialKey !== pond.material) fail(`runtime water material resolves to ${composite.water.materialKey}, expected ${pond.material}.`);
+  if (composite.mudBed.materialKey !== pond.bedMaterial) fail(`runtime mud material resolves to ${composite.mudBed.materialKey}, expected ${pond.bedMaterial}.`);
+  const waterProfile = definition?.textures?.[pond.material];
+  if (!Array.isArray(waterProfile?.animatedFrames) || waterProfile.animatedFrames.length !== 6) fail('runtime water material must resolve all six animated pond frames.');
+  if (!['loop', 'pingPong'].includes(waterProfile?.playbackMode)) fail('runtime water playback mode must be loop or pingPong.');
   if (composite.water.source !== 'waterOutline' || composite.mudBed.source !== 'mudBedOutline' || composite.wetShore?.source !== 'outerShoreOutline') fail('one or more runtime layers selected a fallback ellipse/square geometry source.');
   if (![composite.water.geometry, composite.mudBed.geometry, composite.wetShore?.geometry].filter(Boolean).every(geometryHasOnlyUpwardTopNormals)) fail('generated pond top geometry contains downward-facing normals.');
 

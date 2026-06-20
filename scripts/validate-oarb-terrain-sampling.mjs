@@ -8,6 +8,7 @@ import { createOutdoorSplineTrailMesh, createOutdoorSplineTrailMeshes } from '..
 import { createOutdoorCurvedBlockers } from '../src/engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 import { createOutdoorPrimitiveMeshes } from '../src/engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
 import { createPondDecorGroup } from '../src/engine/outdoor-authoring/PondDecorBuilder.js';
+import { buildOutdoorPond } from '../src/engine/outdoor-authoring/OutdoorPondBuilder.js';
 import { CollisionWorld } from '../src/game/Collision.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { oarbFeatureYardDefinition } from '../src/game/locations/oarbFeatureYard.definition.js';
@@ -349,7 +350,7 @@ expectedPonds.forEach(([pondExpoId, id], index) => {
   const floorY = oarbOutdoorExpoSampler.sampleOutdoorY(cx, cz);
   assert.ok(Number.isFinite(floorY), `${id} sampled pond floor is finite.`);
   assert.ok(floorY < pond.y, `${id} water surface is above the shaped pond floor.`);
-  assert.ok(pond.y - floorY <= 0.55, `${id} water surface is close to supported terrain and should not hover.`);
+  assert.ok(pond.y - floorY <= (pond.userData.recipeData.terrain.basinDepth + 0.12), `${id} water surface depth matches its generated basin recipe.`);
   for (let otherIndex = index + 1; otherIndex < pondBodies.length; otherIndex += 1) {
     const other = pondBodies[otherIndex];
     const clearance = Math.hypot(cx - other.center[0], cz - other.center[1]) - Math.max(rx, rz) - Math.max(other.radius[0], other.radius[1]) - (pond.shoreWidth ?? 0) - (other.shoreWidth ?? 0);
@@ -357,106 +358,40 @@ expectedPonds.forEach(([pondExpoId, id], index) => {
   }
 });
 
-const pond06 = pondBodies.find((pond) => pond.id === 'pond_expo_06_gully_repair');
-assert.ok(pond06, 'POND 06 keeper-candidate pond exists.');
-assert.equal(pond06.userData?.visibleMarker?.label, 'POND 06', 'POND 06 keeps the visible number marker metadata.');
-assert.equal(pond06.userData?.keeperCandidate, true, 'POND 06 is marked as the current keeper candidate.');
-assert.equal(pond06.bedMaterial, 'pondBrightMud', 'POND 06 uses the bright mud pond-bed material profile.');
-assert.ok(oarbOutdoorExpoDefinition.textures.pondBrightMud, 'POND 06 bright mud material profile resolves.');
-assert.equal(pond06.material, 'pondWaterAnimated', 'POND 06 uses the animated pond water material profile.');
-const pond06AnimatedProfile = oarbOutdoorExpoDefinition.textures[pond06.material];
-assert.ok(pond06AnimatedProfile, 'POND 06 animated water material key resolves.');
-assert.equal(pond06AnimatedProfile.animatedFrames?.length, 6, 'POND 06 animated water frame count is exactly 6.');
-assert.ok(['loop', 'pingPong'].includes(pond06AnimatedProfile.playbackMode ?? 'loop'), 'POND 06 animated water playback mode is valid.');
-assert.equal(pond06AnimatedProfile.playbackMode, 'pingPong', 'POND 06 animated water uses ping-pong playback.');
-assert.ok(Number.isFinite(pond06AnimatedProfile.frameDurationMs) && pond06AnimatedProfile.frameDurationMs > 0, 'POND 06 animated water frameDurationMs is finite and positive.');
-assert.equal(pond06AnimatedProfile.frameDurationMs, 220, 'POND 06 animated water frameDurationMs is slowed to 220ms.');
-const pond06PingPongSequence = pond06AnimatedProfile.animatedFrames.concat(pond06AnimatedProfile.animatedFrames.slice(1, -1).reverse());
-assert.ok(pond06PingPongSequence.length > 0, 'POND 06 animated water ping-pong sequence is non-empty.');
-assert.deepEqual(pond06PingPongSequence.map((framePath) => pond06AnimatedProfile.animatedFrames.indexOf(framePath) + 1), [1, 2, 3, 4, 5, 6, 5, 4, 3, 2], 'POND 06 animated water ping-pong sequence avoids jumping directly from frame 6 to frame 1.');
-assert.deepEqual(pond06AnimatedProfile.repeat, [3.2, 2.6], 'POND 06 animated water uses one consistent repeat for every frame.');
-pond06AnimatedProfile.animatedFrames.forEach((framePath, index) => {
-  assert.equal(framePath, `./assets/textures/water/pond/pond_water_anim_0${index + 1}.png`, `POND 06 animated water frame ${index + 1} resolves to the expected pond path.`);
+pondBodies.forEach((pond) => {
+  assert.equal(pond.userData.generatedBy, 'OutdoorPondBuilder', `${pond.id} is compiled by the reusable pond generator.`);
+  assert.equal(pond.footprint.recipe, 'per-vertex-expansion-irregular-polygon', `${pond.id} has no ellipse or rectangle fallback.`);
+  assert.deepEqual(pond.footprint.center, pond.center, `${pond.id} water, mud, and shore share one coordinate basis.`);
+  assert.deepEqual(pond.footprint.waterRadius, pond.radius, `${pond.id} footprint and runtime share generated radii.`);
+  const rebuilt = buildOutdoorPond(pond.userData.recipeSource);
+  assert.deepEqual(rebuilt.body.footprint, pond.footprint, `${pond.id} recipe seed deterministically reproduces the complete runtime footprint.`);
+  assert.deepEqual(rebuilt.terrainStamps, pond.userData.terrainStampIds.map((stampId) => oarbOutdoorExpoDefinition.terrain.heightStamps.find((stamp) => stamp.id === stampId)), `${pond.id} recipe deterministically reproduces terrain support.`);
+  const profile = oarbOutdoorExpoDefinition.textures[pond.material];
+  assert.equal(profile.animatedFrames.length, 6, `${pond.id} resolves all six pond animation frames.`);
+  assert.ok(['loop', 'pingPong'].includes(profile.playbackMode), `${pond.id} uses supported calm playback.`);
+  profile.animatedFrames.forEach((framePath, index) => assert.equal(framePath, `./assets/textures/water/pond/pond_water_anim_0${index + 1}.png`, `${pond.id} water frame ${index + 1} resolves.`));
+  const support = oarbOutdoorExpoDefinition.terrain.heightStamps.find((stamp) => stamp.id === `${pond.id}_outline_support`);
+  const floor = oarbOutdoorExpoDefinition.terrain.heightStamps.find((stamp) => stamp.id === `${pond.id}_water_floor`);
+  assert.deepEqual(support?.outline, pond.footprint.terrainSupportOutline, `${pond.id} terrain support uses the generated outer footprint.`);
+  assert.deepEqual(floor?.outline, pond.footprint.waterOutline, `${pond.id} terrain floor uses the rendered water outline.`);
+  assertValidPondFootprint(pond, oarbOutdoorExpoDefinition);
+  const rendered = assertValidRenderedPondComposite(pond, oarbOutdoorExpoDefinition, { terrainSampler: oarbOutdoorExpoSampler });
+  assert.equal(rendered.geometry.materialKeys.water, pond.material, `${pond.id} rendered water uses its generated style material.`);
+  assert.equal(rendered.geometry.materialKeys.mudBed, pond.bedMaterial, `${pond.id} rendered mud uses its generated bright-mud material.`);
+  const decor = assertValidPondDecor(pond, oarbOutdoorExpoDefinition, { assetExists: (assetPath) => existsSync(resolve(repoRoot, assetPath.replace(/^\.\//, 'public/'))) });
+  const repeat = assertValidPondDecor(pond, oarbOutdoorExpoDefinition, { assetExists: (assetPath) => existsSync(resolve(repoRoot, assetPath.replace(/^\.\//, 'public/'))) });
+  assert.deepEqual(decor.decorations, repeat.decorations, `${pond.id} seeded decorations are deterministic.`);
+  assert.ok(decor.decorations.boulders.length >= 2 && decor.decorations.boulders.length <= 4, `${pond.id} generates 2-4 boulders.`);
+  assert.ok(decor.decorations.vegetation.every((placement) => !`${placement.spriteId} ${placement.spritePath}`.toLowerCase().includes('redwood')), `${pond.id} excludes redwood vegetation.`);
+  const group = createPondDecorGroup(pond, { terrainSampler: oarbOutdoorExpoSampler, textures: oarbOutdoorExpoDefinition.textures });
+  assert.equal(group.children.filter((child) => child.userData.kind === 'boulder').length, decor.decorations.boulders.length, `${pond.id} creates one real 3D mesh per boulder.`);
+  assert.ok(group.children.filter((child) => child.userData.kind === 'boulder').every((mesh) => mesh.isMesh && mesh.geometry?.type === 'DodecahedronGeometry'), `${pond.id} boulders are irregular low-poly meshes.`);
+  assert.ok(group.children.filter((child) => child.userData.kind === 'vegetation').every((sprite) => sprite.isSprite), `${pond.id} vegetation uses mobile-safe billboards.`);
 });
-const animatedPondUsers = pondBodies.filter((pond) => pond.material === 'pondWaterAnimated');
-assert.deepEqual(animatedPondUsers.map((pond) => pond.id), ['pond_expo_06_gully_repair'], 'Animated pond water is applied only to POND 06.');
-assert.equal(pond06.footprint?.recipe, 'per-vertex-expansion-irregular-polygon', 'POND 06 uses the shared per-vertex expansion footprint recipe.');
-assert.deepEqual(pond06.footprint?.center, pond06.center, 'POND 06 footprint center matches the water center.');
-assert.deepEqual(pond06.footprint?.waterRadius, pond06.radius, 'POND 06 footprint water radius matches the water body radius.');
-const waterOutline = pond06.footprint?.waterOutline ?? [];
-const mudBedOutline = pond06.footprint?.mudBedOutline ?? [];
-const outerShoreOutline = pond06.footprint?.outerShoreOutline ?? [];
-assert.ok(waterOutline.length >= 8, 'POND 06 water footprint has a readable irregular polygon outline.');
-assert.equal(mudBedOutline.length, waterOutline.length, 'POND 06 bright mud bed footprint is derived point-for-point from the water outline.');
-assert.equal(outerShoreOutline.length, waterOutline.length, 'POND 06 optional wet shore band is derived point-for-point from the same outline.');
-[...waterOutline, ...mudBedOutline, ...outerShoreOutline].forEach((point, index) => {
-  assert.ok(point.every(Number.isFinite), `POND 06 footprint outline point ${index} is finite.`);
-  assert.equal(pointInsideRoom(point, pondReserve, 0), true, `POND 06 footprint outline point ${index} remains inside Pond Expo bounds.`);
-});
-waterOutline.forEach((point, index) => assert.equal(pointInPolygon(point, mudBedOutline), true, `POND 06 water outline point ${index} lies inside the bright mud bed footprint.`));
-mudBedOutline.forEach((point, index) => assert.equal(pointInPolygon(point, outerShoreOutline), true, `POND 06 bright mud bed outline point ${index} lies inside the outer wet shore footprint.`));
-const pond06OutlineCenter = polygonCentroid(waterOutline);
-assert.ok(Math.hypot(pond06OutlineCenter[0] - pond06.center[0], pond06OutlineCenter[1] - pond06.center[1]) < 0.75, 'POND 06 irregular outline remains centered on the authored water body.');
-const waterAverageRadius = averageRadiusFrom(waterOutline, pond06.center);
-const mudAverageRadius = averageRadiusFrom(mudBedOutline, pond06.center);
-const outerAverageRadius = averageRadiusFrom(outerShoreOutline, pond06.center);
-const brightMudWidths = correspondingRadialWidths(waterOutline, mudBedOutline, pond06.center);
-const wetShoreWidths = correspondingRadialWidths(mudBedOutline, outerShoreOutline, pond06.center);
-assert.ok(brightMudWidths.every((width) => width >= 0.999 && width <= 1.401), 'POND 06 bright mud per-vertex widths stay within the narrow 1.0-1.4 world-unit target.');
-assert.ok(Math.max(...brightMudWidths) - Math.min(...brightMudWidths) >= 0.3, 'POND 06 bright mud width visibly varies around the shoreline.');
-assert.ok(wetShoreWidths.every((width) => width >= 0.399 && width <= 0.701), 'POND 06 dark wet-mud per-vertex widths stay within the subtle 0.4-0.7 world-unit target.');
-assert.ok(Math.max(...wetShoreWidths) - Math.min(...wetShoreWidths) >= 0.2, 'POND 06 dark wet-mud width visibly varies around the shoreline.');
-assert.ok(mudAverageRadius - waterAverageRadius > 1.15 && mudAverageRadius - waterAverageRadius < 1.25, 'POND 06 bright mud averages roughly 1.2 world units instead of a broad exposed bed.');
-assert.ok(outerAverageRadius - mudAverageRadius > 0.5 && outerAverageRadius - mudAverageRadius < 0.6, 'POND 06 outer wet shore averages roughly 0.55 world units and remains thinner than bright mud.');
-assert.equal(pointInsideRoom(pond06.center, pondReserve, Math.ceil(outerAverageRadius)), true, 'POND 06 offset footprint stays inside Pond Expo bounds.');
-(pond06.userData.terrainStampIds ?? []).forEach((stampId) => {
-  const stamp = oarbOutdoorExpoDefinition.terrain.heightStamps.find((candidate) => candidate.id === stampId);
-  const finiteValues = [...(stamp?.center ?? []), ...(stamp?.path ?? []).flat(), stamp?.radius, stamp?.width, stamp?.y, stamp?.height, stamp?.depth].filter((value) => value !== undefined);
-  assert.ok(finiteValues.every(Number.isFinite), `POND 06 terrain support stamp ${stampId} has finite values.`);
-});
-const pond06CompositeSupportStamp = oarbOutdoorExpoDefinition.terrain.heightStamps.find((stamp) => stamp.id === 'pond_expo_06_composite_support');
-const pond06WaterFloorStamp = oarbOutdoorExpoDefinition.terrain.heightStamps.find((stamp) => stamp.id === 'pond_expo_06_supported_water_floor');
-assert.equal(pond06CompositeSupportStamp?.kind, 'flattenOutline', 'POND 06 terrain support uses polygon-outline flattening instead of an unrelated circle.');
-assert.deepEqual(pond06CompositeSupportStamp?.outline, pond06.footprint.terrainSupportOutline, 'POND 06 terrain support mesh derives from the composite support outline.');
-assert.equal(pond06CompositeSupportStamp?.derivedFrom, 'waterOutline', 'POND 06 terrain support records the single source water outline.');
-assert.equal(pond06WaterFloorStamp?.kind, 'flattenOutline', 'POND 06 water floor uses polygon-outline flattening.');
-assert.deepEqual(pond06WaterFloorStamp?.outline, waterOutline, 'POND 06 terrain water floor uses the exact rendered water outline.');
-assert.ok([pond06.footprint?.mudOffset, pond06.footprint?.outerShoreOffset].every(Number.isFinite), 'POND 06 offset distances are finite.');
-assert.ok(Object.values(pond06.footprint?.layerHeights ?? {}).every(Number.isFinite), 'POND 06 explicit terrain, mud, shore, and water height gaps are finite.');
-assert.ok(pond06.userData.recipe.includes('single-source per-vertex expansion'), 'POND 06 recipe documents non-uniform shoreline layers derived from one water outline.');
-assert.equal(pond06.userData.noDownwardFacingTopNormals, true, 'POND 06 pond geometry is authored for two-sided/top-visible normals.');
-const pond06Validation = assertValidPondFootprint(pond06, oarbOutdoorExpoDefinition, { minMudMarginWorld: 0.8, minVisibleMudBandWorld: 0.8, shorelineSampleStepWorld: 0.2, sampleStepWorld: 0.75 });
-assert.equal(pond06Validation.minMudMarginWorld, 0.8, 'POND 06 pond-builder validation preserves a guaranteed bright-mud overlap beneath water.');
-assert.equal(pond06Validation.minVisibleMudBandWorld, 0.8, 'POND 06 shoreline-band validation preserves a narrow visible bright-mud edge.');
-assert.equal(pond06Validation.shorelineSampleStepWorld, 0.2, 'POND 06 shoreline-band validation samples the refined edge every 0.2 world units.');
-assert.equal(pond06.userData.waterMeshSource, 'waterOutline', 'POND 06 rendered water mesh uses waterOutline.');
-assert.equal(pond06.userData.brightMudMeshSource, 'mudBedOutline', 'POND 06 rendered bright mud mesh uses mudBedOutline.');
-assert.equal(pond06.userData.wetShoreMeshSource, 'outerShoreOutline', 'POND 06 rendered wet shore mesh uses outerShoreOutline.');
-const pond06RenderedValidation = assertValidRenderedPondComposite(pond06, oarbOutdoorExpoDefinition, { terrainSampler: oarbOutdoorExpoSampler });
-assert.equal(pond06RenderedValidation.geometry.materialKeys.water, 'pondWaterAnimated', 'POND 06 generated water mesh resolves the animated material.');
-assert.equal(pond06RenderedValidation.geometry.materialKeys.mudBed, 'pondBrightMud', 'POND 06 generated mud mesh resolves bright pond mud.');
-assert.ok(pond06RenderedValidation.geometry.maxTerrainY <= pond06.footprint.layerHeights.mudBedY - pond06.footprint.layerHeights.terrainSafetyGap, 'POND 06 generated mesh validation proves grass terrain remains below the visible mud composite.');
-const pond06DecorValidation = assertValidPondDecor(pond06, oarbOutdoorExpoDefinition, {
-  assetExists: (assetPath) => existsSync(resolve(repoRoot, assetPath.replace(/^\.\//, 'public/'))),
-});
-const pond06DecorRepeat = assertValidPondDecor(pond06, oarbOutdoorExpoDefinition, {
-  assetExists: (assetPath) => existsSync(resolve(repoRoot, assetPath.replace(/^\.\//, 'public/'))),
-});
-assert.deepEqual(pond06DecorValidation.decorations, pond06DecorRepeat.decorations, 'POND 06 decoration placement is deterministic for its pond seed.');
-assert.ok(pond06DecorValidation.decorations.boulders.length >= 2 && pond06DecorValidation.decorations.boulders.length <= 4, 'POND 06 generates 2-4 textured boulders.');
-assert.ok(pond06DecorValidation.decorations.vegetation.every((placement) => !`${placement.spriteId} ${placement.spritePath}`.toLowerCase().includes('redwood')), 'POND 06 vegetation excludes redwood sprites.');
 ['01', '02', '03', '04'].forEach((suffix) => {
   const key = `pondBoulderRock${suffix}`;
   assert.equal(oarbOutdoorExpoDefinition.textures[key]?.path, `./assets/textures/rock/rock_wall_dark_cliff_${suffix}.png`, `POND 06 rock material ${key} uses the discovered rock texture.`);
 });
-const pond06DecorGroup = createPondDecorGroup(pond06, { terrainSampler: oarbOutdoorExpoSampler, textures: oarbOutdoorExpoDefinition.textures });
-const pond06BoulderMeshes = pond06DecorGroup.children.filter((child) => child.userData.kind === 'boulder');
-const pond06VegetationSprites = pond06DecorGroup.children.filter((child) => child.userData.kind === 'vegetation');
-assert.equal(pond06BoulderMeshes.length, pond06DecorValidation.decorations.boulders.length, 'POND 06 runtime creates one 3D mesh per generated boulder.');
-assert.ok(pond06BoulderMeshes.every((mesh) => mesh.isMesh && mesh.geometry?.type === 'DodecahedronGeometry'), 'POND 06 boulders use real low-poly dodecahedron geometry.');
-assert.ok(pond06VegetationSprites.every((sprite) => sprite.isSprite), 'POND 06 vegetation uses lightweight camera-facing foliage sprites.');
-assert.ok(pond06DecorGroup.children.every((child) => child.position.toArray().every(Number.isFinite)), 'POND 06 runtime decor positions are finite after terrain grounding.');
-
 assert.equal(pondBodies.find((pond) => pond.id === 'pond_expo_08_fishing_hole')?.userData?.futureFishable, true, 'POND 08 is marked as a future fishable pond without enabling fishing gameplay.');
 const pondTerrainStamps = oarbOutdoorExpoDefinition.terrain.heightStamps.filter((stamp) => stamp.tags?.includes('pond-expo'));
 assert.ok(pondTerrainStamps.length >= 20, 'Pond Expo has supporting terrain stamps for bowls, shelves, banks, and gully repair.');

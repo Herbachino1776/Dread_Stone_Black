@@ -39,6 +39,13 @@ function randomCount(random, range, fallback) {
   return min + Math.floor(random() * (max - min + 1));
 }
 
+function randomBetween(random, range, fallback) {
+  const source = Array.isArray(range) ? range : fallback;
+  const min = Number.isFinite(Number(source?.[0])) ? Number(source[0]) : fallback[0];
+  const max = Math.max(min, Number.isFinite(Number(source?.[1])) ? Number(source[1]) : fallback[1]);
+  return min + random() * (max - min);
+}
+
 function cross(ax, az, bx, bz) {
   return ax * bz - az * bx;
 }
@@ -92,9 +99,12 @@ function hasClearance(point, placements, minimumDistance) {
   return placements.every((placement) => Math.hypot(point[0] - placement.position[0], point[1] - placement.position[1]) >= minimumDistance);
 }
 
-function chooseSprite(random, type, excludeTags) {
+function chooseSprite(random, type, excludeTags, foliagePool) {
   const excluded = (excludeTags ?? []).map((tag) => String(tag).toLowerCase());
-  const pool = POND_VEGETATION_SPRITES.filter((sprite) => sprite.type === type && !excluded.some((tag) => `${sprite.id} ${sprite.path} ${sprite.type}`.toLowerCase().includes(tag)));
+  const allowedIds = Array.isArray(foliagePool) && foliagePool.length > 0 ? new Set(foliagePool) : null;
+  const pool = POND_VEGETATION_SPRITES.filter((sprite) => sprite.type === type
+    && (!allowedIds || allowedIds.has(sprite.id))
+    && !excluded.some((tag) => `${sprite.id} ${sprite.path} ${sprite.type}`.toLowerCase().includes(tag)));
   return pool[Math.floor(random() * pool.length) % pool.length];
 }
 
@@ -111,10 +121,10 @@ function outlineDistances(pond, angle) {
   return { water, mud, shore };
 }
 
-function placeWithRetries({ random, pond, placements, clearZones, clusterAngles, minimumDistance, distanceFor, makePlacement }) {
+function placeWithRetries({ random, pond, placements, clearZones, clusterAngles, clusterChance = 0.5, minimumDistance, distanceFor, makePlacement }) {
   for (let attempt = 0; attempt < 96; attempt += 1) {
     const cluster = clusterAngles[attempt % clusterAngles.length];
-    const angle = attempt < 48 ? cluster + (random() - 0.5) * 0.9 : random() * TAU;
+    const angle = attempt < 48 && random() < clusterChance ? cluster + (random() - 0.5) * 0.9 : random() * TAU;
     const distances = outlineDistances(pond, angle);
     const distance = distanceFor(distances, attempt);
     const position = pointAt(pond.center, angle, distance);
@@ -139,25 +149,32 @@ export function generatePondDecorPlacements(pond) {
     const texturePool = Array.isArray(boulderRecipe.texturePool) ? boulderRecipe.texturePool : [];
     const clusters = [random() * TAU, random() * TAU];
     for (let index = 0; index < count; index += 1) {
-      const shoreline = index === 0;
+      const roll = random();
+      const waterEdgeChance = Number.isFinite(boulderRecipe.waterEdgeChance) ? boulderRecipe.waterEdgeChance : 0.2;
+      const shoreChance = Number.isFinite(boulderRecipe.shoreChance) ? boulderRecipe.shoreChance : 0.55;
+      const placementZone = roll < waterEdgeChance ? 'water-edge' : roll < waterEdgeChance + shoreChance ? 'shoreline' : 'grass-bank';
       placeWithRetries({
-        random, pond, placements: boulders, clearZones, clusterAngles: clusters, minimumDistance: 1.15,
-        distanceFor: ({ water, mud, shore }) => shoreline
-          ? Math.min(shore - 0.08, water + 0.28 + random() * Math.max(0.2, mud - water - 0.25))
-          : shore + 0.45 + random() * 2.35,
+        random, pond, placements: boulders, clearZones, clusterAngles: clusters, clusterChance: boulderRecipe.clusterChance ?? 0.3, minimumDistance: 1.15,
+        distanceFor: ({ water, mud, shore }) => {
+          if (placementZone === 'water-edge') return water + 0.05 + random() * Math.max(0.12, (mud - water) * 0.35);
+          if (placementZone === 'shoreline') return mud + 0.08 + random() * Math.max(0.15, shore - mud - 0.12);
+          return shore + 0.4 + random() * 2.4;
+        },
         makePlacement: (position, angle) => {
-          const base = 0.72 + random() * 0.72;
+          const base = randomBetween(random, boulderRecipe.size, [0.6, 1.2]);
+          const scaleVariance = Number.isFinite(boulderRecipe.boulderScaleVariance) ? boulderRecipe.boulderScaleVariance : 0.35;
+          const rotationVariance = Number.isFinite(boulderRecipe.boulderRotationVariance) ? boulderRecipe.boulderRotationVariance : 1;
           return {
             id: `${pond.id}_boulder_${String(index + 1).padStart(2, '0')}`,
             kind: 'boulder',
             position,
             angle,
-            placementZone: shoreline ? 'shoreline' : 'near-bank',
-            partiallySubmerged: false,
+            placementZone,
+            partiallySubmerged: placementZone === 'water-edge',
             materialKey: texturePool[Math.floor(random() * texturePool.length) % texturePool.length],
-            scale: [base * (0.85 + random() * 0.4), base * (0.55 + random() * 0.25), base * (0.82 + random() * 0.42)],
-            rotation: [(random() - 0.5) * 0.35, random() * TAU, (random() - 0.5) * 0.28],
-            sinkRatio: 0.2 + random() * 0.18,
+            scale: [base * (1 - scaleVariance * 0.5 + random() * scaleVariance), base * (0.55 + random() * 0.25), base * (1 - scaleVariance * 0.5 + random() * scaleVariance)],
+            rotation: [(random() - 0.5) * 0.35 * rotationVariance, random() * TAU, (random() - 0.5) * 0.28 * rotationVariance],
+            sinkRatio: randomBetween(random, boulderRecipe.sinkAmount, [0.2, 0.38]),
           };
         },
       });
@@ -172,15 +189,18 @@ export function generatePondDecorPlacements(pond) {
     for (let index = 0; index < bushCount; index += 1) {
       const mudEdge = index === 0;
       const placement = placeWithRetries({
-        random, pond, placements: [...boulders, ...vegetation], clearZones, clusterAngles: clusters, minimumDistance: 0.72,
-        distanceFor: ({ mud, shore }) => mudEdge ? mud + 0.12 + random() * Math.max(0.1, shore - mud - 0.2) : shore + 0.8 + random() * 3.0,
+        random, pond, placements: [...boulders, ...vegetation], clearZones, clusterAngles: clusters, clusterChance: vegetationRecipe.bushClusterChance ?? 0.5, minimumDistance: 0.72 / Math.max(0.5, vegetationRecipe.vegetationDensity ?? 1),
+        distanceFor: ({ mud, shore }) => {
+          const range = vegetationRecipe.bushDistanceFromMud ?? [0.15, 3.8];
+          return mudEdge ? mud + randomBetween(random, [range[0], Math.min(range[1], Math.max(range[0], shore - mud - 0.1))], [0.15, 0.8]) : shore + randomBetween(random, [0.5, range[1]], [0.8, 3.8]);
+        },
         makePlacement: (position) => {
-          const sprite = chooseSprite(random, 'bush', vegetationRecipe.excludeTags);
+          const sprite = chooseSprite(random, 'bush', vegetationRecipe.excludeTags, vegetationRecipe.foliagePool);
           return {
             id: `${pond.id}_bush_${String(index + 1).padStart(2, '0')}`,
             kind: 'vegetation', layer: 'bush', placementZone: mudEdge ? 'mud-edge' : 'outer-bank', position,
-            spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, scale: 1.05 + random() * 0.85,
-            sinkRatio: 0.03 + random() * 0.04, yawOffset: (random() - 0.5) * 0.36,
+            spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, scale: randomBetween(random, vegetationRecipe.bushSize, [1.05, 1.9]),
+            sinkRatio: randomBetween(random, vegetationRecipe.vegetationSinkAmount, [0.03, 0.08]), yawOffset: (random() - 0.5) * (vegetationRecipe.vegetationRandomYaw ?? 0.36),
           };
         },
       });
@@ -189,14 +209,14 @@ export function generatePondDecorPlacements(pond) {
     for (let index = 0; index < treeCount; index += 1) {
       const placement = placeWithRetries({
         random, pond, placements: [...boulders, ...vegetation], clearZones, clusterAngles: clusters.slice().reverse(), minimumDistance: 1.55,
-        distanceFor: ({ shore }) => shore + 3.5 + random() * 3.4,
+        distanceFor: ({ shore }) => shore + randomBetween(random, vegetationRecipe.treeDistanceFromWater, [3.2, 6.8]),
         makePlacement: (position) => {
-          const sprite = chooseSprite(random, 'tree', vegetationRecipe.excludeTags);
+          const sprite = chooseSprite(random, 'tree', vegetationRecipe.excludeTags, vegetationRecipe.foliagePool);
           return {
             id: `${pond.id}_small_tree_${String(index + 1).padStart(2, '0')}`,
             kind: 'vegetation', layer: 'small-tree', placementZone: 'nearby-grass', position,
-            spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, scale: 2.8 + random() * 1.8,
-            sinkRatio: 0.04 + random() * 0.04, yawOffset: (random() - 0.5) * 0.3,
+            spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, scale: randomBetween(random, vegetationRecipe.treeSize, [2.8, 4.6]),
+            sinkRatio: randomBetween(random, vegetationRecipe.vegetationSinkAmount, [0.03, 0.08]), yawOffset: (random() - 0.5) * (vegetationRecipe.vegetationRandomYaw ?? 0.36),
           };
         },
       });
