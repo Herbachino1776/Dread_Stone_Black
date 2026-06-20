@@ -21,6 +21,7 @@ import { getLocationDefinition } from './locations/locationRegistry.js';
 import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
 import './creatures/creatureRegistry.js';
 import { RAM_MAN_FRIENDLY_ANIMATION_FILES } from './creatures/ramManFriendly.config.js';
+import { FISH_SPECS, createFishMesh } from './fishing/FishMeshFactory.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -80,15 +81,6 @@ const RAM_MAN_NPC_PATROL_POINTS = [
   new THREE.Vector3(-5, FLOOR_Y, 19),
 ];
 
-const FIELD_FISH_SPECIES = Object.freeze({
-  smallRiverFish: { body: 0x9aaea8, fin: 0xc78d42, length: 0.62, height: 0.16, width: 0.12 },
-  broadCarpFish: { body: 0xd6a25e, fin: 0xc97835, length: 0.72, height: 0.26, width: 0.18 },
-  longEelFish: { body: 0x27322e, fin: 0x1a211f, length: 0.98, height: 0.1, width: 0.09 },
-  spineBackFish: { body: 0x536b45, fin: 0x263127, length: 0.76, height: 0.19, width: 0.13 },
-  flatMarshFish: { body: 0x34413a, fin: 0x2a7970, length: 0.7, height: 0.1, width: 0.28 },
-  jawHunterFish: { body: 0x3b463d, fin: 0x202722, length: 0.86, height: 0.19, width: 0.14 },
-  sacredGlowFish: { body: 0x52b8ad, fin: 0x61d1c4, length: 0.72, height: 0.17, width: 0.13, glow: 0x0f6b64 },
-});
 
 function stableHash(value = '') {
   let hash = 2166136261;
@@ -1535,7 +1527,7 @@ export class DungeonScene {
       this.addPondExpoLabel(body, cx, composite?.water.position[1] ?? y, cz);
       if (body.fishable) {
         const fishableRadius = Number.isFinite(body.fishableRadius) ? body.fishableRadius : Math.max(rx, rz) + 4;
-        const fishSpeciesPool = (body.fishSpeciesPool ?? []).filter((species) => FIELD_FISH_SPECIES[species]);
+        const fishSpeciesPool = (body.fishSpeciesPool ?? []).filter((species) => FISH_SPECS[species]);
         this.fieldFishingZones.push({
           id: `${body.id}_fishing_zone`, name: body.id, shape: 'ellipse', centerX: cx, centerZ: cz, radiusX: rx, radiusZ: rz,
           minX: cx - rx, maxX: cx + rx, minZ: cz - rz, maxZ: cz + rz, interactPadding: Math.max(0, fishableRadius - Math.max(rx, rz)),
@@ -2150,22 +2142,26 @@ export class DungeonScene {
   }
 
   createRawFishPickupMesh(fishSpecies = 'smallRiverFish') {
-    const spec = FIELD_FISH_SPECIES[fishSpecies] ?? FIELD_FISH_SPECIES.smallRiverFish;
-    const group = new THREE.Group();
-    group.userData = { itemId: 'raw_fish', fishSpecies, objectCategory: 'rawFishPickup', visualSource: 'Kerovac fish species pickup' };
-    const bodyMat = new THREE.MeshStandardMaterial({ color: spec.body, roughness: 0.82, emissive: spec.glow ?? 0x101413, emissiveIntensity: spec.glow ? 0.22 : 0.12 });
-    const tailMat = new THREE.MeshStandardMaterial({ color: spec.fin, roughness: 0.88, emissive: spec.glow ?? 0x090d0c, emissiveIntensity: spec.glow ? 0.14 : 0.1 });
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 10), bodyMat);
-    body.scale.set(spec.length / 0.6, spec.height / 0.3, spec.width / 0.3);
-    body.rotation.z = Math.PI / 2;
-    body.userData = { fishSpecies, fishPart: 'speciesBody' };
-    group.add(body);
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.34, 3), tailMat);
-    tail.position.x = -spec.length * 0.48;
-    tail.rotation.z = -Math.PI / 2;
-    tail.scale.z = 0.42;
-    tail.userData = { fishSpecies, fishPart: 'speciesTail' };
-    group.add(tail);
+    const resolvedSpecies = FISH_SPECS[fishSpecies] ? fishSpecies : 'smallRiverFish';
+    const group = createFishMesh(resolvedSpecies, {
+      id: `raw-fish-pickup-${resolvedSpecies}`,
+      baseUserData: {
+        itemId: 'raw_fish',
+        fishSpecies: resolvedSpecies,
+        objectCategory: 'rawFishPickup',
+        generatedBy: 'DungeonScene:createRawFishPickupMesh',
+        pickupScale: 'small-readable-field-pickup',
+      },
+    });
+    group.userData = {
+      ...group.userData,
+      itemId: 'raw_fish',
+      fishSpecies: resolvedSpecies,
+      objectCategory: 'rawFishPickup',
+      visualSource: 'sharedKerovacFishSpeciesFactory',
+    };
+    group.scale.setScalar(0.48);
+    group.rotation.z = Math.PI / 2;
     return group;
   }
 
