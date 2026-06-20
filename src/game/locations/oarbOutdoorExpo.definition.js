@@ -53,8 +53,8 @@ const pond06WaterOutline = createPondOutline(pond06Center, pond06Radius, [
   [0, 1.02], [28, 0.9], [55, 1.08], [86, 0.95], [118, 1.12], [148, 0.93],
   [181, 1.06], [214, 0.88], [244, 1.1], [276, 0.96], [308, 1.04], [336, 0.91],
 ]);
-const pond06MudBedOutline = offsetClosedOutline(pond06WaterOutline, 3.15);
-const pond06WetShoreOutline = offsetClosedOutline(pond06MudBedOutline, 1.85);
+const pond06MudBedOutline = offsetClosedOutline(pond06WaterOutline, 3.6);
+const pond06WetShoreOutline = offsetClosedOutline(pond06MudBedOutline, 2.5);
 
 const textures = Object.freeze({
   ...outdoorTextureProfiles,
@@ -84,7 +84,7 @@ const textures = Object.freeze({
   },
   mudShore: { ...outdoorTextureProfiles.mudChurnedWet, repeat: [12, 12], color: 0x655039, emissive: 0x160d07, emissiveIntensity: 0.06 },
   mudShoreDark: { ...outdoorTextureProfiles.mudWetDark, repeat: [10, 10], color: 0x46372b, emissive: 0x100a07, emissiveIntensity: 0.07 },
-  pondBrightMud: { ...outdoorTextureProfiles.mudChurnedWet, repeat: [14, 14], color: 0xb58b5d, emissive: 0x2a1b0d, emissiveIntensity: 0.08, worldTileLength: 7, worldTileWidth: 7 },
+  pondBrightMud: { ...outdoorTextureProfiles.mudChurnedWet, repeat: [14, 14], color: 0xd0a06c, emissive: 0x3a260f, emissiveIntensity: 0.12, worldTileLength: 7, worldTileWidth: 7 },
   grassDryStrawPad: { ...outdoorTextureProfiles.grassDryStraw, repeat: [6, 6] },
   grassMattedPad: { ...outdoorTextureProfiles.grassMatted, repeat: [6, 6] },
   grassPatchyDirtPad: { ...outdoorTextureProfiles.grassPatchyDirt, repeat: [6, 6] },
@@ -135,7 +135,7 @@ export const oarbOutdoorExpoDefinition = Object.freeze({
       { id: 'pond_expo_06_gully_cut', kind: 'ravine', path: [[-88, 32], [-84, 45], [-80, 58]], width: 5.2, depth: 0.32, tags: ['pond-expo', 'POND 06', 'softened-gully-repair-context'] },
       { id: 'pond_expo_06_outer_walkable_shore', kind: 'flatten', center: [-84, 45], radius: 15.2, y: -0.08, tags: ['pond-expo', 'POND 06', 'walkable-outer-shore'] },
       { id: 'pond_expo_06_basin_hollow', kind: 'hollow', center: [-84, 45], radius: 13.4, depth: 0.42, tags: ['pond-expo', 'POND 06', 'coherent-basin-bowl'] },
-      { id: 'pond_expo_06_bright_mud_bed', kind: 'flatten', center: [-84, 45], radius: 10.7, y: -0.24, tags: ['pond-expo', 'POND 06', 'bright-mud-bed-footprint'] },
+      { id: 'pond_expo_06_bright_mud_bed', kind: 'flatten', center: [-84, 45], radius: 11.2, y: -0.24, tags: ['pond-expo', 'POND 06', 'bright-mud-bed-footprint'] },
       { id: 'pond_expo_06_supported_water_floor', kind: 'flatten', center: [-84, 45], radius: 7.0, y: -0.35, tags: ['pond-expo', 'POND 06', 'supported-water-floor'] },
       { id: 'pond_expo_06_low_inspection_bank', kind: 'hill', center: [-78, 40], radius: 8, height: 0.18, tags: ['pond-expo', 'POND 06', 'softened-view-bank'] },
       { id: 'pond_expo_07_shore_shelf', kind: 'flatten', center: [-60, 45], radius: 13, y: -0.08, tags: ['pond-expo', 'POND 07', 'natural-irregular'] },
@@ -187,9 +187,9 @@ export const oarbOutdoorExpoDefinition = Object.freeze({
       bedMaterial: 'pondBrightMud',
       shoreMaterial: 'mudShoreDark',
       shoreWidth: 3.4,
-      footprint: { recipe: 'offset-outline-irregular-polygon', center: pond06Center, waterRadius: pond06Radius, waterOutline: pond06WaterOutline, mudBedOutline: pond06MudBedOutline, mudOffset: 3.15, minMudMarginWorld: 2.0, outerShoreOutline: pond06WetShoreOutline, outerShoreOffset: 1.85, debug: { showWaterOutline: true, showMudBedOutline: true, showWetShoreOutline: true } },
+      footprint: { recipe: 'offset-outline-irregular-polygon', center: pond06Center, waterRadius: pond06Radius, waterOutline: pond06WaterOutline, mudBedOutline: pond06MudBedOutline, mudOffset: 3.6, minMudMarginWorld: 2.0, minVisibleMudBandWorld: 2.0, shorelineSampleStepWorld: 0.5, outerShoreOutline: pond06WetShoreOutline, outerShoreOffset: 2.5, debug: { showWaterOutline: true, showMudBedOutline: true, showWetShoreOutline: true } },
       tags: ['pond-expo', 'POND 06', 'gully-repair-keeper-candidate'],
-      userData: { pondExpoId: 'POND 06', name: 'Gully Repair / Bright Mud Bed Pond', keeperCandidate: true, recipe: 'offset-outline pond recipe: muted blue-green water uses an irregular source outline; bright pond mud is generated from the same outline with a consistent outward offset, plus one darker wet-mud outer offset band inside a stamped basin', terrainStampIds: ['pond_expo_06_gully_cut', 'pond_expo_06_outer_walkable_shore', 'pond_expo_06_basin_hollow', 'pond_expo_06_bright_mud_bed', 'pond_expo_06_supported_water_floor', 'pond_expo_06_low_inspection_bank'], visibleMarker: { id: 'pond_expo_marker_06', label: 'POND 06' }, noDownwardFacingTopNormals: true, usesSquareDecalFallback: false }
+      userData: { pondExpoId: 'POND 06', name: 'Gully Repair / Bright Mud Bed Pond', keeperCandidate: true, recipe: 'offset-outline pond recipe: muted blue-green water uses an irregular source outline; bright pond mud is generated from the same outline with a consistent outward offset, plus one darker wet-mud outer offset band inside a stamped basin', terrainStampIds: ['pond_expo_06_gully_cut', 'pond_expo_06_outer_walkable_shore', 'pond_expo_06_basin_hollow', 'pond_expo_06_bright_mud_bed', 'pond_expo_06_supported_water_floor', 'pond_expo_06_low_inspection_bank'], visibleMarker: { id: 'pond_expo_marker_06', label: 'POND 06' }, noDownwardFacingTopNormals: true, usesSquareDecalFallback: false, waterMeshSource: 'waterOutline', brightMudMeshSource: 'mudBedOutline', wetShoreMeshSource: 'outerShoreOutline' }
     },
     { id: 'pond_expo_07_natural_irregular', kind: 'pond', center: [-60, 45], radius: [7.4, 5.9], y: -0.34, material: 'pondWater', shoreMaterial: 'mudShore', shoreWidth: 4.1, tags: ['pond-expo', 'POND 07'], userData: { pondExpoId: 'POND 07', name: 'Natural Irregular', recipe: 'natural irregular: polished irregular shoreline with mixed rocks, mud, grass shelves, and muted water', terrainStampIds: ['pond_expo_07_shore_shelf', 'pond_expo_07_bowl', 'pond_expo_07_floor'], visibleMarker: { id: 'pond_expo_marker_07', label: 'POND 07' } } },
     { id: 'pond_expo_08_fishing_hole', kind: 'pond', center: [-38, 45], radius: [5.5, 4.6], y: -0.2, material: 'pondWater', shoreMaterial: 'mudShore', shoreWidth: 3.0, fishable: false, tags: ['pond-expo', 'POND 08', 'future-fishable'], userData: { pondExpoId: 'POND 08', name: 'Fishing Hole', recipe: 'fishing hole: compact basin + flat reachable shoreline + clear dry standing spot for future fishing', terrainStampIds: ['pond_expo_08_standing_pad', 'pond_expo_08_basin'], futureFishable: true, visibleMarker: { id: 'pond_expo_marker_08', label: 'POND 08' } } },

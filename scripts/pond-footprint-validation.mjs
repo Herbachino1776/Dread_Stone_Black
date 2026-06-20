@@ -1,4 +1,6 @@
 const DEFAULT_MIN_MUD_MARGIN_WORLD = 2.0;
+const DEFAULT_MIN_VISIBLE_MUD_BAND_WORLD = 2.0;
+const DEFAULT_SHORELINE_SAMPLE_STEP_WORLD = 0.5;
 const EPSILON = 1e-6;
 
 function isFinitePoint(point) {
@@ -57,6 +59,44 @@ function samplePolygonInterior(polygon, step = 0.75) {
   return [...polygon, ...samples];
 }
 
+
+function formatCoord(value) {
+  return Number(value.toFixed(3));
+}
+
+function directionLabel(dx, dz) {
+  if (Math.abs(dx) >= Math.abs(dz)) return dx >= 0 ? '+X' : '-X';
+  return dz >= 0 ? '+Z' : '-Z';
+}
+
+function sampleOutlineBand(innerOutline, outerOutline, minBandWidth, step, fail, bandName) {
+  const orientation = polygonSignedArea(innerOutline) >= 0 ? 1 : -1;
+  innerOutline.forEach((point, index) => {
+    const next = innerOutline[(index + 1) % innerOutline.length];
+    const dx = next[0] - point[0];
+    const dz = next[1] - point[1];
+    const length = Math.hypot(dx, dz);
+    if (length <= EPSILON) {
+      fail(`${bandName} edge ${index} has zero length.`);
+      return;
+    }
+    const outwardNormal = orientation > 0 ? [dz / length, -dx / length] : [-dz / length, dx / length];
+    const sampleCount = Math.max(1, Math.ceil(length / step));
+    for (let sampleIndex = 0; sampleIndex <= sampleCount; sampleIndex += 1) {
+      const t = Math.min(1, sampleIndex / sampleCount);
+      const edgeSample = [point[0] + dx * t, point[1] + dz * t];
+      for (let distance = step; distance <= minBandWidth + EPSILON; distance += step) {
+        const sample = [formatCoord(edgeSample[0] + outwardNormal[0] * distance), formatCoord(edgeSample[1] + outwardNormal[1] * distance)];
+        if (!pointInPolygon(sample, outerOutline)) {
+          const dirLabel = directionLabel(outwardNormal[0], outwardNormal[1]);
+          fail(`${bandName} edge sample at x=${formatCoord(edgeSample[0])} z=${formatCoord(edgeSample[1])} has no visible band before grass; ${dirLabel} shoreline band is shorter than ${minBandWidth} world units.`);
+          return;
+        }
+      }
+    }
+  });
+}
+
 function labelFor(pond) {
   return pond?.userData?.pondExpoId ?? pond?.id ?? 'pond';
 }
@@ -64,6 +104,8 @@ function labelFor(pond) {
 export function validatePondFootprint(pond, definition, options = {}) {
   const errors = [];
   const minMudMarginWorld = options.minMudMarginWorld ?? pond?.footprint?.minMudMarginWorld ?? DEFAULT_MIN_MUD_MARGIN_WORLD;
+  const minVisibleMudBandWorld = options.minVisibleMudBandWorld ?? pond?.footprint?.minVisibleMudBandWorld ?? DEFAULT_MIN_VISIBLE_MUD_BAND_WORLD;
+  const shorelineSampleStepWorld = options.shorelineSampleStepWorld ?? pond?.footprint?.shorelineSampleStepWorld ?? DEFAULT_SHORELINE_SAMPLE_STEP_WORLD;
   const label = labelFor(pond);
   const fail = (message) => errors.push(`${label} invalid: ${message}`);
   const footprint = pond?.footprint ?? {};
@@ -92,8 +134,12 @@ export function validatePondFootprint(pond, definition, options = {}) {
       if (!pointInPolygon(sample, mudBedOutline)) fail(`water sample at x=${sample[0]} z=${sample[1]} is outside bright mud bed footprint.`);
       else if (distanceToPolygonEdge(sample, mudBedOutline) < minMudMarginWorld) fail(`water sample at x=${sample[0]} z=${sample[1]} is within ${minMudMarginWorld} world units of the bright mud bed edge.`);
     });
+    sampleOutlineBand(waterOutline, mudBedOutline, minVisibleMudBandWorld, shorelineSampleStepWorld, fail, 'bright mud');
   }
-  if (outerShoreOutline.length >= 3 && Math.abs(polygonSignedArea(outerShoreOutline)) <= Math.abs(polygonSignedArea(mudBedOutline))) fail('wet shore outline is not larger than the bright mud bed outline.');
+  if (outerShoreOutline.length >= 3) {
+    if (Math.abs(polygonSignedArea(outerShoreOutline)) <= Math.abs(polygonSignedArea(mudBedOutline))) fail('wet shore outline is not larger than the bright mud bed outline.');
+    else sampleOutlineBand(mudBedOutline, outerShoreOutline, Math.min(minVisibleMudBandWorld, footprint.outerShoreOffset ?? minVisibleMudBandWorld), shorelineSampleStepWorld, fail, 'wet shore');
+  }
 
   const pondRoom = (definition?.rooms ?? []).find((room) => room.tags?.includes('pond-expo'));
   waterOutline.forEach(([x, z], index) => {
@@ -105,8 +151,11 @@ export function validatePondFootprint(pond, definition, options = {}) {
   if (pond?.bedMaterial !== 'pondBrightMud') fail(`uses ${pond?.bedMaterial} under water instead of bright pond mud.`);
   if (pond?.userData?.noDownwardFacingTopNormals !== true) fail('geometry metadata must confirm top-visible/two-sided normals.');
   if (pond?.userData?.usesSquareDecalFallback === true) fail('square decal fallback is forbidden for polished pond recipes.');
+  if (pond?.userData?.waterMeshSource !== 'waterOutline') fail('water mesh must use waterOutline instead of an ellipse fallback.');
+  if (pond?.userData?.brightMudMeshSource !== 'mudBedOutline') fail('bright mud bed mesh must use mudBedOutline instead of a square/ellipse fallback.');
+  if (outerShoreOutline.length >= 3 && pond?.userData?.wetShoreMeshSource !== 'outerShoreOutline') fail('wet shore mesh must use outerShoreOutline instead of a fallback ring.');
 
-  return { valid: errors.length === 0, errors, minMudMarginWorld };
+  return { valid: errors.length === 0, errors, minMudMarginWorld, minVisibleMudBandWorld, shorelineSampleStepWorld };
 }
 
 export function assertValidPondFootprint(pond, definition, options = {}) {
