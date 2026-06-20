@@ -100,6 +100,54 @@ export const reliquaryFieldDefinition = Object.freeze({
     material: 'forestGround',
     heightStamps: [],
   },
+  splineTrails: [
+    {
+      id: 'oarb_outdoor_expo_approach_path',
+      points: [[60, 146], [66, 154], [75, 164], [82, 174], [88, 186]],
+      width: 4.5,
+      material: 'mudTrail',
+      flatten: true,
+      tags: ['temporary', 'oarb-outdoor-expo', 'expo-wayfinding'],
+      userData: {
+        purpose: 'Guide players from the Kerovac/OARB testing cluster to the Outdoor Expo entrance without overlapping nearby gate triggers.',
+        startsNear: 'field_enter_kerovac',
+        endsAt: 'oarb_outdoor_expo_gate',
+      },
+    },
+  ],
+  outdoorPrimitives: [
+    {
+      id: 'oarb_outdoor_expo_gold_header_panel',
+      kind: 'cliffWall',
+      points: [[84, 181.2], [92, 181.2]],
+      height: 3.2,
+      thickness: 0.7,
+      material: 'gate',
+      tags: ['temporary', 'oarb-outdoor-expo', 'expo-sign'],
+      userData: { label: 'OARB Outdoor Expo Center', purpose: 'Bright exterior sign panel just before the expo trigger.' },
+    },
+    {
+      id: 'oarb_outdoor_expo_left_beacon_cluster',
+      kind: 'boulderCluster',
+      center: [82, 181.8],
+      radius: 1.8,
+      material: 'stoneOutcrop',
+      tags: ['temporary', 'oarb-outdoor-expo', 'expo-beacon'],
+    },
+    {
+      id: 'oarb_outdoor_expo_right_beacon_cluster',
+      kind: 'boulderCluster',
+      center: [94, 181.8],
+      radius: 1.8,
+      material: 'stoneOutcrop',
+      tags: ['temporary', 'oarb-outdoor-expo', 'expo-beacon'],
+    },
+  ],
+  curvedBlockers: [
+    { id: 'oarb_outdoor_expo_gold_header_panel_blocker', kind: 'cliff', points: [[84, 181.2], [92, 181.2]], thickness: 0.7, visibleStructureId: 'oarb_outdoor_expo_gold_header_panel' },
+    { id: 'oarb_outdoor_expo_left_beacon_cluster_blocker', kind: 'circle', center: [82, 181.8], radius: 1.8, visibleStructureId: 'oarb_outdoor_expo_left_beacon_cluster' },
+    { id: 'oarb_outdoor_expo_right_beacon_cluster_blocker', kind: 'circle', center: [94, 181.8], radius: 1.8, visibleStructureId: 'oarb_outdoor_expo_right_beacon_cluster' },
+  ],
   fieldManifestations: [
     {
       id: 'giant_ram_man_field_altar_manifestation',
@@ -245,8 +293,8 @@ export const reliquaryFieldDefinition = Object.freeze({
     exteriorBlocker('KEROVAC_EXT_RIGHT_PIER', 62.4, 63.6, 143.5, 148.5, { height: 5.2, visualStructureId: 'KEROVAC_EXT_RIGHT_PIER-limestone-sun-gate' }),
     exteriorBlocker('OARB_PROVING_GROUNDS_LEFT_STONE', 65.2, 66.8, 162.8, 165.2, { height: 5.8, visualStructureId: 'OARB_PROVING_GROUNDS_LEFT_STONE-river-marker' }),
     exteriorBlocker('OARB_PROVING_GROUNDS_RIGHT_STONE', 73.2, 74.8, 162.8, 165.2, { height: 5.8, visualStructureId: 'OARB_PROVING_GROUNDS_RIGHT_STONE-river-marker' }),
-    exteriorBlocker('OARB_OUTDOOR_EXPO_LEFT_STONE', 83.2, 84.8, 184.8, 187.2, { height: 5.8, visualStructureId: 'OARB_OUTDOOR_EXPO_LEFT_STONE-field-marker' }),
-    exteriorBlocker('OARB_OUTDOOR_EXPO_RIGHT_STONE', 91.2, 92.8, 184.8, 187.2, { height: 5.8, visualStructureId: 'OARB_OUTDOOR_EXPO_RIGHT_STONE-field-marker' }),
+    exteriorBlocker('OARB_OUTDOOR_EXPO_LEFT_STONE', 82.6, 84.8, 183.8, 188.2, { height: 7.4, visualStructureId: 'OARB_OUTDOOR_EXPO_LEFT_STONE-field-marker' }),
+    exteriorBlocker('OARB_OUTDOOR_EXPO_RIGHT_STONE', 91.2, 93.4, 183.8, 188.2, { height: 7.4, visualStructureId: 'OARB_OUTDOOR_EXPO_RIGHT_STONE-field-marker' }),
   ],
   spawns: [
     { id: 'field_player_start', kind: 'player', position: { x: 0, y: 1.55, z: -175 }, yaw: 0, roomId: 'FIELD01', tags: ['live'] },
@@ -407,7 +455,18 @@ export const reliquaryFieldDefinition = Object.freeze({
       userData: {
         temporary: true,
         foliageClearRadius: 24,
-        visibleMarker: { type: 'standing-stone-arch', ids: ['OARB_OUTDOOR_EXPO_LEFT_STONE', 'OARB_OUTDOOR_EXPO_RIGHT_STONE', 'OARB_OUTDOOR_EXPO_PATH'] },
+        visibleMarker: {
+          type: 'standing-stone-arch-with-sign-and-path',
+          gatePosition: { x: 88, y: 1, z: 186 },
+          ids: [
+            'OARB_OUTDOOR_EXPO_LEFT_STONE',
+            'OARB_OUTDOOR_EXPO_RIGHT_STONE',
+            'oarb_outdoor_expo_gold_header_panel',
+            'oarb_outdoor_expo_left_beacon_cluster',
+            'oarb_outdoor_expo_right_beacon_cluster',
+            'oarb_outdoor_expo_approach_path',
+          ],
+        },
         returnSpawnId: 'field_oarb_outdoor_expo_return',
         returnSpawnSafetyMargin: 6,
         placementNote: 'Placed north-east of the OARB Feature Yard and Kerovac markers; trigger and return spawn remain outside nearby temporary gate triggerRects.',

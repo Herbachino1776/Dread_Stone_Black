@@ -201,6 +201,56 @@ assert.ok(Math.hypot(chestDx, chestDz) <= oarbPond.fishableRadius + 6, 'OARB fis
 assert.equal(pondChest.itemId, 'fishing_rod', 'OARB fishing rod chest still grants the fishing rod.');
 
 
+
+const reliquaryBounds = reliquaryFieldDefinition.integrity.walkableBounds;
+const pointInsideReliquaryBounds = ([x, z]) => x >= reliquaryBounds.minX && x <= reliquaryBounds.maxX && z >= reliquaryBounds.minZ && z <= reliquaryBounds.maxZ;
+const expoFieldGate = reliquaryFieldDefinition.exits.find((candidate) => candidate.id === 'oarb_outdoor_expo_gate');
+assert.ok(expoFieldGate, 'Reliquary Field keeps the OARB Outdoor Expo entrance trigger.');
+assert.equal(expoFieldGate.toLocation, 'oarbOutdoorExpo', 'OARB Outdoor Expo entrance still routes to oarbOutdoorExpo.');
+assert.equal(expoFieldGate.destinationSpawnId, 'oarb_outdoor_expo_player_start', 'OARB Outdoor Expo entrance still targets the expo player spawn.');
+assert.equal(expoFieldGate.promptText, 'Tap INTERACT to enter the OARB Outdoor Expo Center.', 'OARB Outdoor Expo entrance prompt remains unchanged.');
+assert.deepEqual(expoFieldGate.position, { x: 88, y: 1, z: 186 }, 'OARB Outdoor Expo entrance remains at the authored x 88 z 186 gate position.');
+const expoReturnSpawn = reliquaryFieldDefinition.spawns.find((candidate) => candidate.id === 'field_oarb_outdoor_expo_return');
+assert.ok(expoReturnSpawn && [expoReturnSpawn.position.x, expoReturnSpawn.position.y, expoReturnSpawn.position.z].every(Number.isFinite), 'Reliquary Field OARB Outdoor Expo return spawn resolves and remains finite.');
+assert.ok(expoReturnSpawn.position.z < expoFieldGate.triggerRect.minZ, 'OARB Outdoor Expo return spawn remains south of the expo trigger to avoid instant re-entry.');
+function rectsOverlap(a, b) {
+  return a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ;
+}
+reliquaryFieldDefinition.exits
+  .filter((exit) => exit.id !== expoFieldGate.id)
+  .forEach((exit) => assert.equal(rectsOverlap(expoFieldGate.triggerRect, exit.triggerRect), false, `OARB Outdoor Expo entrance trigger does not overlap ${exit.id}.`));
+const expoVisibleIds = new Set(expoFieldGate.userData?.visibleMarker?.ids ?? []);
+['OARB_OUTDOOR_EXPO_LEFT_STONE', 'OARB_OUTDOOR_EXPO_RIGHT_STONE', 'oarb_outdoor_expo_gold_header_panel', 'oarb_outdoor_expo_approach_path'].forEach((id) => {
+  assert.equal(expoVisibleIds.has(id), true, `OARB Outdoor Expo visible marker metadata includes ${id}.`);
+});
+assert.deepEqual(expoFieldGate.userData?.visibleMarker?.gatePosition, { x: 88, y: 1, z: 186 }, 'OARB Outdoor Expo visible marker metadata records the exact gate position.');
+const expoPath = reliquaryFieldDefinition.splineTrails.find((trailCandidate) => trailCandidate.id === 'oarb_outdoor_expo_approach_path');
+assert.ok(expoPath, 'Reliquary Field has an authored Outdoor Expo approach path.');
+expoPath.points.forEach((point, index) => {
+  assert.ok(point.every(Number.isFinite), `OARB Outdoor Expo approach path point ${index} is finite.`);
+  assert.equal(pointInsideReliquaryBounds(point), true, `OARB Outdoor Expo approach path point ${index} is inside Reliquary Field bounds.`);
+});
+const reliquaryTrailMesh = createOutdoorSplineTrailMesh(expoPath, { terrainSampler: sampler, textures: reliquaryFieldDefinition.textures });
+assert.ok(reliquaryTrailMesh, 'OARB Outdoor Expo approach path generates a visible trail mesh.');
+const expoPrimitiveIdSet = new Set(reliquaryFieldDefinition.outdoorPrimitives.map((primitive) => primitive.id));
+['oarb_outdoor_expo_gold_header_panel', 'oarb_outdoor_expo_left_beacon_cluster', 'oarb_outdoor_expo_right_beacon_cluster'].forEach((id) => {
+  assert.equal(expoPrimitiveIdSet.has(id), true, `OARB Outdoor Expo exterior marker primitive ${id} exists.`);
+});
+reliquaryFieldDefinition.outdoorPrimitives
+  .filter((primitive) => primitive.id.startsWith('oarb_outdoor_expo_'))
+  .forEach((primitive) => {
+    const pointsToCheck = primitive.points ?? [primitive.center].filter(Boolean);
+    pointsToCheck.forEach((point, index) => {
+      assert.ok(point.every(Number.isFinite), `${primitive.id} point ${index} is finite.`);
+      assert.equal(pointInsideReliquaryBounds(point), true, `${primitive.id} point ${index} is inside Reliquary Field bounds.`);
+    });
+  });
+const reliquaryExpoPrimitiveMeshes = createOutdoorPrimitiveMeshes(
+  reliquaryFieldDefinition.outdoorPrimitives.filter((primitive) => primitive.id.startsWith('oarb_outdoor_expo_')),
+  { terrainSampler: sampler, textures: reliquaryFieldDefinition.textures },
+);
+assert.equal(reliquaryExpoPrimitiveMeshes.length, 3, 'OARB Outdoor Expo exterior marker primitives generate visible finite meshes.');
+
 const oarbOutdoorExpoTerrainMesh = createOutdoorTerrainMesh(oarbOutdoorExpoDefinition.terrain, { textures: oarbOutdoorExpoDefinition.textures });
 assert.equal(oarbOutdoorExpoTerrainMesh.userData.materialFallbackUsed, false, 'OARB Outdoor Expo terrain resolves its authored material profile.');
 assert.equal(oarbOutdoorExpoTerrainMesh.userData.materialKey, 'expoGrass', 'OARB Outdoor Expo terrain uses the authored expoGrass material key.');
