@@ -165,6 +165,39 @@ for (let index = 0; index < oarbTrailNormals.count; index += 1) {
   assert.ok(oarbTrailNormals.getY(index) >= -0.001, `OARB test trail normal ${index} is not downward-facing.`);
 }
 
+const oarbPond = oarbFeatureYardDefinition.waterBodies.find((candidate) => candidate.id === 'oarb_training_pond');
+assert.ok(oarbPond, 'OARB Feature Yard keeps the authored training pond water body.');
+const [pondX, pondZ] = oarbPond.center;
+const [pondRadiusX, pondRadiusZ] = oarbPond.radius;
+assert.ok([pondX, pondZ, pondRadiusX, pondRadiusZ, oarbPond.y].every(Number.isFinite), 'OARB pond center/radius/y are finite.');
+assert.ok(pondX - pondRadiusX > -95 && pondX + pondRadiusX < 95 && pondZ - pondRadiusZ > -95 && pondZ + pondRadiusZ < 95, 'OARB pond stays inside Feature Yard bounds.');
+assert.equal(oarbPond.material, 'pondWater', 'OARB pond resolves the authored pond water material.');
+assert.equal(oarbPond.shoreMaterial, 'mudShore', 'OARB pond resolves the authored muddy shore material.');
+assert.ok(oarbPond.fishable && oarbPond.fishableRadius > Math.max(pondRadiusX, pondRadiusZ), 'OARB pond exposes a shore-reachable fishable zone.');
+const pondStampIds = new Set(oarbFeatureYardDefinition.terrain.heightStamps.map((stamp) => stamp.id));
+['oarb_yard_training_pond_shore_shelf', 'oarb_yard_training_pond_bowl', 'oarb_yard_training_pond_floor_flatten'].forEach((stampId) => {
+  assert.equal(pondStampIds.has(stampId), true, `OARB pond is supported by terrain stamp ${stampId}.`);
+});
+const pondFloorY = oarbSampler.sampleOutdoorY(pondX, pondZ);
+assert.ok(pondFloorY < oarbPond.y, 'OARB pond water surface is above the carved pond floor.');
+assert.ok(oarbPond.y - pondFloorY <= 0.35, 'OARB pond water surface is close enough to the flattened floor to avoid a floating decal.');
+[[-pondRadiusX * 0.8, 0], [pondRadiusX * 0.8, 0], [0, -pondRadiusZ * 0.8], [0, pondRadiusZ * 0.8]].forEach(([dx, dz], sampleIndex) => {
+  const bedY = oarbSampler.sampleOutdoorY(pondX + dx, pondZ + dz);
+  assert.ok(Math.abs(bedY - pondFloorY) <= 0.32, `OARB pond bed sample ${sampleIndex} remains flattened under water.`);
+  assert.ok(oarbPond.y - bedY <= 0.45, `OARB pond water sample ${sampleIndex} is not obviously above unsupported terrain.`);
+});
+const shoreY = oarbSampler.sampleOutdoorY(pondX + pondRadiusX + 4, pondZ);
+assert.ok(shoreY > pondFloorY + 0.25, 'OARB pond has a raised muddy shore rim around the basin.');
+const pondChest = oarbFeatureYardDefinition.outdoorChests.find((candidate) => candidate.id === 'oarb_training_pond_fishing_rod_chest');
+assert.ok(pondChest, 'OARB fishing rod chest remains authored near the pond.');
+assert.ok([pondChest.position.x, pondChest.position.y, pondChest.position.z].every(Number.isFinite), 'OARB fishing rod chest position is finite.');
+const chestDx = pondChest.position.x - pondX;
+const chestDz = pondChest.position.z - pondZ;
+const chestEllipse = ((chestDx * chestDx) / (pondRadiusX * pondRadiusX)) + ((chestDz * chestDz) / (pondRadiusZ * pondRadiusZ));
+assert.ok(chestEllipse > 1.1, 'OARB fishing rod chest is outside the water ellipse on dry land.');
+assert.ok(Math.hypot(chestDx, chestDz) <= oarbPond.fishableRadius + 6, 'OARB fishing rod chest remains close to the fishable pond.');
+assert.equal(pondChest.itemId, 'fishing_rod', 'OARB fishing rod chest still grants the fishing rod.');
+
 const authoredOutdoorPrimitives = [
   { id: 'future_cliff_wall', kind: 'cliffWall', points: [[-25, -20], [-15, -16], [-5, -20]], height: 8, thickness: 4, material: 'rockWall' },
   { id: 'future_root_wall', kind: 'rootWall', points: [[0, 20], [10, 24], [20, 20]], height: 4, thickness: 3, material: 'darkRoot' },
