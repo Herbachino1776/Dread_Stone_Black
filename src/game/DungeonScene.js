@@ -134,6 +134,8 @@ const FIELD_BALTHAZAN_RETURN_START = new THREE.Vector3(72, 1.55, 126);
 const FIELD_BALTHAZAN_RETURN_YAW = Math.PI;
 const FIELD_KEROVAC_RETURN_START = new THREE.Vector3(60, 1.55, 139);
 const FIELD_KEROVAC_RETURN_YAW = Math.PI;
+const FIELD_OARB_FEATURE_YARD_RETURN_START = new THREE.Vector3(84, 1.55, 137);
+const FIELD_OARB_FEATURE_YARD_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 const OUTDOOR_INTERACTION_RANGE = 4.25;
 const GENERATED_ENEMY_ACTIVE_CAP = 3;
@@ -678,6 +680,10 @@ export class DungeonScene {
 
     if (this.fieldSpawn === 'kerovacExit') {
       return { spawnPosition: FIELD_KEROVAC_RETURN_START, spawnYaw: FIELD_KEROVAC_RETURN_YAW };
+    }
+
+    if (this.fieldSpawn === 'oarbFeatureYardExit') {
+      return { spawnPosition: FIELD_OARB_FEATURE_YARD_RETURN_START, spawnYaw: FIELD_OARB_FEATURE_YARD_RETURN_YAW };
     }
 
     return { spawnPosition: FIELD_PLAYER_START, spawnYaw: FIELD_PLAYER_YAW };
