@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { createOutdoorTerrainMesh, createOutdoorTerrainSampler } from '../src/engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 import { createOutdoorSplineTrailMesh, createOutdoorSplineTrailMeshes } from '../src/engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { createOutdoorCurvedBlockers } from '../src/engine/outdoor-authoring/OutdoorBlockerBuilder.js';
@@ -6,6 +9,20 @@ import { createOutdoorPrimitiveMeshes } from '../src/engine/outdoor-authoring/Ou
 import { CollisionWorld } from '../src/game/Collision.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { oarbFeatureYardDefinition } from '../src/game/locations/oarbFeatureYard.definition.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(__dirname, '..');
+
+function assertTexturePathsExist(definition) {
+  for (const [key, profile] of Object.entries(definition.textures ?? {})) {
+    if (typeof profile?.path !== 'string') continue;
+    const publicPath = profile.path.replace(/^\.\//, 'public/');
+    assert.equal(existsSync(resolve(repoRoot, publicPath)), true, `${definition.id} texture profile ${key} path exists: ${profile.path}`);
+  }
+}
+
+assertTexturePathsExist(reliquaryFieldDefinition);
+assertTexturePathsExist(oarbFeatureYardDefinition);
 
 const terrain = reliquaryFieldDefinition.terrain;
 const sampler = createOutdoorTerrainSampler(terrain);
@@ -130,12 +147,19 @@ trail.points.forEach(([x, z], pointIndex) => {
 assert.equal(trailMesh.userData.collision, undefined, 'no collision object is generated from trails yet.');
 
 
+const oarbTerrainMesh = createOutdoorTerrainMesh(oarbFeatureYardDefinition.terrain, { textures: oarbFeatureYardDefinition.textures });
+assert.equal(oarbTerrainMesh.userData.materialFallbackUsed, false, 'OARB Feature Yard terrain resolves its authored material profile.');
+assert.equal(oarbTerrainMesh.userData.materialKey, 'forestGround', 'OARB Feature Yard terrain uses the authored forestGround material key.');
+assert.equal(oarbFeatureYardDefinition.textures.forestGround.path, './assets/textures/outdoor/field_grass_matted_01.png', 'OARB Feature Yard terrain uses field_grass_matted_01.png.');
 const oarbSampler = createOutdoorTerrainSampler(oarbFeatureYardDefinition.terrain);
 const oarbTrailDefinition = oarbFeatureYardDefinition.splineTrails.find((candidate) => candidate.id === 'oarb_yard_test_trail');
 assert.ok(oarbTrailDefinition, 'OARB Feature Yard keeps the authored oarb_yard_test_trail spline trail.');
 const oarbTrailMesh = createOutdoorSplineTrailMesh(oarbTrailDefinition, { terrainSampler: oarbSampler, textures: oarbFeatureYardDefinition.textures });
 assert.ok(oarbTrailMesh, 'OARB Feature Yard test trail generates a visible mesh.');
 assert.equal(oarbTrailMesh.name, 'OARB-spline-trail-oarb_yard_test_trail', 'validation targets the disappearing OARB test trail mesh.');
+assert.equal(oarbTrailMesh.userData.materialFallbackUsed, false, 'OARB Feature Yard trail resolves its authored material profile.');
+assert.equal(oarbTrailMesh.userData.materialKey, 'mudTrail', 'OARB Feature Yard trail uses the authored mudTrail material key.');
+assert.equal(oarbFeatureYardDefinition.textures.mudTrail.path, './assets/textures/outdoor/mud_wet_dark_01.png', 'OARB Feature Yard trail uses mud_wet_dark_01.png.');
 const oarbTrailNormals = oarbTrailMesh.geometry.attributes.normal;
 for (let index = 0; index < oarbTrailNormals.count; index += 1) {
   assert.ok(oarbTrailNormals.getY(index) >= -0.001, `OARB test trail normal ${index} is not downward-facing.`);

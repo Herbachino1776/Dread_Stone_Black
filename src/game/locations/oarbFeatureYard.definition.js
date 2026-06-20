@@ -1,6 +1,9 @@
+import { outdoorTextureProfiles } from './outdoorTextureProfiles.js';
+
 const textures = Object.freeze({
-  forestGround: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [28, 28], color: 0xb9b68f, roughness: 0.98, metalness: 0.0, emissive: 0x2b2d20, emissiveIntensity: 0.12 },
-  mudTrail: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [18, 3], color: 0x6b5136, roughness: 1.0, metalness: 0.0, emissive: 0x1b1209, emissiveIntensity: 0.06, worldTileLength: 8, worldTileWidth: 3 },
+  ...outdoorTextureProfiles,
+  forestGround: { ...outdoorTextureProfiles.grassMatted, repeat: [28, 28], color: 0xb9b68f, emissive: 0x2b2d20, emissiveIntensity: 0.12 },
+  mudTrail: { ...outdoorTextureProfiles.mudWetDark, repeat: [18, 3], color: 0x6b5136, emissive: 0x1b1209, emissiveIntensity: 0.06, worldTileLength: 8, worldTileWidth: 3 },
   rockWall: { path: './assets/textures/wall_black_stone_01.png', repeat: [2.5, 1.5], color: 0x5d5a51, roughness: 0.98, metalness: 0.0, emissive: 0x151311, emissiveIntensity: 0.1 },
   stoneOutcrop: { path: './assets/textures/wall_black_stone_01.png', repeat: [1.4, 1.2], color: 0x747066, roughness: 0.99, metalness: 0.0, emissive: 0x171410, emissiveIntensity: 0.08 },
   darkRoot: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [2.0, 1.0], color: 0x321b12, roughness: 1.0, metalness: 0.0, emissive: 0x0b0503, emissiveIntensity: 0.06 },
