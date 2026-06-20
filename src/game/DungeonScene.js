@@ -4,6 +4,7 @@ import { DungeonDebugRenderer } from '../engine/dungeon-authoring/DungeonDebugRe
 import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRuntimeRegistry.js';
 import { createOutdoorTerrainMesh } from '../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 import { createOutdoorSplineTrailMeshes } from '../engine/outdoor-authoring/OutdoorSplineBuilder.js';
+import { createOutdoorCurvedBlockers } from '../engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
 import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
 import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
@@ -975,7 +976,7 @@ export class DungeonScene {
   }
 
   createOutdoorBlockers() {
-    return getReliquaryFieldColliders()
+    const rectangularBlockers = getReliquaryFieldColliders()
       .filter((blocker) => blocker.blocksPlayer !== false)
       .map(({ id, minX, maxX, minZ, maxZ, height, type, tags, userData }) => ({
         id,
@@ -988,6 +989,10 @@ export class DungeonScene {
         tags,
         userData,
       }));
+    return [
+      ...rectangularBlockers,
+      ...createOutdoorCurvedBlockers(reliquaryFieldDefinition.curvedBlockers),
+    ];
   }
 
   addOutdoorLights() {
