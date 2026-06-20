@@ -510,7 +510,7 @@ export class Interactions {
       startPosition: this.player.position.clone(),
       fishingZoneId: fishingZone.id,
       cancelMessage: 'Fishing canceled.',
-      validate: (action) => this.dungeon.area === 'field'
+      validate: (action) => (this.dungeon.area === 'field' || this.dungeon.isCompiledOutdoorFieldArea?.())
         && this.equipmentRuntime?.getEquippedWeaponProfile?.().id === 'fishing_rod'
         && this.player.position.distanceTo(action.startPosition) <= TIMED_ACTION_MOVE_CANCEL_DISTANCE
         && Boolean(this.dungeon.getNearbyFishingZone?.(this.player.position)),
