@@ -1610,8 +1610,39 @@ export class DungeonScene {
     });
   }
 
-  getRawFishLandingPosition(player) {
+  getRawFishLandingPosition(player, fishingZone = null) {
     if (!player?.position) return null;
+    const zone = fishingZone ?? this.getNearbyFishingZone(player.position);
+    if (zone?.shape === 'ellipse' && [zone.centerX, zone.centerZ, zone.radiusX, zone.radiusZ].every(Number.isFinite)) {
+      const center = new THREE.Vector3(zone.centerX, 0, zone.centerZ);
+      const outward = player.position.clone().sub(center);
+      outward.y = 0;
+      if (outward.lengthSq() < 0.001) {
+        outward.set(Math.cos(stableHash(zone.id) % 360), 0, Math.sin(stableHash(`${zone.id}:shore`) % 360));
+      }
+      outward.normalize();
+      const denom = Math.sqrt((outward.x * outward.x) / (zone.radiusX * zone.radiusX) + (outward.z * outward.z) / (zone.radiusZ * zone.radiusZ));
+      const edgeDistance = denom > 0 ? 1 / denom : Math.max(zone.radiusX, zone.radiusZ);
+      const shoreOffset = 1.2;
+      const maxPlayerDistance = 2.65;
+      const minWaterClearance = 0.45;
+      const waterEdge = center.clone().addScaledVector(outward, edgeDistance);
+      const preferred = waterEdge.clone().addScaledVector(outward, shoreOffset);
+      const playerDistance = horizontalDistance(preferred, player.position);
+      const landing = playerDistance > maxPlayerDistance
+        ? player.position.clone().addScaledVector(preferred.clone().sub(player.position).setY(0).normalize(), maxPlayerDistance)
+        : preferred;
+      const minOutside = edgeDistance + minWaterClearance;
+      const fromCenter = landing.clone().sub(center);
+      fromCenter.y = 0;
+      const landingDistance = fromCenter.length();
+      if (landingDistance < minOutside) landing.copy(center).addScaledVector(outward, minOutside);
+      landing.x = THREE.MathUtils.clamp(landing.x, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
+      landing.z = THREE.MathUtils.clamp(landing.z, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
+      landing.y = 0.24;
+      landing.userData = { rawFishLanding: 'pond-shoreline-edge', waterEdgePoint: { x: waterEdge.x, z: waterEdge.z }, outsideWater: !this.isPositionInFishingWater(landing, 0) };
+      if (!this.isPositionInFishingWater(landing, 0)) return landing;
+    }
     const forward = typeof player.getLookDirection === 'function'
       ? player.getLookDirection().clone()
       : new THREE.Vector3(Math.sin(player.yaw ?? 0), 0, Math.cos(player.yaw ?? 0));
@@ -2157,30 +2188,64 @@ export class DungeonScene {
       ...group.userData,
       itemId: 'raw_fish',
       fishSpecies: resolvedSpecies,
-      objectCategory: 'rawFishPickup',
+      objectCategory: 'rawFishPickupVisual',
       visualSource: 'sharedKerovacFishSpeciesFactory',
+      pickupGroundOrientation: 'stable-root-yaw-plus-visual-side-roll',
+      localFishAxis: 'X=head-tail-horizontal',
     };
     group.scale.setScalar(0.48);
-    group.rotation.z = Math.PI / 2;
-    return group;
+    group.rotation.set(Math.PI / 2 + 0.18, 0, 0);
+
+    const root = new THREE.Group();
+    root.name = `raw-fish-pickup-ground-root-${resolvedSpecies}`;
+    root.userData = {
+      itemId: 'raw_fish',
+      fishSpecies: resolvedSpecies,
+      objectCategory: 'rawFishPickup',
+      visualSource: 'sharedKerovacFishSpeciesFactory',
+      pickupGroundOrientation: 'stable-root-yaw-plus-visual-side-roll',
+      localFishAxis: 'X=head-tail-horizontal',
+      interactionTargetStable: true,
+      animatedVisualChild: true,
+      flopAnimation: { rollAmplitude: [0.25, 0.45], hopHeight: [0.04, 0.1], pulseDuration: [0.18, 0.35], interval: [0.8, 1.6] },
+    };
+    root.add(group);
+    root.userData.visualChild = group;
+    return root;
   }
 
   spawnRawFishPickupForPlayer(player, fishingZone = null) {
     if (!(this.area === 'field' || this.isCompiledOutdoorFieldArea())) return null;
-    const landing = this.getRawFishLandingPosition(player);
+    const zone = fishingZone ?? this.getNearbyFishingZone(player?.position);
+    const landing = this.getRawFishLandingPosition(player, zone);
     if (!landing) return null;
     if (this.fieldRawFishPickups.length >= MAX_FIELD_RAW_FISH_PICKUPS) {
       this.removeRawFishPickup(this.fieldRawFishPickups[0]);
     }
     const pickupId = `field_raw_fish_${Date.now()}_${this.fieldRawFishPickups.length + 1}`;
-    const zone = fishingZone ?? this.getNearbyFishingZone(player?.position);
     const fishSpecies = this.selectFishSpeciesForZone(zone);
     const mesh = this.createRawFishPickupMesh(fishSpecies);
     mesh.name = `${pickupId}-${fishSpecies}-raw-fish-pickup`;
     mesh.position.set(landing.x, 0.9, landing.z);
-    mesh.rotation.y = player?.yaw ?? 0;
+    const shoreHeading = zone?.shape === 'ellipse'
+      ? Math.atan2(landing.x - zone.centerX, landing.z - zone.centerZ) + Math.PI / 2
+      : (player?.yaw ?? 0) + Math.PI / 2;
+    mesh.rotation.y = shoreHeading;
     this.scene.add(mesh);
-    const pickup = { id: pickupId, mesh, itemId: 'raw_fish', fishSpecies, start: mesh.position.clone(), target: landing.clone().setY(0.26), elapsed: 0, duration: 0.55 };
+    const seed = stableHash(`${pickupId}:${fishSpecies}`);
+    const visual = mesh.userData.visualChild ?? mesh.children[0] ?? mesh;
+    const flop = {
+      visual,
+      baseY: 0,
+      baseRotation: visual.rotation.clone(),
+      elapsed: (seed % 1000) / 1000,
+      interval: 0.8 + ((seed >>> 8) % 800) / 1000,
+      duration: 0.18 + ((seed >>> 16) % 170) / 1000,
+      rollAmplitude: 0.25 + ((seed >>> 4) % 200) / 1000,
+      hopHeight: 0.04 + ((seed >>> 12) % 60) / 1000,
+      direction: seed % 2 === 0 ? 1 : -1,
+    };
+    const pickup = { id: pickupId, mesh, itemId: 'raw_fish', fishSpecies, start: mesh.position.clone(), target: landing.clone().setY(0.26), elapsed: 0, duration: 0.55, landing: landing.clone(), flop };
     this.fieldRawFishPickups.push(pickup);
     this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(0.9), range: 2.85, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup, itemId: 'raw_fish', fishSpecies });
     return pickup;
@@ -2188,11 +2253,25 @@ export class DungeonScene {
 
   updateRawFishPickups(deltaSeconds) {
     this.fieldRawFishPickups.forEach((pickup) => {
-      if (!pickup.mesh || pickup.elapsed >= pickup.duration) return;
-      pickup.elapsed = Math.min(pickup.duration, pickup.elapsed + deltaSeconds);
-      const t = pickup.elapsed / pickup.duration;
-      pickup.mesh.position.lerpVectors(pickup.start, pickup.target, t);
-      pickup.mesh.position.y = 0.26 + Math.sin(t * Math.PI) * 0.45;
+      if (!pickup.mesh) return;
+      if (pickup.elapsed < pickup.duration) {
+        pickup.elapsed = Math.min(pickup.duration, pickup.elapsed + deltaSeconds);
+        const t = pickup.elapsed / pickup.duration;
+        pickup.mesh.position.lerpVectors(pickup.start, pickup.target, t);
+        pickup.mesh.position.y = 0.26 + Math.sin(t * Math.PI) * 0.45;
+      }
+      const flop = pickup.flop;
+      if (!flop?.visual || pickup.elapsed < pickup.duration) return;
+      flop.elapsed += deltaSeconds;
+      const cycle = flop.elapsed % flop.interval;
+      const pulseT = cycle / flop.duration;
+      const active = pulseT >= 0 && pulseT <= 1;
+      const pulse = active ? Math.sin(pulseT * Math.PI) : 0;
+      const snap = active ? Math.sin(pulseT * Math.PI * 2) : 0;
+      flop.visual.rotation.copy(flop.baseRotation);
+      flop.visual.rotation.x += pulse * flop.rollAmplitude * flop.direction;
+      flop.visual.rotation.y += snap * 0.12;
+      flop.visual.position.y = flop.baseY + pulse * flop.hopHeight;
     });
   }
 

@@ -131,4 +131,29 @@ for (const root of fishRoots) {
   }
 }
 
-console.log(`Fish geometry sanity check passed for ${fishRoots.length} continuous symmetrical volumetric fish.`);
+
+const dungeonSceneSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8'));
+if (dungeonSceneSource.includes('FIELD_FISH_SPECIES')) fail('Duplicate local FIELD_FISH_SPECIES registry returned; raw fish pickups must use shared Kerovac species.');
+if (!dungeonSceneSource.includes("visualSource: 'sharedKerovacFishSpeciesFactory'")) fail('Raw fish pickup invalid: shared Kerovac fish factory visual source metadata is missing.');
+if (!dungeonSceneSource.includes('pickupGroundOrientation')) fail('Raw fish pickup invalid: fish pickup root has no ground orientation transform metadata.');
+if (!dungeonSceneSource.includes('animatedVisualChild: true') || !dungeonSceneSource.includes('flopAnimation')) fail('Raw fish pickup invalid: flopping animation metadata is missing for raw fish pickups.');
+if (!dungeonSceneSource.includes('interactionTargetStable: true')) fail('Raw fish pickup invalid: pickup interaction target is not marked stable while visual child flops.');
+if (!dungeonSceneSource.includes("zone?.shape === 'ellipse'") || !dungeonSceneSource.includes("rawFishLanding: 'pond-shoreline-edge'") || !dungeonSceneSource.includes('waterEdge')) fail('Pond Expo raw fish landing invalid: shoreline ellipse/water-edge landing logic is missing.');
+if (!dungeonSceneSource.includes('this.getRawFishLandingPosition(player, zone)')) fail('Raw fish spawn invalid: active fishing zone is not passed into landing calculation.');
+
+const pondExpoDefinition = await import('../src/game/locations/oarbOutdoorExpo.definition.js').then((module) => module.oarbOutdoorExpoDefinition ?? module.default ?? module);
+const waterBodies = pondExpoDefinition.waterBodies ?? pondExpoDefinition.ponds ?? [];
+for (const pond of waterBodies.filter((body) => body.fishable)) {
+  const [centerX, centerZ] = pond.center ?? [];
+  const radiusX = pond.radiusX ?? pond.rx ?? pond.radius?.[0] ?? pond.size?.[0] * 0.5;
+  const radiusZ = pond.radiusZ ?? pond.rz ?? pond.radius?.[1] ?? pond.size?.[1] * 0.5;
+  if (![centerX, centerZ, radiusX, radiusZ].every(Number.isFinite)) continue;
+  const outward = new THREE.Vector3(1, 0, 0).normalize();
+  const edgeDistance = 1 / Math.sqrt((outward.x * outward.x) / (radiusX * radiusX) + (outward.z * outward.z) / (radiusZ * radiusZ));
+  const landing = new THREE.Vector3(centerX, 0.24, centerZ).addScaledVector(outward, edgeDistance + 1.2);
+  const normalized = ((landing.x - centerX) ** 2) / (radiusX ** 2) + ((landing.z - centerZ) ** 2) / (radiusZ ** 2);
+  if (!(normalized > 1)) fail(`${pond.label ?? pond.id} invalid: raw fish landing point is inside water footprint.`);
+  if (!(normalized < 2.5)) fail(`${pond.label ?? pond.id} invalid: raw fish landing point is not near the water edge.`);
+}
+
+console.log(`Fish geometry sanity check passed for ${fishRoots.length} continuous symmetrical volumetric fish and raw pickup presentation.`);
