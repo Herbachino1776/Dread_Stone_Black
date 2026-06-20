@@ -7,6 +7,7 @@ import { sumerianSunPalaceDistrictV1Definition } from './generated/sumerianSunPa
 import { sumerianCanalMarketDistrictV2Definition } from './generated/sumerianCanalMarketDistrictV2.definition.js';
 import { kerovacDefinition } from './generated/kerovac.definition.js';
 import { oarbFeatureYardDefinition } from './oarbFeatureYard.definition.js';
+import { oarbOutdoorExpoDefinition } from './oarbOutdoorExpo.definition.js';
 import { reliquaryFieldDefinition } from './reliquaryField.definition.js';
 import { southReliquaryCryptDefinition } from './southReliquaryCrypt.definition.js';
 import { v2TestShrineDefinition } from './v2TestShrine.definition.js';
@@ -87,6 +88,7 @@ const locationDefinitions = Object.freeze({
   [sumerianCanalMarketDistrictV2Definition.id]: sumerianCanalMarketDistrictV2Definition,
   [kerovacDefinitionWithRuntimeFixes.id]: kerovacDefinitionWithRuntimeFixes,
   [oarbFeatureYardDefinition.id]: oarbFeatureYardDefinition,
+  [oarbOutdoorExpoDefinition.id]: oarbOutdoorExpoDefinition,
   [southReliquaryCryptDefinition.id]: southReliquaryCryptDefinition,
   [reliquaryFieldDefinition.id]: reliquaryFieldDefinition,
   [v2TestShrineDefinition.id]: v2TestShrineDefinition,
