@@ -55,10 +55,14 @@ function makeTangent(points, index) {
 function assertGeometrySafe(geometry) {
   const position = geometry.attributes.position;
   const uv = geometry.attributes.uv;
+  const normal = geometry.attributes.normal;
   if (!position || !uv || position.count === 0 || uv.count !== position.count) throw new Error('OARB spline trail generated invalid geometry attributes.');
+  if (!normal || normal.count !== position.count) throw new Error('OARB spline trail generated invalid geometry normals.');
   for (let index = 0; index < position.count; index += 1) {
     if (!Number.isFinite(position.getX(index)) || !Number.isFinite(position.getY(index)) || !Number.isFinite(position.getZ(index))) throw new Error(`OARB spline trail generated non-finite position at ${index}.`);
     if (!Number.isFinite(uv.getX(index)) || !Number.isFinite(uv.getY(index))) throw new Error(`OARB spline trail generated non-finite UV at ${index}.`);
+    if (!Number.isFinite(normal.getX(index)) || !Number.isFinite(normal.getY(index)) || !Number.isFinite(normal.getZ(index))) throw new Error(`OARB spline trail generated non-finite normal at ${index}.`);
+    if (normal.getY(index) < -0.001) throw new Error(`OARB spline trail generated downward-facing normal at ${index}.`);
   }
 }
 
@@ -88,7 +92,7 @@ export function createOutdoorSplineTrailMesh(trail, { terrainSampler, textures =
 
   for (let index = 0; index < safe.points.length - 1; index += 1) {
     const a = index * 2;
-    indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
   }
 
   const geometry = new THREE.BufferGeometry();

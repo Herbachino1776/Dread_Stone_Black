@@ -5,6 +5,7 @@ import { createOutdoorCurvedBlockers } from '../src/engine/outdoor-authoring/Out
 import { createOutdoorPrimitiveMeshes } from '../src/engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
 import { CollisionWorld } from '../src/game/Collision.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
+import { oarbFeatureYardDefinition } from '../src/game/locations/oarbFeatureYard.definition.js';
 
 const terrain = reliquaryFieldDefinition.terrain;
 const sampler = createOutdoorTerrainSampler(terrain);
@@ -91,6 +92,34 @@ for (let index = 0; index < trailPosition.count; index += 1) {
   assert.equal(Number.isFinite(trailUv.getX(index)), true, `trail uv ${index} u is finite.`);
   assert.equal(Number.isFinite(trailUv.getY(index)), true, `trail uv ${index} v is finite.`);
 }
+
+const trailNormal = trailMesh.geometry.attributes.normal;
+for (let index = 0; index < trailNormal.count; index += 1) {
+  assert.equal(Number.isFinite(trailNormal.getX(index)), true, `trail normal ${index} x is finite.`);
+  assert.equal(Number.isFinite(trailNormal.getY(index)), true, `trail normal ${index} y is finite.`);
+  assert.equal(Number.isFinite(trailNormal.getZ(index)), true, `trail normal ${index} z is finite.`);
+  assert.ok(trailNormal.getY(index) >= -0.001, `trail normal ${index} does not face downward.`);
+}
+const trailIndex = trailMesh.geometry.index;
+assert.ok(trailIndex, 'trail geometry has indexed triangles.');
+for (let triangle = 0; triangle < trailIndex.count; triangle += 3) {
+  const a = trailIndex.getX(triangle);
+  const b = trailIndex.getX(triangle + 1);
+  const c = trailIndex.getX(triangle + 2);
+  const ab = {
+    x: trailPosition.getX(b) - trailPosition.getX(a),
+    y: trailPosition.getY(b) - trailPosition.getY(a),
+    z: trailPosition.getZ(b) - trailPosition.getZ(a),
+  };
+  const ac = {
+    x: trailPosition.getX(c) - trailPosition.getX(a),
+    y: trailPosition.getY(c) - trailPosition.getY(a),
+    z: trailPosition.getZ(c) - trailPosition.getZ(a),
+  };
+  const faceNormalY = (ab.z * ac.x) - (ab.x * ac.z);
+  assert.ok(faceNormalY >= -0.001, `trail triangle ${triangle / 3} is wound for top-side visibility.`);
+}
+
 trail.points.forEach(([x, z], pointIndex) => {
   const leftY = trailPosition.getY(pointIndex * 2);
   const rightY = trailPosition.getY(pointIndex * 2 + 1);
@@ -99,6 +128,18 @@ trail.points.forEach(([x, z], pointIndex) => {
   assert.ok(Math.abs(rightY - leftY) < 0.001, `trail point ${pointIndex} ribbon edge heights match.`);
 });
 assert.equal(trailMesh.userData.collision, undefined, 'no collision object is generated from trails yet.');
+
+
+const oarbSampler = createOutdoorTerrainSampler(oarbFeatureYardDefinition.terrain);
+const oarbTrailDefinition = oarbFeatureYardDefinition.splineTrails.find((candidate) => candidate.id === 'oarb_yard_test_trail');
+assert.ok(oarbTrailDefinition, 'OARB Feature Yard keeps the authored oarb_yard_test_trail spline trail.');
+const oarbTrailMesh = createOutdoorSplineTrailMesh(oarbTrailDefinition, { terrainSampler: oarbSampler, textures: oarbFeatureYardDefinition.textures });
+assert.ok(oarbTrailMesh, 'OARB Feature Yard test trail generates a visible mesh.');
+assert.equal(oarbTrailMesh.name, 'OARB-spline-trail-oarb_yard_test_trail', 'validation targets the disappearing OARB test trail mesh.');
+const oarbTrailNormals = oarbTrailMesh.geometry.attributes.normal;
+for (let index = 0; index < oarbTrailNormals.count; index += 1) {
+  assert.ok(oarbTrailNormals.getY(index) >= -0.001, `OARB test trail normal ${index} is not downward-facing.`);
+}
 
 const authoredOutdoorPrimitives = [
   { id: 'future_cliff_wall', kind: 'cliffWall', points: [[-25, -20], [-15, -16], [-5, -20]], height: 8, thickness: 4, material: 'rockWall' },
