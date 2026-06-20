@@ -17,7 +17,7 @@ const TERRAIN_STAMP_KINDS = new Set(['hill', 'hollow', 'ridge', 'ravine', 'flatt
 const OUTDOOR_SPLINE_FIELDS = new Set(['id', 'points', 'width', 'material', 'flatten', 'metadata', 'tags', 'userData']);
 const CURVED_BLOCKER_FIELDS = new Set(['id', 'kind', 'points', 'thickness', 'center', 'radius', 'from', 'to', 'visibleStructureId', 'metadata', 'tags', 'userData', 'intentionallyInvisible']);
 const OUTDOOR_PRIMITIVE_FIELDS = new Set(['id', 'kind', 'points', 'height', 'thickness', 'from', 'to', 'center', 'radius', 'material', 'metadata', 'tags', 'userData']);
-const WATER_BODY_FIELDS = new Set(['id', 'kind', 'center', 'radius', 'y', 'material', 'fishable', 'fishableRadius', 'shoreMaterial', 'shoreWidth', 'tags', 'metadata', 'userData']);
+const WATER_BODY_FIELDS = new Set(['id', 'kind', 'center', 'radius', 'y', 'material', 'fishable', 'fishableRadius', 'shoreMaterial', 'shoreWidth', 'bedMaterial', 'bedRadius', 'footprint', 'tags', 'metadata', 'userData']);
 const OUTDOOR_CHEST_FIELDS = new Set(['id', 'label', 'position', 'itemId', 'acquiredMessage', 'tags', 'metadata', 'userData']);
 const FIELD_SURVIVAL_ITEM_IDS = new Set(['wood_axe', 'fishing_rod', 'flint_stick', 'torch']);
 const CURVED_BLOCKER_KINDS = new Set(['capsule', 'spline', 'circle', 'hazard', 'cliff']);
@@ -177,6 +177,11 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
     if (!Number.isFinite(body.y)) addIssue(errors, 'error', `waterBody ${id} y must be finite`, id);
     validateOutdoorMaterial(definition, body.material, `waterBody ${id}`, id, errors, warnings, { required: true });
     validateOutdoorMaterial(definition, body.shoreMaterial, `waterBody ${id} shoreMaterial`, id, errors, warnings);
+    validateOutdoorMaterial(definition, body.bedMaterial, `waterBody ${id} bedMaterial`, id, errors, warnings);
+    if (body.bedRadius !== undefined) {
+      const bedRadius = Array.isArray(body.bedRadius) ? body.bedRadius : [body.bedRadius, body.bedRadius];
+      if (bedRadius.length !== 2 || !bedRadius.every(isFinitePositive)) addIssue(errors, 'error', `waterBody ${id} bedRadius must contain two finite positive values when present`, id);
+    }
     if (body.fishable !== undefined && typeof body.fishable !== 'boolean') addIssue(errors, 'error', `waterBody ${id} fishable must be boolean when present`, id);
     if (body.fishable && !isFinitePositive(body.fishableRadius)) addIssue(errors, 'error', `waterBody ${id} fishableRadius must be > 0 when fishable`, id);
     if (body.shoreWidth !== undefined && !isFinitePositive(body.shoreWidth)) addIssue(errors, 'error', `waterBody ${id} shoreWidth must be > 0 when present`, id);
