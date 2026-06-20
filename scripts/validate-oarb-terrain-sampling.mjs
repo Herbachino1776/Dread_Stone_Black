@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createOutdoorTerrainMesh, createOutdoorTerrainSampler } from '../src/engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 import { createOutdoorSplineTrailMesh, createOutdoorSplineTrailMeshes } from '../src/engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { createOutdoorCurvedBlockers } from '../src/engine/outdoor-authoring/OutdoorBlockerBuilder.js';
+import { createOutdoorPrimitiveMeshes } from '../src/engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
 import { CollisionWorld } from '../src/game/Collision.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 
@@ -98,6 +99,60 @@ trail.points.forEach(([x, z], pointIndex) => {
   assert.ok(Math.abs(rightY - leftY) < 0.001, `trail point ${pointIndex} ribbon edge heights match.`);
 });
 assert.equal(trailMesh.userData.collision, undefined, 'no collision object is generated from trails yet.');
+
+const authoredOutdoorPrimitives = [
+  { id: 'future_cliff_wall', kind: 'cliffWall', points: [[-25, -20], [-15, -16], [-5, -20]], height: 8, thickness: 4, material: 'rockWall' },
+  { id: 'future_root_wall', kind: 'rootWall', points: [[0, 20], [10, 24], [20, 20]], height: 4, thickness: 3, material: 'darkRoot' },
+  { id: 'future_fallen_tree', kind: 'fallenTreeBarrier', from: [-10, 0], to: [10, 0], radius: 1.5, material: 'darkRoot' },
+  { id: 'future_stone_cluster', kind: 'boulderCluster', center: [10, 10], radius: 4, material: 'stoneOutcrop' },
+];
+const primitiveTextures = {
+  rockWall: reliquaryFieldDefinition.textures.rockWall,
+  darkRoot: reliquaryFieldDefinition.textures.darkRoot,
+  stoneOutcrop: reliquaryFieldDefinition.textures.stoneOutcrop,
+};
+const primitiveGroups = createOutdoorPrimitiveMeshes(authoredOutdoorPrimitives, { terrainSampler: stampedSampler, textures: primitiveTextures });
+assert.equal(primitiveGroups.length, authoredOutdoorPrimitives.length, 'each supported outdoor primitive kind generates visible geometry.');
+primitiveGroups.forEach((group, index) => {
+  const authored = authoredOutdoorPrimitives[index];
+  assert.equal(group.userData.authoringRuntime, 'OARB', `primitive ${authored.id} records OARB source metadata.`);
+  assert.equal(group.userData.id, authored.id, `primitive ${authored.id} preserves stable id metadata.`);
+  assert.equal(group.userData.kind, authored.kind, `primitive ${authored.id} preserves kind metadata.`);
+  assert.equal(group.userData.materialKey, authored.material, `primitive ${authored.id} records material key.`);
+  assert.equal(group.userData.materialFallbackUsed, false, `primitive ${authored.id} resolves authored material profile.`);
+  assert.match(group.userData.pairedCollisionNote, /visibleStructureId/, `primitive ${authored.id} describes visibleStructureId pairing.`);
+  assert.match(group.userData.collisionNote, /No collision/, `primitive ${authored.id} records that no collision is generated.`);
+  assert.equal(group.userData.collision, undefined, `primitive ${authored.id} does not attach collision data.`);
+  assert.ok(group.children.length > 0, `primitive ${authored.id} has visible child meshes.`);
+  group.traverse((object) => {
+    if (!object.isMesh) return;
+    const position = object.geometry.attributes.position;
+    for (let vertexIndex = 0; vertexIndex < position.count; vertexIndex += 1) {
+      assert.equal(Number.isFinite(position.getX(vertexIndex)), true, `${object.name} vertex ${vertexIndex} x is finite.`);
+      assert.equal(Number.isFinite(position.getY(vertexIndex)), true, `${object.name} vertex ${vertexIndex} y is finite.`);
+      assert.equal(Number.isFinite(position.getZ(vertexIndex)), true, `${object.name} vertex ${vertexIndex} z is finite.`);
+    }
+    assert.equal(Number.isFinite(object.position.x), true, `${object.name} world x is finite.`);
+    assert.equal(Number.isFinite(object.position.y), true, `${object.name} world y is finite.`);
+    assert.equal(Number.isFinite(object.position.z), true, `${object.name} world z is finite.`);
+  });
+});
+const cliffSegment = primitiveGroups[0].children.find((child) => child.name.endsWith('segment-0'));
+assert.ok(Math.abs((cliffSegment.position.y - authoredOutdoorPrimitives[0].height * 0.5) - stampedSampler.sampleOutdoorY(-25, -20)) < 0.2, 'cliff wall segment follows sampled terrain Y at its authored path.');
+const rootSegment = primitiveGroups[1].children.find((child) => child.name.endsWith('segment-0'));
+assert.ok(Math.abs((rootSegment.position.y - authoredOutdoorPrimitives[1].height * 0.5) - stampedSampler.sampleOutdoorY(0, 20)) < 0.2, 'root wall segment follows sampled terrain Y at its authored path.');
+const trunk = primitiveGroups[2].children.find((child) => child.name.endsWith('trunk'));
+const trunkBase = trunk.position.y - authoredOutdoorPrimitives[2].radius;
+const expectedTrunkBase = (stampedSampler.sampleOutdoorY(-10, 0) + stampedSampler.sampleOutdoorY(10, 0)) * 0.5;
+assert.ok(Math.abs(trunkBase - expectedTrunkBase) < 0.1, 'fallen tree barrier samples terrain height at both ends.');
+const firstStone = primitiveGroups[3].children[0];
+assert.ok(firstStone.position.y > stampedSampler.sampleOutdoorY(10, 10), 'boulder cluster stones sit above sampled terrain Y.');
+const primitiveCollisionRegression = new CollisionWorld({
+  walkableRects: [{ minX: -40, maxX: 40, minZ: -40, maxZ: 40 }],
+  blockerRects: [],
+  outdoorTerrainSampler: stampedSampler,
+});
+assert.equal(primitiveCollisionRegression.canStandAtFloorPosition({ x: -15, y: 0, z: -18 }), true, 'visible outdoor primitives do not create collision by themselves.');
 
 const authoredCurvedBlockers = [
   { id: 'validation_circle_blocker', kind: 'circle', center: [10, 10], radius: 2, visibleStructureId: 'future_stone_cluster' },
