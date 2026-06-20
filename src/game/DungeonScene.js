@@ -209,6 +209,9 @@ const BALTHAZAN_ENTRANCE_TARGET = new THREE.Vector3(72, 1, 126);
 const KEROVAC_GATE_POSITION = Object.freeze({ x: 60, y: 1, z: 146 });
 const KEROVAC_ENTRANCE_TARGET = new THREE.Vector3(60, 1, 142.5);
 const KEROVAC_INTERACT_RANGE = 7.0;
+const OARB_OUTDOOR_EXPO_GATE_POSITION = Object.freeze({ x: 88, y: 1, z: 186 });
+const OARB_OUTDOOR_EXPO_ENTRANCE_TARGET = new THREE.Vector3(88, 1, 186);
+const OARB_OUTDOOR_EXPO_INTERACT_RANGE = 7.0;
 const OARB_PROVING_GROUNDS_ENTRANCE_TARGET = new THREE.Vector3(70, 1, 164);
 const FIELD_FOLIAGE_CLEAR_ZONES = Object.freeze([
   { x: FIELD_PLAYER_START.x, z: FIELD_PLAYER_START.z, radius: 22 },
@@ -222,6 +225,7 @@ const FIELD_FOLIAGE_CLEAR_ZONES = Object.freeze([
   { x: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.x, z: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.z, radius: 20 },
   { x: BALTHAZAN_ENTRANCE_TARGET.x, z: BALTHAZAN_ENTRANCE_TARGET.z, radius: 24 },
   { x: KEROVAC_ENTRANCE_TARGET.x, z: KEROVAC_ENTRANCE_TARGET.z, radius: 18 },
+  { x: OARB_OUTDOOR_EXPO_ENTRANCE_TARGET.x, z: OARB_OUTDOOR_EXPO_ENTRANCE_TARGET.z, radius: 24 },
   { x: OARB_PROVING_GROUNDS_ENTRANCE_TARGET.x, z: OARB_PROVING_GROUNDS_ENTRANCE_TARGET.z, radius: 24 },
   { x: 35, z: 124, radius: 22 },
 ]);
@@ -1792,6 +1796,7 @@ export class DungeonScene {
     this.addSumerianSunPalaceDistrictV1TestEntrance();
     this.addSumerianCanalMarketDistrictV2Entrance();
     this.addKerovacEntrance();
+    this.addOarbOutdoorExpoEntrance();
     this.addOarbProvingGroundsEntrance();
     this.addBalthazanEntrance();
     this.addSunkenCentralTomb();
@@ -2440,6 +2445,26 @@ export class DungeonScene {
       destinationSpawnId: 'kerovac_player_start',
       debugGateId: 'kerovac',
       gatePosition: new THREE.Vector3(KEROVAC_GATE_POSITION.x, KEROVAC_GATE_POSITION.y, KEROVAC_GATE_POSITION.z),
+    });
+  }
+
+  addOarbOutdoorExpoEntrance() {
+    this.outdoorInteractions.push({
+      id: 'OARB_OUTDOOR_EXPO_INT_ENTER',
+      label: 'OARB Outdoor Expo Center',
+      target: OARB_OUTDOOR_EXPO_ENTRANCE_TARGET.clone(),
+      range: OARB_OUTDOOR_EXPO_INTERACT_RANGE,
+      hint: 'X: Enter OARB Outdoor Expo Center',
+      message: 'The OARB Outdoor Expo Center gate opens.',
+      functional: true,
+      area: 'oarbOutdoorExpo',
+      type: 'areaEntrance',
+      destinationSpawnId: 'oarb_outdoor_expo_player_start',
+      debugGateId: 'oarb_outdoor_expo_gate',
+      targetLocationId: 'oarbOutdoorExpo',
+      targetSpawnId: 'oarb_outdoor_expo_player_start',
+      gatePosition: new THREE.Vector3(OARB_OUTDOOR_EXPO_GATE_POSITION.x, OARB_OUTDOOR_EXPO_GATE_POSITION.y, OARB_OUTDOOR_EXPO_GATE_POSITION.z),
+      visibleMarkerPosition: new THREE.Vector3(OARB_OUTDOOR_EXPO_GATE_POSITION.x, OARB_OUTDOOR_EXPO_GATE_POSITION.y, OARB_OUTDOOR_EXPO_GATE_POSITION.z),
     });
   }
 
