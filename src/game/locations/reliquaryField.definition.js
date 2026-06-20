@@ -252,6 +252,7 @@ export const reliquaryFieldDefinition = Object.freeze({
     { id: 'field_sumerian_canal_market_district_v2_return', kind: 'return', position: { x: 110, y: 1.55, z: 128 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'sumerian-canal-market-district-v2'] },
     { id: 'field_balthazan_return', kind: 'return', position: { x: 72, y: 1.55, z: 126 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'balthazan', 'sumerian-canal-city'] },
     { id: 'field_kerovac_return', kind: 'return', position: { x: 60, y: 1.55, z: 139 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'kerovac', 'bright-interior-city', 'sacred-sun-city'] },
+    { id: 'field_oarb_feature_yard_return', kind: 'return', position: { x: 68, y: 1.55, z: 135 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'oarb-feature-yard'] },
     { id: 'field_v2_test_shrine_return', kind: 'return', position: { x: 68, y: 1.55, z: 144.5 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'v2-test-shrine'] },
   ],
   exits: [
@@ -364,6 +365,23 @@ export const reliquaryFieldDefinition = Object.freeze({
         foliageClearRadius: 24,
         returnSpawnId: 'field_balthazan_return',
         placementNote: 'Placed west of the Sumerian Canal Market and south of the V2 Test Shrine marker so the Sumerian entrance cluster remains readable without overlapping existing entrances.',
+      },
+    },
+    {
+      id: 'oarb_feature_yard_gate',
+      fromLocation: 'reliquary-field',
+      toLocation: 'oarbFeatureYard',
+      triggerRect: { minX: 64, maxX: 72, minZ: 131, maxZ: 139 },
+      position: { x: 68, y: 1, z: 135 },
+      destinationSpawnId: 'oarb_feature_yard_player_start',
+      promptText: 'Tap INTERACT to enter the temporary OARB Feature Yard.',
+      tags: ['temporary', 'oarb-feature-yard', 'kerovac-approach'],
+      userData: {
+        temporary: true,
+        foliageClearRadius: 16,
+        returnSpawnId: 'field_oarb_feature_yard_return',
+        removalNote: 'Single Reliquary Field hook for the temporary OARB Feature Yard; remove this exit and return spawn when deleting the yard.',
+        placementNote: 'Placed in Reliquary Field near the Kerovac exterior approach, southeast of the Kerovac temporary gate and outside Kerovac itself.',
       },
     },
     {
