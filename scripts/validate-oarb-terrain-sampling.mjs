@@ -11,6 +11,7 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { oarbFeatureYardDefinition } from '../src/game/locations/oarbFeatureYard.definition.js';
 import { oarbOutdoorExpoDefinition } from '../src/game/locations/oarbOutdoorExpo.definition.js';
+import { assertValidPondFootprint } from './pond-footprint-validation.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
@@ -397,6 +398,8 @@ assert.equal(pointInsideRoom(pond06.center, pondReserve, Math.ceil(outerAverageR
 assert.ok([pond06.footprint?.mudOffset, pond06.footprint?.outerShoreOffset].every(Number.isFinite), 'POND 06 offset distances are finite.');
 assert.ok(pond06.userData.recipe.includes('offset-outline'), 'POND 06 recipe documents that mud derives from the same offset outline.');
 assert.equal(pond06.userData.noDownwardFacingTopNormals, true, 'POND 06 pond geometry is authored for two-sided/top-visible normals.');
+const pond06Validation = assertValidPondFootprint(pond06, oarbOutdoorExpoDefinition, { minMudMarginWorld: 2.0, sampleStepWorld: 0.75 });
+assert.equal(pond06Validation.minMudMarginWorld, 2.0, 'POND 06 pond-builder validation enforces a 2.0 world-unit minimum bright-mud margin.');
 
 assert.equal(pondBodies.find((pond) => pond.id === 'pond_expo_08_fishing_hole')?.userData?.futureFishable, true, 'POND 08 is marked as a future fishable pond without enabling fishing gameplay.');
 const pondTerrainStamps = oarbOutdoorExpoDefinition.terrain.heightStamps.filter((stamp) => stamp.tags?.includes('pond-expo'));
