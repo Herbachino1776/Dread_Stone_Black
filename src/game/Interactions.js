@@ -557,7 +557,7 @@ export class Interactions {
         && this.player.position.distanceTo(action.startPosition) <= TIMED_ACTION_MOVE_CANCEL_DISTANCE
         && Boolean(this.dungeon.getNearbyFishingZone?.(this.player.position)),
       complete: () => {
-        const pickup = this.dungeon.spawnRawFishPickupForPlayer?.(this.player);
+        const pickup = this.dungeon.spawnRawFishPickupForPlayer?.(this.player, fishingZone);
         if (pickup) {
           this.setTemporaryHint('Fish Caught.', 1500);
           this.hud.showMessage('Fish Caught.');
@@ -773,7 +773,7 @@ export class Interactions {
 
     const fishingZone = this.dungeon.getNearbyFishingZone?.(this.player.position);
     if (fishingZone && this.equipmentRuntime?.getEquippedWeaponProfile?.().id === 'fishing_rod') {
-      return { id: fishingZone.id, label: 'River Fishing', target: fishingZone.position, range: fishingZone.interactPadding, hint: 'Fish', message: 'Fish Caught.', type: 'fieldFishing' };
+      return { id: fishingZone.id, label: fishingZone.label ?? 'River Fishing', target: fishingZone.position, range: fishingZone.interactPadding, hint: 'Fish', message: 'Fish Caught.', type: 'fieldFishing' };
     }
 
     return nearbyOutdoorInteractions[0]?.interaction ?? null;
