@@ -393,8 +393,8 @@ assert.ok(Math.hypot(pond06OutlineCenter[0] - pond06.center[0], pond06OutlineCen
 const waterAverageRadius = averageRadiusFrom(waterOutline, pond06.center);
 const mudAverageRadius = averageRadiusFrom(mudBedOutline, pond06.center);
 const outerAverageRadius = averageRadiusFrom(outerShoreOutline, pond06.center);
-assert.ok(mudAverageRadius - waterAverageRadius > 2.6 && mudAverageRadius - waterAverageRadius < 3.8, 'POND 06 bright mud bed is a consistent outward offset from the water outline.');
-assert.ok(outerAverageRadius - mudAverageRadius > 1.3 && outerAverageRadius - mudAverageRadius < 2.4, 'POND 06 outer wet shore band is a second outward offset.');
+assert.ok(mudAverageRadius - waterAverageRadius > 3.4 && mudAverageRadius - waterAverageRadius < 4.4, 'POND 06 bright mud bed is a consistent outward offset from the water outline.');
+assert.ok(outerAverageRadius - mudAverageRadius > 2.2 && outerAverageRadius - mudAverageRadius < 3.0, 'POND 06 outer wet shore band is a second outward offset.');
 assert.equal(pointInsideRoom(pond06.center, pondReserve, Math.ceil(outerAverageRadius)), true, 'POND 06 offset footprint stays inside Pond Expo bounds.');
 (pond06.userData.terrainStampIds ?? []).forEach((stampId) => {
   const stamp = oarbOutdoorExpoDefinition.terrain.heightStamps.find((candidate) => candidate.id === stampId);
@@ -404,8 +404,13 @@ assert.equal(pointInsideRoom(pond06.center, pondReserve, Math.ceil(outerAverageR
 assert.ok([pond06.footprint?.mudOffset, pond06.footprint?.outerShoreOffset].every(Number.isFinite), 'POND 06 offset distances are finite.');
 assert.ok(pond06.userData.recipe.includes('offset-outline'), 'POND 06 recipe documents that mud derives from the same offset outline.');
 assert.equal(pond06.userData.noDownwardFacingTopNormals, true, 'POND 06 pond geometry is authored for two-sided/top-visible normals.');
-const pond06Validation = assertValidPondFootprint(pond06, oarbOutdoorExpoDefinition, { minMudMarginWorld: 2.0, sampleStepWorld: 0.75 });
+const pond06Validation = assertValidPondFootprint(pond06, oarbOutdoorExpoDefinition, { minMudMarginWorld: 2.0, minVisibleMudBandWorld: 2.0, shorelineSampleStepWorld: 0.5, sampleStepWorld: 0.75 });
 assert.equal(pond06Validation.minMudMarginWorld, 2.0, 'POND 06 pond-builder validation enforces a 2.0 world-unit minimum bright-mud margin.');
+assert.equal(pond06Validation.minVisibleMudBandWorld, 2.0, 'POND 06 shoreline-band validation enforces a 2.0 world-unit visible mud band.');
+assert.equal(pond06Validation.shorelineSampleStepWorld, 0.5, 'POND 06 shoreline-band validation samples the visible edge every 0.5 world units.');
+assert.equal(pond06.userData.waterMeshSource, 'waterOutline', 'POND 06 rendered water mesh uses waterOutline.');
+assert.equal(pond06.userData.brightMudMeshSource, 'mudBedOutline', 'POND 06 rendered bright mud mesh uses mudBedOutline.');
+assert.equal(pond06.userData.wetShoreMeshSource, 'outerShoreOutline', 'POND 06 rendered wet shore mesh uses outerShoreOutline.');
 
 assert.equal(pondBodies.find((pond) => pond.id === 'pond_expo_08_fishing_hole')?.userData?.futureFishable, true, 'POND 08 is marked as a future fishable pond without enabling fishing gameplay.');
 const pondTerrainStamps = oarbOutdoorExpoDefinition.terrain.heightStamps.filter((stamp) => stamp.tags?.includes('pond-expo'));
