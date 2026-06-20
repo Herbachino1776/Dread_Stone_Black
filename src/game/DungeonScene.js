@@ -135,7 +135,7 @@ const FIELD_BALTHAZAN_RETURN_START = new THREE.Vector3(72, 1.55, 116);
 const FIELD_BALTHAZAN_RETURN_YAW = Math.PI;
 const FIELD_KEROVAC_RETURN_START = new THREE.Vector3(60, 1.55, 134);
 const FIELD_KEROVAC_RETURN_YAW = Math.PI;
-const FIELD_OARB_FEATURE_YARD_RETURN_START = new THREE.Vector3(84, 1.55, 137);
+const FIELD_OARB_FEATURE_YARD_RETURN_START = new THREE.Vector3(83, 1.55, 155);
 const FIELD_OARB_FEATURE_YARD_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 
@@ -156,6 +156,7 @@ const SUMERIAN_SUN_PALACE_DISTRICT_V1_TEST_ENTRANCE_TARGET = new THREE.Vector3(9
 const SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET = new THREE.Vector3(110, 1, 128);
 const BALTHAZAN_ENTRANCE_TARGET = new THREE.Vector3(72, 1, 126);
 const KEROVAC_ENTRANCE_TARGET = new THREE.Vector3(60, 1, 146);
+const OARB_PROVING_GROUNDS_ENTRANCE_TARGET = new THREE.Vector3(70, 1, 164);
 const FIELD_FOLIAGE_CLEAR_ZONES = Object.freeze([
   { x: FIELD_PLAYER_START.x, z: FIELD_PLAYER_START.z, radius: 22 },
   { x: 0, z: -8, radius: 18 },
@@ -168,6 +169,7 @@ const FIELD_FOLIAGE_CLEAR_ZONES = Object.freeze([
   { x: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.x, z: SUMERIAN_CANAL_MARKET_DISTRICT_V2_ENTRANCE_TARGET.z, radius: 20 },
   { x: BALTHAZAN_ENTRANCE_TARGET.x, z: BALTHAZAN_ENTRANCE_TARGET.z, radius: 24 },
   { x: KEROVAC_ENTRANCE_TARGET.x, z: KEROVAC_ENTRANCE_TARGET.z, radius: 18 },
+  { x: OARB_PROVING_GROUNDS_ENTRANCE_TARGET.x, z: OARB_PROVING_GROUNDS_ENTRANCE_TARGET.z, radius: 24 },
   { x: 35, z: 124, radius: 22 },
 ]);
 function getReliquaryFieldColliders() {
@@ -1563,6 +1565,7 @@ export class DungeonScene {
     this.addSumerianSunPalaceDistrictV1TestEntrance();
     this.addSumerianCanalMarketDistrictV2Entrance();
     this.addKerovacEntrance();
+    this.addOarbProvingGroundsEntrance();
     this.addBalthazanEntrance();
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
@@ -2206,6 +2209,39 @@ export class DungeonScene {
       message: 'The sun-sealed city of Kerovac opens beneath the field.',
       functional: true,
       area: 'kerovac',
+      type: 'areaEntrance',
+    });
+  }
+
+  addOarbProvingGroundsEntrance() {
+    const stoneMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.1, 1.6], color: 0x9b9588, roughness: 0.98, metalness: 0.0, emissive: 0x17130f, emissiveIntensity: 0.14 });
+    const pathMat = this.makeTexturedMaterial({ path: TEXTURE_PATHS.fieldGrass, repeat: [3.0, 1.0], color: 0x7a6446, roughness: 1.0, metalness: 0.0, emissive: 0x191007, emissiveIntensity: 0.1 });
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0x78d8ff, transparent: true, opacity: 0.34, depthWrite: false });
+    const group = new THREE.Group();
+    group.name = 'OARB_PROVING_GROUNDS-river-standing-stone-gate-marker';
+
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.2, 0.08, 22), position: new THREE.Vector3(65, 0.05, 154), material: pathMat, name: 'OARB_PROVING_GROUNDS_PATH-cleared-mud-trail-from-kerovac', rotation: new THREE.Euler(0, -0.52, 0) }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.6, 5.8, 2.4), position: new THREE.Vector3(66, 2.9, 164), material: stoneMat, name: 'OARB_PROVING_GROUNDS_LEFT_STONE-river-marker' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.6, 5.8, 2.4), position: new THREE.Vector3(74, 2.9, 164), material: stoneMat, name: 'OARB_PROVING_GROUNDS_RIGHT_STONE-river-marker' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(9.2, 1.0, 1.2), position: new THREE.Vector3(70, 5.55, 164), material: stoneMat, name: 'OARB_PROVING_GROUNDS_LINTEL-obvious-river-arch' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(4.8, 3.0, 0.16), position: new THREE.Vector3(70, 1.7, 163.35), material: glowMat, name: 'OARB_PROVING_GROUNDS_GATE-blue-debug-threshold' }));
+
+    const glow = new THREE.PointLight(0x78d8ff, 1.45, 22, 1.35);
+    glow.name = 'OARB_PROVING_GROUNDS_GATE-bright-blue-proving-light';
+    glow.position.set(70, 2.8, 162.5);
+    group.add(glow);
+
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'OARB_PROVING_GROUNDS_INT_ENTER',
+      label: 'OARB Proving Grounds',
+      target: OARB_PROVING_GROUNDS_ENTRANCE_TARGET.clone(),
+      range: 5.0,
+      hint: 'Tap INTERACT to enter the OARB Proving Grounds.',
+      message: 'The OARB Proving Grounds gate opens by the river.',
+      functional: true,
+      area: 'oarbFeatureYard',
       type: 'areaEntrance',
     });
   }

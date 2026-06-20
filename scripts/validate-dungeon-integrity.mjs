@@ -209,6 +209,28 @@ function validateTransitionSafety(definitions) {
   });
 
   const reliquaryField = byId.get('reliquary-field');
+  const oarbGate = reliquaryField?.exits?.find((candidate) => candidate.id === 'oarb_feature_yard_gate');
+  const kerovacGate = reliquaryField?.exits?.find((candidate) => candidate.id === 'field_enter_kerovac');
+  if (!oarbGate || !kerovacGate) {
+    errors.push('missing OARB Proving Grounds or Kerovac field gate for dedicated overlap validation');
+  } else if (rectsOverlap(oarbGate.triggerRect, kerovacGate.triggerRect)) {
+    errors.push('oarb_feature_yard_gate triggerRect overlaps field_enter_kerovac triggerRect');
+  }
+  if (oarbGate && !oarbGate.userData?.visibleMarker && !oarbGate.userData?.authoredPlacementMetadata) {
+    errors.push('oarb_feature_yard_gate needs a visibleMarker or authoredPlacementMetadata entry for discoverability');
+  }
+
+  const oarbReturnSpawn = reliquaryField?.spawns?.find((candidate) => candidate.id === 'field_oarb_feature_yard_return');
+  if (!oarbReturnSpawn) {
+    errors.push('field_oarb_feature_yard_return is missing');
+  } else {
+    (reliquaryField?.exits ?? []).forEach((fieldExit) => {
+      if (fieldExit.triggerRect && pointInRect(oarbReturnSpawn.position, fieldExit.triggerRect)) {
+        errors.push(`field_oarb_feature_yard_return lands inside ${fieldExit.id}.triggerRect`);
+      }
+    });
+  }
+
   const criticalReturnSpawns = ['field_kerovac_return', 'field_oarb_feature_yard_return'];
   const criticalFieldExits = ['field_enter_kerovac', 'oarb_feature_yard_gate'];
   criticalReturnSpawns.forEach((spawnId) => {
