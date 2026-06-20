@@ -79,6 +79,25 @@ const RAM_MAN_NPC_PATROL_POINTS = [
   new THREE.Vector3(5, FLOOR_Y, 19),
   new THREE.Vector3(-5, FLOOR_Y, 19),
 ];
+
+const FIELD_FISH_SPECIES = Object.freeze({
+  smallRiverFish: { body: 0x9aaea8, fin: 0xc78d42, length: 0.62, height: 0.16, width: 0.12 },
+  broadCarpFish: { body: 0xd6a25e, fin: 0xc97835, length: 0.72, height: 0.26, width: 0.18 },
+  longEelFish: { body: 0x27322e, fin: 0x1a211f, length: 0.98, height: 0.1, width: 0.09 },
+  spineBackFish: { body: 0x536b45, fin: 0x263127, length: 0.76, height: 0.19, width: 0.13 },
+  flatMarshFish: { body: 0x34413a, fin: 0x2a7970, length: 0.7, height: 0.1, width: 0.28 },
+  jawHunterFish: { body: 0x3b463d, fin: 0x202722, length: 0.86, height: 0.19, width: 0.14 },
+  sacredGlowFish: { body: 0x52b8ad, fin: 0x61d1c4, length: 0.72, height: 0.17, width: 0.13, glow: 0x0f6b64 },
+});
+
+function stableHash(value = '') {
+  let hash = 2166136261;
+  for (const char of String(value)) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
 const RAM_MAN_NPC_PATROL_SPEED = 0.34;
 const RAM_MAN_NPC_TURN_SPEED = 3.2;
 const RAM_MAN_NPC_PATROL_PAUSE_SECONDS = 0.9;
@@ -1516,10 +1535,11 @@ export class DungeonScene {
       this.addPondExpoLabel(body, cx, composite?.water.position[1] ?? y, cz);
       if (body.fishable) {
         const fishableRadius = Number.isFinite(body.fishableRadius) ? body.fishableRadius : Math.max(rx, rz) + 4;
+        const fishSpeciesPool = (body.fishSpeciesPool ?? []).filter((species) => FIELD_FISH_SPECIES[species]);
         this.fieldFishingZones.push({
           id: `${body.id}_fishing_zone`, name: body.id, shape: 'ellipse', centerX: cx, centerZ: cz, radiusX: rx, radiusZ: rz,
           minX: cx - rx, maxX: cx + rx, minZ: cz - rz, maxZ: cz + rz, interactPadding: Math.max(0, fishableRadius - Math.max(rx, rz)),
-          position: new THREE.Vector3(cx, y, cz), label: 'Pond Fishing',
+          position: new THREE.Vector3(cx, y, cz), label: 'Pond Fishing', fishSpeciesPool, fishCatchSeed: body.fishCatchSeed ?? body.id,
         });
       }
     });
@@ -1529,7 +1549,7 @@ export class DungeonScene {
     (definition.outdoorChests ?? []).forEach((chest) => {
       if (!chest?.id || !chest?.position || !chest.itemId) return;
       this.addFieldSurvivalChest({
-        id: chest.id, label: chest.label ?? 'Outdoor Chest', position: chest.position, itemId: chest.itemId, acquiredMessage: chest.acquiredMessage ?? 'Item Acquired.',
+        id: chest.id, label: chest.label ?? 'Outdoor Chest', position: chest.position, itemId: chest.itemId, acquiredMessage: chest.acquiredMessage ?? 'Item Acquired.', rodVariant: chest.rodVariant,
       });
     });
   }
@@ -1920,7 +1940,7 @@ export class DungeonScene {
     });
   }
 
-  addFieldSurvivalChest({ id, label, position, itemId, acquiredMessage }) {
+  addFieldSurvivalChest({ id, label, position, itemId, acquiredMessage, rodVariant = null }) {
     const opened = this.gameState?.hasOpenedFieldChest?.(id) ?? false;
     const looted = this.gameState?.hasLootedFieldChest?.(id) ?? false;
     const group = this.createFieldChestGroup(opened);
@@ -1938,10 +1958,30 @@ export class DungeonScene {
       message: looted ? 'Empty.' : opened ? acquiredMessage : 'Chest opened.',
       type: 'fieldSurvivalChest',
       itemId,
+      rodVariant,
       acquiredMessage,
       repeatHint: 'Empty.',
       repeatMessage: 'Empty.',
     });
+    if (itemId === 'fishing_rod' && rodVariant) this.addFishingRodChestPreview(id, position, rodVariant);
+  }
+
+  addFishingRodChestPreview(id, position, rodVariant) {
+    const colorByVariant = { reedPoleRod: 0x8a7442, hookedBranchRod: 0x4a2d1b, heavyRiverRod: 0x33251b };
+    const group = new THREE.Group();
+    group.name = `${id}-${rodVariant}-preview`;
+    group.position.set(position.x + 1.2, position.y + 0.45, position.z);
+    group.rotation.z = -0.55;
+    group.userData = { objectCategory: 'fishingRodPreview', itemId: 'fishing_rod', rodVariant, sourceChestId: id };
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, rodVariant === 'heavyRiverRod' ? 0.075 : 0.05, rodVariant === 'heavyRiverRod' ? 2.3 : 2.8, 8), new THREE.MeshStandardMaterial({ color: colorByVariant[rodVariant] ?? 0x6d4525, roughness: 0.85 }));
+    shaft.rotation.z = Math.PI / 2;
+    shaft.userData = group.userData;
+    group.add(shaft);
+    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.8, 5), new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.7 }));
+    line.position.set(1.32, -0.35, 0);
+    line.userData = group.userData;
+    group.add(line);
+    this.scene.add(group);
   }
 
   createFieldChestGroup(opened = false) {
@@ -2103,38 +2143,50 @@ export class DungeonScene {
     return pickup;
   }
 
-  createRawFishPickupMesh() {
+  selectFishSpeciesForZone(zone) {
+    const pool = zone?.fishSpeciesPool?.length ? zone.fishSpeciesPool : ['smallRiverFish'];
+    const counter = (zone.catchCounter = (zone.catchCounter ?? 0) + 1);
+    return pool[stableHash(`${zone.fishCatchSeed ?? zone.id}:${counter}`) % pool.length] ?? 'smallRiverFish';
+  }
+
+  createRawFishPickupMesh(fishSpecies = 'smallRiverFish') {
+    const spec = FIELD_FISH_SPECIES[fishSpecies] ?? FIELD_FISH_SPECIES.smallRiverFish;
     const group = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x6f766f, roughness: 0.82, emissive: 0x101413, emissiveIntensity: 0.12 });
-    const tailMat = new THREE.MeshStandardMaterial({ color: 0x4e5a55, roughness: 0.88, emissive: 0x090d0c, emissiveIntensity: 0.1 });
+    group.userData = { itemId: 'raw_fish', fishSpecies, objectCategory: 'rawFishPickup', visualSource: 'Kerovac fish species pickup' };
+    const bodyMat = new THREE.MeshStandardMaterial({ color: spec.body, roughness: 0.82, emissive: spec.glow ?? 0x101413, emissiveIntensity: spec.glow ? 0.22 : 0.12 });
+    const tailMat = new THREE.MeshStandardMaterial({ color: spec.fin, roughness: 0.88, emissive: spec.glow ?? 0x090d0c, emissiveIntensity: spec.glow ? 0.14 : 0.1 });
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 10), bodyMat);
-    body.scale.set(1.7, 0.38, 0.56);
+    body.scale.set(spec.length / 0.6, spec.height / 0.3, spec.width / 0.3);
     body.rotation.z = Math.PI / 2;
+    body.userData = { fishSpecies, fishPart: 'speciesBody' };
     group.add(body);
     const tail = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.34, 3), tailMat);
-    tail.position.x = -0.47;
+    tail.position.x = -spec.length * 0.48;
     tail.rotation.z = -Math.PI / 2;
     tail.scale.z = 0.42;
+    tail.userData = { fishSpecies, fishPart: 'speciesTail' };
     group.add(tail);
     return group;
   }
 
-  spawnRawFishPickupForPlayer(player) {
-    if (this.area !== 'field') return null;
+  spawnRawFishPickupForPlayer(player, fishingZone = null) {
+    if (!(this.area === 'field' || this.isCompiledOutdoorFieldArea())) return null;
     const landing = this.getRawFishLandingPosition(player);
     if (!landing) return null;
     if (this.fieldRawFishPickups.length >= MAX_FIELD_RAW_FISH_PICKUPS) {
       this.removeRawFishPickup(this.fieldRawFishPickups[0]);
     }
     const pickupId = `field_raw_fish_${Date.now()}_${this.fieldRawFishPickups.length + 1}`;
-    const mesh = this.createRawFishPickupMesh();
-    mesh.name = `${pickupId}-gray-raw-fish-placeholder-pickup`;
+    const zone = fishingZone ?? this.getNearbyFishingZone(player?.position);
+    const fishSpecies = this.selectFishSpeciesForZone(zone);
+    const mesh = this.createRawFishPickupMesh(fishSpecies);
+    mesh.name = `${pickupId}-${fishSpecies}-raw-fish-pickup`;
     mesh.position.set(landing.x, 0.9, landing.z);
     mesh.rotation.y = player?.yaw ?? 0;
     this.scene.add(mesh);
-    const pickup = { id: pickupId, mesh, start: mesh.position.clone(), target: landing.clone().setY(0.26), elapsed: 0, duration: 0.55 };
+    const pickup = { id: pickupId, mesh, itemId: 'raw_fish', fishSpecies, start: mesh.position.clone(), target: landing.clone().setY(0.26), elapsed: 0, duration: 0.55 };
     this.fieldRawFishPickups.push(pickup);
-    this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(0.9), range: 2.85, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup });
+    this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(0.9), range: 2.85, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup, itemId: 'raw_fish', fishSpecies });
     return pickup;
   }
 

@@ -3,7 +3,7 @@ import { buildOutdoorPondSystem } from '../../engine/outdoor-authoring/OutdoorPo
 
 const pondExpoRecipes = [
   {
-    id: 'pond_expo_01_simple_bowl', label: 'POND 01', name: 'Simple Rounded Mud Pond', style: 'simple-rounded', seed: 10101, center: [-108, -5], markerId: 'pond_expo_marker_01', markerOffset: [-8, 0, -9],
+    id: 'pond_expo_01_simple_bowl', label: 'POND 01', fishable: true, fishSpeciesPool: ['smallRiverFish', 'broadCarpFish'], name: 'Simple Rounded Mud Pond', style: 'simple-rounded', seed: 10101, center: [-108, -5], markerId: 'pond_expo_marker_01', markerOffset: [-8, 0, -9],
     size: { radiusX: 6.1, radiusZ: 5.1, overallScale: 1, waterAreaScale: 1, shoreScale: 1 },
     shape: { outlinePointCount: 18, outlineWobble: 0.08, asymmetry: 0.06, ovalBias: 0.1, lobeCount: 1, edgeRoughness: 0.025 },
     terrain: { basinDepth: 0.35, stampKind: 'hollow', hollowRadius: 9.5, bankSoftness: 0.75 },
@@ -14,7 +14,7 @@ const pondExpoRecipes = [
     vegetation: { bushesRange: [4, 6], smallTreesRange: [1, 2], vegetationDensity: 0.75 },
   },
   {
-    id: 'pond_expo_02_terraced_shore', label: 'POND 02', name: 'Terraced Shore Pond', style: 'terraced-shore', seed: 20202, center: [-84, -5], markerId: 'pond_expo_marker_02', markerOffset: [-8, 0, -9],
+    id: 'pond_expo_02_terraced_shore', label: 'POND 02', fishable: true, fishSpeciesPool: ['smallRiverFish', 'broadCarpFish', 'flatMarshFish'], name: 'Terraced Shore Pond', style: 'terraced-shore', seed: 20202, center: [-84, -5], markerId: 'pond_expo_marker_02', markerOffset: [-8, 0, -9],
     size: { radiusX: 6.4, radiusZ: 4.8, overallScale: 1, waterAreaScale: 1, shoreScale: 1 },
     shape: { outlinePointCount: 20, outlineWobble: 0.12, asymmetry: 0.14, ovalBias: 0.25, lobeCount: 2, edgeRoughness: 0.04 },
     terrain: { basinDepth: 0.45, stampKind: 'terraced', shelfRadius: 10.5, bankHeight: 0.08, bankSoftness: 0.7 },
@@ -25,7 +25,7 @@ const pondExpoRecipes = [
     vegetation: { bushesRange: [5, 8], smallTreesRange: [1, 2], bushClusterChance: 0.55 },
   },
   {
-    id: 'pond_expo_03_rocky_spring', label: 'POND 03', name: 'Rocky Spring Pond', style: 'rocky-spring', seed: 30303, center: [-60, -5], markerId: 'pond_expo_marker_03', markerOffset: [-8, 0, -9],
+    id: 'pond_expo_03_rocky_spring', label: 'POND 03', fishable: true, fishSpeciesPool: ['spineBackFish', 'jawHunterFish', 'smallRiverFish'], name: 'Rocky Spring Pond', style: 'rocky-spring', seed: 30303, center: [-60, -5], markerId: 'pond_expo_marker_03', markerOffset: [-8, 0, -9],
     size: { radiusX: 5, radiusZ: 4.2, overallScale: 1, waterAreaScale: 1, shoreScale: 1 },
     shape: { outlinePointCount: 22, outlineWobble: 0.16, asymmetry: 0.35, ovalBias: 0.12, lobeCount: 3, edgeRoughness: 0.08 },
     terrain: { basinDepth: 0.55, stampKind: 'hollow', hollowRadius: 8.4, bankHeight: 0.16, bankSoftness: 0.48 },
@@ -36,7 +36,7 @@ const pondExpoRecipes = [
     vegetation: { bushesRange: [3, 5], smallTreesRange: [1, 2], bushSize: [0.9, 1.55] },
   },
   {
-    id: 'pond_expo_04_marsh_mud', label: 'POND 04', name: 'Marshy Shallow Pond', style: 'marshy-wide', seed: 40404, center: [-37, -5], markerId: 'pond_expo_marker_04', markerOffset: [-7, 0, -9],
+    id: 'pond_expo_04_marsh_mud', label: 'POND 04', fishable: true, fishSpeciesPool: ['flatMarshFish', 'longEelFish', 'smallRiverFish'], name: 'Marshy Shallow Pond', style: 'marshy-wide', seed: 40404, center: [-37, -5], markerId: 'pond_expo_marker_04', markerOffset: [-7, 0, -9],
     size: { radiusX: 6.9, radiusZ: 4.5, overallScale: 1, waterAreaScale: 1, shoreScale: 1 },
     shape: { outlinePointCount: 26, outlineWobble: 0.22, asymmetry: 0.25, ovalBias: 0.45, bayCount: 3, lobeCount: 4, edgeRoughness: 0.11 },
     terrain: { basinDepth: 0.18, stampKind: 'shelf', shelfRadius: 11, bankSoftness: 0.92 },
@@ -47,7 +47,7 @@ const pondExpoRecipes = [
     vegetation: { bushesRange: [8, 12], smallTreesRange: [0, 1], bushSize: [0.85, 1.5], vegetationDensity: 1.35 },
   },
   {
-    id: 'pond_expo_05_crescent_pool', label: 'POND 05', name: 'Crescent Pond', style: 'crescent', seed: 50505, center: [-109, 45], markerId: 'pond_expo_marker_05', markerOffset: [-7, 0, -10],
+    id: 'pond_expo_05_crescent_pool', label: 'POND 05', fishable: true, fishSpeciesPool: ['broadCarpFish', 'longEelFish', 'sacredGlowFish'], name: 'Crescent Pond', style: 'crescent', seed: 50505, center: [-109, 45], markerId: 'pond_expo_marker_05', markerOffset: [-7, 0, -10],
     size: { radiusX: 6.6, radiusZ: 4.8, overallScale: 1, waterAreaScale: 1, shoreScale: 1 },
     shape: { outlinePointCount: 24, crescentBias: 0.55, pinchAmount: 0.35, pinchDirection: 0.1, outlineWobble: 0.15, asymmetry: 0.22, lobeCount: 2, edgeRoughness: 0.06 },
     terrain: { basinDepth: 0.42, stampKind: 'hollow', hollowRadius: 10, bankSoftness: 0.55 },
@@ -58,7 +58,7 @@ const pondExpoRecipes = [
     vegetation: { bushesRange: [5, 8], smallTreesRange: [1, 3], vegetationSideBias: 'innerCurve' },
   },
   {
-    id: 'pond_expo_06_gully_repair', label: 'POND 06', name: 'Gully Repair Keeper Candidate', style: 'gully-fed', seed: 60606, center: [-84, 45], markerId: 'pond_expo_marker_06', markerOffset: [-8, 0, -10], keeperCandidate: true,
+    id: 'pond_expo_06_gully_repair', label: 'POND 06', fishable: true, fishSpeciesPool: ['smallRiverFish', 'spineBackFish', 'jawHunterFish'], name: 'Gully Repair Keeper Candidate', style: 'gully-fed', seed: 60606, center: [-84, 45], markerId: 'pond_expo_marker_06', markerOffset: [-8, 0, -10], keeperCandidate: true,
     size: { radiusX: 6.4, radiusZ: 5.2, overallScale: 1, waterAreaScale: 1, shoreScale: 1 },
     shape: { outlinePointCount: 22, outlineWobble: 0.18, asymmetry: 0.3, ovalBias: 0.25, bayCount: 2, lobeCount: 3, edgeRoughness: 0.075 },
     terrain: { stampKind: 'ravinePlusBasin', gullyPath: [[-88, 31], [-84, 45], [-80, 59]], gullyDepth: 0.32, gullyWidth: 5.2, basinDepth: 0.42, bankSoftness: 0.68 },
@@ -70,7 +70,7 @@ const pondExpoRecipes = [
     clearances: { zones: [{ id: 'pond06_inspection_path', bounds: { minX: -88, maxX: -80, minZ: 32, maxZ: 39 } }] },
   },
   {
-    id: 'pond_expo_07_natural_irregular', label: 'POND 07', name: 'Natural Irregular Forest Pond', style: 'irregular-natural', seed: 70707, center: [-60, 45], markerId: 'pond_expo_marker_07', markerOffset: [-8, 0, -10],
+    id: 'pond_expo_07_natural_irregular', label: 'POND 07', fishable: true, fishSpeciesPool: ['flatMarshFish', 'broadCarpFish', 'sacredGlowFish'], name: 'Natural Irregular Forest Pond', style: 'irregular-natural', seed: 70707, center: [-60, 45], markerId: 'pond_expo_marker_07', markerOffset: [-8, 0, -10],
     size: { radiusX: 6.8, radiusZ: 5.3, overallScale: 1, waterAreaScale: 1, shoreScale: 1 },
     shape: { outlinePointCount: 28, outlineWobble: 0.28, asymmetry: 0.45, bayCount: 2, lobeCount: 4, edgeRoughness: 0.14 },
     terrain: { basinDepth: 0.5, stampKind: 'hollow', hollowRadius: 10.8, bankHeight: 0.08, bankSoftness: 0.85 },
@@ -81,7 +81,7 @@ const pondExpoRecipes = [
     vegetation: { bushesRange: [7, 11], smallTreesRange: [2, 4], bushClusterChance: 0.68, treeDistanceFromWater: [3.8, 7.2] },
   },
   {
-    id: 'pond_expo_08_fishing_hole', label: 'POND 08', name: 'Future Fishing Hole', style: 'future-fishing-hole', seed: 80808, center: [-37, 45], markerId: 'pond_expo_marker_08', markerOffset: [-7, 0, -10], futureFishable: true, fishable: false,
+    id: 'pond_expo_08_fishing_hole', label: 'POND 08', name: 'Future Fishing Hole', style: 'future-fishing-hole', seed: 80808, center: [-37, 45], markerId: 'pond_expo_marker_08', markerOffset: [-7, 0, -10], futureFishable: true, fishable: true, fishSpeciesPool: ['longEelFish', 'jawHunterFish', 'sacredGlowFish'],
     size: { radiusX: 5.6, radiusZ: 4.5, overallScale: 1, waterAreaScale: 1, shoreScale: 1 },
     shape: { outlinePointCount: 20, outlineWobble: 0.1, asymmetry: 0.1, ovalBias: 0.2, lobeCount: 2, edgeRoughness: 0.035 },
     terrain: { basinDepth: 0.65, stampKind: 'terraced', shelfRadius: 9.4, bankSoftness: 0.62 },
@@ -193,6 +193,11 @@ export const oarbOutdoorExpoDefinition = Object.freeze({
   ],
   waterBodies: [
     ...pondExpoSystem.waterBodies,
+  ],
+  outdoorChests: [
+    { id: 'pond_expo_reed_pole_chest', label: 'Reed Pole Rod Chest', position: { x: -121, y: 0.18, z: 6 }, itemId: 'fishing_rod', rodVariant: 'reedPoleRod', acquiredMessage: 'Reed Pole Fishing Rod Acquired.', tags: ['pond-expo', 'fishing', 'rod-chest'] },
+    { id: 'pond_expo_hooked_branch_rod_chest', label: 'Hooked Branch Rod Chest', position: { x: -121, y: 0.18, z: 54 }, itemId: 'fishing_rod', rodVariant: 'hookedBranchRod', acquiredMessage: 'Hooked Branch Fishing Rod Acquired.', tags: ['pond-expo', 'fishing', 'rod-chest'] },
+    { id: 'pond_expo_heavy_river_rod_chest', label: 'Heavy River Rod Chest', position: { x: -25, y: 0.18, z: 54 }, itemId: 'fishing_rod', rodVariant: 'heavyRiverRod', acquiredMessage: 'Heavy River Fishing Rod Acquired.', tags: ['pond-expo', 'fishing', 'rod-chest'] },
   ],
   reservedStations: [
     { id: 'future_bridge_platform_tests', label: 'Future Bridge/Platform Tests', bounds: { minX: -132, maxX: -70, minZ: 78, maxZ: 112 }, tags: ['future-bridge-platform-tests'] },

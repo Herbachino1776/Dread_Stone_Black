@@ -238,7 +238,7 @@ export function buildOutdoorPond(input) {
   const body = {
     id: recipe.id, kind: 'pond', center: recipe.center, radius: footprint.waterRadius, y: waterY,
     material: waterMaterialKey, bedMaterial: mudMaterialKey, shoreMaterial: shoreMaterialKey,
-    shoreWidth: mudMargin + wetShoreWidth, fishable: Boolean(recipe.futureFishable && recipe.fishable),
+    shoreWidth: mudMargin + wetShoreWidth, fishable: Boolean(recipe.fishable), fishSpeciesPool: [...(recipe.fishSpeciesPool ?? [])], fishCatchSeed: `${recipe.seed ?? recipe.id}-catch`,
     footprint,
     pondDecor: {
       seed: recipe.seed,

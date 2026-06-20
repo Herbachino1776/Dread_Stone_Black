@@ -214,6 +214,54 @@ assert.equal(pondChest.itemId, 'fishing_rod', 'OARB fishing rod chest still gran
 
 
 
+
+const dungeonSceneSource = readFileSync(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
+const lockedFishSpecies = new Set(['smallRiverFish', 'broadCarpFish', 'longEelFish', 'spineBackFish', 'flatMarshFish', 'jawHunterFish', 'sacredGlowFish']);
+const pondExpoPonds = oarbOutdoorExpoDefinition.waterBodies.filter((body) => body.tags?.includes('pond-expo'));
+assert.equal(pondExpoPonds.length, 8, 'Pond Expo has exactly 8 generated pond water bodies.');
+const seenPondSpecies = new Set();
+pondExpoPonds.forEach((pond) => {
+  const label = pond.userData?.pondExpoId ?? pond.id;
+  assert.equal(pond.fishable, true, `${label} invalid: pond is not fishable.`);
+  assert.equal(Array.isArray(pond.fishSpeciesPool), true, `${label} invalid: fishSpeciesPool must be an array.`);
+  assert.ok(pond.fishSpeciesPool.length >= 2, `${label} invalid: fishSpeciesPool is empty or has fewer than 2 species.`);
+  pond.fishSpeciesPool.forEach((species) => {
+    assert.equal(lockedFishSpecies.has(species), true, `${label} invalid: fishSpeciesPool includes unknown species ${species}.`);
+    seenPondSpecies.add(species);
+  });
+  assert.equal(typeof pond.fishCatchSeed, 'string', `${label} invalid: fishCatchSeed must be deterministic string metadata.`);
+  assert.ok(pond.footprint?.waterOutline?.length >= 8, `${label} invalid: fishing zone must derive from generated water footprint.`);
+});
+lockedFishSpecies.forEach((species) => assert.equal(seenPondSpecies.has(species), true, `Pond Expo invalid: locked fish species ${species} is missing from all pond pools.`));
+const pond08 = pondExpoPonds.find((pond) => pond.userData?.pondExpoId === 'POND 08');
+['longEelFish', 'jawHunterFish', 'sacredGlowFish'].forEach((species) => assert.equal(pond08?.fishSpeciesPool?.includes(species), true, `POND 08 invalid: missing future-fishing-hole species ${species}.`));
+
+const pondExpoChestIds = ['pond_expo_reed_pole_chest', 'pond_expo_hooked_branch_rod_chest', 'pond_expo_heavy_river_rod_chest'];
+const pondExpoChestVariants = new Map([
+  ['pond_expo_reed_pole_chest', 'reedPoleRod'],
+  ['pond_expo_hooked_branch_rod_chest', 'hookedBranchRod'],
+  ['pond_expo_heavy_river_rod_chest', 'heavyRiverRod'],
+]);
+const pondExpoChests = oarbOutdoorExpoDefinition.outdoorChests?.filter((chest) => pondExpoChestIds.includes(chest.id)) ?? [];
+assert.equal(pondExpoChests.length, 3, 'Pond Expo has all 3 fishing rod chests.');
+pondExpoChests.forEach((chest) => {
+  assert.equal(chest.itemId, 'fishing_rod', `${chest.id} invalid: chest must award the generic fishing_rod item.`);
+  assert.equal(chest.rodVariant, pondExpoChestVariants.get(chest.id), `${chest.id} invalid: rodVariant metadata mismatch.`);
+  assert.ok([chest.position?.x, chest.position?.y, chest.position?.z].every(Number.isFinite), `${chest.id} invalid: chest position is not finite.`);
+  const nearestPondDistance = Math.min(...pondExpoPonds.map((pond) => Math.hypot(chest.position.x - pond.center[0], chest.position.z - pond.center[1])));
+  assert.ok(nearestPondDistance <= 22, `${chest.id} invalid: chest is not close enough to Pond Expo.`);
+  pondExpoPonds.forEach((pond) => {
+    const [rx, rz] = pond.radius;
+    const dx = chest.position.x - pond.center[0];
+    const dz = chest.position.z - pond.center[1];
+    const waterEllipse = ((dx * dx) / (rx * rx)) + ((dz * dz) / (rz * rz));
+    assert.ok(waterEllipse > 1.15, `${chest.id} invalid: chest is inside water footprint for ${pond.userData?.pondExpoId ?? pond.id}.`);
+  });
+});
+assert.ok(dungeonSceneSource.includes('selectFishSpeciesForZone'), 'Pond Expo caught fish chooses a species from the active fishing zone.');
+assert.ok(dungeonSceneSource.includes("visualSource: 'Kerovac fish species pickup'"), 'Pond Expo raw fish pickup uses species-based fish visual metadata.');
+assert.equal(dungeonSceneSource.includes('gray-raw-fish-placeholder-pickup'), false, 'No placeholder caught fish pickup name remains for Pond Expo catches.');
+
 const reliquaryBounds = reliquaryFieldDefinition.integrity.walkableBounds;
 const pointInsideReliquaryBounds = ([x, z]) => x >= reliquaryBounds.minX && x <= reliquaryBounds.maxX && z >= reliquaryBounds.minZ && z <= reliquaryBounds.maxZ;
 const expoFieldGate = reliquaryFieldDefinition.exits.find((candidate) => candidate.id === 'oarb_outdoor_expo_gate');
@@ -237,7 +285,6 @@ const expoVisibleIds = new Set(expoFieldGate.userData?.visibleMarker?.ids ?? [])
 });
 assert.deepEqual(expoFieldGate.userData?.visibleMarker?.gatePosition, { x: 88, y: 1, z: 186 }, 'OARB Outdoor Expo visible marker metadata records the exact gate position.');
 
-const dungeonSceneSource = readFileSync(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
 [
   'OARB_OUTDOOR_EXPO_INT_ENTER',
   "area: 'oarbOutdoorExpo'",
