@@ -36,6 +36,107 @@ function destinationSpawnIdsFor(definition) {
     .flatMap((exit) => [...(spawnIdsByLocation.get(exit.toLocation) ?? [])]));
 }
 
+
+function isFinitePosition(position) {
+  return position && Number.isFinite(position.x) && Number.isFinite(position.y ?? 0) && Number.isFinite(position.z);
+}
+
+function pointInRect(position, rect, margin = 0) {
+  return position.x >= rect.minX - margin
+    && position.x <= rect.maxX + margin
+    && position.z >= rect.minZ - margin
+    && position.z <= rect.maxZ + margin;
+}
+
+function rectsOverlap(a, b) {
+  return a.minX <= b.maxX && a.maxX >= b.minX && a.minZ <= b.maxZ && a.maxZ >= b.minZ;
+}
+
+function rectClearance(position, rect) {
+  if (pointInRect(position, rect)) return 0;
+  const dx = position.x < rect.minX ? rect.minX - position.x : position.x > rect.maxX ? position.x - rect.maxX : 0;
+  const dz = position.z < rect.minZ ? rect.minZ - position.z : position.z > rect.maxZ ? position.z - rect.maxZ : 0;
+  return Math.hypot(dx, dz);
+}
+
+function allowsExitOverlap(a, b) {
+  return a.userData?.allowTriggerOverlapWith?.includes?.(b.id)
+    || b.userData?.allowTriggerOverlapWith?.includes?.(a.id);
+}
+
+function validateTransitionSafety(definitions) {
+  const errors = [];
+  const byId = new Map(definitions.map((definition) => [definition.id, definition]));
+
+  definitions.forEach((definition) => {
+    (definition.exits ?? []).forEach((exit) => {
+      const target = byId.get(exit.toLocation);
+      if (!target) {
+        errors.push(`${definition.id}.${exit.id} targets missing location ${exit.toLocation}`);
+        return;
+      }
+      const destinationSpawn = (target.spawns ?? []).find((spawn) => spawn.id === exit.destinationSpawnId);
+      if (!destinationSpawn) {
+        errors.push(`${definition.id}.${exit.id} references missing destinationSpawnId ${exit.destinationSpawnId} in ${target.id}`);
+        return;
+      }
+      if (!isFinitePosition(destinationSpawn.position)) {
+        errors.push(`${target.id}.${destinationSpawn.id} destination position is not finite`);
+      }
+      if (target.type === 'field') {
+        (target.exits ?? []).forEach((fieldExit) => {
+          if (fieldExit.triggerRect && pointInRect(destinationSpawn.position, fieldExit.triggerRect)) {
+            errors.push(`${definition.id}.${exit.id} returns to ${target.id}.${destinationSpawn.id} inside ${fieldExit.id}.triggerRect`);
+          }
+        });
+      }
+    });
+
+    if (definition.type === 'field') {
+      const exits = (definition.exits ?? []).filter((exit) => exit.triggerRect);
+      exits.forEach((exit, index) => {
+        exits.slice(index + 1).forEach((other) => {
+          if (rectsOverlap(exit.triggerRect, other.triggerRect) && !allowsExitOverlap(exit, other)) {
+            errors.push(`${definition.id} exit triggerRects overlap: ${exit.id} and ${other.id}`);
+          }
+        });
+      });
+
+      exits.forEach((exit) => {
+        const returnSpawnId = exit.userData?.returnSpawnId;
+        const safetyMargin = exit.userData?.returnSpawnSafetyMargin;
+        if (!returnSpawnId || !Number.isFinite(safetyMargin)) return;
+        const returnSpawn = (definition.spawns ?? []).find((spawn) => spawn.id === returnSpawnId);
+        if (!returnSpawn) {
+          errors.push(`${definition.id}.${exit.id} references missing returnSpawnId ${returnSpawnId}`);
+          return;
+        }
+        const clearance = rectClearance(returnSpawn.position, exit.triggerRect);
+        if (clearance < safetyMargin) {
+          errors.push(`${definition.id}.${returnSpawn.id} is ${clearance.toFixed(2)} units from ${exit.id}.triggerRect; expected at least ${safetyMargin}`);
+        }
+      });
+    }
+  });
+
+  const reliquaryField = byId.get('reliquary-field');
+  const criticalReturnSpawns = ['field_kerovac_return', 'field_oarb_feature_yard_return'];
+  const criticalFieldExits = ['field_enter_kerovac', 'oarb_feature_yard_gate'];
+  criticalReturnSpawns.forEach((spawnId) => {
+    const spawn = reliquaryField?.spawns?.find((candidate) => candidate.id === spawnId);
+    criticalFieldExits.forEach((exitId) => {
+      const exit = reliquaryField?.exits?.find((candidate) => candidate.id === exitId);
+      if (!spawn || !exit) {
+        errors.push(`missing critical Reliquary Field transition ${spawnId} or ${exitId}`);
+      } else if (pointInRect(spawn.position, exit.triggerRect, 6)) {
+        errors.push(`${spawnId} is inside the 6-unit safety buffer for ${exitId}`);
+      }
+    });
+  });
+
+  return errors;
+}
+
 const targets = definitions
   .filter((definition) => definition.type !== 'field' || definition.integrity?.facades?.length)
   .map((definition) => ({
@@ -45,8 +146,14 @@ const targets = definitions
 
 let totalErrors = 0;
 let totalWarnings = 0;
+const transitionSafetyErrors = validateTransitionSafety(definitions);
+totalErrors += transitionSafetyErrors.length;
 
 console.log('Dungeon integrity validation');
+if (transitionSafetyErrors.length) {
+  console.log('\nTransition safety');
+  transitionSafetyErrors.forEach((error) => console.log(`- error: ${error}`));
+}
 
 targets.forEach(({ label, definition }) => {
   const baseReport = validateDungeonDefinition(definition, { destinationSpawnIds: destinationSpawnIdsFor(definition), textureAssetExists });
