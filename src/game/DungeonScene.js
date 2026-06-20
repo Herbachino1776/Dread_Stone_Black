@@ -21,6 +21,55 @@ import { RAM_MAN_FRIENDLY_ANIMATION_FILES } from './creatures/ramManFriendly.con
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
+
+function createOrganicPondDiscGeometry(segments = 80, wobble = 0.08) {
+  const vertices = [0, 0, 0];
+  const uvs = [0.5, 0.5];
+  const indices = [];
+  for (let index = 0; index <= segments; index += 1) {
+    const angle = (index / segments) * Math.PI * 2;
+    const edge = 1 + Math.sin(angle * 3.0 + 0.45) * wobble + Math.sin(angle * 5.0 - 0.8) * wobble * 0.45;
+    const x = Math.cos(angle) * edge;
+    const z = Math.sin(angle) * edge;
+    vertices.push(x, 0, z);
+    uvs.push(0.5 + x * 0.5, 0.5 + z * 0.5);
+    if (index > 0) indices.push(0, index + 1, index);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createOrganicPondRingGeometry(segments = 80, wobble = 0.08) {
+  const vertices = [];
+  const uvs = [];
+  const indices = [];
+  for (let index = 0; index <= segments; index += 1) {
+    const angle = (index / segments) * Math.PI * 2;
+    const edge = 1 + Math.sin(angle * 3.0 + 0.45) * wobble + Math.sin(angle * 5.0 - 0.8) * wobble * 0.45;
+    const outer = edge * 1.0;
+    const inner = edge * 0.74;
+    vertices.push(Math.cos(angle) * inner, 0, Math.sin(angle) * inner, Math.cos(angle) * outer, 0, Math.sin(angle) * outer);
+    uvs.push(0.5, 0, 1, 1);
+    if (index > 0) {
+      const a = (index - 1) * 2;
+      const b = a + 1;
+      const c = index * 2;
+      const d = c + 1;
+      indices.push(a, c, b, c, d, b);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 const RAM_MAN_NPC_POSITION = new THREE.Vector3(0, FLOOR_Y, 14);
 const RAM_MAN_NPC_PATROL_POINTS = [
   new THREE.Vector3(-7, FLOOR_Y, 10),
@@ -1344,12 +1393,11 @@ export class DungeonScene {
       const shoreWidth = Number.isFinite(body.shoreWidth) ? Math.max(0, body.shoreWidth) : 0;
       const shoreMaterial = this.makeTexturedMaterial(textureProfiles[body.shoreMaterial] ?? textureProfiles.mudWetDark ?? { color: 0x60462f, roughness: 1 });
       shoreMaterial.name = `OARB-water-shore-material-${body.shoreMaterial ?? 'mud'}`;
-      const shoreGeometry = new THREE.RingGeometry(1, 1, 72);
-      shoreGeometry.rotateX(-Math.PI / 2);
+      const shoreGeometry = createOrganicPondRingGeometry(88, 0.075);
       const shore = new THREE.Mesh(shoreGeometry, shoreMaterial);
       shore.name = `OARB-water-shore-${body.id}`;
       shore.position.set(cx, y + 0.012, cz);
-      shore.scale.set(rx + shoreWidth, rz + shoreWidth, 1);
+      shore.scale.set(rx + shoreWidth, 1, rz + shoreWidth);
       shore.receiveShadow = true;
       shore.userData = { id: body.id, kind: 'pondShore', materialKey: body.shoreMaterial, collision: 'visual-only muddy shoreline' };
       this.scene.add(shore);
@@ -1360,12 +1408,11 @@ export class DungeonScene {
         transparent: profile.transparent ?? true, opacity: profile.opacity ?? 0.78, emissive: profile.emissive ?? 0x0b4858, emissiveIntensity: profile.emissiveIntensity ?? 0.34, depthWrite: false,
       });
       waterMat.name = `OARB-water-material-${body.material ?? 'pondWater'}`;
-      const waterGeometry = new THREE.CircleGeometry(1, 72);
-      waterGeometry.rotateX(-Math.PI / 2);
+      const waterGeometry = createOrganicPondDiscGeometry(88, 0.075);
       const water = new THREE.Mesh(waterGeometry, waterMat);
       water.name = `OARB-water-body-${body.id}`;
       water.position.set(cx, y + 0.035, cz);
-      water.scale.set(rx, rz, 1);
+      water.scale.set(rx, 1, rz);
       water.userData = { id: body.id, kind: body.kind, tags: body.tags ?? [], fishable: Boolean(body.fishable), collision: 'visual-only pond water; shore remains walkable' };
       this.scene.add(water);
       if (body.fishable) {
