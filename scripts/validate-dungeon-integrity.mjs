@@ -378,8 +378,15 @@ function validateCompiledOutdoorFieldRuntime(definitions) {
     if (pond06.material !== 'pondWaterAnimated') errors.push(`oarbOutdoorExpo POND 06 should use pondWaterAnimated, found ${pond06.material}`);
     if (!animatedProfile) errors.push('oarbOutdoorExpo POND 06 animated water material key does not resolve');
     else {
-      if ((animatedProfile.animatedFrames ?? []).length !== 6) errors.push('oarbOutdoorExpo POND 06 animated water must author exactly 6 frames');
+      const animatedFrames = animatedProfile.animatedFrames ?? [];
+      if (animatedFrames.length !== 6) errors.push('oarbOutdoorExpo POND 06 animated water must author exactly 6 frames');
+      const playbackMode = animatedProfile.playbackMode ?? 'loop';
+      if (!['loop', 'pingPong'].includes(playbackMode)) errors.push(`oarbOutdoorExpo POND 06 animated water playbackMode must be loop or pingPong, found ${playbackMode}`);
+      if (playbackMode !== 'pingPong') errors.push(`oarbOutdoorExpo POND 06 animated water should use pingPong playback, found ${playbackMode}`);
       if (!Number.isFinite(animatedProfile.frameDurationMs) || animatedProfile.frameDurationMs <= 0) errors.push('oarbOutdoorExpo POND 06 animated water frameDurationMs must be finite and positive');
+      if (animatedProfile.frameDurationMs !== 220) errors.push(`oarbOutdoorExpo POND 06 animated water frameDurationMs should be 220, found ${animatedProfile.frameDurationMs}`);
+      const pingPongSequence = playbackMode === 'pingPong' && animatedFrames.length > 1 ? animatedFrames.concat(animatedFrames.slice(1, -1).reverse()) : animatedFrames;
+      if (playbackMode === 'pingPong' && pingPongSequence.length === 0) errors.push('oarbOutdoorExpo POND 06 animated water ping-pong sequence must be non-empty');
       (animatedProfile.animatedFrames ?? []).forEach((framePath) => {
         const publicPath = framePath.replace(/^\.\//, 'public/');
         if (!fs.existsSync(path.resolve(repoRoot, publicPath))) errors.push(`oarbOutdoorExpo POND 06 animated water frame path is missing: ${framePath}`);

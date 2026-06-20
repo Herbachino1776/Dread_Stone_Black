@@ -3203,8 +3203,17 @@ export class DungeonScene {
     return framePaths.map((path) => this.loadRepeatingTexture(path, repeat));
   }
 
+  buildAnimatedTextureFrameSequence(frames = [], playbackMode = 'loop') {
+    if (!Array.isArray(frames) || frames.length === 0) return [];
+    if (playbackMode === 'loop') return frames;
+    if (playbackMode === 'pingPong') return frames.length > 1 ? frames.concat(frames.slice(1, -1).reverse()) : frames;
+    return [];
+  }
+
   registerAnimatedTextureFlipbook(material, profile = {}) {
-    const frames = this.loadPondWaterAnimationFrames(profile);
+    const sourceFrames = this.loadPondWaterAnimationFrames(profile);
+    const playbackMode = profile.playbackMode ?? 'loop';
+    const frames = this.buildAnimatedTextureFrameSequence(sourceFrames, playbackMode);
     const frameDurationMs = Number(profile.frameDurationMs);
     if (!material || frames.length === 0 || !Number.isFinite(frameDurationMs) || frameDurationMs <= 0) return;
     material.map = frames[0];
@@ -3212,6 +3221,7 @@ export class DungeonScene {
     this.animatedTextureFlipbooks.push({
       material,
       frames,
+      playbackMode,
       frameDurationMs,
       elapsedMs: 0,
       frameIndex: 0,
