@@ -16,6 +16,7 @@ import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
 import { MobileControls } from './MobileControls.js';
 import { PlayerController } from './PlayerController.js';
+import { resolveStartupArea } from './locationRouting.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 import { getObjectivePackForLocation } from './objectives/objectiveRegistry.js';
 import { objectiveMessages, resolveObjectiveMessage } from './objectives/objectiveMessages.js';
@@ -46,6 +47,7 @@ const FIELD_RETURN_SPAWNS_BY_LOCATION = Object.freeze({
   'sumerian-canal-market-district-v2': 'sumerianCanalMarketDistrictV2Exit',
   balthazan: 'balthazanExit',
   kerovac: 'kerovacExit',
+  oarbFeatureYard: 'oarbFeatureYardExit',
   dungeon: 'cryptAExit',
 });
 
@@ -80,8 +82,7 @@ export class Game {
     const returnedFrom = query.get('from');
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
     const fieldSpawn = FIELD_RETURN_SPAWNS_BY_LOCATION[returnedFrom] ?? 'start';
-    const requestedLocation = getLocationDefinition(requestedArea);
-    const area = ['dungeon', 'black-grass-temple'].includes(requestedArea) || requestedLocation?.tags?.includes('compiled-runtime') ? requestedArea : 'kerovac';
+    const area = resolveStartupArea(requestedArea);
     this.gameState = new GameState();
     this.equipmentRuntime = new EquipmentRuntime({
       weaponProfiles: equipmentRegistry.weapons,

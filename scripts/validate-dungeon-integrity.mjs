@@ -8,6 +8,7 @@ import { formatIntegrityIssue } from '../src/engine/dungeon-authoring/integrity/
 import { buildLightObjectRegistry } from '../src/engine/lighting/LightObjectRegistry.js';
 import { validateTorchPlacements } from '../src/engine/lighting/TorchPlacementValidator.js';
 import { listLocationDefinitions } from '../src/game/locations/locationRegistry.js';
+import { resolveStartupArea } from '../src/game/locationRouting.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -62,6 +63,50 @@ function rectClearance(position, rect) {
 function allowsExitOverlap(a, b) {
   return a.userData?.allowTriggerOverlapWith?.includes?.(b.id)
     || b.userData?.allowTriggerOverlapWith?.includes?.(a.id);
+}
+
+
+function validateStartupRouting(definitions) {
+  const errors = [];
+  const byId = new Map(definitions.map((definition) => [definition.id, definition]));
+  const expectArea = (requestedArea, expectedArea) => {
+    const actualArea = resolveStartupArea(requestedArea);
+    if (actualArea !== expectedArea) {
+      errors.push(`requested area ${requestedArea ?? '<none>'} resolved to ${actualArea}; expected ${expectedArea}`);
+    }
+  };
+
+  expectArea(null, 'field');
+  expectArea('', 'field');
+  expectArea('field', 'field');
+  expectArea('reliquary-field', 'field');
+  expectArea('kerovac', 'kerovac');
+  expectArea('oarbFeatureYard', 'oarbFeatureYard');
+  expectArea('not-a-real-area', 'field');
+
+  const compiledRuntimeIds = definitions
+    .filter((definition) => definition.tags?.includes('compiled-runtime'))
+    .map((definition) => definition.id);
+  compiledRuntimeIds.forEach((id) => expectArea(id, id));
+
+  const requireReturnToField = (fromLocation, exitId) => {
+    const exit = byId.get(fromLocation)?.exits?.find((candidate) => candidate.id === exitId);
+    if (!exit) {
+      errors.push(`${fromLocation}.${exitId} is missing`);
+      return;
+    }
+    if (exit.toLocation !== 'reliquary-field') {
+      errors.push(`${fromLocation}.${exitId} returns to ${exit.toLocation}; expected reliquary-field`);
+    }
+    if (!byId.get('reliquary-field')?.spawns?.some((spawn) => spawn.id === exit.destinationSpawnId)) {
+      errors.push(`${fromLocation}.${exitId} targets missing Reliquary Field spawn ${exit.destinationSpawnId}`);
+    }
+  };
+
+  requireReturnToField('kerovac', 'kerovac_exit_to_reliquary_field');
+  requireReturnToField('oarbFeatureYard', 'oarb_feature_yard_return_gate');
+
+  return errors;
 }
 
 function validateTransitionSafety(definitions) {
@@ -146,10 +191,15 @@ const targets = definitions
 
 let totalErrors = 0;
 let totalWarnings = 0;
+const startupRoutingErrors = validateStartupRouting(definitions);
 const transitionSafetyErrors = validateTransitionSafety(definitions);
-totalErrors += transitionSafetyErrors.length;
+totalErrors += startupRoutingErrors.length + transitionSafetyErrors.length;
 
 console.log('Dungeon integrity validation');
+if (startupRoutingErrors.length) {
+  console.log('\nStartup routing');
+  startupRoutingErrors.forEach((error) => console.log(`- error: ${error}`));
+}
 if (transitionSafetyErrors.length) {
   console.log('\nTransition safety');
   transitionSafetyErrors.forEach((error) => console.log(`- error: ${error}`));
