@@ -21,6 +21,14 @@ function assertTexturePathsExist(definition) {
     const publicPath = profile.path.replace(/^\.\//, 'public/');
     assert.equal(existsSync(resolve(repoRoot, publicPath)), true, `${definition.id} texture profile ${key} path exists: ${profile.path}`);
   }
+  for (const [key, profile] of Object.entries(definition.textures ?? {})) {
+    if (!Array.isArray(profile?.animatedFrames)) continue;
+    profile.animatedFrames.forEach((framePath, index) => {
+      assert.equal(typeof framePath, 'string', `${definition.id} animated texture profile ${key} frame ${index + 1} has a string path.`);
+      const publicPath = framePath.replace(/^\.\//, 'public/');
+      assert.equal(existsSync(resolve(repoRoot, publicPath)), true, `${definition.id} animated texture profile ${key} frame path exists: ${framePath}`);
+    });
+  }
 }
 
 assertTexturePathsExist(reliquaryFieldDefinition);
@@ -347,6 +355,17 @@ assert.equal(pond06.userData?.visibleMarker?.label, 'POND 06', 'POND 06 keeps th
 assert.equal(pond06.userData?.keeperCandidate, true, 'POND 06 is marked as the current keeper candidate.');
 assert.equal(pond06.bedMaterial, 'pondBrightMud', 'POND 06 uses the bright mud pond-bed material profile.');
 assert.ok(oarbOutdoorExpoDefinition.textures.pondBrightMud, 'POND 06 bright mud material profile resolves.');
+assert.equal(pond06.material, 'pondWaterAnimated', 'POND 06 uses the animated pond water material profile.');
+const pond06AnimatedProfile = oarbOutdoorExpoDefinition.textures[pond06.material];
+assert.ok(pond06AnimatedProfile, 'POND 06 animated water material key resolves.');
+assert.equal(pond06AnimatedProfile.animatedFrames?.length, 6, 'POND 06 animated water frame count is exactly 6.');
+assert.ok(Number.isFinite(pond06AnimatedProfile.frameDurationMs) && pond06AnimatedProfile.frameDurationMs > 0, 'POND 06 animated water frameDurationMs is finite and positive.');
+assert.deepEqual(pond06AnimatedProfile.repeat, [3.2, 2.6], 'POND 06 animated water uses one consistent repeat for every frame.');
+pond06AnimatedProfile.animatedFrames.forEach((framePath, index) => {
+  assert.equal(framePath, `./assets/textures/water/pond/pond_water_anim_0${index + 1}.png`, `POND 06 animated water frame ${index + 1} resolves to the expected pond path.`);
+});
+const animatedPondUsers = pondBodies.filter((pond) => pond.material === 'pondWaterAnimated');
+assert.deepEqual(animatedPondUsers.map((pond) => pond.id), ['pond_expo_06_gully_repair'], 'Animated pond water is applied only to POND 06.');
 assert.equal(pond06.footprint?.recipe, 'offset-outline-irregular-polygon', 'POND 06 uses a proper offset-outline footprint recipe.');
 assert.deepEqual(pond06.footprint?.center, pond06.center, 'POND 06 footprint center matches the water center.');
 assert.deepEqual(pond06.footprint?.waterRadius, pond06.radius, 'POND 06 footprint water radius matches the water body radius.');
