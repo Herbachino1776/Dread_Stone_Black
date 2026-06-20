@@ -1390,6 +1390,49 @@ export class DungeonScene {
   }
 
 
+  addPondExpoLabel(body, cx, y, cz) {
+    const marker = body?.userData?.visibleMarker;
+    const label = typeof marker?.label === 'string' && marker.label.trim() ? marker.label.trim() : null;
+    if (!label || typeof document === 'undefined') return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 96;
+    const context = canvas.getContext('2d');
+    context.fillStyle = 'rgba(34, 28, 18, 0.92)';
+    context.fillRect(8, 14, 240, 68);
+    context.strokeStyle = 'rgba(218, 194, 130, 0.96)';
+    context.lineWidth = 6;
+    context.strokeRect(11, 17, 234, 62);
+    context.fillStyle = '#f3e5b0';
+    context.font = 'bold 34px sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(label, 128, 49);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.name = `OARB-pond-expo-label-texture-${body.id}`;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+    const sprite = new THREE.Sprite(material);
+    sprite.name = `OARB-pond-expo-visible-label-${body.id}`;
+    const offset = marker.offset ?? [-6, 0, -7];
+    const markerX = Number.isFinite(offset[0]) ? offset[0] : -6;
+    const markerY = Number.isFinite(offset[1]) ? offset[1] : 0;
+    const markerZ = Number.isFinite(offset[2]) ? offset[2] : -7;
+    sprite.position.set(cx + markerX, y + 2.25 + markerY, cz + markerZ);
+    sprite.scale.set(6.4, 2.4, 1);
+    sprite.renderOrder = 42;
+    sprite.userData = {
+      id: marker.id ?? `${body.id}_visible_label`,
+      pondExpoId: body.userData?.pondExpoId,
+      label,
+      kind: 'pondExpoVisibleNumberLabel',
+      sourceWaterBodyId: body.id,
+      collision: 'visual-only numbered pond marker',
+    };
+    this.scene.add(sprite);
+  }
+
   addAuthoredWaterBodies(waterBodies = [], textureProfiles = {}) {
     if (!Array.isArray(waterBodies) || !this.outdoorTerrainRuntime) return;
     waterBodies.forEach((body) => {
@@ -1423,6 +1466,7 @@ export class DungeonScene {
       water.scale.set(rx, 1, rz);
       water.userData = { id: body.id, kind: body.kind, tags: body.tags ?? [], fishable: Boolean(body.fishable), collision: 'visual-only pond water; shore remains walkable' };
       this.scene.add(water);
+      this.addPondExpoLabel(body, cx, y, cz);
       if (body.fishable) {
         const fishableRadius = Number.isFinite(body.fishableRadius) ? body.fishableRadius : Math.max(rx, rz) + 4;
         this.fieldFishingZones.push({

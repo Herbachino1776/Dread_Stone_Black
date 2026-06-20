@@ -273,13 +273,60 @@ const oarbOutdoorExpoSampler = createOutdoorTerrainSampler(oarbOutdoorExpoDefini
 const expoPlayerSpawn = oarbOutdoorExpoDefinition.spawns.find((candidate) => candidate.id === 'oarb_outdoor_expo_player_start');
 assert.ok(expoPlayerSpawn && [expoPlayerSpawn.position.x, expoPlayerSpawn.position.y, expoPlayerSpawn.position.z].every(Number.isFinite), 'OARB Outdoor Expo player spawn is finite.');
 assert.ok(expoPlayerSpawn.position.x > -140 && expoPlayerSpawn.position.x < 140 && expoPlayerSpawn.position.z > -120 && expoPlayerSpawn.position.z < 120, 'OARB Outdoor Expo player spawn is inside terrain bounds.');
-const pondReserve = oarbOutdoorExpoDefinition.rooms.find((room) => room.tags?.includes('pond-expo-reserve'));
-assert.ok(pondReserve, 'OARB Outdoor Expo declares a Flat Pond Expo Reserve room.');
-assert.equal(pondReserve.userData?.noWaterBodiesYet, true, 'OARB Outdoor Expo pond reserve metadata explicitly says no water bodies yet.');
-assert.equal((oarbOutdoorExpoDefinition.waterBodies ?? []).length, 0, 'OARB Outdoor Expo has no pond or water bodies yet.');
-const reserveSamples = [[-72, 24], [-112, -16], [-32, 64], [-72, 64]];
-reserveSamples.forEach(([x, z], index) => {
-  assert.ok(Math.abs(oarbOutdoorExpoSampler.sampleOutdoorY(x, z) - 0.08) <= 0.08, `OARB Outdoor Expo pond reserve sample ${index} stays mostly flat.`);
+const pondReserve = oarbOutdoorExpoDefinition.rooms.find((room) => room.tags?.includes('pond-expo'));
+assert.ok(pondReserve, 'OARB Outdoor Expo declares a Pond Expo / Water Garden wing room.');
+assert.equal(pondReserve.userData?.pondExpoWing, true, 'OARB Outdoor Expo pond wing metadata identifies the active Pond Expo wing.');
+assert.equal(pondReserve.userData?.layout, '2 rows of 4 numbered pond prototypes', 'Pond Expo documents the comparison layout.');
+const expoBounds = oarbOutdoorExpoDefinition.rooms.find((room) => room.id === 'oarb_outdoor_expo_bounds');
+assert.ok(expoBounds, 'OARB Outdoor Expo bounds room remains authored.');
+const pondBodies = oarbOutdoorExpoDefinition.waterBodies ?? [];
+assert.equal(pondBodies.length, 8, 'OARB Outdoor Expo has all eight Pond Expo water bodies.');
+const expectedPonds = [
+  ['POND 01', 'pond_expo_01_simple_bowl'], ['POND 02', 'pond_expo_02_terraced_shore'], ['POND 03', 'pond_expo_03_rocky_spring'], ['POND 04', 'pond_expo_04_marsh_mud'],
+  ['POND 05', 'pond_expo_05_crescent_pool'], ['POND 06', 'pond_expo_06_gully_repair'], ['POND 07', 'pond_expo_07_natural_irregular'], ['POND 08', 'pond_expo_08_fishing_hole'],
+];
+const pondExpoIds = new Set();
+const pondMarkerIds = new Set(oarbOutdoorExpoDefinition.outdoorPrimitives.filter((primitive) => primitive.tags?.includes('pond-expo-marker')).map((primitive) => primitive.id));
+const terrainStampIds = new Set(oarbOutdoorExpoDefinition.terrain.heightStamps.map((stamp) => stamp.id));
+function pointInsideRoom([x, z], room, padding = 0) {
+  return x >= room.minX + padding && x <= room.maxX - padding && z >= room.minZ + padding && z <= room.maxZ - padding;
+}
+expectedPonds.forEach(([pondExpoId, id], index) => {
+  const pond = pondBodies.find((candidate) => candidate.id === id);
+  assert.ok(pond, `${pondExpoId} water body ${id} exists.`);
+  assert.equal(pond.userData?.pondExpoId, pondExpoId, `${id} records unique ${pondExpoId} metadata.`);
+  assert.equal(pondExpoIds.has(pondExpoId), false, `${pondExpoId} identifier is unique.`);
+  pondExpoIds.add(pondExpoId);
+  assert.equal(typeof pond.userData?.recipe, 'string', `${id} documents its pond recipe.`);
+  assert.ok(pond.userData.recipe.length > 20, `${id} recipe is descriptive.`);
+  const marker = pond.userData?.visibleMarker;
+  assert.ok(marker?.id && marker?.label === pondExpoId, `${id} has visible marker metadata labeled ${pondExpoId}.`);
+  assert.equal(pondMarkerIds.has(marker.id), true, `${id} visible marker ${marker.id} resolves to an outdoor primitive.`);
+  const [cx, cz] = pond.center;
+  const [rx, rz] = pond.radius;
+  assert.ok([cx, cz, rx, rz, pond.y].every(Number.isFinite), `${id} center/radii/y are finite.`);
+  assert.equal(pointInsideRoom([cx, cz], pondReserve, Math.max(rx, rz) + (pond.shoreWidth ?? 0)), true, `${id} water and shore stay inside the Pond Expo wing.`);
+  assert.equal(pointInsideRoom([cx, cz], expoBounds, Math.max(rx, rz) + (pond.shoreWidth ?? 0)), true, `${id} stays inside OARB Outdoor Expo bounds.`);
+  assert.ok(oarbOutdoorExpoDefinition.textures[pond.material], `${id} water material ${pond.material} resolves.`);
+  assert.ok(oarbOutdoorExpoDefinition.textures[pond.shoreMaterial], `${id} shore material ${pond.shoreMaterial} resolves.`);
+  assert.ok((pond.userData.terrainStampIds ?? []).length >= 2, `${id} has supporting terrain stamp metadata.`);
+  pond.userData.terrainStampIds.forEach((stampId) => assert.equal(terrainStampIds.has(stampId), true, `${id} terrain stamp ${stampId} exists.`));
+  const floorY = oarbOutdoorExpoSampler.sampleOutdoorY(cx, cz);
+  assert.ok(Number.isFinite(floorY), `${id} sampled pond floor is finite.`);
+  assert.ok(floorY < pond.y, `${id} water surface is above the shaped pond floor.`);
+  assert.ok(pond.y - floorY <= 0.55, `${id} water surface is close to supported terrain and should not hover.`);
+  for (let otherIndex = index + 1; otherIndex < pondBodies.length; otherIndex += 1) {
+    const other = pondBodies[otherIndex];
+    const clearance = Math.hypot(cx - other.center[0], cz - other.center[1]) - Math.max(rx, rz) - Math.max(other.radius[0], other.radius[1]) - (pond.shoreWidth ?? 0) - (other.shoreWidth ?? 0);
+    assert.ok(clearance >= 1.5, `${id} has walking clearance from ${other.id}.`);
+  }
+});
+assert.equal(pondBodies.find((pond) => pond.id === 'pond_expo_08_fishing_hole')?.userData?.futureFishable, true, 'POND 08 is marked as a future fishable pond without enabling fishing gameplay.');
+const pondTerrainStamps = oarbOutdoorExpoDefinition.terrain.heightStamps.filter((stamp) => stamp.tags?.includes('pond-expo'));
+assert.ok(pondTerrainStamps.length >= 20, 'Pond Expo has supporting terrain stamps for bowls, shelves, banks, and gully repair.');
+pondTerrainStamps.forEach((stamp) => {
+  const finiteValues = [...(stamp.center ?? []), ...(stamp.path ?? []).flat(), stamp.radius, stamp.width, stamp.y, stamp.height, stamp.depth].filter((value) => value !== undefined);
+  assert.ok(finiteValues.every(Number.isFinite), `Pond Expo terrain stamp ${stamp.id} uses finite authored values.`);
 });
 const textureGalleryMaterials = ['grassDryStrawPad', 'grassMattedPad', 'grassPatchyDirtPad', 'grassWornPad', 'mudWetDarkPad', 'mudCrackedDryPad', 'mudChurnedWetPad', 'mudPebblyEarthPad'];
 textureGalleryMaterials.forEach((materialKey) => {
