@@ -8,6 +8,7 @@ import { formatIntegrityIssue } from '../src/engine/dungeon-authoring/integrity/
 import { buildLightObjectRegistry } from '../src/engine/lighting/LightObjectRegistry.js';
 import { validateTorchPlacements } from '../src/engine/lighting/TorchPlacementValidator.js';
 import { listLocationDefinitions } from '../src/game/locations/locationRegistry.js';
+import { resolveFieldPlayerSpawn } from '../src/game/fieldSpawnResolution.js';
 import { resolveStartupArea } from '../src/game/locationRouting.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -65,6 +66,49 @@ function allowsExitOverlap(a, b) {
     || b.userData?.allowTriggerOverlapWith?.includes?.(a.id);
 }
 
+
+function isFiniteVector3(value) {
+  return value
+    && value.isVector3 === true
+    && Number.isFinite(value.x)
+    && Number.isFinite(value.y)
+    && Number.isFinite(value.z);
+}
+
+function validateFieldSpawnResolution() {
+  const errors = [];
+  const dungeonSceneSource = fs.readFileSync(path.join(repoRoot, 'src/game/DungeonScene.js'), 'utf8');
+  const hasToVector3Calls = dungeonSceneSource.includes('this.toVector3(');
+  if (hasToVector3Calls && !/toVector3\s*\([^)]*\)\s*\{/.test(dungeonSceneSource)) {
+    errors.push('DungeonScene contains this.toVector3 calls, but no toVector3 prototype method is defined');
+  }
+  const getFieldPlayerSpawnIndex = dungeonSceneSource.indexOf('getFieldPlayerSpawn() {');
+  const buildMethodIndex = dungeonSceneSource.indexOf('\n  build() {', getFieldPlayerSpawnIndex);
+  const getFieldPlayerSpawnSource = getFieldPlayerSpawnIndex >= 0 && buildMethodIndex > getFieldPlayerSpawnIndex
+    ? dungeonSceneSource.slice(getFieldPlayerSpawnIndex, buildMethodIndex)
+    : '';
+  if (!getFieldPlayerSpawnSource) {
+    errors.push('DungeonScene.getFieldPlayerSpawn could not be found for validation');
+  } else if (getFieldPlayerSpawnSource.includes('this.toVector3(')) {
+    errors.push('getFieldPlayerSpawn calls this.toVector3; use the local authored position resolver instead');
+  }
+
+  ['start', 'kerovacExit', 'oarbFeatureYardExit'].forEach((fieldSpawn) => {
+    try {
+      const result = resolveFieldPlayerSpawn(fieldSpawn, { logger: { error() {} } });
+      if (!isFiniteVector3(result?.spawnPosition)) {
+        errors.push(`getFieldPlayerSpawn(${fieldSpawn}) did not return a finite THREE.Vector3 spawnPosition`);
+      }
+      if (!Number.isFinite(result?.spawnYaw)) {
+        errors.push(`getFieldPlayerSpawn(${fieldSpawn}) did not return a finite spawnYaw`);
+      }
+    } catch (error) {
+      errors.push(`getFieldPlayerSpawn(${fieldSpawn}) threw ${error?.name ?? 'Error'}: ${error?.message ?? error}`);
+    }
+  });
+
+  return errors;
+}
 
 function validateStartupRouting(definitions) {
   const errors = [];
@@ -242,7 +286,8 @@ let totalWarnings = 0;
 const startupRoutingErrors = validateStartupRouting(definitions);
 const transitionSafetyErrors = validateTransitionSafety(definitions);
 const reliquaryFieldStartupErrors = validateReliquaryFieldStartupRuntime(definitions);
-totalErrors += startupRoutingErrors.length + transitionSafetyErrors.length + reliquaryFieldStartupErrors.length;
+const fieldSpawnResolutionErrors = validateFieldSpawnResolution();
+totalErrors += startupRoutingErrors.length + transitionSafetyErrors.length + reliquaryFieldStartupErrors.length + fieldSpawnResolutionErrors.length;
 
 console.log('Dungeon integrity validation');
 if (startupRoutingErrors.length) {
@@ -256,6 +301,10 @@ if (transitionSafetyErrors.length) {
 if (reliquaryFieldStartupErrors.length) {
   console.log('\nReliquary Field startup runtime');
   reliquaryFieldStartupErrors.forEach((error) => console.log(`- error: ${error}`));
+}
+if (fieldSpawnResolutionErrors.length) {
+  console.log('\nReliquary Field spawn resolution');
+  fieldSpawnResolutionErrors.forEach((error) => console.log(`- error: ${error}`));
 }
 
 targets.forEach(({ label, definition }) => {
