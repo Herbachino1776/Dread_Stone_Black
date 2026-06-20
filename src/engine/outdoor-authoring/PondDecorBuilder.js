@@ -4,6 +4,7 @@ import { OUTDOOR_SMALL_FOLIAGE_SPRITES } from './OutdoorFoliageRegistry.js';
 const TAU = Math.PI * 2;
 const EPSILON = 1e-6;
 const DEFAULT_VISIBLE_DISTANCE_SQ = 185 * 185;
+export const POND_FOLIAGE_ALPHA_TEST = 0.35;
 
 export const POND_VEGETATION_SPRITES = Object.freeze(
   OUTDOOR_SMALL_FOLIAGE_SPRITES.filter((sprite) => !`${sprite.id} ${sprite.path} ${sprite.type}`.toLowerCase().includes('redwood')),
@@ -260,8 +261,21 @@ export function createPondDecorGroup(pond, { terrainSampler, textures = {}, make
   placements.vegetation.forEach((placement) => {
     if (!foliageMaterials.has(placement.spriteId)) {
       const map = loadFoliageTexture?.(placement.spritePath);
-      const material = new THREE.SpriteMaterial({ ...(map ? { map } : {}), transparent: true, alphaTest: 0.35, depthWrite: false, toneMapped: false });
-      material.name = `${placement.spriteId}-pond-alpha-tested-billboard-material`;
+      const material = new THREE.SpriteMaterial({
+        ...(map ? { map } : {}),
+        alphaTest: POND_FOLIAGE_ALPHA_TEST,
+        depthTest: true,
+        depthWrite: true,
+        transparent: false,
+        toneMapped: false,
+      });
+      material.name = `${placement.spriteId}-pond-alpha-cutout-depth-billboard-material`;
+      material.userData = {
+        ...(material.userData ?? {}),
+        pondFoliageAlphaCutout: true,
+        occludesTransparentPondWater: true,
+      };
+      if (material.alphaTest < POND_FOLIAGE_ALPHA_TEST || !material.depthTest || !material.depthWrite || material.transparent) throw new Error(`Pond vegetation billboard ${placement.spriteId} must use alpha-cutout depth-writing material.`);
       foliageMaterials.set(placement.spriteId, material);
     }
     const sprite = new THREE.Sprite(foliageMaterials.get(placement.spriteId));
@@ -270,7 +284,7 @@ export function createPondDecorGroup(pond, { terrainSampler, textures = {}, make
     sprite.name = `OARB-${placement.id}-${placement.spriteId}`;
     sprite.position.set(x, terrainSampler.sampleOutdoorY(x, z) + placement.scale * 0.5 - sinkDepth, z);
     sprite.scale.set(placement.scale * placement.width, placement.scale, 1);
-    sprite.userData = { ...placement, sourcePondId: pond.id, billboard: true, visibleDistanceSq: DEFAULT_VISIBLE_DISTANCE_SQ, collision: 'none' };
+    sprite.userData = { ...placement, sourcePondId: pond.id, billboard: true, alphaCutoutDepthWrite: true, visibleDistanceSq: DEFAULT_VISIBLE_DISTANCE_SQ, collision: 'none' };
     group.add(sprite);
   });
   return group;

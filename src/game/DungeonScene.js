@@ -125,6 +125,12 @@ const FIELD_MID_FOLIAGE_COUNT_TARGET = 190 + Math.floor(FIELD_TREE_WALL_UNDERGRO
 const FIELD_BUSH_COUNT_TARGET = 190 + Math.ceil(FIELD_TREE_WALL_UNDERGROWTH_COUNT * 0.55);
 const FIELD_FOLIAGE_INSTANCE_TARGET = FIELD_REDWOOD_COUNT_TARGET + FIELD_MID_FOLIAGE_COUNT_TARGET + FIELD_BUSH_COUNT_TARGET;
 const FIELD_FOLIAGE_ALPHA_TEST = 0.35;
+const FOLIAGE_BILLBOARD_DEPTH_SETTINGS = Object.freeze({
+  alphaTest: FIELD_FOLIAGE_ALPHA_TEST,
+  depthTest: true,
+  depthWrite: true,
+  transparent: false,
+});
 const FIELD_FOLIAGE_GROUND_Y = 0;
 const FIELD_REDWOOD_SINK_RATIO_MIN = 0.04;
 const FIELD_REDWOOD_SINK_RATIO_MAX = 0.08;
@@ -1842,9 +1848,7 @@ export class DungeonScene {
     const materials = new Map(FIELD_FOLIAGE_SPRITES.map((sprite) => {
       const material = new THREE.MeshBasicMaterial({
         map: this.loadFoliageTexture(sprite.path),
-        transparent: true,
-        alphaTest: FIELD_FOLIAGE_ALPHA_TEST,
-        depthWrite: false,
+        ...FOLIAGE_BILLBOARD_DEPTH_SETTINGS,
         side: THREE.DoubleSide,
         toneMapped: false,
       });
@@ -1858,7 +1862,8 @@ export class DungeonScene {
       mesh.position.set(placement.x, placement.y, placement.z);
       mesh.scale.set(placement.scale * placement.width, placement.scale, 1);
       mesh.rotation.y = placement.yawOffset;
-      mesh.userData = { ...placement, billboard: true, collision: 'none' };
+      mesh.userData = { ...placement, billboard: true, alphaCutoutDepthWrite: true, collision: 'none' };
+      if (mesh.material.alphaTest < FIELD_FOLIAGE_ALPHA_TEST || !mesh.material.depthTest || !mesh.material.depthWrite || mesh.material.transparent) throw new Error(`Field foliage billboard ${mesh.name} must use alpha-cutout depth-writing material.`);
       if (placement.layer === 'redwood' && placement.harvestable !== false) {
         const harvestable = this.createRedwoodHarvestable(placement, mesh);
         mesh.userData.harvestableTreeId = harvestable.id;
