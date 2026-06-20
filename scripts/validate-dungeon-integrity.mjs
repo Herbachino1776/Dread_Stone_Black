@@ -353,9 +353,23 @@ function validateCompiledOutdoorFieldRuntime(definitions) {
   const expoReturn = (expo.exits ?? []).find((exit) => exit.id === 'oarb_outdoor_expo_return_gate');
   if (!expoReturn) errors.push('oarb_outdoor_expo_return_gate is missing');
   else if (!byId.get(expoReturn.toLocation)?.spawns?.some((spawn) => spawn.id === expoReturn.destinationSpawnId)) errors.push(`oarb_outdoor_expo_return_gate destination spawn ${expoReturn.destinationSpawnId} does not resolve`);
-  const pondReserve = (expo.rooms ?? []).find((room) => room.tags?.includes('pond-expo-reserve') && room.tags?.includes('future-water-tests'));
-  if (!pondReserve) errors.push('oarbOutdoorExpo pond reserve room with future-water-tests tag is missing');
-  if ((expo.waterBodies ?? []).length !== 0) errors.push('oarbOutdoorExpo must not author waterBodies/pond prototypes in this pass');
+  const pondReserve = (expo.rooms ?? []).find((room) => room.tags?.includes('pond-expo') && room.tags?.includes('water-garden'));
+  if (!pondReserve?.userData?.pondExpoWing) errors.push('oarbOutdoorExpo Pond Expo / Water Garden wing room metadata is missing');
+  const expectedPondIds = ['POND 01', 'POND 02', 'POND 03', 'POND 04', 'POND 05', 'POND 06', 'POND 07', 'POND 08'];
+  const waterBodies = expo.waterBodies ?? [];
+  if (waterBodies.length !== expectedPondIds.length) errors.push('oarbOutdoorExpo must author exactly 8 Pond Expo water bodies');
+  const authoredPondIds = new Set(waterBodies.map((body) => body.userData?.pondExpoId));
+  expectedPondIds.forEach((pondExpoId) => {
+    if (!authoredPondIds.has(pondExpoId)) errors.push(`oarbOutdoorExpo missing ${pondExpoId} metadata`);
+  });
+  const pondMarkerIds = new Set((expo.outdoorPrimitives ?? []).filter((primitive) => primitive.tags?.includes('pond-expo-marker')).map((primitive) => primitive.id));
+  waterBodies.forEach((body) => {
+    const marker = body.userData?.visibleMarker;
+    if (!marker?.id || !marker?.label) errors.push(`oarbOutdoorExpo ${body.id} is missing visible marker metadata`);
+    else if (!pondMarkerIds.has(marker.id)) errors.push(`oarbOutdoorExpo ${body.id} visible marker ${marker.id} does not resolve`);
+    if (!expo.textures?.[body.material]) errors.push(`oarbOutdoorExpo ${body.id} water material ${body.material} is missing`);
+    if (!expo.textures?.[body.shoreMaterial]) errors.push(`oarbOutdoorExpo ${body.id} shore material ${body.shoreMaterial} is missing`);
+  });
   const visibleIds = new Set((expo.outdoorPrimitives ?? []).map((primitive) => primitive.id));
   (expo.curvedBlockers ?? []).forEach((blocker) => {
     if (!blocker.visibleStructureId || !visibleIds.has(blocker.visibleStructureId)) errors.push(`oarbOutdoorExpo blocker ${blocker.id} is not paired to a visible primitive`);
