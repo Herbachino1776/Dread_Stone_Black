@@ -100,6 +100,26 @@ function distanceToPolyline2D(x, z, path) {
   return closest;
 }
 
+function pointInPolygon2D(x, z, outline = []) {
+  let inside = false;
+  for (let index = 0, previous = outline.length - 1; index < outline.length; previous = index, index += 1) {
+    const [xi, zi] = outline[index];
+    const [xj, zj] = outline[previous];
+    if (((zi > z) !== (zj > z)) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function distanceToOutline2D(x, z, outline = []) {
+  let closest = Infinity;
+  for (let index = 0; index < outline.length; index += 1) {
+    const [ax, az] = outline[index];
+    const [bx, bz] = outline[(index + 1) % outline.length];
+    closest = Math.min(closest, distanceToSegment2D(x, z, ax, az, bx, bz));
+  }
+  return closest;
+}
+
 function applyHeightStampAtPoint(currentY, stamp, x, z) {
   switch (stamp?.kind) {
     case 'hill': {
@@ -123,6 +143,13 @@ function applyHeightStampAtPoint(currentY, stamp, x, z) {
     case 'flatten': {
       const [cx, cz] = Array.isArray(stamp.center) ? stamp.center : [];
       const falloff = smoothFalloff01(Math.hypot(x - cx, z - cz), stamp.radius);
+      return THREE.MathUtils.lerp(currentY, stamp.y, falloff);
+    }
+    case 'flattenOutline': {
+      if (!Array.isArray(stamp.outline) || stamp.outline.length < 3 || !Number.isFinite(stamp.y)) return currentY;
+      if (pointInPolygon2D(x, z, stamp.outline)) return stamp.y;
+      const feather = Number.isFinite(stamp.feather) ? Math.max(0, stamp.feather) : 0;
+      const falloff = smoothFalloff01(distanceToOutline2D(x, z, stamp.outline), feather);
       return THREE.MathUtils.lerp(currentY, stamp.y, falloff);
     }
     default:
