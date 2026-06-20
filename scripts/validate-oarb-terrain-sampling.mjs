@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createOutdoorTerrainMesh, createOutdoorTerrainSampler } from '../src/engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 import { createOutdoorSplineTrailMesh, createOutdoorSplineTrailMeshes } from '../src/engine/outdoor-authoring/OutdoorSplineBuilder.js';
+import { createOutdoorCurvedBlockers } from '../src/engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 import { CollisionWorld } from '../src/game/Collision.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 
@@ -97,6 +98,41 @@ trail.points.forEach(([x, z], pointIndex) => {
   assert.ok(Math.abs(rightY - leftY) < 0.001, `trail point ${pointIndex} ribbon edge heights match.`);
 });
 assert.equal(trailMesh.userData.collision, undefined, 'no collision object is generated from trails yet.');
+
+const authoredCurvedBlockers = [
+  { id: 'validation_circle_blocker', kind: 'circle', center: [10, 10], radius: 2, visibleStructureId: 'future_stone_cluster' },
+  { id: 'validation_capsule_blocker', kind: 'capsule', from: [-10, 0], to: [10, 0], radius: 1.5, visibleStructureId: 'future_fallen_tree' },
+  { id: 'validation_spline_blocker', kind: 'spline', points: [[0, 20], [10, 24], [20, 20]], thickness: 3, visibleStructureId: 'future_root_wall' },
+  { id: 'validation_cliff_blocker', kind: 'cliff', points: [[-25, -20], [-15, -16], [-5, -20]], thickness: 4, visibleStructureId: 'future_cliff_wall' },
+  { id: 'validation_hazard_metadata', kind: 'hazard', center: [30, -30], radius: 3, metadata: { intentionallyInvisible: true } },
+];
+const curvedBlockers = createOutdoorCurvedBlockers(authoredCurvedBlockers);
+assert.equal(curvedBlockers.length, authoredCurvedBlockers.length, 'all authored curved blockers convert to runtime blockers.');
+assert.equal(curvedBlockers[0].userData.source, 'OARB', 'blocker metadata preserves OARB source.');
+assert.equal(curvedBlockers[0].userData.visibleStructureId, 'future_stone_cluster', 'blocker metadata preserves visibleStructureId.');
+assert.deepEqual(curvedBlockers[2].userData.points, authoredCurvedBlockers[2].points, 'spline blocker metadata preserves authored points.');
+assert.equal(curvedBlockers[4].type, 'hazard', 'hazard blockers preserve hazard type metadata without adding gameplay effects.');
+assert.equal(curvedBlockers[4].userData.intentionallyInvisible, true, 'intentionally invisible metadata is preserved.');
+
+const blockerCollision = new CollisionWorld({
+  walkableRects: [{ minX: -100, maxX: 100, minZ: -100, maxZ: 100 }],
+  blockerRects: curvedBlockers,
+  playerRadius: 0.5,
+});
+assert.equal(blockerCollision.canStandAtFloorPosition({ x: 12.4, y: 0, z: 10 }), false, 'circle blocker respects player radius.');
+assert.equal(blockerCollision.canStandAtFloorPosition({ x: 0, y: 0, z: 1.9 }), false, 'capsule blocker blocks along a segment with player radius.');
+assert.equal(blockerCollision.canStandAtFloorPosition({ x: 10, y: 0, z: 25.9 }), false, 'spline blocker blocks near a thick polyline.');
+assert.equal(blockerCollision.canStandAtFloorPosition({ x: -15, y: 0, z: -13.6 }), false, 'cliff blocker behaves as a thick polyline blocker.');
+assert.equal(blockerCollision.canStandAtFloorPosition({ x: 70, y: 0, z: 70 }), true, 'far-away points are not blocked by curved blockers.');
+assert.equal(blockerCollision.canStandAtFloorPosition({ x: 12.6, y: 0, z: 10 }), true, 'points outside blocker radius plus player radius remain walkable.');
+
+const indoorBlockerRegression = new CollisionWorld({
+  walkableRects: [{ minX: -10, maxX: 10, minZ: -10, maxZ: 10 }],
+  blockerRects: [{ id: 'indoor_rect', minX: -1, maxX: 1, minZ: -1, maxZ: 1 }],
+  defaultFloorY: 3,
+});
+assert.equal(indoorBlockerRegression.canStandAtFloorPosition({ x: 0, y: 3, z: 0 }), false, 'indoor rectangular blockers continue to block.');
+assert.equal(indoorBlockerRegression.canStandAtFloorPosition({ x: 5, y: 3, z: 5 }), true, 'indoor collision remains unaffected away from existing blockers.');
 
 const outdoorCollision = new CollisionWorld({
   walkableRects: [{ minX: -200, maxX: 200, minZ: -200, maxZ: 200 }],

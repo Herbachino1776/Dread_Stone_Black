@@ -1,6 +1,7 @@
 import { asArray, hasUsableId } from './DungeonDefinitionTypes.js';
 import { OARB_TERRAIN_FALLBACK_MATERIAL_KEY, OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS, OARB_TERRAIN_MAX_TOTAL_CELLS } from '../outdoor-authoring/OutdoorTerrainBuilder.js';
 import { OARB_SPLINE_TRAIL_FALLBACK_MATERIAL_KEY, OARB_SPLINE_TRAIL_MAX_WIDTH } from '../outdoor-authoring/OutdoorSplineBuilder.js';
+import { OARB_CURVED_BLOCKER_MAX_COORDINATE, OARB_CURVED_BLOCKER_MAX_RADIUS, OARB_CURVED_BLOCKER_MAX_THICKNESS } from '../outdoor-authoring/OutdoorBlockerBuilder.js';
 
 const loggedValidationKeys = new Set();
 const RUNTIME_ENEMY_SPECIES = new Set(['sheep_demon', 'neck_man']);
@@ -13,6 +14,7 @@ const OUTDOOR_TERRAIN_WARN_TOTAL_CELLS = 9216;
 const OUTDOOR_TERRAIN_MAX_SIZE_PER_AXIS = 2000;
 const TERRAIN_STAMP_KINDS = new Set(['hill', 'hollow', 'ridge', 'ravine', 'flatten']);
 const OUTDOOR_SPLINE_FIELDS = new Set(['id', 'points', 'width', 'material', 'flatten', 'metadata', 'tags', 'userData']);
+const CURVED_BLOCKER_FIELDS = new Set(['id', 'kind', 'points', 'thickness', 'center', 'radius', 'from', 'to', 'visibleStructureId', 'metadata', 'tags', 'userData', 'intentionallyInvisible']);
 const CURVED_BLOCKER_KINDS = new Set(['capsule', 'spline', 'circle', 'hazard', 'cliff']);
 const DECORATION_ZONE_KINDS = new Set(['treeClusterZone', 'shrubPatchZone', 'grassPatchZone', 'mistVolume', 'fallenBranchScatter', 'standingStoneScatter']);
 const OUTDOOR_PRIMITIVE_KINDS = new Set([
@@ -106,16 +108,23 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
     });
   });
 
+  if (definition.curvedBlockers !== undefined && !Array.isArray(definition.curvedBlockers)) addIssue(errors, 'error', 'curvedBlockers must be an array when present', 'curvedBlockers');
   asArray(definition.curvedBlockers).forEach((blocker, index) => {
     const id = blocker.id ?? `curvedBlockers[${index}]`;
     if (!hasUsableId(blocker)) addIssue(errors, 'error', `curvedBlockers[${index}] is missing a stable id`, id);
     if (!CURVED_BLOCKER_KINDS.has(blocker.kind)) addIssue(errors, 'error', `curvedBlocker ${id} uses unsupported kind ${blocker.kind}`, id);
-    if (['capsule', 'cliff'].includes(blocker.kind) && (!xzPoint(blocker.from) || !xzPoint(blocker.to))) addIssue(errors, 'error', `curvedBlocker ${id} needs finite from/to points`, id);
-    if (blocker.kind === 'spline' && !pointArrayIsFinite(blocker.points, 2)) addIssue(errors, 'error', `curvedBlocker ${id} needs at least two finite points`, id);
-    if (['circle', 'hazard'].includes(blocker.kind) && !xzPoint(blocker.center)) addIssue(errors, 'error', `curvedBlocker ${id} needs a finite center`, id);
-    if (['capsule', 'spline', 'cliff'].includes(blocker.kind) && !isFinitePositive(blocker.thickness ?? blocker.width)) addIssue(errors, 'error', `curvedBlocker ${id} thickness or width must be > 0`, id);
-    if (['circle', 'hazard'].includes(blocker.kind) && !isFinitePositive(blocker.radius)) addIssue(errors, 'error', `curvedBlocker ${id} radius must be > 0`, id);
-    if (!blocker.visibleStructureId && blocker.metadata?.intentionallyInvisible !== true) addIssue(warnings, 'warning', `curvedBlocker ${id} has no visibleStructureId; add metadata.intentionallyInvisible when this is deliberate`, id);
+    if (['spline', 'cliff'].includes(blocker.kind) && !pointArrayIsFinite(blocker.points, 2)) addIssue(errors, 'error', `curvedBlocker ${id} needs at least two finite [x, z] points`, id);
+    if (blocker.kind === 'circle' && !xzPoint(blocker.center)) addIssue(errors, 'error', `curvedBlocker ${id} needs a finite center`, id);
+    if (blocker.kind === 'capsule' && (!xzPoint(blocker.from) || !xzPoint(blocker.to))) addIssue(errors, 'error', `curvedBlocker ${id} needs finite from/to points`, id);
+    if (blocker.kind === 'hazard' && !xzPoint(blocker.center)) addIssue(errors, 'error', `curvedBlocker ${id} hazard needs a finite center`, id);
+    if (['spline', 'cliff'].includes(blocker.kind) && !isFinitePositive(blocker.thickness)) addIssue(errors, 'error', `curvedBlocker ${id} thickness must be > 0`, id);
+    if (['circle', 'capsule', 'hazard'].includes(blocker.kind) && !isFinitePositive(blocker.radius)) addIssue(errors, 'error', `curvedBlocker ${id} radius must be > 0`, id);
+    if (Number.isFinite(blocker.thickness) && blocker.thickness > OARB_CURVED_BLOCKER_MAX_THICKNESS) addIssue(errors, 'error', `curvedBlocker ${id} thickness must be <= ${OARB_CURVED_BLOCKER_MAX_THICKNESS}`, id);
+    if (Number.isFinite(blocker.radius) && blocker.radius > OARB_CURVED_BLOCKER_MAX_RADIUS) addIssue(errors, 'error', `curvedBlocker ${id} radius must be <= ${OARB_CURVED_BLOCKER_MAX_RADIUS}`, id);
+    const authoredPoints = [...asArray(blocker.points), blocker.center, blocker.from, blocker.to].filter(Boolean).map(xzPoint).filter(Boolean);
+    if (authoredPoints.some((point) => Math.abs(point.x) > OARB_CURVED_BLOCKER_MAX_COORDINATE || Math.abs(point.z) > OARB_CURVED_BLOCKER_MAX_COORDINATE)) addIssue(errors, 'error', `curvedBlocker ${id} coordinates must stay within +/-${OARB_CURVED_BLOCKER_MAX_COORDINATE}`, id);
+    if (!blocker.visibleStructureId && blocker.metadata?.intentionallyInvisible !== true && blocker.intentionallyInvisible !== true) addIssue(warnings, 'warning', `curvedBlocker ${id} has no visibleStructureId; add metadata.intentionallyInvisible when this is deliberate`, id);
+    Object.keys(blocker).filter((key) => !CURVED_BLOCKER_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `curvedBlocker ${id} uses unsupported field ${key}; rendering, damage, or advanced gameplay behavior is not implemented yet`, id));
   });
 
   asArray(definition.outdoorPrimitives).forEach((primitive, index) => {

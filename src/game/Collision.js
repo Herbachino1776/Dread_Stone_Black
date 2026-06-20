@@ -29,6 +29,35 @@ function circleIntersectsSegment(point, radius, rect) {
   return px * px + pz * pz < combinedRadius * combinedRadius;
 }
 
+function circleIntersectsCircle(point, radius, blocker) {
+  const center = blocker.center;
+  if (!center) return false;
+  const dx = point.x - center.x;
+  const dz = point.z - center.z;
+  const combinedRadius = radius + (blocker.radius ?? 0);
+  return dx * dx + dz * dz < combinedRadius * combinedRadius;
+}
+
+function circleIntersectsCapsule(point, radius, blocker) {
+  return circleIntersectsSegment(point, radius, { ...blocker, thickness: (blocker.radius ?? 0) * 2 });
+}
+
+function circleIntersectsPolyline(point, radius, blocker) {
+  const points = Array.isArray(blocker.points) ? blocker.points : [];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    if (circleIntersectsSegment(point, radius, { from: points[index], to: points[index + 1], thickness: blocker.thickness ?? 0 })) return true;
+  }
+  return false;
+}
+
+function circleIntersectsBlocker(point, radius, rect) {
+  if (rect.blockerShape === 'segment') return circleIntersectsSegment(point, radius, rect);
+  if (rect.blockerShape === 'circle') return circleIntersectsCircle(point, radius, rect);
+  if (rect.blockerShape === 'capsule') return circleIntersectsCapsule(point, radius, rect);
+  if (rect.blockerShape === 'polyline') return circleIntersectsPolyline(point, radius, rect);
+  return circleIntersectsRect(point, radius, rect);
+}
+
 function pointInPolygon(point, footprint) {
   let inside = false;
   for (let i = 0, j = footprint.length - 1; i < footprint.length; j = i, i += 1) {
@@ -110,9 +139,7 @@ export class CollisionWorld {
 
     return !this.blockerRects.some((rect) => {
       if (rect.type === 'canal' && targetSurface.kind === 'bridgeDeck') return false;
-      return rect.blockerShape === 'segment'
-        ? circleIntersectsSegment(testPoint, this.playerRadius, rect)
-        : circleIntersectsRect(testPoint, this.playerRadius, rect);
+      return circleIntersectsBlocker(testPoint, this.playerRadius, rect);
     });
   }
 
