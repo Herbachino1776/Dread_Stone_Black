@@ -1447,7 +1447,8 @@ export class DungeonScene {
       const waterOutline = Array.isArray(footprint.waterOutline) ? footprint.waterOutline : null;
       const mudBedOutline = Array.isArray(footprint.mudBedOutline) ? footprint.mudBedOutline : null;
       const outerShoreOutline = Array.isArray(footprint.outerShoreOutline) ? footprint.outerShoreOutline : null;
-      const usesSharedComposite = footprint.recipe === 'radial-expansion-irregular-polygon' && waterOutline?.length >= 3 && mudBedOutline?.length >= 3;
+      const usesSharedComposite = ['radial-expansion-irregular-polygon', 'per-vertex-expansion-irregular-polygon'].includes(footprint.recipe)
+        && waterOutline?.length >= 3 && mudBedOutline?.length >= 3;
       const composite = usesSharedComposite ? createPondCompositeGeometry(body) : null;
       const [bedRx, bedRz] = Array.isArray(body.bedRadius) ? body.bedRadius : [rx + shoreWidth, rz + shoreWidth];
       const [outerShoreRx, outerShoreRz] = Array.isArray(footprint.outerShoreRadius) ? footprint.outerShoreRadius : [rx + shoreWidth, rz + shoreWidth];

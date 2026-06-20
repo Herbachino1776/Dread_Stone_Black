@@ -5,6 +5,10 @@ const DEFAULT_MIN_MUD_MARGIN_WORLD = 2.0;
 const DEFAULT_MIN_VISIBLE_MUD_BAND_WORLD = 2.0;
 const DEFAULT_SHORELINE_SAMPLE_STEP_WORLD = 0.5;
 const EPSILON = 1e-6;
+const SUPPORTED_FOOTPRINT_RECIPES = new Set([
+  'radial-expansion-irregular-polygon',
+  'per-vertex-expansion-irregular-polygon',
+]);
 
 function isFinitePoint(point) {
   return Array.isArray(point) && point.length >= 2 && Number.isFinite(point[0]) && Number.isFinite(point[1]);
@@ -120,12 +124,18 @@ export function validatePondFootprint(pond, definition, options = {}) {
 
   if (![cx, cz, rx, rz, pond?.y, footprint.mudOffset].every(Number.isFinite)) fail('center, radii, y, and mud offset must all be finite.');
   if (rx <= 0 || rz <= 0) fail('water radii must be positive and not inverted.');
-  if (footprint.recipe !== 'radial-expansion-irregular-polygon') fail('must use the single-source radial-expansion footprint recipe instead of a square/ellipse fallback.');
+  if (!SUPPORTED_FOOTPRINT_RECIPES.has(footprint.recipe)) fail('must use a supported single-source irregular-polygon footprint recipe instead of a square/ellipse fallback.');
   if (footprint.center !== pond.center) fail('footprint center must share the exact water center object.');
   if (footprint.waterRadius !== pond.radius) fail('footprint waterRadius must share the exact water radius object.');
   if (!Array.isArray(waterOutline) || waterOutline.length < 8) fail('water outline must be the single source irregular polygon with at least 8 points.');
   if (mudBedOutline.length !== waterOutline.length) fail('bright mud bed outline must be generated point-for-point from the water outline.');
   if (outerShoreOutline.length > 0 && outerShoreOutline.length !== waterOutline.length) fail('wet shore outline must be generated point-for-point from the same water outline.');
+  if (footprint.recipe === 'per-vertex-expansion-irregular-polygon') {
+    if (footprint.mudOffsets?.length !== waterOutline.length || !footprint.mudOffsets.every(Number.isFinite)) fail('per-vertex bright mud expansion must provide one finite offset for every water point.');
+    if (outerShoreOutline.length > 0 && (footprint.outerShoreOffsets?.length !== waterOutline.length || !footprint.outerShoreOffsets.every(Number.isFinite))) fail('per-vertex wet shore expansion must provide one finite offset for every water point.');
+    if (new Set(footprint.mudOffsets ?? []).size < 3) fail('per-vertex bright mud expansion must vary around the shoreline.');
+    if (outerShoreOutline.length > 0 && new Set(footprint.outerShoreOffsets ?? []).size < 3) fail('per-vertex wet shore expansion must vary around the shoreline.');
+  }
   [...waterOutline, ...mudBedOutline, ...outerShoreOutline].forEach((point, index) => {
     if (!isFinitePoint(point)) fail(`outline point ${index} has non-finite coordinates.`);
   });

@@ -19,6 +19,26 @@ export function expandPondOutlineRadially(outline = [], center = [0, 0], distanc
   });
 }
 
+export function expandPondOutlinePerVertex(outline = [], center = [0, 0], distances = []) {
+  if (outline.length !== distances.length) {
+    throw new Error('Per-vertex pond expansion requires one distance for every outline point.');
+  }
+  return outline.map(([x, z], index) => {
+    const dx = x - center[0];
+    const dz = z - center[1];
+    const length = Math.hypot(dx, dz);
+    const distance = distances[index];
+    if (!Number.isFinite(distance) || distance < 0) {
+      throw new Error(`Per-vertex pond expansion distance ${index} must be finite and non-negative.`);
+    }
+    if (length <= EPSILON) return [roundWorld(x), roundWorld(z)];
+    return [
+      roundWorld(x + (dx / length) * distance),
+      roundWorld(z + (dz / length) * distance),
+    ];
+  });
+}
+
 function upwardTriangle(indices, positions, a, b, c) {
   const ax = positions[a * 3];
   const az = positions[a * 3 + 2];

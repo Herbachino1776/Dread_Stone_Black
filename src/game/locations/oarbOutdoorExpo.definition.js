@@ -1,27 +1,24 @@
 import { outdoorTextureProfiles } from './outdoorTextureProfiles.js';
-import { expandPondOutlineRadially } from '../../engine/outdoor-authoring/PondCompositeBuilder.js';
+import { expandPondOutlinePerVertex, expandPondOutlineRadially } from '../../engine/outdoor-authoring/PondCompositeBuilder.js';
 
-function createPondOutline(center, radius, radialSteps) {
-  return radialSteps.map(([degrees, scale]) => {
-    const radians = degrees * Math.PI / 180;
-    return [
-      Number((center[0] + Math.cos(radians) * radius[0] * scale).toFixed(3)),
-      Number((center[1] + Math.sin(radians) * radius[1] * scale).toFixed(3)),
-    ];
-  });
+function createPondOutline(center, offsets) {
+  return offsets.map(([x, z]) => [center[0] + x, center[1] + z]);
 }
 
 const pond06Center = [-84, 45];
 const pond06Radius = [6.4, 5.2];
-const pond06WaterOutline = createPondOutline(pond06Center, pond06Radius, [
-  [0, 1.02], [28, 0.9], [55, 1.08], [86, 0.95], [118, 1.12], [148, 0.93],
-  [181, 1.06], [214, 0.88], [244, 1.1], [276, 0.96], [308, 1.04], [336, 0.91],
+const pond06WaterOutline = createPondOutline(pond06Center, [
+  [6.2, 0.4], [5.8, 2.0], [4.4, 3.3], [2.2, 5.5], [-0.2, 5.9], [-2.4, 4.9],
+  [-4.1, 3.5], [-5.8, 2.1], [-6.5, 0.2], [-5.7, -1.5], [-4.6, -3.5], [-2.1, -5.2],
+  [0.1, -4.8], [2.0, -4.2], [3.2, -3.0], [5.5, -2.1],
 ]);
-const pond06MudOffset = 2.6;
-const pond06WetShoreOffset = 1.5;
+const pond06MudOffsets = [1.12, 1.24, 1.38, 1.3, 1.16, 1.04, 1.2, 1.36, 1.28, 1.1, 1.02, 1.22, 1.4, 1.26, 1.08, 1.18];
+const pond06WetShoreOffsets = [0.56, 0.48, 0.66, 0.58, 0.44, 0.54, 0.68, 0.5, 0.6, 0.46, 0.64, 0.56, 0.48, 0.68, 0.52, 0.62];
+const pond06MudOffset = 1.2;
+const pond06WetShoreOffset = 0.55;
 const pond06TerrainSafetyMargin = 5.0;
-const pond06MudBedOutline = expandPondOutlineRadially(pond06WaterOutline, pond06Center, pond06MudOffset);
-const pond06WetShoreOutline = expandPondOutlineRadially(pond06MudBedOutline, pond06Center, pond06WetShoreOffset);
+const pond06MudBedOutline = expandPondOutlinePerVertex(pond06WaterOutline, pond06Center, pond06MudOffsets);
+const pond06WetShoreOutline = expandPondOutlinePerVertex(pond06MudBedOutline, pond06Center, pond06WetShoreOffsets);
 const pond06TerrainSupportOutline = expandPondOutlineRadially(pond06WetShoreOutline, pond06Center, pond06TerrainSafetyMargin);
 
 const textures = Object.freeze({
@@ -152,9 +149,9 @@ export const oarbOutdoorExpoDefinition = Object.freeze({
       bedMaterial: 'pondBrightMud',
       shoreMaterial: 'mudShoreDark',
       shoreWidth: 3.4,
-      footprint: { recipe: 'radial-expansion-irregular-polygon', center: pond06Center, waterRadius: pond06Radius, waterOutline: pond06WaterOutline, mudBedOutline: pond06MudBedOutline, mudOffset: pond06MudOffset, minMudMarginWorld: 2.0, minVisibleMudBandWorld: 1.0, shorelineSampleStepWorld: 0.5, outerShoreOutline: pond06WetShoreOutline, outerShoreOffset: pond06WetShoreOffset, terrainSupportOutline: pond06TerrainSupportOutline, terrainSafetyMargin: pond06TerrainSafetyMargin, terrainMaxY: -0.26, layerHeights: { mudBedY: -0.215, wetShoreY: -0.21, waterY: -0.17, terrainSafetyGap: 0.04, waterAboveMud: 0.045 }, debug: { showWaterOutline: true, showMudBedOutline: true, showWetShoreOutline: true } },
+      footprint: { recipe: 'per-vertex-expansion-irregular-polygon', center: pond06Center, waterRadius: pond06Radius, waterOutline: pond06WaterOutline, mudBedOutline: pond06MudBedOutline, mudOffset: pond06MudOffset, mudOffsets: pond06MudOffsets, minMudMarginWorld: 0.8, minVisibleMudBandWorld: 0.8, shorelineSampleStepWorld: 0.2, outerShoreOutline: pond06WetShoreOutline, outerShoreOffset: pond06WetShoreOffset, outerShoreOffsets: pond06WetShoreOffsets, terrainSupportOutline: pond06TerrainSupportOutline, terrainSafetyMargin: pond06TerrainSafetyMargin, terrainMaxY: -0.26, layerHeights: { mudBedY: -0.215, wetShoreY: -0.21, waterY: -0.17, terrainSafetyGap: 0.04, waterAboveMud: 0.045 }, debug: { showWaterOutline: true, showMudBedOutline: true, showWetShoreOutline: true } },
       tags: ['pond-expo', 'POND 06', 'gully-repair-keeper-candidate'],
-      userData: { pondExpoId: 'POND 06', name: 'Gully Repair / Bright Mud Bed Pond', keeperCandidate: true, recipe: 'single-source radial-expansion pond recipe: irregular water, bright pond mud, wet shore, and terrain support all derive from waterOutline with explicit grass < mud < water heights', terrainStampIds: ['pond_expo_06_composite_support', 'pond_expo_06_supported_water_floor'], visibleMarker: { id: 'pond_expo_marker_06', label: 'POND 06' }, noDownwardFacingTopNormals: true, usesSquareDecalFallback: false, waterMeshSource: 'waterOutline', brightMudMeshSource: 'mudBedOutline', wetShoreMeshSource: 'outerShoreOutline' }
+      userData: { pondExpoId: 'POND 06', name: 'Gully Repair / Bright Mud Bed Pond', keeperCandidate: true, recipe: 'single-source per-vertex expansion pond recipe: asymmetric water, narrow bright pond mud, subtle wet shore, and terrain support all derive from waterOutline with explicit grass < mud < water heights', terrainStampIds: ['pond_expo_06_composite_support', 'pond_expo_06_supported_water_floor'], visibleMarker: { id: 'pond_expo_marker_06', label: 'POND 06' }, noDownwardFacingTopNormals: true, usesSquareDecalFallback: false, waterMeshSource: 'waterOutline', brightMudMeshSource: 'mudBedOutline', wetShoreMeshSource: 'outerShoreOutline' }
     },
     { id: 'pond_expo_07_natural_irregular', kind: 'pond', center: [-60, 45], radius: [7.4, 5.9], y: -0.34, material: 'pondWater', shoreMaterial: 'mudShore', shoreWidth: 4.1, tags: ['pond-expo', 'POND 07'], userData: { pondExpoId: 'POND 07', name: 'Natural Irregular', recipe: 'natural irregular: polished irregular shoreline with mixed rocks, mud, grass shelves, and muted water', terrainStampIds: ['pond_expo_07_shore_shelf', 'pond_expo_07_bowl', 'pond_expo_07_floor'], visibleMarker: { id: 'pond_expo_marker_07', label: 'POND 07' } } },
     { id: 'pond_expo_08_fishing_hole', kind: 'pond', center: [-38, 45], radius: [5.5, 4.6], y: -0.2, material: 'pondWater', shoreMaterial: 'mudShore', shoreWidth: 3.0, fishable: false, tags: ['pond-expo', 'POND 08', 'future-fishable'], userData: { pondExpoId: 'POND 08', name: 'Fishing Hole', recipe: 'fishing hole: compact basin + flat reachable shoreline + clear dry standing spot for future fishing', terrainStampIds: ['pond_expo_08_standing_pad', 'pond_expo_08_basin'], futureFishable: true, visibleMarker: { id: 'pond_expo_marker_08', label: 'POND 08' } } },
