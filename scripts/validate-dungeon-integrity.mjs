@@ -248,6 +248,66 @@ function validateTransitionSafety(definitions) {
   return errors;
 }
 
+function validateCompiledOutdoorFieldRuntime(definitions) {
+  const errors = [];
+  const byId = new Map(definitions.map((definition) => [definition.id, definition]));
+  const dungeonSceneSource = fs.readFileSync(path.join(repoRoot, 'src/game/DungeonScene.js'), 'utf8');
+  const requiredRuntimeSnippets = [
+    'isCompiledOutdoorFieldArea()',
+    'buildCompiledOutdoorField()',
+    'configureCompiledOutdoorFieldRuntime',
+    'addOutdoorTerrain(definition.terrain, definition.textures, definition)',
+    'createOutdoorCurvedBlockers(definition.curvedBlockers)',
+    'addCompiledOutdoorExitCues(definition)',
+  ];
+  requiredRuntimeSnippets.forEach((snippet) => {
+    if (!dungeonSceneSource.includes(snippet)) {
+      errors.push(`DungeonScene compiled outdoor field runtime is missing ${snippet}`);
+    }
+  });
+
+  const oarb = byId.get('oarbFeatureYard');
+  if (!oarb) return ['oarbFeatureYard definition is missing'];
+  if (oarb.type !== 'field') errors.push(`oarbFeatureYard type is ${oarb.type}; expected field`);
+  if (!oarb.tags?.includes('compiled-runtime')) errors.push('oarbFeatureYard must remain tagged compiled-runtime');
+
+  const terrain = oarb.terrain;
+  const [sizeX, sizeZ] = Array.isArray(terrain?.size) ? terrain.size : [];
+  if (!terrain || !Number.isFinite(sizeX) || !Number.isFinite(sizeZ)) {
+    errors.push('oarbFeatureYard terrain is missing finite bounds');
+  }
+  const terrainMaterialKey = terrain?.material;
+  const terrainMaterial = terrainMaterialKey ? oarb.textures?.[terrainMaterialKey] : null;
+  if (!terrainMaterial) {
+    errors.push(`oarbFeatureYard terrain material ${terrainMaterialKey ?? '<none>'} is not defined in textures`);
+  } else if (textureAssetExists(terrainMaterial.path) === false) {
+    errors.push(`oarbFeatureYard terrain texture asset is missing: ${terrainMaterial.path}`);
+  }
+
+  const playerSpawn = (oarb.spawns ?? []).find((spawn) => spawn.id === 'oarb_feature_yard_player_start' && spawn.kind === 'player');
+  if (!isFinitePosition(playerSpawn?.position)) {
+    errors.push('oarb_feature_yard_player_start is missing or not finite');
+  } else if (terrain && !pointInRect(playerSpawn.position, { minX: -sizeX * 0.5, maxX: sizeX * 0.5, minZ: -sizeZ * 0.5, maxZ: sizeZ * 0.5 })) {
+    errors.push('oarb_feature_yard_player_start is outside terrain bounds');
+  }
+
+  const visiblePrimitive = (oarb.outdoorPrimitives ?? []).find((primitive) => primitive && primitive.id && primitive.tags?.includes('visible-boundary'));
+  if (!visiblePrimitive) errors.push('oarbFeatureYard needs at least one visible outdoor primitive');
+
+  const returnGate = (oarb.exits ?? []).find((exit) => exit.id === 'oarb_feature_yard_return_gate');
+  if (!returnGate) {
+    errors.push('oarb_feature_yard_return_gate is missing');
+  } else {
+    const target = byId.get(returnGate.toLocation);
+    if (!target) errors.push(`oarb_feature_yard_return_gate targets missing ${returnGate.toLocation}`);
+    if (!target?.spawns?.some((spawn) => spawn.id === returnGate.destinationSpawnId)) {
+      errors.push(`oarb_feature_yard_return_gate destination spawn ${returnGate.destinationSpawnId} does not resolve`);
+    }
+  }
+
+  return errors;
+}
+
 function validateReliquaryFieldStartupRuntime(definitions) {
   const errors = [];
   const field = definitions.find((definition) => definition.id === 'reliquary-field');
@@ -309,7 +369,8 @@ const startupRoutingErrors = validateStartupRouting(definitions);
 const transitionSafetyErrors = validateTransitionSafety(definitions);
 const reliquaryFieldStartupErrors = validateReliquaryFieldStartupRuntime(definitions);
 const fieldSpawnResolutionErrors = validateFieldSpawnResolution();
-totalErrors += startupRoutingErrors.length + transitionSafetyErrors.length + reliquaryFieldStartupErrors.length + fieldSpawnResolutionErrors.length;
+const compiledOutdoorFieldRuntimeErrors = validateCompiledOutdoorFieldRuntime(definitions);
+totalErrors += startupRoutingErrors.length + transitionSafetyErrors.length + reliquaryFieldStartupErrors.length + fieldSpawnResolutionErrors.length + compiledOutdoorFieldRuntimeErrors.length;
 
 console.log('Dungeon integrity validation');
 if (startupRoutingErrors.length) {
@@ -327,6 +388,10 @@ if (reliquaryFieldStartupErrors.length) {
 if (fieldSpawnResolutionErrors.length) {
   console.log('\nReliquary Field spawn resolution');
   fieldSpawnResolutionErrors.forEach((error) => console.log(`- error: ${error}`));
+}
+if (compiledOutdoorFieldRuntimeErrors.length) {
+  console.log('\nCompiled outdoor field runtime');
+  compiledOutdoorFieldRuntimeErrors.forEach((error) => console.log(`- error: ${error}`));
 }
 
 targets.forEach(({ label, definition }) => {

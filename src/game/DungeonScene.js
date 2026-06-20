@@ -290,7 +290,7 @@ export class DungeonScene {
     this.textureCheckRig = null;
     this.playerSpawn = this.area === 'field'
       ? this.getFieldPlayerSpawn()
-      : this.getIndoorPlayerSpawn();
+      : this.getAuthoredLocationPlayerSpawn();
     this.outdoorInteractions = [];
     this.fieldShrineGroup = null;
     this.fieldShrineAnswerLight = null;
@@ -388,6 +388,8 @@ export class DungeonScene {
 
     if (this.area === 'black-grass-temple') {
       this.configureBlackGrassTempleRuntime();
+    } else if (this.isCompiledOutdoorFieldArea()) {
+      this.configureCompiledOutdoorFieldRuntime(this.area);
     } else if (this.isCompiledRuntimeArea()) {
       this.configureCompiledLocationRuntime(this.area);
     } else {
@@ -400,18 +402,33 @@ export class DungeonScene {
     }
   }
 
-  getIndoorPlayerSpawn() {
+  getAuthoredLocationPlayerSpawn() {
     const definition = getLocationDefinition(this.area);
     const playerSpawn = definition?.spawns?.find((spawn) => spawn.kind === 'player');
     if (playerSpawn?.position) {
-      return { spawnPosition: this.toVector3(playerSpawn.position, 1.55), spawnYaw: playerSpawn.yaw ?? 0 };
+      const position = this.toVector3(playerSpawn.position, 1.55);
+      if (this.isCompiledOutdoorFieldArea()) {
+        const terrainSampler = definition.terrain ? createOutdoorTerrainMesh(definition.terrain, { textures: definition.textures }).userData.terrainSampler : null;
+        const groundY = terrainSampler?.sampleOutdoorY?.(position.x, position.z);
+        if (Number.isFinite(groundY)) position.y = groundY + 1.55;
+      }
+      return { spawnPosition: position, spawnYaw: playerSpawn.yaw ?? 0 };
     }
 
     return { spawnPosition: new THREE.Vector3(0, 1.55, -30), spawnYaw: 0 };
   }
 
+  getIndoorPlayerSpawn() {
+    return this.getAuthoredLocationPlayerSpawn();
+  }
+
   isCompiledRuntimeArea() {
     return this.area !== 'field' && this.area !== 'dungeon' && getLocationDefinition(this.area)?.tags?.includes('compiled-runtime');
+  }
+
+  isCompiledOutdoorFieldArea() {
+    const definition = getLocationDefinition(this.area);
+    return this.isCompiledRuntimeArea() && definition?.type === 'field' && Boolean(definition.terrain);
   }
 
   configureCompiledLocationRuntime(locationId = this.area) {
@@ -436,6 +453,43 @@ export class DungeonScene {
     }
 
     return runtime;
+  }
+
+  configureCompiledOutdoorFieldRuntime(locationId = this.area) {
+    const definition = getLocationDefinition(locationId);
+    if (!definition?.terrain) throw new Error(`Missing outdoor field terrain for compiled runtime location: ${locationId}`);
+
+    const [sizeX = FIELD_SIZE, sizeZ = FIELD_SIZE] = Array.isArray(definition.terrain.size) ? definition.terrain.size : [];
+    const walkableRect = {
+      id: `${locationId}-terrain-walkable-bounds`,
+      minX: -sizeX * 0.5,
+      maxX: sizeX * 0.5,
+      minZ: -sizeZ * 0.5,
+      maxZ: sizeZ * 0.5,
+    };
+    const roomRects = (definition.rooms ?? [])
+      .filter((room) => [room.minX, room.maxX, room.minZ, room.maxZ].every(Number.isFinite))
+      .map((room) => ({ id: room.id, minX: room.minX, maxX: room.maxX, minZ: room.minZ, maxZ: room.maxZ }));
+    this.collision = new CollisionWorld({
+      walkableRects: roomRects.length ? roomRects : [walkableRect],
+      blockerRects: createOutdoorCurvedBlockers(definition.curvedBlockers),
+      playerRadius: 0.5,
+      defaultFloorY: definition.defaultFloorY ?? definition.terrain.baseY ?? 0,
+      outdoorTerrainSampler: this.outdoorTerrainRuntime,
+    });
+
+    const exits = (definition.exits ?? []).map((exit) => ({
+      ...exit,
+      position: exit.position ? this.toVector3(exit.position, 1.2) : this.toVector3({
+        x: (exit.triggerRect.minX + exit.triggerRect.maxX) / 2,
+        y: exit.triggerRect.y ?? 1.2,
+        z: (exit.triggerRect.minZ + exit.triggerRect.maxZ) / 2,
+      }),
+    }));
+    this.compiledLocationRuntime = { locationId, definition, exits, spawnAnchors: [] };
+    const exit = exits.find((candidate) => candidate.toLocation === 'reliquary-field') ?? exits[0];
+    this.indoorExitTarget = exit?.position?.clone() ?? this.indoorExitTarget;
+    return this.compiledLocationRuntime;
   }
 
   configureBlackGrassTempleRuntime() {
@@ -660,6 +714,8 @@ export class DungeonScene {
   build() {
     if (this.area === 'field') {
       this.buildOutdoorField();
+    } else if (this.isCompiledOutdoorFieldArea()) {
+      this.buildCompiledOutdoorField();
     } else {
       this.buildIndoorDungeon();
     }
@@ -701,6 +757,52 @@ export class DungeonScene {
     this.addReliquaryFieldFoliage();
     this.addFieldSurvivalLoopObjects();
     this.ensureGiantRamManFieldManifestation();
+  }
+
+
+  buildCompiledOutdoorField() {
+    const definition = getLocationDefinition(this.area);
+    this.scene.background = new THREE.Color(definition.lighting?.background ?? OUTDOOR_DAWN_SKY_COLOR);
+    this.scene.fog = new THREE.Fog(
+      definition.fog?.color ?? OUTDOOR_DAWN_FOG_COLOR,
+      definition.fog?.near ?? OUTDOOR_FOG_NEAR,
+      definition.fog?.far ?? OUTDOOR_FOG_FAR,
+    );
+    this.addCompiledOutdoorLights(definition);
+    this.addOutdoorTerrain(definition.terrain, definition.textures, definition);
+    this.addCompiledOutdoorExitCues(definition);
+  }
+
+  addCompiledOutdoorLights(definition) {
+    let hasAmbient = false;
+    (definition.lights ?? []).forEach((light) => {
+      if (light.kind === 'ambient') {
+        hasAmbient = true;
+        this.scene.add(new THREE.HemisphereLight(light.skyColor ?? 0xded49d, light.groundColor ?? 0x4c4a32, light.intensity ?? 0.7));
+      } else if (light.kind === 'point') {
+        const point = new THREE.PointLight(light.color ?? 0xffd58a, light.intensity ?? 0.7, light.distance ?? 20, light.decay ?? 1.5);
+        point.name = light.id ?? `${definition.id}-outdoor-point-light`;
+        point.position.copy(this.toVector3(light.position, 2));
+        this.scene.add(point);
+      }
+    });
+    if (!hasAmbient) this.addOutdoorLights();
+  }
+
+  addCompiledOutdoorExitCues(definition) {
+    (definition.exits ?? []).filter((exit) => exit.toLocation === 'reliquary-field').forEach((exit) => {
+      const position = this.toVector3(exit.position, 1.1);
+      const groundY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(position.x, position.z) ?? 0;
+      const group = new THREE.Group();
+      group.name = `${exit.id}-visible-return-gate-cue`;
+      const postMaterial = new THREE.MeshStandardMaterial({ color: 0x4c4638, roughness: 0.95, emissive: 0x17120a, emissiveIntensity: 0.12 });
+      const glowMaterial = new THREE.MeshStandardMaterial({ color: 0xffd58a, roughness: 0.65, emissive: 0xffa84a, emissiveIntensity: 0.85, transparent: true, opacity: 0.72 });
+      group.add(this.createBoxMesh({ size: new THREE.Vector3(0.45, 3.2, 0.45), position: new THREE.Vector3(position.x - 2.2, groundY + 1.6, position.z), material: postMaterial, name: `${exit.id}-left-visible-return-post` }));
+      group.add(this.createBoxMesh({ size: new THREE.Vector3(0.45, 3.2, 0.45), position: new THREE.Vector3(position.x + 2.2, groundY + 1.6, position.z), material: postMaterial, name: `${exit.id}-right-visible-return-post` }));
+      group.add(this.createBoxMesh({ size: new THREE.Vector3(5.2, 0.35, 0.35), position: new THREE.Vector3(position.x, groundY + 3.15, position.z), material: postMaterial, name: `${exit.id}-lintel-visible-return-post` }));
+      group.add(this.createBoxMesh({ size: new THREE.Vector3(3.6, 1.8, 0.08), position: new THREE.Vector3(position.x, groundY + 1.45, position.z + 0.08), material: glowMaterial, name: `${exit.id}-warm-visible-return-threshold` }));
+      this.scene.add(group);
+    });
   }
 
   shouldManifestGiantRamManInField(manifestation) {
@@ -1191,7 +1293,7 @@ export class DungeonScene {
       playerGroundingChanged: true,
     };
     this.outdoorTerrainRuntime = terrain.userData.terrainSampler;
-    if (this.collision && this.area === 'field') this.collision.outdoorTerrainSampler = this.outdoorTerrainRuntime;
+    if (this.collision && (this.area === 'field' || this.isCompiledOutdoorFieldArea())) this.collision.outdoorTerrainSampler = this.outdoorTerrainRuntime;
     this.scene.add(terrain);
 
     createOutdoorSplineTrailMeshes(outdoorDefinition.splineTrails, {
