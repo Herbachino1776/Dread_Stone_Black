@@ -13,6 +13,7 @@ export const FIELD_SPAWN_IDS_BY_RUNTIME_KEY = Object.freeze({
   balthazanExit: 'field_balthazan_return',
   kerovacExit: 'field_kerovac_return',
   oarbFeatureYardExit: 'field_oarb_feature_yard_return',
+  oarbOutdoorExpoExit: 'field_oarb_outdoor_expo_return',
 });
 
 export function isFiniteAuthoredPosition(position) {

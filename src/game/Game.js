@@ -48,6 +48,7 @@ const FIELD_RETURN_SPAWNS_BY_LOCATION = Object.freeze({
   balthazan: 'balthazanExit',
   kerovac: 'kerovacExit',
   oarbFeatureYard: 'oarbFeatureYardExit',
+  oarbOutdoorExpo: 'oarbOutdoorExpoExit',
   dungeon: 'cryptAExit',
 });
 

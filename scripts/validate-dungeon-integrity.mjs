@@ -305,6 +305,43 @@ function validateCompiledOutdoorFieldRuntime(definitions) {
     }
   }
 
+
+  const expo = byId.get('oarbOutdoorExpo');
+  if (!expo) {
+    errors.push('oarbOutdoorExpo definition is missing');
+    return errors;
+  }
+  if (expo.type !== 'field') errors.push(`oarbOutdoorExpo type is ${expo.type}; expected field`);
+  if (!expo.tags?.includes('compiled-runtime')) errors.push('oarbOutdoorExpo must be tagged compiled-runtime');
+  const expoTerrain = expo.terrain;
+  const [expoSizeX, expoSizeZ] = Array.isArray(expoTerrain?.size) ? expoTerrain.size : [];
+  if (!expoTerrain || !Number.isFinite(expoSizeX) || !Number.isFinite(expoSizeZ)) errors.push('oarbOutdoorExpo terrain is missing finite bounds');
+  for (const [key, profile] of Object.entries(expo.textures ?? {})) {
+    if (textureAssetExists(profile?.path) === false) errors.push(`oarbOutdoorExpo texture asset is missing for ${key}: ${profile.path}`);
+  }
+  const expoPlayerSpawn = (expo.spawns ?? []).find((spawn) => spawn.id === 'oarb_outdoor_expo_player_start' && spawn.kind === 'player');
+  if (!isFinitePosition(expoPlayerSpawn?.position)) {
+    errors.push('oarb_outdoor_expo_player_start is missing or not finite');
+  } else if (expoTerrain && !pointInRect(expoPlayerSpawn.position, { minX: -expoSizeX * 0.5, maxX: expoSizeX * 0.5, minZ: -expoSizeZ * 0.5, maxZ: expoSizeZ * 0.5 })) {
+    errors.push('oarb_outdoor_expo_player_start is outside terrain bounds');
+  }
+  const expoEntry = byId.get('reliquary-field')?.exits?.find((exit) => exit.id === 'oarb_outdoor_expo_gate');
+  if (!expoEntry) errors.push('oarb_outdoor_expo_gate is missing from Reliquary Field');
+  else if (!expo.spawns?.some((spawn) => spawn.id === expoEntry.destinationSpawnId)) errors.push(`oarb_outdoor_expo_gate destination spawn ${expoEntry.destinationSpawnId} does not resolve`);
+  const expoReturn = (expo.exits ?? []).find((exit) => exit.id === 'oarb_outdoor_expo_return_gate');
+  if (!expoReturn) errors.push('oarb_outdoor_expo_return_gate is missing');
+  else if (!byId.get(expoReturn.toLocation)?.spawns?.some((spawn) => spawn.id === expoReturn.destinationSpawnId)) errors.push(`oarb_outdoor_expo_return_gate destination spawn ${expoReturn.destinationSpawnId} does not resolve`);
+  const pondReserve = (expo.rooms ?? []).find((room) => room.tags?.includes('pond-expo-reserve') && room.tags?.includes('future-water-tests'));
+  if (!pondReserve) errors.push('oarbOutdoorExpo pond reserve room with future-water-tests tag is missing');
+  if ((expo.waterBodies ?? []).length !== 0) errors.push('oarbOutdoorExpo must not author waterBodies/pond prototypes in this pass');
+  const visibleIds = new Set((expo.outdoorPrimitives ?? []).map((primitive) => primitive.id));
+  (expo.curvedBlockers ?? []).forEach((blocker) => {
+    if (!blocker.visibleStructureId || !visibleIds.has(blocker.visibleStructureId)) errors.push(`oarbOutdoorExpo blocker ${blocker.id} is not paired to a visible primitive`);
+  });
+  ['grassDryStrawPad', 'grassMattedPad', 'grassPatchyDirtPad', 'grassWornPad', 'mudWetDarkPad', 'mudCrackedDryPad', 'mudChurnedWetPad', 'mudPebblyEarthPad'].forEach((key) => {
+    if (!expo.textures?.[key]) errors.push(`oarbOutdoorExpo texture gallery material key ${key} is missing`);
+  });
+
   return errors;
 }
 
@@ -339,6 +376,7 @@ function validateReliquaryFieldStartupRuntime(definitions) {
     ['FIELD_BALTHAZAN_RETURN_START', 'field_balthazan_return'],
     ['FIELD_KEROVAC_RETURN_START', 'field_kerovac_return'],
     ['FIELD_OARB_FEATURE_YARD_RETURN_START', 'field_oarb_feature_yard_return'],
+    ['FIELD_OARB_OUTDOOR_EXPO_RETURN_START', 'field_oarb_outdoor_expo_return'],
   ]);
   const dungeonSceneSource = fs.readFileSync(path.join(repoRoot, 'src/game/DungeonScene.js'), 'utf8');
   runtimeReturnSpawns.forEach((spawnId, constantName) => {

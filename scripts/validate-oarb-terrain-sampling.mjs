@@ -9,6 +9,7 @@ import { createOutdoorPrimitiveMeshes } from '../src/engine/outdoor-authoring/Ou
 import { CollisionWorld } from '../src/game/Collision.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { oarbFeatureYardDefinition } from '../src/game/locations/oarbFeatureYard.definition.js';
+import { oarbOutdoorExpoDefinition } from '../src/game/locations/oarbOutdoorExpo.definition.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
@@ -23,6 +24,7 @@ function assertTexturePathsExist(definition) {
 
 assertTexturePathsExist(reliquaryFieldDefinition);
 assertTexturePathsExist(oarbFeatureYardDefinition);
+assertTexturePathsExist(oarbOutdoorExpoDefinition);
 
 const terrain = reliquaryFieldDefinition.terrain;
 const sampler = createOutdoorTerrainSampler(terrain);
@@ -197,6 +199,36 @@ const chestEllipse = ((chestDx * chestDx) / (pondRadiusX * pondRadiusX)) + ((che
 assert.ok(chestEllipse > 1.1, 'OARB fishing rod chest is outside the water ellipse on dry land.');
 assert.ok(Math.hypot(chestDx, chestDz) <= oarbPond.fishableRadius + 6, 'OARB fishing rod chest remains close to the fishable pond.');
 assert.equal(pondChest.itemId, 'fishing_rod', 'OARB fishing rod chest still grants the fishing rod.');
+
+
+const oarbOutdoorExpoTerrainMesh = createOutdoorTerrainMesh(oarbOutdoorExpoDefinition.terrain, { textures: oarbOutdoorExpoDefinition.textures });
+assert.equal(oarbOutdoorExpoTerrainMesh.userData.materialFallbackUsed, false, 'OARB Outdoor Expo terrain resolves its authored material profile.');
+assert.equal(oarbOutdoorExpoTerrainMesh.userData.materialKey, 'expoGrass', 'OARB Outdoor Expo terrain uses the authored expoGrass material key.');
+const oarbOutdoorExpoSampler = createOutdoorTerrainSampler(oarbOutdoorExpoDefinition.terrain);
+const expoPlayerSpawn = oarbOutdoorExpoDefinition.spawns.find((candidate) => candidate.id === 'oarb_outdoor_expo_player_start');
+assert.ok(expoPlayerSpawn && [expoPlayerSpawn.position.x, expoPlayerSpawn.position.y, expoPlayerSpawn.position.z].every(Number.isFinite), 'OARB Outdoor Expo player spawn is finite.');
+assert.ok(expoPlayerSpawn.position.x > -140 && expoPlayerSpawn.position.x < 140 && expoPlayerSpawn.position.z > -120 && expoPlayerSpawn.position.z < 120, 'OARB Outdoor Expo player spawn is inside terrain bounds.');
+const pondReserve = oarbOutdoorExpoDefinition.rooms.find((room) => room.tags?.includes('pond-expo-reserve'));
+assert.ok(pondReserve, 'OARB Outdoor Expo declares a Flat Pond Expo Reserve room.');
+assert.equal(pondReserve.userData?.noWaterBodiesYet, true, 'OARB Outdoor Expo pond reserve metadata explicitly says no water bodies yet.');
+assert.equal((oarbOutdoorExpoDefinition.waterBodies ?? []).length, 0, 'OARB Outdoor Expo has no pond or water bodies yet.');
+const reserveSamples = [[-72, 24], [-112, -16], [-32, 64], [-72, 64]];
+reserveSamples.forEach(([x, z], index) => {
+  assert.ok(Math.abs(oarbOutdoorExpoSampler.sampleOutdoorY(x, z) - 0.08) <= 0.08, `OARB Outdoor Expo pond reserve sample ${index} stays mostly flat.`);
+});
+const textureGalleryMaterials = ['grassDryStrawPad', 'grassMattedPad', 'grassPatchyDirtPad', 'grassWornPad', 'mudWetDarkPad', 'mudCrackedDryPad', 'mudChurnedWetPad', 'mudPebblyEarthPad'];
+textureGalleryMaterials.forEach((materialKey) => {
+  assert.ok(oarbOutdoorExpoDefinition.textures[materialKey], `OARB Outdoor Expo texture gallery material ${materialKey} resolves.`);
+  assert.ok(oarbOutdoorExpoDefinition.splineTrails.some((trail) => trail.id === `expo_texture_gallery_${materialKey}` && trail.material === materialKey), `OARB Outdoor Expo texture gallery has sample pad for ${materialKey}.`);
+});
+const expoPrimitiveIds = new Set(oarbOutdoorExpoDefinition.outdoorPrimitives.map((primitive) => primitive.id));
+oarbOutdoorExpoDefinition.curvedBlockers.forEach((blocker) => {
+  assert.ok(expoPrimitiveIds.has(blocker.visibleStructureId), `OARB Outdoor Expo blocker ${blocker.id} is paired with visible primitive ${blocker.visibleStructureId}.`);
+});
+const expoPrimitiveMeshes = createOutdoorPrimitiveMeshes(oarbOutdoorExpoDefinition.outdoorPrimitives, { terrainSampler: oarbOutdoorExpoSampler, textures: oarbOutdoorExpoDefinition.textures });
+assert.equal(expoPrimitiveMeshes.length, oarbOutdoorExpoDefinition.outdoorPrimitives.length, 'OARB Outdoor Expo blocker station primitives generate visible meshes.');
+const expoBlockers = createOutdoorCurvedBlockers(oarbOutdoorExpoDefinition.curvedBlockers);
+assert.equal(expoBlockers.length, oarbOutdoorExpoDefinition.curvedBlockers.length, 'OARB Outdoor Expo paired blockers convert to runtime blockers.');
 
 const authoredOutdoorPrimitives = [
   { id: 'future_cliff_wall', kind: 'cliffWall', points: [[-25, -20], [-15, -16], [-5, -20]], height: 8, thickness: 4, material: 'rockWall' },

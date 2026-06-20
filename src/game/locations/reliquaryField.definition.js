@@ -245,6 +245,8 @@ export const reliquaryFieldDefinition = Object.freeze({
     exteriorBlocker('KEROVAC_EXT_RIGHT_PIER', 62.4, 63.6, 143.5, 148.5, { height: 5.2, visualStructureId: 'KEROVAC_EXT_RIGHT_PIER-limestone-sun-gate' }),
     exteriorBlocker('OARB_PROVING_GROUNDS_LEFT_STONE', 65.2, 66.8, 162.8, 165.2, { height: 5.8, visualStructureId: 'OARB_PROVING_GROUNDS_LEFT_STONE-river-marker' }),
     exteriorBlocker('OARB_PROVING_GROUNDS_RIGHT_STONE', 73.2, 74.8, 162.8, 165.2, { height: 5.8, visualStructureId: 'OARB_PROVING_GROUNDS_RIGHT_STONE-river-marker' }),
+    exteriorBlocker('OARB_OUTDOOR_EXPO_LEFT_STONE', 83.2, 84.8, 184.8, 187.2, { height: 5.8, visualStructureId: 'OARB_OUTDOOR_EXPO_LEFT_STONE-field-marker' }),
+    exteriorBlocker('OARB_OUTDOOR_EXPO_RIGHT_STONE', 91.2, 92.8, 184.8, 187.2, { height: 5.8, visualStructureId: 'OARB_OUTDOOR_EXPO_RIGHT_STONE-field-marker' }),
   ],
   spawns: [
     { id: 'field_player_start', kind: 'player', position: { x: 0, y: 1.55, z: -175 }, yaw: 0, roomId: 'FIELD01', tags: ['live'] },
@@ -258,6 +260,7 @@ export const reliquaryFieldDefinition = Object.freeze({
     { id: 'field_balthazan_return', kind: 'return', position: { x: 72, y: 1.55, z: 116 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'balthazan', 'sumerian-canal-city'] },
     { id: 'field_kerovac_return', kind: 'return', position: { x: 60, y: 1.55, z: 134 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'kerovac', 'bright-interior-city', 'sacred-sun-city'] },
     { id: 'field_oarb_feature_yard_return', kind: 'return', position: { x: 83, y: 1.55, z: 155 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'oarb-feature-yard'] },
+    { id: 'field_oarb_outdoor_expo_return', kind: 'return', position: { x: 88, y: 1.55, z: 176 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'oarb-outdoor-expo'] },
     { id: 'field_v2_test_shrine_return', kind: 'return', position: { x: 68, y: 1.55, z: 134 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'v2-test-shrine'] },
   ],
   exits: [
@@ -389,6 +392,25 @@ export const reliquaryFieldDefinition = Object.freeze({
         returnSpawnSafetyMargin: 6,
         removalNote: 'Single Reliquary Field hook for the temporary OARB Feature Yard; remove this exit and return spawn when deleting the yard.',
         placementNote: 'Moved from x 84 z 126 to a cleared river-facing marker at x 70 z 164, behind and east of Kerovac. The trigger stays clear of Kerovac, V2 Test Shrine, Balthazan, Sumerian Canal Market, and City Block gates.',
+      },
+    },
+
+    {
+      id: 'oarb_outdoor_expo_gate',
+      fromLocation: 'reliquary-field',
+      toLocation: 'oarbOutdoorExpo',
+      triggerRect: { minX: 86, maxX: 90, minZ: 182, maxZ: 190 },
+      position: { x: 88, y: 1, z: 186 },
+      destinationSpawnId: 'oarb_outdoor_expo_player_start',
+      promptText: 'Tap INTERACT to enter the OARB Outdoor Expo Center.',
+      tags: ['temporary', 'oarb-outdoor-expo', 'kerovac-approach'],
+      userData: {
+        temporary: true,
+        foliageClearRadius: 24,
+        visibleMarker: { type: 'standing-stone-arch', ids: ['OARB_OUTDOOR_EXPO_LEFT_STONE', 'OARB_OUTDOOR_EXPO_RIGHT_STONE', 'OARB_OUTDOOR_EXPO_PATH'] },
+        returnSpawnId: 'field_oarb_outdoor_expo_return',
+        returnSpawnSafetyMargin: 6,
+        placementNote: 'Placed north-east of the OARB Feature Yard and Kerovac markers; trigger and return spawn remain outside nearby temporary gate triggerRects.',
       },
     },
     {
