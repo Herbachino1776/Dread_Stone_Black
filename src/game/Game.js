@@ -112,7 +112,7 @@ export class Game {
       window.dreadStoneObjectiveRuntime = this.objectiveRuntime;
       window.dreadStoneObjectiveDebug = () => this.objectiveRuntime.getDebugInfo();
     }
-    const movementProfile = this.dungeon.area === 'field'
+    const movementProfile = getLocationDefinition(this.locationId)?.type === 'field'
       ? {
         moveSpeed: PlayerController.OUTDOOR_MOVE_SPEED,
         strafeSpeed: PlayerController.OUTDOOR_STRAFE_SPEED,
