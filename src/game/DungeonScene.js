@@ -770,6 +770,7 @@ export class DungeonScene {
     );
     this.addCompiledOutdoorLights(definition);
     this.addOutdoorTerrain(definition.terrain, definition.textures, definition);
+    this.addAuthoredOutdoorChests(definition);
     this.addCompiledOutdoorExitCues(definition);
   }
 
@@ -1312,6 +1313,8 @@ export class DungeonScene {
       },
     }).forEach((trailMesh) => this.scene.add(trailMesh));
 
+    this.addAuthoredWaterBodies(outdoorDefinition.waterBodies, textureProfiles);
+
     createOutdoorPrimitiveMeshes(outdoorDefinition.outdoorPrimitives, {
       terrainSampler: this.outdoorTerrainRuntime,
       textures: textureProfiles,
@@ -1327,6 +1330,62 @@ export class DungeonScene {
         return material;
       },
     }).forEach((primitiveGroup) => this.scene.add(primitiveGroup));
+  }
+
+
+  addAuthoredWaterBodies(waterBodies = [], textureProfiles = {}) {
+    if (!Array.isArray(waterBodies) || !this.outdoorTerrainRuntime) return;
+    waterBodies.forEach((body) => {
+      if (body?.kind !== 'pond') return;
+      const [cx, cz] = Array.isArray(body.center) ? body.center : [];
+      const [rx, rz] = Array.isArray(body.radius) ? body.radius : [body.radius, body.radius];
+      const y = Number(body.y);
+      if (![cx, cz, rx, rz, y].every(Number.isFinite) || rx <= 0 || rz <= 0) return;
+      const shoreWidth = Number.isFinite(body.shoreWidth) ? Math.max(0, body.shoreWidth) : 0;
+      const shoreMaterial = this.makeTexturedMaterial(textureProfiles[body.shoreMaterial] ?? textureProfiles.mudWetDark ?? { color: 0x60462f, roughness: 1 });
+      shoreMaterial.name = `OARB-water-shore-material-${body.shoreMaterial ?? 'mud'}`;
+      const shoreGeometry = new THREE.RingGeometry(1, 1, 72);
+      shoreGeometry.rotateX(-Math.PI / 2);
+      const shore = new THREE.Mesh(shoreGeometry, shoreMaterial);
+      shore.name = `OARB-water-shore-${body.id}`;
+      shore.position.set(cx, y + 0.012, cz);
+      shore.scale.set(rx + shoreWidth, rz + shoreWidth, 1);
+      shore.receiveShadow = true;
+      shore.userData = { id: body.id, kind: 'pondShore', materialKey: body.shoreMaterial, collision: 'visual-only muddy shoreline' };
+      this.scene.add(shore);
+
+      const profile = textureProfiles[body.material] ?? { color: 0x2d7f92, roughness: 0.5, metalness: 0, transparent: true, opacity: 0.78, emissive: 0x0b4858, emissiveIntensity: 0.34 };
+      const waterMat = new THREE.MeshStandardMaterial({
+        color: profile.color ?? 0x2d7f92, roughness: profile.roughness ?? 0.5, metalness: profile.metalness ?? 0,
+        transparent: profile.transparent ?? true, opacity: profile.opacity ?? 0.78, emissive: profile.emissive ?? 0x0b4858, emissiveIntensity: profile.emissiveIntensity ?? 0.34, depthWrite: false,
+      });
+      waterMat.name = `OARB-water-material-${body.material ?? 'pondWater'}`;
+      const waterGeometry = new THREE.CircleGeometry(1, 72);
+      waterGeometry.rotateX(-Math.PI / 2);
+      const water = new THREE.Mesh(waterGeometry, waterMat);
+      water.name = `OARB-water-body-${body.id}`;
+      water.position.set(cx, y + 0.035, cz);
+      water.scale.set(rx, rz, 1);
+      water.userData = { id: body.id, kind: body.kind, tags: body.tags ?? [], fishable: Boolean(body.fishable), collision: 'visual-only pond water; shore remains walkable' };
+      this.scene.add(water);
+      if (body.fishable) {
+        const fishableRadius = Number.isFinite(body.fishableRadius) ? body.fishableRadius : Math.max(rx, rz) + 4;
+        this.fieldFishingZones.push({
+          id: `${body.id}_fishing_zone`, name: body.id, shape: 'ellipse', centerX: cx, centerZ: cz, radiusX: rx, radiusZ: rz,
+          minX: cx - rx, maxX: cx + rx, minZ: cz - rz, maxZ: cz + rz, interactPadding: Math.max(0, fishableRadius - Math.max(rx, rz)),
+          position: new THREE.Vector3(cx, y, cz), label: 'Pond Fishing',
+        });
+      }
+    });
+  }
+
+  addAuthoredOutdoorChests(definition = {}) {
+    (definition.outdoorChests ?? []).forEach((chest) => {
+      if (!chest?.id || !chest?.position || !chest.itemId) return;
+      this.addFieldSurvivalChest({
+        id: chest.id, label: chest.label ?? 'Outdoor Chest', position: chest.position, itemId: chest.itemId, acquiredMessage: chest.acquiredMessage ?? 'Item Acquired.',
+      });
+    });
   }
 
   addReliquaryFieldRiverBoundary() {
@@ -1359,23 +1418,38 @@ export class DungeonScene {
   }
 
   getNearbyFishingZone(position) {
-    if (this.area !== 'field' || !position) return null;
-    return this.fieldFishingZones.find((zone) => (
-      position.x >= zone.minX - zone.interactPadding
-      && position.x <= zone.maxX + zone.interactPadding
-      && position.z >= zone.minZ - zone.interactPadding
-      && position.z <= zone.maxZ + zone.interactPadding
-    )) ?? null;
+    if (!(this.area === 'field' || this.isCompiledOutdoorFieldArea()) || !position) return null;
+    return this.fieldFishingZones.find((zone) => {
+      if (zone.shape === 'ellipse') {
+        const padding = zone.interactPadding ?? 0;
+        const dx = position.x - zone.centerX;
+        const dz = position.z - zone.centerZ;
+        const rx = zone.radiusX + padding;
+        const rz = zone.radiusZ + padding;
+        return ((dx * dx) / (rx * rx)) + ((dz * dz) / (rz * rz)) <= 1;
+      }
+      return position.x >= zone.minX - zone.interactPadding
+        && position.x <= zone.maxX + zone.interactPadding
+        && position.z >= zone.minZ - zone.interactPadding
+        && position.z <= zone.maxZ + zone.interactPadding;
+    }) ?? null;
   }
 
   isPositionInFishingWater(position, margin = 0.35) {
-    if (this.area !== 'field' || !position) return false;
-    return this.fieldFishingZones.some((zone) => (
-      position.x >= zone.minX - margin
-      && position.x <= zone.maxX + margin
-      && position.z >= zone.minZ - margin
-      && position.z <= zone.maxZ + margin
-    ));
+    if (!(this.area === 'field' || this.isCompiledOutdoorFieldArea()) || !position) return false;
+    return this.fieldFishingZones.some((zone) => {
+      if (zone.shape === 'ellipse') {
+        const dx = position.x - zone.centerX;
+        const dz = position.z - zone.centerZ;
+        const rx = zone.radiusX + margin;
+        const rz = zone.radiusZ + margin;
+        return ((dx * dx) / (rx * rx)) + ((dz * dz) / (rz * rz)) <= 1;
+      }
+      return position.x >= zone.minX - margin
+        && position.x <= zone.maxX + margin
+        && position.z >= zone.minZ - margin
+        && position.z <= zone.maxZ + margin;
+    });
   }
 
   getRawFishLandingPosition(player) {

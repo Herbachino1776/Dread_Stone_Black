@@ -17,6 +17,9 @@ const TERRAIN_STAMP_KINDS = new Set(['hill', 'hollow', 'ridge', 'ravine', 'flatt
 const OUTDOOR_SPLINE_FIELDS = new Set(['id', 'points', 'width', 'material', 'flatten', 'metadata', 'tags', 'userData']);
 const CURVED_BLOCKER_FIELDS = new Set(['id', 'kind', 'points', 'thickness', 'center', 'radius', 'from', 'to', 'visibleStructureId', 'metadata', 'tags', 'userData', 'intentionallyInvisible']);
 const OUTDOOR_PRIMITIVE_FIELDS = new Set(['id', 'kind', 'points', 'height', 'thickness', 'from', 'to', 'center', 'radius', 'material', 'metadata', 'tags', 'userData']);
+const WATER_BODY_FIELDS = new Set(['id', 'kind', 'center', 'radius', 'y', 'material', 'fishable', 'fishableRadius', 'shoreMaterial', 'shoreWidth', 'tags', 'metadata', 'userData']);
+const OUTDOOR_CHEST_FIELDS = new Set(['id', 'label', 'position', 'itemId', 'acquiredMessage', 'tags', 'metadata', 'userData']);
+const FIELD_SURVIVAL_ITEM_IDS = new Set(['wood_axe', 'fishing_rod', 'flint_stick', 'torch']);
 const CURVED_BLOCKER_KINDS = new Set(['capsule', 'spline', 'circle', 'hazard', 'cliff']);
 const DECORATION_ZONE_KINDS = new Set(['treeClusterZone', 'shrubPatchZone', 'grassPatchZone', 'mistVolume', 'fallenBranchScatter', 'standingStoneScatter']);
 const OUTDOOR_PRIMITIVE_KINDS = new Set(OARB_OUTDOOR_PRIMITIVE_KINDS);
@@ -160,6 +163,34 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
     if (primitive.collision || primitive.blocksPlayer || primitive.blocksEnemies || primitive.damage || primitive.hazard || primitive.gameplay) addIssue(errors, 'error', `outdoorPrimitive ${id} cannot claim collision, blocking, hazard, damage, or gameplay behavior yet; pair visible geometry with curvedBlockers instead`, id);
     if (!visibleStructureIds.has(primitive.id)) addIssue(warnings, 'warning', `outdoor boundary primitive ${id} has no curvedBlocker visibleStructureId referencing it yet`, id);
     Object.keys(primitive).filter((key) => !OUTDOOR_PRIMITIVE_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `outdoorPrimitive ${id} uses unsupported field ${key}; visible boundary rendering only is implemented in this PR`, id));
+  });
+
+
+  if (definition.waterBodies !== undefined && !Array.isArray(definition.waterBodies)) addIssue(errors, 'error', 'waterBodies must be an array when present', 'waterBodies');
+  asArray(definition.waterBodies).forEach((body, index) => {
+    const id = body.id ?? `waterBodies[${index}]`;
+    if (!hasUsableId(body)) addIssue(errors, 'error', `waterBodies[${index}] is missing a stable id`, id);
+    if (body.kind !== 'pond') addIssue(errors, 'error', `waterBody ${id} uses unsupported kind ${body.kind}`, id);
+    if (!xzPoint(body.center)) addIssue(errors, 'error', `waterBody ${id} needs a finite center`, id);
+    const radius = Array.isArray(body.radius) ? body.radius : [body.radius, body.radius];
+    if (radius.length !== 2 || !radius.every(isFinitePositive)) addIssue(errors, 'error', `waterBody ${id} radius must contain two finite positive values`, id);
+    if (!Number.isFinite(body.y)) addIssue(errors, 'error', `waterBody ${id} y must be finite`, id);
+    validateOutdoorMaterial(definition, body.material, `waterBody ${id}`, id, errors, warnings, { required: true });
+    validateOutdoorMaterial(definition, body.shoreMaterial, `waterBody ${id} shoreMaterial`, id, errors, warnings);
+    if (body.fishable !== undefined && typeof body.fishable !== 'boolean') addIssue(errors, 'error', `waterBody ${id} fishable must be boolean when present`, id);
+    if (body.fishable && !isFinitePositive(body.fishableRadius)) addIssue(errors, 'error', `waterBody ${id} fishableRadius must be > 0 when fishable`, id);
+    if (body.shoreWidth !== undefined && !isFinitePositive(body.shoreWidth)) addIssue(errors, 'error', `waterBody ${id} shoreWidth must be > 0 when present`, id);
+    Object.keys(body).filter((key) => !WATER_BODY_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `waterBody ${id} uses unsupported field ${key}`, id));
+  });
+
+  if (definition.outdoorChests !== undefined && !Array.isArray(definition.outdoorChests)) addIssue(errors, 'error', 'outdoorChests must be an array when present', 'outdoorChests');
+  asArray(definition.outdoorChests).forEach((chest, index) => {
+    const id = chest.id ?? `outdoorChests[${index}]`;
+    if (!hasUsableId(chest)) addIssue(errors, 'error', `outdoorChests[${index}] is missing a stable id`, id);
+    const position = positionOf(chest.position);
+    if (!position || ![position.x, position.y, position.z].every(Number.isFinite)) addIssue(errors, 'error', `outdoorChest ${id} position must be finite`, id);
+    if (!FIELD_SURVIVAL_ITEM_IDS.has(chest.itemId)) addIssue(errors, 'error', `outdoorChest ${id} itemId ${chest.itemId} does not resolve to a field survival item`, id);
+    Object.keys(chest).filter((key) => !OUTDOOR_CHEST_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `outdoorChest ${id} uses unsupported field ${key}`, id));
   });
 
   asArray(definition.decorationZones).forEach((zone, index) => {
@@ -366,6 +397,8 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     { label: 'creekBeds', items: definition.creekBeds },
     { label: 'curvedBlockers', items: definition.curvedBlockers },
     { label: 'outdoorPrimitives', items: definition.outdoorPrimitives },
+    { label: 'waterBodies', items: definition.waterBodies },
+    { label: 'outdoorChests', items: definition.outdoorChests },
     { label: 'decorationZones', items: definition.decorationZones },
   ], errors);
 
