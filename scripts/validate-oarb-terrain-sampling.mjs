@@ -291,6 +291,24 @@ const terrainStampIds = new Set(oarbOutdoorExpoDefinition.terrain.heightStamps.m
 function pointInsideRoom([x, z], room, padding = 0) {
   return x >= room.minX + padding && x <= room.maxX - padding && z >= room.minZ + padding && z <= room.maxZ - padding;
 }
+function pointInPolygon(point, polygon) {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
+    const xi = polygon[index][0];
+    const zi = polygon[index][1];
+    const xj = polygon[previous][0];
+    const zj = polygon[previous][1];
+    const intersects = ((zi > point[1]) !== (zj > point[1])) && (point[0] < ((xj - xi) * (point[1] - zi)) / (zj - zi) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+function polygonCentroid(points) {
+  return points.reduce((acc, point) => [acc[0] + point[0] / points.length, acc[1] + point[1] / points.length], [0, 0]);
+}
+function averageRadiusFrom(points, center) {
+  return points.reduce((sum, point) => sum + Math.hypot(point[0] - center[0], point[1] - center[1]), 0) / points.length;
+}
 expectedPonds.forEach(([pondExpoId, id], index) => {
   const pond = pondBodies.find((candidate) => candidate.id === id);
   assert.ok(pond, `${pondExpoId} water body ${id} exists.`);
@@ -329,23 +347,36 @@ assert.equal(pond06.userData?.visibleMarker?.label, 'POND 06', 'POND 06 keeps th
 assert.equal(pond06.userData?.keeperCandidate, true, 'POND 06 is marked as the current keeper candidate.');
 assert.equal(pond06.bedMaterial, 'pondBrightMud', 'POND 06 uses the bright mud pond-bed material profile.');
 assert.ok(oarbOutdoorExpoDefinition.textures.pondBrightMud, 'POND 06 bright mud material profile resolves.');
-assert.equal(pond06.footprint?.recipe, 'shared-organic-oval', 'POND 06 uses a shared pond footprint recipe.');
+assert.equal(pond06.footprint?.recipe, 'offset-outline-irregular-polygon', 'POND 06 uses a proper offset-outline footprint recipe.');
 assert.deepEqual(pond06.footprint?.center, pond06.center, 'POND 06 footprint center matches the water center.');
 assert.deepEqual(pond06.footprint?.waterRadius, pond06.radius, 'POND 06 footprint water radius matches the water body radius.');
-assert.deepEqual(pond06.footprint?.mudBedRadius, pond06.bedRadius, 'POND 06 mud bed radius derives from the shared footprint.');
-const [pond06WaterRx, pond06WaterRz] = pond06.radius;
-const [pond06BedRx, pond06BedRz] = pond06.bedRadius;
-const [pond06OuterRx, pond06OuterRz] = pond06.footprint.outerShoreRadius;
-assert.ok(pond06BedRx > pond06WaterRx && pond06BedRz > pond06WaterRz, 'POND 06 mud bed footprint is larger than the water footprint.');
-assert.ok(pond06OuterRx > pond06BedRx && pond06OuterRz > pond06BedRz, 'POND 06 dark shore rim expands beyond the bright mud bed.');
-assert.equal(pointInsideRoom(pond06.center, pondReserve, Math.max(pond06OuterRx, pond06OuterRz)), true, 'POND 06 shared footprint stays inside Pond Expo bounds.');
+const waterOutline = pond06.footprint?.waterOutline ?? [];
+const mudBedOutline = pond06.footprint?.mudBedOutline ?? [];
+const outerShoreOutline = pond06.footprint?.outerShoreOutline ?? [];
+assert.ok(waterOutline.length >= 8, 'POND 06 water footprint has a readable irregular polygon outline.');
+assert.equal(mudBedOutline.length, waterOutline.length, 'POND 06 bright mud bed footprint is derived point-for-point from the water outline.');
+assert.equal(outerShoreOutline.length, waterOutline.length, 'POND 06 optional wet shore band is derived point-for-point from the same outline.');
+[...waterOutline, ...mudBedOutline, ...outerShoreOutline].forEach((point, index) => {
+  assert.ok(point.every(Number.isFinite), `POND 06 footprint outline point ${index} is finite.`);
+  assert.equal(pointInsideRoom(point, pondReserve, 0), true, `POND 06 footprint outline point ${index} remains inside Pond Expo bounds.`);
+});
+waterOutline.forEach((point, index) => assert.equal(pointInPolygon(point, mudBedOutline), true, `POND 06 water outline point ${index} lies inside the bright mud bed footprint.`));
+mudBedOutline.forEach((point, index) => assert.equal(pointInPolygon(point, outerShoreOutline), true, `POND 06 bright mud bed outline point ${index} lies inside the outer wet shore footprint.`));
+const pond06OutlineCenter = polygonCentroid(waterOutline);
+assert.ok(Math.hypot(pond06OutlineCenter[0] - pond06.center[0], pond06OutlineCenter[1] - pond06.center[1]) < 0.75, 'POND 06 irregular outline remains centered on the authored water body.');
+const waterAverageRadius = averageRadiusFrom(waterOutline, pond06.center);
+const mudAverageRadius = averageRadiusFrom(mudBedOutline, pond06.center);
+const outerAverageRadius = averageRadiusFrom(outerShoreOutline, pond06.center);
+assert.ok(mudAverageRadius - waterAverageRadius > 2.6 && mudAverageRadius - waterAverageRadius < 3.8, 'POND 06 bright mud bed is a consistent outward offset from the water outline.');
+assert.ok(outerAverageRadius - mudAverageRadius > 1.3 && outerAverageRadius - mudAverageRadius < 2.4, 'POND 06 outer wet shore band is a second outward offset.');
+assert.equal(pointInsideRoom(pond06.center, pondReserve, Math.ceil(outerAverageRadius)), true, 'POND 06 offset footprint stays inside Pond Expo bounds.');
 (pond06.userData.terrainStampIds ?? []).forEach((stampId) => {
   const stamp = oarbOutdoorExpoDefinition.terrain.heightStamps.find((candidate) => candidate.id === stampId);
   const finiteValues = [...(stamp?.center ?? []), ...(stamp?.path ?? []).flat(), stamp?.radius, stamp?.width, stamp?.y, stamp?.height, stamp?.depth].filter((value) => value !== undefined);
   assert.ok(finiteValues.every(Number.isFinite), `POND 06 terrain support stamp ${stampId} has finite values.`);
 });
-assert.ok((pond06.footprint?.outerShoreRadius ?? []).every(Number.isFinite), 'POND 06 shared footprint radii are finite.');
-assert.ok(pond06.userData.recipe.includes('shared footprint'), 'POND 06 recipe documents that the shore ring derives from the same footprint.');
+assert.ok([pond06.footprint?.mudOffset, pond06.footprint?.outerShoreOffset].every(Number.isFinite), 'POND 06 offset distances are finite.');
+assert.ok(pond06.userData.recipe.includes('offset-outline'), 'POND 06 recipe documents that mud derives from the same offset outline.');
 assert.equal(pond06.userData.noDownwardFacingTopNormals, true, 'POND 06 pond geometry is authored for two-sided/top-visible normals.');
 
 assert.equal(pondBodies.find((pond) => pond.id === 'pond_expo_08_fishing_hole')?.userData?.futureFishable, true, 'POND 08 is marked as a future fishable pond without enabling fishing gameplay.');
