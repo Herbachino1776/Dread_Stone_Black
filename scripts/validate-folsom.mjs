@@ -10,11 +10,14 @@ import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { FISH_SPECS } from '../src/game/fishing/FishMeshFactory.js';
 import { resolveStartupArea } from '../src/game/locationRouting.js';
 import { FOLSOM_PINE_SWATHE_SPECS, FOLSOM_VISIBLE_TREE_BOUNDS, folsomDefinition } from '../src/game/locations/folsom.definition.js';
+import { FOLSOM_PINE_MAX_BILLBOARD_YAW_OFFSET, FOLSOM_PINE_SOURCE_SPRITES, FOLSOM_PINE_SPRITE_BASELINES } from '../src/game/world-kits/vegetation/PineTreeBillboardKit.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { validatePondDecor, validatePondFootprint } from './pond-footprint-validation.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const interactionsSource = readFileSync(resolve(repoRoot, 'src/game/Interactions.js'), 'utf8');
+const dungeonSceneSource = readFileSync(resolve(repoRoot, 'src/game/DungeonScene.js'), 'utf8');
+const pineKitSource = readFileSync(resolve(repoRoot, 'src/game/world-kits/vegetation/PineTreeBillboardKit.js'), 'utf8');
 const terrainSampler = createOutdoorTerrainSampler(folsomDefinition.terrain);
 const dungeonCollision = buildDungeonCollision(folsomDefinition);
 const collision = new CollisionWorld({
@@ -24,6 +27,27 @@ const collision = new CollisionWorld({
   walkableSurfaces: dungeonCollision.walkableSurfaces,
   defaultFloorY: folsomDefinition.defaultFloorY,
   outdoorTerrainSampler: terrainSampler,
+});
+
+
+assert.ok(
+  !/update(?:ReliquaryFieldFoliage|OutdoorFoliageBillboards)\s*\([^)]*\)\s*{[^}]*this\.area\s*!==\s*['"]field['"]/s.test(dungeonSceneSource),
+  'Folsom invalid: authored foliage billboard updater is field-only and will not rotate Folsom pines.',
+);
+assert.ok(
+  /updateOutdoorFoliageBillboards\(player\)/.test(dungeonSceneSource) && /this\.fieldFoliageBillboards\.push\(mesh\)/.test(dungeonSceneSource),
+  'Folsom invalid: pine billboards are not registered for per-frame camera-facing rotation.',
+);
+assert.ok(
+  /Math\.atan2\(dx, dz\)/.test(dungeonSceneSource) && /maxBillboardYawOffset/.test(dungeonSceneSource),
+  'Folsom invalid: pine billboard yaw jitter can make trees appear paper-thin.',
+);
+assert.ok(
+  /bottomTransparentPaddingRatio/.test(pineKitSource) && /visualBaseGroundingOffset/.test(dungeonSceneSource),
+  'Folsom invalid: pine sprite visual base is not grounded; only mesh origin is grounded.',
+);
+FOLSOM_PINE_SOURCE_SPRITES.forEach((spritePath) => {
+  assert.ok(Number.isFinite(FOLSOM_PINE_SPRITE_BASELINES[spritePath]?.bottomTransparentPaddingRatio), 'Folsom invalid: pine sprite visual base is not grounded; only mesh origin is grounded.');
 });
 
 function textureAssetExists(texturePath) {
@@ -229,7 +253,9 @@ pinePlacements.forEach((tree) => {
   assert.ok(pineVariantIds.has(tree.variantId), `Folsom invalid: pine tree ${tree.id} does not use the reusable pine kit.`);
   assert.equal(textureAssetExists(tree.spritePath), true, `Folsom invalid: pine sprite texture missing: ${tree.spritePath}`);
   assert.ok(tree.tags?.includes('pine-billboard'), `Folsom invalid: pine tree ${tree.id} is not tagged as reusable pine billboard.`);
-  assert.ok([...(tree.position ?? []), tree.height, tree.width, tree.sinkIntoGround].every(Number.isFinite), `Folsom invalid: pine tree ${tree.id} has non-finite placement data.`);
+  assert.ok([...(tree.position ?? []), tree.height, tree.width, tree.sinkIntoGround, tree.bottomTransparentPaddingRatio, tree.yawOffset].every(Number.isFinite), `Folsom invalid: pine tree ${tree.id} has non-finite placement data.`);
+  assert.ok(Math.abs(tree.yawOffset) <= FOLSOM_PINE_MAX_BILLBOARD_YAW_OFFSET, 'Folsom invalid: pine billboard yaw jitter can make trees appear paper-thin.');
+  assert.equal(tree.bottomTransparentPaddingRatio, FOLSOM_PINE_SPRITE_BASELINES[tree.spritePath]?.bottomTransparentPaddingRatio, 'Folsom invalid: pine sprite visual base is not grounded; only mesh origin is grounded.');
   const [x, y, z] = tree.position;
   assert.ok(x >= -100 && x <= 100 && z >= -100 && z <= 100, 'Folsom invalid: pine density count includes off-map placements.');
   assert.ok(Math.abs(x) < 99.5 && Math.abs(z) < 99.5, 'Folsom invalid: pine tree placed where terrain sampler clamps to edge.');
