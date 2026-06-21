@@ -295,6 +295,8 @@ export const reliquaryFieldDefinition = Object.freeze({
     exteriorBlocker('OARB_PROVING_GROUNDS_RIGHT_STONE', 73.2, 74.8, 162.8, 165.2, { height: 5.8, visualStructureId: 'OARB_PROVING_GROUNDS_RIGHT_STONE-river-marker' }),
     exteriorBlocker('OARB_OUTDOOR_EXPO_LEFT_STONE', 82.6, 84.8, 183.8, 188.2, { height: 7.4, visualStructureId: 'OARB_OUTDOOR_EXPO_LEFT_STONE-field-marker' }),
     exteriorBlocker('OARB_OUTDOOR_EXPO_RIGHT_STONE', 91.2, 93.4, 183.8, 188.2, { height: 7.4, visualStructureId: 'OARB_OUTDOOR_EXPO_RIGHT_STONE-field-marker' }),
+    exteriorBlocker('FOLSOM_LEGACY_DOOR_LEFT_POST', -4.8, -3.2, -187, -183, { height: 5, visualStructureId: 'FOLSOM_LEGACY_DOOR_LEFT_POST' }),
+    exteriorBlocker('FOLSOM_LEGACY_DOOR_RIGHT_POST', 3.2, 4.8, -187, -183, { height: 5, visualStructureId: 'FOLSOM_LEGACY_DOOR_RIGHT_POST' }),
   ],
   spawns: [
     { id: 'field_player_start', kind: 'player', position: { x: 0, y: 1.55, z: -175 }, yaw: 0, roomId: 'FIELD01', tags: ['live'] },
@@ -310,8 +312,20 @@ export const reliquaryFieldDefinition = Object.freeze({
     { id: 'field_oarb_feature_yard_return', kind: 'return', position: { x: 83, y: 1.55, z: 155 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'oarb-feature-yard'] },
     { id: 'field_oarb_outdoor_expo_return', kind: 'return', position: { x: 88, y: 1.55, z: 176 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'oarb-outdoor-expo'] },
     { id: 'field_v2_test_shrine_return', kind: 'return', position: { x: 68, y: 1.55, z: 134 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['temporary', 'v2-test-shrine'] },
+    { id: 'field_folsom_return', kind: 'return', position: { x: 0, y: 1.55, z: -176 }, yaw: Math.PI, roomId: 'FIELD01', tags: ['folsom', 'legacy-door-return'] },
   ],
   exits: [
+    {
+      id: 'field_return_to_folsom',
+      fromLocation: 'reliquary-field',
+      toLocation: 'folsom',
+      triggerRect: { minX: -3, maxX: 3, minZ: -188, maxZ: -181 },
+      position: { x: 0, y: 1, z: -184 },
+      destinationSpawnId: 'folsom_reliquary_return',
+      promptText: 'Return to Folsom',
+      tags: ['folsom', 'legacy-route', 'rusty-border-door'],
+      userData: { returnSpawnId: 'field_folsom_return' },
+    },
     {
       id: 'field_enter_v2_test_shrine',
       fromLocation: 'reliquary-field',

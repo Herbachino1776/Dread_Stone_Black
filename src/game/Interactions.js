@@ -390,6 +390,9 @@ export class Interactions {
     if (interaction.itemId === 'torch') {
       this.equipmentRuntime?.acquireItem?.('torch', { source: interaction.id, tags: ['offhand', 'torch', 'light', 'dungeon-utility'] });
     }
+    if (interaction.itemId === 'rusted_sword') {
+      this.equipmentRuntime?.acquireItem?.('rusted_sword', { source: interaction.id, tags: ['weapon', 'starter-weapon', 'dungeon-utility'] });
+    }
     this.openFieldChestVisual(interaction.id);
     interaction.hint = interaction.repeatHint ?? 'The chest lies open and empty.';
     interaction.message = interaction.repeatMessage ?? 'The chest lies open and empty.';
@@ -715,7 +718,7 @@ export class Interactions {
   }
 
   getOpenGroundCampfireCraftInteraction() {
-    if (this.dungeon.area !== 'field') return null;
+    if (!this.dungeon.isOutdoorSurvivalArea?.()) return null;
     if (this.dungeon.gameState?.getFieldItemCount?.('wood') < 1
       || !this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick')
       || this.dungeon.gameState?.getEquippedFieldItem?.() !== 'wood') return null;
@@ -784,7 +787,7 @@ export class Interactions {
     }
 
     if (interaction.type === 'fieldCampfireCraft') {
-      return this.dungeon.area === 'field' && !this.getCampfireRequirementMessage(interaction);
+      return this.dungeon.isOutdoorSurvivalArea?.() && !this.getCampfireRequirementMessage(interaction);
     }
     return true;
   }

@@ -1,5 +1,6 @@
 import { blackGrassTempleDefinition } from './blackGrassTemple.definition.js';
 import { fieldKeeperHouseDefinition } from './fieldKeeperHouse.definition.js';
+import { folsomDefinition } from './folsom.definition.js';
 import { level1Definition } from './generated/level1.definition.js';
 import { balthazanDefinition } from './generated/balthazan.definition.js';
 import { sumerianCityBlockV0Definition } from './generated/sumerianCityBlockV0.definition.js';
@@ -81,6 +82,7 @@ const kerovacDefinitionWithRuntimeFixes = Object.freeze({
 const locationDefinitions = Object.freeze({
   [blackGrassTempleDefinition.id]: blackGrassTempleDefinition,
   [fieldKeeperHouseDefinition.id]: fieldKeeperHouseDefinition,
+  [folsomDefinition.id]: folsomDefinition,
   [level1Definition.id]: level1Definition,
   [balthazanDefinition.id]: balthazanDefinition,
   [sumerianCityBlockV0Definition.id]: sumerianCityBlockV0Definition,

@@ -48,15 +48,15 @@ assert.deepEqual(
   `${identifier} must not be referenced outside its defining module without an explicit named import`,
 );
 
-assert.equal(resolveStartupArea(undefined), 'field');
+assert.equal(resolveStartupArea(undefined), 'folsom');
 assert.equal(resolveStartupArea('field'), 'field');
 assert.equal(resolveStartupArea('reliquary-field'), 'field');
 assert.equal(resolveStartupArea('kerovac'), 'kerovac');
 assert.equal(resolveStartupArea('oarbFeatureYard'), 'oarbFeatureYard');
-assert.equal(resolveStartupArea('not-a-real-area'), 'field');
+assert.equal(resolveStartupArea('not-a-real-area'), 'folsom');
 
 const { spawnPosition, spawnYaw } = resolveFieldPlayerSpawn('start');
 assert.deepEqual(spawnPosition.toArray(), [0, 1.55, -175]);
 assert.equal(spawnYaw, 0);
 
-console.log('Reliquary Field startup references, routing, and spawn resolution are valid.');
+console.log('Folsom default routing plus Reliquary Field fallback references and spawn resolution are valid.');
