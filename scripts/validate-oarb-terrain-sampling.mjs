@@ -385,6 +385,26 @@ function correspondingRadialWidths(inner, outer, center) {
     - Math.hypot(point[0] - center[0], point[1] - center[1])
   ));
 }
+function polygonArea(points) {
+  let sum = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const [x1, z1] = points[index];
+    const [x2, z2] = points[(index + 1) % points.length];
+    sum += (x1 * z2) - (x2 * z1);
+  }
+  return Math.abs(sum) * 0.5;
+}
+function average(values) {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+function depthCategory(depth) {
+  if (depth < 0.34) return 'very-shallow';
+  if (depth < 0.5) return 'shallow';
+  if (depth < 0.75) return 'medium';
+  if (depth < 1.05) return 'deep';
+  return 'very-deep';
+}
+const pondDepths = [];
 expectedPonds.forEach(([pondExpoId, id], index) => {
   const pond = pondBodies.find((candidate) => candidate.id === id);
   assert.ok(pond, `${pondExpoId} water body ${id} exists.`);
@@ -410,12 +430,33 @@ expectedPonds.forEach(([pondExpoId, id], index) => {
   assert.ok(Number.isFinite(floorY), `${id} sampled pond floor is finite.`);
   assert.ok(floorY < pond.y, `${id} water surface is above the shaped pond floor.`);
   assert.ok(pond.y - floorY <= (pond.userData.recipeData.terrain.basinDepth + 0.12), `${id} water surface depth matches its generated basin recipe.`);
+  assert.ok([pond.userData.recipeData.terrain.pondFloorY, pond.footprint.layerHeights.waterFloorY, pond.footprint.layerHeights.waterY, pond.footprint.layerHeights.mudBedY, pond.footprint.layerHeights.wetShoreY].every(Number.isFinite), `${pondExpoId} invalid: pond floor / water / bank Y values must be finite.`);
+  const waterArea = polygonArea(pond.footprint.waterOutline);
+  const mudArea = polygonArea(pond.footprint.mudBedOutline);
+  const shoreArea = polygonArea(pond.footprint.outerShoreOutline);
+  assert.ok(waterArea / mudArea >= 0.7, `${pondExpoId} invalid: water footprint is too small relative to bright mud.`);
+  const brightMudWidths = correspondingRadialWidths(pond.footprint.waterOutline, pond.footprint.mudBedOutline, pond.center);
+  const wetBankWidths = correspondingRadialWidths(pond.footprint.mudBedOutline, pond.footprint.outerShoreOutline, pond.center);
+  const avgBrightMudWidth = average(brightMudWidths);
+  const avgWetBankWidth = average(wetBankWidths);
+  assert.ok(avgBrightMudWidth >= 0.72 && avgBrightMudWidth <= 1.35, `${pondExpoId} invalid: bright mud visible width exceeds target range.`);
+  assert.ok(avgWetBankWidth >= 0.38 && avgWetBankWidth <= 0.82, `${pondExpoId} invalid: dark wet bank visible width exceeds target range.`);
+  assert.ok((shoreArea - mudArea) / waterArea <= 0.28, `${pondExpoId} invalid: giant exposed dark band is not allowed for this pond set.`);
+  const authoredDepth = pond.y - pond.footprint.layerHeights.waterFloorY;
+  assert.ok(Number.isFinite(authoredDepth) && authoredDepth > 0, `${pondExpoId} invalid: authored pond depth is not finite.`);
+  pondDepths.push({ id, pondExpoId, depth: authoredDepth, category: depthCategory(authoredDepth), profile: pond.userData.depthProfile });
   for (let otherIndex = index + 1; otherIndex < pondBodies.length; otherIndex += 1) {
     const other = pondBodies[otherIndex];
     const clearance = Math.hypot(cx - other.center[0], cz - other.center[1]) - Math.max(rx, rz) - Math.max(other.radius[0], other.radius[1]) - (pond.shoreWidth ?? 0) - (other.shoreWidth ?? 0);
     assert.ok(clearance >= 1.5, `${id} has walking clearance from ${other.id}.`);
   }
 });
+const depthRange = Math.max(...pondDepths.map((pond) => pond.depth)) - Math.min(...pondDepths.map((pond) => pond.depth));
+assert.ok(depthRange >= 0.85, 'Pond Expo invalid: depth variation too small; all ponds are effectively shallow.');
+assert.ok(new Set(pondDepths.map((pond) => pond.category)).size >= 3, 'Pond Expo invalid: at least three distinct depth classes are required.');
+assert.ok(['deep', 'very-deep'].includes(pondDepths.find((pond) => pond.pondExpoId === 'POND 08')?.category), 'POND 08 invalid: expected deep fishing-hole profile but basin depth is below threshold.');
+assert.ok(['very-shallow', 'shallow'].includes(pondDepths.find((pond) => pond.pondExpoId === 'POND 04')?.category), 'POND 04 invalid: marsh pond should remain among the shallowest depth classes.');
+assert.equal(Math.max(...pondDepths.map((pond) => pond.depth)), pondDepths.find((pond) => pond.pondExpoId === 'POND 08')?.depth, 'POND 08 invalid: future fishing hole must be the deepest Pond Expo basin.');
 
 pondBodies.forEach((pond) => {
   assert.equal(pond.userData.generatedBy, 'OutdoorPondBuilder', `${pond.id} is compiled by the reusable pond generator.`);
