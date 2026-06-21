@@ -75,6 +75,47 @@ function pointAt(center, angle, distance) {
   return [center[0] + Math.cos(angle) * distance, center[1] + Math.sin(angle) * distance];
 }
 
+function polygonSignedArea(points) {
+  return points.reduce((sum, point, index) => {
+    const next = points[(index + 1) % points.length];
+    return sum + point[0] * next[1] - next[0] * point[1];
+  }, 0) / 2;
+}
+
+function sampleShorelinePoint(random, outline, center) {
+  if (!Array.isArray(outline) || outline.length < 3) return null;
+  const index = Math.floor(random() * outline.length) % outline.length;
+  const point = outline[index];
+  const next = outline[(index + 1) % outline.length];
+  const t = random();
+  const edgePoint = [point[0] + (next[0] - point[0]) * t, point[1] + (next[1] - point[1]) * t];
+  const dx = next[0] - point[0];
+  const dz = next[1] - point[1];
+  const length = Math.max(EPSILON, Math.hypot(dx, dz));
+  const orientation = polygonSignedArea(outline) >= 0 ? 1 : -1;
+  let outward = orientation > 0 ? [dz / length, -dx / length] : [-dz / length, dx / length];
+  const away = [edgePoint[0] - center[0], edgePoint[1] - center[1]];
+  if (outward[0] * away[0] + outward[1] * away[1] < 0) outward = [-outward[0], -outward[1]];
+  return { edgePoint, outward, inward: [-outward[0], -outward[1]], angle: Math.atan2(edgePoint[1] - center[1], edgePoint[0] - center[0]) };
+}
+
+function offsetPoint(edgeSample, offset) {
+  const direction = offset >= 0 ? edgeSample.outward : edgeSample.inward;
+  const distance = Math.abs(offset);
+  return [edgeSample.edgePoint[0] + direction[0] * distance, edgeSample.edgePoint[1] + direction[1] * distance];
+}
+
+function pointInFishingLane(point, pond, lanes = []) {
+  return lanes.some((lane) => {
+    const angle = Number(lane.angle);
+    const width = Number(lane.width ?? 0.55);
+    if (!Number.isFinite(angle) || !Number.isFinite(width)) return false;
+    const pointAngle = Math.atan2(point[1] - pond.center[1], point[0] - pond.center[0]);
+    const delta = Math.abs(Math.atan2(Math.sin(pointAngle - angle), Math.cos(pointAngle - angle)));
+    return delta < width * 0.5;
+  });
+}
+
 export function pointInPondPolygon(point, polygon) {
   if (!Array.isArray(polygon) || polygon.length < 3) return false;
   let inside = false;
@@ -127,10 +168,18 @@ function placeWithRetries({ random, pond, placements, clearZones, clusterAngles,
     const cluster = clusterAngles[attempt % clusterAngles.length];
     const angle = attempt < 48 && random() < clusterChance ? cluster + (random() - 0.5) * 0.9 : random() * TAU;
     const distances = outlineDistances(pond, angle);
+    let position;
+    let edgeSample = null;
     const distance = distanceFor(distances, attempt);
-    const position = pointAt(pond.center, angle, distance);
-    if (pointInPondDecorClearZone(position, clearZones) || !hasClearance(position, placements, minimumDistance)) continue;
-    const placement = makePlacement(position, angle, distances);
+    if (distance && typeof distance === 'object' && Number.isFinite(distance.edgeOffset)) {
+      edgeSample = sampleShorelinePoint(random, pond.footprint?.waterOutline, pond.center);
+      if (!edgeSample) continue;
+      position = offsetPoint(edgeSample, distance.edgeOffset);
+    } else {
+      position = pointAt(pond.center, angle, distance);
+    }
+    if (pointInPondDecorClearZone(position, clearZones) || pointInFishingLane(position, pond, pond.pondDecor?.clearFishingLanes) || !hasClearance(position, placements, minimumDistance)) continue;
+    const placement = makePlacement(position, edgeSample?.angle ?? angle, distances, edgeSample);
     placements.push(placement);
     return placement;
   }
@@ -151,15 +200,18 @@ export function generatePondDecorPlacements(pond) {
     const clusters = [random() * TAU, random() * TAU];
     for (let index = 0; index < count; index += 1) {
       const roll = random();
-      const waterEdgeChance = Number.isFinite(boulderRecipe.waterEdgeChance) ? boulderRecipe.waterEdgeChance : 0.2;
-      const shoreChance = Number.isFinite(boulderRecipe.shoreChance) ? boulderRecipe.shoreChance : 0.55;
-      const placementZone = roll < waterEdgeChance ? 'water-edge' : roll < waterEdgeChance + shoreChance ? 'shoreline' : 'grass-bank';
+      const submergedTarget = randomCount(random, boulderRecipe.submergedCountRange, [1, 2]);
+      const submergedChance = Number.isFinite(boulderRecipe.submergedChance) ? boulderRecipe.submergedChance : 0.35;
+      const waterEdgeChance = Number.isFinite(boulderRecipe.waterEdgeChance) ? boulderRecipe.waterEdgeChance : 0.45;
+      const shoreChance = Number.isFinite(boulderRecipe.shoreChance) ? boulderRecipe.shoreChance : 0.4;
+      const placementZone = index < submergedTarget || roll < submergedChance ? 'submerged' : roll < submergedChance + waterEdgeChance ? 'water-edge' : roll < submergedChance + waterEdgeChance + shoreChance ? 'shoreline' : 'grass-bank';
       placeWithRetries({
         random, pond, placements: boulders, clearZones, clusterAngles: clusters, clusterChance: boulderRecipe.clusterChance ?? 0.3, minimumDistance: 1.15,
         distanceFor: ({ water, mud, shore }) => {
-          if (placementZone === 'water-edge') return water + 0.05 + random() * Math.max(0.12, (mud - water) * 0.35);
-          if (placementZone === 'shoreline') return mud + 0.08 + random() * Math.max(0.15, shore - mud - 0.12);
-          return shore + 0.4 + random() * 2.4;
+          if (placementZone === 'submerged') return { edgeOffset: -randomBetween(random, [0.25, 1.15], [0.25, 1.15]) };
+          if (placementZone === 'water-edge') return { edgeOffset: randomBetween(random, [0.05, Math.max(0.18, mud - water)], [0.05, 1.1]) };
+          if (placementZone === 'shoreline') return { edgeOffset: randomBetween(random, [Math.max(0.35, mud - water), Math.max(0.6, shore - water)], [0.7, 2.4]) };
+          return { edgeOffset: randomBetween(random, [Math.max(1.2, shore - water), Math.max(1.8, shore - water + 2.4)], [1.8, 4.2]) };
         },
         makePlacement: (position, angle) => {
           const base = randomBetween(random, boulderRecipe.size, [0.6, 1.2]);
@@ -171,11 +223,11 @@ export function generatePondDecorPlacements(pond) {
             position,
             angle,
             placementZone,
-            partiallySubmerged: placementZone === 'water-edge',
+            partiallySubmerged: placementZone === 'submerged',
             materialKey: texturePool[Math.floor(random() * texturePool.length) % texturePool.length],
             scale: [base * (1 - scaleVariance * 0.5 + random() * scaleVariance), base * (0.55 + random() * 0.25), base * (1 - scaleVariance * 0.5 + random() * scaleVariance)],
             rotation: [(random() - 0.5) * 0.35 * rotationVariance, random() * TAU, (random() - 0.5) * 0.28 * rotationVariance],
-            sinkRatio: randomBetween(random, boulderRecipe.sinkAmount, [0.2, 0.38]),
+            sinkRatio: placementZone === 'submerged' ? randomBetween(random, boulderRecipe.sinkAmountRange, [0.2, 0.65]) : randomBetween(random, boulderRecipe.sinkAmount, [0.2, 0.38]),
           };
         },
       });
@@ -224,6 +276,31 @@ export function generatePondDecorPlacements(pond) {
       if (placement) vegetation.push(placement);
     }
   }
+  const aquaticRecipe = recipe.aquaticBrush;
+  if (aquaticRecipe) {
+    const clusterCount = randomCount(random, aquaticRecipe.clusterCountRange, [2, 5]);
+    for (let clusterIndex = 0; clusterIndex < clusterCount; clusterIndex += 1) {
+      const edgeSample = sampleShorelinePoint(random, pond.footprint?.waterOutline, pond.center);
+      if (!edgeSample) continue;
+      const sprites = randomCount(random, aquaticRecipe.spritesPerClusterRange, [3, 7]);
+      for (let spriteIndex = 0; spriteIndex < sprites; spriteIndex += 1) {
+        const offset = randomBetween(random, [-0.65, 0.95], [-0.65, 0.95]);
+        const along = (random() - 0.5) * 1.2;
+        const tangent = [-edgeSample.outward[1], edgeSample.outward[0]];
+        const base = offsetPoint(edgeSample, offset);
+        const position = [base[0] + tangent[0] * along, base[1] + tangent[1] * along];
+        if (pointInPondDecorClearZone(position, clearZones) || pointInFishingLane(position, pond, recipe.clearFishingLanes) || !hasClearance(position, [...boulders, ...vegetation], 0.28)) continue;
+        const sprite = chooseSprite(random, 'bush', aquaticRecipe.excludeTags, aquaticRecipe.foliagePool);
+        vegetation.push({
+          id: `${pond.id}_aquatic_brush_${String(clusterIndex + 1).padStart(2, '0')}_${String(spriteIndex + 1).padStart(2, '0')}`,
+          kind: 'vegetation', layer: 'aquatic-brush', placementZone: offset < 0 ? 'shallow-water-edge' : 'wet-mud-edge', position,
+          spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, scale: randomBetween(random, aquaticRecipe.scaleRange, [0.35, 0.75]),
+          sinkRatio: randomBetween(random, [0.12, 0.28], [0.12, 0.28]), yawOffset: (random() - 0.5) * 0.55,
+        });
+      }
+    }
+  }
+
   return { boulders, vegetation };
 }
 

@@ -73,7 +73,7 @@ function buildWaterOutline(center, size, shape, random) {
     const angle = baseAngle + angleJitter;
     const lobes = Math.sin(angle * Math.max(1, Math.round(finite(shape.lobeCount, 2))) + phaseA);
     const bays = Math.max(0, Math.cos(angle * Math.max(1, Math.round(finite(shape.bayCount, 2))) + phaseB));
-    const rough = Math.sin(angle * 5 + phaseC) * 0.55 + (random() - 0.5) * 0.9;
+    const rough = Math.sin(angle * 5 + phaseC) * 0.55 + Math.sin(angle * 9 + phaseA * 0.7) * 0.25 + (random() - 0.5) * 0.9;
     const asymmetry = Math.cos(angle - asymmetryDirection) * finite(shape.asymmetry, 0.1) * 0.28;
     const pinchFacing = Math.max(0, Math.cos(angle - pinchDirection));
     const crescentFacing = Math.max(0, Math.cos(angle - pinchDirection));
@@ -81,6 +81,7 @@ function buildWaterOutline(center, size, shape, random) {
       + lobes * finite(shape.outlineWobble, 0.12) * 0.45
       - bays * finite(shape.outlineWobble, 0.12) * finite(shape.bayCount, 0) * 0.045
       + rough * finite(shape.edgeRoughness, 0.06)
+      + Math.sin(angle * 7 + phaseB) * finite(shape.radiusVariation, 0.08) * 0.22
       + asymmetry
       - pinchFacing * pinchFacing * finite(shape.pinchAmount, 0) * 0.38
       - crescentFacing * crescentFacing * finite(shape.crescentBias, 0) * 0.34;
@@ -154,8 +155,8 @@ function normalizeRecipe(input) {
     center: [...input.center],
     size: { radiusX, radiusZ, overallScale, waterAreaScale, shoreScale },
     shape: {
-      outlinePointCount: 20, outlineWobble: 0.12, asymmetry: 0.12, ovalBias: 0.1, crescentBias: 0,
-      pinchAmount: 0, bayCount: 1, lobeCount: 2, edgeRoughness: 0.05, ...(input.shape ?? {}),
+      outlinePointCount: 24, outlineWobble: 0.18, asymmetry: 0.18, ovalBias: 0.1, crescentBias: 0,
+      pinchAmount: 0, bayCount: 2, lobeCount: 3, edgeRoughness: 0.08, radiusVariation: 0.1, ...(input.shape ?? {}),
     },
     terrain: {
       stampKind: 'hollow', basinDepth: 0.35, waterFloorY: null, mudBedY: null, outerBankY: 0.02,
@@ -179,8 +180,8 @@ function normalizeRecipe(input) {
     },
     boulders: {
       countRange: [2, 4], size: [0.6, 1.2], boulderScaleVariance: 0.35, boulderRotationVariance: 1,
-      clusterChance: 0.3, waterEdgeChance: 0.2, shoreChance: 0.55, grassBankChance: 0.25,
-      sinkAmount: [0.2, 0.38], texturePool: [...ROCK_TEXTURE_POOL], ...(input.boulders ?? {}),
+      clusterChance: 0.3, submergedCountRange: [1, 2], submergedChance: 0.35, waterEdgeChance: 0.45, shoreChance: 0.4, bankChance: 0.15, grassBankChance: 0.15,
+      sinkAmount: [0.2, 0.38], sinkAmountRange: [0.2, 0.65], texturePool: [...ROCK_TEXTURE_POOL], ...(input.boulders ?? {}),
     },
     vegetation: {
       bushesRange: [4, 8], smallTreesRange: [1, 3], bushSize: [1.05, 1.9], treeSize: [2.8, 4.6],
@@ -244,7 +245,9 @@ export function buildOutdoorPond(input) {
       seed: recipe.seed,
       boulders: { ...recipe.boulders, countRange: normalizeRange(recipe.boulders.countRange, [2, 4]), texturePool: recipe.boulders.texturePool },
       vegetation: { ...recipe.vegetation, bushesRange: normalizeRange(recipe.vegetation.bushesRange, [4, 8]), smallTreesRange: normalizeRange(recipe.vegetation.smallTreesRange, [1, 3]) },
+      aquaticBrush: { clusterCountRange: [2, 5], spritesPerClusterRange: [3, 7], scaleRange: [0.35, 0.75], placement: 'shallow-water-and-mud-edge', excludeTags: ['redwood'], ...(recipe.aquaticBrush ?? {}) },
       clearZones,
+      clearFishingLanes: recipe.clearFishingLanes ?? [{ angle: -Math.PI / 2, width: 0.7, reason: 'player approach / casting lane' }],
       clearances: recipe.clearances,
     },
     tags: ['pond-expo', recipe.label, recipe.style, 'procedural-pond', ...(recipe.tags ?? [])],
