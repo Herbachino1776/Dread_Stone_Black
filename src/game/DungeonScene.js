@@ -21,7 +21,7 @@ import { getLocationDefinition } from './locations/locationRegistry.js';
 import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
 import './creatures/creatureRegistry.js';
 import { RAM_MAN_FRIENDLY_ANIMATION_FILES } from './creatures/ramManFriendly.config.js';
-import { FISH_SPECS, createFishMesh } from './fishing/FishMeshFactory.js';
+import { FISH_SPECS, FISH_TEXTURE_PROFILES, createFishMesh } from './fishing/FishMeshFactory.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -2172,9 +2172,22 @@ export class DungeonScene {
     return pool[stableHash(`${zone.fishCatchSeed ?? zone.id}:${counter}`) % pool.length] ?? 'smallRiverFish';
   }
 
+  resolveRawFishPickupMaterial(reference, fallback = {}) {
+    const profile = FISH_TEXTURE_PROFILES[reference] ?? fallback;
+    const material = this.makeDefinitionMaterial(profile);
+    material.userData = {
+      ...material.userData,
+      fishTextureProfileKey: reference,
+      fishTextureProfilePath: profile?.path ?? null,
+      rawFishPickupMaterialResolver: 'KerovacFishTextureProfiles',
+    };
+    return material;
+  }
+
   createRawFishPickupMesh(fishSpecies = 'smallRiverFish') {
     const resolvedSpecies = FISH_SPECS[fishSpecies] ? fishSpecies : 'smallRiverFish';
     const group = createFishMesh(resolvedSpecies, {
+      materialResolver: (reference, fallback) => this.resolveRawFishPickupMaterial(reference, fallback),
       id: `raw-fish-pickup-${resolvedSpecies}`,
       baseUserData: {
         itemId: 'raw_fish',
