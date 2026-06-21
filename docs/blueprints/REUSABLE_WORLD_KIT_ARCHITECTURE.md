@@ -636,3 +636,8 @@ engine primitives
 ```
 
 Fish proved the model. Ponds are close. Terrain, rocks, structures, walls, and vegetation should follow next.
+
+
+### 3.4 City Border Wooden Wall Kit
+
+Folsom's protective perimeter wall is the first reusable city-border wooden wall kit. The kit creates modular textured panels from a perimeter polyline, alternates approved wooden wall materials per panel, samples terrain for panel bases/posts, preserves authored gate openings, and emits wall segments with real collision rather than a single large billboard.

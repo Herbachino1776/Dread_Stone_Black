@@ -1,6 +1,8 @@
 import { buildOutdoorPondSystem } from '../../engine/outdoor-authoring/OutdoorPondBuilder.js';
+import { createOutdoorTerrainSampler } from '../../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 import { outdoorTextureProfiles } from './outdoorTextureProfiles.js';
 import { terrainStampKit } from './terrainStampKit.js';
+import { createCityBorderWoodenWall } from '../world-kits/walls/CityBorderWoodenWallKit.js';
 
 const folsomPondSystem = buildOutdoorPondSystem([{
   id: 'folsom_starter_pond',
@@ -23,6 +25,26 @@ const folsomPondSystem = buildOutdoorPondSystem([{
   clearFishingLanes: [{ angle: 0, width: 0.82, reason: 'clear north-bank starter casting lane' }],
 }]);
 
+const FOLSOM_BORDER_WALL_HEIGHT = 6.1;
+const FOLSOM_BORDER_WALL_THICKNESS = 0.65;
+const FOLSOM_BORDER_WALL_PANEL_LENGTH = 5.75;
+const FOLSOM_BORDER_WALL_MATERIALS = Object.freeze([
+  'cityBorderWoodenWall01',
+  'cityBorderWoodenWall02',
+  'cityBorderWoodenWall03',
+  'cityBorderWoodenWall04',
+  'cityBorderWoodenWall05',
+  'cityBorderWoodenWall06',
+]);
+const FOLSOM_BORDER_WALL_PERIMETER = Object.freeze([
+  [-92, -86], [-58, -96], [8, -94], [68, -88], [94, -54], [94, -12], [88, -2], [88, 10],
+  [90, 20], [78, 72], [34, 96], [9, 96], [-9, 96], [-18, 96], [-76, 76], [-96, 28], [-96, -38], [-92, -86],
+]);
+const FOLSOM_BORDER_WALL_GATES = Object.freeze([
+  { id: 'folsom_reliquary_palisade_gate', center: [88, 4], width: 12, tolerance: 8, routeId: 'folsom_rusted_reliquary_door' },
+  { id: 'folsom_north_future_road_gate', center: [0, 96], width: 18, tolerance: 10, routeId: 'folsom_north_future_road' },
+]);
+
 const FOLSOM_NATURAL_BOULDER_MATERIAL = 'pondBoulderRock02';
 const FOLSOM_NATURAL_BOULDER_MATERIAL_POOL = Object.freeze(['pondBoulderRock01', 'pondBoulderRock02', 'pondBoulderRock03', 'pondBoulderRock04']);
 
@@ -36,6 +58,12 @@ const textures = Object.freeze({
   darkStone: { path: './assets/textures/wall_black_stone_01.png', repeat: [2.2, 1.6], color: 0x55534d, roughness: 0.99, metalness: 0, emissive: 0x0c0b09, emissiveIntensity: 0.08 },
   agedWood: { path: './assets/textures/pack1/wood_dark_aged_01.png', repeat: [2.2, 1.5], color: 0x6a4d34, roughness: 0.96, metalness: 0, emissive: 0x100906, emissiveIntensity: 0.07 },
   rustedIron: { path: './assets/textures/metal_gate_rusted_01.png', repeat: [1.2, 1.6], color: 0x755a48, roughness: 0.84, metalness: 0.42, emissive: 0x160b06, emissiveIntensity: 0.12 },
+  cityBorderWoodenWall01: { path: './assets/textures/wall/wooden/city_border_wooden_wall_01.png', repeat: [1, 1], roughness: 0.95, metalness: 0 },
+  cityBorderWoodenWall02: { path: './assets/textures/wall/wooden/city_border_wooden_wall_02.png', repeat: [1, 1], roughness: 0.95, metalness: 0 },
+  cityBorderWoodenWall03: { path: './assets/textures/wall/wooden/city_border_wooden_wall_03.png', repeat: [1, 1], roughness: 0.95, metalness: 0 },
+  cityBorderWoodenWall04: { path: './assets/textures/wall/wooden/city_border_wooden_wall_04.png', repeat: [1, 1], roughness: 0.95, metalness: 0 },
+  cityBorderWoodenWall05: { path: './assets/textures/wall/wooden/city_border_wooden_wall_05.png', repeat: [1, 1], roughness: 0.95, metalness: 0 },
+  cityBorderWoodenWall06: { path: './assets/textures/wall/wooden/city_border_wooden_wall_06.png', repeat: [1, 1], roughness: 0.95, metalness: 0 },
   pondWaterAnimated: {
     color: 0x52766f, roughness: 0.88, metalness: 0, transparent: true, opacity: 0.62,
     emissive: 0x071511, emissiveIntensity: 0.08, repeat: [3.2, 2.5], playbackMode: 'pingPong', frameDurationMs: 235,
@@ -47,23 +75,9 @@ const rectFloor = (id, minX, maxX, minZ, maxZ, material, roomId, tags = [], y = 
   id, points: [[minX, minZ], [maxX, minZ], [maxX, maxZ], [minX, maxZ]], y, material, roomId, tags,
 });
 
-export const folsomDefinition = Object.freeze({
-  id: 'folsom',
-  displayName: 'Folsom',
-  type: 'field',
-  tags: ['folsom', 'starter-town', 'game-root', 'compiled-runtime', 'oarb', 'darb', 'mixed-authored-location'],
-  notes: [
-    'Folsom v1 is the compact real-game root, combining OARB terrain and pond systems with DARB structures.',
-    'Reliquary Field remains preserved behind the rusted east border door.',
-  ],
-  fog: { color: 0x7f8678, near: 54, far: 225 },
-  lighting: { background: 0x69766d },
-  textures,
-  defaultFloorY: 0,
-  geometry: { wallHeight: 3.8, wallThickness: 0.38, floorThickness: 0.18, ceilingThickness: 0.18 },
-  terrain: {
-    size: [200, 200], segments: [64, 64], baseY: 0, material: 'folsomGrass',
-    heightStamps: [
+const folsomTerrain = Object.freeze({
+  size: [200, 200], segments: [64, 64], baseY: 0, material: 'folsomGrass',
+  heightStamps: [
       terrainStampKit.softTownRise({ id: 'folsom_west_shoulder_hill', center: [-74, 4], radius: 34, height: 2.65, tags: ['terrain-frame', 'large-landform'] }),
       terrainStampKit.softTownRise({ id: 'folsom_southwest_roll', center: [-48, -62], radius: 30, height: 1.15, tags: ['pond-bank-rise', 'large-landform'] }),
       terrainStampKit.softTownRise({ id: 'folsom_east_border_ridge_mass', center: [70, -18], radius: 31, height: 1.55, tags: ['east-border', 'large-landform'] }),
@@ -98,8 +112,37 @@ export const folsomDefinition = Object.freeze({
         { center: [-62, -28], radius: 7, height: -0.12 }, { center: [18, 26], radius: 7, height: 0.14 },
         { center: [30, 58], radius: 8, height: -0.15 }, { center: [-30, -55], radius: 6, height: 0.12 },
       ], tags: ['safe-grass-texture'] }),
-    ],
-  },
+  ],
+});
+const folsomTerrainSampler = createOutdoorTerrainSampler(folsomTerrain);
+const folsomCityBorderWoodenWall = createCityBorderWoodenWall({
+  idPrefix: 'folsom_city_border_wooden_wall',
+  points: FOLSOM_BORDER_WALL_PERIMETER,
+  height: FOLSOM_BORDER_WALL_HEIGHT,
+  thickness: FOLSOM_BORDER_WALL_THICKNESS,
+  panelLength: FOLSOM_BORDER_WALL_PANEL_LENGTH,
+  materialKeys: FOLSOM_BORDER_WALL_MATERIALS,
+  gateOpenings: FOLSOM_BORDER_WALL_GATES,
+  terrainSampler: folsomTerrainSampler,
+  terrainSamplerAware: true,
+  tags: ['folsom', 'protective-perimeter'],
+});
+
+export const folsomDefinition = Object.freeze({
+  id: 'folsom',
+  displayName: 'Folsom',
+  type: 'field',
+  tags: ['folsom', 'starter-town', 'game-root', 'compiled-runtime', 'oarb', 'darb', 'mixed-authored-location'],
+  notes: [
+    'Folsom v1 is the compact real-game root, combining OARB terrain and pond systems with DARB structures.',
+    'Reliquary Field remains preserved behind the rusted east border door.',
+  ],
+  fog: { color: 0x7f8678, near: 54, far: 225 },
+  lighting: { background: 0x69766d },
+  textures,
+  defaultFloorY: 0,
+  geometry: { wallHeight: 3.8, wallThickness: 0.38, floorThickness: 0.18, ceilingThickness: 0.18 },
+  terrain: folsomTerrain,
   rooms: [{ id: 'folsom_bounds', label: 'Folsom Town Bounds', minX: -98, maxX: 98, minZ: -98, maxZ: 98, floorY: 0, ceilingY: 18, visibleGeometry: false, wallGeometry: false, safeForSpawn: true, tags: ['field-bounds', 'starter-town'] }],
   splineTrails: [
     { id: 'folsom_courtyard_to_pond', points: [[0, -5], [-2, -22], [-8, -38], [0, -45]], width: 5.6, material: 'townPath', flatten: true, tags: ['walkable-route', 'pond-route'] },
@@ -120,6 +163,7 @@ export const folsomDefinition = Object.freeze({
     rectFloor('folsom_rusted_door_apron', 74, 90, -3, 11, 'courtyardStone', 'folsom_bounds', ['legacy-door', 'terrain-pad-aligned'], 0.28),
   ],
   wallSegments: [
+    ...folsomCityBorderWoodenWall.wallSegments,
     { id: 'folsom_shed_back', from: [-43, -24], to: [-27, -24], y: 0.16, height: 3.5, thickness: 0.38, material: 'agedWood', roomId: 'folsom_bounds', tags: ['tool-shed'] },
     { id: 'folsom_shed_west', from: [-43, -36], to: [-43, -24], y: 0.16, height: 3.2, thickness: 0.38, material: 'agedWood', roomId: 'folsom_bounds', tags: ['tool-shed'] },
     { id: 'folsom_shed_east', from: [-27, -36], to: [-27, -24], y: 0.16, height: 3.2, thickness: 0.38, material: 'agedWood', roomId: 'folsom_bounds', tags: ['tool-shed'] },
@@ -136,6 +180,7 @@ export const folsomDefinition = Object.freeze({
   doorGaps: [{ id: 'folsom_house_entry_gap', wallSegmentId: 'folsom_house_south', centerT: 0.5, width: 3.2 }],
   horizontalSurfaces: [{ id: 'folsom_house_roof', kind: 'roof', shape: 'rect', center: [42, 4.35, -7], width: 21.4, depth: 21.4, y: 4.35, material: 'darkStone', roomId: 'folsom_bounds', walkable: false, tags: ['house-roof'] }],
   architecturalPrimitives: [
+    ...folsomCityBorderWoodenWall.architecturalPrimitives,
     { id: 'folsom_central_plinth', kind: 'altar', position: [0, 0.16, 0], width: 2.4, depth: 2.4, height: 0.78, material: 'shrineStone', blocksPlayer: true, tags: ['courtyard-landmark', 'old-stone-basin'] },
     { id: 'folsom_shrine_altar', kind: 'altar', position: [-42, 0.76, 40], width: 2.8, depth: 1.5, height: 1, material: 'shrineStone', blocksPlayer: true, tags: ['shrine', 'interactable-placeholder'] },
     { id: 'folsom_shrine_column_left', kind: 'brokenColumn', position: [-49, 0.76, 34], radius: 0.65, height: 4.4, material: 'darkStone', blocksPlayer: true, tags: ['shrine', 'open-ceiling'] },
@@ -186,7 +231,7 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_courtyard_fire_fill', kind: 'point', color: 0xffa14f, intensity: 0.75, distance: 22, decay: 1.5, position: { x: -8, y: 2.4, z: -14 } },
     { id: 'folsom_shrine_fill', kind: 'point', color: 0xe3c078, intensity: 0.52, distance: 18, decay: 1.55, position: { x: -42, y: 2.8, z: 39 } },
   ],
-  validation: { naturalBoulderMaterialPool: FOLSOM_NATURAL_BOULDER_MATERIAL_POOL },
+  validation: { naturalBoulderMaterialPool: FOLSOM_NATURAL_BOULDER_MATERIAL_POOL, cityBorderWoodenWall: folsomCityBorderWoodenWall.validation },
   navigation: { roomGraph: { roomIds: ['folsom_bounds'], links: [] }, localAvoidanceHints: [], forbiddenZones: [], preferredPatrolRoutes: [] },
   encounterZones: [],
   structurePads: [
