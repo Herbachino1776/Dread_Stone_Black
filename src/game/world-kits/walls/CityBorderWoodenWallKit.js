@@ -58,6 +58,10 @@ function sampleY(terrainSampler, point) {
   return Number.isFinite(y) ? y : 0;
 }
 
+function segmentYaw(from, to) {
+  return Math.atan2(to[1] - from[1], to[0] - from[0]);
+}
+
 export function createCityBorderWoodenWall({
   idPrefix,
   points,
@@ -82,6 +86,7 @@ export function createCityBorderWoodenWall({
 
   const wallSegments = [];
   const architecturalPrimitives = [];
+  const generatedRuns = [];
   let panelIndex = 0;
   let postIndex = 0;
 
@@ -90,19 +95,22 @@ export function createCityBorderWoodenWall({
     const runEnd = safePoints[runIndex + 1];
     const runLength = distance2(runStart, runEnd);
     if (runLength <= 0.001) continue;
-    intervalsForSegment(runStart, runEnd, gateOpenings).forEach(([intervalStart, intervalEnd]) => {
+    const yaw = segmentYaw(runStart, runEnd);
+    intervalsForSegment(runStart, runEnd, gateOpenings).forEach(([intervalStart, intervalEnd], intervalIndex) => {
       const intervalLength = runLength * (intervalEnd - intervalStart);
       const pieces = Math.max(1, Math.ceil(intervalLength / panelLength));
+      const runPanelIds = [];
       for (let piece = 0; piece < pieces; piece += 1) {
         const startT = intervalStart + ((intervalEnd - intervalStart) * piece) / pieces;
         const endT = intervalStart + ((intervalEnd - intervalStart) * (piece + 1)) / pieces;
         const from = lerpPoint(runStart, runEnd, startT);
         const to = lerpPoint(runStart, runEnd, endT);
         const midpoint = lerpPoint(from, to, 0.5);
-        const baseY = terrainSamplerAware ? Math.min(sampleY(terrainSampler, from), sampleY(terrainSampler, midpoint), sampleY(terrainSampler, to)) : 0;
+        const baseY = terrainSamplerAware ? sampleY(terrainSampler, midpoint) : 0;
         const material = safeMaterials[panelIndex % safeMaterials.length];
+        const panelId = `${safePrefix}_panel_${String(panelIndex + 1).padStart(3, '0')}`;
         wallSegments.push({
-          id: `${safePrefix}_panel_${String(panelIndex + 1).padStart(3, '0')}`,
+          id: panelId,
           from,
           to,
           y: Number(baseY.toFixed(3)),
@@ -111,32 +119,59 @@ export function createCityBorderWoodenWall({
           material,
           roomId,
           tags: ['city-border-wall', 'wooden-city-wall', 'terrain-following', ...tags],
-          userData: { kit: 'CityBorderWoodenWallKit', panelIndex, textureVariationIndex: panelIndex % safeMaterials.length },
+          userData: {
+            kit: 'CityBorderWoodenWallKit',
+            panelIndex,
+            runIndex,
+            intervalIndex,
+            piece,
+            pieces,
+            yaw,
+            coverageStartT: startT,
+            coverageEndT: endT,
+            textureVariationIndex: panelIndex % safeMaterials.length,
+          },
         });
+        runPanelIds.push(panelId);
         [from, to].forEach((point, endpointIndex) => {
           if (endpointIndex === 0 && piece > 0) return;
           const postY = terrainSamplerAware ? sampleY(terrainSampler, point) : baseY;
           architecturalPrimitives.push({
             id: `${safePrefix}_post_${String(postIndex + 1).padStart(3, '0')}`,
-            kind: 'brokenColumn',
+            kind: 'squareStonePillar',
             position: [point[0], Number(postY.toFixed(3)), point[1]],
             radius: postThickness * 0.5,
+            width: postThickness,
+            depth: postThickness,
+            baseSize: postThickness,
+            capitalSize: postThickness,
+            baseHeight: 0.12,
+            capitalHeight: 0.12,
             height: postHeight,
             material,
             blocksPlayer: true,
             tags: ['city-border-wall-post', 'wooden-city-wall', ...tags],
-            userData: { kit: 'CityBorderWoodenWallKit', panelIndex, postIndex },
+            userData: { kit: 'CityBorderWoodenWallKit', runIndex, intervalIndex, panelIndex, postIndex, attachedPanelId: panelId, seamT: endpointIndex === 0 ? startT : endT },
           });
           postIndex += 1;
         });
         panelIndex += 1;
       }
+      generatedRuns.push({
+        runIndex,
+        intervalIndex,
+        startT: intervalStart,
+        endT: intervalEnd,
+        from: lerpPoint(runStart, runEnd, intervalStart),
+        to: lerpPoint(runStart, runEnd, intervalEnd),
+        panelIds: runPanelIds,
+      });
     });
   }
 
   return {
     wallSegments,
     architecturalPrimitives,
-    validation: { idPrefix: safePrefix, height, thickness, panelLength, materialKeys: safeMaterials, gateOpenings },
+    validation: { idPrefix: safePrefix, height, thickness, panelLength, postHeight, postThickness, materialKeys: safeMaterials, gateOpenings, perimeter: safePoints, generatedRuns },
   };
 }
