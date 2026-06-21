@@ -1425,6 +1425,8 @@ export class DungeonScene {
       loadFoliageTexture: (path) => this.loadFoliageTexture(path),
     }).forEach((decorGroup) => this.scene.add(decorGroup));
 
+    this.addAuthoredFoliageBillboards(outdoorDefinition.foliageBillboards, outdoorDefinition.foliageBillboardVariants);
+
     createOutdoorPrimitiveMeshes(outdoorDefinition.outdoorPrimitives, {
       terrainSampler: this.outdoorTerrainRuntime,
       textures: textureProfiles,
@@ -1491,6 +1493,49 @@ export class DungeonScene {
       collision: 'visual-only numbered pond marker',
     };
     this.scene.add(sprite);
+  }
+
+
+  addAuthoredFoliageBillboards(foliageBillboards = [], foliageBillboardVariants = []) {
+    if (!Array.isArray(foliageBillboards) || foliageBillboards.length === 0 || !this.outdoorTerrainRuntime) return;
+    const variants = new Map((foliageBillboardVariants ?? []).map((variant) => [variant.id, variant]));
+    const group = new THREE.Group();
+    group.name = `OARB-authored-pine-billboard-forest-${foliageBillboards.length}-instances`;
+    group.userData = { kind: 'authoredFoliageBillboards', billboardCount: foliageBillboards.length, variantCount: variants.size, alphaCutoutDepthWrite: true };
+    const geometry = new THREE.PlaneGeometry(1, 1);
+    const materials = new Map();
+    foliageBillboards.forEach((placement) => {
+      const variant = variants.get(placement.variantId);
+      const spritePath = placement.spritePath ?? variant?.path;
+      if (!spritePath) throw new Error(`Folsom invalid: pine sprite texture missing for ${placement.id}.`);
+      if (!materials.has(spritePath)) {
+        const material = new THREE.MeshBasicMaterial({
+          map: this.loadFoliageTexture(spritePath),
+          alphaTest: FIELD_FOLIAGE_ALPHA_TEST,
+          depthTest: true,
+          depthWrite: true,
+          transparent: false,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+        });
+        material.name = `${placement.variantId}-authored-pine-alpha-cutout-depth-billboard-material`;
+        material.userData = { authoredFoliageAlphaCutout: true, occludesTransparentWater: true };
+        materials.set(spritePath, material);
+      }
+      const [x, authoredY, z] = placement.position ?? [];
+      const groundY = this.outdoorTerrainRuntime.sampleOutdoorY(x, z);
+      const height = placement.height ?? variant?.height ?? 5;
+      const width = placement.width ?? variant?.width ?? 3;
+      const mesh = new THREE.Mesh(geometry, materials.get(spritePath));
+      mesh.name = `OARB-${placement.id}-${placement.variantId}`;
+      mesh.position.set(x, groundY + height * 0.5 - (placement.sinkIntoGround ?? variant?.sinkIntoGround ?? 0.06), z);
+      mesh.scale.set(width, height, 1);
+      mesh.rotation.y = placement.yawOffset ?? 0;
+      mesh.userData = { ...placement, authoredY, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq: FIELD_REDWOOD_VISIBLE_DISTANCE_SQ };
+      group.add(mesh);
+      this.fieldFoliageBillboards.push(mesh);
+    });
+    this.scene.add(group);
   }
 
   addAuthoredWaterBodies(waterBodies = [], textureProfiles = {}) {

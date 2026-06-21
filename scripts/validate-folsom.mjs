@@ -165,6 +165,44 @@ const playerSpawns = folsomDefinition.spawns.filter((spawn) => spawn.kind === 'p
 assert.equal(playerSpawns.length, 1, 'Folsom has exactly one player spawn.');
 assert.equal(canStandAt([playerSpawns[0].position.x, playerSpawns[0].position.z]), true, 'Folsom player spawn is clear of authored geometry.');
 
+
+const pineVariants = folsomDefinition.foliageBillboardVariants ?? [];
+const pinePlacements = folsomDefinition.foliageBillboards ?? [];
+const pineSources = new Set(pineVariants.map((variant) => variant.path));
+assert.equal(pineSources.size, 6, 'Folsom invalid: expected six pine source sprites registered.');
+assert.equal(pineVariants.length, 42, 'Folsom invalid: expected 42 pine billboard variants.');
+pineSources.forEach((path) => assert.equal(textureAssetExists(path), true, `Folsom invalid: pine sprite texture missing: ${path}`));
+assert.ok(pinePlacements.length >= 120 && pinePlacements.length <= 220, `Folsom invalid: pine tree count ${pinePlacements.length} misses the target forest budget.`);
+const pineVariantIds = new Set(pineVariants.map((variant) => variant.id));
+const requiredPineBands = ['tiny', 'small', 'medium', 'tall', 'large', 'giant', 'ancient'];
+for (let sourceIndex = 1; sourceIndex <= 6; sourceIndex += 1) requiredPineBands.forEach((band) => assert.ok(pineVariantIds.has(`pine${String(sourceIndex).padStart(2, '0')}_${band}`), 'Folsom invalid: expected 42 pine billboard variants.'));
+const pineAvoidValidationZones = [
+  { label: 'player spawn', center: [0, 0], radius: 22 }, { label: 'campfire', center: [12, -22], radius: 8 },
+  { label: 'pond water', center: [0, -58], radiusX: 18, radiusZ: 14 }, { label: 'fishing approach', center: [-12, -43], radius: 8 },
+  { label: 'tool shed entrance', center: [-36, -34], radius: 8 }, { label: 'house doorway', center: [42, -14], radius: 8 },
+  { label: 'shrine entrance', center: [-42, 31], radius: 8 }, { label: 'Underworks entrance', center: [42, 42], radius: 11 },
+  { label: 'rusty Reliquary trigger', center: [82, 4], radius: 12 }, { label: 'north future road', center: [0, 94], radius: 13 },
+];
+function pointInValidationZone([x, z], zone) {
+  if (zone.radiusX) return (((x - zone.center[0]) ** 2) / (zone.radiusX ** 2)) + (((z - zone.center[1]) ** 2) / (zone.radiusZ ** 2)) <= 1;
+  return Math.hypot(x - zone.center[0], z - zone.center[1]) <= zone.radius;
+}
+pinePlacements.forEach((tree) => {
+  assert.ok(pineVariantIds.has(tree.variantId), `Folsom invalid: pine tree ${tree.id} does not use the reusable pine kit.`);
+  assert.equal(textureAssetExists(tree.spritePath), true, `Folsom invalid: pine sprite texture missing: ${tree.spritePath}`);
+  assert.ok(tree.tags?.includes('pine-billboard'), `Folsom invalid: pine tree ${tree.id} is not tagged as reusable pine billboard.`);
+  assert.ok([...(tree.position ?? []), tree.height, tree.width, tree.sinkIntoGround].every(Number.isFinite), `Folsom invalid: pine tree ${tree.id} has non-finite placement data.`);
+  const [x, y, z] = tree.position;
+  assert.ok(Math.abs(y - terrainSampler.sampleOutdoorY(x, z)) <= 0.01, `Folsom invalid: pine tree ${tree.id} base is not grounded to terrain.`);
+  pineAvoidValidationZones.forEach((zone) => assert.equal(pointInValidationZone([x, z], zone), false, `Folsom invalid: pine tree blocks ${zone.label}.`));
+});
+assert.ok(pinePlacements.some((tree) => tree.tags?.includes('outside-wall-forest')), 'Folsom invalid: outside wall pine forest belt missing.');
+assert.ok(pinePlacements.some((tree) => tree.tags?.includes('inside-edge-tree-belt')), 'Folsom invalid: inside-edge pine belt missing.');
+assert.ok(pinePlacements.some((tree) => tree.tags?.includes('pond-side-pine-cluster')), 'Folsom invalid: pond-side pine clusters missing.');
+assert.ok(pinePlacements.some((tree) => tree.tags?.includes('shrine-grove')), 'Folsom invalid: shrine pine grove missing.');
+assert.ok(pinePlacements.some((tree) => tree.tags?.includes('north-road-corridor')), 'Folsom invalid: north road pine corridor missing.');
+assert.ok(pinePlacements.some((tree) => tree.tags?.includes('rusty-reliquary-ominous')), 'Folsom invalid: rusty Reliquary pine cluster missing.');
+
 const pond = folsomDefinition.waterBodies.find((body) => body.id === 'folsom_starter_pond');
 assert.ok(pond?.fishable, 'Folsom starter pond is fishable.');
 assert.ok(pond.fishableRadius > Math.max(...pond.radius), 'Pond fishing interaction reaches the casting bank.');
