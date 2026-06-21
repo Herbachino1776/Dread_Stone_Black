@@ -90,6 +90,72 @@ function routeIsWalkable(route) {
   return true;
 }
 
+function pointDistance(a, b) {
+  return Math.hypot((a?.[0] ?? 0) - (b?.[0] ?? 0), (a?.[1] ?? 0) - (b?.[1] ?? 0));
+}
+
+function angleDelta(a, b) {
+  return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+}
+
+function segmentYaw(from, to) {
+  return Math.atan2(to[1] - from[1], to[0] - from[0]);
+}
+
+function blockerCoversPanel(blocker, panel) {
+  const blockerWallSegmentId = blocker.userData?.wallSegmentId ?? blocker.id?.replace(/^V2-WALL-BLOCKER-/, '').replace(/-\d+$/, '');
+  if (blockerWallSegmentId !== panel.id) return false;
+  const from = [blocker.from?.x, blocker.from?.z];
+  const to = [blocker.to?.x, blocker.to?.z];
+  if (from.every(Number.isFinite) && to.every(Number.isFinite)) {
+    return pointDistance(from, panel.from) <= 0.05 && pointDistance(to, panel.to) <= 0.05;
+  }
+  const halfThickness = panel.thickness * 0.5;
+  const minX = Math.min(panel.from[0], panel.to[0]) - halfThickness;
+  const maxX = Math.max(panel.from[0], panel.to[0]) + halfThickness;
+  const minZ = Math.min(panel.from[1], panel.to[1]) - halfThickness;
+  const maxZ = Math.max(panel.from[1], panel.to[1]) + halfThickness;
+  return blocker.minX <= minX + 0.05 && blocker.maxX >= maxX - 0.05 && blocker.minZ <= minZ + 0.05 && blocker.maxZ >= maxZ - 0.05;
+}
+
+function validateContinuousCityWallPanels({ cityWallValidation, cityWallSegments, expectedCityWallMaterials }) {
+  const panelsById = new Map(cityWallSegments.map((segment) => [segment.id, segment]));
+  const nonGateGapTolerance = 0.075;
+  cityWallValidation.generatedRuns.forEach((run) => {
+    assert.ok(run.panelIds.length > 0, 'Folsom invalid: perimeter segment generated posts without continuous panels.');
+    run.panelIds.forEach((panelId, index) => {
+      const panel = panelsById.get(panelId);
+      assert.ok(panel, `Folsom invalid: wooden perimeter wall has non-gate gap. Missing panel ${panelId}.`);
+      assert.ok(expectedCityWallMaterials.has(panel.material), `Folsom invalid: wall panel uses non-wood material: ${panel.material}.`);
+      const expectedYaw = segmentYaw(panel.from, panel.to);
+      assert.ok(angleDelta(panel.userData?.yaw ?? expectedYaw, expectedYaw) <= 0.01, `Folsom invalid: wall panel yaw is not aligned to perimeter segment. ${panel.id}`);
+      if (index === 0) {
+        assert.ok(pointDistance(panel.from, run.from) <= nonGateGapTolerance, 'Folsom invalid: wooden perimeter wall has non-gate gap.');
+      } else {
+        const previous = panelsById.get(run.panelIds[index - 1]);
+        assert.ok(pointDistance(previous.to, panel.from) <= nonGateGapTolerance, 'Folsom invalid: wooden perimeter wall has non-gate gap.');
+      }
+      if (index === run.panelIds.length - 1) {
+        assert.ok(pointDistance(panel.to, run.to) <= nonGateGapTolerance, 'Folsom invalid: wooden perimeter wall has non-gate gap.');
+      }
+    });
+  });
+
+  const postPrimitives = folsomDefinition.architecturalPrimitives.filter((primitive) => primitive.tags?.includes('city-border-wall-post'));
+  postPrimitives.forEach((post) => {
+    const attached = panelsById.get(post.userData?.attachedPanelId);
+    assert.ok(attached, 'Folsom invalid: perimeter segment generated posts without continuous panels.');
+    const postPoint = [post.position?.[0], post.position?.[2]];
+    const attachedToEndpoint = pointDistance(postPoint, attached.from) <= 0.1 || pointDistance(postPoint, attached.to) <= 0.1;
+    assert.ok(attachedToEndpoint, 'Folsom invalid: perimeter segment generated posts without continuous panels.');
+  });
+
+  const wallBlockers = dungeonCollision.blockerRects.filter((blocker) => blocker.tags?.includes('city-border-wall'));
+  cityWallSegments.forEach((panel) => {
+    assert.ok(wallBlockers.some((blocker) => blockerCoversPanel(blocker, panel)), `Folsom invalid: wooden wall blocker gap allows player to pass. ${panel.id}`);
+  });
+}
+
 assert.equal(folsomDefinition.id, 'folsom');
 assert.equal(folsomDefinition.displayName, 'Folsom');
 assert.equal(resolveStartupArea(null), 'folsom', 'Folsom is the default no-query game root.');
@@ -206,6 +272,7 @@ assert.ok(reliquaryFieldDefinition.exits.some((exit) => exit.toLocation === 'fol
 const cityWallValidation = folsomDefinition.validation?.cityBorderWoodenWall;
 assert.ok(cityWallValidation, 'Folsom invalid: city border wall missing.');
 assert.ok(cityWallValidation.height >= 5.9 && cityWallValidation.height <= 6.4, 'Folsom invalid: wooden city wall below required protective height.');
+assert.ok(Array.isArray(cityWallValidation.generatedRuns) && cityWallValidation.generatedRuns.length > 0, 'Folsom invalid: city border wall missing generated run coverage metadata.');
 const cityWallSegments = folsomDefinition.wallSegments.filter((segment) => segment.tags?.includes('city-border-wall'));
 assert.ok(cityWallSegments.length >= 50, 'Folsom invalid: city border wall missing.');
 const cityWallMaterials = new Set(cityWallSegments.map((segment) => segment.material));
@@ -223,6 +290,7 @@ cityWallSegments.forEach((segment) => {
   const sampledBase = terrainSampler.sampleOutdoorY(midpoint[0], midpoint[1]);
   assert.ok(Math.abs(segment.y - sampledBase) <= 0.75, `Folsom invalid: city border wall panel does not follow terrain: ${segment.id}.`);
 });
+validateContinuousCityWallPanels({ cityWallValidation, cityWallSegments, expectedCityWallMaterials });
 const cityWallLength = cityWallSegments.reduce((sum, segment) => sum + Math.hypot(segment.to[0] - segment.from[0], segment.to[1] - segment.from[1]), 0);
 assert.ok(cityWallLength >= 600, 'Folsom invalid: city border wall perimeter is not substantially continuous.');
 assert.equal(routeIsWalkable(folsomDefinition.validationRoutes.find((route) => route.id === 'reliquary-door')), true, 'Folsom invalid: rusty Reliquary door is blocked by perimeter wall.');
