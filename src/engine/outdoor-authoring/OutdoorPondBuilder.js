@@ -141,7 +141,8 @@ function buildTerrainStamps(recipe, footprint, layers) {
 
 function normalizeRecipe(input) {
   const id = String(input.id);
-  const label = String(input.label);
+  const rawLabel = typeof input.label === 'string' ? input.label.trim() : '';
+  const label = rawLabel && !['undefined', 'null'].includes(rawLabel.toLowerCase()) ? rawLabel : '';
   const seed = input.seed ?? id;
   const overallScale = finite(input.size?.overallScale, 1);
   const waterAreaScale = finite(input.size?.waterAreaScale, 1);
@@ -263,12 +264,12 @@ export function buildOutdoorPond(input) {
       clearFishingLanes: recipe.clearFishingLanes ?? [{ angle: -Math.PI / 2, width: 0.7, reason: 'player approach / casting lane' }],
       clearances: recipe.clearances,
     },
-    tags: ['pond-expo', recipe.label, recipe.style, 'procedural-pond', ...(recipe.tags ?? [])],
+    tags: ['pond-expo', ...(recipe.label ? [recipe.label] : []), recipe.style, 'procedural-pond', ...(recipe.tags ?? [])],
     userData: {
       pondExpoId: recipe.label, name: recipe.name ?? recipe.style, style: recipe.style, seed: recipe.seed,
       recipe: describeRecipe(recipe), recipeData: recipe, recipeSource: input, generatedBy: 'OutdoorPondBuilder',
       terrainStampIds: terrainStamps.map((stamp) => stamp.id),
-      visibleMarker: { id: recipe.markerId ?? `${recipe.id}_marker`, label: recipe.label, offset: markerOffset },
+      ...(recipe.label ? { visibleMarker: { id: recipe.markerId ?? `${recipe.id}_marker`, label: recipe.label, offset: markerOffset } } : {}),
       keeperCandidate: Boolean(recipe.keeperCandidate), futureFishable: Boolean(recipe.futureFishable),
       depthProfile: recipe.terrain.depthProfile, depthMetersApprox: roundWorld(waterY - layers.waterFloorY), shorelineBandRebalance: { waterAreaScale: recipe.size.waterAreaScale, brightMudWidth: mudMargin, wetBankWidth: wetShoreWidth },
       noDownwardFacingTopNormals: true, usesSquareDecalFallback: false,

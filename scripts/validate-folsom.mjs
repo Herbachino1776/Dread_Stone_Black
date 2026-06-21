@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
@@ -14,6 +14,7 @@ import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.d
 import { validatePondDecor, validatePondFootprint } from './pond-footprint-validation.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const interactionsSource = readFileSync(resolve(repoRoot, 'src/game/Interactions.js'), 'utf8');
 const terrainSampler = createOutdoorTerrainSampler(folsomDefinition.terrain);
 const dungeonCollision = buildDungeonCollision(folsomDefinition);
 const collision = new CollisionWorld({
@@ -34,6 +35,23 @@ function textureAssetExists(texturePath) {
 function canStandAt([x, z]) {
   const floor = collision.sampleWalkableY(x, z, 0).y;
   return collision.canStandAtFloorPosition({ x, y: floor, z });
+}
+
+
+function normalizedLabelText(value) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function isKnownFolsomCampfireOpenGround([x, z]) {
+  const floor = collision.sampleWalkableY(x, z, 0).y;
+  const inWater = folsomDefinition.waterBodies.some((body) => {
+    const [cx, cz] = body.center ?? [];
+    const [rx, rz] = Array.isArray(body.radius) ? body.radius : [body.radius, body.radius];
+    if (![cx, cz, rx, rz].every(Number.isFinite)) return false;
+    const margin = 1.1;
+    return (((x - cx) ** 2) / ((rx + margin) ** 2)) + (((z - cz) ** 2) / ((rz + margin) ** 2)) <= 1;
+  });
+  return !inWater && collision.canStandAtFloorPosition({ x, y: floor, z });
 }
 
 function routeIsWalkable(route) {
@@ -72,6 +90,11 @@ assert.ok(pond.fishSpeciesPool.filter((species) => species === 'spineBackFish').
 assert.deepEqual(validatePondFootprint(pond, folsomDefinition).errors, [], 'Folsom pond footprint and shoreline ordering validate.');
 assert.deepEqual(validatePondDecor(pond, folsomDefinition, { assetExists: textureAssetExists }).errors, [], 'Folsom pond decor validates.');
 assert.equal(pond.userData?.validation?.avoidsGrassContact, true, 'Generated shoreline prevents water-to-grass contact.');
+const pondMarkerLabel = normalizedLabelText(pond.userData?.visibleMarker?.label);
+assert.equal(pondMarkerLabel, '', 'Folsom starter pond has no authored visible debug label.');
+assert.equal((folsomDefinition.waterBodies ?? []).some((body) => ['undefined', 'null'].includes(normalizedLabelText(body.userData?.visibleMarker?.label))), false, 'Folsom invalid: pond label text resolves to undefined.');
+assert.equal(isKnownFolsomCampfireOpenGround([12, -22]), true, 'Folsom campfire invalid: known open ground placement point rejected.');
+assert.ok(interactionsSource.includes('ignoreCancelSeconds') && interactionsSource.includes('ignoreStartCancel'), 'Folsom cooking invalid: cooking can immediately cancel from the same input edge that started it.');
 const layers = pond.footprint?.layerHeights;
 assert.ok(layers && layers.waterFloorY < pond.y && layers.mudBedY > pond.y && layers.outerBankY >= layers.mudBedY, 'Pond layers order floor -> water -> bright mud -> wet bank.');
 const [pondX, pondZ] = pond.center;

@@ -445,7 +445,7 @@ export class Interactions {
   }
 
   getCampfireRequirementMessage(interaction = null) {
-    if (this.dungeon.area !== 'field') return 'Need open ground.';
+    if (!this.dungeon.isOutdoorSurvivalArea?.()) return 'Need open ground.';
     if (this.dungeon.gameState?.getFieldItemCount?.('wood') < 1) return 'Need Wood.';
     if (!this.dungeon.gameState?.hasFieldKeyItem?.('flint_stick')) return 'Need Flint Stick.';
     if (this.dungeon.gameState?.getEquippedFieldItem?.() !== 'wood') return 'Equip Wood.';
@@ -471,7 +471,7 @@ export class Interactions {
       startPosition: this.player.position.clone(),
       placement: placement.clone?.() ?? placement,
       cancelMessage: 'Building canceled.',
-      validate: (action) => this.dungeon.area === 'field'
+      validate: (action) => this.dungeon.isOutdoorSurvivalArea?.()
         && this.player.position.distanceTo(action.startPosition) <= TIMED_ACTION_MOVE_CANCEL_DISTANCE
         && !this.getCampfireRequirementMessage({ placement: action.placement }),
       complete: (action) => this.completeFieldCampfireCraft(action),
@@ -481,7 +481,9 @@ export class Interactions {
   updateTimedAction(deltaSeconds, cancelRequested = false) {
     const action = this.activeTimedAction;
     if (!action) { this.hud.updateTimedActionProgress?.(0); return; }
-    if (cancelRequested || action.validate?.(action) === false) {
+    const elapsed = action.elapsedSeconds ?? 0;
+    const ignoreStartCancel = cancelRequested && elapsed <= (action.ignoreCancelSeconds ?? 0);
+    if ((cancelRequested && !ignoreStartCancel) || action.validate?.(action) === false) {
       this.cancelTimedAction();
       return;
     }
@@ -581,7 +583,8 @@ export class Interactions {
       target: interaction.target?.clone?.() ?? interaction.target,
       range: interaction.range ?? 4.25,
       cancelMessage: 'Cooking canceled.',
-      validate: (action) => this.dungeon.area === 'field'
+      ignoreCancelSeconds: 0.18,
+      validate: (action) => this.dungeon.isOutdoorSurvivalArea?.()
         && this.player.position.distanceTo(action.startPosition) <= TIMED_ACTION_MOVE_CANCEL_DISTANCE
         && this.dungeon.gameState?.getEquippedFieldItem?.() === 'raw_fish'
         && this.dungeon.gameState?.getFieldItemCount?.('raw_fish') > 0

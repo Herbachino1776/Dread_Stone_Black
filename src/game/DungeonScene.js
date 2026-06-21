@@ -1443,9 +1443,16 @@ export class DungeonScene {
   }
 
 
+  getMeaningfulWorldLabelText(value) {
+    if (typeof value !== 'string') return null;
+    const label = value.trim();
+    if (!label || ['undefined', 'null'].includes(label.toLowerCase())) return null;
+    return label;
+  }
+
   addPondExpoLabel(body, cx, y, cz) {
     const marker = body?.userData?.visibleMarker;
-    const label = typeof marker?.label === 'string' && marker.label.trim() ? marker.label.trim() : null;
+    const label = this.getMeaningfulWorldLabelText(marker?.label);
     if (!label || typeof document === 'undefined') return;
     const canvas = document.createElement('canvas');
     canvas.width = 256;
@@ -1556,7 +1563,7 @@ export class DungeonScene {
       water.renderOrder = 12;
       water.userData = { id: body.id, kind: body.kind, tags: body.tags ?? [], fishable: Boolean(body.fishable), footprintRecipe: footprint.recipe, geometrySource: composite?.water.source, coordinateBasis: composite?.coordinateBasis, materialKey: body.material, collision: 'visual-only pond water; shore remains walkable' };
       this.scene.add(water);
-      this.addPondExpoLabel(body, cx, composite?.water.position[1] ?? y, cz);
+      if (body.userData?.pondExpoId) this.addPondExpoLabel(body, cx, composite?.water.position[1] ?? y, cz);
       if (body.fishable) {
         const fishableRadius = Number.isFinite(body.fishableRadius) ? body.fishableRadius : Math.max(rx, rz) + 4;
         const fishSpeciesPool = (body.fishSpeciesPool ?? []).filter((species) => FISH_SPECS[species]);
@@ -1727,7 +1734,7 @@ export class DungeonScene {
       if (landingDistance < minOutside) landing.copy(center).addScaledVector(outward, minOutside);
       landing.x = THREE.MathUtils.clamp(landing.x, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
       landing.z = THREE.MathUtils.clamp(landing.z, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
-      landing.y = 0.24;
+      landing.y = this.sampleFishLandingSurfaceY(landing, zone);
       landing.userData = { rawFishLanding: 'pond-shoreline-edge', waterEdgePoint: { x: waterEdge.x, z: waterEdge.z }, outsideWater: !this.isPositionInFishingWater(landing, 0) };
       if (!this.isPositionInFishingWater(landing, 0)) return landing;
     }
@@ -1742,7 +1749,7 @@ export class DungeonScene {
     const clampToField = (position) => {
       position.x = THREE.MathUtils.clamp(position.x, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
       position.z = THREE.MathUtils.clamp(position.z, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
-      position.y = 0.24;
+      position.y = this.sampleFishLandingSurfaceY(position, zone);
       return position;
     };
     const candidates = [
@@ -1754,6 +1761,33 @@ export class DungeonScene {
       base.clone().addScaledVector(right, -0.75),
     ].map(clampToField);
     return candidates.find((candidate) => !this.isPositionInFishingWater(candidate)) ?? candidates[0] ?? null;
+  }
+
+  sampleFishLandingSurfaceY(position, fishingZone = null) {
+    if (!position) return 0;
+    const terrainY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(position.x, position.z);
+    const zone = fishingZone ?? this.getNearbyFishingZone?.(position);
+    if (zone && this.isPositionInFishingWater(position, -0.05)) {
+      const waterY = zone.position?.y;
+      return Number.isFinite(waterY) ? waterY + 0.035 : (Number.isFinite(terrainY) ? terrainY : 0);
+    }
+    return Number.isFinite(terrainY) ? terrainY : 0;
+  }
+
+  alignObjectBottomToSurface(object, surfaceY, epsilon = 0.018) {
+    object.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(object);
+    if (!Number.isFinite(box.min.y)) return 0;
+    const offset = surfaceY + epsilon - box.min.y;
+    object.position.y += offset;
+    object.updateMatrixWorld(true);
+    object.userData = {
+      ...object.userData,
+      groundedByBoundingBox: true,
+      groundedSurfaceY: surfaceY,
+      groundedBottomEpsilon: epsilon,
+    };
+    return offset;
   }
 
   addOutdoorBoundary() {
@@ -2240,6 +2274,9 @@ export class DungeonScene {
     const x = position.x;
     const z = position.z;
     if (Math.abs(x) > 168 || Math.abs(z) > 168) return false;
+    if (this.isPositionInFishingWater(position, 1.1)) return false;
+    const floorY = this.collision?.sampleWalkableY?.(x, z, position.y ?? 0)?.y ?? this.outdoorTerrainRuntime?.sampleOutdoorY?.(x, z) ?? position.y ?? 0;
+    if (!(this.collision?.canStandAtFloorPosition?.({ x, y: floorY, z }) ?? true)) return false;
     if (!this.isFieldFoliageSafePosition(x, z)) return false;
     const protectedTargets = this.outdoorInteractions.filter((interaction) => interaction.type !== 'fieldCampfireCraft');
     return !protectedTargets.some((interaction) => {
@@ -2259,10 +2296,10 @@ export class DungeonScene {
     const candidates = [3.0, 4.2, 2.2].map((distance) => base.clone().addScaledVector(forward, distance));
     candidates.push(base.clone().add(new THREE.Vector3(2.8, 0, 0)), base.clone().add(new THREE.Vector3(-2.8, 0, 0)));
     const open = candidates.find((candidate) => {
-      candidate.y = 0;
+      candidate.y = this.outdoorTerrainRuntime?.sampleOutdoorY?.(candidate.x, candidate.z) ?? 0;
       return this.isFieldCampfireOpenGround(candidate);
     });
-    return open ? new THREE.Vector3(open.x, 0, open.z) : null;
+    return open ? new THREE.Vector3(open.x, open.y, open.z) : null;
   }
 
   spawnCookedFishPickup(position) {
@@ -2353,17 +2390,19 @@ export class DungeonScene {
     const fishSpecies = this.selectFishSpeciesForZone(zone);
     const mesh = this.createRawFishPickupMesh(fishSpecies);
     mesh.name = `${pickupId}-${fishSpecies}-raw-fish-pickup`;
-    mesh.position.set(landing.x, 0.9, landing.z);
+    const surfaceY = this.sampleFishLandingSurfaceY(landing, zone);
+    mesh.position.set(landing.x, surfaceY + 0.9, landing.z);
     const shoreHeading = zone?.shape === 'ellipse'
       ? Math.atan2(landing.x - zone.centerX, landing.z - zone.centerZ) + Math.PI / 2
       : (player?.yaw ?? 0) + Math.PI / 2;
     mesh.rotation.y = shoreHeading;
     this.scene.add(mesh);
+    this.alignObjectBottomToSurface(mesh, surfaceY);
     const seed = stableHash(`${pickupId}:${fishSpecies}`);
     const visual = mesh.userData.visualChild ?? mesh.children[0] ?? mesh;
     const flop = {
       visual,
-      baseY: 0,
+      baseY: visual.position.y,
       baseRotation: visual.rotation.clone(),
       elapsed: (seed % 1000) / 1000,
       interval: 0.8 + ((seed >>> 8) % 800) / 1000,
@@ -2372,9 +2411,12 @@ export class DungeonScene {
       hopHeight: 0.04 + ((seed >>> 12) % 60) / 1000,
       direction: seed % 2 === 0 ? 1 : -1,
     };
-    const pickup = { id: pickupId, mesh, itemId: 'raw_fish', fishSpecies, start: mesh.position.clone(), target: landing.clone().setY(0.26), elapsed: 0, duration: 0.55, landing: landing.clone(), flop };
+    const target = mesh.position.clone();
+    const start = target.clone().setY(target.y + 0.64);
+    mesh.position.copy(start);
+    const pickup = { id: pickupId, mesh, itemId: 'raw_fish', fishSpecies, start, target, elapsed: 0, duration: 0.55, landing: landing.clone().setY(surfaceY), surfaceY, flop };
     this.fieldRawFishPickups.push(pickup);
-    this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(0.9), range: 2.85, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup, itemId: 'raw_fish', fishSpecies });
+    this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(surfaceY + 0.35), range: 2.85, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup, itemId: 'raw_fish', fishSpecies });
     return pickup;
   }
 
@@ -2385,7 +2427,7 @@ export class DungeonScene {
         pickup.elapsed = Math.min(pickup.duration, pickup.elapsed + deltaSeconds);
         const t = pickup.elapsed / pickup.duration;
         pickup.mesh.position.lerpVectors(pickup.start, pickup.target, t);
-        pickup.mesh.position.y = 0.26 + Math.sin(t * Math.PI) * 0.45;
+        pickup.mesh.position.y = THREE.MathUtils.lerp(pickup.start.y, pickup.target.y, t) + Math.sin(t * Math.PI) * 0.32;
       }
       const flop = pickup.flop;
       if (!flop?.visual || pickup.elapsed < pickup.duration) return;
