@@ -241,7 +241,7 @@ Black Grass Temple has a conservative silent proof chain:
 - `bgt_survive_warring_temple`: enter the first deeper tavern room after the blade is blooded
 - `bgt_touch_silent_altar`: optional silent altar interaction state
 
-No objective blocks exiting the temple. No gate or encounter lock was added. These objectives are hidden state for future progression logic; the player should discover the route from the authored room composition, torch pools, chest placement, FPV weapon change, and faction conflict.
+No objective blocks exiting the temple. No gate or encounter lock was added. These objectives are hidden state for future progression logic; the player should discover the route from the authored room composition, torch pools, chest placement, equipment state change, and faction conflict.
 
 ## South Reliquary Crypt Partial Objectives
 

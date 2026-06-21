@@ -6,11 +6,9 @@ import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
 import { ObjectiveRuntime } from '../engine/objectives/ObjectiveRuntime.js';
 import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
 import { Feedback } from './Feedback.js';
-import { FirstPersonArmsOverlay } from './FirstPersonArmsOverlay.js';
 import { EquipmentPanel } from './equipment/EquipmentPanel.js';
 import { equipmentRegistry } from './equipment/equipmentRegistry.js';
 import { startingEquipment } from './equipment/startingEquipment.js';
-import { FPVEquipmentRenderer } from './fpv/FPVEquipmentRenderer.js';
 import { GameState } from './GameState.js';
 import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
@@ -128,19 +126,12 @@ export class Game {
     });
     this.hud = new Hud(this.app, { debugEnabled: this.debugHudEnabled });
     this.feedback = new Feedback(this.camera);
-    this.armsOverlay = new FirstPersonArmsOverlay(this.app);
     this.objectivePanel = new ObjectivePanel({
       root: this.app,
       objectiveRuntime: this.objectiveRuntime,
       enabled: objectiveDebugUiEnabled,
     });
     this.createPlayerTorchLight();
-    this.fpvEquipmentRenderer = new FPVEquipmentRenderer({
-      root: this.app,
-      armsOverlay: this.armsOverlay,
-      equipmentRuntime: this.equipmentRuntime,
-    });
-    this.dungeon.fpvEquipmentRenderer = this.fpvEquipmentRenderer;
     this.setPlayerTorchEnabled(this.equipmentRuntime.getEquippedOffhandId?.() === 'torch');
     this.controls = new MobileControls(this.app);
     this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
@@ -161,7 +152,6 @@ export class Game {
       hud: this.hud,
       controls: this.controls,
       equipmentRuntime: this.equipmentRuntime,
-      fpvEquipmentRenderer: this.fpvEquipmentRenderer,
     });
 
     this.preventMobilePageGestures();
@@ -405,11 +395,6 @@ export class Game {
             <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
             <p class="field-kit-status" data-hud="field-kit" aria-live="polite" hidden></p>
             <div class="timed-action-progress-ring" data-hud="timed-action-progress" aria-hidden="true"></div>
-            <div class="first-person-arms" data-arms-overlay aria-hidden="true">
-              <div class="first-person-arms__layer" data-arms-layer="base"></div>
-              <div class="first-person-offhand first-person-offhand--torch" data-fpv-offhand-layer hidden></div>
-              <div class="first-person-weapon" data-fpv-equipment-layer hidden></div>
-            </div>
             <div class="damage-flash" data-hud="damage" aria-hidden="true"></div>
             <section class="pause-overlay" data-pause-overlay aria-label="Paused" aria-hidden="true">
               <div class="pause-card">
@@ -487,7 +472,6 @@ export class Game {
     this.combat.update(deltaSeconds);
     const hunger = this.gameState.updateHunger?.(deltaSeconds, { paused: this.equipmentPanel?.isOpen || this.isPaused, applyStarvationDamage: (amount) => this.combat.takeDamage?.(amount, 'Starvation') });
     if (hunger) this.hud.updateHunger?.(hunger);
-    this.armsOverlay.update(deltaSeconds);
     this.updatePlayerTorchLight(deltaSeconds);
     this.updateObjectiveLocationTracking(deltaSeconds);
     this.interactions.updateHint();

@@ -434,7 +434,7 @@ Codex should:
 - read docs/world/ARCHITECTURE_BLUEPRINT_STANDARD.md first
 - implement through src/game/locations/<locationId>.definition.js when possible
 - keep major dungeon geometry out of DungeonScene.js
-- preserve mobile controls, FPV arms, HUD, combat, equipment, objectives, and gore runtimes
+- preserve mobile controls, HUD, HUD, combat, equipment, objectives, and gore runtimes
 - use existing texture/material profiles first
 - run all validation commands listed above
 - report warnings/errors honestly

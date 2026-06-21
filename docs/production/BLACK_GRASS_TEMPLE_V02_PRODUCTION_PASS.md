@@ -2,7 +2,7 @@
 
 ## Design Goal
 
-Black Grass Temple v0.2 turns the compiled dungeon slice into the first serious playable Dread Stone Black dungeon experience. The pass uses the existing dungeon authoring, torch lighting, objective, equipment, faction enemy, gore, and FPV weapon systems. It does not add a new quest engine, save system, combat rewrite, or deployment behavior.
+Black Grass Temple v0.2 turns the compiled dungeon slice into the first serious playable Dread Stone Black dungeon experience. The pass uses the existing dungeon authoring, torch lighting, objective, equipment, faction enemy, gore, and HUD feedback systems. It does not add a new quest engine, save system, combat rewrite, or deployment behavior.
 
 The intended feel is a buried stone temple swallowed by black subterranean grass. The player should understand where they entered, find the rusted sword, see Sheep Demon and Neck Man conflict, survive a widening route through hostile ritual rooms, and still be able to return to the field.
 
@@ -54,7 +54,7 @@ The rusted sword chest remains the existing `equipmentPickup` interaction for `r
 
 New game starts unarmed with only `unarmed` acquired. The rusted sword is not part of starting equipment, and stale saved equipment is repaired if it contains `rusted_sword` while the rusted sword chest has never been opened.
 
-The interaction still emits `chest_opened`, acquires `rusted_sword`, persists the chest-open state, updates the chest visual state, and lets the equipment panel and FPV weapon renderer react through the existing equipment runtime. The chest uses blank authored hint/message fields in normal play and silently auto-equips the sword so the FPV weapon change carries the feedback.
+The interaction still emits `chest_opened`, acquires `rusted_sword`, persists the chest-open state, updates the chest visual state, and lets the equipment panel react through the existing equipment runtime. The chest uses blank authored hint/message fields in normal play and silently auto-equips the sword so the equipment change carries the feedback.
 
 ## Faction Encounter Staging
 
@@ -147,7 +147,7 @@ git diff --check
 ## Known Limitations
 
 - Props are still procedural boxes using existing texture profiles.
-- The rusted sword FPV visual is still the existing placeholder layer.
+- First-person weapon and arm overlays have been removed; the rusted sword is represented through equipment state and gameplay feedback.
 - There is no locked progression gate or boss endpoint in v0.2.
 - Faction combat still depends on the current battle director and simple authored room graph.
 - No browser/mobile smoke test was performed as part of this pass.

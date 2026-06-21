@@ -363,7 +363,7 @@ Codex should build:
 6. Add exit trigger back to Reliquary Field.
 7. Add optional inspect triggers for shrine slab, east grate, and reliquary block.
 8. Keep the guardian chamber staged even if no creature is added yet.
-9. Keep mobile controls, HUD, FPV arms, combat code, and deployment config working.
+9. Keep mobile controls, HUD, HUD, combat code, and deployment config working.
 10. Run npm run build before final response.
 ```
 

@@ -12,7 +12,8 @@
     "validate:dungeons": "npm run validate:integrity",
     "validate:fish": "node scripts/validate-fish-geometry.mjs",
     "validate:oarb-terrain": "node scripts/validate-oarb-terrain-sampling.mjs",
-    "validate:reliquary-startup": "node scripts/validate-reliquary-field-startup.mjs"
+    "validate:reliquary-startup": "node scripts/validate-reliquary-field-startup.mjs",
+    "validate:no-player-arms": "node scripts/validate-no-player-arms.mjs"
   },
   "dependencies": {
     "three": "^0.184.0",
