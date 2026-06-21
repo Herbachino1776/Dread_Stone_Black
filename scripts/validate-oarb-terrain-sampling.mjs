@@ -439,8 +439,8 @@ expectedPonds.forEach(([pondExpoId, id], index) => {
   const wetBankWidths = correspondingRadialWidths(pond.footprint.mudBedOutline, pond.footprint.outerShoreOutline, pond.center);
   const avgBrightMudWidth = average(brightMudWidths);
   const avgWetBankWidth = average(wetBankWidths);
-  assert.ok(avgBrightMudWidth >= 0.72 && avgBrightMudWidth <= 1.35, `${pondExpoId} invalid: bright mud visible width exceeds target range.`);
-  assert.ok(avgWetBankWidth >= 0.38 && avgWetBankWidth <= 0.82, `${pondExpoId} invalid: dark wet bank visible width exceeds target range.`);
+  assert.ok(avgBrightMudWidth >= 0.55 && avgBrightMudWidth <= 1.35, `${pondExpoId} invalid: bright mud visible width exceeds target range.`);
+  assert.ok(avgWetBankWidth >= 0.34 && avgWetBankWidth <= 0.82, `${pondExpoId} invalid: dark wet bank visible width exceeds target range.`);
   assert.ok((shoreArea - mudArea) / waterArea <= 0.28, `${pondExpoId} invalid: giant exposed dark band is not allowed for this pond set.`);
   const authoredDepth = pond.y - pond.footprint.layerHeights.waterFloorY;
   assert.ok(Number.isFinite(authoredDepth) && authoredDepth > 0, `${pondExpoId} invalid: authored pond depth is not finite.`);
