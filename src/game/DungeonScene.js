@@ -2347,18 +2347,100 @@ export class DungeonScene {
     return open ? new THREE.Vector3(open.x, open.y, open.z) : null;
   }
 
+  resolveCookedFishPickupMaterial(reference, fallback = {}, { slot } = {}) {
+    if (slot === 'eyeMaterial') {
+      return new THREE.MeshStandardMaterial({ color: 0x050302, roughness: 0.72, metalness: 0.01, emissive: 0x000000, emissiveIntensity: 0 });
+    }
+    const cookedProfile = {
+      ...(FISH_TEXTURE_PROFILES[reference] ?? fallback),
+      color: slot === 'finMaterial' ? 0x3f2416 : 0x7a4a2a,
+      roughness: 0.96,
+      metalness: 0,
+      emissive: 0x120806,
+      emissiveIntensity: 0.035,
+    };
+    const material = this.makeDefinitionMaterial(cookedProfile);
+    material.color?.multiplyScalar(slot === 'finMaterial' ? 0.62 : 0.72);
+    material.userData = {
+      ...material.userData,
+      cookedFishMaterialVariant: 'warm-brown-charred-muted',
+      cookedFishTintCoversSlot: slot,
+      originalFishTextureProfileKey: reference,
+      sourceSpecies: 'spineBackFish',
+    };
+    return material;
+  }
+
+  createCookedFishPickupMesh() {
+    const cookedSpecies = 'spineBackFish';
+    const group = createFishMesh(cookedSpecies, {
+      materialResolver: (reference, fallback, context) => this.resolveCookedFishPickupMaterial(reference, fallback, context),
+      id: `cooked-fish-pickup-${cookedSpecies}`,
+      baseUserData: {
+        itemId: 'cooked_fish',
+        fishSpecies: cookedSpecies,
+        objectCategory: 'cookedFishPickup',
+        generatedBy: 'DungeonScene:createCookedFishPickupMesh',
+        cookedMaterialTreatment: 'body-and-fins-warm-brown-charred-muted',
+      },
+    });
+    group.userData = {
+      ...group.userData,
+      itemId: 'cooked_fish',
+      fishSpecies: cookedSpecies,
+      objectCategory: 'cookedFishPickupVisual',
+      visualSource: 'sharedKerovacFishSpeciesFactory',
+      cookedKeeperSpeciesId: cookedSpecies,
+      cookedScaleComparedToRawDisplay: 0.36,
+      cookedMaterialTreatment: 'body-and-fins-warm-brown-charred-muted',
+      pickupGroundOrientation: 'stable-root-yaw-plus-visual-side-roll',
+      localFishAxis: 'X=head-tail-horizontal',
+    };
+    group.scale.setScalar(0.36);
+    group.rotation.set(Math.PI / 2 + 0.1, 0, -0.12);
+
+    const charMaterial = new THREE.MeshStandardMaterial({ color: 0x1f120c, roughness: 0.98, metalness: 0, emissive: 0x030100, emissiveIntensity: 0.01 });
+    [-0.22, 0.02, 0.26].forEach((xOffset, index) => {
+      const charBand = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.014, 0.42), charMaterial.clone());
+      charBand.name = `cooked-c4-fish-char-grill-mark-${index + 1}`;
+      charBand.position.set(xOffset, 0.19, 0);
+      charBand.rotation.z = 0.34;
+      charBand.userData = { itemId: 'cooked_fish', fishSpecies: cookedSpecies, fishPart: 'subtleCharGrillMark', cookedAccent: true };
+      group.add(charBand);
+    });
+
+    const root = new THREE.Group();
+    root.name = `cooked-fish-pickup-ground-root-${cookedSpecies}`;
+    root.userData = {
+      itemId: 'cooked_fish',
+      fishSpecies: cookedSpecies,
+      objectCategory: 'cookedFishPickup',
+      visualSource: 'sharedKerovacFishSpeciesFactory',
+      cookedKeeperSpeciesId: cookedSpecies,
+      cookedMaterialTreatment: 'body-and-fins-warm-brown-charred-muted',
+      interactionTargetStable: true,
+    };
+    root.add(group);
+    root.userData.visualChild = group;
+    return root;
+  }
+
   spawnCookedFishPickup(position) {
     const pickupId = `field_cooked_fish_${Date.now()}_${this.fieldCookedFishPickups.length + 1}`;
-    const mat = new THREE.MeshStandardMaterial({ color: 0x6b3f22, roughness: 0.9, emissive: 0x120805, emissiveIntensity: 0.15 });
-    const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.42, 4, 8), mat);
-    mesh.name = `${pickupId}-brown-placeholder-pickup`;
-    mesh.position.set(position.x, 0.75, position.z);
-    mesh.rotation.z = Math.PI / 2;
+    const mesh = this.createCookedFishPickupMesh();
+    mesh.name = `${pickupId}-spineBackFish-cooked-c4-fish-pickup`;
+    const landing = new THREE.Vector3(position.x + 1.15, position.y ?? 0, position.z + 0.45);
+    const surfaceY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(landing.x, landing.z) ?? position.y ?? 0;
+    landing.y = surfaceY;
+    mesh.position.set(position.x, surfaceY + 0.9, position.z);
     this.scene.add(mesh);
-    const landing = new THREE.Vector3(position.x + 1.15, 0.28, position.z + 0.45);
-    const pickup = { id: pickupId, mesh, start: mesh.position.clone(), target: landing.clone(), elapsed: 0, duration: 0.65 };
+    this.alignObjectBottomToSurface(mesh, surfaceY, 0.012);
+    const target = mesh.position.clone().set(landing.x, mesh.position.y, landing.z);
+    const start = target.clone().set(position.x, target.y + 0.62, position.z);
+    mesh.position.copy(start);
+    const pickup = { id: pickupId, mesh, itemId: 'cooked_fish', fishSpecies: 'spineBackFish', start, target, elapsed: 0, duration: 0.65, landing: landing.clone().setY(surfaceY), surfaceY };
     this.fieldCookedFishPickups.push(pickup);
-    this.outdoorInteractions.push({ id: pickupId, label: 'Cooked Fish', target: landing.clone().setY(1), range: 2.4, hint: 'Pick up Cooked Fish', message: 'Cooked Fish Acquired.', type: 'cookedFishPickup', pickup });
+    this.outdoorInteractions.push({ id: pickupId, label: 'Cooked Fish', target: target.clone().setY(surfaceY + 0.35), range: 2.4, hint: 'Pick up Cooked Fish', message: 'Cooked Fish Acquired.', type: 'cookedFishPickup', pickup, itemId: 'cooked_fish', fishSpecies: 'spineBackFish' });
     return pickup;
   }
 
@@ -2502,7 +2584,7 @@ export class DungeonScene {
       pickup.elapsed = Math.min(pickup.duration, pickup.elapsed + deltaSeconds);
       const t = pickup.elapsed / pickup.duration;
       pickup.mesh.position.lerpVectors(pickup.start, pickup.target, t);
-      pickup.mesh.position.y = 0.28 + Math.sin(t * Math.PI) * 1.2;
+      pickup.mesh.position.y = THREE.MathUtils.lerp(pickup.start.y, pickup.target.y, t) + Math.sin(t * Math.PI) * 1.2;
       pickup.mesh.rotation.y += deltaSeconds * 4;
     });
   }
