@@ -1358,6 +1358,7 @@ export class DungeonScene {
   }
 
   addOutdoorTerrain(terrainDefinition, textureProfiles = {}, outdoorDefinition = {}) {
+    this.outdoorTextureProfiles = textureProfiles;
     const terrain = createOutdoorTerrainMesh(terrainDefinition ?? {
       size: [FIELD_SIZE, FIELD_SIZE],
       segments: [1, 1],
@@ -1503,6 +1504,7 @@ export class DungeonScene {
     group.name = `OARB-authored-pine-billboard-forest-${foliageBillboards.length}-instances`;
     group.userData = { kind: 'authoredFoliageBillboards', billboardCount: foliageBillboards.length, variantCount: variants.size, alphaCutoutDepthWrite: true };
     const geometry = new THREE.PlaneGeometry(1, 1);
+    geometry.translate(0, 0.5, 0);
     const materials = new Map();
     foliageBillboards.forEach((placement) => {
       const variant = variants.get(placement.variantId);
@@ -1528,10 +1530,11 @@ export class DungeonScene {
       const width = placement.width ?? variant?.width ?? 3;
       const mesh = new THREE.Mesh(geometry, materials.get(spritePath));
       mesh.name = `OARB-${placement.id}-${placement.variantId}`;
-      mesh.position.set(x, groundY + height * 0.5 - (placement.sinkIntoGround ?? variant?.sinkIntoGround ?? 0.06), z);
+      const sinkIntoGround = placement.sinkIntoGround ?? variant?.sinkIntoGround ?? 0.06;
+      mesh.position.set(x, groundY - sinkIntoGround, z);
       mesh.scale.set(width, height, 1);
       mesh.rotation.y = placement.yawOffset ?? 0;
-      mesh.userData = { ...placement, authoredY, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq: FIELD_REDWOOD_VISIBLE_DISTANCE_SQ };
+      mesh.userData = { ...placement, authoredY, groundY, sinkIntoGround, bottomAnchoredBillboard: true, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq: FIELD_REDWOOD_VISIBLE_DISTANCE_SQ };
       group.add(mesh);
       this.fieldFoliageBillboards.push(mesh);
     });
@@ -1624,8 +1627,11 @@ export class DungeonScene {
   addAuthoredOutdoorChests(definition = {}) {
     (definition.outdoorChests ?? []).forEach((chest) => {
       if (!chest?.id || !chest?.position || !chest.itemId) return;
+      const authoredPosition = { ...chest.position };
+      authoredPosition.y = this.outdoorTerrainRuntime?.sampleOutdoorY?.(authoredPosition.x, authoredPosition.z) ?? authoredPosition.y;
       this.addFieldSurvivalChest({
-        id: chest.id, label: chest.label ?? 'Outdoor Chest', position: chest.position, itemId: chest.itemId, acquiredMessage: chest.acquiredMessage ?? 'Item Acquired.', rodVariant: chest.rodVariant,
+        id: chest.id, label: chest.label ?? 'Outdoor Chest', position: authoredPosition, itemId: chest.itemId, acquiredMessage: chest.acquiredMessage ?? 'Item Acquired.', rodVariant: chest.rodVariant,
+        materialProfileKeys: { body: chest.bodyMaterial ?? 'agedWood', straps: chest.strapMaterial ?? 'rustedIron' },
       });
     });
   }
@@ -2156,10 +2162,10 @@ export class DungeonScene {
     });
   }
 
-  addFieldSurvivalChest({ id, label, position, itemId, acquiredMessage, rodVariant = null }) {
+  addFieldSurvivalChest({ id, label, position, itemId, acquiredMessage, rodVariant = null, materialProfileKeys = null }) {
     const opened = this.gameState?.hasOpenedFieldChest?.(id) ?? false;
     const looted = this.gameState?.hasLootedFieldChest?.(id) ?? false;
-    const group = this.createFieldChestGroup(opened);
+    const group = this.createFieldChestGroup(opened, materialProfileKeys);
     group.name = `${id}-visual`;
     group.position.set(position.x, position.y, position.z);
     this.scene.add(group);
@@ -2200,10 +2206,16 @@ export class DungeonScene {
     this.scene.add(group);
   }
 
-  createFieldChestGroup(opened = false) {
+  createFieldChestGroup(opened = false, materialProfileKeys = null) {
     const group = new THREE.Group();
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a2b18, roughness: 0.92, metalness: 0.0, emissive: 0x100805, emissiveIntensity: 0.12 });
-    const ironMat = new THREE.MeshStandardMaterial({ color: 0x1f1d1b, roughness: 0.78, metalness: 0.35 });
+    const woodMat = materialProfileKeys?.body
+      ? this.makeDefinitionMaterial(this.outdoorTextureProfiles?.[materialProfileKeys.body] ?? { color: 0x4a2b18, roughness: 0.92, metalness: 0.0, emissive: 0x100805, emissiveIntensity: 0.12 })
+      : new THREE.MeshStandardMaterial({ color: 0x4a2b18, roughness: 0.92, metalness: 0.0, emissive: 0x100805, emissiveIntensity: 0.12 });
+    const ironMat = materialProfileKeys?.straps
+      ? this.makeDefinitionMaterial(this.outdoorTextureProfiles?.[materialProfileKeys.straps] ?? { color: 0x382116, roughness: 0.86, metalness: 0.42 })
+      : new THREE.MeshStandardMaterial({ color: 0x1f1d1b, roughness: 0.78, metalness: 0.35 });
+    woodMat.name = materialProfileKeys?.body ? `${materialProfileKeys.body}-field-chest-wood-body` : 'field-chest-plain-wood-body';
+    ironMat.name = materialProfileKeys?.straps ? `${materialProfileKeys.straps}-field-chest-rusted-metal-straps` : 'field-chest-plain-metal-straps';
     const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.65, 0.9), woodMat);
     base.position.y = 0.33;
     group.add(base);
@@ -2353,17 +2365,17 @@ export class DungeonScene {
     }
     const cookedProfile = {
       ...(FISH_TEXTURE_PROFILES[reference] ?? fallback),
-      color: slot === 'finMaterial' ? 0x3f2416 : 0x7a4a2a,
-      roughness: 0.96,
+      color: slot === 'finMaterial' ? 0x1f150d : 0x2b1b10,
+      roughness: 0.99,
       metalness: 0,
-      emissive: 0x120806,
-      emissiveIntensity: 0.035,
+      emissive: 0x090706,
+      emissiveIntensity: 0.006,
     };
     const material = this.makeDefinitionMaterial(cookedProfile);
-    material.color?.multiplyScalar(slot === 'finMaterial' ? 0.62 : 0.72);
+    material.color?.multiplyScalar(slot === 'finMaterial' ? 0.32 : 0.36);
     material.userData = {
       ...material.userData,
-      cookedFishMaterialVariant: 'warm-brown-charred-muted',
+      cookedFishMaterialVariant: 'dark-brown-black-burnt-charred',
       cookedFishTintCoversSlot: slot,
       originalFishTextureProfileKey: reference,
       sourceSpecies: 'spineBackFish',
@@ -2381,7 +2393,7 @@ export class DungeonScene {
         fishSpecies: cookedSpecies,
         objectCategory: 'cookedFishPickup',
         generatedBy: 'DungeonScene:createCookedFishPickupMesh',
-        cookedMaterialTreatment: 'body-and-fins-warm-brown-charred-muted',
+        cookedMaterialTreatment: 'body-and-fins-dark-brown-black-burnt-charred',
       },
     });
     group.userData = {
@@ -2392,7 +2404,7 @@ export class DungeonScene {
       visualSource: 'sharedKerovacFishSpeciesFactory',
       cookedKeeperSpeciesId: cookedSpecies,
       cookedScaleComparedToRawDisplay: 0.36,
-      cookedMaterialTreatment: 'body-and-fins-warm-brown-charred-muted',
+      cookedMaterialTreatment: 'body-and-fins-dark-brown-black-burnt-charred',
       pickupGroundOrientation: 'stable-root-yaw-plus-visual-side-roll',
       localFishAxis: 'X=head-tail-horizontal',
     };
@@ -2417,7 +2429,7 @@ export class DungeonScene {
       objectCategory: 'cookedFishPickup',
       visualSource: 'sharedKerovacFishSpeciesFactory',
       cookedKeeperSpeciesId: cookedSpecies,
-      cookedMaterialTreatment: 'body-and-fins-warm-brown-charred-muted',
+      cookedMaterialTreatment: 'body-and-fins-dark-brown-black-burnt-charred',
       interactionTargetStable: true,
     };
     root.add(group);
