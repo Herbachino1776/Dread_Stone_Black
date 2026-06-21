@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { buildDungeonGeometry } from '../src/engine/dungeon-authoring/DungeonGeometryBuilder.js';
 import { kerovacDefinition } from '../src/game/locations/generated/kerovac.definition.js';
-import { FISH_SPECIES_IDS, FISH_SPECS } from '../src/game/fishing/FishMeshFactory.js';
+import { FISH_SPECIES_IDS, FISH_SPECS, FISH_TEXTURE_PROFILES, createFishMesh } from '../src/game/fishing/FishMeshFactory.js';
 
 const testMaterialFactory = (profile = {}) => {
   const material = new THREE.MeshStandardMaterial({
@@ -32,6 +32,64 @@ const fail = (message) => { throw new Error(message); };
 const expectedSpecies = ['smallRiverFish', 'broadCarpFish', 'longEelFish', 'spineBackFish', 'flatMarshFish', 'jawHunterFish', 'sacredGlowFish'];
 if (JSON.stringify(FISH_SPECIES_IDS) !== JSON.stringify(expectedSpecies)) fail(`Shared fish registry must expose the permanent species ids in Kerovac order.`);
 expectedSpecies.forEach((species) => { if (!FISH_SPECS[species]) fail(`Shared FISH_SPECS missing ${species}.`); });
+
+
+const expectedKerovacFishPads = new Map([
+  ['C1', 'smallRiverFish'],
+  ['C2', 'broadCarpFish'],
+  ['C3', 'longEelFish'],
+  ['C4', 'spineBackFish'],
+  ['D1', 'flatMarshFish'],
+  ['D2', 'jawHunterFish'],
+  ['D3', 'sacredGlowFish'],
+]);
+
+for (const [padId, species] of expectedKerovacFishPads) {
+  const fish = kerovacDefinition.architecturalPrimitives?.find((primitive) => primitive.kind === 'fishDisplay' && primitive.userData?.displayPadId === padId);
+  if (!fish) fail(`Kerovac fish mapping invalid: ${padId} display fish is missing.`);
+  if (fish.variant !== species || fish.itemId !== species) fail(`Kerovac fish mapping invalid: ${padId} should be ${species}.`);
+}
+
+const textureProfileKeys = ['fishScaleSilver', 'fishScaleKoiCreamOrange', 'fishScaleEelSkinDark', 'fishScaleZebraOlive', 'fishScaleMottledDark', 'fishScaleIridescentTeal', 'fishFinAmber', 'fishFinDark', 'fishFinSpottedTeal'];
+for (const key of textureProfileKeys) {
+  const shared = FISH_TEXTURE_PROFILES[key];
+  const kerovac = kerovacDefinition.textures?.[key];
+  if (!shared?.path) fail(`Caught fish invalid: texture profile ${key} is missing from shared pickup profiles.`);
+  if (shared.path !== kerovac?.path) fail(`Caught fish invalid: shared profile ${key} path ${shared.path} differs from Kerovac ${kerovac?.path ?? 'none'}.`);
+}
+
+const makePickupTestMaterial = (profile = {}, key = 'unknown') => {
+  const material = testMaterialFactory(profile);
+  material.userData.fishTextureProfileKey = key;
+  material.userData.rawFishPickupMaterialResolver = 'KerovacFishTextureProfiles';
+  return material;
+};
+
+for (const species of expectedSpecies) {
+  const spec = FISH_SPECS[species];
+  const resolvedSlots = [];
+  const pickupRoot = createFishMesh(species, {
+    id: `validate-raw-pickup-${species}`,
+    materialResolver: (reference, fallback, { slot }) => {
+      resolvedSlots.push(`${slot}:${reference}`);
+      return makePickupTestMaterial(FISH_TEXTURE_PROFILES[reference] ?? fallback, reference);
+    },
+  });
+  const body = pickupRoot.children.find((child) => child.userData?.fishPart === 'singleClosedEllipsoidBody');
+  const fins = pickupRoot.children.filter((child) => ['closedAttachedTail', 'closedAttachedDorsalFin', 'closedMirroredPectoralFin'].includes(child.userData?.fishPart));
+  if (!resolvedSlots.includes(`bodyMaterial:${spec.bodyMaterial}`)) fail(`Caught fish invalid: ${species} body material ${spec.bodyMaterial} was not resolved through the Kerovac texture resolver.`);
+  if (!resolvedSlots.includes(`finMaterial:${spec.finMaterial}`)) fail(`Caught fish invalid: ${species} fin material ${spec.finMaterial} was not resolved through the Kerovac texture resolver.`);
+  const bodyPath = body?.material?.map?.userData?.path ?? body?.material?.map?.name;
+  const expectedBodyPath = FISH_TEXTURE_PROFILES[spec.bodyMaterial]?.path;
+  if (bodyPath !== expectedBodyPath) fail(`Caught fish invalid: ${species} body material ${spec.bodyMaterial} resolved without a texture map.`);
+  if (body.material.userData?.fishTextureProfileKey !== spec.bodyMaterial) fail(`Kerovac Expo fish and Pond Expo caught fish use different body material keys for ${species}.`);
+  for (const fin of fins) {
+    const finPath = fin.material?.map?.userData?.path ?? fin.material?.map?.name;
+    const expectedFinPath = FISH_TEXTURE_PROFILES[spec.finMaterial]?.path;
+    if (finPath !== expectedFinPath) fail(`Caught fish invalid: ${species} fin/tail material ${spec.finMaterial} resolved without a texture map.`);
+    if (fin.material.userData?.fishTextureProfileKey !== spec.finMaterial) fail(`Kerovac Expo fish and Pond Expo caught fish use different fin material keys for ${species}.`);
+  }
+}
 
 const { group } = buildDungeonGeometry(kerovacDefinition, { materialFactory: testMaterialFactory });
 group.updateMatrixWorld(true);

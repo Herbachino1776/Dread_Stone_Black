@@ -220,6 +220,7 @@ const dungeonSceneSource = readFileSync(new URL('../src/game/DungeonScene.js', i
 const lockedFishSpecies = new Set(['smallRiverFish', 'broadCarpFish', 'longEelFish', 'spineBackFish', 'flatMarshFish', 'jawHunterFish', 'sacredGlowFish']);
 assert.deepEqual(new Set(FISH_SPECIES_IDS), lockedFishSpecies, 'Shared fish registry must expose exactly the seven permanent Kerovac fish species.');
 lockedFishSpecies.forEach((species) => assert.ok(FISH_SPECS[species], `Shared fish registry missing ${species}.`));
+assert.ok(FISH_SPECS.spineBackFish, 'Shared fish registry missing C4 spineBackFish.');
 assert.equal(/FIELD_FISH_SPECIES\s*=/.test(dungeonSceneSource), false, 'DungeonScene.js must not define a duplicate FIELD_FISH_SPECIES shortcut table.');
 assert.equal(/FIELD_FISH_SPECIES/.test(dungeonSceneSource), false, 'DungeonScene.js must not reference the retired FIELD_FISH_SPECIES shortcut table.');
 assert.match(dungeonSceneSource, /createFishMesh\(resolvedSpecies/, 'Raw fish pickups must be built by the shared Kerovac fish mesh factory.');
@@ -243,6 +244,7 @@ pondExpoPonds.forEach((pond) => {
   assert.ok(pond.footprint?.waterOutline?.length >= 8, `${label} invalid: fishing zone must derive from generated water footprint.`);
 });
 lockedFishSpecies.forEach((species) => assert.equal(seenPondSpecies.has(species), true, `Pond Expo invalid: locked fish species ${species} is missing from all pond pools.`));
+assert.equal(seenPondSpecies.has('spineBackFish'), true, 'Pond Expo invalid: C4 species spineBackFish is missing from all pond catch pools.');
 const pond08 = pondExpoPonds.find((pond) => pond.userData?.pondExpoId === 'POND 08');
 ['longEelFish', 'jawHunterFish', 'sacredGlowFish'].forEach((species) => assert.equal(pond08?.fishSpeciesPool?.includes(species), true, `POND 08 invalid: missing future-fishing-hole species ${species}.`));
 

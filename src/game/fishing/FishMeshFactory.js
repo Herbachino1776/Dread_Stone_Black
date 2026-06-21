@@ -15,6 +15,20 @@ const DEFAULT_FISH_MATERIAL_COLORS = Object.freeze({
 
 const FISH_TAIL_GEOMETRY_SCALE = 0.55;
 
+
+export const FISH_TEXTURE_PROFILES = Object.freeze({
+  fishScaleSilver: { path: './assets/textures/fish/fish_scale_silver_01.png', repeat: [2, 1], color: 0xaeb8b4, roughness: 0.78, metalness: 0.06, emissive: 0x101918, emissiveIntensity: 0.06 },
+  fishScaleKoiCreamOrange: { path: './assets/textures/fish/fish_scale_koi_cream_orange_01.png', repeat: [2, 1], color: 0xd9b474, roughness: 0.84, metalness: 0.01, emissive: 0x331908, emissiveIntensity: 0.06 },
+  fishScaleEelSkinDark: { path: './assets/textures/fish/fish_scale_eel_skin_dark_01.png', repeat: [2, 1], color: 0x293126, roughness: 0.88, metalness: 0.02, emissive: 0x040604, emissiveIntensity: 0.04 },
+  fishScaleZebraOlive: { path: './assets/textures/fish/fish_scale_zebra_olive_01.png', repeat: [2, 1], color: 0x66704a, roughness: 0.86, metalness: 0.01, emissive: 0x0b0d07, emissiveIntensity: 0.05 },
+  fishScaleMottledDark: { path: './assets/textures/fish/fish_scale_mottled_dark_01.png', repeat: [2, 1], color: 0x3d3a31, roughness: 0.9, metalness: 0.01, emissive: 0x050504, emissiveIntensity: 0.04 },
+  fishScaleIridescentTeal: { path: './assets/textures/fish/fish_scale_iridescent_teal_01.png', repeat: [2, 1], color: 0x35b7aa, roughness: 0.74, metalness: 0.05, emissive: 0x16766f, emissiveIntensity: 0.28 },
+  fishFinAmber: { path: './assets/textures/fish/fish_fin_membrane_amber_01.png', repeat: [1, 1], color: 0xd18a35, roughness: 0.82, metalness: 0, emissive: 0x2f1606, emissiveIntensity: 0.08 },
+  fishFinDark: { path: './assets/textures/fish/fish_fin_membrane_dark_01.png', repeat: [1, 1], color: 0x242825, roughness: 0.86, metalness: 0, emissive: 0x050604, emissiveIntensity: 0.04 },
+  fishFinSpottedTeal: { path: './assets/textures/fish/fish_fin_spotted_teal_01.png', repeat: [1, 1], color: 0x2a817c, roughness: 0.82, metalness: 0, emissive: 0x0b3d3a, emissiveIntensity: 0.12 },
+  tinyBlackEye: { color: 0x020202, roughness: 0.28, metalness: 0.08 },
+});
+
 export const FISH_SPECS = {
   smallRiverFish: { bodyLength: 1.25, bodyHeight: 0.3, bodyWidth: 0.22, bodyMaterial: 'fishScaleSilver', finMaterial: 'fishFinAmber', tailScale: 0.92, dorsalScale: 0.82, pectoralScale: 0.86, headTaper: 1 },
   broadCarpFish: { bodyLength: 1.55, bodyHeight: 0.58, bodyWidth: 0.36, bodyMaterial: 'fishScaleKoiCreamOrange', finMaterial: 'fishFinAmber', tailScale: 1.18, dorsalScale: 1.06, pectoralScale: 1.0, headTaper: 1 },
