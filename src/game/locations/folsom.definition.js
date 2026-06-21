@@ -22,6 +22,9 @@ const folsomPondSystem = buildOutdoorPondSystem([{
   clearFishingLanes: [{ angle: 0, width: 0.82, reason: 'clear north-bank starter casting lane' }],
 }]);
 
+const FOLSOM_NATURAL_BOULDER_MATERIAL = 'pondBoulderRock02';
+const FOLSOM_NATURAL_BOULDER_MATERIAL_POOL = Object.freeze(['pondBoulderRock01', 'pondBoulderRock02', 'pondBoulderRock03', 'pondBoulderRock04']);
+
 const textures = Object.freeze({
   ...outdoorTextureProfiles,
   ...folsomPondSystem.textures,
@@ -60,15 +63,23 @@ export const folsomDefinition = Object.freeze({
   terrain: {
     size: [200, 200], segments: [64, 64], baseY: 0, material: 'folsomGrass',
     heightStamps: [
-      { id: 'folsom_courtyard_pad', kind: 'flatten', center: [0, 0], radius: 25, y: 0.12, tags: ['building-pad', 'spawn-courtyard'] },
-      { id: 'folsom_tool_shed_pad', kind: 'flatten', center: [-34, -30], radius: 13, y: 0.12, tags: ['building-pad', 'tool-shed'] },
-      { id: 'folsom_shrine_pad', kind: 'flatten', center: [-42, 38], radius: 14, y: 0.12, tags: ['building-pad', 'shrine'] },
-      { id: 'folsom_house_pad', kind: 'flatten', center: [42, -8], radius: 14, y: 0.12, tags: ['building-pad', 'house'] },
-      { id: 'folsom_cellar_pad', kind: 'flatten', center: [42, 42], radius: 12, y: 0.12, tags: ['building-pad', 'cellar-gate'] },
-      { id: 'folsom_rusted_door_pad', kind: 'flatten', center: [82, 4], radius: 11, y: 0.12, tags: ['building-pad', 'legacy-door'] },
+      { id: 'folsom_west_rise', kind: 'hill', center: [-76, 6], radius: 25, height: 2.3, tags: ['terrain-frame', 'soft-hill'] },
+      { id: 'folsom_east_rise', kind: 'hill', center: [72, -42], radius: 22, height: 1.7, tags: ['terrain-frame', 'soft-hill'] },
+      { id: 'folsom_shrine_knoll', kind: 'hill', center: [-42, 38], radius: 25, height: 0.72, tags: ['raised-shrine-knoll', 'landmark-grade'] },
+      { id: 'folsom_house_yard_mound', kind: 'hill', center: [44, -12], radius: 20, height: 0.38, tags: ['low-mound', 'house-grade'] },
+      { id: 'folsom_reliquary_boundary_rise', kind: 'ridge', path: [[72, -18], [82, -8], [84, 18], [74, 26]], width: 15, height: 0.58, tags: ['boundary-grade', 'rusty-door'] },
+      { id: 'folsom_pond_approach_slope', kind: 'hollow', center: [-2, -52], radius: 34, depth: 0.42, tags: ['pond-approach-slope', 'wet-low-ground'] },
+      { id: 'folsom_pond_muddy_bank_low', kind: 'hollow', center: [-10, -43], radius: 15, depth: 0.22, tags: ['muddy-casting-bank', 'pond-route'] },
+      { id: 'folsom_future_stream_dry_gully', kind: 'ravine', path: [[-7, 20], [-3, 43], [3, 66], [0, 96]], width: 8.5, depth: 0.34, tags: ['future-stream-corridor', 'linear-drainage-gully'] },
+      { id: 'folsom_cellar_dug_cut', kind: 'ravine', path: [[31, 31], [38, 38], [43, 45]], width: 7.5, depth: 0.28, tags: ['embedded-dungeon-entrance', 'road-cut'] },
+      { id: 'folsom_work_yard_drainage_swale', kind: 'ravine', path: [[-50, -48], [-32, -43], [-16, -47], [-2, -54]], width: 6.5, depth: 0.24, tags: ['work-yard-drainage', 'shallow-gully'] },
+      { id: 'folsom_courtyard_pad', kind: 'flatten', center: [0, 0], radius: 25, y: 0.16, tags: ['building-pad', 'spawn-courtyard', 'courtyard-shelf'] },
+      { id: 'folsom_tool_shed_pad', kind: 'flatten', center: [-34, -30], radius: 13, y: 0.16, tags: ['building-pad', 'tool-shed'] },
+      { id: 'folsom_shrine_pad', kind: 'flatten', center: [-42, 38], radius: 14, y: 0.16, tags: ['building-pad', 'shrine'] },
+      { id: 'folsom_house_pad', kind: 'flatten', center: [42, -8], radius: 14, y: 0.16, tags: ['building-pad', 'house'] },
+      { id: 'folsom_cellar_pad', kind: 'flatten', center: [42, 42], radius: 12, y: 0.16, tags: ['building-pad', 'cellar-gate', 'embedded-entrance-pad'] },
+      { id: 'folsom_rusted_door_pad', kind: 'flatten', center: [82, 4], radius: 11, y: 0.16, tags: ['building-pad', 'legacy-door', 'boundary-shelf'] },
       { id: 'folsom_north_road_pad', kind: 'flatten', center: [0, 86], radius: 12, y: 0.08, tags: ['future-road-exit'] },
-      { id: 'folsom_west_rise', kind: 'hill', center: [-76, 6], radius: 25, height: 2.3, tags: ['terrain-frame'] },
-      { id: 'folsom_east_rise', kind: 'hill', center: [72, -42], radius: 22, height: 1.7, tags: ['terrain-frame'] },
       ...folsomPondSystem.terrainStamps,
     ],
   },
@@ -118,8 +129,8 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_north_road_marker_right', kind: 'brokenColumn', position: [4.5, 0.08, 88], radius: 0.55, height: 1.7, material: 'darkStone', blocksPlayer: true, tags: ['future-road-exit'] },
   ],
   outdoorPrimitives: [
-    { id: 'folsom_west_boundary_boulders', kind: 'boulderCluster', center: [-86, 6], radius: 7.5, material: 'darkStone', tags: ['town-boundary', 'paired-blocker'] },
-    { id: 'folsom_pond_bank_boulders', kind: 'boulderCluster', center: [15, -62], radius: 3.4, material: 'darkStone', tags: ['pond', 'partially-submerged', 'paired-blocker'] },
+    { id: 'folsom_west_boundary_boulders', kind: 'boulderCluster', center: [-86, 6], radius: 7.5, material: FOLSOM_NATURAL_BOULDER_MATERIAL, tags: ['town-boundary', 'paired-blocker'] },
+    { id: 'folsom_pond_bank_boulders', kind: 'boulderCluster', center: [15, -62], radius: 3.4, material: FOLSOM_NATURAL_BOULDER_MATERIAL, tags: ['pond', 'partially-submerged', 'paired-blocker'] },
     { id: 'folsom_work_yard_woodpile', kind: 'fallenTreeBarrier', from: [-26, -44], to: [-17, -44], radius: 0.7, material: 'agedWood', tags: ['work-yard', 'wood-pile', 'paired-blocker'] },
   ],
   curvedBlockers: [
@@ -158,6 +169,7 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_courtyard_fire_fill', kind: 'point', color: 0xffa14f, intensity: 0.75, distance: 22, decay: 1.5, position: { x: -8, y: 2.4, z: -14 } },
     { id: 'folsom_shrine_fill', kind: 'point', color: 0xe3c078, intensity: 0.52, distance: 18, decay: 1.55, position: { x: -42, y: 2.8, z: 39 } },
   ],
+  validation: { naturalBoulderMaterialPool: FOLSOM_NATURAL_BOULDER_MATERIAL_POOL },
   navigation: { roomGraph: { roomIds: ['folsom_bounds'], links: [] }, localAvoidanceHints: [], forbiddenZones: [], preferredPatrolRoutes: [] },
   encounterZones: [],
   structurePads: [

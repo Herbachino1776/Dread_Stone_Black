@@ -54,6 +54,26 @@ function isKnownFolsomCampfireOpenGround([x, z]) {
   return !inWater && collision.canStandAtFloorPosition({ x, y: floor, z });
 }
 
+function routeMaxSampledSlope(route) {
+  let maxSlope = 0;
+  for (let index = 1; index < route.points.length; index += 1) {
+    const [x0, z0] = route.points[index - 1];
+    const [x1, z1] = route.points[index];
+    const distance = Math.hypot(x1 - x0, z1 - z0);
+    const steps = Math.max(1, Math.ceil(distance / 1.5));
+    let previous = { x: x0, z: z0, y: terrainSampler.sampleOutdoorY(x0, z0) };
+    for (let step = 1; step <= steps; step += 1) {
+      const t = step / steps;
+      const current = { x: x0 + (x1 - x0) * t, z: z0 + (z1 - z0) * t };
+      current.y = terrainSampler.sampleOutdoorY(current.x, current.z);
+      const run = Math.hypot(current.x - previous.x, current.z - previous.z);
+      if (run > 0) maxSlope = Math.max(maxSlope, Math.abs(current.y - previous.y) / run);
+      previous = current;
+    }
+  }
+  return maxSlope;
+}
+
 function routeIsWalkable(route) {
   for (let index = 0; index < route.points.length; index += 1) {
     if (!canStandAt(route.points[index])) return false;
@@ -102,6 +122,18 @@ const pondFloorY = terrainSampler.sampleOutdoorY(pondX, pondZ);
 assert.ok(pond.y > pondFloorY && pond.y - pondFloorY < 1.2, 'Pond water is supported by its carved terrain basin.');
 
 const terrainStamps = new Map(folsomDefinition.terrain.heightStamps.map((stamp) => [stamp.id, stamp]));
+const sampledRelief = [];
+for (let x = -90; x <= 90; x += 10) {
+  for (let z = -90; z <= 90; z += 10) sampledRelief.push(terrainSampler.sampleOutdoorY(x, z));
+}
+const reliefRange = Math.max(...sampledRelief) - Math.min(...sampledRelief);
+assert.ok(reliefRange >= 1.2, 'Folsom invalid: terrain relief range below minimum; town still reads as flat.');
+assert.ok(reliefRange <= 4.25, 'Folsom invalid: terrain relief range exceeds safe starter-town grade.');
+['folsom_shrine_knoll', 'folsom_pond_approach_slope', 'folsom_future_stream_dry_gully', 'folsom_cellar_dug_cut', 'folsom_work_yard_drainage_swale'].forEach((stampId) => {
+  assert.ok(terrainStamps.has(stampId), `Folsom terrain relief stamp missing: ${stampId}.`);
+});
+assert.ok(terrainSampler.sampleOutdoorY(-42, 38) > terrainSampler.sampleOutdoorY(-42, 18), 'Folsom invalid: shrine floor floats above raised terrain pad.');
+assert.ok(terrainSampler.sampleOutdoorY(0, -50) < terrainSampler.sampleOutdoorY(0, -25), 'Folsom invalid: pond approach does not slope toward lower wet ground.');
 const floors = new Map(folsomDefinition.polygonFloors.map((floor) => [floor.id, floor]));
 folsomDefinition.structurePads.forEach((pad) => {
   assert.ok(terrainStamps.has(pad.stampId), `${pad.id} has a leveled terrain pad.`);
@@ -110,7 +142,20 @@ folsomDefinition.structurePads.forEach((pad) => {
   assert.ok(Math.abs(sampledY - floors.get(pad.floorId).y) <= 0.12, `${pad.id} floor is grounded on its OARB pad.`);
 });
 
-folsomDefinition.validationRoutes.forEach((route) => assert.equal(routeIsWalkable(route), true, `${route.id} route is walkable from the courtyard.`));
+folsomDefinition.validationRoutes.forEach((route) => {
+  assert.equal(routeIsWalkable(route), true, `${route.id} route is walkable from the courtyard.`);
+  assert.ok(routeMaxSampledSlope(route) <= 0.18, `Folsom invalid: path from spawn courtyard to ${route.id} exceeds safe slope threshold.`);
+});
+
+const approvedBoulderMaterials = new Set(folsomDefinition.validation?.naturalBoulderMaterialPool ?? []);
+folsomDefinition.outdoorPrimitives
+  .filter((primitive) => primitive.kind === 'boulderCluster')
+  .forEach((primitive) => {
+    assert.ok(approvedBoulderMaterials.has(primitive.material), `Folsom invalid: field boulder uses block/brick material instead of natural rock material: ${primitive.id}.`);
+    const profile = folsomDefinition.textures[primitive.material];
+    assert.ok(profile?.path?.startsWith('./assets/textures/rock/'), `Folsom invalid: field boulder uses block/brick material instead of natural rock material: ${primitive.id}.`);
+    assert.equal(/brick|block|wall_black_stone|floor|wood/i.test(profile.path), false, `Folsom invalid: field boulder uses block/brick material instead of natural rock material: ${primitive.id}.`);
+  });
 
 const validChestItemIds = new Set(Object.keys(equipmentRegistry.items));
 const requiredChestItems = new Set(['fishing_rod', 'wood_axe', 'flint_stick', 'torch', 'rusted_sword']);
@@ -139,4 +184,4 @@ Object.entries(folsomDefinition.textures).forEach(([key, profile]) => {
   (profile?.animatedFrames ?? []).forEach((frame) => assert.equal(textureAssetExists(frame), true, `Folsom animated texture frame exists: ${frame}`));
 });
 
-console.log('Folsom starter town validation passed: spawn, mixed OARB+DARB grounding, pond, routes, chests, legacy door, assets, and mobile budget.');
+console.log('Folsom starter town validation passed: non-flat terrain relief, safe pads/routes, pond, chests, natural boulders, legacy door, assets, and mobile budget.');
