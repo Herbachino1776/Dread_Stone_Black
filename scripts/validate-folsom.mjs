@@ -203,6 +203,34 @@ assert.equal(rustyDoor.toLocation, 'reliquary-field');
 assert.ok(reliquaryFieldDefinition.spawns.some((spawn) => spawn.id === rustyDoor.destinationSpawnId), 'Rusted door resolves to the current Reliquary Field return spawn.');
 assert.ok(reliquaryFieldDefinition.exits.some((exit) => exit.toLocation === 'folsom'), 'Reliquary Field preserves a return route to Folsom.');
 
+const cityWallValidation = folsomDefinition.validation?.cityBorderWoodenWall;
+assert.ok(cityWallValidation, 'Folsom invalid: city border wall missing.');
+assert.ok(cityWallValidation.height >= 5.9 && cityWallValidation.height <= 6.4, 'Folsom invalid: wooden city wall below required protective height.');
+const cityWallSegments = folsomDefinition.wallSegments.filter((segment) => segment.tags?.includes('city-border-wall'));
+assert.ok(cityWallSegments.length >= 50, 'Folsom invalid: city border wall missing.');
+const cityWallMaterials = new Set(cityWallSegments.map((segment) => segment.material));
+const expectedCityWallMaterials = new Set(['cityBorderWoodenWall01', 'cityBorderWoodenWall02', 'cityBorderWoodenWall03', 'cityBorderWoodenWall04', 'cityBorderWoodenWall05', 'cityBorderWoodenWall06']);
+expectedCityWallMaterials.forEach((materialKey) => {
+  assert.ok(cityWallMaterials.has(materialKey), `Folsom invalid: city border wall missing wooden texture variation ${materialKey}.`);
+  const profile = folsomDefinition.textures[materialKey];
+  assert.ok(profile, `Folsom invalid: city border wall panel uses missing texture key ${materialKey}.`);
+  assert.ok(profile.path?.includes('/wall/wooden/city_border_wooden_wall_'), `Folsom invalid: city border wall uses non-wooden texture: ${materialKey}.`);
+});
+cityWallSegments.forEach((segment) => {
+  assert.ok(expectedCityWallMaterials.has(segment.material), `Folsom invalid: city border wall uses non-wooden texture: ${segment.material}.`);
+  assert.ok(segment.height >= 5.9, 'Folsom invalid: wooden city wall below required protective height.');
+  const midpoint = [(segment.from[0] + segment.to[0]) * 0.5, (segment.from[1] + segment.to[1]) * 0.5];
+  const sampledBase = terrainSampler.sampleOutdoorY(midpoint[0], midpoint[1]);
+  assert.ok(Math.abs(segment.y - sampledBase) <= 0.75, `Folsom invalid: city border wall panel does not follow terrain: ${segment.id}.`);
+});
+const cityWallLength = cityWallSegments.reduce((sum, segment) => sum + Math.hypot(segment.to[0] - segment.from[0], segment.to[1] - segment.from[1]), 0);
+assert.ok(cityWallLength >= 600, 'Folsom invalid: city border wall perimeter is not substantially continuous.');
+assert.equal(routeIsWalkable(folsomDefinition.validationRoutes.find((route) => route.id === 'reliquary-door')), true, 'Folsom invalid: rusty Reliquary door is blocked by perimeter wall.');
+assert.equal(routeIsWalkable(folsomDefinition.validationRoutes.find((route) => route.id === 'north-road')), true, 'Folsom invalid: north road/future gate opening is blocked by perimeter wall.');
+assert.equal(canStandAt([88, 4]), true, 'Folsom invalid: rusty Reliquary door is blocked by perimeter wall.');
+assert.equal(canStandAt([0, 94]), true, 'Folsom invalid: north road/future gate opening is blocked by perimeter wall.');
+assert.equal(canStandAt([playerSpawns[0].position.x, playerSpawns[0].position.z]), true, 'Folsom invalid: player spawn is outside the protected perimeter or blocked.');
+
 const [terrainWidth, terrainDepth] = folsomDefinition.terrain.size;
 const [segmentsX, segmentsZ] = folsomDefinition.terrain.segments;
 assert.ok(terrainWidth >= 180 && terrainWidth <= 220 && terrainDepth >= 180 && terrainDepth <= 220, 'Folsom keeps the requested compact town footprint.');
