@@ -127,13 +127,41 @@ for (let x = -90; x <= 90; x += 10) {
   for (let z = -90; z <= 90; z += 10) sampledRelief.push(terrainSampler.sampleOutdoorY(x, z));
 }
 const reliefRange = Math.max(...sampledRelief) - Math.min(...sampledRelief);
-assert.ok(reliefRange >= 1.2, 'Folsom invalid: terrain relief range below minimum; town still reads as flat.');
-assert.ok(reliefRange <= 4.25, 'Folsom invalid: terrain relief range exceeds safe starter-town grade.');
-['folsom_shrine_knoll', 'folsom_pond_approach_slope', 'folsom_future_stream_dry_gully', 'folsom_cellar_dug_cut', 'folsom_work_yard_drainage_swale'].forEach((stampId) => {
+const interiorRelief = [];
+let flatSamples = 0;
+let totalInteriorSamples = 0;
+const stablePadAvoidZones = [
+  { center: [0, 0], radius: 18 }, { center: [-34, -30], radius: 11 }, { center: [-42, 38], radius: 12 },
+  { center: [42, -8], radius: 12 }, { center: [42, 42], radius: 11 }, { center: [0, -58], radius: 22 },
+];
+for (let x = -60; x <= 60; x += 5) {
+  for (let z = -65; z <= 70; z += 5) {
+    const y = terrainSampler.sampleOutdoorY(x, z);
+    interiorRelief.push(y);
+    if (stablePadAvoidZones.some((zone) => Math.hypot(x - zone.center[0], z - zone.center[1]) <= zone.radius)) continue;
+    totalInteriorSamples += 1;
+    if (Math.abs(y - 0.16) <= 0.015 || Math.abs(y) <= 0.015) flatSamples += 1;
+  }
+}
+const interiorHeightRange = Math.max(...interiorRelief) - Math.min(...interiorRelief);
+const flatAreaRatio = flatSamples / totalInteriorSamples;
+const shrineElevationDelta = terrainSampler.sampleOutdoorY(-42, 38) - terrainSampler.sampleOutdoorY(-42, 18);
+const pondLowlandDelta = terrainSampler.sampleOutdoorY(0, -25) - terrainSampler.sampleOutdoorY(0, -56);
+const northRoadChannelDelta = Math.min(terrainSampler.sampleOutdoorY(-9, 62), terrainSampler.sampleOutdoorY(9, 62)) - terrainSampler.sampleOutdoorY(1, 62);
+const routeSlopes = folsomDefinition.validationRoutes.map((route) => routeMaxSampledSlope(route));
+const maxRouteSlope = Math.max(...routeSlopes);
+const averageSlope = routeSlopes.reduce((sum, slope) => sum + slope, 0) / routeSlopes.length;
+const terrainMetrics = { reliefRange, interiorHeightRange, averageSlope, maxRouteSlope, flatAreaRatio, shrineElevationDelta, pondLowlandDelta, northRoadChannelDelta };
+assert.ok(reliefRange >= 2.4, `Folsom invalid: terrain height range is still too small; town still reads flat. Metrics: ${JSON.stringify(terrainMetrics)}`);
+assert.ok(reliefRange <= 4.75, `Folsom invalid: terrain relief range exceeds safe starter-town grade. Metrics: ${JSON.stringify(terrainMetrics)}`);
+assert.ok(interiorHeightRange >= 1.45, `Folsom invalid: interior terrain relief too low; town still reads flat. Metrics: ${JSON.stringify(terrainMetrics)}`);
+assert.ok(flatAreaRatio <= 0.26, `Folsom invalid: too much playable grass area remains exactly flat. Metrics: ${JSON.stringify(terrainMetrics)}`);
+['folsom_west_shoulder_hill', 'folsom_east_border_ridge_mass', 'folsom_shrine_knoll', 'folsom_pond_lowland_basin', 'folsom_future_stream_dry_gully', 'folsom_cellar_dug_cut', 'folsom_work_yard_drainage_swale', 'folsom_rusty_door_cut'].forEach((stampId) => {
   assert.ok(terrainStamps.has(stampId), `Folsom terrain relief stamp missing: ${stampId}.`);
 });
-assert.ok(terrainSampler.sampleOutdoorY(-42, 38) > terrainSampler.sampleOutdoorY(-42, 18), 'Folsom invalid: shrine floor floats above raised terrain pad.');
-assert.ok(terrainSampler.sampleOutdoorY(0, -50) < terrainSampler.sampleOutdoorY(0, -25), 'Folsom invalid: pond approach does not slope toward lower wet ground.');
+assert.ok(shrineElevationDelta >= 0.35, `Folsom invalid: shrine knoll elevation below required threshold. Metrics: ${JSON.stringify(terrainMetrics)}`);
+assert.ok(pondLowlandDelta >= 0.45, `Folsom invalid: pond lowland is not lower than surrounding town terrain. Metrics: ${JSON.stringify(terrainMetrics)}`);
+assert.ok(northRoadChannelDelta >= 0.12, `Folsom invalid: north road/future stream corridor lacks readable channel shaping. Metrics: ${JSON.stringify(terrainMetrics)}`);
 const floors = new Map(folsomDefinition.polygonFloors.map((floor) => [floor.id, floor]));
 folsomDefinition.structurePads.forEach((pad) => {
   assert.ok(terrainStamps.has(pad.stampId), `${pad.id} has a leveled terrain pad.`);
@@ -144,7 +172,7 @@ folsomDefinition.structurePads.forEach((pad) => {
 
 folsomDefinition.validationRoutes.forEach((route) => {
   assert.equal(routeIsWalkable(route), true, `${route.id} route is walkable from the courtyard.`);
-  assert.ok(routeMaxSampledSlope(route) <= 0.18, `Folsom invalid: path from spawn courtyard to ${route.id} exceeds safe slope threshold.`);
+  assert.ok(routeMaxSampledSlope(route) <= 0.18, `Folsom invalid: route from courtyard to ${route.id} exceeds safe slope threshold.`);
 });
 
 const approvedBoulderMaterials = new Set(folsomDefinition.validation?.naturalBoulderMaterialPool ?? []);
@@ -184,4 +212,4 @@ Object.entries(folsomDefinition.textures).forEach(([key, profile]) => {
   (profile?.animatedFrames ?? []).forEach((frame) => assert.equal(textureAssetExists(frame), true, `Folsom animated texture frame exists: ${frame}`));
 });
 
-console.log('Folsom starter town validation passed: non-flat terrain relief, safe pads/routes, pond, chests, natural boulders, legacy door, assets, and mobile budget.');
+console.log(`Folsom starter town validation passed: non-flat terrain relief, safe pads/routes, pond, chests, natural boulders, legacy door, assets, and mobile budget. Terrain metrics: ${JSON.stringify(terrainMetrics)}`);
