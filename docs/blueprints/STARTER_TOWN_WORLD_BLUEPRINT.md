@@ -17,6 +17,8 @@ The intended world relationship is:
 
 ## 2. Working Names
 
+> **Implementation note (Folsom v1):** The starter town is now named **Folsom** and uses the area id `folsom`. References below to `starterTown`, “New Starter Town,” or “Starter Town” describe Folsom.
+
 The final name can be chosen later. The first implementation may use a neutral technical identifier such as `starterTown` while the world fiction settles.
 
 Possible display names:

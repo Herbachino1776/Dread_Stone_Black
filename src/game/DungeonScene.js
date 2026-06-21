@@ -520,6 +520,8 @@ export class DungeonScene {
     const definition = getLocationDefinition(locationId);
     if (!definition?.terrain) throw new Error(`Missing outdoor field terrain for compiled runtime location: ${locationId}`);
 
+    const runtime = this.compileLocationRuntime(locationId);
+
     const [sizeX = FIELD_SIZE, sizeZ = FIELD_SIZE] = Array.isArray(definition.terrain.size) ? definition.terrain.size : [];
     const walkableRect = {
       id: `${locationId}-terrain-walkable-bounds`,
@@ -533,24 +535,31 @@ export class DungeonScene {
       .map((room) => ({ id: room.id, minX: room.minX, maxX: room.maxX, minZ: room.minZ, maxZ: room.maxZ }));
     this.collision = new CollisionWorld({
       walkableRects: roomRects.length ? roomRects : [walkableRect],
-      blockerRects: createOutdoorCurvedBlockers(definition.curvedBlockers),
+      blockerRects: [...runtime.blockerRects, ...createOutdoorCurvedBlockers(definition.curvedBlockers)],
       playerRadius: 0.5,
+      walkableSurfaces: runtime.walkableSurfaces,
       defaultFloorY: definition.defaultFloorY ?? definition.terrain.baseY ?? 0,
       outdoorTerrainSampler: this.outdoorTerrainRuntime,
     });
 
-    const exits = (definition.exits ?? []).map((exit) => ({
-      ...exit,
-      position: exit.position ? this.toVector3(exit.position, 1.2) : this.toVector3({
-        x: (exit.triggerRect.minX + exit.triggerRect.maxX) / 2,
-        y: exit.triggerRect.y ?? 1.2,
-        z: (exit.triggerRect.minZ + exit.triggerRect.maxZ) / 2,
-      }),
+    runtime.collisionWorld = this.collision;
+    this.compiledLocationRuntime = runtime;
+    this.inspectInteractions = (definition.interactions ?? []).map((interaction) => ({
+      ...interaction,
+      target: this.toVector3(interaction.target, 1.2),
     }));
-    this.compiledLocationRuntime = { locationId, definition, exits, spawnAnchors: [] };
-    const exit = exits.find((candidate) => candidate.toLocation === 'reliquary-field') ?? exits[0];
+    const playerStart = runtime.spawnAnchors.find((spawn) => spawn.kind === 'player');
+    if (playerStart) {
+      const terrainSampler = createOutdoorTerrainMesh(definition.terrain, { textures: definition.textures }).userData.terrainSampler;
+      const groundY = terrainSampler?.sampleOutdoorY?.(playerStart.position.x, playerStart.position.z);
+      this.playerSpawn = {
+        spawnPosition: playerStart.position.clone().setY((Number.isFinite(groundY) ? groundY : 0) + 1.55),
+        spawnYaw: playerStart.yaw ?? 0,
+      };
+    }
+    const exit = runtime.exits.find((candidate) => candidate.toLocation === 'reliquary-field') ?? runtime.exits[0];
     this.indoorExitTarget = exit?.position?.clone() ?? this.indoorExitTarget;
-    return this.compiledLocationRuntime;
+    return runtime;
   }
 
   configureBlackGrassTempleRuntime() {
@@ -831,7 +840,13 @@ export class DungeonScene {
     );
     this.addCompiledOutdoorLights(definition);
     this.addOutdoorTerrain(definition.terrain, definition.textures, definition);
+    if (this.compiledLocationRuntime?.group) {
+      this.scene.add(this.compiledLocationRuntime.group);
+      this.torchFlickerController.registerFromObject(this.compiledLocationRuntime.group);
+    }
     this.addAuthoredOutdoorChests(definition);
+    this.addAuthoredOutdoorSurvivalObjects(definition);
+    this.addAuthoredOutdoorInteractions(definition);
     this.addCompiledOutdoorExitCues(definition);
   }
 
@@ -841,6 +856,23 @@ export class DungeonScene {
       if (light.kind === 'ambient') {
         hasAmbient = true;
         this.scene.add(new THREE.HemisphereLight(light.skyColor ?? 0xded49d, light.groundColor ?? 0x4c4a32, light.intensity ?? 0.7));
+      } else if (light.kind === 'directional') {
+        const directional = new THREE.DirectionalLight(light.color ?? 0xffe2ad, light.intensity ?? 1);
+        directional.name = light.id ?? `${definition.id}-outdoor-directional-light`;
+        directional.position.copy(this.toVector3(light.position, 24));
+        directional.target.position.copy(this.toVector3(light.target, 0));
+        directional.castShadow = light.castShadow !== false;
+        if (directional.castShadow) {
+          directional.shadow.mapSize.set(1024, 1024);
+          directional.shadow.camera.left = -100;
+          directional.shadow.camera.right = 100;
+          directional.shadow.camera.top = 100;
+          directional.shadow.camera.bottom = -100;
+          directional.shadow.camera.near = 4;
+          directional.shadow.camera.far = 260;
+          directional.shadow.bias = -0.0002;
+        }
+        this.scene.add(directional, directional.target);
       } else if (light.kind === 'point') {
         const point = new THREE.PointLight(light.color ?? 0xffd58a, light.intensity ?? 0.7, light.distance ?? 20, light.decay ?? 1.5);
         point.name = light.id ?? `${definition.id}-outdoor-point-light`;
@@ -852,7 +884,7 @@ export class DungeonScene {
   }
 
   addCompiledOutdoorExitCues(definition) {
-    (definition.exits ?? []).filter((exit) => exit.toLocation === 'reliquary-field').forEach((exit) => {
+    (definition.exits ?? []).filter((exit) => exit.toLocation === 'reliquary-field' && !exit.tags?.includes('authored-gate')).forEach((exit) => {
       const position = this.toVector3(exit.position, 1.1);
       const groundY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(position.x, position.z) ?? 0;
       const group = new THREE.Group();
@@ -1546,6 +1578,62 @@ export class DungeonScene {
     });
   }
 
+  addAuthoredOutdoorSurvivalObjects(definition = {}) {
+    (definition.outdoorCampfires ?? []).forEach((campfire) => {
+      if (!campfire?.id || !campfire.position) return;
+      this.addFieldCampfire(this.toVector3(campfire.position), campfire.id);
+    });
+
+    (definition.harvestableTrees ?? []).forEach((tree) => {
+      if (!tree?.id || !tree.position) return;
+      const position = this.toVector3(tree.position);
+      const groundY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(position.x, position.z) ?? position.y ?? 0;
+      const group = new THREE.Group();
+      group.name = `${tree.id}-harvestable-tree`;
+      group.position.set(position.x, groundY, position.z);
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.52, 0.72, 5.6, 8),
+        new THREE.MeshStandardMaterial({ color: 0x4a2b1d, roughness: 0.98 }),
+      );
+      trunk.position.y = 2.8;
+      const crown = new THREE.Mesh(
+        new THREE.ConeGeometry(2.8, 6.4, 9),
+        new THREE.MeshStandardMaterial({ color: 0x35462f, roughness: 1, emissive: 0x071008, emissiveIntensity: 0.08 }),
+      );
+      crown.position.y = 7.2;
+      group.add(trunk, crown);
+      group.visible = !this.gameState?.hasHarvestedFieldTree?.(tree.id);
+      this.scene.add(group);
+      const harvestable = {
+        id: tree.id,
+        kind: 'redwood',
+        position: new THREE.Vector3(position.x, groundY, position.z),
+        target: new THREE.Vector3(position.x, groundY + 1, position.z),
+        interactRadius: tree.interactRadius ?? 5.5,
+        range: tree.interactRadius ?? 5.5,
+        yield: tree.yield ?? 1,
+        label: tree.label ?? 'Harvestable Redwood',
+        type: 'fieldHarvestableTree',
+        treeObject: group,
+        stumpPosition: new THREE.Vector3(position.x, groundY, position.z),
+        tags: tree.tags ?? [],
+      };
+      this.fieldRedwoodHarvestables.push(harvestable);
+      if (!group.visible) this.addFieldStump(harvestable.stumpPosition, tree.id);
+    });
+  }
+
+  addAuthoredOutdoorInteractions(definition = {}) {
+    (definition.outdoorInteractions ?? []).forEach((interaction) => {
+      if (!interaction?.id || !interaction.target) return;
+      this.outdoorInteractions.push({
+        ...interaction,
+        target: this.toVector3(interaction.target, 1),
+        functional: false,
+      });
+    });
+  }
+
   addReliquaryFieldRiverBoundary() {
     const waterMat = new THREE.MeshStandardMaterial({ color: 0x0c1820, roughness: 0.88, metalness: 0.0, transparent: true, opacity: 0.82, emissive: 0x020609, emissiveIntensity: 0.28 });
     const specs = [
@@ -1920,6 +2008,7 @@ export class DungeonScene {
   }
 
   addReliquaryFieldStructures() {
+    this.addFolsomLegacyReturnDoor();
     this.addBrokenShrine();
     this.addSouthReliquaryCrypt();
     this.addBlackGrassTempleExterior();
@@ -1935,6 +2024,31 @@ export class DungeonScene {
     this.addSunkenCentralTomb();
     this.addStandingStoneCluster();
     this.addLowRuinWalls();
+  }
+
+  addFolsomLegacyReturnDoor() {
+    const stoneMaterial = this.makeTexturedMaterial({ path: TEXTURE_PATHS.wall, repeat: [1.4, 1.6], color: 0x514c45, roughness: 0.99, metalness: 0 });
+    const gateMaterial = this.makeTexturedMaterial({ path: TEXTURE_PATHS.gate, repeat: [1.1, 1.5], color: 0x725743, roughness: 0.86, metalness: 0.44, emissive: 0x130905, emissiveIntensity: 0.1 });
+    const group = new THREE.Group();
+    group.name = 'FOLSOM_LEGACY_DOOR-reliquary-field-return-gate';
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.6, 5, 4), position: new THREE.Vector3(-4, 2.5, -185), material: stoneMaterial, name: 'FOLSOM_LEGACY_DOOR_LEFT_POST' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(1.6, 5, 4), position: new THREE.Vector3(4, 2.5, -185), material: stoneMaterial, name: 'FOLSOM_LEGACY_DOOR_RIGHT_POST' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(9.6, 1.1, 2.8), position: new THREE.Vector3(0, 5, -185), material: stoneMaterial, name: 'FOLSOM_LEGACY_DOOR_LINTEL' }));
+    group.add(this.createBoxMesh({ size: new THREE.Vector3(5.8, 3.8, 0.22), position: new THREE.Vector3(0, 2, -184.7), material: gateMaterial, name: 'FOLSOM_LEGACY_DOOR_RUSTED_GATE' }));
+    this.enableOutdoorReadableShadows(group);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      id: 'FOLSOM_LEGACY_DOOR_INT_RETURN',
+      label: 'Folsom',
+      target: new THREE.Vector3(0, 1, -181.5),
+      range: 5,
+      hint: 'Return to Folsom',
+      message: 'The rusted door opens toward Folsom.',
+      functional: true,
+      area: 'folsom',
+      type: 'areaEntrance',
+      destinationSpawnId: 'folsom_reliquary_return',
+    });
   }
 
   addFieldSurvivalLoopObjects() {
@@ -2058,7 +2172,7 @@ export class DungeonScene {
   }
 
   getNearbyFieldHarvestableRedwood(position) {
-    if (this.area !== 'field' || !position || !this.fieldRedwoodHarvestables.length) return null;
+    if (!this.isOutdoorSurvivalArea() || !position || !this.fieldRedwoodHarvestables.length) return null;
     let nearest = null;
     let nearestDistanceSq = Infinity;
     this.fieldRedwoodHarvestables.forEach((tree) => {
@@ -2122,7 +2236,7 @@ export class DungeonScene {
   }
 
   isFieldCampfireOpenGround(position) {
-    if (!position || this.area !== 'field') return false;
+    if (!position || !this.isOutdoorSurvivalArea()) return false;
     const x = position.x;
     const z = position.z;
     if (Math.abs(x) > 168 || Math.abs(z) > 168) return false;
@@ -2137,7 +2251,7 @@ export class DungeonScene {
   }
 
   getFieldCampfirePlacement(player) {
-    if (!player?.position || this.area !== 'field') return null;
+    if (!player?.position || !this.isOutdoorSurvivalArea()) return null;
     const forward = typeof player.getLookDirection === 'function'
       ? player.getLookDirection()
       : new THREE.Vector3(Math.sin(player.yaw ?? 0), 0, Math.cos(player.yaw ?? 0)).normalize();
@@ -2317,7 +2431,8 @@ export class DungeonScene {
     const campfireId = id ?? `field_survival_campfire_${this.fieldSurvivalObjects.size}`;
     const group = this.createFieldCampfireGroup();
     group.name = `${campfireId}-visual`;
-    group.position.set(position.x, 0, position.z);
+    const groundY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(position.x, position.z) ?? position.y ?? 0;
+    group.position.set(position.x, groundY, position.z);
     this.scene.add(group);
     this.fieldSurvivalObjects.set(campfireId, group);
     if (!this.outdoorInteractions.some((interaction) => interaction.id === `${campfireId}_use`)) {
@@ -2332,6 +2447,10 @@ export class DungeonScene {
       });
     }
     return group;
+  }
+
+  isOutdoorSurvivalArea() {
+    return this.area === 'field' || this.isCompiledOutdoorFieldArea();
   }
 
   createFieldCampfireGroup() {

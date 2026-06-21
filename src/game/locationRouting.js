@@ -3,11 +3,12 @@ import { getLocationDefinition } from './locations/locationRegistry.js';
 const FIELD_AREA_ALIASES = Object.freeze(new Set(['field', 'reliquary-field']));
 
 export function resolveStartupArea(requestedArea) {
-  if (!requestedArea || FIELD_AREA_ALIASES.has(requestedArea)) return 'field';
+  if (!requestedArea) return 'folsom';
+  if (FIELD_AREA_ALIASES.has(requestedArea)) return 'field';
   if (requestedArea === 'dungeon') return 'dungeon';
 
   const requestedLocation = getLocationDefinition(requestedArea);
   if (requestedLocation?.tags?.includes('compiled-runtime')) return requestedArea;
 
-  return 'field';
+  return 'folsom';
 }

@@ -121,13 +121,13 @@ function validateStartupRouting(definitions) {
     }
   };
 
-  expectArea(null, 'field');
-  expectArea('', 'field');
+  expectArea(null, 'folsom');
+  expectArea('', 'folsom');
   expectArea('field', 'field');
   expectArea('reliquary-field', 'field');
   expectArea('kerovac', 'kerovac');
   expectArea('oarbFeatureYard', 'oarbFeatureYard');
-  expectArea('not-a-real-area', 'field');
+  expectArea('not-a-real-area', 'folsom');
 
   const compiledRuntimeIds = definitions
     .filter((definition) => definition.tags?.includes('compiled-runtime'))

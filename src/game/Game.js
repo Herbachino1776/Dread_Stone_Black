@@ -47,6 +47,7 @@ const FIELD_RETURN_SPAWNS_BY_LOCATION = Object.freeze({
   kerovac: 'kerovacExit',
   oarbFeatureYard: 'oarbFeatureYardExit',
   oarbOutdoorExpo: 'oarbOutdoorExpoExit',
+  folsom: 'folsomExit',
   dungeon: 'cryptAExit',
 });
 
