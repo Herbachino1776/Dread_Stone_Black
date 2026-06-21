@@ -172,7 +172,11 @@ const pineSources = new Set(pineVariants.map((variant) => variant.path));
 assert.equal(pineSources.size, 6, 'Folsom invalid: expected six pine source sprites registered.');
 assert.equal(pineVariants.length, 42, 'Folsom invalid: expected 42 pine billboard variants.');
 pineSources.forEach((path) => assert.equal(textureAssetExists(path), true, `Folsom invalid: pine sprite texture missing: ${path}`));
-assert.ok(pinePlacements.length >= 120 && pinePlacements.length <= 220, `Folsom invalid: pine tree count ${pinePlacements.length} misses the target forest budget.`);
+const minimumFolsomPineBillboards = 120;
+const preferredFolsomPineBillboardMax = 220;
+assert.ok(pinePlacements.length >= minimumFolsomPineBillboards, 'Folsom invalid: pine forest density below required minimum.');
+assert.ok(pinePlacements.length >= minimumFolsomPineBillboards, `Folsom invalid: expected at least 120 pine billboards. Found ${pinePlacements.length}.`);
+assert.ok(pinePlacements.length <= preferredFolsomPineBillboardMax, `Folsom invalid: pine tree count ${pinePlacements.length} exceeds the preferred dense-forest budget of ${preferredFolsomPineBillboardMax}.`);
 const pineVariantIds = new Set(pineVariants.map((variant) => variant.id));
 const requiredPineBands = ['tiny', 'small', 'medium', 'tall', 'large', 'giant', 'ancient'];
 for (let sourceIndex = 1; sourceIndex <= 6; sourceIndex += 1) requiredPineBands.forEach((band) => assert.ok(pineVariantIds.has(`pine${String(sourceIndex).padStart(2, '0')}_${band}`), 'Folsom invalid: expected 42 pine billboard variants.'));
@@ -182,10 +186,17 @@ const pineAvoidValidationZones = [
   { label: 'tool shed entrance', center: [-36, -34], radius: 8 }, { label: 'house doorway', center: [42, -14], radius: 8 },
   { label: 'shrine entrance', center: [-42, 31], radius: 8 }, { label: 'Underworks entrance', center: [42, 42], radius: 11 },
   { label: 'rusty Reliquary trigger', center: [82, 4], radius: 12 }, { label: 'north future road', center: [0, 94], radius: 13 },
+  { label: 'required route clearance', minX: -8, maxX: 8, minZ: 14, maxZ: 99 },
+  { label: 'required route clearance', minX: 68, maxX: 94, minZ: -6, maxZ: 14 },
 ];
 function pointInValidationZone([x, z], zone) {
   if (zone.radiusX) return (((x - zone.center[0]) ** 2) / (zone.radiusX ** 2)) + (((z - zone.center[1]) ** 2) / (zone.radiusZ ** 2)) <= 1;
-  return Math.hypot(x - zone.center[0], z - zone.center[1]) <= zone.radius;
+  if (zone.radius) return Math.hypot(x - zone.center[0], z - zone.center[1]) <= zone.radius;
+  if (zone.minX !== undefined) return x >= zone.minX && x <= zone.maxX && z >= zone.minZ && z <= zone.maxZ;
+  return false;
+}
+function pineCountWithTag(tag) {
+  return pinePlacements.filter((tree) => tree.tags?.includes(tag)).length;
 }
 pinePlacements.forEach((tree) => {
   assert.ok(pineVariantIds.has(tree.variantId), `Folsom invalid: pine tree ${tree.id} does not use the reusable pine kit.`);
@@ -194,7 +205,14 @@ pinePlacements.forEach((tree) => {
   assert.ok([...(tree.position ?? []), tree.height, tree.width, tree.sinkIntoGround].every(Number.isFinite), `Folsom invalid: pine tree ${tree.id} has non-finite placement data.`);
   const [x, y, z] = tree.position;
   assert.ok(Math.abs(y - terrainSampler.sampleOutdoorY(x, z)) <= 0.01, `Folsom invalid: pine tree ${tree.id} base is not grounded to terrain.`);
-  pineAvoidValidationZones.forEach((zone) => assert.equal(pointInValidationZone([x, z], zone), false, `Folsom invalid: pine tree blocks ${zone.label}.`));
+  pineAvoidValidationZones.forEach((zone) => {
+    const failure = zone.label === 'pond water'
+      ? 'Folsom invalid: pine tree placed on pond water.'
+      : zone.label === 'required route clearance'
+        ? 'Folsom invalid: pine tree placed inside required route clearance.'
+        : `Folsom invalid: pine tree blocks ${zone.label}.`;
+    assert.equal(pointInValidationZone([x, z], zone), false, failure);
+  });
 });
 assert.ok(pinePlacements.some((tree) => tree.tags?.includes('outside-wall-forest')), 'Folsom invalid: outside wall pine forest belt missing.');
 assert.ok(pinePlacements.some((tree) => tree.tags?.includes('inside-edge-tree-belt')), 'Folsom invalid: inside-edge pine belt missing.');
@@ -202,6 +220,12 @@ assert.ok(pinePlacements.some((tree) => tree.tags?.includes('pond-side-pine-clus
 assert.ok(pinePlacements.some((tree) => tree.tags?.includes('shrine-grove')), 'Folsom invalid: shrine pine grove missing.');
 assert.ok(pinePlacements.some((tree) => tree.tags?.includes('north-road-corridor')), 'Folsom invalid: north road pine corridor missing.');
 assert.ok(pinePlacements.some((tree) => tree.tags?.includes('rusty-reliquary-ominous')), 'Folsom invalid: rusty Reliquary pine cluster missing.');
+assert.ok(pineCountWithTag('outside-wall-forest') >= 80, 'Folsom invalid: outside wall pine forest belt is below dense swathe minimum.');
+assert.ok(pineCountWithTag('inside-edge-tree-belt') >= 20, 'Folsom invalid: inside town pine pockets are below required coverage.');
+assert.ok(pineCountWithTag('pond-side-pine-cluster') >= 12, 'Folsom invalid: pond-side pine coverage is below required coverage.');
+assert.ok(pineCountWithTag('shrine-grove') >= 16, 'Folsom invalid: shrine grove is below required old-pine coverage.');
+assert.ok(pineCountWithTag('north-road-corridor') >= 18, 'Folsom invalid: north road corridor pine coverage is below required coverage.');
+assert.ok(pineCountWithTag('rusty-reliquary-ominous') >= 10, 'Folsom invalid: rusty Reliquary ominous pine cluster is below required coverage.');
 
 const pond = folsomDefinition.waterBodies.find((body) => body.id === 'folsom_starter_pond');
 assert.ok(pond?.fishable, 'Folsom starter pond is fishable.');
