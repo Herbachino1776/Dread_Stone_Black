@@ -992,7 +992,7 @@ export class DungeonScene {
     this.updateRamManNpcPatrol(deltaSeconds);
     this.updateBlackGrassFactionEnemies(deltaSeconds, player);
     this.updateSheepDemonEnemy(deltaSeconds, player);
-    this.updateReliquaryFieldFoliage(player);
+    this.updateOutdoorFoliageBillboards(player);
     this.updateRawFishPickups(deltaSeconds);
     this.updateCookedFishPickups(deltaSeconds);
     this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
@@ -1001,8 +1001,8 @@ export class DungeonScene {
     this.updateBalthazanFloorCoverageQa(player);
   }
 
-  updateReliquaryFieldFoliage(player = null) {
-    if (this.area !== 'field' || !player?.position || !this.fieldFoliageBillboards.length) return;
+  updateOutdoorFoliageBillboards(player = null) {
+    if (!player?.position || !this.fieldFoliageBillboards.length) return;
 
     this.fieldFoliageBillboards.forEach((billboard) => {
       const dx = player.position.x - billboard.position.x;
@@ -1010,7 +1010,10 @@ export class DungeonScene {
       const harvested = billboard.userData.harvestableTreeId && this.gameState?.hasHarvestedFieldTree?.(billboard.userData.harvestableTreeId);
       billboard.visible = !harvested && dx * dx + dz * dz <= (billboard.userData.visibleDistanceSq ?? FIELD_FOLIAGE_VISIBLE_DISTANCE_SQ);
       if (!billboard.visible) return;
-      billboard.rotation.y = Math.atan2(dx, dz) + (billboard.userData.yawOffset ?? 0);
+      const maxYawOffset = billboard.userData.maxBillboardYawOffset ?? Infinity;
+      const authoredYawOffset = billboard.userData.yawOffset ?? 0;
+      const yawOffset = Math.max(-maxYawOffset, Math.min(maxYawOffset, authoredYawOffset));
+      billboard.rotation.y = Math.atan2(dx, dz) + yawOffset;
     });
   }
 
@@ -1531,10 +1534,13 @@ export class DungeonScene {
       const mesh = new THREE.Mesh(geometry, materials.get(spritePath));
       mesh.name = `OARB-${placement.id}-${placement.variantId}`;
       const sinkIntoGround = placement.sinkIntoGround ?? variant?.sinkIntoGround ?? 0.06;
-      mesh.position.set(x, groundY - sinkIntoGround, z);
+      const bottomTransparentPaddingRatio = placement.bottomTransparentPaddingRatio ?? variant?.bottomTransparentPaddingRatio ?? 0;
+      const visualBaseGroundingOffset = height * bottomTransparentPaddingRatio;
+      const maxBillboardYawOffset = placement.tags?.includes('pine-billboard') ? 0.12 : Infinity;
+      mesh.position.set(x, groundY - sinkIntoGround - visualBaseGroundingOffset, z);
       mesh.scale.set(width, height, 1);
       mesh.rotation.y = placement.yawOffset ?? 0;
-      mesh.userData = { ...placement, authoredY, groundY, sinkIntoGround, bottomAnchoredBillboard: true, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq: FIELD_REDWOOD_VISIBLE_DISTANCE_SQ };
+      mesh.userData = { ...placement, authoredY, groundY, sinkIntoGround, bottomTransparentPaddingRatio, visualBaseGroundingOffset, maxBillboardYawOffset, bottomAnchoredBillboard: true, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq: FIELD_REDWOOD_VISIBLE_DISTANCE_SQ };
       group.add(mesh);
       this.fieldFoliageBillboards.push(mesh);
     });
