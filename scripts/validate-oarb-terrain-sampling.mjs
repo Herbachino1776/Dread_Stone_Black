@@ -227,7 +227,10 @@ assert.match(dungeonSceneSource, /createFishMesh\(resolvedSpecies/, 'Raw fish pi
 assert.match(dungeonSceneSource, /visualSource:\s*'sharedKerovacFishSpeciesFactory'/, 'Raw fish pickup metadata must identify the shared Kerovac fish factory.');
 assert.equal(/new THREE\.ConeGeometry\(0\.2, 0\.34, 3\)/.test(dungeonSceneSource), false, 'Raw fish pickups must not use the old simple cone-tail placeholder.');
 assert.match(dungeonSceneSource, /new THREE\.Box3\(\)\.setFromObject\(object\)/, 'Fish pickup invalid: grounded placement does not account for mesh bounding box.');
-assert.equal(/brown-placeholder-pickup/.test(dungeonSceneSource), true, 'Cooked fish placeholder may remain, but raw fish placeholder naming must stay removed.');
+assert.equal(/brown-placeholder-pickup/.test(dungeonSceneSource), false, 'Cooked fish pickup must not use the old brown placeholder blob/capsule.');
+assert.match(dungeonSceneSource, /createFishMesh\(cookedSpecies/, 'Cooked fish pickup must be built by the shared Kerovac fish mesh factory.');
+assert.match(dungeonSceneSource, /const cookedSpecies = 'spineBackFish'/, 'Cooked fish pickup must use the C4 keeper species spineBackFish.');
+assert.match(dungeonSceneSource, /cookedFishTintCoversSlot:\s*slot/, 'Cooked fish material must tint both body and fin material slots through the cooked resolver.');
 const pondExpoPonds = oarbOutdoorExpoDefinition.waterBodies.filter((body) => body.tags?.includes('pond-expo'));
 assert.equal(pondExpoPonds.length, 8, 'Pond Expo has exactly 8 generated pond water bodies.');
 const seenPondSpecies = new Set();
