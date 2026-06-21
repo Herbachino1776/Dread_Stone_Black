@@ -9,7 +9,7 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { FISH_SPECS } from '../src/game/fishing/FishMeshFactory.js';
 import { resolveStartupArea } from '../src/game/locationRouting.js';
-import { folsomDefinition } from '../src/game/locations/folsom.definition.js';
+import { FOLSOM_PINE_SWATHE_SPECS, FOLSOM_VISIBLE_TREE_BOUNDS, folsomDefinition } from '../src/game/locations/folsom.definition.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { validatePondDecor, validatePondFootprint } from './pond-footprint-validation.mjs';
 
@@ -172,11 +172,38 @@ const pineSources = new Set(pineVariants.map((variant) => variant.path));
 assert.equal(pineSources.size, 6, 'Folsom invalid: expected six pine source sprites registered.');
 assert.equal(pineVariants.length, 42, 'Folsom invalid: expected 42 pine billboard variants.');
 pineSources.forEach((path) => assert.equal(textureAssetExists(path), true, `Folsom invalid: pine sprite texture missing: ${path}`));
-const minimumFolsomPineBillboards = 120;
-const preferredFolsomPineBillboardMax = 220;
-assert.ok(pinePlacements.length >= minimumFolsomPineBillboards, 'Folsom invalid: pine forest density below required minimum.');
-assert.ok(pinePlacements.length >= minimumFolsomPineBillboards, `Folsom invalid: expected at least 120 pine billboards. Found ${pinePlacements.length}.`);
-assert.ok(pinePlacements.length <= preferredFolsomPineBillboardMax, `Folsom invalid: pine tree count ${pinePlacements.length} exceeds the preferred dense-forest budget of ${preferredFolsomPineBillboardMax}.`);
+const minimumVisibleFolsomPineBillboards = 160;
+const hardFolsomPineBillboardMax = 280;
+const visibleInBoundsPinePlacements = pinePlacements.filter((tree) => {
+  const [x, , z] = tree.position ?? [];
+  return x >= FOLSOM_VISIBLE_TREE_BOUNDS.minX && x <= FOLSOM_VISIBLE_TREE_BOUNDS.maxX && z >= FOLSOM_VISIBLE_TREE_BOUNDS.minZ && z <= FOLSOM_VISIBLE_TREE_BOUNDS.maxZ;
+});
+assert.ok(pinePlacements.length <= hardFolsomPineBillboardMax, `Folsom invalid: pine tree count ${pinePlacements.length} exceeds the hard dense-forest budget of ${hardFolsomPineBillboardMax}.`);
+assert.ok(visibleInBoundsPinePlacements.length === pinePlacements.length, 'Folsom invalid: pine density count includes off-map placements.');
+assert.ok(visibleInBoundsPinePlacements.length >= minimumVisibleFolsomPineBillboards, `Folsom invalid: visible in-bounds pine count below required density. Found ${visibleInBoundsPinePlacements.length}.`);
+FOLSOM_PINE_SWATHE_SPECS.forEach((swathe) => {
+  const [x, z] = swathe.center;
+  assert.ok(x >= -100 && x <= 100 && z >= -100 && z <= 100, `Folsom invalid: pine swathe center outside playable terrain bounds. ${swathe.idPrefix}`);
+});
+const pineSectorCounts = visibleInBoundsPinePlacements.reduce((counts, tree) => {
+  const [x, , z] = tree.position;
+  if (x < 0 && z >= 0) counts.NW += 1;
+  if (x >= 0 && z >= 0) counts.NE += 1;
+  if (x < 0 && z < 0) counts.SW += 1;
+  if (x >= 0 && z < 0) counts.SE += 1;
+  if (z > 48) counts.N += 1;
+  if (z < -48) counts.S += 1;
+  if (x > 48) counts.E += 1;
+  if (x < -48) counts.W += 1;
+  if (Math.abs(x) <= 70 && Math.abs(z) <= 70) counts.insideWallOrNearTown += 1;
+  else counts.outerWallButInBounds += 1;
+  return counts;
+}, { NW: 0, NE: 0, SW: 0, SE: 0, N: 0, S: 0, E: 0, W: 0, insideWallOrNearTown: 0, outerWallButInBounds: 0 });
+assert.ok(pineSectorCounts.insideWallOrNearTown >= 50, 'Folsom invalid: inside-wall or near-town pine count below required coverage.');
+assert.ok(pineSectorCounts.outerWallButInBounds >= 100, 'Folsom invalid: outer wall pine belt must remain in terrain bounds.');
+['NW', 'NE', 'SW', 'SE'].forEach((sector) => assert.ok(pineSectorCounts[sector] >= 24, `Folsom invalid: pine density missing visible sector ${sector}.`));
+['N', 'S', 'E', 'W'].forEach((sector) => assert.ok(pineSectorCounts[sector] >= 40, `Folsom invalid: pine density missing visible edge sector ${sector}.`));
+
 const pineVariantIds = new Set(pineVariants.map((variant) => variant.id));
 const requiredPineBands = ['tiny', 'small', 'medium', 'tall', 'large', 'giant', 'ancient'];
 for (let sourceIndex = 1; sourceIndex <= 6; sourceIndex += 1) requiredPineBands.forEach((band) => assert.ok(pineVariantIds.has(`pine${String(sourceIndex).padStart(2, '0')}_${band}`), 'Folsom invalid: expected 42 pine billboard variants.'));
@@ -204,7 +231,9 @@ pinePlacements.forEach((tree) => {
   assert.ok(tree.tags?.includes('pine-billboard'), `Folsom invalid: pine tree ${tree.id} is not tagged as reusable pine billboard.`);
   assert.ok([...(tree.position ?? []), tree.height, tree.width, tree.sinkIntoGround].every(Number.isFinite), `Folsom invalid: pine tree ${tree.id} has non-finite placement data.`);
   const [x, y, z] = tree.position;
-  assert.ok(Math.abs(y - terrainSampler.sampleOutdoorY(x, z)) <= 0.01, `Folsom invalid: pine tree ${tree.id} base is not grounded to terrain.`);
+  assert.ok(x >= -100 && x <= 100 && z >= -100 && z <= 100, 'Folsom invalid: pine density count includes off-map placements.');
+  assert.ok(Math.abs(x) < 99.5 && Math.abs(z) < 99.5, 'Folsom invalid: pine tree placed where terrain sampler clamps to edge.');
+  assert.ok(Math.abs(y - terrainSampler.sampleOutdoorY(x, z)) <= 0.01, 'Folsom invalid: pine billboard base is not grounded to terrain.');
   pineAvoidValidationZones.forEach((zone) => {
     const failure = zone.label === 'pond water'
       ? 'Folsom invalid: pine tree placed on pond water.'
@@ -317,6 +346,11 @@ const validChestItemIds = new Set(Object.keys(equipmentRegistry.items));
 const requiredChestItems = new Set(['fishing_rod', 'wood_axe', 'flint_stick', 'torch', 'rusted_sword']);
 folsomDefinition.outdoorChests.forEach((chest) => {
   assert.ok(validChestItemIds.has(chest.itemId), `${chest.id} uses a valid item id.`);
+  assert.equal(chest.bodyMaterial, 'agedWood', `${chest.id} uses aged wood chest body material.`);
+  assert.equal(chest.strapMaterial, 'rustedIron', `${chest.id} uses rusted iron strap material.`);
+  assert.ok(textureAssetExists(folsomDefinition.textures[chest.bodyMaterial]?.path), `${chest.id} wood chest texture exists.`);
+  assert.ok(textureAssetExists(folsomDefinition.textures[chest.strapMaterial]?.path), `${chest.id} rusted metal strap texture exists.`);
+  assert.ok(Math.abs((chest.position.y ?? 0) - terrainSampler.sampleOutdoorY(chest.position.x, chest.position.z)) <= 0.22, 'Folsom invalid: outdoor chest is floating above terrain.');
   assert.equal(canStandAt([chest.position.x, chest.position.z]), true, `${chest.id} is reachable on walkable ground.`);
   requiredChestItems.delete(chest.itemId);
 });

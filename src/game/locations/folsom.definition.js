@@ -128,17 +128,21 @@ const folsomPineAvoidZones = Object.freeze([
   { minX: -7, maxX: 7, minZ: -48, maxZ: 10 }, { minX: -50, maxX: -18, minZ: -42, maxZ: -18 },
   { minX: -48, maxX: -25, minZ: 25, maxZ: 47 }, { minX: 28, maxX: 55, minZ: -24, maxZ: 5 },
 ]);
-const folsomPineForestBillboards = Object.freeze([
-  ...createPineForestSwathe({ idPrefix: 'folsom_outer_pine_south', center: [-12, -100], radiusX: 98, radiusZ: 20, count: 34, seed: 177601, variants: folsomPineBillboardVariants, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler, tags: ['outside-wall-forest'] }),
-  ...createPineForestSwathe({ idPrefix: 'folsom_outer_pine_west', center: [-103, -8], radiusX: 18, radiusZ: 88, count: 32, seed: 177602, variants: folsomPineBillboardVariants, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler, tags: ['outside-wall-forest'] }),
-  ...createPineForestSwathe({ idPrefix: 'folsom_outer_pine_east', center: [105, 6], radiusX: 18, radiusZ: 75, count: 24, seed: 177603, variants: folsomPineBillboardVariants, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler, tags: ['outside-wall-forest', 'rusty-reliquary-ominous'] }),
-  ...createPineForestSwathe({ idPrefix: 'folsom_outer_pine_north', center: [4, 106], radiusX: 86, radiusZ: 19, count: 28, seed: 177604, variants: folsomPineBillboardVariants, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler, tags: ['outside-wall-forest', 'north-road-corridor'] }),
-  ...createPineForestSwathe({ idPrefix: 'folsom_inside_pine_belts', center: [-52, 10], radiusX: 36, radiusZ: 58, count: 28, seed: 177605, variants: folsomPineBillboardVariants, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler, tags: ['inside-edge-tree-belt'] }),
-  ...createPineForestSwathe({ idPrefix: 'folsom_pond_pine_clusters', center: [17, -64], radiusX: 38, radiusZ: 22, count: 16, seed: 177606, variants: folsomPineBillboardVariants, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler, tags: ['pond-side-pine-cluster'] }),
-  ...createPineForestSwathe({ idPrefix: 'folsom_shrine_pine_grove', center: [-55, 51], radiusX: 30, radiusZ: 20, count: 24, seed: 177607, variants: folsomPineBillboardVariants, variantWeights: { tall: 2, large: 2, giant: 1.5, ancient: 1.2, tiny: 0.2 }, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler, tags: ['shrine-grove'] }),
-  ...createPineForestSwathe({ idPrefix: 'folsom_north_road_pines', center: [22, 63], radiusX: 30, radiusZ: 36, count: 18, seed: 177608, variants: folsomPineBillboardVariants, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler, tags: ['north-road-corridor'] }),
-  ...createPineForestSwathe({ idPrefix: 'folsom_reliquary_dark_pines', center: [99, 22], radiusX: 16, radiusZ: 22, count: 10, seed: 177609, variants: folsomPineBillboardVariants, variantWeights: { tall: 2, large: 2.2, giant: 1.4, ancient: 1.1, tiny: 0.1 }, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler, tags: ['rusty-reliquary-ominous'] }),
+export const FOLSOM_VISIBLE_TREE_BOUNDS = Object.freeze({ minX: -96, maxX: 96, minZ: -96, maxZ: 96 });
+export const FOLSOM_PINE_SWATHE_SPECS = Object.freeze([
+  { idPrefix: 'folsom_outer_pine_south', center: [-10, -82], radiusX: 84, radiusZ: 14, count: 34, seed: 177601, tags: ['outside-wall-forest', 'south-visible-belt'] },
+  { idPrefix: 'folsom_outer_pine_west', center: [-82, -8], radiusX: 13, radiusZ: 78, count: 36, seed: 177602, tags: ['outside-wall-forest', 'west-visible-belt'] },
+  { idPrefix: 'folsom_outer_pine_east', center: [82, 8], radiusX: 12, radiusZ: 70, count: 32, seed: 177603, tags: ['outside-wall-forest', 'east-visible-belt', 'rusty-reliquary-ominous'] },
+  { idPrefix: 'folsom_outer_pine_north', center: [0, 82], radiusX: 76, radiusZ: 12, count: 32, seed: 177604, tags: ['outside-wall-forest', 'north-road-corridor', 'north-visible-belt'] },
+  { idPrefix: 'folsom_inside_pine_belts', center: [-55, 0], radiusX: 30, radiusZ: 58, count: 30, seed: 177605, tags: ['inside-edge-tree-belt'] },
+  { idPrefix: 'folsom_pond_pine_clusters', center: [22, -66], radiusX: 42, radiusZ: 20, count: 20, seed: 177606, tags: ['pond-side-pine-cluster'] },
+  { idPrefix: 'folsom_shrine_pine_grove', center: [-58, 54], radiusX: 26, radiusZ: 18, count: 24, seed: 177607, variantWeights: { tall: 2, large: 2, giant: 1.5, ancient: 1.2, tiny: 0.2 }, tags: ['shrine-grove'] },
+  { idPrefix: 'folsom_north_road_pines', center: [24, 62], radiusX: 28, radiusZ: 28, count: 20, seed: 177608, tags: ['north-road-corridor', 'inside-edge-tree-belt'] },
+  { idPrefix: 'folsom_reliquary_dark_pines', center: [76, 24], radiusX: 14, radiusZ: 24, count: 14, seed: 177609, variantWeights: { tall: 2, large: 2.2, giant: 1.4, ancient: 1.1, tiny: 0.1 }, tags: ['rusty-reliquary-ominous'] },
 ]);
+const folsomPineForestBillboards = Object.freeze(FOLSOM_PINE_SWATHE_SPECS.flatMap((spec) => createPineForestSwathe({
+  ...spec, variants: folsomPineBillboardVariants, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler,
+})));
 
 const folsomCityBorderWoodenWall = createCityBorderWoodenWall({
   idPrefix: 'folsom_city_border_wooden_wall',
@@ -228,11 +232,11 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_work_yard_woodpile_blocker', kind: 'capsule', from: [-26, -44], to: [-17, -44], radius: 0.9, visibleStructureId: 'folsom_work_yard_woodpile', tags: ['work-yard'] },
   ],
   outdoorChests: [
-    { id: 'folsom_fishing_rod_chest', label: 'Pond-Side Fishing Chest', position: { x: -12, y: 0.18, z: -43 }, itemId: 'fishing_rod', acquiredMessage: 'Fishing Rod Acquired.', tags: ['pond', 'starter-loop'] },
-    { id: 'folsom_wood_axe_chest', label: 'Tool Shed Axe Chest', position: { x: -39, y: 0.18, z: -29 }, itemId: 'wood_axe', acquiredMessage: 'Wood Axe Acquired.', tags: ['tool-shed', 'starter-loop'] },
-    { id: 'folsom_flint_stick_chest', label: 'Work Yard Flint Chest', position: { x: -22, y: 0.18, z: -39 }, itemId: 'flint_stick', acquiredMessage: 'Flint Stick Acquired.', tags: ['work-yard', 'starter-loop'] },
-    { id: 'folsom_torch_chest', label: 'House Torch Chest', position: { x: 46, y: 0.18, z: -7 }, itemId: 'torch', acquiredMessage: 'Torch Acquired.', tags: ['house-interior', 'starter-loop'] },
-    { id: 'folsom_rusted_sword_chest', label: 'Underworks Sword Chest', position: { x: 35, y: 0.18, z: 38 }, itemId: 'rusted_sword', acquiredMessage: 'Rusted Sword Acquired.', tags: ['first-weapon', 'dungeon-route'] },
+    { id: 'folsom_fishing_rod_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Pond-Side Fishing Chest', position: { x: -12, y: -0.015, z: -43 }, itemId: 'fishing_rod', acquiredMessage: 'Fishing Rod Acquired.', tags: ['pond', 'starter-loop'] },
+    { id: 'folsom_wood_axe_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Tool Shed Axe Chest', position: { x: -39, y: 0.079, z: -29 }, itemId: 'wood_axe', acquiredMessage: 'Wood Axe Acquired.', tags: ['tool-shed', 'starter-loop'] },
+    { id: 'folsom_flint_stick_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Work Yard Flint Chest', position: { x: -22, y: -0.343, z: -39 }, itemId: 'flint_stick', acquiredMessage: 'Flint Stick Acquired.', tags: ['work-yard', 'starter-loop'] },
+    { id: 'folsom_torch_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'House Torch Chest', position: { x: 46, y: 0.21, z: -7 }, itemId: 'torch', acquiredMessage: 'Torch Acquired.', tags: ['house-interior', 'starter-loop'] },
+    { id: 'folsom_rusted_sword_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Underworks Sword Chest', position: { x: 35, y: 0.799, z: 38 }, itemId: 'rusted_sword', acquiredMessage: 'Rusted Sword Acquired.', tags: ['first-weapon', 'dungeon-route'] },
   ],
   outdoorCampfires: [{ id: 'folsom_courtyard_campfire', position: { x: -8, y: 0.16, z: -14 }, tags: ['courtyard', 'pond-path', 'starter-loop'] }],
   harvestableTrees: [{ id: 'folsom_work_yard_tree', position: { x: -13, y: 0.12, z: -40 }, yield: 2, label: 'Work Yard Redwood', tags: ['work-yard', 'starter-loop'] }],
