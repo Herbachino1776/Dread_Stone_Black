@@ -143,8 +143,13 @@ export function validatePondDecor(pond, definition, options = {}) {
       if (!definition?.textures?.[boulder.materialKey]) fail(`boulder ${boulder.id} uses missing material ${boulder.materialKey}.`);
       if (!(boulderRecipe.texturePool ?? []).includes(boulder.materialKey)) fail(`boulder ${boulder.id} uses material ${boulder.materialKey} outside its texture pool.`);
       const insideWater = pointInPondPolygon(boulder.position, waterOutline);
-      if (insideWater && !(boulder.partiallySubmerged && boulder.placementZone === 'water-edge')) {
+      if (insideWater && !(boulder.partiallySubmerged && boulder.placementZone === 'submerged')) {
         fail(`boulder ${boulder.id} placed inside water footprint.`);
+      }
+      if (boulder.placementZone === 'submerged') {
+        const edgeDistance = distanceToPolygonEdge(boulder.position, waterOutline);
+        if (!insideWater || edgeDistance > 1.35) fail(`submerged boulder ${boulder.id} is not partly in/near water edge.`);
+        if (boulder.sinkRatio >= 0.78) fail(`submerged boulder ${boulder.id} is fully below water surface.`);
       }
       if (pointInPondDecorClearZone(boulder.position, clearZones)) fail(`boulder ${boulder.id} overlaps a marker, label, or inspection-path clear zone.`);
     });
@@ -167,7 +172,10 @@ export function validatePondDecor(pond, definition, options = {}) {
       if (!registryEntry) fail(`vegetation asset ${placement.spriteId} does not resolve in the outdoor foliage registry.`);
       else if (registryEntry.path !== placement.spritePath) fail(`vegetation asset ${placement.spriteId} resolves to an unexpected sprite path.`);
       if (assetExists && placement.spritePath && !assetExists(placement.spritePath)) fail(`vegetation sprite path does not resolve: ${placement.spritePath}.`);
-      if (pointInPondPolygon(placement.position, waterOutline)) fail(`vegetation ${placement.id} placed inside water footprint.`);
+      if (placement.layer === 'aquatic-brush') {
+        const edgeDistance = distanceToPolygonEdge(placement.position, waterOutline);
+        if (edgeDistance > 1.6) fail(`aquatic brush cluster placed too far from shoreline.`);
+      } else if (pointInPondPolygon(placement.position, waterOutline)) fail(`vegetation ${placement.id} placed inside water footprint.`);
       if (pointInPondDecorClearZone(placement.position, clearZones)) fail(`vegetation ${placement.id} overlaps a marker, label, or inspection-path clear zone.`);
     });
   }
@@ -199,7 +207,14 @@ export function validatePondFootprint(pond, definition, options = {}) {
   if (!SUPPORTED_FOOTPRINT_RECIPES.has(footprint.recipe)) fail('must use a supported single-source irregular-polygon footprint recipe instead of a square/ellipse fallback.');
   if (footprint.center !== pond.center) fail('footprint center must share the exact water center object.');
   if (footprint.waterRadius !== pond.radius) fail('footprint waterRadius must share the exact water radius object.');
-  if (!Array.isArray(waterOutline) || waterOutline.length < 8) fail('water outline must be the single source irregular polygon with at least 8 points.');
+  if (!Array.isArray(waterOutline) || waterOutline.length < 16) fail('water outline must be the single source irregular polygon with at least 16 points.');
+  if (Array.isArray(waterOutline) && waterOutline.length >= 3) {
+    const radii = waterOutline.map(([x, z]) => Math.hypot(x - cx, z - cz));
+    const mean = radii.reduce((sum, radius) => sum + radius, 0) / radii.length;
+    const variation = Math.sqrt(radii.reduce((sum, radius) => sum + (radius - mean) ** 2, 0) / radii.length) / Math.max(EPSILON, mean);
+    const recipeShape = pond?.userData?.recipeData?.shape ?? {};
+    if (variation < 0.045 && (recipeShape.outlineWobble ?? 0) < 0.16 && (recipeShape.edgeRoughness ?? 0) < 0.06) fail('water outline is too circular; shoreline variation below minimum.');
+  }
   if (mudBedOutline.length !== waterOutline.length) fail('bright mud bed outline must be generated point-for-point from the water outline.');
   if (outerShoreOutline.length > 0 && outerShoreOutline.length !== waterOutline.length) fail('wet shore outline must be generated point-for-point from the same water outline.');
   if (footprint.recipe === 'per-vertex-expansion-irregular-polygon') {
