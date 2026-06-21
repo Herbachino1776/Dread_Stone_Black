@@ -21,7 +21,7 @@ export class Hud {
   }
 
   playAttack() {
-    // First-person weapon/arms attack strips can hook in here later without changing combat input.
+    // Combat feedback remains HUD-only; no first-person arm or hand overlay is rendered.
   }
 
   flashDamage() {

@@ -424,7 +424,6 @@ export class Interactions {
 
     this.setTemporaryHint('Chop redwood', 700);
     this.feedback?.shake?.({ durationMs: 180, intensity: 0.08 });
-    this.dungeon.fpvEquipmentRenderer?.playAttack?.(this.equipmentRuntime?.getEquippedWeaponProfile?.());
     this.dungeon.gameState?.markFieldTreeHarvested?.(interaction.id);
     this.dungeon.gameState?.addFieldItem?.('wood', interaction.yield ?? 1);
     if (interaction.treeObject) interaction.treeObject.visible = false;

@@ -379,7 +379,7 @@ Implementation scope:
 - Add hard boundary.
 - Add central landmark.
 - Allow player to move around the field.
-- Preserve mobile controls and FPV arms.
+- Preserve mobile controls and HUD.
 - Do not build all crypt interiors in this PR.
 - Do not add attack/hurt/death creature states.
 - Do not change deployment config.
@@ -433,7 +433,7 @@ Requirements:
   - crypt C: X 0, Z -175
 - Add a central landmark around X 0, Z -25.
 - Add hard outer boundaries so the player cannot leave the playable area.
-- Preserve current mobile-first controls, dual sticks, FPV arms, HUD, and existing indoor dungeon systems.
+- Preserve current mobile-first controls, dual sticks, HUD, HUD, and existing indoor dungeon systems.
 - Do not remove Ram Man.
 - Do not add new animated creatures.
 - Do not add attack/hurt/death animation states.

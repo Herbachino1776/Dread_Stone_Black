@@ -658,7 +658,7 @@ Systems that must remain working:
 - field-to-interior transitions
 - mobile dual-stick controls
 - vertical look
-- FPV arms / HUD
+- HUD / HUD
 - existing combat systems
 - GitHub Pages deployment
 - npm run build

@@ -561,7 +561,7 @@ Required build goals:
 6. Add invisible boundaries at the edge of the first slice.
 7. Add simple interaction volumes for C01, C03 gate, and S01 shrine.
 8. Keep mobile controls working.
-9. Keep current FPV arm/HUD systems working.
+9. Keep current HUD systems working.
 10. Run npm run build before final response.
 ```
 
@@ -586,7 +586,7 @@ Systems that must remain working:
 - GitHub Pages deployment workflow
 - mobile dual-stick controls
 - vertical look
-- existing FPV arm strip
+- existing HUD feedback
 - existing indoor/dungeon prototype access if present
 - npm run build
 ```
