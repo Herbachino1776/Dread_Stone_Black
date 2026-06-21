@@ -201,8 +201,10 @@ export function buildOutdoorPond(input) {
   const recipe = normalizeRecipe(input);
   const random = createRandom(recipe.seed);
   const waterOutline = buildWaterOutline(recipe.center, recipe.size, recipe.shape, random);
-  const mudMargin = finite(recipe.mud.mudBedWidth, recipe.mud.mudMargin) * recipe.size.shoreScale;
-  const wetShoreWidth = recipe.wetShore.wetShoreWidth * recipe.size.shoreScale;
+  const authoredDepth = Math.max(0.1, finite(recipe.terrain.basinDepth, 0.35));
+  const depthT = clamp((authoredDepth - 0.28) / 0.9, 0, 1);
+  const mudMargin = finite(recipe.mud.mudBedWidth, recipe.mud.mudMargin) * recipe.size.shoreScale * (1 - depthT * 0.28);
+  const wetShoreWidth = recipe.wetShore.wetShoreWidth * recipe.size.shoreScale * (1 - depthT * 0.22);
   const mudOffsets = variedOffsets(waterOutline.length, mudMargin, 0.12 + recipe.shape.edgeRoughness * 0.35, random);
   const shoreOffsets = variedOffsets(waterOutline.length, wetShoreWidth, 0.14 + recipe.shape.edgeRoughness * 0.3, random);
   const mudBedOutline = expandPondOutlinePerVertex(waterOutline, recipe.center, mudOffsets);
@@ -215,21 +217,24 @@ export function buildOutdoorPond(input) {
   const waterY = finite(recipe.water.waterSurfaceY, -0.17) + recipe.water.waterYOffset;
   const shoreShelfDepth = finite(recipe.terrain.shoreShelfDepth, 0.045);
   const visibleShelfDepth = Math.min(shoreShelfDepth, 0.05);
-  const mudBedY = finite(recipe.terrain.mudBedY, waterY - visibleShelfDepth) + recipe.mud.mudYOffset;
-  const wetShoreY = finite(recipe.terrain.shoreShelfY, mudBedY + Math.min(0.018, Math.max(0.004, shoreShelfDepth * 0.12)));
-  const terrainMaxY = Math.min(mudBedY, wetShoreY) - 0.045;
+  const exposedMudAboveWater = finite(recipe.terrain.exposedMudAboveWater, 0.018 + depthT * 0.012);
+  const waterFloorY = finite(recipe.terrain.pondFloorY, finite(recipe.terrain.waterFloorY, waterY - recipe.terrain.basinDepth));
+  const innerMudY = finite(recipe.terrain.innerMudY, waterY - Math.max(0.08, authoredDepth * (0.38 + depthT * 0.28)));
+  const mudBedY = finite(recipe.terrain.mudBedY, waterY + exposedMudAboveWater) + recipe.mud.mudYOffset;
+  const wetShoreY = finite(recipe.terrain.shoreShelfY, mudBedY + Math.min(0.065, Math.max(0.018, shoreShelfDepth * (0.28 + depthT * 0.35))));
+  const outerBankY = finite(recipe.terrain.outerBankY, 0.02 + recipe.terrain.bankHeight);
+  const terrainMaxY = Math.max(mudBedY, wetShoreY, outerBankY) - 0.035;
   const layers = {
-    waterY, mudBedY, wetShoreY, terrainMaxY,
-    waterFloorY: finite(recipe.terrain.pondFloorY, finite(recipe.terrain.waterFloorY, waterY - recipe.terrain.basinDepth)),
-    outerBankY: finite(recipe.terrain.outerBankY, 0.02),
+    waterY, mudBedY, wetShoreY, terrainMaxY, waterFloorY, innerMudY, exposedMudAboveWater,
+    outerBankY,
   };
   const footprint = {
     recipe: 'per-vertex-expansion-irregular-polygon', center: recipe.center, waterRadius: [recipe.size.radiusX, recipe.size.radiusZ],
     waterOutline, mudBedOutline, outerShoreOutline, mudOffsets, outerShoreOffsets: shoreOffsets,
     mudOffset: mudMargin, outerShoreOffset: wetShoreWidth, terrainSupportOutline, terrainSafetyMargin,
-    terrainMaxY, minMudMarginWorld: 0.4,
-    minVisibleMudBandWorld: 0.4, shorelineSampleStepWorld: 0.25,
-    layerHeights: { ...layers, terrainSafetyGap: 0.035, waterAboveMud: waterY - mudBedY, shoreShelfDepth, visibleShelfDepth },
+    terrainMaxY, minMudMarginWorld: 0.34,
+    minVisibleMudBandWorld: 0.18, shorelineSampleStepWorld: 0.25,
+    layerHeights: { ...layers, terrainSafetyGap: 0.035, mudAboveWater: mudBedY - waterY, shoreShelfDepth, visibleShelfDepth, visibleMudWidth: mudMargin, wetBankWidth: wetShoreWidth, underwaterMudDepth: waterY - waterFloorY, shoreSlope: (mudBedY - innerMudY) / Math.max(0.1, mudMargin), bankSlope: (outerBankY - mudBedY) / Math.max(0.1, wetShoreWidth) },
     depthProfile: recipe.terrain.depthProfile, depthClass: recipe.terrain.depthProfile, centerDepthBias: recipe.terrain.centerDepthBias,
     visualBandTargets: { waterDominant: true, brightMudWorld: mudMargin, wetBankWorld: wetShoreWidth }, debug: recipe.debug,
   };

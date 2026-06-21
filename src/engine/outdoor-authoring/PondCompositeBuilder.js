@@ -95,6 +95,53 @@ export function createPondOutlineRingGeometry(innerOutline = [], outerOutline = 
   return geometry;
 }
 
+function createPondConformedMudBedGeometry(waterOutline = [], mudOutline = [], center = [0, 0], profile = {}) {
+  const waterY = Number.isFinite(profile.waterY) ? profile.waterY : 0;
+  const floorY = Number.isFinite(profile.waterFloorY) ? profile.waterFloorY : waterY - 0.25;
+  const innerMudY = Number.isFinite(profile.innerMudY) ? profile.innerMudY : (floorY + waterY) * 0.5;
+  const exposedMudY = Number.isFinite(profile.mudBedY) ? profile.mudBedY : waterY + 0.018;
+  const vertices = [0, floorY, 0];
+  const uvs = [0.5, 0.5];
+  const indices = [];
+  const count = Math.min(waterOutline.length, mudOutline.length);
+  for (let index = 0; index < count; index += 1) {
+    const water = waterOutline[index];
+    const mud = mudOutline[index];
+    vertices.push(water[0] - center[0], innerMudY, water[1] - center[1], mud[0] - center[0], exposedMudY, mud[1] - center[1]);
+    uvs.push(0.5 + (water[0] - center[0]) * 0.04, 0.5 + (water[1] - center[1]) * 0.04, 0.5 + (mud[0] - center[0]) * 0.04, 0.5 + (mud[1] - center[1]) * 0.04);
+  }
+  for (let index = 0; index < count; index += 1) {
+    const next = (index + 1) % count;
+    const water = index * 2 + 1;
+    const mud = water + 1;
+    const nextWater = next * 2 + 1;
+    const nextMud = nextWater + 1;
+    upwardTriangle(indices, vertices, 0, water, nextWater);
+    upwardTriangle(indices, vertices, water, mud, nextWater);
+    upwardTriangle(indices, vertices, nextWater, mud, nextMud);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.userData = { pondGeometryKind: 'conformedMudBed', waterVertexCount: count, mudVertexCount: count, coordinateBasis: [...center], depthAware: true };
+  return geometry;
+}
+
+function createPondConformedRingGeometry(innerOutline = [], outerOutline = [], center = [0, 0], profile = {}) {
+  const innerY = Number.isFinite(profile.mudBedY) ? profile.mudBedY : 0.02;
+  const midY = Number.isFinite(profile.wetShoreY) ? profile.wetShoreY : innerY + 0.025;
+  const outerY = Number.isFinite(profile.outerBankY) ? profile.outerBankY : midY + 0.025;
+  const geometry = createPondOutlineRingGeometry(innerOutline, outerOutline, center);
+  const pos = geometry.attributes.position;
+  for (let index = 0; index < pos.count; index += 1) pos.setY(index, index % 2 === 0 ? innerY : outerY);
+  pos.needsUpdate = true;
+  geometry.computeVertexNormals();
+  geometry.userData = { ...geometry.userData, pondGeometryKind: 'conformedWetShore', depthAware: true, innerY, midY, outerY };
+  return geometry;
+}
+
 export function createPondCompositeGeometry(body = {}) {
   const footprint = body.footprint ?? {};
   const center = Array.isArray(body.center) ? body.center : [0, 0];
@@ -116,17 +163,17 @@ export function createPondCompositeGeometry(body = {}) {
       source: 'waterOutline',
     },
     mudBed: {
-      geometry: createPondOutlineDiscGeometry(mudBedOutline, center),
+      geometry: createPondConformedMudBedGeometry(waterOutline, mudBedOutline, center, heights),
       outline: mudBedOutline,
-      position: [center[0], mudBedY, center[1]],
+      position: [center[0], 0, center[1]],
       materialKey: body.bedMaterial,
       source: 'mudBedOutline',
     },
     wetShore: outerShoreOutline.length >= 3 ? {
-      geometry: createPondOutlineRingGeometry(mudBedOutline, outerShoreOutline, center),
+      geometry: createPondConformedRingGeometry(mudBedOutline, outerShoreOutline, center, heights),
       innerOutline: mudBedOutline,
       outline: outerShoreOutline,
-      position: [center[0], wetShoreY, center[1]],
+      position: [center[0], 0, center[1]],
       materialKey: body.shoreMaterial,
       source: 'outerShoreOutline',
     } : null,

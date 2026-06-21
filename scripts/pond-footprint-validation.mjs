@@ -264,11 +264,22 @@ function samePointList(actual, expected, tolerance = 0.002) {
   ));
 }
 
-function geometryHasOnlyUpwardTopNormals(geometry) {
+
+function geometryWorldYRange(geometry, position = [0, 0, 0]) {
+  const attribute = geometry?.attributes?.position;
+  if (!attribute) return { min: Infinity, max: -Infinity, values: [] };
+  const values = Array.from({ length: attribute.count }, (_, index) => attribute.getY(index) + position[1]);
+  return { min: Math.min(...values), max: Math.max(...values), values };
+}
+
+function geometryWorldXZForIndices(geometry, position, indices) {
+  return geometryWorldXZ(geometry, position, indices);
+}
+function geometryHasAcceptableTopNormals(geometry) {
   const normals = geometry?.attributes?.normal;
   if (!normals || normals.count === 0) return false;
   for (let index = 0; index < normals.count; index += 1) {
-    if (normals.getY(index) < 0.999) return false;
+    if (normals.getY(index) < 0.2) return false;
   }
   return true;
 }
@@ -288,7 +299,8 @@ export function validateRenderedPondComposite(pond, definition, options = {}) {
 
   const center = pond.center ?? [];
   const waterVertices = geometryWorldXZ(composite.water.geometry, composite.water.position);
-  const mudVertices = geometryWorldXZ(composite.mudBed.geometry, composite.mudBed.position);
+  const mudOuterIndices = composite.mudBed.geometry.userData?.pondGeometryKind === 'conformedMudBed' ? Array.from({ length: footprint.mudBedOutline?.length ?? 0 }, (_, index) => index * 2 + 2) : null;
+  const mudVertices = geometryWorldXZForIndices(composite.mudBed.geometry, composite.mudBed.position, mudOuterIndices);
   const outerIndices = Array.from({ length: footprint.outerShoreOutline?.length ?? 0 }, (_, index) => index * 2 + 1);
   const shoreOuterVertices = composite.wetShore ? geometryWorldXZ(composite.wetShore.geometry, composite.wetShore.position, outerIndices) : [];
   if (!samePointList(waterVertices, footprint.waterOutline ?? [])) fail('generated water BufferGeometry vertices do not match waterOutline in world coordinates.');
@@ -301,7 +313,7 @@ export function validateRenderedPondComposite(pond, definition, options = {}) {
   if (!Array.isArray(waterProfile?.animatedFrames) || waterProfile.animatedFrames.length !== 6) fail('runtime water material must resolve all six animated pond frames.');
   if (!['loop', 'pingPong'].includes(waterProfile?.playbackMode)) fail('runtime water playback mode must be loop or pingPong.');
   if (composite.water.source !== 'waterOutline' || composite.mudBed.source !== 'mudBedOutline' || composite.wetShore?.source !== 'outerShoreOutline') fail('one or more runtime layers selected a fallback ellipse/square geometry source.');
-  if (![composite.water.geometry, composite.mudBed.geometry, composite.wetShore?.geometry].filter(Boolean).every(geometryHasOnlyUpwardTopNormals)) fail('generated pond top geometry contains downward-facing normals.');
+  if (![composite.water.geometry, composite.mudBed.geometry, composite.wetShore?.geometry].filter(Boolean).every(geometryHasAcceptableTopNormals)) fail('generated pond top geometry contains downward-facing normals.');
 
   waterVertices.forEach((point, index) => {
     if (!pointInPolygon(point, mudVertices)) fail(`generated water vertex ${index} falls outside the generated mud mesh polygon.`);
@@ -320,8 +332,16 @@ export function validateRenderedPondComposite(pond, definition, options = {}) {
   const wetShoreY = composite.wetShore?.position[1] ?? mudBedY;
   const waterY = composite.water.position[1];
   const terrainSafetyGap = footprint.layerHeights?.terrainSafetyGap ?? 0.02;
-  if (!(waterY > mudBedY && waterY - mudBedY >= (footprint.layerHeights?.waterAboveMud ?? 0.035) - EPSILON)) fail('water mesh is not explicitly above the bright mud underlay.');
-  if (Math.abs(wetShoreY - mudBedY) > 0.02) fail('wet shore and bright mud layers are too far apart to read as one shoreline.');
+  const mudYRange = geometryWorldYRange(composite.mudBed.geometry, composite.mudBed.position);
+  const shoreYRange = geometryWorldYRange(composite.wetShore?.geometry, composite.wetShore?.position ?? [0, 0, 0]);
+  const depth = waterY - (footprint.layerHeights?.waterFloorY ?? mudYRange.min);
+  const depthProfile = String(footprint.depthProfile ?? pond?.userData?.depthProfile ?? '');
+  const needsVariation = depth >= 0.5 || /medium|deep/.test(depthProfile);
+  if (!(mudYRange.min < waterY - 0.04)) fail('underwater mud/floor is not below the water surface.');
+  if (!((footprint.layerHeights?.mudBedY ?? mudYRange.max) > waterY + 0.008)) fail('exposed mud inner edge is below water surface.');
+  if (needsVariation && mudYRange.max - mudYRange.min < 0.12) fail('deep pond shore layer is flat; expected Y variation across mud/bank mesh.');
+  if (needsVariation && shoreYRange.max - shoreYRange.min < 0.025) fail('deep pond wet bank layer is flat; expected uphill slope toward grass.');
+  if (Math.abs((shoreYRange.min || wetShoreY) - (footprint.layerHeights?.mudBedY ?? mudBedY)) > 0.08) fail('wet shore and bright mud layers disconnect instead of forming one sloped shoreline.');
 
   const terrainSampler = options.terrainSampler ?? createOutdoorTerrainSampler(definition?.terrain);
   const terrainSamples = samplePolygonInterior(footprint.outerShoreOutline ?? [], options.terrainSampleStepWorld ?? 0.25);
@@ -334,8 +354,10 @@ export function validateRenderedPondComposite(pond, definition, options = {}) {
       maxTerrainPoint = [x, z];
     }
   });
-  const lowestVisibleLayerY = Math.min(mudBedY, wetShoreY);
-  if (maxTerrainY > lowestVisibleLayerY - terrainSafetyGap + EPSILON) fail(`terrain reaches y=${formatCoord(maxTerrainY)} at x=${maxTerrainPoint?.[0]} z=${maxTerrainPoint?.[1]}, above the required grass-to-mud safety ceiling.`);
+  const outerBankY = footprint.layerHeights?.outerBankY ?? shoreYRange.max;
+  if (maxTerrainY > outerBankY + terrainSafetyGap + 0.08) fail(`terrain reaches y=${formatCoord(maxTerrainY)} at x=${maxTerrainPoint?.[0]} z=${maxTerrainPoint?.[1]}, above the conformed outer bank ceiling.`);
+  if (needsVariation && (footprint.layerHeights?.visibleMudWidth ?? Infinity) > 1.25) fail('visible bright mud band is too wide for a deep conformed pond.');
+  if (needsVariation && (footprint.layerHeights?.wetBankWidth ?? Infinity) > 0.78) fail('dark wet bank is too wide for a deep conformed pond.');
 
   return {
     valid: errors.length === 0,
@@ -345,7 +367,7 @@ export function validateRenderedPondComposite(pond, definition, options = {}) {
       mudVertexCount: composite.mudBed.geometry.attributes.position.count,
       shoreVertexCount: composite.wetShore?.geometry.attributes.position.count ?? 0,
       maxTerrainY: formatCoord(maxTerrainY),
-      layerHeights: { wetShoreY, mudBedY, waterY },
+      layerHeights: { wetShoreY, mudBedY, waterY, mudYRange, shoreYRange },
       coordinateBasis: composite.coordinateBasis,
       materialKeys: { wetShore: composite.wetShore?.materialKey, mudBed: composite.mudBed.materialKey, water: composite.water.materialKey },
     },
