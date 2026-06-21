@@ -159,9 +159,9 @@ function normalizeRecipe(input) {
       pinchAmount: 0, bayCount: 2, lobeCount: 3, edgeRoughness: 0.08, radiusVariation: 0.1, ...(input.shape ?? {}),
     },
     terrain: {
-      stampKind: 'hollow', basinDepth: 0.35, waterFloorY: null, mudBedY: null, outerBankY: 0.02,
-      shoreShelfY: null, bankHeight: 0, bankSoftness: 0.7, stampRadius: null, stampDepth: null,
-      stampWidth: null, stampPath: null, gullyPath: null, gullyWidth: 5.2, gullyDepth: 0.32,
+      stampKind: 'hollow', depthProfile: 'medium', basinDepth: 0.35, waterFloorY: null, pondFloorY: null, mudBedY: null, outerBankY: 0.02,
+      shoreShelfY: null, shoreShelfDepth: null, bankHeight: 0, bankSlope: 0.6, bankSoftness: 0.7, centerDepthBias: 0.35,
+      stampRadius: null, stampDepth: null, stampFalloff: null, stampWidth: null, stampPath: null, gullyPath: null, gullyWidth: 5.2, gullyDepth: 0.32,
       shelfRadius: null, flattenRadius: null, hollowRadius: null, bankHillRadius: null, bankHillHeight: null,
       ...(input.terrain ?? {}),
     },
@@ -210,24 +210,28 @@ export function buildOutdoorPond(input) {
   // The Expo terrain grid is intentionally coarse for mobile. Keep the support
   // outline wider than one grid cell so bilinear terrain sampling cannot leak
   // grass up through the generated mud/shore meshes at polygon boundaries.
-  const terrainSafetyMargin = Math.max(6, recipe.wetShore.shoreTransitionWidth);
+  const terrainSafetyMargin = Math.max(9, recipe.wetShore.shoreTransitionWidth);
   const terrainSupportOutline = expandPondOutlineRadially(outerShoreOutline, recipe.center, terrainSafetyMargin);
   const waterY = finite(recipe.water.waterSurfaceY, -0.17) + recipe.water.waterYOffset;
-  const mudBedY = finite(recipe.terrain.mudBedY, waterY - 0.045) + recipe.mud.mudYOffset;
-  const wetShoreY = finite(recipe.terrain.shoreShelfY, mudBedY + 0.004);
+  const shoreShelfDepth = finite(recipe.terrain.shoreShelfDepth, 0.045);
+  const visibleShelfDepth = Math.min(shoreShelfDepth, 0.05);
+  const mudBedY = finite(recipe.terrain.mudBedY, waterY - visibleShelfDepth) + recipe.mud.mudYOffset;
+  const wetShoreY = finite(recipe.terrain.shoreShelfY, mudBedY + Math.min(0.018, Math.max(0.004, shoreShelfDepth * 0.12)));
   const terrainMaxY = Math.min(mudBedY, wetShoreY) - 0.045;
   const layers = {
     waterY, mudBedY, wetShoreY, terrainMaxY,
-    waterFloorY: finite(recipe.terrain.waterFloorY, waterY - recipe.terrain.basinDepth),
+    waterFloorY: finite(recipe.terrain.pondFloorY, finite(recipe.terrain.waterFloorY, waterY - recipe.terrain.basinDepth)),
     outerBankY: finite(recipe.terrain.outerBankY, 0.02),
   };
   const footprint = {
     recipe: 'per-vertex-expansion-irregular-polygon', center: recipe.center, waterRadius: [recipe.size.radiusX, recipe.size.radiusZ],
     waterOutline, mudBedOutline, outerShoreOutline, mudOffsets, outerShoreOffsets: shoreOffsets,
-    mudOffset: mudMargin, outerShoreOffset: 0.4, terrainSupportOutline, terrainSafetyMargin,
+    mudOffset: mudMargin, outerShoreOffset: wetShoreWidth, terrainSupportOutline, terrainSafetyMargin,
     terrainMaxY, minMudMarginWorld: 0.4,
     minVisibleMudBandWorld: 0.4, shorelineSampleStepWorld: 0.25,
-    layerHeights: { ...layers, terrainSafetyGap: 0.035, waterAboveMud: waterY - mudBedY }, debug: recipe.debug,
+    layerHeights: { ...layers, terrainSafetyGap: 0.035, waterAboveMud: waterY - mudBedY, shoreShelfDepth, visibleShelfDepth },
+    depthProfile: recipe.terrain.depthProfile, depthClass: recipe.terrain.depthProfile, centerDepthBias: recipe.terrain.centerDepthBias,
+    visualBandTargets: { waterDominant: true, brightMudWorld: mudMargin, wetBankWorld: wetShoreWidth }, debug: recipe.debug,
   };
   const terrainStamps = buildTerrainStamps(recipe, footprint, layers);
   const markerOffset = recipe.markerOffset ?? [-6.8, 0, -7.2];
@@ -257,6 +261,7 @@ export function buildOutdoorPond(input) {
       terrainStampIds: terrainStamps.map((stamp) => stamp.id),
       visibleMarker: { id: recipe.markerId ?? `${recipe.id}_marker`, label: recipe.label, offset: markerOffset },
       keeperCandidate: Boolean(recipe.keeperCandidate), futureFishable: Boolean(recipe.futureFishable),
+      depthProfile: recipe.terrain.depthProfile, depthMetersApprox: roundWorld(waterY - layers.waterFloorY), shorelineBandRebalance: { waterAreaScale: recipe.size.waterAreaScale, brightMudWidth: mudMargin, wetBankWidth: wetShoreWidth },
       noDownwardFacingTopNormals: true, usesSquareDecalFallback: false,
       waterMeshSource: 'waterOutline', brightMudMeshSource: 'mudBedOutline', wetShoreMeshSource: 'outerShoreOutline',
       validation: { coordinateBasis: recipe.center, waterInsideMud: true, wetShoreOutsideMud: true, avoidsGrassContact: true, generatedGeometry: footprint },
