@@ -33,8 +33,8 @@ export const weaponProfiles = createWeaponProfileRegistry([
   },
   {
     id: 'fishing_rod',
-    displayName: 'Fishing Rod',
-    description: 'A dark river tool for pulling food from cursed water.',
+    displayName: 'Rod A1',
+    description: 'The canonical Kerovac Expo A1 reed pole, now rigged for casting.',
     weaponType: 'tool',
     damage: 2, attackRange: 2.0, attackCooldown: 1.2, windupTime: 0.1, recoveryTime: 0.2, staminaCost: 1,
     goreProfileId: 'unarmed', hitReactionType: 'light_stagger',

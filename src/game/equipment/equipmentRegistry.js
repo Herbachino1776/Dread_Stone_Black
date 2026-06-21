@@ -19,7 +19,7 @@ export const equipmentRegistry = Object.freeze({
       source: 'field_survival_axe_chest',
     }),
     fishing_rod: Object.freeze({
-      id: 'fishing_rod', name: 'Fishing Rod', displayName: 'Fishing Rod', itemType: 'weapon', type: 'tool', slot: 'weapon', weaponProfileId: 'fishing_rod', tags: ['fishing', 'tool', 'field-survival'], source: 'field_survival_fishing_rod_chest',
+      id: 'fishing_rod', name: 'Fishing Rod', displayName: 'Rod A1', itemType: 'weapon', type: 'tool', slot: 'weapon', weaponProfileId: 'fishing_rod', tags: ['fishing', 'tool', 'field-survival'], source: 'field_survival_fishing_rod_chest',
     }),
     flint_stick: Object.freeze({
       id: 'flint_stick',

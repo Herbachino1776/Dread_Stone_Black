@@ -254,15 +254,15 @@ const pond08 = pondExpoPonds.find((pond) => pond.userData?.pondExpoId === 'POND 
 
 const pondExpoChestIds = ['pond_expo_reed_pole_chest', 'pond_expo_hooked_branch_rod_chest', 'pond_expo_heavy_river_rod_chest'];
 const pondExpoChestVariants = new Map([
-  ['pond_expo_reed_pole_chest', 'reedPoleRod'],
-  ['pond_expo_hooked_branch_rod_chest', 'hookedBranchRod'],
-  ['pond_expo_heavy_river_rod_chest', 'heavyRiverRod'],
+  ['pond_expo_reed_pole_chest', 'rodA1'],
+  ['pond_expo_hooked_branch_rod_chest', 'rodA1'],
+  ['pond_expo_heavy_river_rod_chest', 'rodA1'],
 ]);
 const pondExpoChests = oarbOutdoorExpoDefinition.outdoorChests?.filter((chest) => pondExpoChestIds.includes(chest.id)) ?? [];
 assert.equal(pondExpoChests.length, 3, 'Pond Expo has all 3 fishing rod chests.');
 pondExpoChests.forEach((chest) => {
   assert.equal(chest.itemId, 'fishing_rod', `${chest.id} invalid: chest must award the generic fishing_rod item.`);
-  assert.equal(chest.rodVariant, pondExpoChestVariants.get(chest.id), `${chest.id} invalid: rodVariant metadata mismatch.`);
+  assert.equal(chest.rodVariant, pondExpoChestVariants.get(chest.id), `${chest.id} invalid: active gameplay rodVariant must be canonical rodA1.`);
   assert.ok([chest.position?.x, chest.position?.y, chest.position?.z].every(Number.isFinite), `${chest.id} invalid: chest position is not finite.`);
   const nearestPondDistance = Math.min(...pondExpoPonds.map((pond) => Math.hypot(chest.position.x - pond.center[0], chest.position.z - pond.center[1])));
   assert.ok(nearestPondDistance <= 22, `${chest.id} invalid: chest is not close enough to Pond Expo.`);

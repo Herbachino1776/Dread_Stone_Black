@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { buildDungeonGeometry } from '../src/engine/dungeon-authoring/DungeonGeometryBuilder.js';
 import { kerovacDefinition } from '../src/game/locations/generated/kerovac.definition.js';
 import { FISH_SPECIES_IDS, FISH_SPECS, FISH_TEXTURE_PROFILES, createFishMesh } from '../src/game/fishing/FishMeshFactory.js';
+import { ACTIVE_GAMEPLAY_RODS, CANONICAL_GAMEPLAY_ROD_ID, KEROVAC_EXPO_ROD_A1_SOURCE, createRodA1Mesh } from '../src/game/fishing/FishingRodFactory.js';
 
 const testMaterialFactory = (profile = {}) => {
   const material = new THREE.MeshStandardMaterial({
@@ -33,6 +34,14 @@ const expectedSpecies = ['smallRiverFish', 'broadCarpFish', 'longEelFish', 'spin
 if (JSON.stringify(FISH_SPECIES_IDS) !== JSON.stringify(expectedSpecies)) fail(`Shared fish registry must expose the permanent species ids in Kerovac order.`);
 expectedSpecies.forEach((species) => { if (!FISH_SPECS[species]) fail(`Shared FISH_SPECS missing ${species}.`); });
 
+
+
+const rodA1Primitive = kerovacDefinition.architecturalPrimitives?.find((primitive) => primitive.kind === 'fishingRodDisplay' && primitive.userData?.displayPadId === 'A1');
+if (!rodA1Primitive) fail('Fishing invalid: Kerovac Expo Rod A1 was not registered as canonical rodA1.');
+if (rodA1Primitive.id !== KEROVAC_EXPO_ROD_A1_SOURCE.sourcePrimitiveId || rodA1Primitive.variant !== KEROVAC_EXPO_ROD_A1_SOURCE.sourceVariant) fail('Fishing invalid: Kerovac Expo Rod A1 source metadata does not match canonical rodA1.');
+if (ACTIVE_GAMEPLAY_RODS.length !== 1 || ACTIVE_GAMEPLAY_RODS[0]?.id !== CANONICAL_GAMEPLAY_ROD_ID) fail('Fishing invalid: more than one active gameplay rod is exposed.');
+const rodA1Mesh = createRodA1Mesh();
+if (rodA1Mesh.userData?.visualSource !== 'KerovacExpoSlotA1' || rodA1Mesh.userData?.fallbackDebugGeometry !== false) fail('Fishing invalid: fallback/debug rod used instead of canonical Rod A1.');
 
 const expectedKerovacFishPads = new Map([
   ['C1', 'smallRiverFish'],
@@ -215,5 +224,17 @@ for (const pond of waterBodies.filter((body) => body.fishable)) {
   if (!(normalized > 1)) fail(`${pond.label ?? pond.id} invalid: raw fish landing point is inside water footprint.`);
   if (!(normalized < 2.5)) fail(`${pond.label ?? pond.id} invalid: raw fish landing point is not near the water edge.`);
 }
+
+
+const gameSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/Game.js', import.meta.url), 'utf8'));
+const interactionSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/Interactions.js', import.meta.url), 'utf8'));
+const castingSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/CastingController.js', import.meta.url), 'utf8'));
+const lureSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/LureProjectile.js', import.meta.url), 'utf8'));
+if (!gameSource.includes('new FishingRodView') || !gameSource.includes('new CastingController')) fail('Fishing invalid: Rod A1 view exists when equipped and cast controller exists checks failed.');
+if (interactionSource.includes("return this.startFishingTimedAction(interaction);")) fail('Fishing invalid: old proximity timer fishing remains primary while Rod A1 is equipped.');
+if (!castingSource.includes('spawnRawFishPickupFromCast') || !castingSource.includes('Fish On')) fail('Fishing invalid: successful catch is not routed through cast landing.');
+if (!lureSource.includes('Number.isFinite(length)') && !lureSource.includes('this.velocity')) fail('Fishing invalid: lure projectile uses finite positions/velocities check failed.');
+if (!lureSource.includes('replacesUglyFakeWorm: true')) fail('Fishing invalid: fake worm lure was not replaced.');
+if (!castingSource.includes("hud.showMessage('Cast Failed')")) fail('Fishing invalid: failed ground cast spawned a fish.');
 
 console.log(`Fish geometry sanity check passed for ${fishRoots.length} continuous symmetrical volumetric fish and raw pickup presentation.`);

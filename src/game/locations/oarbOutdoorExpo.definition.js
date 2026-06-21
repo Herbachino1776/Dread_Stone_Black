@@ -197,9 +197,9 @@ export const oarbOutdoorExpoDefinition = Object.freeze({
     ...pondExpoSystem.waterBodies,
   ],
   outdoorChests: [
-    { id: 'pond_expo_reed_pole_chest', label: 'Reed Pole Rod Chest', position: { x: -121, y: 0.18, z: 6 }, itemId: 'fishing_rod', rodVariant: 'reedPoleRod', acquiredMessage: 'Reed Pole Fishing Rod Acquired.', tags: ['pond-expo', 'fishing', 'rod-chest'] },
-    { id: 'pond_expo_hooked_branch_rod_chest', label: 'Hooked Branch Rod Chest', position: { x: -121, y: 0.18, z: 54 }, itemId: 'fishing_rod', rodVariant: 'hookedBranchRod', acquiredMessage: 'Hooked Branch Fishing Rod Acquired.', tags: ['pond-expo', 'fishing', 'rod-chest'] },
-    { id: 'pond_expo_heavy_river_rod_chest', label: 'Heavy River Rod Chest', position: { x: -25, y: 0.18, z: 54 }, itemId: 'fishing_rod', rodVariant: 'heavyRiverRod', acquiredMessage: 'Heavy River Fishing Rod Acquired.', tags: ['pond-expo', 'fishing', 'rod-chest'] },
+    { id: 'pond_expo_reed_pole_chest', label: 'Reed Pole Rod Chest', position: { x: -121, y: 0.18, z: 6 }, itemId: 'fishing_rod', rodVariant: 'rodA1', acquiredMessage: 'Rod A1 Acquired.', tags: ['pond-expo', 'fishing', 'rod-chest'] },
+    { id: 'pond_expo_hooked_branch_rod_chest', label: 'Hooked Branch Rod Chest', position: { x: -121, y: 0.18, z: 54 }, itemId: 'fishing_rod', rodVariant: 'rodA1', acquiredMessage: 'Rod A1 Acquired.', tags: ['pond-expo', 'fishing', 'rod-chest'] },
+    { id: 'pond_expo_heavy_river_rod_chest', label: 'Heavy River Rod Chest', position: { x: -25, y: 0.18, z: 54 }, itemId: 'fishing_rod', rodVariant: 'rodA1', acquiredMessage: 'Rod A1 Acquired.', tags: ['pond-expo', 'fishing', 'rod-chest'] },
   ],
   reservedStations: [
     { id: 'future_bridge_platform_tests', label: 'Future Bridge/Platform Tests', bounds: { minX: -132, maxX: -70, minZ: 78, maxZ: 112 }, tags: ['future-bridge-platform-tests'] },

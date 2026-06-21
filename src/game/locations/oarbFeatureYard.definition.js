@@ -52,7 +52,7 @@ export const oarbFeatureYardDefinition = Object.freeze({
     { id: 'oarb_training_pond', kind: 'pond', center: [60, 34], radius: [17, 12], y: -0.58, material: 'pondWater', fishable: true, fishableRadius: 22, shoreMaterial: 'mudShore', shoreWidth: 5.5, tags: ['fishable', 'oarb-proving-ground'] },
   ],
   outdoorChests: [
-    { id: 'oarb_training_pond_fishing_rod_chest', label: 'Fishing Rod Chest', position: { x: 42, y: -0.08, z: 52 }, itemId: 'fishing_rod', acquiredMessage: 'Fishing Rod Acquired.', tags: ['fishing', 'pond-cue'] },
+    { id: 'oarb_training_pond_fishing_rod_chest', label: 'Fishing Rod Chest', position: { x: 42, y: -0.08, z: 52 }, itemId: 'fishing_rod', acquiredMessage: 'Rod A1 Acquired.', tags: ['fishing', 'pond-cue'] },
   ],
   outdoorPrimitives: [
     { id: 'oarb_yard_cliff_wall_visible', kind: 'cliffWall', points: [[-80, 24], [-62, 52], [-18, 66], [24, 58]], height: 7.5, thickness: 3.2, material: 'rockWall', tags: ['visible-boundary', 'paired-blocker'] },
