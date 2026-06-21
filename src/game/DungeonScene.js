@@ -2151,7 +2151,7 @@ export class DungeonScene {
       itemId: 'flint_stick',
       acquiredMessage: 'Flint Stick Acquired.',
     });
-    this.addFieldSurvivalChest({ id: FIELD_SURVIVAL_PLACEMENTS.fishingRodChest.id, label: 'Fishing Rod Chest', position: FIELD_SURVIVAL_PLACEMENTS.fishingRodChest.position, itemId: 'fishing_rod', acquiredMessage: 'Fishing Rod Acquired.' });
+    this.addFieldSurvivalChest({ id: FIELD_SURVIVAL_PLACEMENTS.fishingRodChest.id, label: 'Fishing Rod Chest', position: FIELD_SURVIVAL_PLACEMENTS.fishingRodChest.position, itemId: 'fishing_rod', acquiredMessage: 'Rod A1 Acquired.' });
     this.restoreHarvestedRedwoodVisuals();
     this.addCampfireCraftingPrompt();
 
@@ -2189,13 +2189,13 @@ export class DungeonScene {
   }
 
   addFishingRodChestPreview(id, position, rodVariant) {
-    const colorByVariant = { reedPoleRod: 0x8a7442, hookedBranchRod: 0x4a2d1b, heavyRiverRod: 0x33251b };
+    const colorByVariant = { rodA1: 0x8a7442 };
     const group = new THREE.Group();
     group.name = `${id}-${rodVariant}-preview`;
     group.position.set(position.x + 1.2, position.y + 0.45, position.z);
     group.rotation.z = -0.55;
     group.userData = { objectCategory: 'fishingRodPreview', itemId: 'fishing_rod', rodVariant, sourceChestId: id };
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, rodVariant === 'heavyRiverRod' ? 0.075 : 0.05, rodVariant === 'heavyRiverRod' ? 2.3 : 2.8, 8), new THREE.MeshStandardMaterial({ color: colorByVariant[rodVariant] ?? 0x6d4525, roughness: 0.85 }));
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 2.8, 8), new THREE.MeshStandardMaterial({ color: colorByVariant[rodVariant] ?? 0x6d4525, roughness: 0.85 }));
     shaft.rotation.z = Math.PI / 2;
     shaft.userData = group.userData;
     group.add(shaft);
@@ -2515,6 +2515,22 @@ export class DungeonScene {
     root.add(group);
     root.userData.visualChild = group;
     return root;
+  }
+
+  spawnRawFishPickupFromCast(lurePosition, fishingZone = null, player = null) {
+    if (!lurePosition || !fishingZone) return null;
+    const castPlayer = {
+      position: lurePosition.clone?.() ?? new THREE.Vector3(lurePosition.x ?? 0, lurePosition.y ?? 0, lurePosition.z ?? 0),
+      yaw: player?.yaw ?? 0,
+      getLookDirection: () => {
+        if (player?.position) {
+          const outward = (player.position.clone?.() ?? new THREE.Vector3()).sub(lurePosition).setY(0);
+          if (outward.lengthSq() > 0.001) return outward.normalize();
+        }
+        return new THREE.Vector3(0, 0, 1);
+      },
+    };
+    return this.spawnRawFishPickupForPlayer(castPlayer, fishingZone);
   }
 
   spawnRawFishPickupForPlayer(player, fishingZone = null) {

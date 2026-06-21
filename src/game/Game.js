@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { Combat } from './Combat.js';
+import { FishingRodView } from './fishing/FishingRodView.js';
+import { CastingController } from './fishing/CastingController.js';
 import { DungeonScene } from './DungeonScene.js';
 import { EQUIPMENT_EVENTS } from '../engine/equipment/EquipmentEvents.js';
 import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
@@ -136,6 +138,8 @@ export class Game {
     this.setPlayerTorchEnabled(this.equipmentRuntime.getEquippedOffhandId?.() === 'torch');
     this.controls = new MobileControls(this.app);
     this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
+    this.fishingRodView = new FishingRodView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
+    this.castingController = new CastingController({ app: this.app, camera: this.camera, player: this.player, dungeon: this.dungeon, hud: this.hud, rodView: this.fishingRodView, equipmentRuntime: this.equipmentRuntime });
     this.interactions = new Interactions({
       player: this.player,
       dungeon: this.dungeon,
@@ -470,6 +474,8 @@ export class Game {
       this.player.update(deltaSeconds, this.controls);
     }
     this.dungeon.update(deltaSeconds, this.player);
+    this.fishingRodView?.update(deltaSeconds, this.castingController?.state);
+    this.castingController?.update(deltaSeconds);
     this.combat.update(deltaSeconds);
     const hunger = this.gameState.updateHunger?.(deltaSeconds, { paused: this.equipmentPanel?.isOpen || this.isPaused, applyStarvationDamage: (amount) => this.combat.takeDamage?.(amount, 'Starvation') });
     if (hunger) this.hud.updateHunger?.(hunger);

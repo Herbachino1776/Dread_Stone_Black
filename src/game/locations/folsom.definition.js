@@ -232,7 +232,7 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_work_yard_woodpile_blocker', kind: 'capsule', from: [-26, -44], to: [-17, -44], radius: 0.9, visibleStructureId: 'folsom_work_yard_woodpile', tags: ['work-yard'] },
   ],
   outdoorChests: [
-    { id: 'folsom_fishing_rod_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Pond-Side Fishing Chest', position: { x: -12, y: -0.015, z: -43 }, itemId: 'fishing_rod', acquiredMessage: 'Fishing Rod Acquired.', tags: ['pond', 'starter-loop'] },
+    { id: 'folsom_fishing_rod_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Pond-Side Fishing Chest', position: { x: -12, y: -0.015, z: -43 }, itemId: 'fishing_rod', acquiredMessage: 'Rod A1 Acquired.', tags: ['pond', 'starter-loop'] },
     { id: 'folsom_wood_axe_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Tool Shed Axe Chest', position: { x: -39, y: 0.079, z: -29 }, itemId: 'wood_axe', acquiredMessage: 'Wood Axe Acquired.', tags: ['tool-shed', 'starter-loop'] },
     { id: 'folsom_flint_stick_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Work Yard Flint Chest', position: { x: -22, y: -0.343, z: -39 }, itemId: 'flint_stick', acquiredMessage: 'Flint Stick Acquired.', tags: ['work-yard', 'starter-loop'] },
     { id: 'folsom_torch_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'House Torch Chest', position: { x: 46, y: 0.21, z: -7 }, itemId: 'torch', acquiredMessage: 'Torch Acquired.', tags: ['house-interior', 'starter-loop'] },

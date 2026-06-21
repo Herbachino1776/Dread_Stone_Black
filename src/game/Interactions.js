@@ -156,7 +156,9 @@ export class Interactions {
     }
 
     if (interaction.type === 'fieldFishing') {
-      return this.startFishingTimedAction(interaction);
+      this.setTemporaryHint('Drag to Cast', 1200);
+      this.hud.showMessage('Use the cast zone.');
+      return false;
     }
 
     if (interaction.type === 'cookedFishPickup') {
@@ -778,7 +780,7 @@ export class Interactions {
 
     const fishingZone = this.dungeon.getNearbyFishingZone?.(this.player.position);
     if (fishingZone && this.equipmentRuntime?.getEquippedWeaponProfile?.().id === 'fishing_rod') {
-      return { id: fishingZone.id, label: fishingZone.label ?? 'River Fishing', target: fishingZone.position, range: fishingZone.interactPadding, hint: 'Fish', message: 'Fish Caught.', type: 'fieldFishing' };
+      return null;
     }
 
     return nearbyOutdoorInteractions[0]?.interaction ?? null;
