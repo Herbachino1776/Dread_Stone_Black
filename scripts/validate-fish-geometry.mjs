@@ -103,7 +103,7 @@ const validateRodA1SnappyLineUnspooling = () => {
   const physics = new FishingLinePhysics({ terrainSampler });
   const rodTip = new THREE.Vector3(0, 1.7, 0);
   physics.resetAtRodTip(rodTip);
-  if (!(physics.currentLineLength === LINE_START_LENGTH && physics.currentLineLength < LINE_MAX_LENGTH * 0.08)) fail('Fishing invalid: cast line starts too long / fully unspooled.');
+  if (!(physics.currentLineLength === LINE_MIN_LENGTH && physics.lurePosition.distanceTo(rodTip) <= LINE_MIN_LENGTH + 0.01)) fail('Fishing invalid: fully reeled lure does not start on the minimum short line.');
   physics.launch(rodTip, new THREE.Vector3(0, 9, -20));
   const launchLength = physics.currentLineLength;
   if (!(launchLength === LINE_START_LENGTH && launchLength < LINE_MAX_LENGTH * 0.08)) fail('Fishing invalid: cast line starts too long / fully unspooled.');
@@ -322,11 +322,13 @@ const interactionSource = await import('node:fs/promises').then((fs) => fs.readF
 const castingSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/CastingController.js', import.meta.url), 'utf8'));
 const lureSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/LureProjectile.js', import.meta.url), 'utf8'));
 const linePhysicsSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/FishingLinePhysics.js', import.meta.url), 'utf8'));
+const physicalFishSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/PhysicalFishAngling.js', import.meta.url), 'utf8'));
 const tuningSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/CastingTuning.js', import.meta.url), 'utf8'));
 if (!gameSource.includes('gameState: this.gameState')) fail('Fishing invalid: FishingRodView does not receive GameState field tool equipment.');
 if (!gameSource.includes('new FishingRodView') || !gameSource.includes('new CastingController')) fail('Fishing invalid: Rod A1 view exists when equipped and cast controller exists checks failed.');
 if (interactionSource.includes("return this.startFishingTimedAction(interaction);")) fail('Fishing invalid: old proximity timer fishing remains primary while Rod A1 is equipped.');
-if (!castingSource.includes('spawnRawFishPickupFromCast') || !castingSource.includes('Fish On')) fail('Fishing invalid: successful catch is not routed through cast landing.');
+if (castingSource.includes('spawnRawFishPickupFromCast') || /FISH ON/i.test(castingSource)) fail('Fishing invalid: cast landing bypasses the physical fish loop or restores forbidden hook text.');
+if (!physicalFishSource.includes('spawnRawFishPickupAtPosition') || !physicalFishSource.includes("setState('reeledToShore')")) fail('Fishing invalid: physical shore landing does not own successful fish pickup creation.');
 
 if (castingSource.includes('cast-zone') || castingSource.includes('Drag Rod')) fail('Fishing invalid: casting still depends on a dedicated cast button or cast zone.');
 if (!castingSource.includes('projectRodGrabHit') || !castingSource.includes('pointerdown') || !castingSource.includes('grabT')) fail('Fishing invalid: rod cannot be directly grabbed by touching the visible rod.');
@@ -391,10 +393,10 @@ if (!castingSource.includes('targetYaw = THREE.MathUtils.clamp(this.state.target
 if (!castingSource.includes('rootOffsetX') || !rodViewSource.includes('pose.rootOffset') || !rodViewSource.includes('this.root.position.x = ROD_REST_POS.x + this.pose.rootOffset.x')) fail('Fishing invalid: Rod A1 grab only applies tiny rotation; whole rod motion missing.');
 if (!castingSource.includes('Screen-space sign convention')) fail('Fishing invalid: Rod A1 drag direction sign convention is undocumented.');
 if (!linePhysicsSource.includes('sampleOutdoorY') || !linePhysicsSource.includes('LINE_GROUND_CLEARANCE') || !linePhysicsSource.includes('LURE_GROUND_CLEARANCE') || !linePhysicsSource.includes('clampLineToTerrain') || !linePhysicsSource.includes('clampLureToTerrain')) fail('Fishing invalid: line/lure passes below terrain.');
-if (!linePhysicsSource.includes('forceGrounded') || !linePhysicsSource.includes('isLureHeldNearRod && !this.isCasting')) fail('Fishing invalid: lure does not rest on terrain at idle.');
-if (!linePhysicsSource.includes('this.isLureOnWater || this.isLureAirborne') || !linePhysicsSource.includes('waterTargetLineLength') || !linePhysicsSource.includes('LINE_WATER_CONTROLLED_SLACK')) fail('Fishing invalid: water-mode fishing line does not angle toward lure.');
+if (!linePhysicsSource.includes('constrainGroundedLureToTerrain') || !linePhysicsSource.includes("lureRecoveryState = 'deployedGround'")) fail('Fishing invalid: deployed ground lure does not remain terrain-owned before recovery.');
+if (!linePhysicsSource.includes('allowedHorizontalDistance') || !linePhysicsSource.includes("lureRecoveryState = 'deployedWater'") || !linePhysicsSource.includes("lureRecoveryState = 'recoveringToTip'")) fail('Fishing invalid: water/ground contact does not drag horizontally before recovery lift.');
 if (!linePhysicsSource.includes('activePoints') || !linePhysicsSource.includes('emittedLineLength') || !linePhysicsSource.includes('solveAirborneRope') || !linePhysicsSource.includes('collapseAtRodTip')) fail('Fishing invalid: active/emitted line length does not grow progressively after cast.');
-if (!linePhysicsSource.includes('this.isLureOnWater || this.isLureAirborne')) fail('Fishing invalid: airborne cast line is terrain-clamped into ground.');
+if (!linePhysicsSource.includes('!this.isCasting') || !linePhysicsSource.includes('solveAirborneRope')) fail('Fishing invalid: airborne cast line is terrain-clamped before projectile landing ownership.');
 
 if (!castingSource.includes("hud.showMessage('Cast Failed')")) fail('Fishing invalid: failed ground cast spawned a fish.');
 

@@ -372,7 +372,7 @@ export class Game {
 
   renderShell() {
     const debugReadout = this.debugHudEnabled
-      ? '<p class="debug-readout" data-hud="debug" aria-label="Debug player position">POS 0.0, 0.0 · YAW 0° · PITCH 0°</p>'
+      ? '<p class="debug-readout" data-hud="debug" aria-label="Debug runtime state">POS 0.0, 0.0 · YAW 0° · PITCH 0°</p>'
       : '';
 
     return `
@@ -465,7 +465,7 @@ export class Game {
     if (this.isPaused) {
       this.controls.consumeAttack();
       this.controls.consumeInteract();
-      this.hud.updateDebug(this.player);
+      this.hud.updateDebug(this.player, this.castingController?.debug);
       this.renderer.render(this.scene, this.camera);
       return;
     }
@@ -492,7 +492,7 @@ export class Game {
     }
     this.wasKeyboardInteractHeld = keyboardInteractHeld;
 
-    this.hud.updateDebug(this.player);
+    this.hud.updateDebug(this.player, this.castingController?.debug);
     this.feedback.update(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
   }

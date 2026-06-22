@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { LureProjectile } from './LureProjectile.js';
 import { FishingWaterResolver } from './FishingWaterResolver.js';
-import { CAST_GESTURE_HISTORY_MS, CAST_MIN_DRAG_DISTANCE, CAST_MIN_RELEASE_SPEED, CAST_MAX_RELEASE_SPEED, CAST_POWER_FROM_VELOCITY, CAST_POWER_FROM_LOAD, CAST_SIDE_AIM_SCALE, CAST_VERTICAL_ARC_SCALE, CAST_ROD_BEND_SCALE, CAST_MAX_RANGE, ROD_GRAB_SPRING, ROD_GRAB_DAMPING, ROD_ANGULAR_SPRING, ROD_ANGULAR_DAMPING, ROD_MASS_FEEL, ROD_BEND_RELEASE_SCALE, ROD_RELEASE_SNAP_SCALE, REEL_GESTURE_INNER_DEADZONE, REEL_GESTURE_MIN_ARC_RAD, REEL_GESTURE_RATE_PER_RADIAN, REEL_GESTURE_MAX_RATE, REEL_GESTURE_RATE_DECAY } from './CastingTuning.js';
+import { CAST_GESTURE_HISTORY_MS, CAST_MIN_DRAG_DISTANCE, CAST_MIN_RELEASE_SPEED, CAST_MAX_RELEASE_SPEED, CAST_POWER_FROM_VELOCITY, CAST_POWER_FROM_LOAD, CAST_SIDE_AIM_SCALE, CAST_VERTICAL_ARC_SCALE, CAST_ROD_BEND_SCALE, CAST_MAX_RANGE, ROD_GRAB_SPRING, ROD_GRAB_DAMPING, ROD_ANGULAR_SPRING, ROD_ANGULAR_DAMPING, ROD_MASS_FEEL, ROD_BEND_RELEASE_SCALE, ROD_RELEASE_SNAP_SCALE, REEL_GESTURE_INNER_DEADZONE, REEL_GESTURE_MIN_ARC_RAD, REEL_GESTURE_MAX_ARC_PER_SAMPLE, REEL_GESTURE_RATE_PER_RADIAN, REEL_GESTURE_MAX_RATE, REEL_GESTURE_TARGET_SMOOTHING, REEL_GESTURE_INPUT_HOLD_SECONDS, REEL_GESTURE_MAX_ACCELERATION, REEL_GESTURE_MAX_DECELERATION } from './CastingTuning.js';
 
 const tmpForward = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
@@ -22,13 +22,13 @@ export class CastingController {
     this.viewport = app.querySelector('[data-game="viewport"]') ?? app;
     this.state = this.createIdleState();
     this.reelState = this.createIdleReelState();
-    this.debug = { enabled: false, loadAmount: 0, releaseSpeed: 0, castValid: false, launchVelocity: new THREE.Vector3(), lureHitType: 'none', lineLength: 0, lineTension: 0, lureMode: 'held', lureSpeed: 0, spoolState: 'held', castAge: 0, lureDistance: 0, payoutAllowed: false, endpointConstraintActive: false, lureSpeedBeforeEndpointConstraint: 0, lureSpeedAfterEndpointConstraint: 0, castGraceActive: false, fishableWaterId: null, manualReelRate: 0, reelClockwiseDegrees: 0, reelZoneHit: false, reelZone: null, projectedReelCenter: null, fallbackReelCenter: null, activeReelPointerId: null, reelClockwiseDelta: 0, pointerMode: 'none', rodHitSamples: [], grabT: 0, hitRadius: 0, grabbedPointBefore: null, grabbedPointAfter: null, handPivot: null, releaseVelocity: { x: 0, y: 0 } };
+    this.debug = { enabled: false, loadAmount: 0, releaseSpeed: 0, castValid: false, launchVelocity: new THREE.Vector3(), lureHitType: 'none', lineLength: 0, minLineLength: 0, maxLineLength: 0, lineTension: 0, lureMode: 'held', lureSpeed: 0, spoolState: 'held', castAge: 0, lureDistance: 0, payoutAllowed: false, endpointConstraintActive: false, lureSpeedBeforeEndpointConstraint: 0, lureSpeedAfterEndpointConstraint: 0, castGraceActive: false, fishableWaterId: null, reelTargetRate: 0, reelActualRate: 0, reelAccelerationClamp: REEL_GESTURE_MAX_ACCELERATION, manualReelRate: 0, reelClockwiseDegrees: 0, reelZoneHit: false, reelZone: null, projectedReelCenter: null, fallbackReelCenter: null, activeReelPointerId: null, reelClockwiseDelta: 0, pointerMode: 'none', rodHitSamples: [], grabT: 0, hitRadius: 0, grabbedPointBefore: null, grabbedPointAfter: null, handPivot: null, rodTipVelocity: new THREE.Vector3(), releaseVelocity: { x: 0, y: 0 } };
     this.projectile = new LureProjectile({ scene: dungeon.scene, dungeon, waterResolver: new FishingWaterResolver({ dungeon }), maxCastRange: CAST_MAX_RANGE, onLanded: (result) => this.handleLanded(result) });
     this.dungeon.setFishingFeedback?.(this.feedback);
     this.bind();
   }
   createIdleState() { return { dragging: false, loadAmount: 0, gestureHistory: [], rodYaw: 0, rodPitch: 0, rodYawVelocity: 0, rodPitchVelocity: 0, targetYaw: 0, targetPitch: 0, rootOffsetX: 0, rootOffsetY: 0, rootOffsetZ: 0, rootVelocityX: 0, rootVelocityY: 0, rootVelocityZ: 0, targetRootOffsetX: 0, targetRootOffsetY: 0, targetRootOffsetZ: 0, releaseSnap: 0, motionSmoothness: 0, grabT: 0, angularVelocity: 0, tipSpeed: 0 }; }
-  createIdleReelState() { return { active: false, pointerId: null, centerX: 0, centerY: 0, lastAngle: 0, lastTimeMs: 0, rate: 0, accumulatedClockwise: 0 }; }
+  createIdleReelState() { return { active: false, pointerId: null, centerX: 0, centerY: 0, lastAngle: 0, lastTimeMs: 0, lastClockwiseTimeMs: -Infinity, targetRate: 0, actualRate: 0, rate: 0, accumulatedClockwise: 0 }; }
   isEquipped() { return this.rodView?.isEquipped?.() === true; }
   isLineDeployed() {
     const physics = this.projectile?.physics;
@@ -70,7 +70,8 @@ export class CastingController {
 
   startReelGesture(e, hit) {
     const angle = Math.atan2(e.clientY - hit.y, e.clientX - hit.x);
-    this.reelState = { ...this.createIdleReelState(), active: true, pointerId: e.pointerId, centerX: hit.x, centerY: hit.y, lastAngle: angle, lastTimeMs: performance.now() };
+    const carriedRate = this.reelState.actualRate ?? this.reelState.rate ?? 0;
+    this.reelState = { ...this.createIdleReelState(), active: true, pointerId: e.pointerId, centerX: hit.x, centerY: hit.y, lastAngle: angle, lastTimeMs: performance.now(), actualRate: carriedRate, rate: carriedRate };
     this.debug.reelZoneHit = true;
     this.debug.reelZone = { x: hit.x, y: hit.y, radius: hit.radius, projected: hit.projected, fallback: hit.fallback === true };
     const zones = hit.zones ?? [];
@@ -83,15 +84,17 @@ export class CastingController {
     const dx = e.clientX - this.reelState.centerX; const dy = e.clientY - this.reelState.centerY;
     const radius = Math.hypot(dx, dy);
     const angle = Math.atan2(dy, dx);
-    const dt = Math.max(0.016, (now - this.reelState.lastTimeMs) / 1000);
+    const dt = THREE.MathUtils.clamp((now - this.reelState.lastTimeMs) / 1000, 0.016, 0.08);
     const delta = getClockwiseDeltaRadians(this.reelState.lastAngle, angle);
-    const clockwise = radius >= REEL_GESTURE_INNER_DEADZONE ? Math.max(0, delta) : 0;
+    const clockwise = radius >= REEL_GESTURE_INNER_DEADZONE ? THREE.MathUtils.clamp(delta, 0, REEL_GESTURE_MAX_ARC_PER_SAMPLE) : 0;
     this.debug.reelClockwiseDelta = clockwise;
     this.debug.activeReelPointerId = e.pointerId;
     if (clockwise >= REEL_GESTURE_MIN_ARC_RAD) {
       const cleanliness = THREE.MathUtils.clamp((radius - REEL_GESTURE_INNER_DEADZONE) / 42, 0.2, 1);
       const instantRate = THREE.MathUtils.clamp((clockwise / dt) * REEL_GESTURE_RATE_PER_RADIAN * cleanliness, 0, REEL_GESTURE_MAX_RATE);
-      this.reelState.rate = THREE.MathUtils.lerp(this.reelState.rate, instantRate, 0.58);
+      const targetAlpha = 1 - Math.exp(-REEL_GESTURE_TARGET_SMOOTHING * dt);
+      this.reelState.targetRate = THREE.MathUtils.lerp(this.reelState.targetRate, instantRate, targetAlpha);
+      this.reelState.lastClockwiseTimeMs = now;
       this.reelState.accumulatedClockwise += clockwise;
       if (this.reelState.accumulatedClockwise >= Math.PI / 2) {
         navigator.vibrate?.(8);
@@ -100,7 +103,22 @@ export class CastingController {
     }
     this.reelState.lastAngle = angle; this.reelState.lastTimeMs = now;
   }
-  endReelGesture() { this.reelState = this.createIdleReelState(); this.debug.activeReelPointerId = null; }
+  endReelGesture() {
+    this.reelState.active = false;
+    this.reelState.pointerId = null;
+    this.reelState.targetRate = 0;
+    this.debug.activeReelPointerId = null;
+  }
+
+  updateReelRate(dt, nowMs = performance.now()) {
+    const freshInput = this.reelState.active && nowMs - this.reelState.lastClockwiseTimeMs <= REEL_GESTURE_INPUT_HOLD_SECONDS * 1000;
+    if (!freshInput) this.reelState.targetRate = Math.max(0, this.reelState.targetRate - REEL_GESTURE_MAX_DECELERATION * dt);
+    const difference = this.reelState.targetRate - this.reelState.actualRate;
+    const accelerationLimit = (difference >= 0 ? REEL_GESTURE_MAX_ACCELERATION : REEL_GESTURE_MAX_DECELERATION) * dt;
+    this.reelState.actualRate += THREE.MathUtils.clamp(difference, -accelerationLimit, accelerationLimit);
+    if (this.reelState.actualRate < 0.001 && this.reelState.targetRate <= 0) this.reelState.actualRate = 0;
+    this.reelState.rate = this.reelState.actualRate;
+  }
 
   makeSample(e) { return { screenX: e.clientX, screenY: e.clientY, timeMs: performance.now(), rodYaw: this.state.rodYaw, rodPitch: this.state.rodPitch }; }
   recordGesture(e) {
@@ -143,16 +161,25 @@ export class CastingController {
     const equipped = this.isEquipped();
     if (equipped) {
       const rodTip = this.rodView?.getWorldTipPosition?.();
-      this.reelState.rate = this.reelState.active ? this.reelState.rate : Math.max(0, this.reelState.rate - REEL_GESTURE_RATE_DECAY * dt);
+      this.updateReelRate(dt);
       const reelBoost = this.state.dragging ? Math.min(1.5, Math.max(0, this.state.tipSpeed ?? 0) / 5.5) : 0;
-      this.projectile.update(dt, rodTip, { rodHeld: this.state.dragging === true, reelBoost, manualReelRate: this.reelState.rate });
-      this.dungeon.updatePhysicalFishAngling?.(dt, { player: this.player, lure: this.projectile, rodTip, manualReelRate: this.reelState.rate, rodState: this.state, physics: this.projectile.physics });
+      this.projectile.update(dt, rodTip, { rodHeld: this.state.dragging === true, reelBoost, manualReelRate: this.reelState.actualRate });
+      this.dungeon.updatePhysicalFishAngling?.(dt, { player: this.player, lure: this.projectile, rodTip, manualReelRate: this.reelState.actualRate, rodState: this.state, physics: this.projectile.physics });
+      if (this.projectile.physics?.isFishHooked) {
+        this.projectile.physics.solveRope?.();
+        this.projectile.syncVisuals?.();
+      }
       Object.assign(this.debug, this.projectile.getDebugState?.() ?? {});
       Object.assign(this.debug, { handPivot: this.rodView?.debug?.handPivot ?? null, rodHitSamples: this.rodView?.debug?.rodHitSamples ?? [], pointerMode: this.debug.pointerMode });
-      this.debug.manualReelRate = this.reelState.rate;
+      this.debug.reelTargetRate = this.reelState.targetRate;
+      this.debug.reelActualRate = this.reelState.actualRate;
+      this.debug.reelAccelerationClamp = this.reelState.targetRate >= this.reelState.actualRate ? REEL_GESTURE_MAX_ACCELERATION : REEL_GESTURE_MAX_DECELERATION;
+      this.debug.manualReelRate = this.reelState.actualRate;
       this.debug.reelClockwiseDegrees = THREE.MathUtils.radToDeg(this.reelState.accumulatedClockwise);
+      const rodTipVelocity = this.rodView?.getWorldTipVelocity?.();
+      if (rodTipVelocity) this.debug.rodTipVelocity.copy(rodTipVelocity);
     }
-    if (!equipped) { this.projectile.cleanup(); this.endReelGesture(); return; }
+    if (!equipped) { this.projectile.cleanup(); this.reelState = this.createIdleReelState(); this.debug.activeReelPointerId = null; return; }
     if (this.state.dragging) {
       const gripPenalty = THREE.MathUtils.lerp(1, 1.38, this.state.grabT ?? 0);
       const rootSpring = ROD_GRAB_SPRING * 1.35;

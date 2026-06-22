@@ -27,15 +27,44 @@ This is the practical engineering/design reference for the first playable physic
 | Clockwise reel gesture | When line is deployed, clockwise motion around the projected reel zone creates manual reel rate and pulls lure/fish toward Rod A1. |
 | Rod angle while hooked | Rod tip should stay reasonably above the player. If it is dipped too low for roughly 1.6 seconds while hooked, the fish can escape. |
 
+## Rod A1 Lure Behavior Model
+
+`FishingLinePhysics.lureRecoveryState` is the debuggable behavior state. The legacy contact booleans still exist for collision/render integration, but they must agree with this state rather than independently deciding recovery.
+
+| State | Owner and transition rule |
+| --- | --- |
+| `danglingNearTip` | Ready/fully reeled. Spool is at `LINE_MIN_LENGTH`; only the weighted pendulum update owns the lure. |
+| `castingUnspooling` | Begins on release. Cast-only payout is allowed and the endpoint tension ramps in after the grace window. |
+| `deployedWater` | Water surface owns vertical bobbing. Reel constraint pulls horizontally until the contact geometry is too short to remain on the surface. |
+| `deployedGround` | Terrain owns lure height. Reel constraint drags horizontally until the contact geometry is too short to remain grounded. |
+| `recoveringToTip` | Water/ground contact has released. Cast payout is forbidden; gravity, reel shortening, and the endpoint constraint lift the lure toward the tip. |
+| `hookedFish` | `PhysicalFishAngling` owns fish/lure movement until escape or shore landing. Normal near-tip recovery is disabled. |
+
+Do not use `isLureAirborne` by itself to authorize payout. Both a real cast (`isCasting`) and `castingUnspooling` are required; recovery is also airborne but must never leak line outward.
+
 ## Spool Lock Rules
 
 - Lure held near rod: spool is locked/held at the true minimum line length, not a fake attachment to the rod mesh.
 - Airborne cast: spool unlocks and unspools to satisfy lure travel.
-- Cast release starts with a short payout grace window (about 0.28 seconds) where the spool expands aggressively toward lure distance plus a small buffer, keeping the visible line attached without letting the short fully-reeled endpoint constraint choke launch velocity.
+- Cast release starts with a `0.34s` payout grace window where the spool expands aggressively toward lure distance plus a `0.5` unit buffer. Endpoint tension begins at `0.08x`, then ramps over `0.52s` toward `0.58x` while normal cast payout continues.
 - Lure on water with no reeling/rod work: spool locks on water to preserve cast distance.
 - Clockwise manual reeling: spool unlocks for reel-in and raises line tension.
 - Grounded lure: spool locks unless manual reeling pulls it back.
 - Fully reeled lure: when manual clockwise reeling shortens a deployed, unhooked line to the minimum length plus the recovery threshold, water/ground pinning is released continuously and the lure enters `danglingNearTip` as the weighted endpoint of the remaining short line.
+
+## Manual Reel Signal
+
+Clockwise pointer samples do not directly shorten the spool. They produce a bounded target rate, which becomes the actual rate through frame-based acceleration limits:
+
+- per-sample clockwise arc is capped at `0.32rad`;
+- target rate is capped at `4.8` line units/second;
+- target filtering uses `16` response strength;
+- fresh motion is held for `0.085s` so normal touch event spacing does not pulse the reel;
+- actual rate accelerates at no more than `18` units/second squared and decelerates at no more than `24`;
+- spool shortening is capped at `0.1` unit per rendered physics frame;
+- releasing or pausing the gesture drives the target to zero while actual rate decays, rather than resetting or persisting indefinitely.
+
+Slow clean circles therefore stay slow, fast clean circles reach the cap progressively, and a single bad pointer delta cannot recover the lure in one frame.
 
 ## Lure and Line Behavior
 
@@ -44,11 +73,24 @@ This is the practical engineering/design reference for the first playable physic
 - The line uses the existing multi-point/tube visual and tension opacity, but no visual line may extend beyond the actual spool length currently out of the reel.
 - On fishable water the lure bobs at the surface while the line is deployed; lure velocity and line tension feed fish interest. Clockwise reeling shortens the spool length and pulls the lure across the water until the remaining line is too short to keep it pinned, then it lifts naturally into the dangling endpoint state.
 - On land the grounded lure remains terrain-constrained while deployed so reel-in drags it along the ground. When the shortened spool can no longer reach the ground contact, the lure lifts naturally into the dangling endpoint state.
+- While a lure is surface/terrain constrained, spool shortening is limited by the horizontal distance it can physically move that frame (`0.12` unit maximum contact pull). This prevents the spool from becoming much shorter than the endpoint and avoids a later correction snap.
+- Contact releases only when the lure is horizontally near the rod and spool length is within `0.16` unit of the vertical tip-to-contact distance. `recoveringToTip` then owns the continuous lift; it cannot re-enter cast payout.
 - At max reel-in, an unhooked lure does **not** remain pinned to water or terrain and does **not** snap to a fake point beside the rod. It recovers into `danglingNearTip`, a short near-tip pose about 0.32 world units (roughly 1 foot in meter-ish tuning) below the true Rod A1 tip.
 - In `danglingNearTip`, the visible line is short and taut from the true rod tip to the lure; the lure uses gravity plus spring/constraint damping so it sways like a small weighted pendulum rather than being rigidly glued to the tip.
 - During the first burst of a cast, endpoint clamping is relaxed while line payout is allowed; hard endpoint constraint returns when the line reaches max spool length, the lure lands and locks, the lure is fully reeled/dangling, or hooked fish tension owns the fight.
 - Line momentum/trailing only exists when spool length is actually out. When the line is near minimum length, old long rope points are collapsed/reseeded into a compact chain between the rod tip and lure endpoint so player motion cannot leave a long phantom trail.
 - Hooked fish movement is coupled to the lure/rod direction in a simple first-playable way. Hooked fish are excluded from near-tip lure recovery: the fish/lure connection stays under hooked fight, escape, and shore landing logic until the fish is picked up, lost, or detached. Complex line break math is intentionally deferred.
+
+## Dev-Only Fishing Debug State
+
+Debug data is present but disabled by default. In a development build, use `?debugHud=1` for the compact live readout or inspect `CastingController.debug` / `FishingLinePhysics.getDebugState()` when tuning. It includes:
+
+- lure behavior mode, spool state, current/min/max line length, and tip-to-lure distance;
+- reel target rate, actual rate, active acceleration/deceleration clamp, and clockwise accumulation;
+- cast payout/grace flags, endpoint constraint activity, tension, and lure speed before/after constraint;
+- rod grab `t`, hit samples/radius, hand pivot, rod-tip velocity, launch velocity, and lure hit type.
+
+Do not add normal-gameplay console logging or an always-visible reel UI for this data.
 
 ## Physical Fish State Machine
 
