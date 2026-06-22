@@ -4,7 +4,8 @@ import { kerovacDefinition } from '../src/game/locations/generated/kerovac.defin
 import { FISH_SPECIES_IDS, FISH_SPECS, FISH_TEXTURE_PROFILES, createFishMesh } from '../src/game/fishing/FishMeshFactory.js';
 import { ACTIVE_GAMEPLAY_RODS, CANONICAL_GAMEPLAY_ROD_ID, KEROVAC_EXPO_ROD_A1_SOURCE, createRodA1Mesh } from '../src/game/fishing/FishingRodFactory.js';
 import { FishingRodView } from '../src/game/fishing/FishingRodView.js';
-import { ROD_REST_POS, ROD_REST_ROT } from '../src/game/fishing/CastingTuning.js';
+import { LINE_MAX_LENGTH, LINE_MAX_SPOOL_OUT_PER_FRAME, LINE_MIN_LENGTH, LINE_START_LENGTH, ROD_ANGULAR_DAMPING, ROD_ANGULAR_SPRING, ROD_GRAB_DAMPING, ROD_GRAB_SPRING, ROD_MASS_FEEL, ROD_RELEASE_SNAP_SCALE, ROD_REST_POS, ROD_REST_ROT } from '../src/game/fishing/CastingTuning.js';
+import { FishingLinePhysics } from '../src/game/fishing/FishingLinePhysics.js';
 import { GameState } from '../src/game/GameState.js';
 
 const testMaterialFactory = (profile = {}) => {
@@ -91,6 +92,39 @@ const validateFirstPersonRodA1RestPose = () => {
 };
 
 validateFirstPersonRodA1RestPose();
+
+const validateRodA1SnappyLineUnspooling = () => {
+  if (!(ROD_GRAB_SPRING >= 30 && ROD_ANGULAR_SPRING >= 26 && ROD_MASS_FEEL <= 0.9 && ROD_GRAB_DAMPING <= 8 && ROD_ANGULAR_DAMPING <= 6.2 && ROD_RELEASE_SNAP_SCALE >= 1.25)) fail('Fishing invalid: Rod A1 responsiveness is over-damped / too heavy.');
+  if (!(LINE_START_LENGTH <= 0.72 && LINE_MIN_LENGTH <= 0.45)) fail('Fishing invalid: idle lure line length was not reduced.');
+
+  const terrainSampler = { sampleOutdoorY: () => 0 };
+  const physics = new FishingLinePhysics({ terrainSampler });
+  const rodTip = new THREE.Vector3(0, 1.7, 0);
+  physics.resetAtRodTip(rodTip);
+  if (!(physics.currentLineLength === LINE_START_LENGTH && physics.currentLineLength < LINE_MAX_LENGTH * 0.08)) fail('Fishing invalid: line starts fully spooled out on cast launch.');
+  physics.launch(rodTip, new THREE.Vector3(0, 9, -20));
+  const launchLength = physics.currentLineLength;
+  if (!(launchLength === LINE_START_LENGTH && launchLength < LINE_MAX_LENGTH * 0.08)) fail('Fishing invalid: line starts fully spooled out on cast launch.');
+
+  const firstFrameRodTip = rodTip.clone();
+  physics.update(1 / 60, firstFrameRodTip, { rodHeld: false });
+  if (!(physics.currentLineLength <= launchLength + LINE_MAX_SPOOL_OUT_PER_FRAME + 1e-6 && physics.currentLineLength < LINE_MAX_LENGTH * 0.14)) fail('Fishing invalid: currentLineLength does not jump to max on first cast frame.');
+  if (!physics.linePoints.slice(1, -1).every((point) => point.y > 0.12)) fail('Fishing invalid: airborne cast line is terrain-clamped into ground.');
+  const groundedInteriorPoints = physics.linePoints.slice(1, -1).filter((point) => point.y <= 0.08).length;
+  if (groundedInteriorPoints > 1) fail('Fishing invalid: cast line can form immediate ground U-shape.');
+
+  const waterPhysics = new FishingLinePhysics({ terrainSampler });
+  waterPhysics.resetAtRodTip(rodTip);
+  waterPhysics.lurePosition.set(5, 0.35, -9);
+  waterPhysics.enterWater(0.32);
+  waterPhysics.update(1 / 60, rodTip, { rodHeld: false });
+  const end = waterPhysics.linePoints.at(-1);
+  const mid = waterPhysics.linePoints[Math.floor(waterPhysics.linePoints.length / 2)];
+  if (!(Math.abs(end.x - rodTip.x) > 2 && Math.abs(mid.x - rodTip.x) > 0.6 && end.z < rodTip.z - 2)) fail('Fishing invalid: water-mode line still angles toward lure.');
+};
+
+validateRodA1SnappyLineUnspooling();
+
 if (rodA1Mesh.userData?.visualSource !== 'KerovacExpoSlotA1' || rodA1Mesh.userData?.fallbackDebugGeometry !== false) fail('Fishing invalid: fallback/debug rod used instead of canonical Rod A1.');
 
 const expectedKerovacFishPads = new Map([
@@ -343,14 +377,14 @@ const tautOpacity = Number(tautOpacityMatch?.[1]);
 const idleLineLength = Number(idleLengthMatch?.[1]);
 const minLineLength = Number(minLengthMatch?.[1]);
 if (!(slackOpacity >= 0.30 && slackOpacity <= 0.40 && tautOpacity >= 0.70 && tautOpacity <= 0.85 && tautOpacity > slackOpacity)) fail('Fishing invalid: line visibility below required threshold.');
-if (!(idleLineLength <= 1.8 && minLineLength <= 1.0)) fail('Fishing invalid: idle fishing line is too long.');
+if (!(idleLineLength <= 0.72 && minLineLength <= 0.45)) fail('Fishing invalid: idle lure line length was not reduced.');
 if (!castingSource.includes('targetYaw = THREE.MathUtils.clamp(this.state.targetYaw - dx') || !castingSource.includes('targetPitch = THREE.MathUtils.clamp(this.state.targetPitch - dy') || !castingSource.includes('targetRootOffsetX = THREE.MathUtils.clamp(this.state.targetRootOffsetX + dx')) fail('Fishing invalid: Rod A1 grab point moves opposite pointer drag.');
 if (!castingSource.includes('rootOffsetX') || !rodViewSource.includes('pose.rootOffset') || !rodViewSource.includes('this.root.position.x = ROD_REST_POS.x + this.pose.rootOffset.x')) fail('Fishing invalid: Rod A1 grab only applies tiny rotation; whole rod motion missing.');
 if (!castingSource.includes('Screen-space sign convention')) fail('Fishing invalid: Rod A1 drag direction sign convention is undocumented.');
 if (!linePhysicsSource.includes('sampleOutdoorY') || !linePhysicsSource.includes('LINE_GROUND_CLEARANCE') || !linePhysicsSource.includes('LURE_GROUND_CLEARANCE') || !linePhysicsSource.includes('clampLineToTerrain') || !linePhysicsSource.includes('clampLureToTerrain')) fail('Fishing invalid: line/lure passes below terrain.');
 if (!linePhysicsSource.includes('forceGrounded') || !linePhysicsSource.includes('isLureHeldNearRod && !this.isCasting')) fail('Fishing invalid: lure does not rest on terrain at idle.');
-if (!linePhysicsSource.includes('if (this.isLureOnWater) return') || !linePhysicsSource.includes('waterTargetLineLength') || !linePhysicsSource.includes('LINE_WATER_CONTROLLED_SLACK')) fail('Fishing invalid: water-mode fishing line does not angle toward lure.');
-if (!linePhysicsSource.includes('if (this.isLureOnWater) return')) fail('Fishing invalid: dynamic line is terrain-clamped while lure is on water.');
+if (!linePhysicsSource.includes('this.isLureOnWater || this.isLureAirborne') || !linePhysicsSource.includes('waterTargetLineLength') || !linePhysicsSource.includes('LINE_WATER_CONTROLLED_SLACK')) fail('Fishing invalid: water-mode fishing line does not angle toward lure.');
+if (!linePhysicsSource.includes('this.isLureOnWater || this.isLureAirborne')) fail('Fishing invalid: airborne cast line is terrain-clamped into ground.');
 
 if (!castingSource.includes("hud.showMessage('Cast Failed')")) fail('Fishing invalid: failed ground cast spawned a fish.');
 
