@@ -9,7 +9,7 @@ export const CAST_VERTICAL_ARC_SCALE = 0.00036;
 export const CAST_ROD_SMOOTHING = 0.22;
 export const CAST_ROD_BEND_SCALE = 1.15;
 export const CAST_ROD_RETURN_SPEED = 7.5;
-export const CAST_MAX_RANGE = 44;
+export const CAST_MAX_RANGE = 72;
 
 // First-person Rod A1 rest pose. The factory authors the held rod with its
 // handle-to-tip axis on local +Z after the view mesh yaw, while the camera looks
@@ -33,17 +33,17 @@ export const REEL_GESTURE_RATE_DECAY = 9.5;
 export const ROD_RELEASE_SNAP_SCALE = 1.32;
 
 export const LINE_POINT_COUNT = 18;
-export const LINE_MIN_LENGTH = 0.42;
+export const LINE_MIN_LENGTH = 0.18;
 export const LINE_START_LENGTH = 0.68;
-export const LINE_MAX_LENGTH = 38;
+export const LINE_MAX_LENGTH = 68;
 export const LINE_SEGMENT_ITERATIONS = 5;
 export const LINE_GRAVITY = -14.5;
 export const LINE_AIR_DRAG = 0.988;
 export const LINE_WATER_DRAG = 0.9;
 export const LINE_TENSION_STIFFNESS = 8.5;
 export const LINE_TENSION_DAMPING = 0.42;
-export const LINE_SPOOL_OUT_SPEED = 16;
-export const LINE_MAX_SPOOL_OUT_PER_FRAME = 0.42;
+export const LINE_SPOOL_OUT_SPEED = 24;
+export const LINE_MAX_SPOOL_OUT_PER_FRAME = 0.72;
 export const LINE_AUTO_REEL_SPEED = 1.05;
 export const LINE_REEL_PULL_BOOST = 0.7;
 export const LINE_SLACK_OPACITY = 0.36;
