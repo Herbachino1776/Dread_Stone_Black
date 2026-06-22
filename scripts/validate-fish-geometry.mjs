@@ -64,12 +64,12 @@ const validateFirstPersonRodA1RestPose = () => {
     const ndc = point.clone().project(camera);
     return { t, ndc };
   });
-  const insideOrNear = projected.filter(({ ndc }) => ndc.z >= -1 && ndc.z <= 1 && ndc.x >= -1.1 && ndc.x <= 1.1 && ndc.y >= -1.1 && ndc.y <= 1.1);
+  const insideOrNear = projected.filter(({ ndc }) => ndc.z >= -1 && ndc.z <= 1 && ndc.x >= -1.1 && ndc.x <= 1.1 && ndc.y >= -1.55 && ndc.y <= 1.1);
   if (insideOrNear.length !== projected.length) fail('Fishing invalid: Rod A1 rest pose projects outside the viewport.');
   const [handle, mid, tip] = projected;
   if (!(handle.ndc.y < mid.ndc.y && mid.ndc.y < tip.ndc.y && handle.ndc.x > 0.15)) fail('Fishing invalid: Rod A1 rest pose projects outside the viewport.');
   if (!(handle.ndc.x > 0.38 && handle.ndc.y < -0.7)) fail('Fishing invalid: Rod A1 rest handle must remain in the lower-right first-person grip region.');
-  if (!(tip.ndc.x > 0.05 && tip.ndc.x < 0.32 && tip.ndc.y > -0.18 && tip.ndc.y < 0.12)) fail('Fishing invalid: Rod A1 rest tip must project toward the upper/mid-right-to-center viewport region.');
+  if (!(tip.ndc.x > 0.05 && tip.ndc.x < 0.32 && tip.ndc.y > 0.22 && tip.ndc.y < 0.52)) fail('Fishing invalid: Rod A1 rest tip must project toward the raised upper/mid-right-to-center viewport region.');
 
   const handleWorld = rodView.getWorldPointAt(0);
   const tipWorld = rodView.getWorldPointAt(1);
@@ -81,6 +81,8 @@ const validateFirstPersonRodA1RestPose = () => {
   const midX = (mid.ndc.x * 0.5 + 0.5) * 1280;
   const midY = (-mid.ndc.y * 0.5 + 0.5) * 720;
   if (!rodView.projectRodGrabHit(midX, midY, viewport)) fail('Fishing invalid: Rod A1 is visible but cannot be grabbed by touch hit detection.');
+  const projectedReel = rodView.getProjectedReelCenter(viewport);
+  if (!projectedReel?.projected || projectedReel.x < 760 || projectedReel.x > 940 || projectedReel.y < 620 || projectedReel.y > 720) fail('Fishing invalid: raised Rod A1 projected reel center must remain near the visible lower-right grip area.');
 
   gameState.equipFieldTool(null);
   rodView.update(1 / 60, {});
