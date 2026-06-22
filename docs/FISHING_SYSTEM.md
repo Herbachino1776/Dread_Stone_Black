@@ -14,10 +14,10 @@ This is the practical engineering/design reference for the first playable physic
 8. At high interest the fish enters `chasingLure`, approaches the lure, and can strike.
 9. Strike enters `hookedWater`, increases line tension, uses screen shake and safe haptics, and does **not** show “FISH ON” text.
 10. While hooked in water, the fish remains attached to the lure/line and fights against line pull. Clockwise reel gestures shorten/pull the line; keeping Rod A1 up keeps the hook set.
-11. Active reeling changes the fight to `draggingToShore`; once the fish has been hooked for at least `0.5s`, the line is reeled to `minLineLength + 0.85` or shorter, and clockwise reel input happened within the last `0.75s`, it deterministically enters `liftingFromWater`.
+11. Active reeling changes the fight to `draggingToShore`; once the fish has been hooked for at least `0.5s`, the line is reeled to `minLineLength + 0.92` or shorter, and clockwise reel input happened within the last `0.75s`, it deterministically enters `liftingFromWater`.
 12. During `liftingFromWater`/`landedAttached`, water pinning is disabled (`isLureOnWater = false`) so the fish/lure endpoint can leave the pond zone, arc to a sampled beach/ground point near the player, and settle on terrain instead of being lerped back below the surface.
 13. After landing, the actor despawns and creates the existing raw flopping fish pickup carrying species, size-group, and hunger metadata. It is not added directly to inventory; the player picks it up normally.
-14. Dipping the rod too low for too long enters `lost`, splashes, detaches, creates no pickup, clears hooked/water fight ownership, and leaves the lure in normal `deployedWater` recovery so clockwise reeling can bring it fully back to the dangling near-tip state.
+14. Dipping the rod too low for too long enters `lost`, splashes, detaches, creates no pickup, clears hooked/water fight ownership, and puts the lure into normal `recoveringToTip` recovery so clockwise reeling can bring it fully back to the dangling near-tip state.
 15. Raw fish pickup, cooking, cooked fish pickup, inventory, and eating still use the existing survival path, now with size-based hunger restoration metadata.
 
 ## Rod A1 Control Summary
@@ -63,7 +63,7 @@ Clockwise pointer samples do not directly shorten the spool. They produce a boun
 - target filtering uses `16` response strength;
 - fresh motion is held for `0.085s` so normal touch event spacing does not pulse the reel;
 - actual rate accelerates at no more than `18` units/second squared and decelerates at no more than `24`;
-- spool shortening is capped at `0.1` unit per rendered physics frame;
+- spool shortening is capped at `0.1` unit per rendered physics frame; hooked fish may pull contact distance by up to `0.32` unit per frame so the line cannot stall just short of landing;
 - releasing or pausing the gesture drives the target to zero while actual rate decays, rather than resetting or persisting indefinitely.
 
 Slow clean circles therefore stay slow, fast clean circles reach the cap progressively, and a single bad pointer delta cannot recover the lure in one frame.
@@ -81,16 +81,24 @@ Slow clean circles therefore stay slow, fast clean circles reach the cap progres
 - In `danglingNearTip`, the visible line is short and taut from the true rod tip to the lure; the lure uses gravity plus spring/constraint damping so it sways like a small weighted pendulum rather than being rigidly glued to the tip.
 - During the first burst of a cast, endpoint clamping is relaxed while line payout is allowed; hard endpoint constraint returns when the line reaches max spool length, the lure lands and locks, the lure is fully reeled/dangling, or hooked fish tension owns the fight.
 - Line momentum/trailing only exists when spool length is actually out. When the line is near minimum length, old long rope points are collapsed/reseeded into a compact chain between the rod tip and lure endpoint so player motion cannot leave a long phantom trail.
-- Hooked fish movement is coupled to the lure/rod direction in a simple first-playable way. Hooked fish are excluded from near-tip lure recovery only while the fish/lure connection is actively under hooked fight, escape, or shore landing logic. The catch finish is deterministic: if `isFishHooked` is true, the fight is at least `0.5s` old, the line is within `0.85` units of `minLineLength`, and reel input was seen in the last `0.75s`, landing begins even if the fish has not solved perfect shore physics. Once landing begins, the fish/lure endpoint is no longer water-owned, can exit the fishable zone near shore, and is moved to a sampled ground/beach point. Complex line break math is intentionally deferred.
+- Hooked fish movement is coupled to the lure/rod direction in a simple first-playable way. Hooked reel pull is intentionally stronger than normal lure surface pull (`2.25 + manualRate * 1.05`, divided by size reel weight) while fish backdrag is damped to `0.42x` size fight strength so clean circles visibly move the fish closer without instantly teleporting it. Hooked fish are excluded from near-tip lure recovery only while the fish/lure connection is actively under hooked fight, escape, or shore landing logic. The catch finish is deterministic: if `isFishHooked` is true, the fight is at least `0.5s` old, the line is within `0.92` units of `minLineLength`, and reel input was seen in the last `0.75s`, landing begins even if the fish has not solved perfect shore physics. Once landing begins, the fish/lure endpoint is no longer water-owned, can exit the fishable zone near shore, and is moved to a sampled ground/beach point. Complex line break math is intentionally deferred.
 - Landing placement prefers a point between the fish and player, then checks whether that point is still inside the fishable zone. If it is still water-owned, placement falls back to a safe ground point just beyond the player on the shore side and samples the outdoor terrain height. Survival gameplay should prefer a safely grounded raw fish pickup over an unwinnable physically perfect beach solution.
-- Escape/lost cleanup must clear `isFishHooked`, line tension, fish actor ownership, and stale hooked landing state. The lure remains/re-enters `deployedWater` rather than staying in `hookedFish`, so normal clockwise reel recovery can release water pinning and return the lure to `danglingNearTip`.
+- Escape/lost cleanup must clear `isFishHooked`, line tension, fish actor ownership, and stale hooked landing state. The lure enters `recoveringToTip` rather than staying in `hookedFish` or water pinning, so normal clockwise reel recovery can return the lure to `danglingNearTip`.
+
+## Hooked Reel-Cycle Tuning
+
+The landing gate remains line-length based, but hooked fights also track accumulated clockwise reel radians as `hookedReelCycles = clockwiseRadians / 2π` for tuning and debug. A normal mid-pond medium fish should land in roughly **25 clean full clockwise reel cycles**. Small fish use lighter reel weight and should generally feel closer to **16–20 cycles** when hooked at similar distance. Large fish use heavier reel weight and stronger fight, targeting roughly **30–40 cycles**, but the deterministic short-line rule still makes them landable. Fish that strike close to shore can land in fewer cycles because less line is out.
+
+PR #211 introduced explicit landing states, but unwinnable fights could still happen when the fish/lure stayed water-owned, fishable-zone clamping continued to win over the landing motion, or the line remained just long enough that shore/rod-tip geometry gates never aligned in the same frame. The current rule intentionally does not require perfect rod-up, exact rod-tip reach, or physically solving the pond edge at the catch moment: hooked fish + short line + recent reel input + minimum fight age wins the fish. This is required for survival because raw fish must be a reliable food source; a player who executes the reel gesture should not starve because the fish never quite exits the water volume.
+
+Lost-fish cleanup is equally explicit: escape spawns no pickup, clears `isFishHooked`, clears stale water pinning, enters `recoveringToTip`, unlocks the spool, and gives the lure a small upward velocity so normal clockwise reeling can return it to the near-tip dangling state instead of leaving it stuck on the surface.
 
 ## Dev-Only Fishing Debug State
 
 Debug data is present but disabled by default. In a development build, use `?debugHud=1` for the compact live readout or inspect `CastingController.debug` / `FishingLinePhysics.getDebugState()` when tuning. It includes:
 
 - lure behavior mode, spool state, current/min/max line length, and tip-to-lure distance;
-- hooked-fish state, hooked age, recent reel timer, deterministic landing threshold, landing-triggered/spawned flags, and latest landing/lost cleanup result;
+- hooked-fish state, hooked age, recent reel timer, deterministic landing threshold, landing-ready/reason, hooked reel cycles, target cycles, size group, reel pull, landing-triggered/spawned flags, and latest landing/lost cleanup result;
 - reel target rate, actual rate, active acceleration/deceleration clamp, and clockwise accumulation;
 - cast payout/grace flags, endpoint constraint activity, tension, and lure speed before/after constraint;
 - rod grab `t`, hit samples/radius, hand pivot, rod-tip velocity, launch velocity, and lure hit type.

@@ -7,7 +7,11 @@ const tmp2 = new THREE.Vector3();
 const tmp3 = new THREE.Vector3();
 
 const HOOK_LANDING_DISTANCE = 2.75;
-const HOOKED_LANDING_LINE_THRESHOLD = 0.85;
+const HOOKED_LANDING_LINE_THRESHOLD = 0.92;
+const HOOKED_REEL_TARGET_CYCLES = Object.freeze({ small: 18, medium: 25, large: 36 });
+const HOOKED_REEL_PULL_BASE = 2.25;
+const HOOKED_REEL_PULL_RATE_SCALE = 1.05;
+const HOOKED_FIGHT_BACKDRAG_SCALE = 0.42;
 const HOOKED_LANDING_RECENT_REEL_SECONDS = 0.75;
 const HOOKED_MIN_FIGHT_SECONDS = 0.5;
 const HOOK_LIFT_HEIGHT = 0.82;
@@ -23,7 +27,7 @@ export class PhysicalFishAngling {
     this.actor = null; this.zone = null; this.spawnTimer = 0; this.breachTimer = 2.5; this.rng = Math.random;
   }
 
-  update(dt, { player = null, lure = null, rodTip = null, manualReelRate = 0, rodState = null, physics = null } = {}) {
+  update(dt, { player = null, lure = null, rodTip = null, manualReelRate = 0, reelClockwiseRadians = 0, rodState = null, physics = null } = {}) {
     if (!player?.position || !this.dungeon?.isOutdoorSurvivalArea?.()) return;
     const nearbyZone = this.dungeon.getNearbyFishingZone?.(player.position) ?? this.dungeon.fieldFishingZones?.find?.((zone) => this.pointInZone(player.position, zone));
     if (!nearbyZone?.fishSpeciesPool?.length) { this.despawn(); return; }
@@ -33,7 +37,7 @@ export class PhysicalFishAngling {
     this.actor.age += dt; this.actor.stateAge += dt;
     this.updateBreach(dt);
     this.updateLureAwareness(dt, lure, physics);
-    this.updateStateMotion(dt, { player, lure, rodTip, manualReelRate, rodState, physics });
+    this.updateStateMotion(dt, { player, lure, rodTip, manualReelRate, reelClockwiseRadians, rodState, physics });
     this.syncVisual();
   }
 
@@ -49,7 +53,7 @@ export class PhysicalFishAngling {
     const position = this.randomPointInZone(zone, playerPosition);
     const surfaceY = this.dungeon.sampleFishLandingSurfaceY?.(position, zone) ?? position.y ?? 0;
     position.y = surfaceY - 0.28;
-    this.actor = { mesh, species, sizeGroup, size, state: 'idle', stateAge: 0, age: 0, position, velocity: new THREE.Vector3(), target: position.clone(), liftStart: null, liftPeak: null, landingPoint: null, interest: 0, lowRodSeconds: 0, recentReelSeconds: 0, hooked: false, hookedAge: 0, landingTriggered: false, landingSpawned: false, lastLure: null };
+    this.actor = { mesh, species, sizeGroup, size, state: 'idle', stateAge: 0, age: 0, position, velocity: new THREE.Vector3(), target: position.clone(), liftStart: null, liftPeak: null, landingPoint: null, interest: 0, lowRodSeconds: 0, recentReelSeconds: 0, hooked: false, hookedAge: 0, landingTriggered: false, landingSpawned: false, lastLure: null, hookedReelCycles: 0, landingReason: 'none', lastReelPull: 0 };
     this.breachTimer = 1.8 + this.rng() * 3.2;
     this.syncVisual();
   }
@@ -84,13 +88,14 @@ export class PhysicalFishAngling {
     }
   }
 
-  updateStateMotion(dt, { player, lure, rodTip, manualReelRate, rodState, physics }) {
+  updateStateMotion(dt, { player, lure, rodTip, manualReelRate, reelClockwiseRadians, rodState, physics }) {
     const a = this.actor;
     const surfaceY = this.dungeon.sampleFishLandingSurfaceY?.(a.position, this.zone) ?? a.position.y;
     if (a.state === 'breach' && a.stateAge > 0.75) { a.position.y = surfaceY - 0.22; this.setState('idle'); }
     if (a.hooked) {
       a.hookedAge += dt;
       a.recentReelSeconds = manualReelRate > 0.05 ? HOOKED_LANDING_RECENT_REEL_SECONDS : Math.max(0, a.recentReelSeconds - dt);
+      if (reelClockwiseRadians > 0) a.hookedReelCycles += reelClockwiseRadians / (Math.PI * 2);
     }
     if (a.state === 'spooked') {
       tmp.copy(a.position).sub(player.position).setY(0).normalize(); a.velocity.addScaledVector(tmp, dt * 5.5); if (a.stateAge > 1.2) this.setState('idle');
@@ -105,10 +110,16 @@ export class PhysicalFishAngling {
       if (a.lowRodSeconds > 1.6) { this.escape(physics); return; }
       if (manualReelRate > 0.05 && a.state === 'hookedWater') this.setState('draggingToShore');
       const pullTarget = rodTip ?? player.position;
-      if (rodTip && manualReelRate > 0) this.seek(pullTarget, dt, (1.15 + manualReelRate * 0.55) / a.size.reelWeight);
-      tmp.copy(a.position).sub(pullTarget).setY(0); if (tmp.lengthSq() > 0.001) a.velocity.addScaledVector(tmp.normalize(), dt * a.size.fightStrength * 0.9);
+      if (rodTip && manualReelRate > 0) {
+        a.lastReelPull = (HOOKED_REEL_PULL_BASE + manualReelRate * HOOKED_REEL_PULL_RATE_SCALE) / a.size.reelWeight;
+        this.seek(pullTarget, dt, a.lastReelPull);
+      } else {
+        a.lastReelPull = 0;
+      }
+      tmp.copy(a.position).sub(pullTarget).setY(0); if (tmp.lengthSq() > 0.001) a.velocity.addScaledVector(tmp.normalize(), dt * a.size.fightStrength * HOOKED_FIGHT_BACKDRAG_SCALE);
       this.updateHookedDebug(physics, rodUp);
-      if (this.shouldBeginLanding(a, player, rodTip, rodUp, physics)) this.beginLanding(player, rodTip, physics);
+      const landingReason = this.getLandingReason(a, physics);
+      if (landingReason) this.beginLanding(player, rodTip, physics, landingReason);
     } else if (a.state === 'liftingFromWater') {
       this.updateLift(dt, physics);
     } else if (a.state === 'landedAttached') {
@@ -142,21 +153,23 @@ export class PhysicalFishAngling {
   }
 
   seek(target, dt, speed) { tmp.copy(target).sub(this.actor.position).setY(0); if (tmp.lengthSq() > 0.001) this.actor.velocity.addScaledVector(tmp.normalize(), speed * dt); }
-  hookFish(physics) { this.actor.hooked = true; this.actor.hookedAge = 0; this.actor.recentReelSeconds = 0; this.actor.landingTriggered = false; this.setState('hookedWater'); this.makeSplash(this.actor.position, 0.7); this.feedback?.shake?.({ durationMs: 210, intensity: 0.075 }); navigator.vibrate?.([18, 24, 18]); if (physics) { physics.isFishHooked = true; physics.isCasting = false; physics.lureRecoveryState = 'hookedFish'; physics.lineTension = Math.max(physics.lineTension, 8); this.updateHookedDebug(physics, true); } }
-  escape(physics) { this.actor.hooked = false; this.actor.hookedAge = 0; this.actor.landingTriggered = false; this.setState('lost'); this.makeSplash(this.actor.position, 0.75); this.cleanupHookedPhysics(physics, 'lost'); setTimeout(() => this.actor && this.setState('idle'), 900); }
+  hookFish(physics) { this.actor.hooked = true; this.actor.hookedAge = 0; this.actor.recentReelSeconds = 0; this.actor.hookedReelCycles = 0; this.actor.landingReason = 'none'; this.actor.landingTriggered = false; this.setState('hookedWater'); this.makeSplash(this.actor.position, 0.7); this.feedback?.shake?.({ durationMs: 210, intensity: 0.075 }); navigator.vibrate?.([18, 24, 18]); if (physics) { physics.isFishHooked = true; physics.isCasting = false; physics.lureRecoveryState = 'hookedFish'; physics.lineTension = Math.max(physics.lineTension, 8); this.updateHookedDebug(physics, true); } }
+  escape(physics) { this.actor.hooked = false; this.actor.hookedAge = 0; this.actor.landingTriggered = false; this.actor.landingReason = 'lost'; this.setState('lost'); this.makeSplash(this.actor.position, 0.75); this.cleanupHookedPhysics(physics, 'lost'); setTimeout(() => this.actor && this.setState('idle'), 900); }
 
-  shouldBeginLanding(a, player, rodTip, rodUp, physics) {
-    if (!a.hooked || a.landingTriggered || a.landingSpawned || !physics?.isFishHooked) return false;
+  getLandingReason(a, physics) {
+    if (!a.hooked || a.landingTriggered || a.landingSpawned || !physics?.isFishHooked) return null;
     const shortLine = physics.currentLineLength <= (physics.minLineLength ?? 0) + HOOKED_LANDING_LINE_THRESHOLD;
     const activeReel = a.recentReelSeconds > 0;
     const foughtLongEnough = a.hookedAge >= HOOKED_MIN_FIGHT_SECONDS;
-    return shortLine && activeReel && foughtLongEnough;
+    if (shortLine && activeReel && foughtLongEnough) return 'shortLineRecentReel';
+    return null;
   }
 
-  beginLanding(player, rodTip, physics) {
+  beginLanding(player, rodTip, physics, landingReason = 'shortLineRecentReel') {
     const a = this.actor;
     if (a.landingTriggered || a.landingSpawned) return;
     a.landingTriggered = true;
+    a.landingReason = landingReason;
     a.hooked = false;
     a.liftStart = a.position.clone();
     a.landingPoint = this.resolveLandingPoint(a.position, player);
@@ -218,6 +231,7 @@ export class PhysicalFishAngling {
     if (!physics) return;
     physics.isFishHooked = false;
     physics.lineTension = 0;
+    physics.lineSlack = 0;
     physics.isCasting = false;
     if (result === 'landed') {
       physics.isLureOnWater = false;
@@ -226,11 +240,12 @@ export class PhysicalFishAngling {
       physics.isLureHeldNearRod = false;
       physics.lureRecoveryState = 'deployedGround';
     } else {
-      physics.isLureOnWater = true;
-      physics.isLureAirborne = false;
+      physics.isLureOnWater = false;
+      physics.isLureAirborne = true;
       physics.isLureGrounded = false;
       physics.isLureHeldNearRod = false;
-      physics.lureRecoveryState = 'deployedWater';
+      physics.lureRecoveryState = 'recoveringToTip';
+      physics.lureVelocity.y = Math.max(physics.lureVelocity.y, 0.18);
       physics.spoolLocked = false;
     }
     physics.hookedFishDebug = { ...(physics.hookedFishDebug ?? {}), cleanup: result, landingTriggered: result === 'landed', isFishHooked: false, isLureOnWater: physics.isLureOnWater, lureRecoveryState: physics.lureRecoveryState };
@@ -245,6 +260,12 @@ export class PhysicalFishAngling {
       lineLength: physics.currentLineLength,
       minLineLength: physics.minLineLength,
       landingThreshold: HOOKED_LANDING_LINE_THRESHOLD,
+      landingReady: this.getLandingReason(this.actor, physics) !== null,
+      landingReason: this.actor.landingReason,
+      hookedReelCycles: this.actor.hookedReelCycles,
+      targetReelCycles: HOOKED_REEL_TARGET_CYCLES[this.actor.sizeGroup] ?? HOOKED_REEL_TARGET_CYCLES.medium,
+      fishSizeGroup: this.actor.sizeGroup,
+      reelPull: this.actor.lastReelPull,
       minFightSeconds: HOOKED_MIN_FIGHT_SECONDS,
       rodUp,
       landingTriggered: this.actor.landingTriggered,
