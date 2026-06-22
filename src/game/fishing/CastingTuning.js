@@ -11,8 +11,8 @@ export const CAST_ROD_BEND_SCALE = 1.15;
 export const CAST_ROD_RETURN_SPEED = 7.5;
 export const CAST_MAX_RANGE = 44;
 
-export const ROD_REST_POS = Object.freeze({ x: 0.86, y: -0.9, z: -1.18 });
-export const ROD_REST_ROT = Object.freeze({ x: -0.94, y: -0.18, z: 0.88 });
+export const ROD_REST_POS = Object.freeze({ x: 0.74, y: -0.74, z: -1.55 });
+export const ROD_REST_ROT = Object.freeze({ x: -0.68, y: -0.24, z: 0.54 });
 export const ROD_GRAB_SPRING = 24;
 export const ROD_GRAB_DAMPING = 8.8;
 export const ROD_ANGULAR_SPRING = 17;
