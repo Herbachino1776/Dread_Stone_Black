@@ -16,7 +16,7 @@ export class CastingController {
     this.projectile = new LureProjectile({ scene: dungeon.scene, dungeon, waterResolver: new FishingWaterResolver({ dungeon }), maxCastRange: CAST_MAX_RANGE, onLanded: (result) => this.handleLanded(result) });
     this.bind();
   }
-  createIdleState() { return { dragging: false, loadAmount: 0, gestureHistory: [], rodYaw: 0, rodPitch: 0, rodYawVelocity: 0, rodPitchVelocity: 0, targetYaw: 0, targetPitch: 0, releaseSnap: 0, motionSmoothness: 0, grabT: 0, angularVelocity: 0, tipSpeed: 0 }; }
+  createIdleState() { return { dragging: false, loadAmount: 0, gestureHistory: [], rodYaw: 0, rodPitch: 0, rodYawVelocity: 0, rodPitchVelocity: 0, targetYaw: 0, targetPitch: 0, rootOffsetX: 0, rootOffsetY: 0, rootOffsetZ: 0, rootVelocityX: 0, rootVelocityY: 0, rootVelocityZ: 0, targetRootOffsetX: 0, targetRootOffsetY: 0, targetRootOffsetZ: 0, releaseSnap: 0, motionSmoothness: 0, grabT: 0, angularVelocity: 0, tipSpeed: 0 }; }
   isEquipped() { return this.rodView?.isEquipped?.() === true; }
   bind() {
     this.viewport.addEventListener('pointerdown', (e) => {
@@ -48,8 +48,12 @@ export class CastingController {
     // Screen-space sign convention: browser pointer X grows right and Y grows down.
     // In the Rod A1 view transform, positive yaw projects the tip left and positive pitch projects it up,
     // so pointer deltas are negated here to keep the projected rod tip under the player's thumb.
-    this.state.targetYaw = THREE.MathUtils.clamp(this.state.targetYaw - dx * 0.007 * leverage, -0.95, 0.95);
-    this.state.targetPitch = THREE.MathUtils.clamp(this.state.targetPitch - dy * 0.006 * leverage, -0.75, 0.9);
+    this.state.targetYaw = THREE.MathUtils.clamp(this.state.targetYaw - dx * 0.0095 * leverage, -1.25, 1.25);
+    this.state.targetPitch = THREE.MathUtils.clamp(this.state.targetPitch - dy * 0.0082 * leverage, -0.95, 1.05);
+    // Camera-local grab target: move the whole rod root with the same screen direction as the thumb.
+    this.state.targetRootOffsetX = THREE.MathUtils.clamp(this.state.targetRootOffsetX + dx * 0.0075 * leverage, -0.82, 0.82);
+    this.state.targetRootOffsetY = THREE.MathUtils.clamp(this.state.targetRootOffsetY - dy * 0.0048 * leverage, -0.58, 0.62);
+    this.state.targetRootOffsetZ = THREE.MathUtils.clamp(this.state.targetRootOffsetZ - dy * 0.0032 * leverage + Math.abs(dx) * -0.0009, -0.72, 0.38);
     const velocity = this.computeReleaseVelocity(sample.timeMs);
     const totalDx = sample.screenX - this.state.startX; const totalDy = sample.screenY - this.state.startY;
     const backwardLoad = Math.max(0, totalDy * 0.0045 + Math.abs(totalDx) * 0.0011 - Math.max(0, -velocity.y) * 0.00014);
@@ -70,11 +74,20 @@ export class CastingController {
     if (!equipped) { this.projectile.cleanup(); return; }
     if (this.state.dragging) {
       const gripPenalty = THREE.MathUtils.lerp(1, 1.38, this.state.grabT ?? 0);
+      const rootSpring = ROD_GRAB_SPRING * 1.18;
+      const rootDamping = ROD_GRAB_DAMPING * 0.82;
+      const ax = ((this.state.targetRootOffsetX - this.state.rootOffsetX) * rootSpring - this.state.rootVelocityX * rootDamping) / (ROD_MASS_FEEL * gripPenalty);
+      const ay = ((this.state.targetRootOffsetY - this.state.rootOffsetY) * rootSpring - this.state.rootVelocityY * rootDamping) / (ROD_MASS_FEEL * gripPenalty);
+      const az = ((this.state.targetRootOffsetZ - this.state.rootOffsetZ) * rootSpring - this.state.rootVelocityZ * rootDamping) / (ROD_MASS_FEEL * gripPenalty);
+      this.state.rootVelocityX += ax * dt; this.state.rootVelocityY += ay * dt; this.state.rootVelocityZ += az * dt;
+      this.state.rootOffsetX = THREE.MathUtils.clamp(this.state.rootOffsetX + this.state.rootVelocityX * dt, -0.9, 0.9);
+      this.state.rootOffsetY = THREE.MathUtils.clamp(this.state.rootOffsetY + this.state.rootVelocityY * dt, -0.65, 0.7);
+      this.state.rootOffsetZ = THREE.MathUtils.clamp(this.state.rootOffsetZ + this.state.rootVelocityZ * dt, -0.8, 0.45);
       const yawAccel = ((this.state.targetYaw - this.state.rodYaw) * ROD_GRAB_SPRING - this.state.rodYawVelocity * ROD_GRAB_DAMPING) / (ROD_MASS_FEEL * gripPenalty);
       const pitchAccel = ((this.state.targetPitch - this.state.rodPitch) * ROD_ANGULAR_SPRING - this.state.rodPitchVelocity * ROD_ANGULAR_DAMPING) / (ROD_MASS_FEEL * gripPenalty);
       this.state.rodYawVelocity += yawAccel * dt; this.state.rodPitchVelocity += pitchAccel * dt;
-      this.state.rodYaw = THREE.MathUtils.clamp(this.state.rodYaw + this.state.rodYawVelocity * dt, -0.95, 0.95);
-      this.state.rodPitch = THREE.MathUtils.clamp(this.state.rodPitch + this.state.rodPitchVelocity * dt, -0.75, 0.9);
+      this.state.rodYaw = THREE.MathUtils.clamp(this.state.rodYaw + this.state.rodYawVelocity * dt, -1.25, 1.25);
+      this.state.rodPitch = THREE.MathUtils.clamp(this.state.rodPitch + this.state.rodPitchVelocity * dt, -0.95, 1.05);
       this.state.angularVelocity = Math.hypot(this.state.rodYawVelocity, this.state.rodPitchVelocity);
       this.state.tipSpeed = this.rodView?.getWorldTipVelocity?.().length?.() ?? 0;
       this.rodView?.setGestureState?.(this.state);

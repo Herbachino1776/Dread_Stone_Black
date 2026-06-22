@@ -298,14 +298,18 @@ if (!rodViewSource.includes('equipped via EquipmentRuntime weapon') || !rodViewS
 if (!rodViewSource.includes('getEquippedFieldTool') || !rodViewSource.includes('COMPATIBLE_FISHING_ROD_ITEM_ID')) fail('Fishing invalid: FishingRodView does not recognize GameState field tool equipment.');
 if (!rodViewSource.includes('ROD_REST_POS') || !rodViewSource.includes('ROD_REST_ROT') || !rodViewSource.includes('raised-diagonal')) fail('Fishing invalid: rod rest pose is not the raised diagonal reference composition.');
 if (!rodViewSource.includes('projectRodGrabHit') || !rodViewSource.includes('ROD_GRAB_HIT_RADIUS') || !rodViewSource.includes('grabT')) fail('Fishing invalid: rod cannot be directly grabbed by touching the visible rod.');
+if (!rodViewSource.includes('includeLine: false') || rodViewSource.includes('first-person-rodA1-line') || rodViewSource.includes('first-person-rodA1-clean-dark-hook')) fail('Fishing invalid: first-person Rod A1 still contains baked fake line/hook geometry.');
 
 function projectedRodTipForDrag(dx, dy) {
   const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 100);
   camera.lookAt(0, 0, -1);
   const rodView = new FishingRodView({ camera, equipmentRuntime: { getEquippedWeaponProfile: () => ({ id: 'fishing_rod' }) } });
-  const rodYaw = -dx * 0.007;
-  const rodPitch = -dy * 0.006;
-  for (let i = 0; i < 18; i += 1) rodView.update(1 / 60, { dragging: true, rodYaw, rodPitch });
+  const rodYaw = -dx * 0.0095;
+  const rodPitch = -dy * 0.0082;
+  const rootOffsetX = dx * 0.0075;
+  const rootOffsetY = -dy * 0.0048;
+  const rootOffsetZ = -dy * 0.0032 + Math.abs(dx) * -0.0009;
+  for (let i = 0; i < 18; i += 1) rodView.update(1 / 60, { dragging: true, rodYaw, rodPitch, rootOffsetX, rootOffsetY, rootOffsetZ });
   camera.updateMatrixWorld(true); rodView.root.updateMatrixWorld(true);
   const projected = rodView.getWorldTipPosition().project(camera);
   return { screenX: (projected.x * 0.5 + 0.5) * 1600, screenY: (-projected.y * 0.5 + 0.5) * 900 };
@@ -315,7 +319,8 @@ const rodTipRight = projectedRodTipForDrag(40, 0);
 const rodTipLeft = projectedRodTipForDrag(-40, 0);
 const rodTipDown = projectedRodTipForDrag(0, 40);
 const rodTipUp = projectedRodTipForDrag(0, -40);
-if (!(rodTipRight.screenX > rodTipCenter.screenX && rodTipLeft.screenX < rodTipCenter.screenX && rodTipDown.screenY > rodTipCenter.screenY && rodTipUp.screenY < rodTipCenter.screenY)) fail('Fishing invalid: Rod A1 drag direction is inverted.');
+if (!(rodTipRight.screenX > rodTipCenter.screenX && rodTipLeft.screenX < rodTipCenter.screenX && rodTipDown.screenY > rodTipCenter.screenY && rodTipUp.screenY < rodTipCenter.screenY)) fail('Fishing invalid: Rod A1 grab point moves opposite pointer drag.');
+if (Math.hypot(rodTipRight.screenX - rodTipLeft.screenX, rodTipRight.screenY - rodTipLeft.screenY) < 180) fail('Fishing invalid: Rod A1 grab only applies tiny rotation; whole rod motion missing.');
 if (!lureSource.includes('Number.isFinite(length)') && !lureSource.includes('this.velocity')) fail('Fishing invalid: lure projectile uses finite positions/velocities check failed.');
 if (!lureSource.includes('replacesUglyFakeWorm: true')) fail('Fishing invalid: fake worm lure was not replaced.');
 if (!lureSource.includes('weightedLureMass') || !linePhysicsSource.includes('lureMass') || !linePhysicsSource.includes('lureVelocity')) fail('Fishing invalid: advanced line physics missing weighted lure state.');
@@ -337,12 +342,15 @@ const slackOpacity = Number(slackOpacityMatch?.[1]);
 const tautOpacity = Number(tautOpacityMatch?.[1]);
 const idleLineLength = Number(idleLengthMatch?.[1]);
 const minLineLength = Number(minLengthMatch?.[1]);
-if (!(slackOpacity >= 0.22 && slackOpacity <= 0.32 && tautOpacity >= 0.55 && tautOpacity <= 0.75 && tautOpacity > slackOpacity)) fail('Fishing invalid: fishing line is below required visibility threshold.');
+if (!(slackOpacity >= 0.30 && slackOpacity <= 0.40 && tautOpacity >= 0.70 && tautOpacity <= 0.85 && tautOpacity > slackOpacity)) fail('Fishing invalid: line visibility below required threshold.');
 if (!(idleLineLength <= 1.8 && minLineLength <= 1.0)) fail('Fishing invalid: idle fishing line is too long.');
-if (!castingSource.includes('targetYaw = THREE.MathUtils.clamp(this.state.targetYaw - dx') || !castingSource.includes('targetPitch = THREE.MathUtils.clamp(this.state.targetPitch - dy')) fail('Fishing invalid: Rod A1 drag direction is inverted.');
+if (!castingSource.includes('targetYaw = THREE.MathUtils.clamp(this.state.targetYaw - dx') || !castingSource.includes('targetPitch = THREE.MathUtils.clamp(this.state.targetPitch - dy') || !castingSource.includes('targetRootOffsetX = THREE.MathUtils.clamp(this.state.targetRootOffsetX + dx')) fail('Fishing invalid: Rod A1 grab point moves opposite pointer drag.');
+if (!castingSource.includes('rootOffsetX') || !rodViewSource.includes('pose.rootOffset') || !rodViewSource.includes('this.root.position.x = ROD_REST_POS.x + this.pose.rootOffset.x')) fail('Fishing invalid: Rod A1 grab only applies tiny rotation; whole rod motion missing.');
 if (!castingSource.includes('Screen-space sign convention')) fail('Fishing invalid: Rod A1 drag direction sign convention is undocumented.');
 if (!linePhysicsSource.includes('sampleOutdoorY') || !linePhysicsSource.includes('LINE_GROUND_CLEARANCE') || !linePhysicsSource.includes('LURE_GROUND_CLEARANCE') || !linePhysicsSource.includes('clampLineToTerrain') || !linePhysicsSource.includes('clampLureToTerrain')) fail('Fishing invalid: line/lure passes below terrain.');
 if (!linePhysicsSource.includes('forceGrounded') || !linePhysicsSource.includes('isLureHeldNearRod && !this.isCasting')) fail('Fishing invalid: lure does not rest on terrain at idle.');
+if (!linePhysicsSource.includes('if (this.isLureOnWater) return') || !linePhysicsSource.includes('waterTargetLineLength') || !linePhysicsSource.includes('LINE_WATER_CONTROLLED_SLACK')) fail('Fishing invalid: water-mode fishing line does not angle toward lure.');
+if (!linePhysicsSource.includes('if (this.isLureOnWater) return')) fail('Fishing invalid: dynamic line is terrain-clamped while lure is on water.');
 
 if (!castingSource.includes("hud.showMessage('Cast Failed')")) fail('Fishing invalid: failed ground cast spawned a fish.');
 
