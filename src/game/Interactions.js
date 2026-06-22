@@ -563,15 +563,9 @@ export class Interactions {
         && this.player.position.distanceTo(action.startPosition) <= TIMED_ACTION_MOVE_CANCEL_DISTANCE
         && Boolean(this.dungeon.getNearbyFishingZone?.(this.player.position)),
       complete: () => {
-        const pickup = this.dungeon.spawnRawFishPickupForPlayer?.(this.player, fishingZone);
-        if (pickup) {
-          this.setTemporaryHint('Fish Caught.', 1500);
-          this.hud.showMessage('Fish Caught.');
-        } else {
-          console.warn('[Dread Stone Black] Raw Fish pickup spawn failed.');
-          this.setTemporaryHint('No fish.', 1200);
-          this.hud.showMessage('No fish.');
-        }
+        this.dungeon.ensurePhysicalFishAngling?.();
+        this.setTemporaryHint('Cast Rod A1 near surface movement.', 1500);
+        this.hud.showMessage('Cast Rod A1 near surface movement.');
       },
     });
   }
@@ -592,8 +586,9 @@ export class Interactions {
         && this.dungeon.gameState?.getFieldItemCount?.('raw_fish') > 0
         && this.horizontalDistanceTo(action.target) <= action.range,
       complete: (action) => {
+        const fishMeta = this.dungeon.gameState?.peekFishStackMetadata?.('raw_fish') ?? { fishSizeGroup: 'medium', hungerSeconds: 10 * 60 };
         if (this.dungeon.gameState?.consumeFieldItems?.({ raw_fish: 1 })) {
-          this.dungeon.spawnCookedFishPickup?.(action.target);
+          this.dungeon.spawnCookedFishPickup?.(action.target, fishMeta);
           this.setTemporaryHint('Fish Cooked.', 1500);
           this.hud.showMessage('Fish Cooked.');
         }
@@ -610,7 +605,7 @@ export class Interactions {
   }
 
   pickupCookedFish(interaction) {
-    this.dungeon.gameState?.addFieldItem?.('cooked_fish', 1);
+    this.dungeon.gameState?.addFieldItem?.('cooked_fish', 1, { fishSizeGroup: interaction.fishSizeGroup ?? interaction.pickup?.fishSizeGroup, hungerSeconds: interaction.hungerSeconds ?? interaction.pickup?.hungerSeconds });
     this.dungeon.removeCookedFishPickup?.(interaction.pickup);
     this.setTemporaryHint('Cooked Fish Acquired.', 1400);
     this.hud.showMessage('Cooked Fish Acquired.');
@@ -618,7 +613,7 @@ export class Interactions {
   }
 
   pickupRawFish(interaction) {
-    this.dungeon.gameState?.addFieldItem?.('raw_fish', 1);
+    this.dungeon.gameState?.addFieldItem?.('raw_fish', 1, { fishSizeGroup: interaction.fishSizeGroup ?? interaction.pickup?.fishSizeGroup, hungerSeconds: interaction.hungerSeconds ?? interaction.pickup?.hungerSeconds });
     this.dungeon.removeRawFishPickup?.(interaction.pickup);
     this.setTemporaryHint('Raw Fish Acquired.', 1400);
     this.hud.showMessage('Raw Fish Acquired.');
