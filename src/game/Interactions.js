@@ -156,8 +156,8 @@ export class Interactions {
     }
 
     if (interaction.type === 'fieldFishing') {
-      this.setTemporaryHint('Drag to Cast', 1200);
-      this.hud.showMessage('Use the cast zone.');
+      this.setTemporaryHint('Touch Rod to Cast', 1200);
+      this.hud.showMessage('Touch Rod A1 to cast.');
       return false;
     }
 

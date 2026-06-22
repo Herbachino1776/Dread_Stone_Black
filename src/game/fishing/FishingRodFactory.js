@@ -90,6 +90,7 @@ export function createRodA1Mesh({ id = 'rodA1-runtime', yaw = 0, origin = new TH
     addCylinderBetween(group, p3, hookEnd, 0.008, basicMat(0x151515), `${id}-line`, base, 5);
     addCylinderBetween(group, hookEnd, localPoint(origin, yaw, spec.len / 2 + 0.36, -0.06, spec.curve * 0.34 + 0.16), 0.018, bone, `${id}-clean-dark-hook`, base, 6);
   }
+  group.userData.handleLocalPosition = localPoint(origin, yaw, -spec.len / 2 - 0.15, 0.16, 0).clone();
   group.userData.tipLocalPosition = p3.clone();
   return group;
 }
