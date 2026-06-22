@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createRodA1Mesh, resolveGameplayRodForItem, CANONICAL_GAMEPLAY_ROD_ID } from './FishingRodFactory.js';
+import { createRodA1Mesh, resolveGameplayRodForItem, CANONICAL_GAMEPLAY_ROD_ID, COMPATIBLE_FISHING_ROD_ITEM_ID } from './FishingRodFactory.js';
 import { ROD_GRAB_HIT_RADIUS, ROD_REST_POS, ROD_REST_ROT } from './CastingTuning.js';
 
 const screenPoint = new THREE.Vector3();
@@ -7,9 +7,11 @@ const worldPoint = new THREE.Vector3();
 const lastTipScratch = new THREE.Vector3();
 
 export class FishingRodView {
-  constructor({ camera, equipmentRuntime }) {
+  constructor({ camera, equipmentRuntime, gameState } = {}) {
     this.camera = camera;
     this.equipmentRuntime = equipmentRuntime;
+    this.gameState = gameState;
+    this.lastVisibleStateReason = 'not equipped';
     this.root = new THREE.Group();
     this.root.name = 'first-person-canonical-Rod-A1-view-raised-diagonal-touch-surface';
     this.root.visible = false;
@@ -26,8 +28,25 @@ export class FishingRodView {
     this.hasLastTip = false;
   }
 
+  getVisibleStateReason() {
+    const equippedWeaponId = this.equipmentRuntime?.getEquippedWeaponProfile?.().id ?? null;
+    if (resolveGameplayRodForItem(equippedWeaponId)?.id === CANONICAL_GAMEPLAY_ROD_ID) return 'equipped via EquipmentRuntime weapon';
+
+    const equippedFieldToolId = this.gameState?.getEquippedFieldTool?.() ?? this.gameState?.fieldSurvivalState?.equipment?.equippedTool ?? null;
+    if (equippedFieldToolId === COMPATIBLE_FISHING_ROD_ITEM_ID || resolveGameplayRodForItem(equippedFieldToolId)?.id === CANONICAL_GAMEPLAY_ROD_ID) return 'equipped via GameState field tool';
+
+    return 'not equipped';
+  }
+
   isEquipped() {
-    return resolveGameplayRodForItem(this.equipmentRuntime?.getEquippedWeaponProfile?.().id)?.id === CANONICAL_GAMEPLAY_ROD_ID;
+    this.lastVisibleStateReason = this.getVisibleStateReason();
+    return this.lastVisibleStateReason !== 'not equipped';
+  }
+
+  validateEquippedStateMatchesFieldTool() {
+    const fieldToolIsRod = (this.gameState?.getEquippedFieldTool?.() ?? this.gameState?.fieldSurvivalState?.equipment?.equippedTool ?? null) === COMPATIBLE_FISHING_ROD_ITEM_ID;
+    if (fieldToolIsRod && !this.isEquipped()) throw new Error('Fishing invalid: Rod A1 is equipped but FishingRodView reports not equipped.');
+    return true;
   }
 
   setGestureState(castState = {}) { this.gestureState = { ...this.gestureState, ...castState }; }
@@ -72,6 +91,7 @@ export class FishingRodView {
   update(deltaSeconds, castState = {}) {
     const equipped = this.isEquipped();
     this.root.visible = equipped;
+    this.root.userData.visibleStateReason = this.lastVisibleStateReason;
     if (!equipped) return;
     this.setGestureState(castState);
     const dt = Math.max(0.001, Math.min(0.05, deltaSeconds));

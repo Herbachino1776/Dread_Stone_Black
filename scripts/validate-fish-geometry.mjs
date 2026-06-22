@@ -3,6 +3,9 @@ import { buildDungeonGeometry } from '../src/engine/dungeon-authoring/DungeonGeo
 import { kerovacDefinition } from '../src/game/locations/generated/kerovac.definition.js';
 import { FISH_SPECIES_IDS, FISH_SPECS, FISH_TEXTURE_PROFILES, createFishMesh } from '../src/game/fishing/FishMeshFactory.js';
 import { ACTIVE_GAMEPLAY_RODS, CANONICAL_GAMEPLAY_ROD_ID, KEROVAC_EXPO_ROD_A1_SOURCE, createRodA1Mesh } from '../src/game/fishing/FishingRodFactory.js';
+import { FishingRodView } from '../src/game/fishing/FishingRodView.js';
+import { ROD_REST_POS, ROD_REST_ROT } from '../src/game/fishing/CastingTuning.js';
+import { GameState } from '../src/game/GameState.js';
 
 const testMaterialFactory = (profile = {}) => {
   const material = new THREE.MeshStandardMaterial({
@@ -41,6 +44,45 @@ if (!rodA1Primitive) fail('Fishing invalid: Kerovac Expo Rod A1 was not register
 if (rodA1Primitive.id !== KEROVAC_EXPO_ROD_A1_SOURCE.sourcePrimitiveId || rodA1Primitive.variant !== KEROVAC_EXPO_ROD_A1_SOURCE.sourceVariant) fail('Fishing invalid: Kerovac Expo Rod A1 source metadata does not match canonical rodA1.');
 if (ACTIVE_GAMEPLAY_RODS.length !== 1 || ACTIVE_GAMEPLAY_RODS[0]?.id !== CANONICAL_GAMEPLAY_ROD_ID) fail('Fishing invalid: more than one active gameplay rod is exposed.');
 const rodA1Mesh = createRodA1Mesh();
+
+const validateFirstPersonRodA1RestPose = () => {
+  const camera = new THREE.PerspectiveCamera(68, 16 / 9, 0.1, 260);
+  const gameState = new GameState({ getItem: () => null, setItem: () => {}, removeItem: () => {} });
+  gameState.acquireFieldTool('fishing_rod');
+  gameState.equipFieldTool('fishing_rod');
+  const equipmentRuntime = { getEquippedWeaponProfile: () => ({ id: 'unarmed' }) };
+  const rodView = new FishingRodView({ camera, equipmentRuntime, gameState });
+  if (rodView.getVisibleStateReason() !== 'equipped via GameState field tool' || !rodView.isEquipped()) fail('Fishing invalid: Rod A1 is equipped but FishingRodView reports not equipped.');
+  rodView.update(1 / 60, {});
+  if (!rodView.root.visible) fail('Fishing invalid: Rod A1 is equipped but FishingRodView reports not equipped.');
+
+  camera.updateMatrixWorld(true);
+  rodView.root.updateMatrixWorld(true);
+  const projected = [0, 0.5, 1].map((t) => {
+    const point = rodView.getWorldPointAt(t);
+    const ndc = point.clone().project(camera);
+    return { t, ndc };
+  });
+  const insideOrNear = projected.filter(({ ndc }) => ndc.z >= -1 && ndc.z <= 1 && ndc.x >= -1.1 && ndc.x <= 1.1 && ndc.y >= -1.1 && ndc.y <= 1.1);
+  if (insideOrNear.length !== projected.length) fail('Fishing invalid: Rod A1 rest pose projects outside the viewport.');
+  const [handle, mid, tip] = projected;
+  if (!(handle.ndc.y < mid.ndc.y && mid.ndc.y < tip.ndc.y && handle.ndc.x > 0.15)) fail('Fishing invalid: Rod A1 rest pose projects outside the viewport.');
+
+  const viewport = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }) };
+  const midX = (mid.ndc.x * 0.5 + 0.5) * 1280;
+  const midY = (-mid.ndc.y * 0.5 + 0.5) * 720;
+  if (!rodView.projectRodGrabHit(midX, midY, viewport)) fail('Fishing invalid: Rod A1 is visible but cannot be grabbed by touch hit detection.');
+
+  gameState.equipFieldTool(null);
+  rodView.update(1 / 60, {});
+  if (rodView.root.visible || rodView.isEquipped()) fail('Fishing invalid: Rod A1 remained visible after being unequipped.');
+
+  const weaponRodView = new FishingRodView({ camera: new THREE.PerspectiveCamera(68, 16 / 9, 0.1, 260), equipmentRuntime: { getEquippedWeaponProfile: () => ({ id: 'fishing_rod' }) }, gameState: new GameState({ getItem: () => null, setItem: () => {}, removeItem: () => {} }) });
+  if (weaponRodView.getVisibleStateReason() !== 'equipped via EquipmentRuntime weapon' || !weaponRodView.isEquipped()) fail('Fishing invalid: Rod A1 EquipmentRuntime weapon visibility path is not recognized.');
+  if (!Number.isFinite(ROD_REST_POS.x + ROD_REST_POS.y + ROD_REST_POS.z + ROD_REST_ROT.x + ROD_REST_ROT.y + ROD_REST_ROT.z)) fail('Fishing invalid: Rod A1 root has non-finite rest pose constants.');
+};
+
+validateFirstPersonRodA1RestPose();
 if (rodA1Mesh.userData?.visualSource !== 'KerovacExpoSlotA1' || rodA1Mesh.userData?.fallbackDebugGeometry !== false) fail('Fishing invalid: fallback/debug rod used instead of canonical Rod A1.');
 
 const expectedKerovacFishPads = new Map([
@@ -230,6 +272,7 @@ const gameSource = await import('node:fs/promises').then((fs) => fs.readFile(new
 const interactionSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/Interactions.js', import.meta.url), 'utf8'));
 const castingSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/CastingController.js', import.meta.url), 'utf8'));
 const lureSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/LureProjectile.js', import.meta.url), 'utf8'));
+if (!gameSource.includes('gameState: this.gameState')) fail('Fishing invalid: FishingRodView does not receive GameState field tool equipment.');
 if (!gameSource.includes('new FishingRodView') || !gameSource.includes('new CastingController')) fail('Fishing invalid: Rod A1 view exists when equipped and cast controller exists checks failed.');
 if (interactionSource.includes("return this.startFishingTimedAction(interaction);")) fail('Fishing invalid: old proximity timer fishing remains primary while Rod A1 is equipped.');
 if (!castingSource.includes('spawnRawFishPickupFromCast') || !castingSource.includes('Fish On')) fail('Fishing invalid: successful catch is not routed through cast landing.');
@@ -241,6 +284,8 @@ if (!castingSource.includes('getWorldTipPosition()') || !castingSource.includes(
 if (!castingSource.includes('CAST_MIN_DRAG_DISTANCE') || !castingSource.includes('CAST_MIN_RELEASE_SPEED') || !castingSource.includes('!castValid')) fail('Fishing invalid: weak tap launches lure.');
 if (castingSource.includes('holdDuration') || castingSource.includes('setTimeout') || castingSource.includes('power bar')) fail('Fishing invalid: old proximity timer fishing returned as primary path.');
 const rodViewSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/FishingRodView.js', import.meta.url), 'utf8'));
+if (!rodViewSource.includes('equipped via EquipmentRuntime weapon') || !rodViewSource.includes('equipped via GameState field tool') || !rodViewSource.includes('not equipped')) fail('Fishing invalid: Rod A1 visible-state reason validation is missing.');
+if (!rodViewSource.includes('getEquippedFieldTool') || !rodViewSource.includes('COMPATIBLE_FISHING_ROD_ITEM_ID')) fail('Fishing invalid: FishingRodView does not recognize GameState field tool equipment.');
 if (!rodViewSource.includes('ROD_REST_POS') || !rodViewSource.includes('ROD_REST_ROT') || !rodViewSource.includes('raised-diagonal')) fail('Fishing invalid: rod rest pose is not the raised diagonal reference composition.');
 if (!rodViewSource.includes('projectRodGrabHit') || !rodViewSource.includes('ROD_GRAB_HIT_RADIUS') || !rodViewSource.includes('grabT')) fail('Fishing invalid: rod cannot be directly grabbed by touching the visible rod.');
 if (!lureSource.includes('Number.isFinite(length)') && !lureSource.includes('this.velocity')) fail('Fishing invalid: lure projectile uses finite positions/velocities check failed.');
