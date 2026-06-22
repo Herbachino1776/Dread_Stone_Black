@@ -99,9 +99,9 @@ export class PhysicalFishAngling {
   }
 
   seek(target, dt, speed) { tmp.copy(target).sub(this.actor.position).setY(0); if (tmp.lengthSq() > 0.001) this.actor.velocity.addScaledVector(tmp.normalize(), speed * dt); }
-  hookFish(physics) { this.actor.hooked = true; this.setState('hooked'); this.makeSplash(this.actor.position, 0.7); this.feedback?.shake?.({ durationMs: 210, intensity: 0.075 }); navigator.vibrate?.([18, 24, 18]); if (physics) physics.lineTension = Math.max(physics.lineTension, 8); }
-  escape(physics) { this.actor.hooked = false; this.setState('lost'); this.makeSplash(this.actor.position, 0.75); if (physics) physics.lineTension = 0; setTimeout(() => this.actor && this.setState('idle'), 900); }
-  land(player, physics) { const { species, sizeGroup } = this.actor; const pos = this.actor.position.clone(); this.setState('reeledToShore'); this.despawn(); this.dungeon.spawnRawFishPickupAtPosition?.(pos, this.zone, player, { fishSpecies: species, fishSizeGroup: sizeGroup }); if (physics) physics.lineTension = 0; }
+  hookFish(physics) { this.actor.hooked = true; this.setState('hooked'); this.makeSplash(this.actor.position, 0.7); this.feedback?.shake?.({ durationMs: 210, intensity: 0.075 }); navigator.vibrate?.([18, 24, 18]); if (physics) { physics.isFishHooked = true; physics.lineTension = Math.max(physics.lineTension, 8); } }
+  escape(physics) { this.actor.hooked = false; this.setState('lost'); this.makeSplash(this.actor.position, 0.75); if (physics) { physics.isFishHooked = false; physics.lineTension = 0; } setTimeout(() => this.actor && this.setState('idle'), 900); }
+  land(player, physics) { const { species, sizeGroup } = this.actor; const pos = this.actor.position.clone(); this.setState('reeledToShore'); this.despawn(); this.dungeon.spawnRawFishPickupAtPosition?.(pos, this.zone, player, { fishSpecies: species, fishSizeGroup: sizeGroup }); if (physics) { physics.isFishHooked = false; physics.lineTension = 0; } }
 
   makeSplash(position, scale = 0.5) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.12 * scale, 0.22 * scale, 24), new THREE.MeshBasicMaterial({ color: 0xbfe7df, transparent: true, opacity: 0.58, side: THREE.DoubleSide }));
