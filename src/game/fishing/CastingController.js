@@ -74,8 +74,8 @@ export class CastingController {
     if (!equipped) { this.projectile.cleanup(); return; }
     if (this.state.dragging) {
       const gripPenalty = THREE.MathUtils.lerp(1, 1.38, this.state.grabT ?? 0);
-      const rootSpring = ROD_GRAB_SPRING * 1.18;
-      const rootDamping = ROD_GRAB_DAMPING * 0.82;
+      const rootSpring = ROD_GRAB_SPRING * 1.35;
+      const rootDamping = ROD_GRAB_DAMPING * 0.72;
       const ax = ((this.state.targetRootOffsetX - this.state.rootOffsetX) * rootSpring - this.state.rootVelocityX * rootDamping) / (ROD_MASS_FEEL * gripPenalty);
       const ay = ((this.state.targetRootOffsetY - this.state.rootOffsetY) * rootSpring - this.state.rootVelocityY * rootDamping) / (ROD_MASS_FEEL * gripPenalty);
       const az = ((this.state.targetRootOffsetZ - this.state.rootOffsetZ) * rootSpring - this.state.rootVelocityZ * rootDamping) / (ROD_MASS_FEEL * gripPenalty);
@@ -83,7 +83,7 @@ export class CastingController {
       this.state.rootOffsetX = THREE.MathUtils.clamp(this.state.rootOffsetX + this.state.rootVelocityX * dt, -0.9, 0.9);
       this.state.rootOffsetY = THREE.MathUtils.clamp(this.state.rootOffsetY + this.state.rootVelocityY * dt, -0.65, 0.7);
       this.state.rootOffsetZ = THREE.MathUtils.clamp(this.state.rootOffsetZ + this.state.rootVelocityZ * dt, -0.8, 0.45);
-      const yawAccel = ((this.state.targetYaw - this.state.rodYaw) * ROD_GRAB_SPRING - this.state.rodYawVelocity * ROD_GRAB_DAMPING) / (ROD_MASS_FEEL * gripPenalty);
+      const yawAccel = ((this.state.targetYaw - this.state.rodYaw) * ROD_ANGULAR_SPRING - this.state.rodYawVelocity * ROD_ANGULAR_DAMPING) / (ROD_MASS_FEEL * gripPenalty);
       const pitchAccel = ((this.state.targetPitch - this.state.rodPitch) * ROD_ANGULAR_SPRING - this.state.rodPitchVelocity * ROD_ANGULAR_DAMPING) / (ROD_MASS_FEEL * gripPenalty);
       this.state.rodYawVelocity += yawAccel * dt; this.state.rodPitchVelocity += pitchAccel * dt;
       this.state.rodYaw = THREE.MathUtils.clamp(this.state.rodYaw + this.state.rodYawVelocity * dt, -1.25, 1.25);

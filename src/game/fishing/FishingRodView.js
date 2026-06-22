@@ -102,14 +102,14 @@ export class FishingRodView {
     const targetOffset = active
       ? new THREE.Vector3(this.gestureState.rootOffsetX ?? 0, this.gestureState.rootOffsetY ?? 0, this.gestureState.rootOffsetZ ?? 0)
       : new THREE.Vector3();
-    const follow = active ? 0.42 : Math.min(1, dt * 6.2);
-    this.pose.rootOffset.lerp(targetOffset, active ? 0.34 : Math.min(1, dt * 7.4));
+    const follow = active ? 0.62 : Math.min(1, dt * 7.4);
+    this.pose.rootOffset.lerp(targetOffset, active ? 0.55 : Math.min(1, dt * 8.4));
     this.pose.yaw = THREE.MathUtils.lerp(this.pose.yaw, targetYaw, follow);
     this.pose.pitch = THREE.MathUtils.lerp(this.pose.pitch, targetPitch, follow);
-    this.pose.bend = THREE.MathUtils.lerp(this.pose.bend, active ? load : 0, active ? 0.2 : Math.min(1, dt * 8));
+    this.pose.bend = THREE.MathUtils.lerp(this.pose.bend, active ? load : 0, active ? 0.32 : Math.min(1, dt * 9));
     this.pose.snap = Math.max(0, Math.max(this.pose.snap, this.gestureState.releaseSnap ?? 0) - dt * 5.4);
     const t = performance.now() / 1000;
-    const snapForward = Math.sin(this.pose.snap * Math.PI) * 0.32;
+    const snapForward = Math.sin(this.pose.snap * Math.PI) * 0.38;
     this.root.position.x = ROD_REST_POS.x + this.pose.rootOffset.x + this.pose.yaw * 0.18;
     this.root.position.y = ROD_REST_POS.y + this.pose.rootOffset.y - this.pose.bend * 0.08 + snapForward * 0.04;
     this.root.position.z = ROD_REST_POS.z + this.pose.rootOffset.z - Math.abs(this.pose.pitch) * 0.055;
