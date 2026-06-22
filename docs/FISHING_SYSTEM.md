@@ -31,6 +31,7 @@ This is the practical engineering/design reference for the first playable physic
 
 - Lure held near rod: spool is locked/held at the true minimum line length, not a fake attachment to the rod mesh.
 - Airborne cast: spool unlocks and unspools to satisfy lure travel.
+- Cast release starts with a short payout grace window (about 0.28 seconds) where the spool expands aggressively toward lure distance plus a small buffer, keeping the visible line attached without letting the short fully-reeled endpoint constraint choke launch velocity.
 - Lure on water with no reeling/rod work: spool locks on water to preserve cast distance.
 - Clockwise manual reeling: spool unlocks for reel-in and raises line tension.
 - Grounded lure: spool locks unless manual reeling pulls it back.
@@ -45,6 +46,7 @@ This is the practical engineering/design reference for the first playable physic
 - On land the grounded lure remains terrain-constrained while deployed so reel-in drags it along the ground. When the shortened spool can no longer reach the ground contact, the lure lifts naturally into the dangling endpoint state.
 - At max reel-in, an unhooked lure does **not** remain pinned to water or terrain and does **not** snap to a fake point beside the rod. It recovers into `danglingNearTip`, a short near-tip pose about 0.32 world units (roughly 1 foot in meter-ish tuning) below the true Rod A1 tip.
 - In `danglingNearTip`, the visible line is short and taut from the true rod tip to the lure; the lure uses gravity plus spring/constraint damping so it sways like a small weighted pendulum rather than being rigidly glued to the tip.
+- During the first burst of a cast, endpoint clamping is relaxed while line payout is allowed; hard endpoint constraint returns when the line reaches max spool length, the lure lands and locks, the lure is fully reeled/dangling, or hooked fish tension owns the fight.
 - Line momentum/trailing only exists when spool length is actually out. When the line is near minimum length, old long rope points are collapsed/reseeded into a compact chain between the rod tip and lure endpoint so player motion cannot leave a long phantom trail.
 - Hooked fish movement is coupled to the lure/rod direction in a simple first-playable way. Hooked fish are excluded from near-tip lure recovery: the fish/lure connection stays under hooked fight, escape, and shore landing logic until the fish is picked up, lost, or detached. Complex line break math is intentionally deferred.
 

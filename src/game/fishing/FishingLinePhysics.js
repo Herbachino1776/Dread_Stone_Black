@@ -3,6 +3,8 @@ import {
   LINE_POINT_COUNT, LINE_MIN_LENGTH, LINE_START_LENGTH, LINE_MAX_LENGTH, LINE_SEGMENT_ITERATIONS,
   LINE_GRAVITY, LINE_AIR_DRAG, LINE_WATER_DRAG, LINE_TENSION_STIFFNESS, LINE_TENSION_DAMPING,
   LINE_SPOOL_OUT_SPEED, LINE_MAX_SPOOL_OUT_PER_FRAME, LINE_AUTO_REEL_SPEED, LINE_REEL_PULL_BOOST, LINE_MANUAL_REEL_PULL_ACCEL, LURE_MASS, LURE_WATER_BOB_HEIGHT,
+  LINE_CAST_PAYOUT_GRACE_SECONDS, LINE_CAST_PAYOUT_BUFFER, LINE_CAST_PAYOUT_GRACE_SPEED_MULTIPLIER, LINE_CAST_PAYOUT_GRACE_MAX_PER_FRAME,
+  LINE_CAST_PAYOUT_GRACE_TENSION_SCALE,
   LURE_WATER_BOB_SPEED, LURE_SURFACE_PULL_SCALE, LURE_HELICOPTER_TENSION_SCALE, LURE_MAX_SPEED,
   LINE_GROUND_CLEARANCE, LURE_GROUND_CLEARANCE, LURE_GROUND_FRICTION, LINE_WATER_CONTROLLED_SLACK,
   LINE_FULLY_REELED_THRESHOLD, LURE_DANGLE_DISTANCE_FROM_TIP, LURE_DANGLE_BACKSET_FROM_TIP,
@@ -32,6 +34,7 @@ export class FishingLinePhysics {
     this.spoolOutSpeed = LINE_SPOOL_OUT_SPEED; this.autoReelInSpeed = LINE_AUTO_REEL_SPEED; this.lineSegmentLength = LINE_START_LENGTH / (LINE_POINT_COUNT - 1);
     this.lineTension = 0; this.lineSlack = 1; this.isLureHeldNearRod = true; this.isCasting = false; this.isLureAirborne = false; this.isLureOnWater = false; this.isLureGrounded = false;
     this.waterSurfaceY = 0; this.age = 0; this.castAge = 0; this.spoolState = 'held'; this.spoolLocked = true; this.activePoints = LINE_POINT_COUNT; this.emittedLineLength = LINE_START_LENGTH; this.isFishHooked = false; this.lureRecoveryState = 'danglingNearTip';
+    this.debugState = { enabled: false, castAge: 0, lineLength: LINE_START_LENGTH, lureDistance: 0, payoutAllowed: false, castGraceActive: false, endpointConstraintActive: true, lureSpeedBeforeEndpointConstraint: 0, lureSpeedAfterEndpointConstraint: 0, lineTension: 0, launchVelocity: new THREE.Vector3() };
   }
 
   resetAtRodTip(rodTip) {
@@ -55,7 +58,7 @@ export class FishingLinePhysics {
     }
   }
 
-  launch(rodTip, inheritedVelocity) { this.lureRecoveryState = 'deployed'; this.isLureHeldNearRod = false; this.isCasting = true; this.isLureAirborne = true; this.isLureOnWater = false; this.isLureGrounded = false; this.rodTipWorldPosition.copy(rodTip); this.currentLineLength = LINE_START_LENGTH; this.targetLineLength = LINE_START_LENGTH; this.emittedLineLength = LINE_START_LENGTH; this.activePoints = 2; this.lineSegmentLength = this.currentLineLength / (LINE_POINT_COUNT - 1); this.castAge = 0; this.lureVelocity.copy(inheritedVelocity).addScaledVector(this.rodTipVelocity, 0.35); this.lurePreviousPosition.copy(this.lurePosition); this.seedRope({ collapseAtRodTip: true }); this.spoolState = 'unspooling'; this.spoolLocked = false; }
+  launch(rodTip, inheritedVelocity) { this.lureRecoveryState = 'deployed'; this.isLureHeldNearRod = false; this.isCasting = true; this.isLureAirborne = true; this.isLureOnWater = false; this.isLureGrounded = false; this.rodTipWorldPosition.copy(rodTip); this.currentLineLength = LINE_START_LENGTH; this.targetLineLength = LINE_START_LENGTH; this.emittedLineLength = LINE_START_LENGTH; this.activePoints = 2; this.lineSegmentLength = this.currentLineLength / (LINE_POINT_COUNT - 1); this.castAge = 0; this.lureVelocity.copy(inheritedVelocity).addScaledVector(this.rodTipVelocity, 0.35); this.debugState.launchVelocity.copy(this.lureVelocity); this.lurePreviousPosition.copy(this.lurePosition); this.seedRope({ collapseAtRodTip: true }); this.spoolState = 'cast-payout-grace'; this.spoolLocked = false; }
   enterWater(surfaceY) { this.lureRecoveryState = 'deployed'; this.isCasting = false; this.isLureAirborne = false; this.isLureOnWater = true; this.isLureGrounded = false; this.isLureHeldNearRod = false; this.waterSurfaceY = surfaceY; this.lurePosition.y = surfaceY + LURE_WATER_BOB_HEIGHT * 0.35; this.lureVelocity.y = 0; this.currentLineLength = THREE.MathUtils.clamp(this.currentLineLength, Math.min(this.minLineLength, this.currentLineLength), this.maxLineLength); this.targetLineLength = this.currentLineLength; this.activePoints = LINE_POINT_COUNT; this.emittedLineLength = this.currentLineLength; this.spoolState = 'locked-water'; this.spoolLocked = true; }
   enterGround(surfaceY) { this.lureRecoveryState = 'deployed'; this.isCasting = false; this.isLureAirborne = false; this.isLureOnWater = false; this.isLureGrounded = true; this.isLureHeldNearRod = false; this.lurePosition.y = surfaceY + LURE_GROUND_CLEARANCE; this.lureVelocity.multiplyScalar(0.15); this.spoolState = 'locked-ground'; this.spoolLocked = true; }
 
@@ -156,12 +159,16 @@ export class FishingLinePhysics {
     const canLiftGroundedLure = this.shouldLiftGroundedLure(distance);
     if (this.isLureAirborne || this.isLureHeldNearRod || (this.isLureGrounded && canLiftGroundedLure)) this.lureVelocity.y += LINE_GRAVITY * dt;
     this.lureVelocity.multiplyScalar(Math.pow(drag, dt * 60));
-    const stretch = Math.max(0, distance - this.currentLineLength); const dir = scratch.copy(this.rodTipWorldPosition).sub(this.lurePosition);
+    const payoutAllowed = this.isCastPayoutAllowed(distance);
+    const castGraceActive = this.isCastPayoutGraceActive();
+    const tensionLength = payoutAllowed ? Math.min(this.maxLineLength, Math.max(this.currentLineLength, distance + LINE_CAST_PAYOUT_BUFFER)) : this.currentLineLength;
+    const stretch = Math.max(0, distance - tensionLength); const dir = scratch.copy(this.rodTipWorldPosition).sub(this.lurePosition);
     if (dir.lengthSq() > 0.0001) dir.normalize();
     const tensionDir = this.isLureGrounded && !canLiftGroundedLure ? scratchHorizontal.copy(dir).setY(0) : scratchHorizontal.copy(dir);
     if (tensionDir.lengthSq() > 0.0001) tensionDir.normalize();
     const awaySpeed = this.lureVelocity.dot(tensionDir) * -1 + this.rodTipVelocity.dot(tensionDir);
-    this.lineTension = Math.max(0, stretch * LINE_TENSION_STIFFNESS + Math.max(0, awaySpeed) * LINE_TENSION_DAMPING);
+    const payoutTensionScale = payoutAllowed ? (castGraceActive ? LINE_CAST_PAYOUT_GRACE_TENSION_SCALE : 0.42) : 1;
+    this.lineTension = Math.max(0, (stretch * LINE_TENSION_STIFFNESS + Math.max(0, awaySpeed) * LINE_TENSION_DAMPING) * payoutTensionScale);
     const heldScale = this.isLureHeldNearRod ? LURE_HELICOPTER_TENSION_SCALE : 1;
     this.lureVelocity.addScaledVector(tensionDir, this.lineTension * heldScale * dt / Math.max(0.2, this.lureMass));
     if (this.isLureOnWater) {
@@ -189,12 +196,15 @@ export class FishingLinePhysics {
   updateSpool(dt, rodHeld, reelBoost, manualReelRate = 0) {
     if (this.isLureAirborne) {
       const distance = this.rodTipWorldPosition.distanceTo(this.lurePosition);
-      const neededLength = Math.min(this.maxLineLength, Math.max(LINE_START_LENGTH, distance + 0.16));
-      const tensionScale = THREE.MathUtils.clamp((this.lineTension + distance * 0.18) / 7, 0.22, 1);
-      const earlyReleaseScale = THREE.MathUtils.clamp(this.castAge / 0.26, 0.28, 1);
-      const maxFrameRelease = Math.min(LINE_MAX_SPOOL_OUT_PER_FRAME, this.spoolOutSpeed * dt * tensionScale * earlyReleaseScale);
+      const castGraceActive = this.isCastPayoutGraceActive();
+      const neededLength = Math.min(this.maxLineLength, Math.max(LINE_START_LENGTH, distance + (castGraceActive ? LINE_CAST_PAYOUT_BUFFER : 0.16)));
+      const tensionScale = castGraceActive ? 1 : THREE.MathUtils.clamp((this.lineTension + distance * 0.18) / 7, 0.35, 1);
+      const speed = this.spoolOutSpeed * (castGraceActive ? LINE_CAST_PAYOUT_GRACE_SPEED_MULTIPLIER : 1);
+      const frameLimit = castGraceActive ? LINE_CAST_PAYOUT_GRACE_MAX_PER_FRAME : LINE_MAX_SPOOL_OUT_PER_FRAME;
+      const maxFrameRelease = Math.min(frameLimit, speed * dt * tensionScale);
       this.currentLineLength += Math.min(maxFrameRelease, Math.max(0, neededLength - this.currentLineLength));
       this.spoolLocked = false;
+      this.spoolState = castGraceActive ? 'cast-payout-grace' : 'unspooling';
       this.emittedLineLength = this.currentLineLength;
       this.activePoints = THREE.MathUtils.clamp(2 + Math.floor((this.currentLineLength / Math.max(distance, this.currentLineLength, 0.001)) * (LINE_POINT_COUNT - 2)), 2, LINE_POINT_COUNT);
     }
@@ -246,6 +256,9 @@ export class FishingLinePhysics {
 
   enforceLureEndpointConstraint({ forceAtLength = false, damping = 0.45 } = {}) {
     if (this.isFishHooked) return;
+    const speedBefore = this.lureVelocity.length();
+    this.debugState.lureSpeedBeforeEndpointConstraint = speedBefore;
+    this.debugState.endpointConstraintActive = false;
     const fromTip = scratch.copy(this.lurePosition).sub(this.rodTipWorldPosition);
     const distance = fromTip.length();
     if (distance <= 0.0001) {
@@ -254,14 +267,28 @@ export class FishingLinePhysics {
       return;
     }
     const length = Math.max(this.minLineLength, this.currentLineLength);
+    const payoutAllowed = this.isCastPayoutAllowed(distance);
+    if (payoutAllowed && !forceAtLength && distance <= this.maxLineLength) {
+      this.debugState.lureSpeedAfterEndpointConstraint = this.lureVelocity.length();
+      return;
+    }
     if (distance > length || forceAtLength) {
+      this.debugState.endpointConstraintActive = true;
       fromTip.setLength(length);
       this.lurePosition.copy(this.rodTipWorldPosition).add(fromTip);
       const radialSpeed = this.lureVelocity.dot(fromTip.normalize());
+      const hardMaxCastLimit = this.isLureAirborne && distance >= this.maxLineLength;
       if (radialSpeed > 0) this.lureVelocity.addScaledVector(fromTip, -radialSpeed);
-      this.lureVelocity.multiplyScalar(damping);
+      this.lureVelocity.multiplyScalar(hardMaxCastLimit ? Math.max(damping, 0.82) : damping);
       this.lineTension = Math.max(this.lineTension, 7);
     }
+    this.debugState.lureSpeedAfterEndpointConstraint = this.lureVelocity.length();
+  }
+
+  isCastPayoutGraceActive() { return this.isLureAirborne && !this.isFishHooked && this.castAge <= LINE_CAST_PAYOUT_GRACE_SECONDS && !this.spoolLocked; }
+
+  isCastPayoutAllowed(distance = this.lurePosition.distanceTo(this.rodTipWorldPosition)) {
+    return this.isLureAirborne && !this.isFishHooked && !this.spoolLocked && distance < this.maxLineLength;
   }
 
   reseedShortLine() {
@@ -324,5 +351,22 @@ export class FishingLinePhysics {
     this.linePoints[0].copy(this.rodTipWorldPosition); this.linePoints[LINE_POINT_COUNT - 1].copy(this.lurePosition);
   }
 
-  getDebugState() { return { lineLength: this.currentLineLength, lineTension: this.lineTension, lureMode: this.isLureOnWater ? 'water' : this.isLureAirborne ? 'airborne' : this.isLureGrounded ? 'grounded' : this.isLureHeldNearRod ? this.lureRecoveryState : 'held', lureSpeed: this.lureVelocity.length(), spoolState: this.spoolLocked ? `${this.spoolState}-spool-locked` : this.spoolState }; }
+  getDebugState() {
+    const lureDistance = this.lurePosition.distanceTo(this.rodTipWorldPosition);
+    return {
+      lineLength: this.currentLineLength,
+      lineTension: this.lineTension,
+      lureMode: this.isLureOnWater ? 'water' : this.isLureAirborne ? 'airborne' : this.isLureGrounded ? 'grounded' : this.isLureHeldNearRod ? this.lureRecoveryState : 'held',
+      lureSpeed: this.lureVelocity.length(),
+      spoolState: this.spoolLocked ? `${this.spoolState}-spool-locked` : this.spoolState,
+      castAge: this.castAge,
+      lureDistance,
+      payoutAllowed: this.isCastPayoutAllowed(lureDistance),
+      endpointConstraintActive: this.debugState.endpointConstraintActive,
+      lureSpeedBeforeEndpointConstraint: this.debugState.lureSpeedBeforeEndpointConstraint,
+      lureSpeedAfterEndpointConstraint: this.debugState.lureSpeedAfterEndpointConstraint,
+      launchVelocity: this.debugState.launchVelocity,
+      castGraceActive: this.isCastPayoutGraceActive(),
+    };
+  }
 }
