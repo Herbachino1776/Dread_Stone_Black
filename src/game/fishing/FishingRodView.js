@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import { createRodA1Mesh, resolveGameplayRodForItem, CANONICAL_GAMEPLAY_ROD_ID, COMPATIBLE_FISHING_ROD_ITEM_ID } from './FishingRodFactory.js';
-import { REEL_GESTURE_FALLBACK_RADIUS, REEL_GESTURE_ZONE_RADIUS, ROD_GRAB_HIT_RADIUS, ROD_REST_POS, ROD_REST_ROT } from './CastingTuning.js';
+import { REEL_GESTURE_FALLBACK_RADIUS, REEL_GESTURE_ZONE_RADIUS, ROD_GRAB_HIT_RADIUS, ROD_GRAB_HIT_RADIUS_HANDLE, ROD_GRAB_HIT_RADIUS_SHAFT, ROD_GRAB_HIT_RADIUS_TIP, ROD_REST_POS, ROD_REST_ROT } from './CastingTuning.js';
 
 const screenPoint = new THREE.Vector3();
 const worldPoint = new THREE.Vector3();
 const lastTipScratch = new THREE.Vector3();
+const pivotDesiredWorld = new THREE.Vector3();
+const pivotActualWorld = new THREE.Vector3();
+const pivotDesiredCamera = new THREE.Vector3();
+const pivotActualCamera = new THREE.Vector3();
 
 export class FishingRodView {
   constructor({ camera, equipmentRuntime, gameState } = {}) {
@@ -26,6 +30,7 @@ export class FishingRodView {
     this.lastTipPosition = new THREE.Vector3();
     this.tipVelocity = new THREE.Vector3();
     this.hasLastTip = false;
+    this.debug = { enabled: false, rodHitSamples: [], grabPoint: null, grabT: 0, hitRadius: 0, grabbedPointBefore: null, grabbedPointAfter: null, handPivot: null, pointerMode: 'none' };
   }
 
   getVisibleStateReason() {
@@ -129,6 +134,32 @@ export class FishingRodView {
     return best;
   }
 
+  getGrabHitRadius(t, rect) {
+    const mobileBoost = Math.min(rect.width, rect.height) < 760 ? 1.18 : 1;
+    const base = t < 0.24
+      ? THREE.MathUtils.lerp(ROD_GRAB_HIT_RADIUS_HANDLE, ROD_GRAB_HIT_RADIUS_SHAFT, t / 0.24)
+      : THREE.MathUtils.lerp(ROD_GRAB_HIT_RADIUS_SHAFT, ROD_GRAB_HIT_RADIUS_TIP, (t - 0.24) / 0.76);
+    return Math.max(ROD_GRAB_HIT_RADIUS, base * mobileBoost);
+  }
+
+  projectWorldPointToViewport(point, viewport) {
+    const rect = viewport.getBoundingClientRect();
+    screenPoint.copy(point).project(this.camera);
+    if (screenPoint.z < -1 || screenPoint.z > 1) return null;
+    return {
+      x: (screenPoint.x * 0.5 + 0.5) * rect.width + rect.left,
+      y: (-screenPoint.y * 0.5 + 0.5) * rect.height + rect.top,
+      z: screenPoint.z,
+    };
+  }
+
+  projectGrabbedPoint(grabT, viewport) {
+    if (!this.isEquipped() || !this.root.visible || !viewport) return null;
+    this.camera.updateMatrixWorld();
+    this.root.updateMatrixWorld(true);
+    return this.projectWorldPointToViewport(this.getWorldPointAt(grabT), viewport);
+  }
+
   projectRodGrabHit(clientX, clientY, viewport) {
     if (!this.isEquipped() || !this.root.visible || !viewport) return null;
     this.camera.updateMatrixWorld();
@@ -136,8 +167,9 @@ export class FishingRodView {
     const rect = viewport.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
+    const samples = [];
     let best = null;
-    const steps = 18;
+    const steps = 28;
     for (let i = 0; i <= steps; i += 1) {
       const t = i / steps;
       worldPoint.copy(this.getWorldPointAt(t));
@@ -145,10 +177,18 @@ export class FishingRodView {
       if (screenPoint.z < -1 || screenPoint.z > 1) continue;
       const sx = (screenPoint.x * 0.5 + 0.5) * rect.width;
       const sy = (-screenPoint.y * 0.5 + 0.5) * rect.height;
+      const radius = this.getGrabHitRadius(t, rect);
       const dist = Math.hypot(x - sx, y - sy);
-      if (!best || dist < best.distance) best = { grabT: t, distance: dist, screenX: sx + rect.left, screenY: sy + rect.top };
+      const candidate = { grabT: t, distance: dist, radius, screenX: sx + rect.left, screenY: sy + rect.top };
+      samples.push(candidate);
+      if (dist <= radius && (!best || dist / radius < best.distance / best.radius)) best = candidate;
     }
-    if (!best || best.distance > ROD_GRAB_HIT_RADIUS) return null;
+    this.debug.rodHitSamples = samples;
+    this.debug.pointerMode = best ? 'rod-grab' : 'none';
+    if (!best) return null;
+    this.debug.grabPoint = { x: best.screenX, y: best.screenY };
+    this.debug.grabT = best.grabT;
+    this.debug.hitRadius = best.radius;
     return best;
   }
 
@@ -174,12 +214,24 @@ export class FishingRodView {
     this.pose.snap = Math.max(0, Math.max(this.pose.snap, this.gestureState.releaseSnap ?? 0) - dt * 5.4);
     const t = performance.now() / 1000;
     const snapForward = Math.sin(this.pose.snap * Math.PI) * 0.38;
-    this.root.position.x = ROD_REST_POS.x + this.pose.rootOffset.x + this.pose.yaw * 0.18;
-    this.root.position.y = ROD_REST_POS.y + this.pose.rootOffset.y - this.pose.bend * 0.08 + snapForward * 0.04;
-    this.root.position.z = ROD_REST_POS.z + this.pose.rootOffset.z - Math.abs(this.pose.pitch) * 0.055;
+    this.root.position.x = ROD_REST_POS.x + this.pose.rootOffset.x;
+    this.root.position.y = ROD_REST_POS.y + this.pose.rootOffset.y;
+    this.root.position.z = ROD_REST_POS.z + this.pose.rootOffset.z;
+    this.root.rotation.set(ROD_REST_ROT.x, ROD_REST_ROT.y, ROD_REST_ROT.z);
+    this.root.updateMatrixWorld(true);
+    // Keep the lower grip planted in camera space so casts pivot from an implied hand instead of the rod root.
+    pivotDesiredWorld.copy(this.getWorldPointAt(0.08));
     this.root.rotation.x = ROD_REST_ROT.x + this.pose.pitch * 0.72 - this.pose.bend * 0.3 + snapForward + Math.sin(t * 2.1) * 0.004;
     this.root.rotation.y = ROD_REST_ROT.y + this.pose.yaw * 0.72;
     this.root.rotation.z = ROD_REST_ROT.z + this.pose.yaw * 0.46 + this.pose.bend * 0.18 - snapForward * 0.2;
+    this.root.position.y -= this.pose.bend * 0.03;
+    this.root.position.z -= Math.max(0, this.pose.pitch) * 0.035;
+    this.root.updateMatrixWorld(true);
+    pivotActualWorld.copy(this.getWorldPointAt(0.08));
+    pivotDesiredCamera.copy(pivotDesiredWorld); this.camera.worldToLocal(pivotDesiredCamera);
+    pivotActualCamera.copy(pivotActualWorld); this.camera.worldToLocal(pivotActualCamera);
+    this.root.position.add(pivotDesiredCamera.sub(pivotActualCamera));
+    this.debug.handPivot = { x: pivotDesiredWorld.x, y: pivotDesiredWorld.y, z: pivotDesiredWorld.z, cameraLocal: this.root.position.clone() };
     this.rod.rotation.z = Math.PI / 2 - this.pose.bend * 0.2 + snapForward * 0.24;
     this.rod.rotation.x = this.pose.yaw * 0.09;
     lastTipScratch.copy(this.getWorldTipPosition());

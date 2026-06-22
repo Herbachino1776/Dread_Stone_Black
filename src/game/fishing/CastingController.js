@@ -22,7 +22,7 @@ export class CastingController {
     this.viewport = app.querySelector('[data-game="viewport"]') ?? app;
     this.state = this.createIdleState();
     this.reelState = this.createIdleReelState();
-    this.debug = { enabled: false, loadAmount: 0, releaseSpeed: 0, castValid: false, launchVelocity: new THREE.Vector3(), lureHitType: 'none', lineLength: 0, lineTension: 0, lureMode: 'held', lureSpeed: 0, spoolState: 'held', fishableWaterId: null, manualReelRate: 0, reelClockwiseDegrees: 0, reelZoneHit: false, reelZone: null, projectedReelCenter: null, fallbackReelCenter: null, activeReelPointerId: null, reelClockwiseDelta: 0 };
+    this.debug = { enabled: false, loadAmount: 0, releaseSpeed: 0, castValid: false, launchVelocity: new THREE.Vector3(), lureHitType: 'none', lineLength: 0, lineTension: 0, lureMode: 'held', lureSpeed: 0, spoolState: 'held', fishableWaterId: null, manualReelRate: 0, reelClockwiseDegrees: 0, reelZoneHit: false, reelZone: null, projectedReelCenter: null, fallbackReelCenter: null, activeReelPointerId: null, reelClockwiseDelta: 0, pointerMode: 'none', rodHitSamples: [], grabT: 0, hitRadius: 0, grabbedPointBefore: null, grabbedPointAfter: null, handPivot: null, releaseVelocity: { x: 0, y: 0 } };
     this.projectile = new LureProjectile({ scene: dungeon.scene, dungeon, waterResolver: new FishingWaterResolver({ dungeon }), maxCastRange: CAST_MAX_RANGE, onLanded: (result) => this.handleLanded(result) });
     this.dungeon.setFishingFeedback?.(this.feedback);
     this.bind();
@@ -40,6 +40,8 @@ export class CastingController {
       const reelHit = this.isLineDeployed() ? this.rodView?.projectReelGestureHit?.(e.clientX, e.clientY, this.viewport) : null;
       if (reelHit) {
         e.preventDefault(); this.viewport.setPointerCapture?.(e.pointerId);
+        this.debug.pointerMode = 'reel';
+        this.rodView.debug.pointerMode = 'reel';
         this.startReelGesture(e, reelHit);
         return;
       }
@@ -47,6 +49,10 @@ export class CastingController {
       if (!hit) return;
       e.preventDefault(); this.viewport.setPointerCapture?.(e.pointerId);
       const sample = this.makeSample(e);
+      this.debug.pointerMode = 'rod-grab';
+      this.debug.grabT = hit.grabT;
+      this.debug.hitRadius = hit.radius;
+      this.debug.rodHitSamples = this.rodView?.debug?.rodHitSamples ?? [];
       this.state = { ...this.createIdleState(), dragging: true, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, grabT: hit.grabT, grabScreenX: hit.screenX, grabScreenY: hit.screenY, gestureHistory: [sample] };
       this.rodView?.setGestureState?.(this.state);
     }, { passive: false });
@@ -99,6 +105,7 @@ export class CastingController {
   makeSample(e) { return { screenX: e.clientX, screenY: e.clientY, timeMs: performance.now(), rodYaw: this.state.rodYaw, rodPitch: this.state.rodPitch }; }
   recordGesture(e) {
     const previous = this.state.gestureHistory.at(-1) ?? this.makeSample(e);
+    const beforeProjection = this.rodView?.projectGrabbedPoint?.(this.state.grabT ?? 0, this.viewport);
     const sample = this.makeSample(e);
     const dx = sample.screenX - previous.screenX; const dy = sample.screenY - previous.screenY;
     this.state.x = sample.screenX; this.state.y = sample.screenY;
@@ -122,6 +129,14 @@ export class CastingController {
     this.state.loadAmount = THREE.MathUtils.clamp((backwardLoad + momentumLoad * 0.65 + this.state.angularVelocity * 0.08) * CAST_ROD_BEND_SCALE * leverage, 0, 1.2);
     this.state.motionSmoothness = this.computeMotionSmoothness();
     this.rodView?.setGestureState?.(this.state);
+    const afterProjection = this.rodView?.projectGrabbedPoint?.(this.state.grabT ?? 0, this.viewport);
+    this.debug.grabbedPointBefore = beforeProjection;
+    this.debug.grabbedPointAfter = afterProjection;
+    this.debug.loadAmount = this.state.loadAmount;
+    if (this.rodView?.debug) {
+      this.rodView.debug.grabbedPointBefore = beforeProjection;
+      this.rodView.debug.grabbedPointAfter = afterProjection;
+    }
   }
   update(deltaSeconds) {
     const dt = Math.max(0.001, Math.min(0.05, deltaSeconds));
@@ -133,6 +148,7 @@ export class CastingController {
       this.projectile.update(dt, rodTip, { rodHeld: this.state.dragging === true, reelBoost, manualReelRate: this.reelState.rate });
       this.dungeon.updatePhysicalFishAngling?.(dt, { player: this.player, lure: this.projectile, rodTip, manualReelRate: this.reelState.rate, rodState: this.state, physics: this.projectile.physics });
       Object.assign(this.debug, this.projectile.getDebugState?.() ?? {});
+      Object.assign(this.debug, { handPivot: this.rodView?.debug?.handPivot ?? null, rodHitSamples: this.rodView?.debug?.rodHitSamples ?? [], pointerMode: this.debug.pointerMode });
       this.debug.manualReelRate = this.reelState.rate;
       this.debug.reelClockwiseDegrees = THREE.MathUtils.radToDeg(this.reelState.accumulatedClockwise);
     }
@@ -180,7 +196,7 @@ export class CastingController {
     const tipSpeed = tipVelocity.length(); const angularRelease = Math.hypot(this.state.rodYawVelocity, this.state.rodPitchVelocity);
     const load = this.state.loadAmount; const forwardFlick = -velocity.y + Math.max(0, -this.state.rodPitchVelocity) * 140;
     const castValid = dragDistance >= CAST_MIN_DRAG_DISTANCE && (releaseSpeed >= CAST_MIN_RELEASE_SPEED || tipSpeed > 5.5) && forwardFlick > CAST_MIN_RELEASE_SPEED * 0.24 && (load > 0.16 || angularRelease > 2.3);
-    this.debug.releaseSpeed = Math.max(releaseSpeed, tipSpeed * 105); this.debug.castValid = castValid; this.debug.loadAmount = load;
+    this.debug.releaseSpeed = Math.max(releaseSpeed, tipSpeed * 105); this.debug.releaseVelocity = { x: velocity.x, y: velocity.y }; this.debug.castValid = castValid; this.debug.loadAmount = load;
     this.state.dragging = false; this.state.releaseSnap = castValid ? Math.min(1.25, ROD_RELEASE_SNAP_SCALE * (0.45 + load)) : 0; this.rodView?.setGestureState?.(this.state);
     if (!castValid) { this.hud.showMessage('Cast Failed'); return; }
     const start = this.rodView.getWorldTipPosition(); const dir = this.buildLaunchDirection(velocity, load, tipVelocity);
