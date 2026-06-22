@@ -233,6 +233,11 @@ const lureSource = await import('node:fs/promises').then((fs) => fs.readFile(new
 if (!gameSource.includes('new FishingRodView') || !gameSource.includes('new CastingController')) fail('Fishing invalid: Rod A1 view exists when equipped and cast controller exists checks failed.');
 if (interactionSource.includes("return this.startFishingTimedAction(interaction);")) fail('Fishing invalid: old proximity timer fishing remains primary while Rod A1 is equipped.');
 if (!castingSource.includes('spawnRawFishPickupFromCast') || !castingSource.includes('Fish On')) fail('Fishing invalid: successful catch is not routed through cast landing.');
+
+if (!castingSource.includes('CAST_GESTURE_HISTORY_MS') || !castingSource.includes('gestureHistory') || !castingSource.includes('computeReleaseVelocity')) fail('Fishing invalid: casting does not use gesture history.');
+if (!castingSource.includes('getWorldTipPosition()') || !castingSource.includes('releaseSpeed') || !castingSource.includes('buildLaunchDirection')) fail('Fishing invalid: cast release ignores rod tip/release velocity.');
+if (!castingSource.includes('CAST_MIN_DRAG_DISTANCE') || !castingSource.includes('CAST_MIN_RELEASE_SPEED') || !castingSource.includes('!castValid')) fail('Fishing invalid: weak tap launches lure.');
+if (castingSource.includes('holdDuration') || castingSource.includes('setTimeout') || castingSource.includes('power bar')) fail('Fishing invalid: old proximity timer fishing returned as primary path.');
 if (!lureSource.includes('Number.isFinite(length)') && !lureSource.includes('this.velocity')) fail('Fishing invalid: lure projectile uses finite positions/velocities check failed.');
 if (!lureSource.includes('replacesUglyFakeWorm: true')) fail('Fishing invalid: fake worm lure was not replaced.');
 if (!castingSource.includes("hud.showMessage('Cast Failed')")) fail('Fishing invalid: failed ground cast spawned a fish.');

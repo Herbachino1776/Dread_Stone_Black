@@ -1,0 +1,12 @@
+export const CAST_GESTURE_HISTORY_MS = 180;
+export const CAST_MIN_DRAG_DISTANCE = 34;
+export const CAST_MIN_RELEASE_SPEED = 520;
+export const CAST_MAX_RELEASE_SPEED = 1850;
+export const CAST_POWER_FROM_VELOCITY = 0.012;
+export const CAST_POWER_FROM_LOAD = 13;
+export const CAST_SIDE_AIM_SCALE = 0.00042;
+export const CAST_VERTICAL_ARC_SCALE = 0.00036;
+export const CAST_ROD_SMOOTHING = 0.22;
+export const CAST_ROD_BEND_SCALE = 1.15;
+export const CAST_ROD_RETURN_SPEED = 7.5;
+export const CAST_MAX_RANGE = 44;
