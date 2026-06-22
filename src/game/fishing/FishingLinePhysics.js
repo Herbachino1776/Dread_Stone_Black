@@ -9,7 +9,7 @@ import {
   LINE_GROUND_CLEARANCE, LURE_GROUND_CLEARANCE, LURE_GROUND_FRICTION, LINE_WATER_CONTROLLED_SLACK,
   LINE_FULLY_REELED_THRESHOLD, LURE_DANGLE_DISTANCE_FROM_TIP, LURE_DANGLE_BACKSET_FROM_TIP,
   LURE_DANGLE_SWAY, LURE_DANGLE_SPRING, LURE_DANGLE_DAMPING, LINE_MANUAL_REEL_MAX_PER_FRAME,
-  LINE_CONTACT_PULL_MAX_PER_FRAME, LINE_HOOKED_CONTACT_PULL_MAX_PER_FRAME, LINE_CONTACT_LIFT_MARGIN,
+  LINE_CONTACT_PULL_MAX_PER_FRAME, LINE_CONTACT_LIFT_MARGIN,
 } from './CastingTuning.js';
 
 const up = new THREE.Vector3(0, 1, 0);
@@ -34,7 +34,7 @@ export class FishingLinePhysics {
     this.currentLineLength = LINE_MIN_LENGTH; this.targetLineLength = LINE_MIN_LENGTH; this.maxLineLength = LINE_MAX_LENGTH; this.minLineLength = LINE_MIN_LENGTH;
     this.spoolOutSpeed = LINE_SPOOL_OUT_SPEED; this.autoReelInSpeed = LINE_AUTO_REEL_SPEED; this.lineSegmentLength = LINE_START_LENGTH / (LINE_POINT_COUNT - 1);
     this.lineTension = 0; this.lineSlack = 1; this.isLureHeldNearRod = true; this.isCasting = false; this.isLureAirborne = false; this.isLureOnWater = false; this.isLureGrounded = false;
-    this.waterSurfaceY = 0; this.age = 0; this.castAge = 0; this.spoolState = 'held'; this.spoolLocked = true; this.activePoints = LINE_POINT_COUNT; this.emittedLineLength = LINE_MIN_LENGTH; this.isFishHooked = false; this.lureRecoveryState = 'danglingNearTip';
+    this.waterSurfaceY = 0; this.age = 0; this.castAge = 0; this.spoolState = 'held'; this.spoolLocked = true; this.activePoints = LINE_POINT_COUNT; this.emittedLineLength = LINE_MIN_LENGTH; this.isFishHooked = false; this.hookedReelWeight = 1; this.lureRecoveryState = 'danglingNearTip';
     this.debugState = { enabled: false, castAge: 0, lineLength: LINE_START_LENGTH, lureDistance: 0, payoutAllowed: false, castGraceActive: false, endpointConstraintActive: true, lureSpeedBeforeEndpointConstraint: 0, lureSpeedAfterEndpointConstraint: 0, lineTension: 0, launchVelocity: new THREE.Vector3() };
     this.hookedFishDebug = null;
   }
@@ -43,7 +43,7 @@ export class FishingLinePhysics {
     this.rodTipWorldPosition.copy(rodTip); this.previousRodTipWorldPosition.copy(rodTip); this.rodTipVelocity.set(0, 0, 0);
     this.currentLineLength = this.minLineLength; this.targetLineLength = this.minLineLength; this.lineSegmentLength = this.currentLineLength / (LINE_POINT_COUNT - 1);
     this.lurePosition.copy(rodTip).add(LURE_RECOVERED_HANG_OFFSET); this.lurePreviousPosition.copy(this.lurePosition); this.lureVelocity.set(0, 0, 0);
-    this.activePoints = LINE_POINT_COUNT; this.emittedLineLength = this.minLineLength; this.seedRope(); this.isLureHeldNearRod = true; this.isCasting = false; this.isLureAirborne = false; this.isLureOnWater = false; this.isLureGrounded = false; this.isFishHooked = false; this.lineTension = 0; this.lineSlack = 0; this.age = 0; this.castAge = 0; this.spoolState = 'held'; this.spoolLocked = true; this.lureRecoveryState = 'danglingNearTip'; this.hookedFishDebug = null;
+    this.activePoints = LINE_POINT_COUNT; this.emittedLineLength = this.minLineLength; this.seedRope(); this.isLureHeldNearRod = true; this.isCasting = false; this.isLureAirborne = false; this.isLureOnWater = false; this.isLureGrounded = false; this.isFishHooked = false; this.hookedReelWeight = 1; this.lineTension = 0; this.lineSlack = 0; this.age = 0; this.castAge = 0; this.spoolState = 'held'; this.spoolLocked = true; this.lureRecoveryState = 'danglingNearTip'; this.hookedFishDebug = null;
   }
 
   seedRope({ collapseAtRodTip = false } = {}) {
@@ -210,13 +210,14 @@ export class FishingLinePhysics {
       this.emittedLineLength = this.currentLineLength;
       this.activePoints = THREE.MathUtils.clamp(2 + Math.floor((this.currentLineLength / Math.max(distance, this.currentLineLength, 0.001)) * (LINE_POINT_COUNT - 2)), 2, LINE_POINT_COUNT);
     }
-    if (this.isLureOnWater && (rodHeld || reelBoost > 0)) {
+    if (!this.isFishHooked && this.isLureOnWater && (rodHeld || reelBoost > 0)) {
       const autoReelAmount = Math.min(LINE_MANUAL_REEL_MAX_PER_FRAME * 0.35, (this.autoReelInSpeed + reelBoost * LINE_REEL_PULL_BOOST) * dt * 0.18);
       this.currentLineLength -= autoReelAmount;
       this.spoolState = 'auto-reel-in';
     }
     if (!this.isLureHeldNearRod && manualReelRate > 0) {
-      const reelAmount = Math.min(LINE_MANUAL_REEL_MAX_PER_FRAME, manualReelRate * dt);
+      const hookedWeight = this.isFishHooked ? Math.max(0.5, this.hookedReelWeight || 1) : 1;
+      const reelAmount = Math.min(LINE_MANUAL_REEL_MAX_PER_FRAME, manualReelRate * dt / hookedWeight);
       let nextLineLength = this.currentLineLength - reelAmount;
       if (!this.isFishHooked && (this.isLureOnWater || this.isLureGrounded)) {
         const verticalGap = Math.abs(this.rodTipWorldPosition.y - this.lurePosition.y);
@@ -224,9 +225,6 @@ export class FishingLinePhysics {
         const horizontalAfterPull = Math.max(0, horizontalGap - LINE_CONTACT_PULL_MAX_PER_FRAME);
         const shortestReachableThisFrame = Math.hypot(verticalGap, horizontalAfterPull);
         nextLineLength = Math.max(nextLineLength, Math.min(this.currentLineLength, shortestReachableThisFrame));
-      } else if (this.isFishHooked) {
-        const hookedDistance = this.rodTipWorldPosition.distanceTo(this.lurePosition);
-        nextLineLength = Math.max(nextLineLength, Math.min(this.currentLineLength, hookedDistance - LINE_HOOKED_CONTACT_PULL_MAX_PER_FRAME));
       }
       this.currentLineLength = nextLineLength;
       this.spoolState = 'manual-reel-in'; this.spoolLocked = false;
@@ -403,6 +401,7 @@ export class FishingLinePhysics {
       castGraceActive: this.isCastPayoutGraceActive(),
       rodTipVelocity: this.rodTipVelocity.clone(),
       hookedFish: this.hookedFishDebug,
+      hookedReelWeight: this.hookedReelWeight,
     };
   }
 }
