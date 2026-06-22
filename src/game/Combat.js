@@ -3,12 +3,13 @@ const ATTACK_COOLDOWN = 0.95;
 const POWER_RECOVERY_RATE = 1.15;
 
 export class Combat {
-  constructor({ player, dungeon, hud, controls, equipmentRuntime = null }) {
+  constructor({ player, dungeon, hud, controls, equipmentRuntime = null, onAttackPerformed = null }) {
     this.player = player;
     this.dungeon = dungeon;
     this.hud = hud;
     this.controls = controls;
     this.equipmentRuntime = equipmentRuntime;
+    this.onAttackPerformed = onAttackPerformed;
     this.maxPower = 10;
     this.power = this.maxPower;
     this.maxHp = 100;
@@ -95,6 +96,7 @@ export class Combat {
     this.power -= powerCost;
     this.attackCooldown = weaponProfile.attackCooldown ?? ATTACK_COOLDOWN;
     this.hud.playAttack();
+    this.onAttackPerformed?.({ weaponProfile });
 
     const hit = this.dungeon.damageEnemyFromPlayerAttack?.({
       position: this.player.position,

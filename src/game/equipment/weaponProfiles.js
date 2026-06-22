@@ -42,8 +42,8 @@ export const weaponProfiles = createWeaponProfileRegistry([
   },
   {
     id: 'rusted_sword',
-    displayName: 'Rusted Sword',
-    description: 'An old temple blade. It reaches farther and bites harder than bare hands.',
+    displayName: 'Broadsword',
+    description: 'The ritual broadsword recovered from the old temple. It keeps the old sword balance but now appears as a 3D first-person blade.',
     weaponType: 'sword',
     damage: 17,
     attackRange: 3.05,

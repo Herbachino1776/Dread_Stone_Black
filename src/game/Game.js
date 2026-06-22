@@ -16,6 +16,8 @@ import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
 import { MobileControls } from './MobileControls.js';
 import { PlayerController } from './PlayerController.js';
+import { BroadswordView } from './weapons/BroadswordView.js';
+import { BroadswordGestureController } from './weapons/BroadswordGestureController.js';
 import { resolveStartupArea } from './locationRouting.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 import { getObjectivePackForLocation } from './objectives/objectiveRegistry.js';
@@ -139,6 +141,7 @@ export class Game {
     this.controls = new MobileControls(this.app);
     this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
     this.fishingRodView = new FishingRodView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
+    this.broadswordView = new BroadswordView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
     this.castingController = new CastingController({ app: this.app, camera: this.camera, player: this.player, dungeon: this.dungeon, hud: this.hud, rodView: this.fishingRodView, equipmentRuntime: this.equipmentRuntime, feedback: this.feedback });
     this.interactions = new Interactions({
       player: this.player,
@@ -151,12 +154,16 @@ export class Game {
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.interactions.cancelActiveTimedAction?.());
     window.addEventListener('field-item-equipped-changed', () => this.interactions.cancelActiveTimedAction?.());
     window.addEventListener('field-offhand-equipped-changed', () => this.interactions.cancelActiveTimedAction?.());
+    this.broadswordGestureController = new BroadswordGestureController({ app: this.app, view: this.broadswordView, controls: this.controls, equipmentRuntime: this.equipmentRuntime });
     this.combat = new Combat({
       player: this.player,
       dungeon: this.dungeon,
       hud: this.hud,
       controls: this.controls,
       equipmentRuntime: this.equipmentRuntime,
+      onAttackPerformed: ({ weaponProfile }) => {
+        if (weaponProfile?.id === 'rusted_sword') this.broadswordGestureController?.notifyFallbackAttack?.('slash');
+      },
     });
 
     this.preventMobilePageGestures();
@@ -465,7 +472,7 @@ export class Game {
     if (this.isPaused) {
       this.controls.consumeAttack();
       this.controls.consumeInteract();
-      this.hud.updateDebug(this.player, this.castingController?.debug);
+      this.hud.updateDebug(this.player, this.castingController?.debug, this.broadswordGestureController?.debug);
       this.renderer.render(this.scene, this.camera);
       return;
     }
@@ -475,7 +482,9 @@ export class Game {
     }
     this.dungeon.update(deltaSeconds, this.player);
     this.fishingRodView?.update(deltaSeconds, this.castingController?.state);
+    this.broadswordView?.update(deltaSeconds);
     this.castingController?.update(deltaSeconds);
+    this.broadswordGestureController?.update(deltaSeconds);
     this.combat.update(deltaSeconds);
     const hunger = this.gameState.updateHunger?.(deltaSeconds, { paused: this.equipmentPanel?.isOpen || this.isPaused, applyStarvationDamage: (amount) => this.combat.takeDamage?.(amount, 'Starvation') });
     if (hunger) this.hud.updateHunger?.(hunger);
@@ -492,7 +501,7 @@ export class Game {
     }
     this.wasKeyboardInteractHeld = keyboardInteractHeld;
 
-    this.hud.updateDebug(this.player, this.castingController?.debug);
+    this.hud.updateDebug(this.player, this.castingController?.debug, this.broadswordGestureController?.debug);
     this.feedback.update(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
   }
