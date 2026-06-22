@@ -11,8 +11,12 @@ export const CAST_ROD_BEND_SCALE = 1.15;
 export const CAST_ROD_RETURN_SPEED = 7.5;
 export const CAST_MAX_RANGE = 44;
 
-export const ROD_REST_POS = Object.freeze({ x: 0.74, y: -0.74, z: -1.55 });
-export const ROD_REST_ROT = Object.freeze({ x: -0.68, y: -0.24, z: 0.54 });
+// First-person Rod A1 rest pose. The factory authors the held rod with its
+// handle-to-tip axis on local +Z after the view mesh yaw, while the camera looks
+// into the scene on -Z. Keep the rest yaw flipped forward so the tip projects
+// away from the player instead of back/up over the right shoulder.
+export const ROD_REST_POS = Object.freeze({ x: 0.74, y: -0.5, z: -2.55 });
+export const ROD_REST_ROT = Object.freeze({ x: 0.42, y: 3.3, z: 0.28 });
 export const ROD_GRAB_SPRING = 24;
 export const ROD_GRAB_DAMPING = 8.8;
 export const ROD_ANGULAR_SPRING = 17;
