@@ -6,6 +6,8 @@ import { ACTIVE_GAMEPLAY_RODS, CANONICAL_GAMEPLAY_ROD_ID, KEROVAC_EXPO_ROD_A1_SO
 import { FishingRodView } from '../src/game/fishing/FishingRodView.js';
 import { LINE_MAX_LENGTH, LINE_MAX_SPOOL_OUT_PER_FRAME, LINE_MIN_LENGTH, LINE_START_LENGTH, ROD_ANGULAR_DAMPING, ROD_ANGULAR_SPRING, ROD_GRAB_DAMPING, ROD_GRAB_SPRING, ROD_MASS_FEEL, ROD_RELEASE_SNAP_SCALE, ROD_REST_POS, ROD_REST_ROT } from '../src/game/fishing/CastingTuning.js';
 import { FishingLinePhysics } from '../src/game/fishing/FishingLinePhysics.js';
+import { PhysicalFishAngling } from '../src/game/fishing/PhysicalFishAngling.js';
+import { resolveFishSizeGroup } from '../src/game/fishing/FishSizeGroups.js';
 import { GameState } from '../src/game/GameState.js';
 
 const testMaterialFactory = (profile = {}) => {
@@ -328,7 +330,9 @@ if (!gameSource.includes('gameState: this.gameState')) fail('Fishing invalid: Fi
 if (!gameSource.includes('new FishingRodView') || !gameSource.includes('new CastingController')) fail('Fishing invalid: Rod A1 view exists when equipped and cast controller exists checks failed.');
 if (interactionSource.includes("return this.startFishingTimedAction(interaction);")) fail('Fishing invalid: old proximity timer fishing remains primary while Rod A1 is equipped.');
 if (castingSource.includes('spawnRawFishPickupFromCast') || /FISH ON/i.test(castingSource)) fail('Fishing invalid: cast landing bypasses the physical fish loop or restores forbidden hook text.');
-if (!physicalFishSource.includes('spawnRawFishPickupAtPosition') || !physicalFishSource.includes("setState('reeledToShore')")) fail('Fishing invalid: physical shore landing does not own successful fish pickup creation.');
+if (!physicalFishSource.includes('spawnRawFishPickupAtPosition') || !physicalFishSource.includes("setState('liftingFromWater')")) fail('Fishing invalid: physical shore landing does not own successful fish pickup creation.');
+if (!physicalFishSource.includes('shortLineRecentReel') || !physicalFishSource.includes('HOOKED_MIN_FIGHT_SECONDS')) fail('Fishing invalid: deterministic hooked-fish landing rule is missing.');
+if (!linePhysicsSource.includes('hookedReelWeight') || linePhysicsSource.includes('LINE_HOOKED_CONTACT_PULL_MAX_PER_FRAME')) fail('Fishing invalid: hooked reel shortening is not size-tuned or can still be blocked by rod-tip/water geometry.');
 
 if (castingSource.includes('cast-zone') || castingSource.includes('Drag Rod')) fail('Fishing invalid: casting still depends on a dedicated cast button or cast zone.');
 if (!castingSource.includes('projectRodGrabHit') || !castingSource.includes('pointerdown') || !castingSource.includes('grabT')) fail('Fishing invalid: rod cannot be directly grabbed by touching the visible rod.');
@@ -378,6 +382,50 @@ if (!castingSource.includes('rodHeld') || !castingSource.includes('reelBoost') |
 if (!linePhysicsSource.includes('LURE_HELICOPTER_TENSION_SCALE') || !linePhysicsSource.includes('isLureHeldNearRod')) fail('Fishing invalid: advanced line physics missing weighted lure state.');
 if (!lureSource.includes('settleMs') || !lureSource.includes('FISH_BITE_SETTLE_MIN_MS')) fail('Fishing invalid: fish catch does not wait for a water-surface settle window.');
 if (!tuningSource.includes('LINE_POINT_COUNT') || !tuningSource.includes('FISH_BITE_SETTLE_MAX_MS')) fail('Fishing invalid: advanced fishing tunable constants are missing.');
+
+function simulateHookedLanding(sizeGroup) {
+  const size = resolveFishSizeGroup(sizeGroup);
+  const zone = { id: 'hooked-reel-test', shape: 'ellipse', centerX: 15, centerZ: 0, radiusX: 40, radiusZ: 20, fishSpeciesPool: ['smallRiverFish'] };
+  const dungeon = {
+    isOutdoorSurvivalArea: () => true,
+    getNearbyFishingZone: () => zone,
+    sampleFishLandingSurfaceY: () => 0,
+    getRawFishLandingPosition: () => new THREE.Vector3(-1, 0, 0),
+    outdoorTerrainRuntime: { sampleOutdoorY: () => 0 },
+  };
+  const angling = new PhysicalFishAngling({ scene: { add() {} }, dungeon });
+  angling.zone = zone;
+  angling.actor = {
+    mesh: { position: new THREE.Vector3(), rotation: { y: 0, z: 0 } }, species: 'smallRiverFish', sizeGroup, size,
+    state: 'draggingToShore', stateAge: 0, age: 0, position: new THREE.Vector3(29, 0, 0), velocity: new THREE.Vector3(),
+    target: new THREE.Vector3(), liftStart: null, liftPeak: null, landingPoint: null, interest: 1, lowRodSeconds: 0,
+    recentReelSeconds: 0, hooked: true, hookedAge: 0, landingTriggered: false, landingSpawned: false, lastLure: null,
+    hookedReelCycles: 0, landingReason: 'none', lastReelPull: 0,
+  };
+  const physics = new FishingLinePhysics();
+  physics.isLureHeldNearRod = false; physics.isLureOnWater = true; physics.isFishHooked = true; physics.hookedReelWeight = size.reelWeight;
+  physics.currentLineLength = 29.5; physics.lurePosition.copy(angling.actor.position); physics.rodTipWorldPosition.set(0, 2, 0);
+  const player = { position: new THREE.Vector3(0, 0, 0) };
+  const rodTip = new THREE.Vector3(0, 2, 0);
+  const oneCyclePerSecondRate = Math.PI * 2 * 0.18;
+  for (let frame = 0; frame < 60 * 45 && angling.actor.state === 'draggingToShore'; frame += 1) {
+    physics.rodTipWorldPosition.copy(rodTip);
+    physics.updateSpool(1 / 60, false, 0, oneCyclePerSecondRate);
+    angling.actor.stateAge += 1 / 60;
+    angling.updateStateMotion(1 / 60, { player, rodTip, manualReelRate: oneCyclePerSecondRate, reelClockwiseRadians: Math.PI * 2 / 60, rodState: { rodPitch: 0 }, physics });
+  }
+  return { cycles: angling.actor.hookedReelCycles, state: angling.actor.state, lineLength: physics.currentLineLength };
+}
+
+const hookedLandingResults = Object.fromEntries(['small', 'medium', 'large'].map((sizeGroup) => [sizeGroup, simulateHookedLanding(sizeGroup)]));
+if (!(hookedLandingResults.small.state === 'liftingFromWater' && hookedLandingResults.small.cycles >= 16 && hookedLandingResults.small.cycles <= 20)) fail(`Fishing invalid: small hooked fish missed 16-20 cycle target: ${JSON.stringify(hookedLandingResults.small)}`);
+if (!(hookedLandingResults.medium.state === 'liftingFromWater' && hookedLandingResults.medium.cycles >= 23 && hookedLandingResults.medium.cycles <= 27)) fail(`Fishing invalid: medium hooked fish missed 25 cycle target: ${JSON.stringify(hookedLandingResults.medium)}`);
+if (!(hookedLandingResults.large.state === 'liftingFromWater' && hookedLandingResults.large.cycles >= 30 && hookedLandingResults.large.cycles <= 40)) fail(`Fishing invalid: large hooked fish missed 30-40 cycle target: ${JSON.stringify(hookedLandingResults.large)}`);
+
+const lostPhysics = new FishingLinePhysics();
+lostPhysics.isFishHooked = true; lostPhysics.hookedReelWeight = 1.55; lostPhysics.isLureOnWater = true; lostPhysics.isLureAirborne = false; lostPhysics.spoolLocked = true;
+new PhysicalFishAngling({ scene: { add() {} }, dungeon: {} }).cleanupHookedPhysics(lostPhysics, 'lost');
+if (lostPhysics.isFishHooked || lostPhysics.isLureOnWater || !lostPhysics.isLureAirborne || lostPhysics.spoolLocked || lostPhysics.hookedReelWeight !== 1 || lostPhysics.lureRecoveryState !== 'recoveringToTip') fail('Fishing invalid: lost-fish cleanup can leave stale hook/water ownership or a locked lure.');
 
 const slackOpacityMatch = tuningSource.match(/LINE_SLACK_OPACITY\s*=\s*([0-9.]+)/);
 const tautOpacityMatch = tuningSource.match(/LINE_TAUT_OPACITY\s*=\s*([0-9.]+)/);

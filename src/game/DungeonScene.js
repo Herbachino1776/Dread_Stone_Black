@@ -2542,6 +2542,10 @@ export class DungeonScene {
     return this.ensurePhysicalFishAngling().update(deltaSeconds, context);
   }
 
+  cancelPhysicalFishAngling(physics, reason = 'lost') {
+    this.physicalFishAngling?.cancelHookedFish?.(physics, reason);
+  }
+
   registerPhysicalLureLanding() {
     this.ensurePhysicalFishAngling();
   }

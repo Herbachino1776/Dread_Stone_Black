@@ -181,7 +181,7 @@ export class CastingController {
       const rodTipVelocity = this.rodView?.getWorldTipVelocity?.();
       if (rodTipVelocity) this.debug.rodTipVelocity.copy(rodTipVelocity);
     }
-    if (!equipped) { this.projectile.cleanup(); this.reelState = this.createIdleReelState(); this.debug.activeReelPointerId = null; return; }
+    if (!equipped) { this.dungeon.cancelPhysicalFishAngling?.(this.projectile.physics, 'rodUnequipped'); this.projectile.cleanup(); this.reelState = this.createIdleReelState(); this.debug.activeReelPointerId = null; return; }
     if (this.state.dragging) {
       const gripPenalty = THREE.MathUtils.lerp(1, 1.38, this.state.grabT ?? 0);
       const rootSpring = ROD_GRAB_SPRING * 1.35;
