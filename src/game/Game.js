@@ -162,7 +162,7 @@ export class Game {
       controls: this.controls,
       equipmentRuntime: this.equipmentRuntime,
       onAttackPerformed: ({ weaponProfile }) => {
-        if (weaponProfile?.id === 'rusted_sword') this.broadswordGestureController?.notifyFallbackAttack?.('slash');
+        if (weaponProfile?.id === 'rusted_sword') this.broadswordGestureController?.notifyFallbackAttack?.('rightSlash');
       },
     });
 
