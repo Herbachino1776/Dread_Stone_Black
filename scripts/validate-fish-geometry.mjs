@@ -67,6 +67,14 @@ const validateFirstPersonRodA1RestPose = () => {
   if (insideOrNear.length !== projected.length) fail('Fishing invalid: Rod A1 rest pose projects outside the viewport.');
   const [handle, mid, tip] = projected;
   if (!(handle.ndc.y < mid.ndc.y && mid.ndc.y < tip.ndc.y && handle.ndc.x > 0.15)) fail('Fishing invalid: Rod A1 rest pose projects outside the viewport.');
+  if (!(handle.ndc.x > 0.38 && handle.ndc.y < -0.7)) fail('Fishing invalid: Rod A1 rest handle must remain in the lower-right first-person grip region.');
+  if (!(tip.ndc.x > 0.05 && tip.ndc.x < 0.32 && tip.ndc.y > -0.18 && tip.ndc.y < 0.12)) fail('Fishing invalid: Rod A1 rest tip must project toward the upper/mid-right-to-center viewport region.');
+
+  const handleWorld = rodView.getWorldPointAt(0);
+  const tipWorld = rodView.getWorldPointAt(1);
+  const handleToTip = tipWorld.clone().sub(handleWorld).normalize();
+  if (!(handleToTip.z < -0.72 && handleToTip.y > 0.28 && tipWorld.z < handleWorld.z)) fail('Fishing invalid: Rod A1 rest tip must point forward into the scene instead of backward/up over the shoulder.');
+  if (!(tip.ndc.x < handle.ndc.x)) fail('Fishing invalid: Rod A1 rest tip must angle inward toward the center of the viewport.');
 
   const viewport = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }) };
   const midX = (mid.ndc.x * 0.5 + 0.5) * 1280;
