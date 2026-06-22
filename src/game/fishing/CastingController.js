@@ -17,13 +17,14 @@ export function getClockwiseDeltaRadians(previousAngle, currentAngle) {
 }
 
 export class CastingController {
-  constructor({ app, camera, player, dungeon, hud, rodView }) {
-    this.camera = camera; this.player = player; this.dungeon = dungeon; this.hud = hud; this.rodView = rodView;
+  constructor({ app, camera, player, dungeon, hud, rodView, feedback = null }) {
+    this.camera = camera; this.player = player; this.dungeon = dungeon; this.hud = hud; this.rodView = rodView; this.feedback = feedback;
     this.viewport = app.querySelector('[data-game="viewport"]') ?? app;
     this.state = this.createIdleState();
     this.reelState = this.createIdleReelState();
     this.debug = { enabled: false, loadAmount: 0, releaseSpeed: 0, castValid: false, launchVelocity: new THREE.Vector3(), lureHitType: 'none', lineLength: 0, lineTension: 0, lureMode: 'held', lureSpeed: 0, spoolState: 'held', fishableWaterId: null, manualReelRate: 0, reelClockwiseDegrees: 0, reelZoneHit: false, reelZone: null, projectedReelCenter: null, fallbackReelCenter: null, activeReelPointerId: null, reelClockwiseDelta: 0 };
     this.projectile = new LureProjectile({ scene: dungeon.scene, dungeon, waterResolver: new FishingWaterResolver({ dungeon }), maxCastRange: CAST_MAX_RANGE, onLanded: (result) => this.handleLanded(result) });
+    this.dungeon.setFishingFeedback?.(this.feedback);
     this.bind();
   }
   createIdleState() { return { dragging: false, loadAmount: 0, gestureHistory: [], rodYaw: 0, rodPitch: 0, rodYawVelocity: 0, rodPitchVelocity: 0, targetYaw: 0, targetPitch: 0, rootOffsetX: 0, rootOffsetY: 0, rootOffsetZ: 0, rootVelocityX: 0, rootVelocityY: 0, rootVelocityZ: 0, targetRootOffsetX: 0, targetRootOffsetY: 0, targetRootOffsetZ: 0, releaseSnap: 0, motionSmoothness: 0, grabT: 0, angularVelocity: 0, tipSpeed: 0 }; }
@@ -130,6 +131,7 @@ export class CastingController {
       this.reelState.rate = this.reelState.active ? this.reelState.rate : Math.max(0, this.reelState.rate - REEL_GESTURE_RATE_DECAY * dt);
       const reelBoost = this.state.dragging ? Math.min(1.5, Math.max(0, this.state.tipSpeed ?? 0) / 5.5) : 0;
       this.projectile.update(dt, rodTip, { rodHeld: this.state.dragging === true, reelBoost, manualReelRate: this.reelState.rate });
+      this.dungeon.updatePhysicalFishAngling?.(dt, { player: this.player, lure: this.projectile, rodTip, manualReelRate: this.reelState.rate, rodState: this.state, physics: this.projectile.physics });
       Object.assign(this.debug, this.projectile.getDebugState?.() ?? {});
       this.debug.manualReelRate = this.reelState.rate;
       this.debug.reelClockwiseDegrees = THREE.MathUtils.radToDeg(this.reelState.accumulatedClockwise);
@@ -197,7 +199,7 @@ export class CastingController {
   handleLanded({ position, zone, success }) {
     this.debug.lureHitType = success ? 'fishable-water' : 'miss';
     if (!success) { this.hud.showMessage('Cast Failed'); return; }
-    const pickup = this.dungeon.spawnRawFishPickupFromCast?.(position, zone, this.player);
-    this.hud.showMessage(pickup ? 'Fish On' : 'Cast Failed');
+    this.dungeon.registerPhysicalLureLanding?.(position, zone, this.player);
+    this.hud.showMessage('Lure Landed');
   }
 }

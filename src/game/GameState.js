@@ -10,6 +10,7 @@ const RUSTED_SWORD_CHEST_INTERACTION_ID = 'BGT_INT_RUSTED_SWORD_CHEST';
 
 const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
   inventory: { wood_axe: false, fishing_rod: false, wood: 0, raw_fish: 0, cooked_fish: 0, torch: false },
+  fishStacks: { raw_fish: [], cooked_fish: [] },
   keyItems: { flint_stick: false },
   equipment: { owned: {}, equippedTool: null, equippedItem: null, equippedOffhand: null },
   campfires: [],
@@ -140,10 +141,11 @@ export class GameState {
     return Number.isFinite(value) ? value : (value ? 1 : 0);
   }
 
-  addFieldItem(itemId, amount = 1) {
+  addFieldItem(itemId, amount = 1, metadata = {}) {
     const normalizedItemId = this.normalizeFieldItemId(itemId);
     if (['wood', 'raw_fish', 'cooked_fish'].includes(normalizedItemId)) {
       this.fieldSurvivalState.inventory[normalizedItemId] = Math.max(0, this.getFieldItemCount(normalizedItemId) + amount);
+      if (['raw_fish', 'cooked_fish'].includes(normalizedItemId)) this.addFishStackMetadata(normalizedItemId, amount, metadata);
     } else if (normalizedItemId === 'flint_stick') {
       this.fieldSurvivalState.keyItems.flint_stick = true;
     } else {
@@ -209,6 +211,24 @@ export class GameState {
     return this.fieldSurvivalState.equipment?.equippedItem ?? null;
   }
 
+  addFishStackMetadata(itemId, amount = 1, metadata = {}) {
+    const stacks = this.fieldSurvivalState.fishStacks ??= { raw_fish: [], cooked_fish: [] };
+    const stack = stacks[itemId] ??= [];
+    for (let i = 0; i < Math.max(0, amount); i += 1) {
+      stack.push({ fishSizeGroup: metadata.fishSizeGroup ?? 'medium', hungerSeconds: metadata.hungerSeconds ?? 10 * 60 });
+    }
+  }
+
+  popFishStackMetadata(itemId) {
+    const stacks = this.fieldSurvivalState.fishStacks ??= { raw_fish: [], cooked_fish: [] };
+    return (stacks[itemId] ??= []).shift() ?? { fishSizeGroup: 'medium', hungerSeconds: 10 * 60 };
+  }
+
+  peekFishStackMetadata(itemId) {
+    const stacks = this.fieldSurvivalState.fishStacks ??= { raw_fish: [], cooked_fish: [] };
+    return (stacks[itemId] ?? [])[0] ?? { fishSizeGroup: 'medium', hungerSeconds: 10 * 60 };
+  }
+
   consumeFieldItems(cost = {}) {
     for (const [itemId, amount] of Object.entries(cost)) {
       if (itemId === 'flint_stick') continue;
@@ -219,6 +239,7 @@ export class GameState {
     for (const [itemId, amount] of Object.entries(cost)) {
       if (itemId === 'flint_stick') continue;
       this.fieldSurvivalState.inventory[itemId] = Math.max(0, this.getFieldItemCount(itemId) - (amount ?? 0));
+      if (['raw_fish', 'cooked_fish'].includes(itemId)) { for (let i = 0; i < (amount ?? 0); i += 1) this.popFishStackMetadata(itemId); }
       if (this.fieldSurvivalState.inventory[itemId] < 1 && this.fieldSurvivalState.equipment?.equippedItem === itemId) {
         this.fieldSurvivalState.equipment.equippedItem = null;
       }
@@ -248,8 +269,9 @@ export class GameState {
 
   eatCookedFish() {
     if (this.getFieldItemCount('cooked_fish') < 1) return false;
+    const fishMeta = this.peekFishStackMetadata('cooked_fish');
     this.consumeFieldItems({ cooked_fish: 1 });
-    this.fieldSurvivalState.hungerSecondsRemaining = Math.min(this.fieldSurvivalState.hungerMaxSeconds, this.fieldSurvivalState.hungerSecondsRemaining + 10 * 60);
+    this.fieldSurvivalState.hungerSecondsRemaining = Math.min(this.fieldSurvivalState.hungerMaxSeconds, this.fieldSurvivalState.hungerSecondsRemaining + (fishMeta.hungerSeconds ?? 10 * 60));
     this.fieldSurvivalState.starvationDamageTimer = 0;
     this.saveFieldSurvivalState();
     return true;
@@ -343,6 +365,10 @@ export class GameState {
         equippedOffhand: source.equipment?.equippedOffhand === 'torch' && Boolean(source.inventory?.torch || source.equipment?.owned?.torch) ? 'torch' : null,
       },
       campfires: this.repairFieldCampfires(source),
+      fishStacks: {
+        raw_fish: Array.isArray(source.fishStacks?.raw_fish) ? source.fishStacks.raw_fish : [],
+        cooked_fish: Array.isArray(source.fishStacks?.cooked_fish) ? source.fishStacks.cooked_fish : [],
+      },
       campfireBuilt: Boolean(source.campfireBuilt || source.campfirePosition || source.campfires?.length),
       campfirePosition: source.campfirePosition ?? source.campfires?.[0]?.position ?? null,
       openedChests: { ...(source.openedChests ?? DEFAULT_FIELD_SURVIVAL_STATE.openedChests) },

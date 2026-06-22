@@ -22,6 +22,8 @@ import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
 import './creatures/creatureRegistry.js';
 import { RAM_MAN_FRIENDLY_ANIMATION_FILES } from './creatures/ramManFriendly.config.js';
 import { FISH_SPECS, FISH_TEXTURE_PROFILES, createFishMesh } from './fishing/FishMeshFactory.js';
+import { PhysicalFishAngling } from './fishing/PhysicalFishAngling.js';
+import { resolveFishSizeGroup } from './fishing/FishSizeGroups.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -2443,7 +2445,7 @@ export class DungeonScene {
     return root;
   }
 
-  spawnCookedFishPickup(position) {
+  spawnCookedFishPickup(position, options = {}) {
     const pickupId = `field_cooked_fish_${Date.now()}_${this.fieldCookedFishPickups.length + 1}`;
     const mesh = this.createCookedFishPickupMesh();
     mesh.name = `${pickupId}-spineBackFish-cooked-c4-fish-pickup`;
@@ -2456,9 +2458,12 @@ export class DungeonScene {
     const target = mesh.position.clone().set(landing.x, mesh.position.y, landing.z);
     const start = target.clone().set(position.x, target.y + 0.62, position.z);
     mesh.position.copy(start);
-    const pickup = { id: pickupId, mesh, itemId: 'cooked_fish', fishSpecies: 'spineBackFish', start, target, elapsed: 0, duration: 0.65, landing: landing.clone().setY(surfaceY), surfaceY };
+    const fishSizeGroup = options.fishSizeGroup ?? 'medium';
+    const fishSize = resolveFishSizeGroup(fishSizeGroup);
+    mesh.scale.multiplyScalar(fishSize.scale);
+    const pickup = { id: pickupId, mesh, itemId: 'cooked_fish', fishSpecies: 'spineBackFish', fishSizeGroup, hungerSeconds: fishSize.hungerSeconds, start, target, elapsed: 0, duration: 0.65, landing: landing.clone().setY(surfaceY), surfaceY };
     this.fieldCookedFishPickups.push(pickup);
-    this.outdoorInteractions.push({ id: pickupId, label: 'Cooked Fish', target: target.clone().setY(surfaceY + 0.35), range: 2.4, hint: 'Pick up Cooked Fish', message: 'Cooked Fish Acquired.', type: 'cookedFishPickup', pickup, itemId: 'cooked_fish', fishSpecies: 'spineBackFish' });
+    this.outdoorInteractions.push({ id: pickupId, label: 'Cooked Fish', target: target.clone().setY(surfaceY + 0.35), range: 2.4, hint: 'Pick up Cooked Fish', message: 'Cooked Fish Acquired.', type: 'cookedFishPickup', pickup, itemId: 'cooked_fish', fishSpecies: 'spineBackFish', fishSizeGroup, hungerSeconds: fishSize.hungerSeconds });
     return pickup;
   }
 
@@ -2523,6 +2528,37 @@ export class DungeonScene {
     return root;
   }
 
+  setFishingFeedback(feedback = null) {
+    this.fishingFeedback = feedback;
+  }
+
+  ensurePhysicalFishAngling() {
+    if (!this.physicalFishAngling) this.physicalFishAngling = new PhysicalFishAngling({ scene: this.scene, dungeon: this, feedback: this.fishingFeedback });
+    this.physicalFishAngling.feedback = this.fishingFeedback;
+    return this.physicalFishAngling;
+  }
+
+  updatePhysicalFishAngling(deltaSeconds, context = {}) {
+    return this.ensurePhysicalFishAngling().update(deltaSeconds, context);
+  }
+
+  registerPhysicalLureLanding() {
+    this.ensurePhysicalFishAngling();
+  }
+
+  spawnRawFishPickupAtPosition(position, fishingZone = null, player = null, { fishSpecies = null, fishSizeGroup = 'medium' } = {}) {
+    if (!position) return null;
+    const landingPlayer = {
+      position: position.clone?.() ?? new THREE.Vector3(position.x ?? 0, position.y ?? 0, position.z ?? 0),
+      yaw: player?.yaw ?? 0,
+      getLookDirection: () => {
+        const outward = player?.position ? player.position.clone().sub(position).setY(0) : new THREE.Vector3(0, 0, 1);
+        return outward.lengthSq() > 0.001 ? outward.normalize() : new THREE.Vector3(0, 0, 1);
+      },
+    };
+    return this.spawnRawFishPickupForPlayer(landingPlayer, fishingZone, { fishSpecies, fishSizeGroup, landingOverride: position });
+  }
+
   spawnRawFishPickupFromCast(lurePosition, fishingZone = null, player = null) {
     if (!lurePosition || !fishingZone) return null;
     const castPlayer = {
@@ -2539,17 +2575,20 @@ export class DungeonScene {
     return this.spawnRawFishPickupForPlayer(castPlayer, fishingZone);
   }
 
-  spawnRawFishPickupForPlayer(player, fishingZone = null) {
+  spawnRawFishPickupForPlayer(player, fishingZone = null, options = {}) {
     if (!(this.area === 'field' || this.isCompiledOutdoorFieldArea())) return null;
     const zone = fishingZone ?? this.getNearbyFishingZone(player?.position);
-    const landing = this.getRawFishLandingPosition(player, zone);
+    const landing = options.landingOverride?.clone?.() ?? this.getRawFishLandingPosition(player, zone);
     if (!landing) return null;
     if (this.fieldRawFishPickups.length >= MAX_FIELD_RAW_FISH_PICKUPS) {
       this.removeRawFishPickup(this.fieldRawFishPickups[0]);
     }
     const pickupId = `field_raw_fish_${Date.now()}_${this.fieldRawFishPickups.length + 1}`;
-    const fishSpecies = this.selectFishSpeciesForZone(zone);
+    const fishSpecies = options.fishSpecies ?? this.selectFishSpeciesForZone(zone);
+    const fishSizeGroup = options.fishSizeGroup ?? 'medium';
+    const fishSize = resolveFishSizeGroup(fishSizeGroup);
     const mesh = this.createRawFishPickupMesh(fishSpecies);
+    mesh.scale.multiplyScalar(fishSize.scale);
     mesh.name = `${pickupId}-${fishSpecies}-raw-fish-pickup`;
     const surfaceY = this.sampleFishLandingSurfaceY(landing, zone);
     mesh.position.set(landing.x, surfaceY + 0.9, landing.z);
@@ -2575,9 +2614,9 @@ export class DungeonScene {
     const target = mesh.position.clone();
     const start = target.clone().setY(target.y + 0.64);
     mesh.position.copy(start);
-    const pickup = { id: pickupId, mesh, itemId: 'raw_fish', fishSpecies, start, target, elapsed: 0, duration: 0.55, landing: landing.clone().setY(surfaceY), surfaceY, flop };
+    const pickup = { id: pickupId, mesh, itemId: 'raw_fish', fishSpecies, fishSizeGroup, hungerSeconds: fishSize.hungerSeconds, start, target, elapsed: 0, duration: 0.55, landing: landing.clone().setY(surfaceY), surfaceY, flop };
     this.fieldRawFishPickups.push(pickup);
-    this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(surfaceY + 0.35), range: 2.85, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup, itemId: 'raw_fish', fishSpecies });
+    this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(surfaceY + 0.35), range: 2.85, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup, itemId: 'raw_fish', fishSpecies, fishSizeGroup, hungerSeconds: fishSize.hungerSeconds });
     return pickup;
   }
 
