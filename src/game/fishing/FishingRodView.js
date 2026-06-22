@@ -78,7 +78,11 @@ export class FishingRodView {
     this.root.updateMatrixWorld(true);
     const rect = viewport.getBoundingClientRect();
     const handle = this.rod?.userData?.handleLocalPosition?.clone?.() ?? this.getRodLocalPointAt(0);
-    const reelLocal = handle.add(new THREE.Vector3(0.18, -0.16, 0.34));
+    const tip = this.rod?.userData?.tipLocalPosition?.clone?.() ?? this.getRodLocalPointAt(1);
+    // The upright rest pose leaves the very butt of the grip on the screen edge,
+    // so project the active reel gesture center from the visible lower grip area
+    // rather than the off-screen end cap.
+    const reelLocal = handle.lerp(tip, 0.16).add(new THREE.Vector3(0.08, 0, 0));
     worldPoint.copy(this.rod.localToWorld(reelLocal));
     screenPoint.copy(worldPoint).project(this.camera);
     if (screenPoint.z >= -1 && screenPoint.z <= 1) {
