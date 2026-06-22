@@ -5,8 +5,8 @@ export const BROADSWORD_DISPLAY_NAME = 'Broadsword';
 export const BROADSWORD_VIEW = Object.freeze({
   // Camera-local first-person ready stance: handle stays lower-right while the blade
   // leans north-northwest back toward screen center instead of pointing off-screen right.
-  restPosition: Object.freeze({ x: 0.22, y: -0.38, z: -0.82 }),
-  restRotation: Object.freeze({ x: -0.44, y: -0.58, z: -0.46 }),
+  restPosition: Object.freeze({ x: 0.24, y: -0.4, z: -0.82 }),
+  restRotation: Object.freeze({ x: -0.44, y: -0.58, z: 1.16 }),
   modelRotation: Object.freeze({ x: -0.2, y: Math.PI * 0.02, z: -0.14 }),
   scale: 0.64,
   targetHeight: 1.55,
