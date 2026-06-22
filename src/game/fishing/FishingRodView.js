@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createRodA1Mesh, resolveGameplayRodForItem, CANONICAL_GAMEPLAY_ROD_ID, COMPATIBLE_FISHING_ROD_ITEM_ID } from './FishingRodFactory.js';
-import { REEL_GESTURE_ZONE_RADIUS, ROD_GRAB_HIT_RADIUS, ROD_REST_POS, ROD_REST_ROT } from './CastingTuning.js';
+import { REEL_GESTURE_FALLBACK_RADIUS, REEL_GESTURE_ZONE_RADIUS, ROD_GRAB_HIT_RADIUS, ROD_REST_POS, ROD_REST_ROT } from './CastingTuning.js';
 
 const screenPoint = new THREE.Vector3();
 const worldPoint = new THREE.Vector3();
@@ -94,19 +94,35 @@ export class FishingRodView {
 
   getFallbackReelCenter(viewport) {
     const rect = viewport.getBoundingClientRect();
+    const radius = Math.min(REEL_GESTURE_FALLBACK_RADIUS, Math.max(70, Math.min(rect.width, rect.height) * 0.12));
+    const hudSafeBottom = rect.top + rect.height - radius - 18;
+    const joystickSafeRight = rect.left + rect.width - radius - 22;
     return {
-      x: rect.left + rect.width * 0.78,
-      y: rect.top + rect.height * 0.78,
-      radius: REEL_GESTURE_ZONE_RADIUS,
+      x: THREE.MathUtils.clamp(rect.left + rect.width * 0.8, rect.left + radius, joystickSafeRight),
+      y: THREE.MathUtils.clamp(rect.top + rect.height * 0.76, rect.top + radius, hudSafeBottom),
+      radius,
       projected: false,
+      fallback: true,
     };
   }
 
+  getReelGestureZones(viewport) {
+    const zones = [];
+    const projected = this.getProjectedReelCenter(viewport);
+    if (projected) zones.push(projected);
+    const fallback = this.getFallbackReelCenter(viewport);
+    if (fallback && (!projected || Math.hypot(projected.x - fallback.x, projected.y - fallback.y) > 8)) zones.push(fallback);
+    return zones;
+  }
+
   projectReelGestureHit(clientX, clientY, viewport) {
-    const center = this.getProjectedReelCenter(viewport) ?? this.getFallbackReelCenter(viewport);
-    if (!center) return null;
-    const distance = Math.hypot(clientX - center.x, clientY - center.y);
-    return distance <= center.radius ? { ...center, distance } : null;
+    const zones = this.getReelGestureZones(viewport);
+    let best = null;
+    for (const center of zones) {
+      const distance = Math.hypot(clientX - center.x, clientY - center.y);
+      if (distance <= center.radius && (!best || distance < best.distance)) best = { ...center, distance, zones };
+    }
+    return best;
   }
 
   projectRodGrabHit(clientX, clientY, viewport) {
