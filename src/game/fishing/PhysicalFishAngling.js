@@ -96,6 +96,15 @@ export class PhysicalFishAngling {
     a.position.addScaledVector(a.velocity, dt);
     this.clampToZone(a.position);
     if (a.state !== 'breach') a.position.y = THREE.MathUtils.lerp(a.position.y, surfaceY - 0.25, dt * 5);
+    if (a.state === 'hooked' && physics?.lurePosition) {
+      physics.lurePosition.copy(a.position);
+      physics.lurePosition.y = surfaceY - 0.08;
+      physics.lureVelocity.copy(a.velocity);
+      physics.isLureOnWater = true;
+      physics.isLureAirborne = false;
+      physics.isLureGrounded = false;
+      physics.isLureHeldNearRod = false;
+    }
   }
 
   seek(target, dt, speed) { tmp.copy(target).sub(this.actor.position).setY(0); if (tmp.lengthSq() > 0.001) this.actor.velocity.addScaledVector(tmp.normalize(), speed * dt); }
