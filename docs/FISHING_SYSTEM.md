@@ -34,14 +34,18 @@ This is the practical engineering/design reference for the first playable physic
 - Lure on water with no reeling/rod work: spool locks on water to preserve cast distance.
 - Clockwise manual reeling: spool unlocks for reel-in and raises line tension.
 - Grounded lure: spool locks unless manual reeling pulls it back.
+- Fully reeled lure: when manual clockwise reeling shortens a deployed, unhooked line to the minimum length plus the recovery threshold, water/ground pinning is released and the lure enters `danglingNearTip`.
 
 ## Lure and Line Behavior
 
 - The lure is still the existing clean bobber / metal hook projectile.
 - The line origin remains Rod A1's world tip position.
 - The line uses the existing multi-point/tube visual and tension opacity.
-- On fishable water the lure bobs at the surface; lure velocity and line tension feed fish interest.
-- Hooked fish movement is coupled to the lure/rod direction in a simple first-playable way. Complex line break math is intentionally deferred.
+- On fishable water the lure bobs at the surface while the line is deployed; lure velocity and line tension feed fish interest.
+- On land the grounded lure remains terrain-constrained while deployed so reel-in drags it along the ground before recovery.
+- At max reel-in, an unhooked lure does **not** remain pinned to water or terrain. It recovers into `danglingNearTip`, a short near-tip pose about 0.18 world units (roughly 6–8 inches in meter-ish tuning) below the true Rod A1 tip.
+- In `danglingNearTip`, the visible line is short and taut from the true rod tip to the lure; the lure uses spring/damper smoothing and small sway so it feels weighty rather than rigidly glued to the tip.
+- Hooked fish movement is coupled to the lure/rod direction in a simple first-playable way. Hooked fish are excluded from near-tip lure recovery: the fish/lure connection stays under hooked fight, escape, and shore landing logic until the fish is picked up, lost, or detached. Complex line break math is intentionally deferred.
 
 ## Physical Fish State Machine
 
@@ -80,7 +84,7 @@ Size metadata is stored on the physical actor, raw pickup interaction, raw inven
 - `src/game/fishing/PhysicalFishAngling.js` owns the physical pond fish actor and state machine.
 - `src/game/fishing/FishSizeGroups.js` centralizes size scale, difficulty, fight strength, reel weight, and hunger seconds.
 - `src/game/fishing/CastingController.js` keeps Rod A1 cast/reel input and forwards lure/rod state into the physical fish system.
-- `src/game/fishing/FishingLinePhysics.js` remains the spool, line, and lure physics source of truth.
+- `src/game/fishing/FishingLinePhysics.js` remains the spool, line, and lure physics source of truth, including the `danglingNearTip` fully-reeled lure state.
 - `src/game/DungeonScene.js` owns raw/cooked pickup spawning and bridges physical landed fish into existing pickups.
 - `src/game/GameState.js` stores size metadata in raw/cooked fish stacks and applies size-based hunger when eating.
 - `src/game/Interactions.js` carries fish size metadata through pickup, cooking, and eating interactions.
@@ -90,6 +94,7 @@ Size metadata is stored on the physical actor, raw pickup interaction, raw inven
 - Do not show “FISH ON” text or add large fishing tutorial labels.
 - Do not add a new cast button, reel button, green reel circle UI, hands/arms, or species personality labels.
 - Preserve Rod A1 canonical first-person visual and line origin at rod tip.
+- Preserve fully reeled Rod A1 lure recovery to `danglingNearTip`; do not let water or terrain constraints keep an unhooked max-reeled lure away from the tip.
 - Preserve no-button freeform casting, clockwise reel gesture, and spool lock behavior.
 - Preserve Folsom default spawn and Folsom pond fishing.
 - Preserve the fish species registry, including C4 / `spineBackFish`.

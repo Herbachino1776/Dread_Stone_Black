@@ -52,6 +52,7 @@ export class LureProjectile {
     const dt = Math.max(0, Math.min(0.05, deltaSeconds)); if (!rodTip) return;
     if (!this.mesh) this.readyAtRod(rodTip);
     this.physics.update(dt, rodTip, options); this.position = this.physics.lurePosition; this.velocity = this.physics.lureVelocity;
+    if (this.physics.isLureHeldNearRod) { this.active = false; this.landed = false; this.pendingWaterZone = null; }
     if (this.active && this.physics.isLureAirborne) {
       const surfaceY = this.dungeon?.sampleFishLandingSurfaceY?.(this.physics.lurePosition) ?? 0; const tooFar = this.physics.lurePosition.distanceTo(this.start) > this.maxCastRange;
       if (this.physics.lurePosition.y <= surfaceY + 0.04 || tooFar) this.land(surfaceY, tooFar);
