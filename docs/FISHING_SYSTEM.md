@@ -29,22 +29,23 @@ This is the practical engineering/design reference for the first playable physic
 
 ## Spool Lock Rules
 
-- Lure held near rod: spool is locked/held at the short starting line length.
+- Lure held near rod: spool is locked/held at the true minimum line length, not a fake attachment to the rod mesh.
 - Airborne cast: spool unlocks and unspools to satisfy lure travel.
 - Lure on water with no reeling/rod work: spool locks on water to preserve cast distance.
 - Clockwise manual reeling: spool unlocks for reel-in and raises line tension.
 - Grounded lure: spool locks unless manual reeling pulls it back.
-- Fully reeled lure: when manual clockwise reeling shortens a deployed, unhooked line to the minimum length plus the recovery threshold, water/ground pinning is released and the lure enters `danglingNearTip`.
+- Fully reeled lure: when manual clockwise reeling shortens a deployed, unhooked line to the minimum length plus the recovery threshold, water/ground pinning is released continuously and the lure enters `danglingNearTip` as the weighted endpoint of the remaining short line.
 
 ## Lure and Line Behavior
 
-- The lure is still the existing clean bobber / metal hook projectile.
-- The line origin remains Rod A1's world tip position.
-- The line uses the existing multi-point/tube visual and tension opacity.
-- On fishable water the lure bobs at the surface while the line is deployed; lure velocity and line tension feed fish interest.
-- On land the grounded lure remains terrain-constrained while deployed so reel-in drags it along the ground before recovery.
-- At max reel-in, an unhooked lure does **not** remain pinned to water or terrain. It recovers into `danglingNearTip`, a short near-tip pose about 0.18 world units (roughly 6–8 inches in meter-ish tuning) below the true Rod A1 tip.
-- In `danglingNearTip`, the visible line is short and taut from the true rod tip to the lure; the lure uses spring/damper smoothing and small sway so it feels weighty rather than rigidly glued to the tip.
+- The lure is still the existing clean bobber / metal hook projectile, and it is always the authoritative weighted endpoint of the fishing line.
+- The line origin remains Rod A1's world tip position; the final rendered line point is always the current lure position.
+- The line uses the existing multi-point/tube visual and tension opacity, but no visual line may extend beyond the actual spool length currently out of the reel.
+- On fishable water the lure bobs at the surface while the line is deployed; lure velocity and line tension feed fish interest. Clockwise reeling shortens the spool length and pulls the lure across the water until the remaining line is too short to keep it pinned, then it lifts naturally into the dangling endpoint state.
+- On land the grounded lure remains terrain-constrained while deployed so reel-in drags it along the ground. When the shortened spool can no longer reach the ground contact, the lure lifts naturally into the dangling endpoint state.
+- At max reel-in, an unhooked lure does **not** remain pinned to water or terrain and does **not** snap to a fake point beside the rod. It recovers into `danglingNearTip`, a short near-tip pose about 0.32 world units (roughly 1 foot in meter-ish tuning) below the true Rod A1 tip.
+- In `danglingNearTip`, the visible line is short and taut from the true rod tip to the lure; the lure uses gravity plus spring/constraint damping so it sways like a small weighted pendulum rather than being rigidly glued to the tip.
+- Line momentum/trailing only exists when spool length is actually out. When the line is near minimum length, old long rope points are collapsed/reseeded into a compact chain between the rod tip and lure endpoint so player motion cannot leave a long phantom trail.
 - Hooked fish movement is coupled to the lure/rod direction in a simple first-playable way. Hooked fish are excluded from near-tip lure recovery: the fish/lure connection stays under hooked fight, escape, and shore landing logic until the fish is picked up, lost, or detached. Complex line break math is intentionally deferred.
 
 ## Physical Fish State Machine
@@ -94,7 +95,7 @@ Size metadata is stored on the physical actor, raw pickup interaction, raw inven
 - Do not show “FISH ON” text or add large fishing tutorial labels.
 - Do not add a new cast button, reel button, green reel circle UI, hands/arms, or species personality labels.
 - Preserve Rod A1 canonical first-person visual and line origin at rod tip.
-- Preserve fully reeled Rod A1 lure recovery to `danglingNearTip`; do not let water or terrain constraints keep an unhooked max-reeled lure away from the tip.
+- Preserve fully reeled Rod A1 lure recovery to `danglingNearTip`; do not let water or terrain constraints keep an unhooked max-reeled lure away from the tip, and do not render stale rope points beyond current spool length.
 - Preserve no-button freeform casting, clockwise reel gesture, and spool lock behavior.
 - Preserve Folsom default spawn and Folsom pond fishing.
 - Preserve the fish species registry, including C4 / `spineBackFish`.
