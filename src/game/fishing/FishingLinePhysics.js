@@ -83,13 +83,14 @@ export class FishingLinePhysics {
     }
   }
 
-  update(dt, rodTip, { rodHeld = false, reelBoost = 0 } = {}) {
+  update(dt, rodTip, { rodHeld = false, reelBoost = 0, manualReelRate = 0 } = {}) {
     this.age += dt; if (this.isLureAirborne || this.spoolState === 'unspooling') this.castAge += dt; this.previousRodTipWorldPosition.copy(this.rodTipWorldPosition); this.rodTipWorldPosition.copy(rodTip);
     this.rodTipVelocity.copy(this.rodTipWorldPosition).sub(this.previousRodTipWorldPosition).divideScalar(Math.max(dt, 0.001));
-    this.integrateLure(dt, rodHeld, reelBoost); this.updateSpool(dt, rodHeld, reelBoost); this.solveRope();
+    const activeManualReelRate = Math.max(0, manualReelRate);
+    this.integrateLure(dt, rodHeld, reelBoost, activeManualReelRate); this.updateSpool(dt, rodHeld, reelBoost, activeManualReelRate); this.solveRope();
   }
 
-  integrateLure(dt, rodHeld, reelBoost) {
+  integrateLure(dt, rodHeld, reelBoost, manualReelRate = 0) {
     this.lurePreviousPosition.copy(this.lurePosition);
     const drag = this.isLureOnWater ? this.waterDrag : this.airDrag;
     if (this.isLureAirborne || this.isLureHeldNearRod) this.lureVelocity.y += LINE_GRAVITY * dt;
@@ -101,7 +102,16 @@ export class FishingLinePhysics {
     const heldScale = this.isLureHeldNearRod ? LURE_HELICOPTER_TENSION_SCALE : 1;
     this.lureVelocity.addScaledVector(dir, this.lineTension * heldScale * dt / Math.max(0.2, this.lureMass));
     if (this.isLureOnWater) {
-      this.lureVelocity.y = 0; this.lureVelocity.addScaledVector(dir.setY(0).normalize(), (this.lineTension + reelBoost * LINE_REEL_PULL_BOOST) * LURE_SURFACE_PULL_SCALE * dt);
+      this.lureVelocity.y = 0;
+      const surfaceDir = dir.setY(0);
+      if (surfaceDir.lengthSq() > 0.0001) surfaceDir.normalize();
+      this.lureVelocity.addScaledVector(surfaceDir, (this.lineTension + (reelBoost + manualReelRate) * LINE_REEL_PULL_BOOST) * LURE_SURFACE_PULL_SCALE * dt);
+    } else if (this.isLureGrounded && manualReelRate > 0) {
+      const groundDir = dir.setY(0);
+      if (groundDir.lengthSq() > 0.0001) {
+        groundDir.normalize();
+        this.lureVelocity.addScaledVector(groundDir, manualReelRate * LINE_REEL_PULL_BOOST * 0.22 * dt);
+      }
     }
     if (this.lureVelocity.length() > LURE_MAX_SPEED) this.lureVelocity.setLength(LURE_MAX_SPEED);
     this.lurePosition.addScaledVector(this.lureVelocity, dt);
@@ -110,7 +120,7 @@ export class FishingLinePhysics {
     this.lineSlack = THREE.MathUtils.clamp(1 - this.lineTension / 8, 0, 1);
   }
 
-  updateSpool(dt, rodHeld, reelBoost) {
+  updateSpool(dt, rodHeld, reelBoost, manualReelRate = 0) {
     if (this.isLureAirborne) {
       const distance = this.rodTipWorldPosition.distanceTo(this.lurePosition);
       const neededLength = Math.min(this.maxLineLength, Math.max(LINE_START_LENGTH, distance + 0.16));
@@ -125,6 +135,10 @@ export class FishingLinePhysics {
       const waterTargetLineLength = this.rodTipWorldPosition.distanceTo(this.lurePosition) + LINE_WATER_CONTROLLED_SLACK;
       this.currentLineLength = THREE.MathUtils.lerp(this.currentLineLength, waterTargetLineLength, Math.min(1, dt * 1.9));
       this.currentLineLength -= (this.autoReelInSpeed + reelBoost * LINE_REEL_PULL_BOOST) * dt * 0.18;
+    }
+    if (!this.isLureHeldNearRod && manualReelRate > 0) {
+      this.currentLineLength -= manualReelRate * dt;
+      this.lineTension = Math.max(this.lineTension, Math.min(8, manualReelRate * 0.45));
     }
     if (this.isLureHeldNearRod && rodHeld) this.currentLineLength = THREE.MathUtils.lerp(this.currentLineLength, LINE_START_LENGTH, dt * 2.5);
     this.currentLineLength = THREE.MathUtils.clamp(this.currentLineLength, this.minLineLength, this.maxLineLength); this.targetLineLength = this.currentLineLength; this.emittedLineLength = this.currentLineLength; this.lineSegmentLength = this.currentLineLength / (LINE_POINT_COUNT - 1);
