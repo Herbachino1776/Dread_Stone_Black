@@ -10,6 +10,7 @@ const SECRET_WALL_RANGE = 2.4;
 const CAMPFIRE_TIMED_ACTION_SECONDS = 2;
 const FISHING_TIMED_ACTION_SECONDS = 3;
 const COOKING_TIMED_ACTION_SECONDS = 10;
+const EATING_COOKED_FISH_TIMED_ACTION_SECONDS = 2.75;
 const TIMED_ACTION_MOVE_CANCEL_DISTANCE = 1.4;
 
 export class Interactions {
@@ -568,6 +569,7 @@ export class Interactions {
         this.hud.showMessage('Cast Rod A1 near surface movement.');
       },
     });
+    return this.activeTimedAction?.type === 'eatingCookedFish';
   }
 
   startCookingTimedAction(interaction) {
@@ -600,7 +602,7 @@ export class Interactions {
     if (this.activeTimedAction) return false;
     this.activeTimedAction = { elapsedSeconds: 0, completed: false, ...action };
     this.hud.updateTimedActionProgress?.(0.001, action.label);
-    this.setTemporaryHint(`${action.label}...`, 700);
+    this.setTemporaryHint(action.label.endsWith('...') ? action.label : `${action.label}...`, 700);
     return false;
   }
 
@@ -622,10 +624,33 @@ export class Interactions {
 
   useEquippedConsumable() {
     if (this.dungeon.gameState?.getEquippedFieldItem?.() !== 'cooked_fish') return false;
-    if (!this.dungeon.gameState?.eatCookedFish?.()) return false;
-    this.setTemporaryHint('Ate Cooked Fish.', 1300);
-    this.hud.showMessage('Ate Cooked Fish.');
-    return true;
+    if (this.activeTimedAction?.type === 'eatingCookedFish') return true;
+    if (this.startEatingCookedFishTimedAction()) return true;
+    return this.activeTimedAction?.type === 'eatingCookedFish';
+  }
+
+  startEatingCookedFishTimedAction() {
+    if (this.activeTimedAction) return false;
+    if (this.dungeon.gameState?.getEquippedFieldItem?.() !== 'cooked_fish') return false;
+    if (this.dungeon.gameState?.getFieldItemCount?.('cooked_fish') < 1) return false;
+
+    this.startTimedAction({
+      type: 'eatingCookedFish',
+      label: 'Eating...',
+      durationSeconds: EATING_COOKED_FISH_TIMED_ACTION_SECONDS,
+      cancelMessage: 'Eating canceled.',
+      // Deliberately named for a future looping munch audio hook; no asset is referenced yet.
+      audioPhase: 'eatingCookedFish',
+      validate: () => this.dungeon.gameState?.getEquippedFieldItem?.() === 'cooked_fish'
+        && this.dungeon.gameState?.getFieldItemCount?.('cooked_fish') > 0,
+      complete: () => {
+        if (this.dungeon.gameState?.eatCookedFish?.()) {
+          this.setTemporaryHint('Ate Cooked Fish.', 1300);
+          this.hud.showMessage('Ate Cooked Fish.');
+        }
+      },
+    });
+    return this.activeTimedAction?.type === 'eatingCookedFish';
   }
 
   pickUpKey() {
