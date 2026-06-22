@@ -12,11 +12,13 @@ This is the practical engineering/design reference for the first playable physic
 6. If the lure lands directly on/too close to the fish, the fish enters `spooked` and darts away.
 7. If the lure lands nearby, the fish becomes `aware`; lure bobbing, rod wiggles, line tension, and reel pulses raise interest.
 8. At high interest the fish enters `chasingLure`, approaches the lure, and can strike.
-9. Strike enters `hooked`, increases line tension, uses screen shake and safe haptics, and does **not** show “FISH ON” text.
-10. While hooked, the fish fights against line pull. Clockwise reel gestures shorten/pull the line; keeping Rod A1 up keeps the hook set.
-11. Dipping the rod too low for too long enters `lost`, splashes, detaches, and creates no pickup.
-12. Reeling the fish close enough to the player/shore enters `reeledToShore`, despawns the actor, and creates an existing raw fish pickup carrying size metadata.
-13. Raw fish pickup, cooking, cooked fish pickup, inventory, and eating still use the existing survival path, now with size-based hunger restoration metadata.
+9. Strike enters `hookedWater`, increases line tension, uses screen shake and safe haptics, and does **not** show “FISH ON” text.
+10. While hooked in water, the fish remains attached to the lure/line and fights against line pull. Clockwise reel gestures shorten/pull the line; keeping Rod A1 up keeps the hook set.
+11. Active reeling changes the fight to `draggingToShore`; when the fish is roughly within `2.75` world units, line length is within `2.7` units of recovered length, the reel input was recent, and the rod is up, it enters `liftingFromWater`.
+12. During `liftingFromWater`/`landedAttached`, water pinning is disabled (`isLureOnWater = false`) so the fish/lure endpoint can leave the pond zone, arc to a sampled beach/ground point near the player, and settle on terrain instead of being lerped back below the surface.
+13. After landing, the actor despawns and creates the existing raw flopping fish pickup carrying species, size-group, and hunger metadata. It is not added directly to inventory; the player picks it up normally.
+14. Dipping the rod too low for too long enters `lost`, splashes, detaches, and creates no pickup.
+15. Raw fish pickup, cooking, cooked fish pickup, inventory, and eating still use the existing survival path, now with size-based hunger restoration metadata.
 
 ## Rod A1 Control Summary
 
@@ -38,7 +40,7 @@ This is the practical engineering/design reference for the first playable physic
 | `deployedWater` | Water surface owns vertical bobbing. Reel constraint pulls horizontally until the contact geometry is too short to remain on the surface. |
 | `deployedGround` | Terrain owns lure height. Reel constraint drags horizontally until the contact geometry is too short to remain grounded. |
 | `recoveringToTip` | Water/ground contact has released. Cast payout is forbidden; gravity, reel shortening, and the endpoint constraint lift the lure toward the tip. |
-| `hookedFish` | `PhysicalFishAngling` owns fish/lure movement until escape or shore landing. Normal near-tip recovery is disabled. |
+| `hookedFish` / `hookedFishLanding` | `PhysicalFishAngling` owns fish/lure movement until escape or shore landing. Normal near-tip recovery is disabled, and landing disables water pinning before the fish is converted to a grounded raw pickup. |
 
 Do not use `isLureAirborne` by itself to authorize payout. Both a real cast (`isCasting`) and `castingUnspooling` are required; recovery is also airborne but must never leak line outward.
 
@@ -79,7 +81,7 @@ Slow clean circles therefore stay slow, fast clean circles reach the cap progres
 - In `danglingNearTip`, the visible line is short and taut from the true rod tip to the lure; the lure uses gravity plus spring/constraint damping so it sways like a small weighted pendulum rather than being rigidly glued to the tip.
 - During the first burst of a cast, endpoint clamping is relaxed while line payout is allowed; hard endpoint constraint returns when the line reaches max spool length, the lure lands and locks, the lure is fully reeled/dangling, or hooked fish tension owns the fight.
 - Line momentum/trailing only exists when spool length is actually out. When the line is near minimum length, old long rope points are collapsed/reseeded into a compact chain between the rod tip and lure endpoint so player motion cannot leave a long phantom trail.
-- Hooked fish movement is coupled to the lure/rod direction in a simple first-playable way. Hooked fish are excluded from near-tip lure recovery: the fish/lure connection stays under hooked fight, escape, and shore landing logic until the fish is picked up, lost, or detached. Complex line break math is intentionally deferred.
+- Hooked fish movement is coupled to the lure/rod direction in a simple first-playable way. Hooked fish are excluded from near-tip lure recovery: the fish/lure connection stays under hooked fight, escape, and shore landing logic until the fish is picked up, lost, or detached. Once landing begins, the fish/lure endpoint is no longer water-owned, can exit the fishable zone near shore, and is moved to a sampled ground/beach point. Complex line break math is intentionally deferred.
 
 ## Dev-Only Fishing Debug State
 
@@ -100,9 +102,12 @@ Do not add normal-gameplay console logging or an always-visible reel UI for this
 | `breach` | Fish briefly breaks surface and creates splash/ripple feedback. | Returns to `idle` after a short visible arc. |
 | `aware` | Fish has noticed a nearby lure. | Lure work raises interest -> `chasingLure`; stale/far lure lowers interest. |
 | `spooked` | Fish darts away after an overly direct landing. | Returns to `idle` after a short cooldown. |
-| `chasingLure` | Fish approaches the worked lure. | Reaches lure -> `hooked`; lure moves away/far can reduce future interest. |
-| `hooked` | Fish is attached to the lure/line and fights. | Rod too low too long -> `lost`; close to player/shore -> `reeledToShore`. |
-| `reeledToShore` | Fish converts into existing raw fish pickup. | Terminal; actor despawns. |
+| `chasingLure` | Fish approaches the worked lure. | Reaches lure -> `hookedWater`; lure moves away/far can reduce future interest. |
+| `hookedWater` | Fish is attached to the lure/line and fights while still water-owned. | Active clockwise reeling -> `draggingToShore`; rod too low too long -> `lost`. |
+| `draggingToShore` | Fish remains attached and is pulled toward the player/shore, with only a weak near-shore zone clamp so it is not trapped forever. | Close enough (`2.75` units), short enough line (`minLineLength + 2.7`), recent reel input (`0.42s`), and rod up -> `liftingFromWater`; rod too low too long -> `lost`. |
+| `liftingFromWater` | Fish/lure endpoint is released from water pinning and arcs out of the pond to a sampled beach/ground landing point. | Lift completes -> `landedAttached`. |
+| `landedAttached` | Fish is on the beach/ground at the landing point while the line has not snapped back to the rod tip. | Short settle completes -> `pickedUp` conversion. |
+| `pickedUp` | Actor converts into the existing raw flopping fish pickup with species, size group, and hunger metadata preserved. | Terminal; actor despawns and pickup handles normal player interaction. |
 | `lost` | Escape splash/no pickup. | Returns to `idle` after feedback. |
 
 ## Size Groups
@@ -154,7 +159,7 @@ Implemented in this PR:
 - Species chosen from existing fishable zone pool.
 - Small/medium/large size groups.
 - Breach/splash target feedback.
-- Lure awareness, spook, chase, strike, hooked fight, escape, and landing states.
+- Lure awareness, spook, chase, strike, hooked water fight, dragging-to-shore, lift-from-water, landed-attached conversion, escape, and raw pickup states.
 - Non-text strike feedback through screen shake/haptics and tension.
 - Clockwise reel integration for pulling hooked fish toward player/shore.
 - Raw pickup only after the fish is physically landed.
