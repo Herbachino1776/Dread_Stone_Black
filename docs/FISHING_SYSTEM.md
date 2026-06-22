@@ -2,6 +2,31 @@
 
 This is the practical engineering/design reference for the first playable physical fishing loop. Future prompts should preserve the systems named here and extend the physical loop rather than returning to `cast into pond -> timer -> fish pickup`.
 
+
+## Rod A1 Fishing A1 Stable / Canonical Lock
+
+Rod A1 Fishing A1 is now stable and canonical. Future PRs should not casually rewrite the core fishing loop or its survival handoff. In particular, preserve:
+
+- Rod A1 touch casting;
+- line/lure endpoint physics;
+- spool length as the source of truth;
+- clockwise reel gesture behavior;
+- hooked fish bite/fight/landing;
+- deterministic fish landing;
+- Folsom pond fishing;
+- raw fish pickup;
+- the cooking/eating survival loop.
+
+Future fishing work should be additive and polish-only unless a core rewrite is explicitly requested. Any future change to core fishing physics must preserve the current acceptance checks for casting, reeling, lure endpoint behavior, hooked fights, deterministic landing, raw pickup, cooking, and timed eating.
+
+## Post-Catch Survival Loop
+
+1. Catch a fish through the canonical Rod A1 bite/fight/landing loop.
+2. Pick up the grounded raw fish pickup; raw fish remains non-edible.
+3. Cook raw fish at a campfire through the existing cooking timed action.
+4. Eat cooked fish from inventory through the timed eating action.
+5. Hunger restores only after the eating timer completes, preserving the cooked fish size-group hunger metadata.
+
 ## Current Implemented Flow
 
 1. Player equips Rod A1 (`fishing_rod`) from the existing field equipment path.
@@ -18,7 +43,7 @@ This is the practical engineering/design reference for the first playable physic
 12. During `liftingFromWater`/`landedAttached`, water pinning is disabled (`isLureOnWater = false`) so the fish/lure endpoint can leave the pond zone, arc to a sampled beach/ground point near the player, and settle on terrain instead of being lerped back below the surface.
 13. After landing, the actor despawns and creates the existing raw flopping fish pickup carrying species, size-group, and hunger metadata. It is not added directly to inventory; the player picks it up normally.
 14. Dipping the rod too low for too long enters `lost`, splashes, detaches, creates no pickup, clears hooked/water fight ownership, and puts the lure into normal `recoveringToTip` recovery so clockwise reeling can bring it fully back to the dangling near-tip state.
-15. Raw fish pickup, cooking, cooked fish pickup, inventory, and eating still use the existing survival path, now with size-based hunger restoration metadata.
+15. Raw fish pickup, cooking, cooked fish pickup, inventory, and timed eating still use the existing survival path, now with size-based hunger restoration metadata.
 
 ## Rod A1 Control Summary
 
@@ -131,7 +156,7 @@ Fish behavior is size-group driven. Do **not** add species personalities yet.
 | Medium Fish | `1.0x` existing species mesh | Default/current difficulty and visual size. | About 10 minutes (`600s`). |
 | Large Fish | `1.32x` existing species mesh | Harder/heavier, stronger fight. Future caution/smarts belong here, not species personalities. | About 20 minutes (`1200s`). |
 
-Size metadata is stored on the physical actor, raw pickup interaction, raw inventory fish stack, cooked pickup interaction, cooked inventory fish stack, and is consumed when eating cooked fish.
+Size metadata is stored on the physical actor, raw pickup interaction, raw inventory fish stack, cooked pickup interaction, cooked inventory fish stack, and is consumed only when timed cooked-fish eating completes.
 
 ## Hunger Values by Fish Size
 
