@@ -4,7 +4,7 @@ import {
   LINE_GRAVITY, LINE_AIR_DRAG, LINE_WATER_DRAG, LINE_TENSION_STIFFNESS, LINE_TENSION_DAMPING,
   LINE_SPOOL_OUT_SPEED, LINE_AUTO_REEL_SPEED, LINE_REEL_PULL_BOOST, LURE_MASS, LURE_WATER_BOB_HEIGHT,
   LURE_WATER_BOB_SPEED, LURE_SURFACE_PULL_SCALE, LURE_HELICOPTER_TENSION_SCALE, LURE_MAX_SPEED,
-  LINE_GROUND_CLEARANCE, LURE_GROUND_CLEARANCE, LURE_GROUND_FRICTION,
+  LINE_GROUND_CLEARANCE, LURE_GROUND_CLEARANCE, LURE_GROUND_FRICTION, LINE_WATER_CONTROLLED_SLACK,
 } from './CastingTuning.js';
 
 const up = new THREE.Vector3(0, 1, 0);
@@ -42,7 +42,7 @@ export class FishingLinePhysics {
   }
 
   launch(rodTip, inheritedVelocity) { this.isLureHeldNearRod = false; this.isCasting = true; this.isLureAirborne = true; this.isLureOnWater = false; this.isLureGrounded = false; this.rodTipWorldPosition.copy(rodTip); this.lureVelocity.copy(inheritedVelocity).addScaledVector(this.rodTipVelocity, 0.35); this.spoolState = 'unspooling'; }
-  enterWater(surfaceY) { this.isCasting = false; this.isLureAirborne = false; this.isLureOnWater = true; this.isLureGrounded = false; this.waterSurfaceY = surfaceY; this.lurePosition.y = surfaceY + LURE_WATER_BOB_HEIGHT * 0.35; this.lureVelocity.y = 0; this.spoolState = 'auto-reel'; }
+  enterWater(surfaceY) { this.isCasting = false; this.isLureAirborne = false; this.isLureOnWater = true; this.isLureGrounded = false; this.waterSurfaceY = surfaceY; this.lurePosition.y = surfaceY + LURE_WATER_BOB_HEIGHT * 0.35; this.lureVelocity.y = 0; this.targetLineLength = this.rodTipWorldPosition.distanceTo(this.lurePosition) + LINE_WATER_CONTROLLED_SLACK; this.spoolState = 'auto-reel'; }
   enterGround(surfaceY) { this.isCasting = false; this.isLureAirborne = false; this.isLureOnWater = false; this.isLureGrounded = true; this.lurePosition.y = surfaceY + LURE_GROUND_CLEARANCE; this.lureVelocity.multiplyScalar(0.15); this.spoolState = 'failed'; }
 
   sampleTerrainY(position) {
@@ -67,6 +67,7 @@ export class FishingLinePhysics {
   }
 
   clampLineToTerrain() {
+    if (this.isLureOnWater) return;
     for (let i = 1; i < LINE_POINT_COUNT; i += 1) {
       const point = this.linePoints[i];
       const terrainY = this.sampleTerrainY(point);
@@ -103,7 +104,11 @@ export class FishingLinePhysics {
 
   updateSpool(dt, rodHeld, reelBoost) {
     if (this.isLureAirborne && this.lineTension > 0.7) this.currentLineLength += this.spoolOutSpeed * dt * THREE.MathUtils.clamp(this.lineTension / 7, 0.15, 1);
-    if (this.isLureOnWater) this.currentLineLength -= (this.autoReelInSpeed + reelBoost * LINE_REEL_PULL_BOOST) * dt;
+    if (this.isLureOnWater) {
+      const waterTargetLineLength = this.rodTipWorldPosition.distanceTo(this.lurePosition) + LINE_WATER_CONTROLLED_SLACK;
+      this.currentLineLength = THREE.MathUtils.lerp(this.currentLineLength, waterTargetLineLength, Math.min(1, dt * 1.9));
+      this.currentLineLength -= (this.autoReelInSpeed + reelBoost * LINE_REEL_PULL_BOOST) * dt * 0.18;
+    }
     if (this.isLureHeldNearRod && rodHeld) this.currentLineLength = THREE.MathUtils.lerp(this.currentLineLength, LINE_START_LENGTH, dt * 2.5);
     this.currentLineLength = THREE.MathUtils.clamp(this.currentLineLength, this.minLineLength, this.maxLineLength); this.targetLineLength = this.currentLineLength; this.lineSegmentLength = this.currentLineLength / (LINE_POINT_COUNT - 1);
   }
@@ -118,7 +123,14 @@ export class FishingLinePhysics {
         if (movableA) a.addScaledVector(delta, diff * 0.5); if (movableB) b.addScaledVector(delta, -diff * 0.5);
       }
     }
-    const sag = Math.min(1.6, this.lineSlack * this.currentLineLength * 0.035); for (let i = 1; i < LINE_POINT_COUNT - 1; i += 1) this.linePoints[i].addScaledVector(up, -Math.sin(Math.PI * i / (LINE_POINT_COUNT - 1)) * sag);
+    const sagScale = this.isLureOnWater ? 0.012 : 0.035;
+    const sag = Math.min(this.isLureOnWater ? 0.42 : 1.6, this.lineSlack * this.currentLineLength * sagScale); for (let i = 1; i < LINE_POINT_COUNT - 1; i += 1) this.linePoints[i].addScaledVector(up, -Math.sin(Math.PI * i / (LINE_POINT_COUNT - 1)) * sag);
+    if (this.isLureOnWater) {
+      for (let i = 1; i < LINE_POINT_COUNT - 1; i += 1) {
+        const t = i / (LINE_POINT_COUNT - 1);
+        this.linePoints[i].lerp(scratch.copy(this.rodTipWorldPosition).lerp(this.lurePosition, t), 0.58);
+      }
+    }
     this.clampLineToTerrain();
   }
 
