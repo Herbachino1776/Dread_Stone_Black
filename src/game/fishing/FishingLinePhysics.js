@@ -9,6 +9,7 @@ import {
 
 const up = new THREE.Vector3(0, 1, 0);
 const scratch = new THREE.Vector3();
+const scratchHorizontal = new THREE.Vector3();
 
 export class FishingLinePhysics {
   constructor({ terrainSampler = null } = {}) {
@@ -58,20 +59,48 @@ export class FishingLinePhysics {
     return Number.isFinite(y) ? y : null;
   }
 
+  shouldLiftGroundedLure(distance = this.lurePosition.distanceTo(this.rodTipWorldPosition)) {
+    if (!this.isLureGrounded) return false;
+    const nearRodTip = distance < 1.05;
+    const closeEnoughToRecover = distance < 1.35;
+    const lineNearlyRecovered = closeEnoughToRecover && this.currentLineLength <= Math.max(this.minLineLength + 0.28, LINE_MIN_LENGTH + 0.28);
+    const tautAndRecovered = closeEnoughToRecover && this.lineTension > 7.5 && distance < Math.max(1.35, this.currentLineLength + 0.22);
+    return nearRodTip || lineNearlyRecovered || tautAndRecovered || this.spoolState === 'recover-to-rod';
+  }
+
+  constrainGroundedLureToTerrain() {
+    if (this.isLureOnWater) return false;
+    const terrainY = this.sampleTerrainY(this.lurePosition);
+    if (!Number.isFinite(terrainY)) return false;
+    this.lurePosition.y = terrainY + LURE_GROUND_CLEARANCE;
+    this.lureVelocity.y = 0;
+    this.lureVelocity.x *= LURE_GROUND_FRICTION; this.lureVelocity.z *= LURE_GROUND_FRICTION;
+    this.isLureGrounded = true; this.isLureAirborne = false;
+    return true;
+  }
+
   clampLureToTerrain(forceGrounded = false) {
     if (this.isLureOnWater) return false;
     const terrainY = this.sampleTerrainY(this.lurePosition);
     if (!Number.isFinite(terrainY)) return false;
     const minY = terrainY + LURE_GROUND_CLEARANCE;
-    if (forceGrounded || this.lurePosition.y < minY) {
-      this.lurePosition.y = minY;
-      if (this.lureVelocity.y < 0) this.lureVelocity.y = 0;
-      this.lureVelocity.x *= LURE_GROUND_FRICTION; this.lureVelocity.z *= LURE_GROUND_FRICTION;
-      this.isLureGrounded = true; this.isLureAirborne = false;
-      return true;
-    }
+    if (forceGrounded || this.lurePosition.y < minY) return this.constrainGroundedLureToTerrain();
+    if (this.isLureGrounded && Math.abs(this.lurePosition.y - minY) <= 0.18 && !this.shouldLiftGroundedLure()) return this.constrainGroundedLureToTerrain();
     this.isLureGrounded = false;
     return false;
+  }
+
+  updateGroundedAirborneState() {
+    if (!this.isLureGrounded || this.isLureOnWater) return false;
+    const terrainY = this.sampleTerrainY(this.lurePosition);
+    if (!Number.isFinite(terrainY)) return false;
+    const groundY = terrainY + LURE_GROUND_CLEARANCE;
+    if (this.shouldLiftGroundedLure()) return false;
+    if (this.lurePosition.y > groundY + 0.18) {
+      this.isLureGrounded = false; this.isLureAirborne = true;
+      return true;
+    }
+    return this.constrainGroundedLureToTerrain();
   }
 
   clampLineToTerrain() {
@@ -92,15 +121,20 @@ export class FishingLinePhysics {
 
   integrateLure(dt, rodHeld, reelBoost, manualReelRate = 0) {
     this.lurePreviousPosition.copy(this.lurePosition);
+    this.updateGroundedAirborneState();
     const drag = this.isLureOnWater ? this.waterDrag : this.airDrag;
-    if (this.isLureAirborne || this.isLureHeldNearRod) this.lureVelocity.y += LINE_GRAVITY * dt;
+    const distance = this.lurePosition.distanceTo(this.rodTipWorldPosition);
+    const canLiftGroundedLure = this.shouldLiftGroundedLure(distance);
+    if (this.isLureAirborne || this.isLureHeldNearRod || (this.isLureGrounded && canLiftGroundedLure)) this.lureVelocity.y += LINE_GRAVITY * dt;
     this.lureVelocity.multiplyScalar(Math.pow(drag, dt * 60));
-    const distance = this.lurePosition.distanceTo(this.rodTipWorldPosition); const stretch = Math.max(0, distance - this.currentLineLength); const dir = scratch.copy(this.rodTipWorldPosition).sub(this.lurePosition);
+    const stretch = Math.max(0, distance - this.currentLineLength); const dir = scratch.copy(this.rodTipWorldPosition).sub(this.lurePosition);
     if (dir.lengthSq() > 0.0001) dir.normalize();
-    const awaySpeed = this.lureVelocity.dot(dir) * -1 + this.rodTipVelocity.dot(dir);
+    const tensionDir = this.isLureGrounded && !canLiftGroundedLure ? scratchHorizontal.copy(dir).setY(0) : scratchHorizontal.copy(dir);
+    if (tensionDir.lengthSq() > 0.0001) tensionDir.normalize();
+    const awaySpeed = this.lureVelocity.dot(tensionDir) * -1 + this.rodTipVelocity.dot(tensionDir);
     this.lineTension = Math.max(0, stretch * LINE_TENSION_STIFFNESS + Math.max(0, awaySpeed) * LINE_TENSION_DAMPING);
     const heldScale = this.isLureHeldNearRod ? LURE_HELICOPTER_TENSION_SCALE : 1;
-    this.lureVelocity.addScaledVector(dir, this.lineTension * heldScale * dt / Math.max(0.2, this.lureMass));
+    this.lureVelocity.addScaledVector(tensionDir, this.lineTension * heldScale * dt / Math.max(0.2, this.lureMass));
     if (this.isLureOnWater) {
       this.lureVelocity.y = 0;
       const surfaceDir = dir.setY(0);
@@ -108,7 +142,7 @@ export class FishingLinePhysics {
       const manualPull = manualReelRate > 0 ? manualReelRate * LINE_MANUAL_REEL_PULL_ACCEL : 0;
       this.lureVelocity.addScaledVector(surfaceDir, ((this.lineTension + reelBoost * LINE_REEL_PULL_BOOST) * LURE_SURFACE_PULL_SCALE + manualPull) * dt);
     } else if (manualReelRate > 0 && (this.isLureGrounded || !this.isLureAirborne)) {
-      const groundDir = dir.setY(0);
+      const groundDir = scratchHorizontal.copy(this.rodTipWorldPosition).sub(this.lurePosition).setY(0);
       if (groundDir.lengthSq() > 0.0001) {
         groundDir.normalize();
         this.lureVelocity.addScaledVector(groundDir, manualReelRate * LINE_MANUAL_REEL_PULL_ACCEL * dt);
@@ -117,6 +151,7 @@ export class FishingLinePhysics {
     if (this.lureVelocity.length() > LURE_MAX_SPEED) this.lureVelocity.setLength(LURE_MAX_SPEED);
     this.lurePosition.addScaledVector(this.lureVelocity, dt);
     if (this.isLureOnWater) this.lurePosition.y = this.waterSurfaceY + Math.sin(this.age * LURE_WATER_BOB_SPEED) * LURE_WATER_BOB_HEIGHT;
+    else if (this.isLureGrounded && !canLiftGroundedLure) this.constrainGroundedLureToTerrain();
     else this.clampLureToTerrain(this.isLureHeldNearRod && !this.isCasting);
     this.lineSlack = THREE.MathUtils.clamp(1 - this.lineTension / 8, 0, 1);
   }
