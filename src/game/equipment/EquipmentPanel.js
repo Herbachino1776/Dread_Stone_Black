@@ -11,7 +11,7 @@ const POCKETS = Object.freeze([
 const ITEM_DETAILS = Object.freeze({
   wood_axe: { type: 'Axe', damage: '6–10', weight: '2.0', icon: '🪓' },
   fishing_rod: { type: 'Tool', damage: '2', weight: '1.5', icon: '╱' },
-  rusted_sword: { type: 'Sword', damage: '8–14', weight: '3.5', icon: '⚔' },
+  rusted_sword: { type: 'Broadsword', damage: '17', weight: '3.5', icon: '⚔' },
   wood: { type: 'Material', restore: null, icon: '▰' },
   raw_fish: { type: 'Food', use: 'Cook at campfire', icon: '🐟' },
   cooked_fish: { type: 'Food', restore: '50%', icon: '◒' },

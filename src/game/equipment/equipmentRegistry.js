@@ -31,7 +31,7 @@ export const equipmentRegistry = Object.freeze({
     }),
     rusted_sword: Object.freeze({
       id: 'rusted_sword',
-      displayName: 'Rusted Sword',
+      displayName: 'Broadsword',
       itemType: 'weapon',
       weaponProfileId: 'rusted_sword',
       source: 'black_grass_temple_rusted_sword_chest',
