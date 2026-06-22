@@ -9,7 +9,7 @@ import {
   LINE_GROUND_CLEARANCE, LURE_GROUND_CLEARANCE, LURE_GROUND_FRICTION, LINE_WATER_CONTROLLED_SLACK,
   LINE_FULLY_REELED_THRESHOLD, LURE_DANGLE_DISTANCE_FROM_TIP, LURE_DANGLE_BACKSET_FROM_TIP,
   LURE_DANGLE_SWAY, LURE_DANGLE_SPRING, LURE_DANGLE_DAMPING, LINE_MANUAL_REEL_MAX_PER_FRAME,
-  LINE_CONTACT_PULL_MAX_PER_FRAME, LINE_CONTACT_LIFT_MARGIN,
+  LINE_CONTACT_PULL_MAX_PER_FRAME, LINE_HOOKED_CONTACT_PULL_MAX_PER_FRAME, LINE_CONTACT_LIFT_MARGIN,
 } from './CastingTuning.js';
 
 const up = new THREE.Vector3(0, 1, 0);
@@ -226,7 +226,7 @@ export class FishingLinePhysics {
         nextLineLength = Math.max(nextLineLength, Math.min(this.currentLineLength, shortestReachableThisFrame));
       } else if (this.isFishHooked) {
         const hookedDistance = this.rodTipWorldPosition.distanceTo(this.lurePosition);
-        nextLineLength = Math.max(nextLineLength, Math.min(this.currentLineLength, hookedDistance - LINE_CONTACT_PULL_MAX_PER_FRAME));
+        nextLineLength = Math.max(nextLineLength, Math.min(this.currentLineLength, hookedDistance - LINE_HOOKED_CONTACT_PULL_MAX_PER_FRAME));
       }
       this.currentLineLength = nextLineLength;
       this.spoolState = 'manual-reel-in'; this.spoolLocked = false;

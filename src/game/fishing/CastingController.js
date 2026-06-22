@@ -28,7 +28,7 @@ export class CastingController {
     this.bind();
   }
   createIdleState() { return { dragging: false, loadAmount: 0, gestureHistory: [], rodYaw: 0, rodPitch: 0, rodYawVelocity: 0, rodPitchVelocity: 0, targetYaw: 0, targetPitch: 0, rootOffsetX: 0, rootOffsetY: 0, rootOffsetZ: 0, rootVelocityX: 0, rootVelocityY: 0, rootVelocityZ: 0, targetRootOffsetX: 0, targetRootOffsetY: 0, targetRootOffsetZ: 0, releaseSnap: 0, motionSmoothness: 0, grabT: 0, angularVelocity: 0, tipSpeed: 0 }; }
-  createIdleReelState() { return { active: false, pointerId: null, centerX: 0, centerY: 0, lastAngle: 0, lastTimeMs: 0, lastClockwiseTimeMs: -Infinity, targetRate: 0, actualRate: 0, rate: 0, accumulatedClockwise: 0 }; }
+  createIdleReelState() { return { active: false, pointerId: null, centerX: 0, centerY: 0, lastAngle: 0, lastTimeMs: 0, lastClockwiseTimeMs: -Infinity, targetRate: 0, actualRate: 0, rate: 0, accumulatedClockwise: 0, frameClockwiseRadians: 0 }; }
   isEquipped() { return this.rodView?.isEquipped?.() === true; }
   isLineDeployed() {
     const physics = this.projectile?.physics;
@@ -96,6 +96,7 @@ export class CastingController {
       this.reelState.targetRate = THREE.MathUtils.lerp(this.reelState.targetRate, instantRate, targetAlpha);
       this.reelState.lastClockwiseTimeMs = now;
       this.reelState.accumulatedClockwise += clockwise;
+      this.reelState.frameClockwiseRadians = (this.reelState.frameClockwiseRadians ?? 0) + clockwise;
       if (this.reelState.accumulatedClockwise >= Math.PI / 2) {
         navigator.vibrate?.(8);
         this.reelState.accumulatedClockwise %= Math.PI / 2;
@@ -164,7 +165,8 @@ export class CastingController {
       this.updateReelRate(dt);
       const reelBoost = this.state.dragging ? Math.min(1.5, Math.max(0, this.state.tipSpeed ?? 0) / 5.5) : 0;
       this.projectile.update(dt, rodTip, { rodHeld: this.state.dragging === true, reelBoost, manualReelRate: this.reelState.actualRate });
-      this.dungeon.updatePhysicalFishAngling?.(dt, { player: this.player, lure: this.projectile, rodTip, manualReelRate: this.reelState.actualRate, rodState: this.state, physics: this.projectile.physics });
+      this.dungeon.updatePhysicalFishAngling?.(dt, { player: this.player, lure: this.projectile, rodTip, manualReelRate: this.reelState.actualRate, reelClockwiseRadians: this.reelState.frameClockwiseRadians ?? 0, rodState: this.state, physics: this.projectile.physics });
+      this.reelState.frameClockwiseRadians = 0;
       if (this.projectile.physics?.isFishHooked) {
         this.projectile.physics.solveRope?.();
         this.projectile.syncVisuals?.();
