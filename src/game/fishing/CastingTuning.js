@@ -24,6 +24,12 @@ export const ROD_ANGULAR_DAMPING = 5.7;
 export const ROD_MASS_FEEL = 0.82;
 export const ROD_BEND_RELEASE_SCALE = 0.42;
 export const ROD_GRAB_HIT_RADIUS = 34;
+export const REEL_GESTURE_ZONE_RADIUS = 58;
+export const REEL_GESTURE_INNER_DEADZONE = 14;
+export const REEL_GESTURE_MIN_ARC_RAD = 0.035;
+export const REEL_GESTURE_RATE_PER_RADIAN = 0.18;
+export const REEL_GESTURE_MAX_RATE = 4.8;
+export const REEL_GESTURE_RATE_DECAY = 9.5;
 export const ROD_RELEASE_SNAP_SCALE = 1.32;
 
 export const LINE_POINT_COUNT = 18;

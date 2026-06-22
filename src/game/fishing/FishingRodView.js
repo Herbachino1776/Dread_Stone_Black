@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createRodA1Mesh, resolveGameplayRodForItem, CANONICAL_GAMEPLAY_ROD_ID, COMPATIBLE_FISHING_ROD_ITEM_ID } from './FishingRodFactory.js';
-import { ROD_GRAB_HIT_RADIUS, ROD_REST_POS, ROD_REST_ROT } from './CastingTuning.js';
+import { REEL_GESTURE_ZONE_RADIUS, ROD_GRAB_HIT_RADIUS, ROD_REST_POS, ROD_REST_ROT } from './CastingTuning.js';
 
 const screenPoint = new THREE.Vector3();
 const worldPoint = new THREE.Vector3();
@@ -64,6 +64,44 @@ export class FishingRodView {
 
   getWorldTipPosition() { return this.getWorldPointAt(1); }
   getWorldTipVelocity() { return this.tipVelocity.clone(); }
+
+
+  getProjectedReelCenter(viewport) {
+    if (!this.isEquipped() || !this.root.visible || !viewport) return null;
+    this.camera.updateMatrixWorld();
+    this.root.updateMatrixWorld(true);
+    const rect = viewport.getBoundingClientRect();
+    const handle = this.rod?.userData?.handleLocalPosition?.clone?.() ?? this.getRodLocalPointAt(0);
+    const reelLocal = handle.add(new THREE.Vector3(0.18, -0.16, 0.34)).multiply(this.rod.scale);
+    worldPoint.copy(this.rod.localToWorld(reelLocal));
+    screenPoint.copy(worldPoint).project(this.camera);
+    if (screenPoint.z >= -1 && screenPoint.z <= 1) {
+      return {
+        x: (screenPoint.x * 0.5 + 0.5) * rect.width + rect.left,
+        y: (-screenPoint.y * 0.5 + 0.5) * rect.height + rect.top,
+        radius: REEL_GESTURE_ZONE_RADIUS,
+        projected: true,
+      };
+    }
+    return this.getFallbackReelCenter(viewport);
+  }
+
+  getFallbackReelCenter(viewport) {
+    const rect = viewport.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width * 0.78,
+      y: rect.top + rect.height * 0.78,
+      radius: REEL_GESTURE_ZONE_RADIUS,
+      projected: false,
+    };
+  }
+
+  projectReelGestureHit(clientX, clientY, viewport) {
+    const center = this.getProjectedReelCenter(viewport) ?? this.getFallbackReelCenter(viewport);
+    if (!center) return null;
+    const distance = Math.hypot(clientX - center.x, clientY - center.y);
+    return distance <= center.radius ? { ...center, distance } : null;
+  }
 
   projectRodGrabHit(clientX, clientY, viewport) {
     if (!this.isEquipped() || !this.root.visible || !viewport) return null;
