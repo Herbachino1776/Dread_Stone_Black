@@ -58,11 +58,17 @@ export class FishingRodView {
   }
 
   getWorldPointAt(t) {
-    const point = this.getRodLocalPointAt(t).multiply(this.rod.scale);
+    const point = this.getRodLocalPointAt(t);
     return this.rod.localToWorld(point);
   }
 
-  getWorldTipPosition() { return this.getWorldPointAt(1); }
+  getRodTipWorldPosition() {
+    const tipAnchor = this.rod?.userData?.tipAnchor;
+    if (tipAnchor?.getWorldPosition) return tipAnchor.getWorldPosition(new THREE.Vector3());
+    return this.getWorldPointAt(1);
+  }
+
+  getWorldTipPosition() { return this.getRodTipWorldPosition(); }
   getWorldTipVelocity() { return this.tipVelocity.clone(); }
 
 
@@ -72,7 +78,7 @@ export class FishingRodView {
     this.root.updateMatrixWorld(true);
     const rect = viewport.getBoundingClientRect();
     const handle = this.rod?.userData?.handleLocalPosition?.clone?.() ?? this.getRodLocalPointAt(0);
-    const reelLocal = handle.add(new THREE.Vector3(0.18, -0.16, 0.34)).multiply(this.rod.scale);
+    const reelLocal = handle.add(new THREE.Vector3(0.18, -0.16, 0.34));
     worldPoint.copy(this.rod.localToWorld(reelLocal));
     screenPoint.copy(worldPoint).project(this.camera);
     if (screenPoint.z >= -1 && screenPoint.z <= 1) {
