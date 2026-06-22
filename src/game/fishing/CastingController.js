@@ -7,13 +7,22 @@ const tmpForward = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
 const tmpUp = new THREE.Vector3(0, 1, 0);
 
+export function getClockwiseDeltaRadians(previousAngle, currentAngle) {
+  let delta = currentAngle - previousAngle;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  // Browser screen coordinates use +Y downward, so increasing atan2 angles are
+  // clockwise on the player's glass. Only positive deltas should reel in.
+  return delta;
+}
+
 export class CastingController {
   constructor({ app, camera, player, dungeon, hud, rodView }) {
     this.camera = camera; this.player = player; this.dungeon = dungeon; this.hud = hud; this.rodView = rodView;
     this.viewport = app.querySelector('[data-game="viewport"]') ?? app;
     this.state = this.createIdleState();
     this.reelState = this.createIdleReelState();
-    this.debug = { enabled: false, loadAmount: 0, releaseSpeed: 0, castValid: false, launchVelocity: new THREE.Vector3(), lureHitType: 'none', lineLength: 0, lineTension: 0, lureMode: 'held', lureSpeed: 0, spoolState: 'held', fishableWaterId: null, manualReelRate: 0, reelClockwiseDegrees: 0, reelZone: null };
+    this.debug = { enabled: false, loadAmount: 0, releaseSpeed: 0, castValid: false, launchVelocity: new THREE.Vector3(), lureHitType: 'none', lineLength: 0, lineTension: 0, lureMode: 'held', lureSpeed: 0, spoolState: 'held', fishableWaterId: null, manualReelRate: 0, reelClockwiseDegrees: 0, reelZoneHit: false, reelZone: null, projectedReelCenter: null, fallbackReelCenter: null, activeReelPointerId: null, reelClockwiseDelta: 0 };
     this.projectile = new LureProjectile({ scene: dungeon.scene, dungeon, waterResolver: new FishingWaterResolver({ dungeon }), maxCastRange: CAST_MAX_RANGE, onLanded: (result) => this.handleLanded(result) });
     this.bind();
   }
@@ -55,7 +64,12 @@ export class CastingController {
   startReelGesture(e, hit) {
     const angle = Math.atan2(e.clientY - hit.y, e.clientX - hit.x);
     this.reelState = { ...this.createIdleReelState(), active: true, pointerId: e.pointerId, centerX: hit.x, centerY: hit.y, lastAngle: angle, lastTimeMs: performance.now() };
-    this.debug.reelZone = { x: hit.x, y: hit.y, radius: hit.radius, projected: hit.projected };
+    this.debug.reelZoneHit = true;
+    this.debug.reelZone = { x: hit.x, y: hit.y, radius: hit.radius, projected: hit.projected, fallback: hit.fallback === true };
+    const zones = hit.zones ?? [];
+    this.debug.projectedReelCenter = zones.find((zone) => zone.projected) ?? (hit.projected ? this.debug.reelZone : null);
+    this.debug.fallbackReelCenter = zones.find((zone) => zone.fallback) ?? (hit.fallback ? this.debug.reelZone : null);
+    this.debug.activeReelPointerId = e.pointerId;
   }
   recordReelGesture(e) {
     const now = performance.now();
@@ -63,10 +77,10 @@ export class CastingController {
     const radius = Math.hypot(dx, dy);
     const angle = Math.atan2(dy, dx);
     const dt = Math.max(0.016, (now - this.reelState.lastTimeMs) / 1000);
-    let delta = angle - this.reelState.lastAngle;
-    while (delta > Math.PI) delta -= Math.PI * 2;
-    while (delta < -Math.PI) delta += Math.PI * 2;
+    const delta = getClockwiseDeltaRadians(this.reelState.lastAngle, angle);
     const clockwise = radius >= REEL_GESTURE_INNER_DEADZONE ? Math.max(0, delta) : 0;
+    this.debug.reelClockwiseDelta = clockwise;
+    this.debug.activeReelPointerId = e.pointerId;
     if (clockwise >= REEL_GESTURE_MIN_ARC_RAD) {
       const cleanliness = THREE.MathUtils.clamp((radius - REEL_GESTURE_INNER_DEADZONE) / 42, 0.2, 1);
       const instantRate = THREE.MathUtils.clamp((clockwise / dt) * REEL_GESTURE_RATE_PER_RADIAN * cleanliness, 0, REEL_GESTURE_MAX_RATE);
@@ -79,7 +93,7 @@ export class CastingController {
     }
     this.reelState.lastAngle = angle; this.reelState.lastTimeMs = now;
   }
-  endReelGesture() { this.reelState = this.createIdleReelState(); }
+  endReelGesture() { this.reelState = this.createIdleReelState(); this.debug.activeReelPointerId = null; }
 
   makeSample(e) { return { screenX: e.clientX, screenY: e.clientY, timeMs: performance.now(), rodYaw: this.state.rodYaw, rodPitch: this.state.rodPitch }; }
   recordGesture(e) {

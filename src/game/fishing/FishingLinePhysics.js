@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
   LINE_POINT_COUNT, LINE_MIN_LENGTH, LINE_START_LENGTH, LINE_MAX_LENGTH, LINE_SEGMENT_ITERATIONS,
   LINE_GRAVITY, LINE_AIR_DRAG, LINE_WATER_DRAG, LINE_TENSION_STIFFNESS, LINE_TENSION_DAMPING,
-  LINE_SPOOL_OUT_SPEED, LINE_MAX_SPOOL_OUT_PER_FRAME, LINE_AUTO_REEL_SPEED, LINE_REEL_PULL_BOOST, LURE_MASS, LURE_WATER_BOB_HEIGHT,
+  LINE_SPOOL_OUT_SPEED, LINE_MAX_SPOOL_OUT_PER_FRAME, LINE_AUTO_REEL_SPEED, LINE_REEL_PULL_BOOST, LINE_MANUAL_REEL_PULL_ACCEL, LURE_MASS, LURE_WATER_BOB_HEIGHT,
   LURE_WATER_BOB_SPEED, LURE_SURFACE_PULL_SCALE, LURE_HELICOPTER_TENSION_SCALE, LURE_MAX_SPEED,
   LINE_GROUND_CLEARANCE, LURE_GROUND_CLEARANCE, LURE_GROUND_FRICTION, LINE_WATER_CONTROLLED_SLACK,
 } from './CastingTuning.js';
@@ -105,12 +105,13 @@ export class FishingLinePhysics {
       this.lureVelocity.y = 0;
       const surfaceDir = dir.setY(0);
       if (surfaceDir.lengthSq() > 0.0001) surfaceDir.normalize();
-      this.lureVelocity.addScaledVector(surfaceDir, (this.lineTension + (reelBoost + manualReelRate) * LINE_REEL_PULL_BOOST) * LURE_SURFACE_PULL_SCALE * dt);
-    } else if (this.isLureGrounded && manualReelRate > 0) {
+      const manualPull = manualReelRate > 0 ? manualReelRate * LINE_MANUAL_REEL_PULL_ACCEL : 0;
+      this.lureVelocity.addScaledVector(surfaceDir, ((this.lineTension + reelBoost * LINE_REEL_PULL_BOOST) * LURE_SURFACE_PULL_SCALE + manualPull) * dt);
+    } else if (manualReelRate > 0 && (this.isLureGrounded || !this.isLureAirborne)) {
       const groundDir = dir.setY(0);
       if (groundDir.lengthSq() > 0.0001) {
         groundDir.normalize();
-        this.lureVelocity.addScaledVector(groundDir, manualReelRate * LINE_REEL_PULL_BOOST * 0.22 * dt);
+        this.lureVelocity.addScaledVector(groundDir, manualReelRate * LINE_MANUAL_REEL_PULL_ACCEL * dt);
       }
     }
     if (this.lureVelocity.length() > LURE_MAX_SPEED) this.lureVelocity.setLength(LURE_MAX_SPEED);
@@ -139,7 +140,7 @@ export class FishingLinePhysics {
     if (!this.isLureHeldNearRod && manualReelRate > 0) {
       this.currentLineLength -= manualReelRate * dt;
       this.spoolState = 'manual-reel-in'; this.spoolLocked = false;
-      this.lineTension = Math.max(this.lineTension, Math.min(8, manualReelRate * 0.45));
+      this.lineTension = Math.max(this.lineTension, Math.min(10, manualReelRate * 0.9));
     }
     if (this.isLureHeldNearRod && rodHeld) this.currentLineLength = THREE.MathUtils.lerp(this.currentLineLength, LINE_START_LENGTH, dt * 2.5);
     if (!this.isLureAirborne && manualReelRate <= 0 && !(this.isLureOnWater && (rodHeld || reelBoost > 0))) this.spoolLocked = true;
