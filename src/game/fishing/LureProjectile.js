@@ -5,7 +5,7 @@ import { FISH_BITE_SETTLE_MIN_MS, FISH_BITE_SETTLE_MAX_MS, LINE_SLACK_OPACITY, L
 export class LureProjectile {
   constructor({ scene, dungeon, waterResolver, onLanded, maxCastRange = 44 }) {
     this.scene = scene; this.dungeon = dungeon; this.waterResolver = waterResolver; this.onLanded = onLanded; this.maxCastRange = maxCastRange;
-    this.physics = new FishingLinePhysics(); this.position = this.physics.lurePosition; this.velocity = this.physics.lureVelocity; this.start = new THREE.Vector3();
+    this.physics = new FishingLinePhysics({ terrainSampler: dungeon?.outdoorTerrainRuntime }); this.position = this.physics.lurePosition; this.velocity = this.physics.lureVelocity; this.start = new THREE.Vector3();
     this.mesh = null; this.lineMesh = null; this.linePositions = null; this.active = false; this.landed = false; this.settleMs = 0; this.settleAgeMs = 0; this.pendingWaterZone = null; this.debug = { enabled: false, lureHitType: 'none', fishableWaterId: null };
   }
   ensureVisuals() {
@@ -20,7 +20,7 @@ export class LureProjectile {
     if (!this.lineMesh) {
       const points = this.physics.linePoints.length; this.linePositions = new Float32Array(points * 3);
       const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.BufferAttribute(this.linePositions, 3));
-      const material = new THREE.LineBasicMaterial({ color: 0xb9ad91, transparent: true, opacity: LINE_SLACK_OPACITY, depthWrite: false });
+      const material = new THREE.LineBasicMaterial({ color: 0xd8d0b8, transparent: true, opacity: LINE_SLACK_OPACITY, depthWrite: false });
       this.lineMesh = new THREE.Line(geometry, material); this.lineMesh.name = 'Rod-A1-dynamic-verlet-fishing-line-tension-visual'; this.lineMesh.userData = { dynamicSpoolLength: true, tensionOpacity: true, multiPointConstraintLine: true }; this.scene.add(this.lineMesh);
     }
   }

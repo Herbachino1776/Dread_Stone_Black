@@ -45,8 +45,11 @@ export class CastingController {
     const cutoff = sample.timeMs - 520;
     this.state.gestureHistory = this.state.gestureHistory.filter((point) => point.timeMs >= cutoff);
     const leverage = THREE.MathUtils.lerp(0.72, 1.45, this.state.grabT ?? 0);
-    this.state.targetYaw = THREE.MathUtils.clamp(this.state.targetYaw + dx * 0.007 * leverage, -0.95, 0.95);
-    this.state.targetPitch = THREE.MathUtils.clamp(this.state.targetPitch + dy * 0.006 * leverage, -0.75, 0.9);
+    // Screen-space sign convention: browser pointer X grows right and Y grows down.
+    // In the Rod A1 view transform, positive yaw projects the tip left and positive pitch projects it up,
+    // so pointer deltas are negated here to keep the projected rod tip under the player's thumb.
+    this.state.targetYaw = THREE.MathUtils.clamp(this.state.targetYaw - dx * 0.007 * leverage, -0.95, 0.95);
+    this.state.targetPitch = THREE.MathUtils.clamp(this.state.targetPitch - dy * 0.006 * leverage, -0.75, 0.9);
     const velocity = this.computeReleaseVelocity(sample.timeMs);
     const totalDx = sample.screenX - this.state.startX; const totalDy = sample.screenY - this.state.startY;
     const backwardLoad = Math.max(0, totalDy * 0.0045 + Math.abs(totalDx) * 0.0011 - Math.max(0, -velocity.y) * 0.00014);
