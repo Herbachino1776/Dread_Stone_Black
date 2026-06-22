@@ -272,6 +272,8 @@ const gameSource = await import('node:fs/promises').then((fs) => fs.readFile(new
 const interactionSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/Interactions.js', import.meta.url), 'utf8'));
 const castingSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/CastingController.js', import.meta.url), 'utf8'));
 const lureSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/LureProjectile.js', import.meta.url), 'utf8'));
+const linePhysicsSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/FishingLinePhysics.js', import.meta.url), 'utf8'));
+const tuningSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/CastingTuning.js', import.meta.url), 'utf8'));
 if (!gameSource.includes('gameState: this.gameState')) fail('Fishing invalid: FishingRodView does not receive GameState field tool equipment.');
 if (!gameSource.includes('new FishingRodView') || !gameSource.includes('new CastingController')) fail('Fishing invalid: Rod A1 view exists when equipped and cast controller exists checks failed.');
 if (interactionSource.includes("return this.startFishingTimedAction(interaction);")) fail('Fishing invalid: old proximity timer fishing remains primary while Rod A1 is equipped.');
@@ -290,6 +292,17 @@ if (!rodViewSource.includes('ROD_REST_POS') || !rodViewSource.includes('ROD_REST
 if (!rodViewSource.includes('projectRodGrabHit') || !rodViewSource.includes('ROD_GRAB_HIT_RADIUS') || !rodViewSource.includes('grabT')) fail('Fishing invalid: rod cannot be directly grabbed by touching the visible rod.');
 if (!lureSource.includes('Number.isFinite(length)') && !lureSource.includes('this.velocity')) fail('Fishing invalid: lure projectile uses finite positions/velocities check failed.');
 if (!lureSource.includes('replacesUglyFakeWorm: true')) fail('Fishing invalid: fake worm lure was not replaced.');
+if (!lureSource.includes('weightedLureMass') || !linePhysicsSource.includes('lureMass') || !linePhysicsSource.includes('lureVelocity')) fail('Fishing invalid: advanced line physics missing weighted lure state.');
+if (!linePhysicsSource.includes('linePoints') || !linePhysicsSource.includes('LINE_SEGMENT_ITERATIONS') || !linePhysicsSource.includes('solveRope')) fail('Fishing invalid: fishing line does not use dynamic spool length.');
+if (!linePhysicsSource.includes('currentLineLength') || !linePhysicsSource.includes('maxLineLength') || !linePhysicsSource.includes('spoolOutSpeed')) fail('Fishing invalid: fishing line does not use dynamic spool length.');
+if (!linePhysicsSource.includes('lineTension') || !linePhysicsSource.includes('LINE_TENSION_STIFFNESS') || !linePhysicsSource.includes('LINE_TENSION_DAMPING')) fail('Fishing invalid: line tension is not computed.');
+if (!lureSource.includes('LINE_SLACK_OPACITY') || !lureSource.includes('LINE_TAUT_OPACITY') || !lureSource.includes('tensionOpacity')) fail('Fishing invalid: line opacity/visibility does not respond to tension.');
+if (!linePhysicsSource.includes('enterWater') || !linePhysicsSource.includes('isLureOnWater') || !linePhysicsSource.includes('LURE_WATER_BOB_HEIGHT')) fail('Fishing invalid: lure has no water-surface mode.');
+if (!castingSource.includes('rodHeld') || !castingSource.includes('reelBoost') || !linePhysicsSource.includes('LURE_SURFACE_PULL_SCALE')) fail('Fishing invalid: lure cannot be manipulated after landing on water.');
+if (!linePhysicsSource.includes('LURE_HELICOPTER_TENSION_SCALE') || !linePhysicsSource.includes('isLureHeldNearRod')) fail('Fishing invalid: advanced line physics missing weighted lure state.');
+if (!lureSource.includes('settleMs') || !lureSource.includes('FISH_BITE_SETTLE_MIN_MS')) fail('Fishing invalid: fish catch does not wait for a water-surface settle window.');
+if (!tuningSource.includes('LINE_POINT_COUNT') || !tuningSource.includes('FISH_BITE_SETTLE_MAX_MS')) fail('Fishing invalid: advanced fishing tunable constants are missing.');
+
 if (!castingSource.includes("hud.showMessage('Cast Failed')")) fail('Fishing invalid: failed ground cast spawned a fish.');
 
 console.log(`Fish geometry sanity check passed for ${fishRoots.length} continuous symmetrical volumetric fish and raw pickup presentation.`);

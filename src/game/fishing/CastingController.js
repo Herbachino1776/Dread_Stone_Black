@@ -12,7 +12,7 @@ export class CastingController {
     this.camera = camera; this.player = player; this.dungeon = dungeon; this.hud = hud; this.rodView = rodView;
     this.viewport = app.querySelector('[data-game="viewport"]') ?? app;
     this.state = this.createIdleState();
-    this.debug = { enabled: false, loadAmount: 0, releaseSpeed: 0, castValid: false, launchVelocity: new THREE.Vector3(), lureHitType: 'none' };
+    this.debug = { enabled: false, loadAmount: 0, releaseSpeed: 0, castValid: false, launchVelocity: new THREE.Vector3(), lureHitType: 'none', lineLength: 0, lineTension: 0, lureMode: 'held', lureSpeed: 0, spoolState: 'held', fishableWaterId: null };
     this.projectile = new LureProjectile({ scene: dungeon.scene, dungeon, waterResolver: new FishingWaterResolver({ dungeon }), maxCastRange: CAST_MAX_RANGE, onLanded: (result) => this.handleLanded(result) });
     this.bind();
   }
@@ -57,8 +57,14 @@ export class CastingController {
   }
   update(deltaSeconds) {
     const dt = Math.max(0.001, Math.min(0.05, deltaSeconds));
-    this.projectile.update(dt);
-    if (!this.isEquipped()) return;
+    const equipped = this.isEquipped();
+    if (equipped) {
+      const rodTip = this.rodView?.getWorldTipPosition?.();
+      const reelBoost = this.state.dragging ? Math.min(1.5, Math.max(0, this.state.tipSpeed ?? 0) / 5.5) : 0;
+      this.projectile.update(dt, rodTip, { rodHeld: this.state.dragging === true, reelBoost });
+      Object.assign(this.debug, this.projectile.getDebugState?.() ?? {});
+    }
+    if (!equipped) { this.projectile.cleanup(); return; }
     if (this.state.dragging) {
       const gripPenalty = THREE.MathUtils.lerp(1, 1.38, this.state.grabT ?? 0);
       const yawAccel = ((this.state.targetYaw - this.state.rodYaw) * ROD_GRAB_SPRING - this.state.rodYawVelocity * ROD_GRAB_DAMPING) / (ROD_MASS_FEEL * gripPenalty);
@@ -96,7 +102,6 @@ export class CastingController {
     this.debug.releaseSpeed = Math.max(releaseSpeed, tipSpeed * 105); this.debug.castValid = castValid; this.debug.loadAmount = load;
     this.state.dragging = false; this.state.releaseSnap = castValid ? Math.min(1.25, ROD_RELEASE_SNAP_SCALE * (0.45 + load)) : 0; this.rodView?.setGestureState?.(this.state);
     if (!castValid) { this.hud.showMessage('Cast Failed'); return; }
-    this.projectile.cleanup();
     const start = this.rodView.getWorldTipPosition(); const dir = this.buildLaunchDirection(velocity, load, tipVelocity);
     const smoothBonus = THREE.MathUtils.lerp(0.82, 1.08, this.state.motionSmoothness);
     const motionPower = releaseSpeed * CAST_POWER_FROM_VELOCITY + tipSpeed * 1.6 + angularRelease * ROD_BEND_RELEASE_SCALE;
