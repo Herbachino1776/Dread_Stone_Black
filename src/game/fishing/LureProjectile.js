@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 
 export class LureProjectile {
-  constructor({ scene, dungeon, waterResolver, onLanded }) {
+  constructor({ scene, dungeon, waterResolver, onLanded, maxCastRange = 44 }) {
     this.scene = scene; this.dungeon = dungeon; this.waterResolver = waterResolver; this.onLanded = onLanded;
-    this.gravity = -18; this.airDrag = 0.985; this.maxAgeSeconds = 4.5; this.maxCastRange = 44;
+    this.gravity = -18; this.airDrag = 0.985; this.maxAgeSeconds = 4.5; this.maxCastRange = maxCastRange;
     this.position = new THREE.Vector3(); this.velocity = new THREE.Vector3(); this.start = new THREE.Vector3();
     this.mesh = null; this.active = false; this.landed = false;
   }
