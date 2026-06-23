@@ -1537,12 +1537,14 @@ export class DungeonScene {
       mesh.name = `OARB-${placement.id}-${placement.variantId}`;
       const sinkIntoGround = placement.sinkIntoGround ?? variant?.sinkIntoGround ?? 0.06;
       const bottomTransparentPaddingRatio = placement.bottomTransparentPaddingRatio ?? variant?.bottomTransparentPaddingRatio ?? 0;
+      const rootOffsetY = placement.rootOffsetY ?? variant?.rootOffsetY ?? 0;
+      const groundOffset = placement.groundOffset ?? variant?.groundOffset ?? 0;
       const visualBaseGroundingOffset = height * bottomTransparentPaddingRatio;
       const maxBillboardYawOffset = placement.maxBillboardYawOffset ?? (placement.tags?.includes('folsom-foliage-billboard') ? 0.18 : Infinity);
-      mesh.position.set(x, groundY - sinkIntoGround - visualBaseGroundingOffset, z);
+      mesh.position.set(x, groundY + groundOffset + rootOffsetY - sinkIntoGround - visualBaseGroundingOffset, z);
       mesh.scale.set(width, height, 1);
       mesh.rotation.y = placement.yawOffset ?? 0;
-      mesh.userData = { ...placement, authoredY, groundY, sinkIntoGround, bottomTransparentPaddingRatio, visualBaseGroundingOffset, maxBillboardYawOffset, bottomAnchoredBillboard: true, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq: FIELD_REDWOOD_VISIBLE_DISTANCE_SQ };
+      mesh.userData = { ...placement, authoredY, groundY, sinkIntoGround, bottomTransparentPaddingRatio, rootOffsetY, groundOffset, visualBaseGroundingOffset, maxBillboardYawOffset, bottomAnchoredBillboard: true, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq: FIELD_REDWOOD_VISIBLE_DISTANCE_SQ };
       group.add(mesh);
       this.fieldFoliageBillboards.push(mesh);
     });

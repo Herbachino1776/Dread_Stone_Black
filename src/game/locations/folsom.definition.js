@@ -22,7 +22,15 @@ const folsomPondSystem = buildOutdoorPondSystem([{
   wetShore: { wetShoreWidth: 0.68, wetShoreDarkness: 0x44352a, shoreTransitionWidth: 1.05 },
   water: { waterOpacity: 0.62, waterTint: 0x52766f, waterPlaybackMode: 'pingPong', frameDurationMs: 235, waterTextureRepeatX: 3.2, waterTextureRepeatZ: 2.5 },
   boulders: { countRange: [4, 6], size: [0.65, 1.55], waterEdgeChance: 0.48, shoreChance: 0.42, clusterChance: 0.36 },
-  vegetation: { bushesRange: [10, 14], smallTreesRange: [1, 2], bushClusterChance: 0.62, vegetationDensity: 1.15, keepCastingLaneClear: true },
+  vegetation: {
+    bushesRange: [18, 24], smallTreesRange: [2, 3], bushClusterChance: 0.76, vegetationDensity: 1.45,
+    foliagePool: ['billboard_bush_ritual_seedpod_01', 'billboard_bush_dead_scrub_01', 'billboard_bush_dark_bramble_01', 'billboard_tree_black_cypress_01'],
+    bushSize: [0.95, 2.15], treeSize: [2.8, 4.9], vegetationSinkAmount: [0.06, 0.13], keepCastingLaneClear: true,
+  },
+  aquaticBrush: {
+    clusterCountRange: [6, 8], spritesPerClusterRange: [5, 9], scaleRange: [0.52, 1.05], placement: 'shallow-water-and-mud-edge',
+    foliagePool: ['billboard_bush_ritual_seedpod_01', 'billboard_bush_dead_scrub_01', 'billboard_bush_dark_bramble_01'], excludeTags: ['redwood', 'pine'],
+  },
   clearFishingLanes: [{ angle: 0, width: 0.82, reason: 'clear north-bank starter casting lane' }],
 }]);
 
@@ -130,15 +138,17 @@ const folsomFoliageAvoidZones = Object.freeze([
 ]);
 export const FOLSOM_VISIBLE_TREE_BOUNDS = Object.freeze({ minX: -96, maxX: 96, minZ: -96, maxZ: 96 });
 export const FOLSOM_FOLIAGE_SWATHE_SPECS = Object.freeze([
-  { idPrefix: 'folsom_outer_redwood_south', center: [-10, -82], radiusX: 84, radiusZ: 14, count: 42, seed: 177601, layerMix: { redwood: 7, cedar: 2, understory: 2 }, tags: ['outside-wall-forest', 'south-visible-belt'] },
-  { idPrefix: 'folsom_outer_redwood_west', center: [-82, -8], radiusX: 13, radiusZ: 78, count: 44, seed: 177602, layerMix: { redwood: 7, cedar: 2, understory: 2 }, tags: ['outside-wall-forest', 'west-visible-belt'] },
-  { idPrefix: 'folsom_outer_redwood_east', center: [82, 8], radiusX: 12, radiusZ: 70, count: 40, seed: 177603, layerMix: { redwood: 6, cedar: 3, understory: 2 }, tags: ['outside-wall-forest', 'east-visible-belt', 'rusty-reliquary-ominous'] },
-  { idPrefix: 'folsom_outer_redwood_north', center: [0, 82], radiusX: 76, radiusZ: 12, count: 38, seed: 177604, layerMix: { redwood: 6, cedar: 2, understory: 2 }, tags: ['outside-wall-forest', 'north-road-corridor', 'north-visible-belt'] },
-  { idPrefix: 'folsom_inside_cedar_redwood_belt', center: [-55, 0], radiusX: 30, radiusZ: 58, count: 34, seed: 177605, layerMix: { redwood: 4, cedar: 3, understory: 2 }, tags: ['inside-edge-tree-belt'] },
-  { idPrefix: 'folsom_pond_rush_brush_clusters', center: [22, -66], radiusX: 42, radiusZ: 20, count: 34, seed: 177606, layerMix: { redwood: 2, cedar: 2, understory: 5 }, tags: ['pond-side-rush-brush-cluster'] },
-  { idPrefix: 'folsom_shrine_redwood_grove', center: [-58, 54], radiusX: 26, radiusZ: 18, count: 28, seed: 177607, layerMix: { redwood: 7, cedar: 2, understory: 1 }, variantWeights: { tall: 2, giant: 1.8, ancient: 1.4, young: 0.35 }, tags: ['shrine-grove'] },
-  { idPrefix: 'folsom_north_road_cedar_redwoods', center: [24, 62], radiusX: 28, radiusZ: 28, count: 26, seed: 177608, layerMix: { redwood: 4, cedar: 3, understory: 2 }, tags: ['north-road-corridor', 'inside-edge-tree-belt'] },
-  { idPrefix: 'folsom_reliquary_dark_cedar_redwoods', center: [76, 24], radiusX: 14, radiusZ: 24, count: 18, seed: 177609, layerMix: { redwood: 5, cedar: 4, understory: 1 }, variantWeights: { tall: 2.2, giant: 1.6, ancient: 1.2, young: 0.2 }, tags: ['rusty-reliquary-ominous'] },
+  { idPrefix: 'folsom_outer_redwood_south', center: [-10, -82], radiusX: 84, radiusZ: 14, count: 56, seed: 177601, layerMix: { redwood: 7, cedar: 2, understory: 2 }, tags: ['outside-wall-forest', 'south-visible-belt'] },
+  { idPrefix: 'folsom_outer_redwood_west', center: [-82, -8], radiusX: 13, radiusZ: 78, count: 58, seed: 177602, layerMix: { redwood: 7, cedar: 2, understory: 2 }, tags: ['outside-wall-forest', 'west-visible-belt'] },
+  { idPrefix: 'folsom_outer_redwood_east', center: [82, 8], radiusX: 12, radiusZ: 70, count: 54, seed: 177603, layerMix: { redwood: 6, cedar: 3, understory: 2 }, tags: ['outside-wall-forest', 'east-visible-belt', 'rusty-reliquary-ominous'] },
+  { idPrefix: 'folsom_outer_redwood_north', center: [0, 82], radiusX: 76, radiusZ: 12, count: 50, seed: 177604, layerMix: { redwood: 6, cedar: 2, understory: 2 }, tags: ['outside-wall-forest', 'north-road-corridor', 'north-visible-belt'] },
+  { idPrefix: 'folsom_inside_cedar_redwood_belt', center: [-55, 0], radiusX: 30, radiusZ: 58, count: 46, seed: 177605, layerMix: { redwood: 4, cedar: 3, understory: 2 }, tags: ['inside-edge-tree-belt'] },
+  { idPrefix: 'folsom_pond_rush_brush_clusters', center: [22, -66], radiusX: 42, radiusZ: 20, count: 52, seed: 177606, layerMix: { redwood: 1, cedar: 2, understory: 8 }, tags: ['pond-side-rush-brush-cluster'] },
+  { idPrefix: 'folsom_pond_west_reed_bank', center: [-23, -61], radiusX: 16, radiusZ: 18, count: 28, seed: 177610, layerMix: { cedar: 1, understory: 9 }, variantWeights: { rush: 2.4, brush: 1.7, shrub: 0.6 }, tags: ['pond-edge-reed-bank'] },
+  { idPrefix: 'folsom_southeast_redwood_screen', center: [48, -64], radiusX: 26, radiusZ: 20, count: 34, seed: 177611, layerMix: { redwood: 5, cedar: 3, understory: 2 }, tags: ['inside-edge-tree-belt', 'pond-backdrop-grove'] },
+  { idPrefix: 'folsom_shrine_redwood_grove', center: [-58, 54], radiusX: 26, radiusZ: 18, count: 38, seed: 177607, layerMix: { redwood: 7, cedar: 2, understory: 1 }, variantWeights: { tall: 2, giant: 1.8, ancient: 1.4, young: 0.35 }, tags: ['shrine-grove'] },
+  { idPrefix: 'folsom_north_road_cedar_redwoods', center: [24, 62], radiusX: 28, radiusZ: 28, count: 36, seed: 177608, layerMix: { redwood: 4, cedar: 3, understory: 2 }, tags: ['north-road-corridor', 'inside-edge-tree-belt'] },
+  { idPrefix: 'folsom_reliquary_dark_cedar_redwoods', center: [76, 24], radiusX: 14, radiusZ: 24, count: 28, seed: 177609, layerMix: { redwood: 5, cedar: 4, understory: 1 }, variantWeights: { tall: 2.2, giant: 1.6, ancient: 1.2, young: 0.2 }, tags: ['rusty-reliquary-ominous'] },
 ]);
 const folsomFoliageBillboards = Object.freeze(FOLSOM_FOLIAGE_SWATHE_SPECS.flatMap((spec) => createFolsomFoliageSwathe({
   ...spec, variants: folsomFoliageBillboardVariants, avoidZones: folsomFoliageAvoidZones, terrainSampler: folsomTerrainSampler, bounds: FOLSOM_VISIBLE_TREE_BOUNDS,
