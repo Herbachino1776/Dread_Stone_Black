@@ -122,7 +122,18 @@ const TEXTURE_PATHS = {
   ceiling: './assets/textures/ceiling_dark_stone_01.png',
   gate: './assets/textures/metal_gate_rusted_01.png',
   fieldGrass: './assets/textures/outdoor/field_dead_grass_01.png',
+  campfireLog: './assets/textures/pack1/wood_dark_aged_01.png',
 };
+
+const CAMPFIRE_FLAME_FRAME_PATHS = Object.freeze([
+  './assets/sprites/fire/campfire_flame_billboard_01.png',
+  './assets/sprites/fire/campfire_flame_billboard_02.png',
+  './assets/sprites/fire/campfire_flame_billboard_03.png',
+  './assets/sprites/fire/campfire_flame_billboard_04.png',
+  './assets/sprites/fire/campfire_flame_billboard_05.png',
+  './assets/sprites/fire/campfire_flame_billboard_06.png',
+]);
+const CAMPFIRE_FLAME_FRAME_DURATION_MS = 110;
 
 const FIELD_SMALL_FOLIAGE_SPRITES = OUTDOOR_SMALL_FOLIAGE_SPRITES;
 const FIELD_REDWOOD_SPRITES = OUTDOOR_REDWOOD_FOLIAGE_SPRITES;
@@ -365,6 +376,7 @@ export class DungeonScene {
     this.fieldRawFishPickups = [];
     this.outdoorTerrainRuntime = null;
     this.animatedTextureFlipbooks = [];
+    this.fieldCampfireFlames = [];
     this.fieldCookedFishPickups = [];
     this.giantRamManFieldManifestation = null;
     this.giantRamManFieldManifestationLoading = false;
@@ -1052,6 +1064,7 @@ export class DungeonScene {
     this.updateOutdoorFoliageBillboards(player);
     this.updateRawFishPickups(deltaSeconds);
     this.updateCookedFishPickups(deltaSeconds);
+    this.updateFieldCampfireFlames(deltaSeconds, player);
     this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
     this.updateAnimatedDungeonMaterials(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
@@ -2769,30 +2782,95 @@ export class DungeonScene {
 
   createFieldCampfireGroup() {
     const group = new THREE.Group();
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x332015, roughness: 0.95, emissive: 0x160804, emissiveIntensity: 0.18 });
-    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x2c2a27, roughness: 0.98 });
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xd96b24, transparent: true, opacity: 0.9 });
-    for (let index = 0; index < 6; index += 1) {
-      const angle = (Math.PI * 2 * index) / 6;
-      const stone = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.18, 0.22), stoneMat);
-      stone.position.set(Math.cos(angle) * 0.75, 0.09, Math.sin(angle) * 0.75);
-      stone.rotation.y = angle;
-      group.add(stone);
-    }
-    [0, Math.PI / 2].forEach((angle) => {
-      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.25, 7), woodMat);
-      log.rotation.z = Math.PI / 2;
-      log.rotation.y = angle;
-      log.position.y = 0.22;
+    group.userData = { objectCategory: 'fieldCampfire', futureExpansion: ['cooking rack', 'fish cooking visual', 'campfire audio', 'ember polish'] };
+    const logMat = this.makeTexturedMaterial({
+      path: TEXTURE_PATHS.campfireLog,
+      repeat: [1.6, 0.7],
+      color: 0x7a5134,
+      roughness: 0.96,
+      metalness: 0.0,
+      emissive: 0x120805,
+      emissiveIntensity: 0.08,
+    });
+    const coalMat = new THREE.MeshStandardMaterial({ color: 0x17110d, roughness: 1.0, emissive: 0x210b04, emissiveIntensity: 0.2 });
+    const logGeometry = new THREE.CylinderGeometry(0.105, 0.135, 1.05, 9);
+    const logPlacements = [
+      { x: -0.22, z: -0.05, y: 0.13, yaw: 0.22, roll: Math.PI / 2 + 0.06, scale: [1.0, 1.12, 0.92] },
+      { x: 0.24, z: 0.09, y: 0.14, yaw: Math.PI + 0.38, roll: Math.PI / 2 - 0.04, scale: [0.92, 0.96, 1.08] },
+      { x: 0.02, z: -0.25, y: 0.17, yaw: Math.PI / 2 - 0.28, roll: Math.PI / 2 + 0.12, scale: [0.86, 0.9, 0.95] },
+      { x: -0.04, z: 0.25, y: 0.18, yaw: -Math.PI / 2 + 0.18, roll: Math.PI / 2 - 0.1, scale: [0.9, 0.86, 1.0] },
+      { x: 0.0, z: 0.0, y: 0.27, yaw: 0.78, roll: Math.PI / 2 + 0.2, scale: [0.72, 0.78, 0.82] },
+    ];
+    logPlacements.forEach((placement, index) => {
+      const log = new THREE.Mesh(logGeometry, logMat);
+      log.name = `field-campfire-irregular-grounded-log-${index + 1}`;
+      log.position.set(placement.x, placement.y, placement.z);
+      log.rotation.set(0, placement.yaw, placement.roll);
+      log.scale.set(...placement.scale);
+      log.userData = { objectCategory: 'campfireLog', texture: TEXTURE_PATHS.campfireLog, grounded: true };
       group.add(log);
     });
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.72, 7), flameMat);
-    flame.position.y = 0.65;
+    const coalBed = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.045, 18), coalMat);
+    coalBed.name = 'field-campfire-low-charcoal-bed-grounding-disc';
+    coalBed.position.y = 0.025;
+    group.add(coalBed);
+    const flame = this.createCampfireFlameBillboard();
     group.add(flame);
-    const light = new THREE.PointLight(0xff8a32, 1.15, 14, 1.7);
-    light.position.set(0, 0.9, 0);
+    const light = new THREE.PointLight(0xff8a32, 0.72, 7.5, 1.85);
+    light.name = 'field-campfire-subtle-warm-flame-glow';
+    light.position.set(0, 0.62, 0);
     group.add(light);
     return group;
+  }
+
+  createCampfireFlameBillboard() {
+    const frames = CAMPFIRE_FLAME_FRAME_PATHS.map((path) => this.loadSpriteTexture(path));
+    const material = new THREE.MeshBasicMaterial({
+      map: frames[0],
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.86,
+      alphaTest: 0.04,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    material.name = 'campfire-six-frame-transparent-flame-billboard-material';
+    const root = new THREE.Group();
+    root.name = 'field-campfire-animated-crossed-flame-billboard';
+    root.position.y = 0.34;
+    [0, Math.PI / 2].forEach((yaw, index) => {
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.74, 0.96), material);
+      plane.name = `field-campfire-flame-cross-plane-${index + 1}`;
+      plane.position.y = 0.34;
+      plane.rotation.y = yaw;
+      plane.renderOrder = 12;
+      root.add(plane);
+    });
+    root.userData = { objectCategory: 'campfireFlame', billboard: 'crossed', frames, frameDurationMs: CAMPFIRE_FLAME_FRAME_DURATION_MS, elapsedMs: 0, frameIndex: 0, material };
+    this.fieldCampfireFlames.push(root);
+    return root;
+  }
+
+  updateFieldCampfireFlames(deltaSeconds, player = null) {
+    this.fieldCampfireFlames = this.fieldCampfireFlames.filter((flame) => flame?.parent);
+    this.fieldCampfireFlames.forEach((flame) => {
+      const data = flame.userData ?? {};
+      data.elapsedMs = (data.elapsedMs ?? 0) + deltaSeconds * 1000;
+      const frames = data.frames ?? [];
+      if (frames.length && data.material) {
+        const nextFrameIndex = Math.floor(data.elapsedMs / (data.frameDurationMs ?? CAMPFIRE_FLAME_FRAME_DURATION_MS)) % frames.length;
+        if (nextFrameIndex !== data.frameIndex) {
+          data.frameIndex = nextFrameIndex;
+          data.material.map = frames[nextFrameIndex];
+          data.material.needsUpdate = true;
+        }
+      }
+      if (!player?.position) return;
+      const worldPosition = flame.getWorldPosition(new THREE.Vector3());
+      const dx = player.position.x - worldPosition.x;
+      const dz = player.position.z - worldPosition.z;
+      flame.rotation.y = Math.atan2(dx, dz);
+    });
   }
 
   addBrokenShrine() {
@@ -3739,6 +3817,19 @@ export class DungeonScene {
     texture.repeat.set(repeat[0], repeat[1]);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 8;
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  loadSpriteTexture(path) {
+    const texture = this.textureLoader.load(path);
+    texture.name = path;
+    texture.userData = { path, sprite: true };
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
     texture.needsUpdate = true;
     return texture;
   }
