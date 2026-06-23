@@ -841,6 +841,7 @@ export class DungeonScene {
       definition.fog?.far ?? OUTDOOR_FOG_FAR,
     );
     this.addCompiledOutdoorLights(definition);
+    this.addCompiledOutdoorSkyDome(definition);
     this.addOutdoorTerrain(definition.terrain, definition.textures, definition);
     if (this.compiledLocationRuntime?.group) {
       this.scene.add(this.compiledLocationRuntime.group);
@@ -850,6 +851,44 @@ export class DungeonScene {
     this.addAuthoredOutdoorSurvivalObjects(definition);
     this.addAuthoredOutdoorInteractions(definition);
     this.addCompiledOutdoorExitCues(definition);
+  }
+
+  addCompiledOutdoorSkyDome(definition = {}) {
+    const skyDome = definition.skyDome;
+    if (!skyDome?.texturePath) return;
+
+    const texture = this.textureLoader.load(skyDome.texturePath);
+    texture.name = skyDome.textureName ?? `${definition.id ?? 'compiled-outdoor'}-sky-panorama-texture`;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.LinearMipmapNearestFilter;
+    texture.anisotropy = 1;
+
+    const material = new THREE.MeshBasicMaterial({
+      name: skyDome.materialName ?? `${definition.id ?? 'compiled-outdoor'}-sky-panorama-unlit-material`,
+      map: texture,
+      side: THREE.BackSide,
+      depthWrite: false,
+      depthTest: false,
+      fog: false,
+      toneMapped: false,
+    });
+    const geometry = new THREE.SphereGeometry(skyDome.radius ?? FIELD_SKYDOME_RADIUS, skyDome.widthSegments ?? 48, skyDome.heightSegments ?? 24);
+    const dome = new THREE.Mesh(geometry, material);
+    dome.name = skyDome.name ?? `${definition.id ?? 'compiled-outdoor'}-sky-panorama-dome`;
+    dome.renderOrder = skyDome.renderOrder ?? -1000;
+    dome.position.set(skyDome.position?.x ?? 0, skyDome.position?.y ?? (definition.defaultFloorY ?? 0), skyDome.position?.z ?? 0);
+    dome.rotation.set(skyDome.rotation?.x ?? 0, skyDome.rotation?.y ?? 0, skyDome.rotation?.z ?? 0);
+    dome.userData = {
+      locationOnly: definition.id,
+      visualOnly: true,
+      collision: 'none',
+      skyTexturePath: skyDome.texturePath,
+      horizonAlignment: skyDome.horizonAlignment ?? 'equirectangular panorama preserved on inward-facing sphere',
+    };
+    this.scene.add(dome);
   }
 
   addCompiledOutdoorLights(definition) {
