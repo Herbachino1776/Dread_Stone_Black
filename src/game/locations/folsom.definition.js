@@ -3,7 +3,7 @@ import { createOutdoorTerrainSampler } from '../../engine/outdoor-authoring/Outd
 import { outdoorTextureProfiles } from './outdoorTextureProfiles.js';
 import { terrainStampKit } from './terrainStampKit.js';
 import { createCityBorderWoodenWall } from '../world-kits/walls/CityBorderWoodenWallKit.js';
-import { FOLSOM_PINE_SOURCE_SPRITES, createPineBillboardVariants, createPineForestSwathe } from '../world-kits/vegetation/PineTreeBillboardKit.js';
+import { createFolsomFoliageBillboardVariants, createFolsomFoliageSwathe } from '../world-kits/vegetation/FolsomFoliageBillboardKit.js';
 
 const folsomPondSystem = buildOutdoorPondSystem([{
   id: 'folsom_starter_pond',
@@ -117,8 +117,8 @@ const folsomTerrain = Object.freeze({
 });
 const folsomTerrainSampler = createOutdoorTerrainSampler(folsomTerrain);
 
-const folsomPineBillboardVariants = createPineBillboardVariants({ spritePaths: FOLSOM_PINE_SOURCE_SPRITES });
-const folsomPineAvoidZones = Object.freeze([
+const folsomFoliageBillboardVariants = createFolsomFoliageBillboardVariants();
+const folsomFoliageAvoidZones = Object.freeze([
   { center: [0, 0], radius: 24 }, { center: [0, -7], radius: 10 }, { center: [12, -22], radius: 9 },
   { center: [0, -58], radiusX: 25, radiusZ: 18 }, { center: [-12, -43], radius: 10 },
   { center: [-34, -30], radius: 15 }, { center: [-36, -34], radius: 10 }, { center: [42, -8], radius: 16 },
@@ -129,19 +129,19 @@ const folsomPineAvoidZones = Object.freeze([
   { minX: -48, maxX: -25, minZ: 25, maxZ: 47 }, { minX: 28, maxX: 55, minZ: -24, maxZ: 5 },
 ]);
 export const FOLSOM_VISIBLE_TREE_BOUNDS = Object.freeze({ minX: -96, maxX: 96, minZ: -96, maxZ: 96 });
-export const FOLSOM_PINE_SWATHE_SPECS = Object.freeze([
-  { idPrefix: 'folsom_outer_pine_south', center: [-10, -82], radiusX: 84, radiusZ: 14, count: 34, seed: 177601, tags: ['outside-wall-forest', 'south-visible-belt'] },
-  { idPrefix: 'folsom_outer_pine_west', center: [-82, -8], radiusX: 13, radiusZ: 78, count: 36, seed: 177602, tags: ['outside-wall-forest', 'west-visible-belt'] },
-  { idPrefix: 'folsom_outer_pine_east', center: [82, 8], radiusX: 12, radiusZ: 70, count: 32, seed: 177603, tags: ['outside-wall-forest', 'east-visible-belt', 'rusty-reliquary-ominous'] },
-  { idPrefix: 'folsom_outer_pine_north', center: [0, 82], radiusX: 76, radiusZ: 12, count: 32, seed: 177604, tags: ['outside-wall-forest', 'north-road-corridor', 'north-visible-belt'] },
-  { idPrefix: 'folsom_inside_pine_belts', center: [-55, 0], radiusX: 30, radiusZ: 58, count: 30, seed: 177605, tags: ['inside-edge-tree-belt'] },
-  { idPrefix: 'folsom_pond_pine_clusters', center: [22, -66], radiusX: 42, radiusZ: 20, count: 20, seed: 177606, tags: ['pond-side-pine-cluster'] },
-  { idPrefix: 'folsom_shrine_pine_grove', center: [-58, 54], radiusX: 26, radiusZ: 18, count: 24, seed: 177607, variantWeights: { tall: 2, large: 2, giant: 1.5, ancient: 1.2, tiny: 0.2 }, tags: ['shrine-grove'] },
-  { idPrefix: 'folsom_north_road_pines', center: [24, 62], radiusX: 28, radiusZ: 28, count: 20, seed: 177608, tags: ['north-road-corridor', 'inside-edge-tree-belt'] },
-  { idPrefix: 'folsom_reliquary_dark_pines', center: [76, 24], radiusX: 14, radiusZ: 24, count: 14, seed: 177609, variantWeights: { tall: 2, large: 2.2, giant: 1.4, ancient: 1.1, tiny: 0.1 }, tags: ['rusty-reliquary-ominous'] },
+export const FOLSOM_FOLIAGE_SWATHE_SPECS = Object.freeze([
+  { idPrefix: 'folsom_outer_redwood_south', center: [-10, -82], radiusX: 84, radiusZ: 14, count: 42, seed: 177601, layerMix: { redwood: 7, cedar: 2, understory: 2 }, tags: ['outside-wall-forest', 'south-visible-belt'] },
+  { idPrefix: 'folsom_outer_redwood_west', center: [-82, -8], radiusX: 13, radiusZ: 78, count: 44, seed: 177602, layerMix: { redwood: 7, cedar: 2, understory: 2 }, tags: ['outside-wall-forest', 'west-visible-belt'] },
+  { idPrefix: 'folsom_outer_redwood_east', center: [82, 8], radiusX: 12, radiusZ: 70, count: 40, seed: 177603, layerMix: { redwood: 6, cedar: 3, understory: 2 }, tags: ['outside-wall-forest', 'east-visible-belt', 'rusty-reliquary-ominous'] },
+  { idPrefix: 'folsom_outer_redwood_north', center: [0, 82], radiusX: 76, radiusZ: 12, count: 38, seed: 177604, layerMix: { redwood: 6, cedar: 2, understory: 2 }, tags: ['outside-wall-forest', 'north-road-corridor', 'north-visible-belt'] },
+  { idPrefix: 'folsom_inside_cedar_redwood_belt', center: [-55, 0], radiusX: 30, radiusZ: 58, count: 34, seed: 177605, layerMix: { redwood: 4, cedar: 3, understory: 2 }, tags: ['inside-edge-tree-belt'] },
+  { idPrefix: 'folsom_pond_rush_brush_clusters', center: [22, -66], radiusX: 42, radiusZ: 20, count: 34, seed: 177606, layerMix: { redwood: 2, cedar: 2, understory: 5 }, tags: ['pond-side-rush-brush-cluster'] },
+  { idPrefix: 'folsom_shrine_redwood_grove', center: [-58, 54], radiusX: 26, radiusZ: 18, count: 28, seed: 177607, layerMix: { redwood: 7, cedar: 2, understory: 1 }, variantWeights: { tall: 2, giant: 1.8, ancient: 1.4, young: 0.35 }, tags: ['shrine-grove'] },
+  { idPrefix: 'folsom_north_road_cedar_redwoods', center: [24, 62], radiusX: 28, radiusZ: 28, count: 26, seed: 177608, layerMix: { redwood: 4, cedar: 3, understory: 2 }, tags: ['north-road-corridor', 'inside-edge-tree-belt'] },
+  { idPrefix: 'folsom_reliquary_dark_cedar_redwoods', center: [76, 24], radiusX: 14, radiusZ: 24, count: 18, seed: 177609, layerMix: { redwood: 5, cedar: 4, understory: 1 }, variantWeights: { tall: 2.2, giant: 1.6, ancient: 1.2, young: 0.2 }, tags: ['rusty-reliquary-ominous'] },
 ]);
-const folsomPineForestBillboards = Object.freeze(FOLSOM_PINE_SWATHE_SPECS.flatMap((spec) => createPineForestSwathe({
-  ...spec, variants: folsomPineBillboardVariants, avoidZones: folsomPineAvoidZones, terrainSampler: folsomTerrainSampler,
+const folsomFoliageBillboards = Object.freeze(FOLSOM_FOLIAGE_SWATHE_SPECS.flatMap((spec) => createFolsomFoliageSwathe({
+  ...spec, variants: folsomFoliageBillboardVariants, avoidZones: folsomFoliageAvoidZones, terrainSampler: folsomTerrainSampler, bounds: FOLSOM_VISIBLE_TREE_BOUNDS,
 })));
 
 const folsomCityBorderWoodenWall = createCityBorderWoodenWall({
@@ -183,8 +183,8 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_tool_yard_path', points: [[-5, -14], [-18, -25], [-28, -36], [-9, -47]], width: 4.2, material: 'townPath', flatten: true, tags: ['walkable-route', 'work-yard'] },
   ],
   waterBodies: [...folsomPondSystem.waterBodies],
-  foliageBillboardVariants: folsomPineBillboardVariants,
-  foliageBillboards: folsomPineForestBillboards,
+  foliageBillboardVariants: folsomFoliageBillboardVariants,
+  foliageBillboards: folsomFoliageBillboards,
   polygonFloors: [
     rectFloor('folsom_courtyard_floor', -16, 16, -13, 13, 'courtyardStone', 'folsom_bounds', ['courtyard', 'terrain-pad-aligned']),
     rectFloor('folsom_tool_shed_floor', -43, -27, -36, -24, 'agedWood', 'folsom_bounds', ['tool-shed', 'terrain-pad-aligned']),

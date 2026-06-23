@@ -1506,7 +1506,7 @@ export class DungeonScene {
     if (!Array.isArray(foliageBillboards) || foliageBillboards.length === 0 || !this.outdoorTerrainRuntime) return;
     const variants = new Map((foliageBillboardVariants ?? []).map((variant) => [variant.id, variant]));
     const group = new THREE.Group();
-    group.name = `OARB-authored-pine-billboard-forest-${foliageBillboards.length}-instances`;
+    group.name = `OARB-authored-foliage-billboard-forest-${foliageBillboards.length}-instances`;
     group.userData = { kind: 'authoredFoliageBillboards', billboardCount: foliageBillboards.length, variantCount: variants.size, alphaCutoutDepthWrite: true };
     const geometry = new THREE.PlaneGeometry(1, 1);
     geometry.translate(0, 0.5, 0);
@@ -1514,7 +1514,7 @@ export class DungeonScene {
     foliageBillboards.forEach((placement) => {
       const variant = variants.get(placement.variantId);
       const spritePath = placement.spritePath ?? variant?.path;
-      if (!spritePath) throw new Error(`Folsom invalid: pine sprite texture missing for ${placement.id}.`);
+      if (!spritePath) throw new Error(`Folsom invalid: foliage sprite texture missing for ${placement.id}.`);
       if (!materials.has(spritePath)) {
         const material = new THREE.MeshBasicMaterial({
           map: this.loadFoliageTexture(spritePath),
@@ -1525,7 +1525,7 @@ export class DungeonScene {
           side: THREE.DoubleSide,
           toneMapped: false,
         });
-        material.name = `${placement.variantId}-authored-pine-alpha-cutout-depth-billboard-material`;
+        material.name = `${placement.variantId}-authored-foliage-alpha-cutout-depth-billboard-material`;
         material.userData = { authoredFoliageAlphaCutout: true, occludesTransparentWater: true };
         materials.set(spritePath, material);
       }
@@ -1538,7 +1538,7 @@ export class DungeonScene {
       const sinkIntoGround = placement.sinkIntoGround ?? variant?.sinkIntoGround ?? 0.06;
       const bottomTransparentPaddingRatio = placement.bottomTransparentPaddingRatio ?? variant?.bottomTransparentPaddingRatio ?? 0;
       const visualBaseGroundingOffset = height * bottomTransparentPaddingRatio;
-      const maxBillboardYawOffset = placement.tags?.includes('pine-billboard') ? 0.12 : Infinity;
+      const maxBillboardYawOffset = placement.maxBillboardYawOffset ?? (placement.tags?.includes('folsom-foliage-billboard') ? 0.18 : Infinity);
       mesh.position.set(x, groundY - sinkIntoGround - visualBaseGroundingOffset, z);
       mesh.scale.set(width, height, 1);
       mesh.rotation.y = placement.yawOffset ?? 0;
