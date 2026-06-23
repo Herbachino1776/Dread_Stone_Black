@@ -358,6 +358,7 @@ export class DungeonScene {
     this.fieldShrineAnswerLight = null;
     this.fieldFoliageGroup = null;
     this.fieldFoliageBillboards = [];
+    this.compiledSkyDomes = [];
     this.fieldRedwoodHarvestables = [];
     this.fieldSurvivalObjects = new Map();
     this.fieldFishingZones = [];
@@ -875,7 +876,15 @@ export class DungeonScene {
       fog: false,
       toneMapped: false,
     });
-    const geometry = new THREE.SphereGeometry(skyDome.radius ?? FIELD_SKYDOME_RADIUS, skyDome.widthSegments ?? 48, skyDome.heightSegments ?? 24);
+    const geometry = new THREE.SphereGeometry(
+      skyDome.radius ?? FIELD_SKYDOME_RADIUS,
+      skyDome.widthSegments ?? 48,
+      skyDome.heightSegments ?? 24,
+      skyDome.phiStart ?? 0,
+      skyDome.phiLength ?? Math.PI * 2,
+      skyDome.thetaStart ?? 0,
+      skyDome.thetaLength ?? Math.PI,
+    );
     const dome = new THREE.Mesh(geometry, material);
     dome.name = skyDome.name ?? `${definition.id ?? 'compiled-outdoor'}-sky-panorama-dome`;
     dome.renderOrder = skyDome.renderOrder ?? -1000;
@@ -887,7 +896,10 @@ export class DungeonScene {
       collision: 'none',
       skyTexturePath: skyDome.texturePath,
       horizonAlignment: skyDome.horizonAlignment ?? 'equirectangular panorama preserved on inward-facing sphere',
+      followPlayerXZ: skyDome.followPlayerXZ === true,
+      baseY: dome.position.y,
     };
+    this.compiledSkyDomes.push(dome);
     this.scene.add(dome);
   }
 
@@ -1033,6 +1045,7 @@ export class DungeonScene {
     this.updateRamManNpcPatrol(deltaSeconds);
     this.updateBlackGrassFactionEnemies(deltaSeconds, player);
     this.updateSheepDemonEnemy(deltaSeconds, player);
+    this.updateCompiledSkyDomes(player);
     this.updateOutdoorFoliageBillboards(player);
     this.updateRawFishPickups(deltaSeconds);
     this.updateCookedFishPickups(deltaSeconds);
@@ -1040,6 +1053,17 @@ export class DungeonScene {
     this.updateAnimatedDungeonMaterials(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
     this.updateBalthazanFloorCoverageQa(player);
+  }
+
+  updateCompiledSkyDomes(player = null) {
+    if (!player?.position || !this.compiledSkyDomes.length) return;
+
+    this.compiledSkyDomes.forEach((dome) => {
+      if (!dome.userData?.followPlayerXZ) return;
+      dome.position.x = player.position.x;
+      dome.position.z = player.position.z;
+      dome.position.y = dome.userData.baseY ?? dome.position.y;
+    });
   }
 
   updateOutdoorFoliageBillboards(player = null) {
