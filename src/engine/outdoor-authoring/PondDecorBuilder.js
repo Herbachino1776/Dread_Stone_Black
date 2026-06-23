@@ -252,7 +252,7 @@ export function generatePondDecorPlacements(pond) {
           return {
             id: `${pond.id}_bush_${String(index + 1).padStart(2, '0')}`,
             kind: 'vegetation', layer: 'bush', placementZone: mudEdge ? 'mud-edge' : 'outer-bank', position,
-            spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, scale: randomBetween(random, vegetationRecipe.bushSize, [1.05, 1.9]),
+            spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, groundOffset: sprite?.groundOffset ?? 0, rootOffsetY: sprite?.rootOffsetY ?? 0, bottomTransparentPaddingRatio: sprite?.bottomTransparentPaddingRatio ?? 0, scale: randomBetween(random, vegetationRecipe.bushSize, [1.05, 1.9]),
             sinkRatio: randomBetween(random, vegetationRecipe.vegetationSinkAmount, [0.03, 0.08]), yawOffset: (random() - 0.5) * (vegetationRecipe.vegetationRandomYaw ?? 0.36),
           };
         },
@@ -268,7 +268,7 @@ export function generatePondDecorPlacements(pond) {
           return {
             id: `${pond.id}_small_tree_${String(index + 1).padStart(2, '0')}`,
             kind: 'vegetation', layer: 'small-tree', placementZone: 'nearby-grass', position,
-            spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, scale: randomBetween(random, vegetationRecipe.treeSize, [2.8, 4.6]),
+            spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, groundOffset: sprite?.groundOffset ?? 0, rootOffsetY: sprite?.rootOffsetY ?? 0, bottomTransparentPaddingRatio: sprite?.bottomTransparentPaddingRatio ?? 0, scale: randomBetween(random, vegetationRecipe.treeSize, [2.8, 4.6]),
             sinkRatio: randomBetween(random, vegetationRecipe.vegetationSinkAmount, [0.03, 0.08]), yawOffset: (random() - 0.5) * (vegetationRecipe.vegetationRandomYaw ?? 0.36),
           };
         },
@@ -294,7 +294,7 @@ export function generatePondDecorPlacements(pond) {
         vegetation.push({
           id: `${pond.id}_aquatic_brush_${String(clusterIndex + 1).padStart(2, '0')}_${String(spriteIndex + 1).padStart(2, '0')}`,
           kind: 'vegetation', layer: 'aquatic-brush', placementZone: offset < 0 ? 'shallow-water-edge' : 'wet-mud-edge', position,
-          spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, scale: randomBetween(random, aquaticRecipe.scaleRange, [0.35, 0.75]),
+          spriteId: sprite?.id, spritePath: sprite?.path, width: sprite?.width, groundOffset: sprite?.groundOffset ?? 0, rootOffsetY: sprite?.rootOffsetY ?? 0, bottomTransparentPaddingRatio: sprite?.bottomTransparentPaddingRatio ?? 0, scale: randomBetween(random, aquaticRecipe.scaleRange, [0.35, 0.75]),
           sinkRatio: randomBetween(random, [0.12, 0.28], [0.12, 0.28]), yawOffset: (random() - 0.5) * 0.55,
         });
       }
@@ -358,10 +358,13 @@ export function createPondDecorGroup(pond, { terrainSampler, textures = {}, make
     const sprite = new THREE.Sprite(foliageMaterials.get(placement.spriteId));
     const [x, z] = placement.position;
     const sinkDepth = placement.scale * placement.sinkRatio;
+    const visualBaseOffset = placement.scale * (placement.bottomTransparentPaddingRatio ?? 0);
+    const rootOffsetY = placement.rootOffsetY ?? 0;
+    const groundOffset = placement.groundOffset ?? 0;
     sprite.name = `OARB-${placement.id}-${placement.spriteId}`;
-    sprite.position.set(x, terrainSampler.sampleOutdoorY(x, z) + placement.scale * 0.5 - sinkDepth, z);
+    sprite.position.set(x, terrainSampler.sampleOutdoorY(x, z) + placement.scale * 0.5 + groundOffset + rootOffsetY - sinkDepth - visualBaseOffset, z);
     sprite.scale.set(placement.scale * placement.width, placement.scale, 1);
-    sprite.userData = { ...placement, sourcePondId: pond.id, billboard: true, alphaCutoutDepthWrite: true, visibleDistanceSq: DEFAULT_VISIBLE_DISTANCE_SQ, collision: 'none' };
+    sprite.userData = { ...placement, sourcePondId: pond.id, visualBaseOffset, rootOffsetY, groundOffset, billboard: true, alphaCutoutDepthWrite: true, visibleDistanceSq: DEFAULT_VISIBLE_DISTANCE_SQ, collision: 'none' };
     group.add(sprite);
   });
   return group;
