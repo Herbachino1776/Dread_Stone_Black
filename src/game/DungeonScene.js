@@ -866,10 +866,13 @@ export class DungeonScene {
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.LinearMipmapNearestFilter;
     texture.anisotropy = 1;
+    if (skyDome.repeat) texture.repeat.set(skyDome.repeat.x ?? skyDome.repeat[0] ?? 1, skyDome.repeat.y ?? skyDome.repeat[1] ?? 1);
+    if (skyDome.offset) texture.offset.set(skyDome.offset.x ?? skyDome.offset[0] ?? 0, skyDome.offset.y ?? skyDome.offset[1] ?? 0);
 
     const material = new THREE.MeshBasicMaterial({
       name: skyDome.materialName ?? `${definition.id ?? 'compiled-outdoor'}-sky-panorama-unlit-material`,
       map: texture,
+      color: skyDome.color ?? 0xffffff,
       side: THREE.BackSide,
       depthWrite: false,
       depthTest: false,
