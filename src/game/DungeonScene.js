@@ -4,7 +4,7 @@ import { DungeonDebugRenderer } from '../engine/dungeon-authoring/DungeonDebugRe
 import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRuntimeRegistry.js';
 import { createOutdoorTerrainMesh } from '../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 import { createPondCompositeGeometry, createPondOutlineDiscGeometry, createPondOutlineRingGeometry } from '../engine/outdoor-authoring/PondCompositeBuilder.js';
-import { createOutdoorSplineTrailMeshes } from '../engine/outdoor-authoring/OutdoorSplineBuilder.js';
+import { createOutdoorSplinePathSupportSurfaces, createOutdoorSplineTrailEdgeMeshes, createOutdoorSplineTrailMeshes } from '../engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { createOutdoorCurvedBlockers } from '../engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 import { createOutdoorPrimitiveMeshes } from '../engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
 import { createPondDecorGroups } from '../engine/outdoor-authoring/PondDecorBuilder.js';
@@ -1488,21 +1488,35 @@ export class DungeonScene {
     if (this.collision && (this.area === 'field' || this.isCompiledOutdoorFieldArea())) this.collision.outdoorTerrainSampler = this.outdoorTerrainRuntime;
     this.scene.add(terrain);
 
+    const splineMaterialFactory = (profile, metadata) => {
+      const material = this.makeTexturedMaterial(profile);
+      material.userData = {
+        ...(material.userData ?? {}),
+        oarbSplineTrailMaterial: true,
+        materialKey: metadata.materialKey,
+        materialFallbackUsed: metadata.usedFallback,
+        sourceProfile: metadata.profile,
+      };
+      return material;
+    };
+
     createOutdoorSplineTrailMeshes(outdoorDefinition.splineTrails, {
       terrainSampler: this.outdoorTerrainRuntime,
       textures: textureProfiles,
-      makeMaterial: (profile, metadata) => {
-        const material = this.makeTexturedMaterial(profile);
-        material.userData = {
-          ...(material.userData ?? {}),
-          oarbSplineTrailMaterial: true,
-          materialKey: metadata.materialKey,
-          materialFallbackUsed: metadata.usedFallback,
-          sourceProfile: metadata.profile,
-        };
-        return material;
-      },
+      makeMaterial: splineMaterialFactory,
     }).forEach((trailMesh) => this.scene.add(trailMesh));
+
+    createOutdoorSplineTrailEdgeMeshes(outdoorDefinition.splineTrails, {
+      terrainSampler: this.outdoorTerrainRuntime,
+      textures: textureProfiles,
+      makeMaterial: splineMaterialFactory,
+    }).forEach((edgeGroup) => this.scene.add(edgeGroup));
+
+    if (this.collision) {
+      const pathSupportSurfaces = createOutdoorSplinePathSupportSurfaces(outdoorDefinition.splineTrails, { terrainSampler: this.outdoorTerrainRuntime });
+      this.collision.walkableSurfaces = [...(this.collision.walkableSurfaces ?? []), ...pathSupportSurfaces];
+      this.collision.userData = { ...(this.collision.userData ?? {}), oarbSplinePathSupportSurfaces: pathSupportSurfaces.length };
+    }
 
     this.addAuthoredWaterBodies(outdoorDefinition.waterBodies, textureProfiles);
 
