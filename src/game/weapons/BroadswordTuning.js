@@ -3,14 +3,19 @@ export const BROADSWORD_ITEM_ID = 'rusted_sword';
 export const BROADSWORD_DISPLAY_NAME = 'Broadsword';
 
 export const BROADSWORD_VIEW = Object.freeze({
-  // Camera-local first-person ready stance: handle stays lower-right while the blade
-  // leans north-northwest back toward screen center instead of pointing off-screen right.
-  restPosition: Object.freeze({ x: 0.24, y: -0.4, z: -0.82 }),
-  restRotation: Object.freeze({ x: -0.44, y: -0.58, z: 1.16 }),
-  modelRotation: Object.freeze({ x: -0.2, y: Math.PI * 0.02, z: -0.14 }),
-  scale: 0.64,
-  targetHeight: 1.55,
-  maxWidth: 0.42,
+  // Camera-local first-person reference stance: grip begins low/right, guard sits
+  // in the lower-right quadrant, and the blade rises through the right third with
+  // only a small inward lean toward screen center.
+  restPosition: Object.freeze({ x: 0.34, y: -0.48, z: -0.74 }),
+  restRotation: Object.freeze({ x: -0.18, y: -0.26, z: 0.22 }),
+  // Model-normalization trim keeps the GLB upright after centering/scaling; broad
+  // viewport framing lives on restPosition/restRotation above.
+  modelRotation: Object.freeze({ x: -0.08, y: Math.PI * 0.015, z: 0.05 }),
+  scale: 0.72,
+  targetHeight: 1.72,
+  maxWidth: 0.48,
+  attackReturnPosition: Object.freeze({ x: 0, y: 0, z: 0 }),
+  attackReturnRotation: Object.freeze({ x: 0, y: 0, z: 0 }),
 
   // Gesture follow tuning. Translation intentionally carries more of the screen-space
   // motion than rotation so the sword follows the thumb naturally instead of feeling inverted.
