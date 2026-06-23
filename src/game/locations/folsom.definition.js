@@ -56,7 +56,6 @@ const FOLSOM_BORDER_WALL_GATES = Object.freeze([
 
 const FOLSOM_NATURAL_BOULDER_MATERIAL = 'pondBoulderRock02';
 const FOLSOM_NATURAL_BOULDER_MATERIAL_POOL = Object.freeze(['pondBoulderRock01', 'pondBoulderRock02', 'pondBoulderRock03', 'pondBoulderRock04']);
-const FOLSOM_SKY_BRIGHTNESS = 0xffffff;
 
 const textures = Object.freeze({
   ...outdoorTextureProfiles,
@@ -180,20 +179,10 @@ export const folsomDefinition = Object.freeze({
   fog: { color: 0x241b18, near: 72, far: 230 },
   lighting: { background: 0x0e0b0a },
   skyDome: {
+    presentation: 'scene-background',
     texturePath: './assets/textures/sky/red_morning_skybox_folsom_retro_02.png',
-    textureName: 'folsom-retro-red-morning-storm-panorama',
-    name: 'FOLSOM-SKYDOME-retro-red-storm-panorama-black-horizon',
-    materialName: 'FOLSOM-SKYDOME-unlit-retro-red-storm-panorama-material',
-    radius: 520,
-    widthSegments: 64,
-    heightSegments: 32,
-    color: FOLSOM_SKY_BRIGHTNESS,
-    thetaStart: 0.001,
-    thetaLength: Math.PI * 0.998,
-    rotation: { x: 0, y: Math.PI * 0.92, z: 0 },
-    position: { x: 0, y: -24, z: 0 },
-    followPlayerXZ: true,
-    horizonAlignment: 'Full-height inward-facing unlit panorama keeps the asset black lower horizon below the eye line while the red storm-cloud band fills the upper and middle sky; no extra Folsom black horizon mesh is stacked over the texture.',
+    textureName: 'folsom-retro-red-morning-storm-panorama-background',
+    horizonAlignment: 'Equirectangular scene background keeps the texture fixed at infinity so the red storm-cloud art fills the upper and middle sky while the asset black horizon remains low and distant without sphere poles, caps, or a lowered near-field dome.',
   },
   textures,
   defaultFloorY: 0,

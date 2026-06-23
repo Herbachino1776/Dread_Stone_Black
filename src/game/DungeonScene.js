@@ -881,6 +881,19 @@ export class DungeonScene {
     if (skyDome.repeat) texture.repeat.set(skyDome.repeat.x ?? skyDome.repeat[0] ?? 1, skyDome.repeat.y ?? skyDome.repeat[1] ?? 1);
     if (skyDome.offset) texture.offset.set(skyDome.offset.x ?? skyDome.offset[0] ?? 0, skyDome.offset.y ?? skyDome.offset[1] ?? 0);
 
+    if (skyDome.presentation === 'scene-background') {
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      this.scene.background = texture;
+      this.scene.userData.compiledSkyBackground = {
+        locationOnly: definition.id,
+        visualOnly: true,
+        collision: 'none',
+        skyTexturePath: skyDome.texturePath,
+        horizonAlignment: skyDome.horizonAlignment ?? 'equirectangular panorama rendered as the scene background',
+      };
+      return;
+    }
+
     const material = new THREE.MeshBasicMaterial({
       name: skyDome.materialName ?? `${definition.id ?? 'compiled-outdoor'}-sky-panorama-unlit-material`,
       map: texture,
