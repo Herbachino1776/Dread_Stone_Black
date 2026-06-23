@@ -1,6 +1,7 @@
-import { OUTDOOR_REDWOOD_FOLIAGE_SPRITES, OUTDOOR_SMALL_FOLIAGE_SPRITES } from '../../../engine/outdoor-authoring/OutdoorFoliageRegistry.js';
+import { OUTDOOR_FOLSOM_DARK_GROVE_FOLIAGE_SPRITES, OUTDOOR_REDWOOD_FOLIAGE_SPRITES, OUTDOOR_SMALL_FOLIAGE_SPRITES } from '../../../engine/outdoor-authoring/OutdoorFoliageRegistry.js';
 
-export const FOLSOM_REDWOOD_SOURCE_SPRITES = Object.freeze(OUTDOOR_REDWOOD_FOLIAGE_SPRITES.map((sprite) => sprite.path));
+export const FOLSOM_DARK_GROVE_SOURCE_SPRITES = Object.freeze(OUTDOOR_FOLSOM_DARK_GROVE_FOLIAGE_SPRITES.map((sprite) => sprite.path));
+export const FOLSOM_REDWOOD_SOURCE_SPRITES = FOLSOM_DARK_GROVE_SOURCE_SPRITES;
 
 const CEDAR_LIKE_IDS = new Set(['billboard_tree_black_cypress_01', 'billboard_tree_windswept_field_01']);
 const UNDERSTORY_IDS = new Set(['billboard_bush_ritual_seedpod_01', 'billboard_bush_dead_scrub_01', 'billboard_bush_dark_bramble_01', 'billboard_tree_gnarled_ritual_01']);
@@ -16,7 +17,7 @@ const FOLSOM_FOLIAGE_GROUNDING = Object.freeze({
 export const FOLSOM_CEDAR_LIKE_SOURCE_SPRITES = Object.freeze(OUTDOOR_SMALL_FOLIAGE_SPRITES.filter((sprite) => CEDAR_LIKE_IDS.has(sprite.id)).map((sprite) => sprite.path));
 export const FOLSOM_UNDERSTORY_SOURCE_SPRITES = Object.freeze(OUTDOOR_SMALL_FOLIAGE_SPRITES.filter((sprite) => UNDERSTORY_IDS.has(sprite.id)).map((sprite) => sprite.path));
 
-const FOLSOM_FOLIAGE_SPRITES_BY_PATH = Object.freeze([...OUTDOOR_REDWOOD_FOLIAGE_SPRITES, ...OUTDOOR_SMALL_FOLIAGE_SPRITES].reduce((lookup, sprite) => ({ ...lookup, [sprite.path]: sprite }), {}));
+const FOLSOM_FOLIAGE_SPRITES_BY_PATH = Object.freeze([...OUTDOOR_FOLSOM_DARK_GROVE_FOLIAGE_SPRITES, ...OUTDOOR_REDWOOD_FOLIAGE_SPRITES, ...OUTDOOR_SMALL_FOLIAGE_SPRITES].reduce((lookup, sprite) => ({ ...lookup, [sprite.path]: sprite }), {}));
 
 const FOLSOM_FOLIAGE_SIZE_BANDS = Object.freeze({
   redwood: Object.freeze([
@@ -52,7 +53,7 @@ function createLayerVariants(layer, spritePaths, sizeBands = FOLSOM_FOLIAGE_SIZE
   return spritePaths.flatMap((path, spriteIndex) => {
     const sprite = FOLSOM_FOLIAGE_SPRITES_BY_PATH[path];
     return sizeBands.map(([band, metrics]) => Object.freeze({
-      id: `folsom_${layer}_${String(spriteIndex + 1).padStart(2, '0')}_${band}`,
+      id: sprite?.id?.startsWith('folsom_dark_grove_tree_') ? `${sprite.id}_${band}` : `folsom_${layer}_${String(spriteIndex + 1).padStart(2, '0')}_${band}`,
       sourceSpriteId: sprite?.id ?? `folsom_${layer}_${String(spriteIndex + 1).padStart(2, '0')}`,
       path,
       band,
