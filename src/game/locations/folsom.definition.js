@@ -56,6 +56,7 @@ const FOLSOM_BORDER_WALL_GATES = Object.freeze([
 
 const FOLSOM_NATURAL_BOULDER_MATERIAL = 'pondBoulderRock02';
 const FOLSOM_NATURAL_BOULDER_MATERIAL_POOL = Object.freeze(['pondBoulderRock01', 'pondBoulderRock02', 'pondBoulderRock03', 'pondBoulderRock04']);
+const FOLSOM_SKY_BRIGHTNESS = 0xffffff;
 
 const textures = Object.freeze({
   ...outdoorTextureProfiles,
@@ -185,13 +186,14 @@ export const folsomDefinition = Object.freeze({
     materialName: 'FOLSOM-SKYDOME-unlit-retro-red-storm-panorama-material',
     radius: 520,
     widthSegments: 64,
-    heightSegments: 24,
+    heightSegments: 32,
+    color: FOLSOM_SKY_BRIGHTNESS,
     thetaStart: 0.001,
-    thetaLength: Math.PI * 0.58,
+    thetaLength: Math.PI * 0.998,
     rotation: { x: 0, y: Math.PI * 0.92, z: 0 },
-    position: { x: 0, y: -6, z: 0 },
+    position: { x: 0, y: -24, z: 0 },
     followPlayerXZ: true,
-    horizonAlignment: 'Open inward-facing partial sphere uses the existing panorama as distant sky only; the lower black horizon stays at the far skyline without rendering a bottom cap or pole disk in front of the camera.',
+    horizonAlignment: 'Full-height inward-facing unlit panorama keeps the asset black lower horizon below the eye line while the red storm-cloud band fills the upper and middle sky; no extra Folsom black horizon mesh is stacked over the texture.',
   },
   textures,
   defaultFloorY: 0,
