@@ -123,6 +123,7 @@ const TEXTURE_PATHS = {
   gate: './assets/textures/metal_gate_rusted_01.png',
   fieldGrass: './assets/textures/outdoor/field_dead_grass_01.png',
   campfireLog: './assets/textures/pack1/wood_dark_aged_01.png',
+  stumpBark: './assets/textures/pack1/wood_dark_aged_01.png',
 };
 
 const CAMPFIRE_FLAME_FRAME_PATHS = Object.freeze([
@@ -2420,10 +2421,33 @@ export class DungeonScene {
   }
 
   addFieldStump(position, id = 'field-stump') {
-    const stumpMat = new THREE.MeshStandardMaterial({ color: 0x3b2114, roughness: 0.96, emissive: 0x0b0503, emissiveIntensity: 0.1 });
-    const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.94, 0.62, 9), stumpMat);
+    const sideMat = this.makeTexturedMaterial({
+      path: TEXTURE_PATHS.stumpBark,
+      repeat: [2.8, 1.15],
+      color: 0x5a341e,
+      roughness: 0.98,
+      metalness: 0,
+      emissive: 0x0b0503,
+      emissiveIntensity: 0.08,
+    });
+    const capMat = this.makeTexturedMaterial({
+      path: TEXTURE_PATHS.stumpBark,
+      repeat: [1.25, 1.25],
+      color: 0x7a4f2b,
+      roughness: 0.99,
+      metalness: 0,
+      emissive: 0x100704,
+      emissiveIntensity: 0.06,
+    });
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.94, 0.62, 14), [sideMat, capMat, sideMat]);
     stump.name = `${id}-chopped-stump`;
     stump.position.set(position.x, 0.31, position.z);
+    stump.userData = {
+      ...(stump.userData ?? {}),
+      objectCategory: 'choppedTreeStump',
+      texture: TEXTURE_PATHS.stumpBark,
+      materialNotes: 'dark aged wood texture wraps the bark sides; brown cap avoids raw placeholder geometry',
+    };
     this.scene.add(stump);
     this.fieldSurvivalObjects.set(`${id}-stump`, stump);
     return stump;

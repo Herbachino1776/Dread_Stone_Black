@@ -232,7 +232,7 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_shrine_altar', kind: 'altar', position: [-42, 0.76, 40], width: 2.8, depth: 1.5, height: 1, material: 'shrineStone', blocksPlayer: true, tags: ['shrine', 'interactable-placeholder'] },
     { id: 'folsom_shrine_column_left', kind: 'brokenColumn', position: [-49, 0.76, 34], radius: 0.65, height: 4.4, material: 'darkStone', blocksPlayer: true, tags: ['shrine', 'open-ceiling'] },
     { id: 'folsom_shrine_column_right', kind: 'brokenColumn', position: [-35, 0.76, 34], radius: 0.65, height: 3.2, material: 'darkStone', blocksPlayer: true, tags: ['shrine', 'open-ceiling'] },
-    { id: 'folsom_cellar_gate', kind: 'lockedRitualGate', position: [42, 0.34, 44], yaw: 0, width: 5.8, height: 4.5, depth: 0.7, material: 'rustedIron', state: 'locked', passable: false, tags: ['first-dungeon-placeholder', 'folsom-underworks'] },
+    { id: 'folsom_cellar_gate', kind: 'lockedRitualGate', position: [42, 0.34, 44], yaw: 0, width: 5.8, height: 4.5, depth: 0.7, material: 'rustedIron', state: 'locked', passable: false, blocksPlayer: false, tags: ['first-dungeon-placeholder', 'folsom-underworks'], userData: { collision: 'visual-only locked gate; inspect interaction supplies the Underworks blocker messaging' } },
     { id: 'folsom_reliquary_door', kind: 'brokenGateFrame', position: [82, 0.28, 4], yaw: Math.PI / 2, width: 6, height: 4.6, depth: 0.75, material: 'rustedIron', state: 'open', passable: true, blocksOpening: false, tags: ['authored-gate', 'rusty-border-door', 'legacy-route'] },
     { id: 'folsom_north_road_marker_left', kind: 'brokenColumn', position: [-4.5, 0.08, 88], radius: 0.55, height: 2.2, material: 'darkStone', blocksPlayer: true, tags: ['future-road-exit'] },
     { id: 'folsom_north_road_marker_right', kind: 'brokenColumn', position: [4.5, 0.08, 88], radius: 0.55, height: 1.7, material: 'darkStone', blocksPlayer: true, tags: ['future-road-exit'] },
@@ -240,12 +240,10 @@ export const folsomDefinition = Object.freeze({
   outdoorPrimitives: [
     { id: 'folsom_west_boundary_boulders', kind: 'boulderCluster', center: [-86, 6], radius: 7.5, material: FOLSOM_NATURAL_BOULDER_MATERIAL, tags: ['town-boundary', 'paired-blocker'] },
     { id: 'folsom_pond_bank_boulders', kind: 'boulderCluster', center: [15, -62], radius: 3.4, material: FOLSOM_NATURAL_BOULDER_MATERIAL, tags: ['pond', 'partially-submerged', 'paired-blocker'] },
-    { id: 'folsom_work_yard_woodpile', kind: 'fallenTreeBarrier', from: [-26, -44], to: [-17, -44], radius: 0.7, material: 'agedWood', tags: ['work-yard', 'wood-pile', 'paired-blocker'] },
   ],
   curvedBlockers: [
     { id: 'folsom_west_boundary_blocker', kind: 'circle', center: [-86, 6], radius: 8.2, visibleStructureId: 'folsom_west_boundary_boulders', tags: ['town-boundary'] },
     { id: 'folsom_pond_bank_boulder_blocker', kind: 'circle', center: [15, -62], radius: 3.8, visibleStructureId: 'folsom_pond_bank_boulders', tags: ['pond-boulder'] },
-    { id: 'folsom_work_yard_woodpile_blocker', kind: 'capsule', from: [-26, -44], to: [-17, -44], radius: 0.9, visibleStructureId: 'folsom_work_yard_woodpile', tags: ['work-yard'] },
   ],
   outdoorChests: [
     { id: 'folsom_fishing_rod_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Pond-Side Fishing Chest', position: { x: -12, y: -0.015, z: -43 }, itemId: 'fishing_rod', acquiredMessage: 'Rod A1 Acquired.', tags: ['pond', 'starter-loop'] },
@@ -255,7 +253,8 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_rusted_sword_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Underworks Sword Chest', position: { x: 35, y: 0.799, z: 38 }, itemId: 'rusted_sword', acquiredMessage: 'Rusted Sword Acquired.', tags: ['first-weapon', 'dungeon-route'] },
   ],
   outdoorCampfires: [{ id: 'folsom_courtyard_campfire', position: { x: -8, y: 0.16, z: -14 }, tags: ['courtyard', 'pond-path', 'starter-loop'] }],
-  harvestableTrees: [{ id: 'folsom_work_yard_tree', position: { x: -13, y: 0.12, z: -40 }, yield: 2, label: 'Work Yard Redwood', tags: ['work-yard', 'starter-loop'] }],
+  // The old folsom_work_yard_tree primitive cylinder/cone fake tree was removed; Folsom harvesting now uses the dark redwood billboard swathes.
+  harvestableTrees: [],
   outdoorInteractions: [
     { id: 'folsom_shrine_altar_inspect', label: 'Weathered Shrine Altar', target: { x: -42, y: 1.7, z: 38.5 }, range: 3.4, hint: 'Inspect the weathered altar', message: 'Old offerings have weathered into the stone.', type: 'outdoorInspect' },
     { id: 'folsom_house_note_placeholder', label: 'Caretaker Note', target: { x: 37, y: 1, z: -7 }, range: 3, hint: 'Read the faded note', message: 'The last caretaker left the lamps trimmed.', type: 'outdoorInspect' },
