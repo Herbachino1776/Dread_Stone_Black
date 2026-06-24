@@ -19,7 +19,7 @@ import { PlayerController } from './PlayerController.js';
 import { BroadswordView } from './weapons/BroadswordView.js';
 import { BroadswordGestureController } from './weapons/BroadswordGestureController.js';
 import { resolveStartupArea } from './locationRouting.js';
-import { getLocationDefinition } from './locations/locationRegistry.js';
+import { getLocationDefinition, loadLocationDefinition } from './locations/locationRegistry.js';
 import { getObjectivePackForLocation } from './objectives/objectiveRegistry.js';
 import { objectiveMessages, resolveObjectiveMessage } from './objectives/objectiveMessages.js';
 import { ObjectivePanel } from './ui/ObjectivePanel.js';
@@ -62,15 +62,15 @@ export class Game {
     this.lastFrame = 0;
   }
 
-  start() {
+  async start() {
     try {
-      this.startUnsafe();
+      await this.startUnsafe();
     } catch (error) {
       this.handleStartupError(error);
     }
   }
 
-  startUnsafe() {
+  async startUnsafe() {
     const query = new URLSearchParams(window.location.search);
     this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
     this.isPaused = false;
@@ -95,6 +95,7 @@ export class Game {
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
     const fieldSpawn = FIELD_RETURN_SPAWNS_BY_LOCATION[returnedFrom] ?? 'start';
     const area = resolveStartupArea(requestedArea);
+    await this.preloadStartupLocation(area);
     this.gameState = new GameState();
     this.equipmentRuntime = new EquipmentRuntime({
       weaponProfiles: equipmentRegistry.weapons,
@@ -178,6 +179,17 @@ export class Game {
     this.playFieldReturnReactionIfNeeded({ query });
 
     this.renderer.setAnimationLoop((time) => this.update(time));
+  }
+
+  async preloadStartupLocation(area) {
+    const locationId = this.resolveLocationId(area);
+    if (getLocationDefinition(locationId)) return;
+    try {
+      await loadLocationDefinition(locationId);
+    } catch (error) {
+      console.error(`[Dread Stone Black] Could not load startup location definition ${locationId}.`, error);
+      throw error;
+    }
   }
 
   handleStartupError(error) {

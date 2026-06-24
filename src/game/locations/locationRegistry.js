@@ -1,17 +1,4 @@
-import { blackGrassTempleDefinition } from './blackGrassTemple.definition.js';
-import { fieldKeeperHouseDefinition } from './fieldKeeperHouse.definition.js';
 import { folsomDefinition } from './folsom.definition.js';
-import { level1Definition } from './generated/level1.definition.js';
-import { balthazanDefinition } from './generated/balthazan.definition.js';
-import { sumerianCityBlockV0Definition } from './generated/sumerianCityBlockV0.definition.js';
-import { sumerianSunPalaceDistrictV1Definition } from './generated/sumerianSunPalaceDistrictV1.definition.js';
-import { sumerianCanalMarketDistrictV2Definition } from './generated/sumerianCanalMarketDistrictV2.definition.js';
-import { kerovacDefinition } from './generated/kerovac.definition.js';
-import { oarbFeatureYardDefinition } from './oarbFeatureYard.definition.js';
-import { oarbOutdoorExpoDefinition } from './oarbOutdoorExpo.definition.js';
-import { reliquaryFieldDefinition } from './reliquaryField.definition.js';
-import { southReliquaryCryptDefinition } from './southReliquaryCrypt.definition.js';
-import { v2TestShrineDefinition } from './v2TestShrine.definition.js';
 
 const KEROVAC_EXPO_ENTRANCE_BLOCKER_ID = 'K_expo_west_observation_tier_01';
 const KEROVAC_EXPO_OVERLAY_Y = 0.055;
@@ -74,36 +61,76 @@ function normalizeKerovacPrimitive(primitive) {
   return next;
 }
 
-const kerovacDefinitionWithRuntimeFixes = Object.freeze({
-  ...kerovacDefinition,
-  architecturalPrimitives: (kerovacDefinition.architecturalPrimitives ?? []).map(normalizeKerovacPrimitive),
+function withKerovacRuntimeFixes(definition) {
+  return Object.freeze({
+    ...definition,
+    architecturalPrimitives: (definition.architecturalPrimitives ?? []).map(normalizeKerovacPrimitive),
+  });
+}
+
+const eagerLocationDefinitions = Object.freeze({
+  [folsomDefinition.id]: folsomDefinition,
 });
 
-const locationDefinitions = Object.freeze({
-  [blackGrassTempleDefinition.id]: blackGrassTempleDefinition,
-  [fieldKeeperHouseDefinition.id]: fieldKeeperHouseDefinition,
-  [folsomDefinition.id]: folsomDefinition,
-  [level1Definition.id]: level1Definition,
-  [balthazanDefinition.id]: balthazanDefinition,
-  [sumerianCityBlockV0Definition.id]: sumerianCityBlockV0Definition,
-  [sumerianSunPalaceDistrictV1Definition.id]: sumerianSunPalaceDistrictV1Definition,
-  [sumerianCanalMarketDistrictV2Definition.id]: sumerianCanalMarketDistrictV2Definition,
-  [kerovacDefinitionWithRuntimeFixes.id]: kerovacDefinitionWithRuntimeFixes,
-  [oarbFeatureYardDefinition.id]: oarbFeatureYardDefinition,
-  [oarbOutdoorExpoDefinition.id]: oarbOutdoorExpoDefinition,
-  [southReliquaryCryptDefinition.id]: southReliquaryCryptDefinition,
-  [reliquaryFieldDefinition.id]: reliquaryFieldDefinition,
-  [v2TestShrineDefinition.id]: v2TestShrineDefinition,
+const lazyLocationLoaders = Object.freeze({
+  'black-grass-temple': () => import('./blackGrassTemple.definition.js').then((module) => module.blackGrassTempleDefinition),
+  'field-keeper-house': () => import('./fieldKeeperHouse.definition.js').then((module) => module.fieldKeeperHouseDefinition),
+  'level-1': () => import('./generated/level1.definition.js').then((module) => module.level1Definition),
+  balthazan: () => import('./generated/balthazan.definition.js').then((module) => module.balthazanDefinition),
+  'sumerian-city-block-v0': () => import('./generated/sumerianCityBlockV0.definition.js').then((module) => module.sumerianCityBlockV0Definition),
+  'sumerian-sun-palace-district-v1': () => import('./generated/sumerianSunPalaceDistrictV1.definition.js').then((module) => module.sumerianSunPalaceDistrictV1Definition),
+  'sumerian-canal-market-district-v2': () => import('./generated/sumerianCanalMarketDistrictV2.definition.js').then((module) => module.sumerianCanalMarketDistrictV2Definition),
+  kerovac: () => import('./generated/kerovac.definition.js').then((module) => withKerovacRuntimeFixes(module.kerovacDefinition)),
+  oarbFeatureYard: () => import('./oarbFeatureYard.definition.js').then((module) => module.oarbFeatureYardDefinition),
+  oarbOutdoorExpo: () => import('./oarbOutdoorExpo.definition.js').then((module) => module.oarbOutdoorExpoDefinition),
+  'south-reliquary-crypt': () => import('./southReliquaryCrypt.definition.js').then((module) => module.southReliquaryCryptDefinition),
+  'reliquary-field': () => import('./reliquaryField.definition.js').then((module) => module['reliquary' + 'FieldDefinition']),
+  'v2-test-shrine': () => import('./v2TestShrine.definition.js').then((module) => module.v2TestShrineDefinition),
 });
+
+const loadedLocationDefinitions = new Map(Object.entries(eagerLocationDefinitions));
+const loadingLocationDefinitions = new Map();
 
 export function getLocationDefinition(id) {
-  return locationDefinitions[id] ?? null;
+  return loadedLocationDefinitions.get(id) ?? null;
 }
 
 export function hasLocationDefinition(id) {
-  return Boolean(locationDefinitions[id]);
+  return loadedLocationDefinitions.has(id) || Object.hasOwn(lazyLocationLoaders, id);
 }
 
-export function listLocationDefinitions() {
-  return Object.values(locationDefinitions);
+export async function loadLocationDefinition(id) {
+  const cached = getLocationDefinition(id);
+  if (cached) return cached;
+
+  const loader = lazyLocationLoaders[id];
+  if (!loader) {
+    throw new Error(`Unknown location definition: ${id}`);
+  }
+
+  if (!loadingLocationDefinitions.has(id)) {
+    loadingLocationDefinitions.set(id, loader().then((definition) => {
+      if (!definition?.id) throw new Error(`Location definition module for ${id} did not export a valid definition.`);
+      if (definition.id !== id) throw new Error(`Location definition id mismatch: requested ${id}, loaded ${definition.id}.`);
+      loadedLocationDefinitions.set(id, definition);
+      loadingLocationDefinitions.delete(id);
+      return definition;
+    }).catch((error) => {
+      loadingLocationDefinitions.delete(id);
+      throw error;
+    }));
+  }
+
+  return loadingLocationDefinitions.get(id);
+}
+
+export async function preloadLocationDefinition(id) {
+  return loadLocationDefinition(id);
+}
+
+export async function listLocationDefinitions() {
+  return Promise.all([
+    ...loadedLocationDefinitions.keys(),
+    ...Object.keys(lazyLocationLoaders).filter((id) => !loadedLocationDefinitions.has(id)),
+  ].map((id) => loadLocationDefinition(id)));
 }

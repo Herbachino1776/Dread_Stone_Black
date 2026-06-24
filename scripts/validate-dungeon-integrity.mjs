@@ -27,7 +27,7 @@ function textureAssetExists(texturePath) {
   return resolved ? fs.existsSync(resolved) : null;
 }
 
-const definitions = listLocationDefinitions();
+const definitions = await listLocationDefinitions();
 const spawnIdsByLocation = new Map(definitions.map((definition) => [
   definition.id,
   new Set((definition.spawns ?? []).map((spawn) => spawn.id)),

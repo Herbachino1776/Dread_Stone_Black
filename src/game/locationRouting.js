@@ -1,4 +1,4 @@
-import { getLocationDefinition } from './locations/locationRegistry.js';
+import { getLocationDefinition, hasLocationDefinition } from './locations/locationRegistry.js';
 
 const FIELD_AREA_ALIASES = Object.freeze(new Set(['field', 'reliquary-field']));
 
@@ -9,6 +9,7 @@ export function resolveStartupArea(requestedArea) {
 
   const requestedLocation = getLocationDefinition(requestedArea);
   if (requestedLocation?.tags?.includes('compiled-runtime')) return requestedArea;
+  if (hasLocationDefinition(requestedArea)) return requestedArea;
 
   return 'folsom';
 }
