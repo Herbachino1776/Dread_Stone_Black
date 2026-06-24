@@ -4,7 +4,7 @@ import { DungeonDebugRenderer } from '../engine/dungeon-authoring/DungeonDebugRe
 import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRuntimeRegistry.js';
 import { createOutdoorTerrainMesh } from '../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 import { createPondCompositeGeometry, createPondOutlineDiscGeometry, createPondOutlineRingGeometry } from '../engine/outdoor-authoring/PondCompositeBuilder.js';
-import { createOutdoorSplinePathSupportSurfaces, createOutdoorSplineTrailEdgeMeshes, createOutdoorSplineTrailMeshes } from '../engine/outdoor-authoring/OutdoorSplineBuilder.js';
+import { createOutdoorSplinePathSupportSurfaces, createOutdoorSplineTrailEdgeMeshes, createOutdoorSplineTrailMeshes, createOutdoorSplineVisibleSurfaceSampler } from '../engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { createOutdoorCurvedBlockers } from '../engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 import { createOutdoorPrimitiveMeshes } from '../engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
 import { createPondDecorGroups } from '../engine/outdoor-authoring/PondDecorBuilder.js';
@@ -347,6 +347,16 @@ function horizontalDistance(a, b) {
   return Math.hypot(dx, dz);
 }
 
+function pointInFootprint(x, z, footprint = []) {
+  let inside = false;
+  for (let i = 0, j = footprint.length - 1; i < footprint.length; j = i, i += 1) {
+    const xi = footprint[i][0]; const zi = footprint[i][1];
+    const xj = footprint[j][0]; const zj = footprint[j][1];
+    if (((zi > z) !== (zj > z)) && (x < ((xj - xi) * (z - zi)) / ((zj - zi) || Number.EPSILON) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
 export const FIELD_SURVIVAL_PLACEMENTS = Object.freeze({
   axeChest: { id: 'field_survival_axe_chest', position: { x: -34, y: 0, z: -118 } },
   flintStickChest: { id: 'field_survival_flint_stick_chest', position: { x: 116, y: 0, z: -24 } },
@@ -378,6 +388,9 @@ export class DungeonScene {
     this.fieldFishingZones = [];
     this.fieldRawFishPickups = [];
     this.outdoorTerrainRuntime = null;
+    this.outdoorVisiblePathSurfaceRuntime = null;
+    this.outdoorVisibleSurfaceRuntime = null;
+    this.outdoorSurfaceDefinition = null;
     this.animatedTextureFlipbooks = [];
     this.fieldCampfireFlames = [];
     this.fieldCookedFishPickups = [];
@@ -1488,7 +1501,10 @@ export class DungeonScene {
       playerGroundingChanged: true,
     };
     this.outdoorTerrainRuntime = terrain.userData.terrainSampler;
-    if (this.collision && (this.area === 'field' || this.isCompiledOutdoorFieldArea())) this.collision.outdoorTerrainSampler = this.outdoorTerrainRuntime;
+    this.outdoorSurfaceDefinition = outdoorDefinition;
+    this.outdoorVisiblePathSurfaceRuntime = createOutdoorSplineVisibleSurfaceSampler(outdoorDefinition.splineTrails, { terrainSampler: this.outdoorTerrainRuntime });
+    this.outdoorVisibleSurfaceRuntime = { sampleOutdoorY: (x, z) => this.resolveOutdoorVisibleSurfaceY(x, z).y };
+    if (this.collision && (this.area === 'field' || this.isCompiledOutdoorFieldArea())) this.collision.outdoorTerrainSampler = this.outdoorVisibleSurfaceRuntime;
     this.scene.add(terrain);
 
     const splineMaterialFactory = (profile, metadata) => {
@@ -1751,10 +1767,12 @@ export class DungeonScene {
     (definition.outdoorChests ?? []).forEach((chest) => {
       if (!chest?.id || !chest?.position || !chest.itemId) return;
       const authoredPosition = { ...chest.position };
-      authoredPosition.y = this.outdoorTerrainRuntime?.sampleOutdoorY?.(authoredPosition.x, authoredPosition.z) ?? authoredPosition.y;
+      const surface = this.resolveOutdoorVisibleSurfaceY(authoredPosition.x, authoredPosition.z, { fallbackY: authoredPosition.y });
+      authoredPosition.y = surface.y;
       this.addFieldSurvivalChest({
         id: chest.id, label: chest.label ?? 'Outdoor Chest', position: authoredPosition, itemId: chest.itemId, acquiredMessage: chest.acquiredMessage ?? 'Item Acquired.', rodVariant: chest.rodVariant,
         materialProfileKeys: { body: chest.bodyMaterial ?? 'agedWood', straps: chest.strapMaterial ?? 'rustedIron' },
+        groundingDebug: { authoredY: chest.position.y, resolvedSurfaceY: surface.y, groundingSource: surface.source, surface },
       });
     });
   }
@@ -1768,7 +1786,7 @@ export class DungeonScene {
     (definition.harvestableTrees ?? []).forEach((tree) => {
       if (!tree?.id || !tree.position) return;
       const position = this.toVector3(tree.position);
-      const groundY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(position.x, position.z) ?? position.y ?? 0;
+      const groundY = this.resolveOutdoorVisibleSurfaceY(position.x, position.z, { fallbackY: position.y ?? 0 }).y;
       const group = new THREE.Group();
       group.name = `${tree.id}-harvestable-tree`;
       group.position.set(position.x, groundY, position.z);
@@ -1939,13 +1957,28 @@ export class DungeonScene {
 
   sampleFishLandingSurfaceY(position, fishingZone = null) {
     if (!position) return 0;
-    const terrainY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(position.x, position.z);
     const zone = fishingZone ?? this.getNearbyFishingZone?.(position);
     if (zone && this.isPositionInFishingWater(position, -0.05)) {
       const waterY = zone.position?.y;
-      return Number.isFinite(waterY) ? waterY + 0.035 : (Number.isFinite(terrainY) ? terrainY : 0);
+      if (Number.isFinite(waterY)) return waterY + 0.035;
     }
-    return Number.isFinite(terrainY) ? terrainY : 0;
+    return this.resolveOutdoorVisibleSurfaceY(position.x, position.z, { water: false }).y;
+  }
+
+  resolveOutdoorVisibleSurfaceY(x, z, options = {}) {
+    const fallbackY = Number.isFinite(options.fallbackY) ? options.fallbackY : (this.outdoorSurfaceDefinition?.defaultFloorY ?? 0);
+    const waterAllowed = options.water === true || options.kind === 'water';
+    const polygon = (this.outdoorSurfaceDefinition?.polygonFloors ?? []).find((floor) => pointInFootprint(x, z, floor.points));
+    if (polygon) return { y: polygon.y ?? fallbackY, source: 'authored-polygon-floor', floorId: polygon.id };
+    const pathY = this.outdoorVisiblePathSurfaceRuntime?.sampleOutdoorY?.(x, z);
+    if (Number.isFinite(pathY)) return { y: pathY, source: 'visible-path-ribbon' };
+    if (waterAllowed) {
+      const zone = this.getNearbyFishingZone?.({ x, z });
+      if (zone && this.isPositionInFishingWater({ x, z }, -0.05) && Number.isFinite(zone.position?.y)) return { y: zone.position.y + 0.035, source: 'pond-water-surface', zoneId: zone.id };
+    }
+    const terrainY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(x, z);
+    if (Number.isFinite(terrainY)) return { y: terrainY, source: 'terrain-sampler' };
+    return { y: fallbackY, source: 'fallback-floor' };
   }
 
   alignObjectBottomToSurface(object, surfaceY, epsilon = 0.018) {
@@ -2285,19 +2318,28 @@ export class DungeonScene {
     });
   }
 
-  addFieldSurvivalChest({ id, label, position, itemId, acquiredMessage, rodVariant = null, materialProfileKeys = null }) {
+  addFieldSurvivalChest({ id, label, position, itemId, acquiredMessage, rodVariant = null, materialProfileKeys = null, groundingDebug = null }) {
     const opened = this.gameState?.hasOpenedFieldChest?.(id) ?? false;
     const looted = this.gameState?.hasLootedFieldChest?.(id) ?? false;
     const group = this.createFieldChestGroup(opened, materialProfileKeys);
     group.name = `${id}-visual`;
     group.position.set(position.x, position.y, position.z);
     this.scene.add(group);
+    const surface = groundingDebug?.surface ?? this.resolveOutdoorVisibleSurfaceY(position.x, position.z, { fallbackY: position.y });
+    this.alignObjectBottomToSurface(group, surface.y, 0.018);
+    group.userData = {
+      ...group.userData,
+      outdoorVisibleSurfaceGrounding: true,
+      authoredY: groundingDebug?.authoredY ?? position.y,
+      resolvedSurfaceY: surface.y,
+      groundingSource: groundingDebug?.groundingSource ?? surface.source,
+    };
     this.fieldSurvivalObjects.set(id, group);
 
     this.outdoorInteractions.push({
       id,
       label,
-      target: new THREE.Vector3(position.x, 1, position.z),
+      target: new THREE.Vector3(position.x, group.position.y + 0.75, position.z),
       range: 4.0,
       hint: looted ? 'Empty.' : opened ? 'Retrieve item' : 'Open chest',
       message: looted ? 'Empty.' : opened ? acquiredMessage : 'Chest opened.',
@@ -2308,7 +2350,7 @@ export class DungeonScene {
       repeatHint: 'Empty.',
       repeatMessage: 'Empty.',
     });
-    if (itemId === 'fishing_rod' && rodVariant) this.addFishingRodChestPreview(id, position, rodVariant);
+    if (itemId === 'fishing_rod' && rodVariant) this.addFishingRodChestPreview(id, group.position, rodVariant);
   }
 
   addFishingRodChestPreview(id, position, rodVariant) {
@@ -2446,7 +2488,7 @@ export class DungeonScene {
       emissiveIntensity: 0.06,
     });
     const stumpHeight = 0.62;
-    const terrainY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(position.x, position.z);
+    const terrainY = this.resolveOutdoorVisibleSurfaceY(position.x, position.z, { fallbackY: position.y ?? 0 }).y;
     const baseY = Number.isFinite(terrainY) ? terrainY : (Number.isFinite(position.y) ? position.y : 0);
     const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.94, stumpHeight, 14), [sideMat, capMat, sideMat]);
     stump.name = `${id}-chopped-stump`;
@@ -2504,7 +2546,7 @@ export class DungeonScene {
     const candidates = [3.0, 4.2, 2.2].map((distance) => base.clone().addScaledVector(forward, distance));
     candidates.push(base.clone().add(new THREE.Vector3(2.8, 0, 0)), base.clone().add(new THREE.Vector3(-2.8, 0, 0)));
     const open = candidates.find((candidate) => {
-      candidate.y = this.outdoorTerrainRuntime?.sampleOutdoorY?.(candidate.x, candidate.z) ?? 0;
+      candidate.y = this.resolveOutdoorVisibleSurfaceY(candidate.x, candidate.z).y;
       return this.isFieldCampfireOpenGround(candidate);
     });
     return open ? new THREE.Vector3(open.x, open.y, open.z) : null;
@@ -2593,7 +2635,7 @@ export class DungeonScene {
     const mesh = this.createCookedFishPickupMesh();
     mesh.name = `${pickupId}-spineBackFish-cooked-c4-fish-pickup`;
     const landing = new THREE.Vector3(position.x + 1.15, position.y ?? 0, position.z + 0.45);
-    const surfaceY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(landing.x, landing.z) ?? position.y ?? 0;
+    const surfaceY = this.resolveOutdoorVisibleSurfaceY(landing.x, landing.z, { fallbackY: position.y ?? 0 }).y;
     landing.y = surfaceY;
     mesh.position.set(position.x, surfaceY + 0.9, position.z);
     this.scene.add(mesh);
@@ -2737,7 +2779,7 @@ export class DungeonScene {
     const mesh = this.createRawFishPickupMesh(fishSpecies);
     mesh.scale.multiplyScalar(fishSize.scale);
     mesh.name = `${pickupId}-${fishSpecies}-raw-fish-pickup`;
-    const surfaceY = this.sampleFishLandingSurfaceY(landing, zone);
+    const surfaceY = this.resolveOutdoorVisibleSurfaceY(landing.x, landing.z, { fallbackY: landing.y ?? 0 }).y;
     mesh.position.set(landing.x, surfaceY + 0.9, landing.z);
     const shoreHeading = zone?.shape === 'ellipse'
       ? Math.atan2(landing.x - zone.centerX, landing.z - zone.centerZ) + Math.PI / 2
@@ -2820,7 +2862,7 @@ export class DungeonScene {
     const campfireId = id ?? `field_survival_campfire_${this.fieldSurvivalObjects.size}`;
     const group = this.createFieldCampfireGroup();
     group.name = `${campfireId}-visual`;
-    const groundY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(position.x, position.z) ?? position.y ?? 0;
+    const groundY = this.resolveOutdoorVisibleSurfaceY(position.x, position.z, { fallbackY: position.y ?? 0 }).y;
     group.position.set(position.x, groundY, position.z);
     this.scene.add(group);
     this.fieldSurvivalObjects.set(campfireId, group);

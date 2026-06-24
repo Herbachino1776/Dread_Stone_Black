@@ -134,6 +134,59 @@ export function createOutdoorSplinePathSupportSurfaces(splineTrails = [], { terr
   return surfaces;
 }
 
+export function createOutdoorSplineVisibleSurfaceSampler(splineTrails = [], { terrainSampler, yOffset = OARB_SPLINE_TRAIL_Y_OFFSET } = {}) {
+  if (!Array.isArray(splineTrails) || typeof terrainSampler?.sampleOutdoorY !== 'function') return null;
+  const segments = [];
+  splineTrails.forEach((trail) => {
+    const safe = sanitizeTrail(trail);
+    if (!safe) return;
+    for (let index = 0; index < safe.points.length - 1; index += 1) {
+      const from = safe.points[index];
+      const to = safe.points[index + 1];
+      segments.push({
+        id: `${safe.id}_visible_surface_${index}`,
+        sourceTrailId: safe.id,
+        from,
+        to,
+        width: safe.width,
+        y0: terrainSampler.sampleOutdoorY(from.x, from.z) + yOffset,
+        y1: terrainSampler.sampleOutdoorY(to.x, to.z) + yOffset,
+        yOffset,
+        tags: ['oarb-spline-visible-path-surface', ...(trail.tags ?? [])],
+      });
+    }
+  });
+  if (!segments.length) return null;
+  return {
+    kind: 'oarbSplineVisibleSurfaceSampler',
+    sampleOutdoorY(x, z) {
+      let best = null;
+      segments.forEach((segment) => {
+        const dx = segment.to.x - segment.from.x;
+        const dz = segment.to.z - segment.from.z;
+        const lengthSq = dx * dx + dz * dz;
+        if (lengthSq <= 0.0001) return;
+        const t = THREE.MathUtils.clamp(((x - segment.from.x) * dx + (z - segment.from.z) * dz) / lengthSq, 0, 1);
+        const closestX = segment.from.x + dx * t;
+        const closestZ = segment.from.z + dz * t;
+        const distanceSq = (x - closestX) ** 2 + (z - closestZ) ** 2;
+        const halfWidth = segment.width * 0.5;
+        if (distanceSq > halfWidth * halfWidth) return;
+        if (!best || distanceSq < best.distanceSq) {
+          best = { y: THREE.MathUtils.lerp(segment.y0, segment.y1, t), segment, t, distanceSq };
+        }
+      });
+      return best?.y ?? null;
+    },
+    sampleSurface(x, z) {
+      const y = this.sampleOutdoorY(x, z);
+      if (!Number.isFinite(y)) return null;
+      return { y, kind: 'visibleSplinePath', source: 'visible-path-ribbon' };
+    },
+    userData: { segments, yOffset, collision: 'none; query-only visible dirt path surface' },
+  };
+}
+
 export function createOutdoorSplineTrailEdgeMeshes(splineTrails = [], { terrainSampler, textures = {}, makeMaterial, yOffset = OARB_SPLINE_PATH_SUPPORT_Y_OFFSET } = {}) {
   if (!Array.isArray(splineTrails) || typeof terrainSampler?.sampleOutdoorY !== 'function') return [];
   const groups = [];

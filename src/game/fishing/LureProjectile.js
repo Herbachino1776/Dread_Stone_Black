@@ -5,7 +5,7 @@ import { FISH_BITE_SETTLE_MIN_MS, FISH_BITE_SETTLE_MAX_MS, LINE_SLACK_OPACITY, L
 export class LureProjectile {
   constructor({ scene, dungeon, waterResolver, onLanded, maxCastRange = 44 }) {
     this.scene = scene; this.dungeon = dungeon; this.waterResolver = waterResolver; this.onLanded = onLanded; this.maxCastRange = maxCastRange;
-    this.physics = new FishingLinePhysics({ terrainSampler: dungeon?.outdoorTerrainRuntime }); this.position = this.physics.lurePosition; this.velocity = this.physics.lureVelocity; this.start = new THREE.Vector3();
+    this.physics = new FishingLinePhysics({ terrainSampler: dungeon?.outdoorVisibleSurfaceRuntime ?? dungeon?.outdoorTerrainRuntime }); this.position = this.physics.lurePosition; this.velocity = this.physics.lureVelocity; this.start = new THREE.Vector3();
     this.mesh = null; this.lineMesh = null; this.linePositions = null; this.lineSegments = []; this.active = false; this.landed = false; this.settleMs = 0; this.settleAgeMs = 0; this.pendingWaterZone = null; this.debug = { enabled: false, lureHitType: 'none', fishableWaterId: null };
   }
   ensureVisuals() {
@@ -64,7 +64,7 @@ export class LureProjectile {
   land(surfaceY, forcedFail = false) {
     const zone = !forcedFail ? this.waterResolver?.resolveFishableWater(this.physics.lurePosition) : null; this.landed = true; this.active = false; this.pendingWaterZone = zone;
     if (zone?.fishSpeciesPool?.length) { this.physics.enterWater(surfaceY); this.settleMs = THREE.MathUtils.lerp(FISH_BITE_SETTLE_MIN_MS, FISH_BITE_SETTLE_MAX_MS, Math.random()); this.debug.lureHitType = 'fishable-water'; this.debug.fishableWaterId = zone.id ?? null; }
-    else { this.physics.enterGround(surfaceY); this.debug.lureHitType = forcedFail ? 'max-range' : 'ground'; this.onLanded?.({ position: this.physics.lurePosition.clone(), zone: null, success: false, settled: false }); }
+    else { const groundY = this.dungeon?.resolveOutdoorVisibleSurfaceY?.(this.physics.lurePosition.x, this.physics.lurePosition.z, { water: false, fallbackY: surfaceY })?.y ?? surfaceY; this.physics.enterGround(groundY); this.debug.lureHitType = forcedFail ? 'max-range' : 'ground'; this.onLanded?.({ position: this.physics.lurePosition.clone(), zone: null, success: false, settled: false }); }
   }
   finishWaterSettle() { const zone = this.pendingWaterZone; this.pendingWaterZone = null; this.landed = false; this.onLanded?.({ position: this.physics.lurePosition.clone(), zone, success: Boolean(zone?.fishSpeciesPool?.length), settled: true }); }
   cleanup(removeVisuals = true) { if (removeVisuals) { if (this.mesh?.parent) this.mesh.parent.remove(this.mesh); if (this.lineMesh?.parent) this.lineMesh.parent.remove(this.lineMesh); this.mesh = null; this.lineMesh = null; this.linePositions = null; this.lineSegments = []; } this.active = false; this.landed = false; this.pendingWaterZone = null; }
