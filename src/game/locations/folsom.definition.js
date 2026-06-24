@@ -80,7 +80,7 @@ const textures = Object.freeze({
   },
 });
 
-const rectFloor = (id, minX, maxX, minZ, maxZ, material, roomId, tags = [], y = 0.16) => ({
+const rectFloor = (id, minX, maxX, minZ, maxZ, material, roomId, tags = [], y = 0.188) => ({
   id, points: [[minX, minZ], [maxX, minZ], [maxX, maxZ], [minX, maxZ]], y, material, roomId, tags,
 });
 
@@ -190,13 +190,13 @@ export const folsomDefinition = Object.freeze({
   terrain: folsomTerrain,
   rooms: [{ id: 'folsom_bounds', label: 'Folsom Town Bounds', minX: -98, maxX: 98, minZ: -98, maxZ: 98, floorY: 0, ceilingY: 18, visibleGeometry: false, wallGeometry: false, safeForSpawn: true, tags: ['field-bounds', 'starter-town'] }],
   splineTrails: [
-    { id: 'folsom_courtyard_to_pond', points: [[0, -5], [-2, -22], [-8, -38], [0, -45]], width: 5.6, material: 'townPath', flatten: true, tags: ['walkable-route', 'pond-route'], edgeMeshes: false, pathSupport: false },
-    { id: 'folsom_courtyard_to_shrine', points: [[-6, 5], [-18, 18], [-30, 28], [-42, 31]], width: 4.8, material: 'townPath', flatten: true, tags: ['walkable-route', 'shrine-route'], edgeMeshes: false, pathSupport: false },
-    { id: 'folsom_courtyard_to_house', points: [[8, -10], [24, -20], [42, -22], [42, -15]], width: 4.6, material: 'townPath', flatten: true, tags: ['walkable-route', 'house-route'], edgeMeshes: false, pathSupport: false },
-    { id: 'folsom_courtyard_to_cellar', points: [[7, 7], [20, 20], [34, 35]], width: 4.8, material: 'townPath', flatten: true, tags: ['walkable-route', 'dungeon-route'], edgeMeshes: false, pathSupport: false },
-    { id: 'folsom_courtyard_to_reliquary', points: [[10, 6], [32, 12], [58, 8], [76, 4]], width: 5.2, material: 'townPath', flatten: true, tags: ['walkable-route', 'rusty-door-route'], edgeMeshes: false, pathSupport: false },
-    { id: 'folsom_courtyard_to_north_road', points: [[0, 9], [-2, 34], [2, 60], [0, 94]], width: 5.8, material: 'townPath', flatten: true, tags: ['walkable-route', 'future-road-route'], edgeMeshes: false, pathSupport: false },
-    { id: 'folsom_tool_yard_path', points: [[-5, -14], [-18, -25], [-28, -36], [-9, -47]], width: 4.2, material: 'townPath', flatten: true, tags: ['walkable-route', 'work-yard'], edgeMeshes: false, pathSupport: false },
+    { id: 'folsom_courtyard_to_pond', points: [[0, -5], [-2, -22], [-8, -38], [0, -45]], width: 5.6, material: 'townPath', flatten: true, tags: ['walkable-route', 'pond-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
+    { id: 'folsom_courtyard_to_shrine', points: [[-6, 5], [-18, 18], [-30, 28], [-42, 31]], width: 4.8, material: 'townPath', flatten: true, tags: ['walkable-route', 'shrine-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
+    { id: 'folsom_courtyard_to_house', points: [[8, -10], [24, -20], [42, -22], [42, -15]], width: 4.6, material: 'townPath', flatten: true, tags: ['walkable-route', 'house-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
+    { id: 'folsom_courtyard_to_cellar', points: [[7, 7], [20, 20], [34, 35]], width: 4.8, material: 'townPath', flatten: true, tags: ['walkable-route', 'dungeon-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
+    { id: 'folsom_courtyard_to_reliquary', points: [[10, 6], [32, 12], [58, 8], [76, 4]], width: 5.2, material: 'townPath', flatten: true, tags: ['walkable-route', 'rusty-door-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
+    { id: 'folsom_courtyard_to_north_road', points: [[0, 9], [-2, 34], [2, 60], [0, 94]], width: 5.8, material: 'townPath', flatten: true, tags: ['walkable-route', 'future-road-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
+    { id: 'folsom_tool_yard_path', points: [[-5, -14], [-18, -25], [-28, -36], [-9, -47]], width: 4.2, material: 'townPath', flatten: true, tags: ['walkable-route', 'work-yard'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
   ],
   waterBodies: [...folsomPondSystem.waterBodies],
   foliageBillboardVariants: folsomFoliageBillboardVariants,
@@ -204,10 +204,10 @@ export const folsomDefinition = Object.freeze({
   polygonFloors: [
     rectFloor('folsom_courtyard_floor', -16, 16, -13, 13, 'courtyardStone', 'folsom_bounds', ['courtyard', 'terrain-pad-aligned']),
     rectFloor('folsom_tool_shed_floor', -43, -27, -36, -24, 'agedWood', 'folsom_bounds', ['tool-shed', 'terrain-pad-aligned']),
-    rectFloor('folsom_shrine_floor', -53, -31, 30, 46, 'shrineStone', 'folsom_bounds', ['open-ceiling-shrine', 'terrain-pad-aligned'], 0.76),
+    rectFloor('folsom_shrine_floor', -53, -31, 30, 46, 'shrineStone', 'folsom_bounds', ['open-ceiling-shrine', 'terrain-pad-aligned'], 0.788),
     rectFloor('folsom_house_floor', 32, 52, -17, 3, 'agedWood', 'folsom_bounds', ['house-interior', 'terrain-pad-aligned']),
-    rectFloor('folsom_cellar_apron', 34, 50, 34, 48, 'courtyardStone', 'folsom_bounds', ['dungeon-placeholder', 'terrain-pad-aligned'], 0.34),
-    rectFloor('folsom_rusted_door_apron', 74, 90, -3, 11, 'courtyardStone', 'folsom_bounds', ['legacy-door', 'terrain-pad-aligned'], 0.28),
+    rectFloor('folsom_cellar_apron', 34, 50, 34, 48, 'courtyardStone', 'folsom_bounds', ['dungeon-placeholder', 'terrain-pad-aligned'], 0.368),
+    rectFloor('folsom_rusted_door_apron', 74, 90, -3, 11, 'courtyardStone', 'folsom_bounds', ['legacy-door', 'terrain-pad-aligned'], 0.308),
   ],
   wallSegments: [
     ...folsomCityBorderWoodenWall.wallSegments,

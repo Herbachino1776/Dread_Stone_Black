@@ -45,6 +45,7 @@ function sanitizeTrail(trail) {
     edgeHeight: Number.isFinite(Number(trail.edgeHeight)) ? Number(trail.edgeHeight) : null,
     edgeThickness: Number.isFinite(Number(trail.edgeThickness)) ? Number(trail.edgeThickness) : null,
     supportYOffset: Number.isFinite(Number(trail.supportYOffset)) ? Number(trail.supportYOffset) : null,
+    visualYOffset: Number.isFinite(Number(trail.visualYOffset)) ? Number(trail.visualYOffset) : null,
     edgeMeshes: trail.edgeMeshes !== false,
     pathSupport: trail.pathSupport !== false,
   };
@@ -243,8 +244,9 @@ export function createOutdoorSplineTrailMesh(trail, { terrainSampler, textures =
     if (index > 0) distance += Math.hypot(point.x - safe.points[index - 1].x, point.z - safe.points[index - 1].z);
     const tangent = makeTangent(safe.points, index);
     const normal = { x: -tangent.z, z: tangent.x };
-    const y = terrainSampler.sampleOutdoorY(point.x, point.z) + yOffset;
-    sampledHeights.push(y - yOffset);
+    const visualOffset = safe.visualYOffset ?? yOffset;
+    const y = terrainSampler.sampleOutdoorY(point.x, point.z) + visualOffset;
+    sampledHeights.push(y - visualOffset);
     const half = safe.width * 0.5;
     vertices.push(point.x + normal.x * half, y, point.z + normal.z * half, point.x - normal.x * half, y, point.z - normal.z * half);
     uvs.push(distance / tileLength, 0, distance / tileLength, safe.width / tileWidth);
@@ -283,7 +285,7 @@ export function createOutdoorSplineTrailMesh(trail, { terrainSampler, textures =
     materialFallbackUsed: usedFallback,
     sampledTerrainSource: terrainSampler.kind ?? 'oarbTerrainSampler',
     sampledHeights,
-    yOffset,
+    yOffset: safe.visualYOffset ?? yOffset,
     flattenRequested: safe.flattenRequested,
     collisionNote: safe.pathSupport
       ? 'Visual dirt ribbon; optional generated spline path support may be attached by DungeonScene.'
