@@ -1654,6 +1654,10 @@ export class DungeonScene {
       mesh.scale.set(width, height, 1);
       mesh.rotation.y = placement.yawOffset ?? 0;
       mesh.userData = { ...placement, authoredY, groundY, sinkIntoGround, bottomTransparentPaddingRatio, rootOffsetY, groundOffset, visualBaseGroundingOffset, maxBillboardYawOffset, bottomAnchoredBillboard: true, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq: FIELD_REDWOOD_VISIBLE_DISTANCE_SQ };
+      if (placement.layer === 'redwood' && placement.harvestable !== false) {
+        const harvestable = this.createRedwoodHarvestable({ ...placement, x, z, groundY, zone: placement.tags?.join(':') }, mesh);
+        mesh.userData.harvestableTreeId = harvestable.id;
+      }
       group.add(mesh);
       this.fieldFoliageBillboards.push(mesh);
     });
@@ -2357,8 +2361,8 @@ export class DungeonScene {
     const harvestable = {
       id,
       kind: 'redwood',
-      position: new THREE.Vector3(placement.x, 0, placement.z),
-      target: new THREE.Vector3(placement.x, 1, placement.z),
+      position: new THREE.Vector3(placement.x, placement.groundY ?? placement.position?.[1] ?? 0, placement.z),
+      target: new THREE.Vector3(placement.x, (placement.groundY ?? placement.position?.[1] ?? 0) + 1, placement.z),
       interactRadius: isHero ? 7.0 : 5.5,
       range: isHero ? 7.0 : 5.5,
       yield: isHero ? 3 : isBoundary ? 2 : 1,
@@ -2366,7 +2370,7 @@ export class DungeonScene {
       label: isHero ? 'Hero Redwood' : 'Redwood',
       type: 'fieldHarvestableTree',
       treeObject: mesh,
-      stumpPosition: new THREE.Vector3(placement.x, 0, placement.z),
+      stumpPosition: new THREE.Vector3(placement.x, placement.groundY ?? placement.position?.[1] ?? 0, placement.z),
       zone: placement.zone,
     };
     this.fieldRedwoodHarvestables.push(harvestable);
@@ -2441,14 +2445,19 @@ export class DungeonScene {
       emissive: 0x100704,
       emissiveIntensity: 0.06,
     });
-    const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.94, 0.62, 14), [sideMat, capMat, sideMat]);
+    const stumpHeight = 0.62;
+    const terrainY = this.outdoorTerrainRuntime?.sampleOutdoorY?.(position.x, position.z);
+    const baseY = Number.isFinite(terrainY) ? terrainY : (Number.isFinite(position.y) ? position.y : 0);
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.94, stumpHeight, 14), [sideMat, capMat, sideMat]);
     stump.name = `${id}-chopped-stump`;
-    stump.position.set(position.x, 0.31, position.z);
+    stump.position.set(position.x, baseY + stumpHeight * 0.5, position.z);
     stump.userData = {
       ...(stump.userData ?? {}),
       objectCategory: 'choppedTreeStump',
       texture: TEXTURE_PATHS.stumpBark,
       materialNotes: 'dark aged wood texture wraps the bark sides; brown cap avoids raw placeholder geometry',
+      grounding: 'base sampled from outdoor terrain at stump position, falling back to saved tree y only when terrain is unavailable',
+      baseY,
     };
     this.scene.add(stump);
     this.fieldSurvivalObjects.set(`${id}-stump`, stump);

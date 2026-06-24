@@ -146,6 +146,7 @@ export function createPondCompositeGeometry(body = {}) {
   const footprint = body.footprint ?? {};
   const center = Array.isArray(body.center) ? body.center : [0, 0];
   const waterOutline = footprint.waterOutline ?? [];
+  const visualWaterOutline = footprint.visualWaterOutline ?? waterOutline;
   const mudBedOutline = footprint.mudBedOutline ?? [];
   const outerShoreOutline = footprint.outerShoreOutline ?? [];
   const heights = footprint.layerHeights ?? {};
@@ -156,11 +157,11 @@ export function createPondCompositeGeometry(body = {}) {
     recipe: footprint.recipe,
     coordinateBasis: [...center],
     water: {
-      geometry: createPondOutlineDiscGeometry(waterOutline, center),
-      outline: waterOutline,
+      geometry: createPondOutlineDiscGeometry(visualWaterOutline, center),
+      outline: visualWaterOutline,
       position: [center[0], waterY, center[1]],
       materialKey: body.material,
-      source: 'waterOutline',
+      source: visualWaterOutline === waterOutline ? 'waterOutline' : 'visualWaterOutline-shore-overlap',
     },
     mudBed: {
       geometry: createPondConformedMudBedGeometry(waterOutline, mudBedOutline, center, heights),
