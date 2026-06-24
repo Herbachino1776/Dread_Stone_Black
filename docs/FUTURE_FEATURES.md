@@ -131,3 +131,165 @@ Keep this feature dev-only and lightweight. It should be a practical tool for tu
 Preserve mobile play, existing controls, inventory, survival systems, field entrances, Vite base `/Dread_Stone_Black/`, and GitHub Pages workflow.
 
 Use bounded verification only unless explicitly told otherwise.
+
+## 002 — Chest Opening, Item Reveal, And Hollow Chest Upgrade
+
+### Summary
+
+Future chest interactions should feel more physical and ceremonial. Opening a chest should trigger a short first-person item reveal rather than immediately leaving the item sitting in the chest.
+
+### Intended Behavior
+
+When the player opens a chest:
+
+- the chest lid animates open;
+- the contained item rises out of the chest;
+- the item floats upward toward the player's eye line;
+- the item becomes easier to inspect and slowly spins;
+- the player presses `X` to add the item to inventory;
+- walking away or canceling exits the reveal safely without duplicating or losing the item.
+
+### Chest Model Direction
+
+Chests should eventually be built from separate visible parts: walls, bottom, lid, straps, and interior space. Avoid solid-block chests when practical. The goal is for opened chests to read as hollow containers.
+
+### Notes For Codex
+
+Keep this first-person, short, and mobile-safe. Do not build a large cutscene framework for the first pass. Preserve existing inventory, item ownership, opened/looted state, Fishing A1, Broadsword A1, campfire, and controls.
+
+## 003 — Fishable River Scene
+
+### Summary
+
+Create a river-focused outdoor scene that extends the existing pond fishing direction into a flowing river environment.
+
+### Environment Direction
+
+The river should have:
+
+- thick trees along both banks;
+- water that visually flows in one direction;
+- boulders and rocks placed in and near the channel;
+- mud banks on both sides;
+- a natural riverbed that is deepest near the center and rises gradually toward the shore.
+
+The shape should feel like a natural curved river channel, not a flat plane. A broad shallow-to-deep-to-shallow cross-section is preferred.
+
+### Fishing Direction
+
+The river should be fishable using the same core Fishing A1 / Rod A1 loop. River fishing must not break pond fishing.
+
+### Notes For Codex
+
+Start with a contained authored river scene or proving ground. Avoid swimming, boats, or complex water simulation in the first pass.
+
+## 004 — Reusable Town Trail / Road Kit With Path Lighting
+
+### Summary
+
+Create reusable defaults for town paths, roads, and trails so locations like Folsom use consistent, maintainable path structures.
+
+### Desired Trail Profile
+
+A default town trail profile should define:
+
+- width;
+- material profile;
+- terrain-conforming behavior;
+- visual height offset policy;
+- optional edge treatment;
+- optional collision/walkable support rules;
+- validation against sinking, floating, z-fighting, and invisible slabs.
+
+### Path Lighting Direction
+
+Important town trails should support optional paired torches or small flame fixtures at readable intervals. The goal is a lit main route through town, not random decoration.
+
+### Notes For Codex
+
+Do not reintroduce the old paver/field-wall rectangle jank. Path fixtures must not block movement or create hidden collision problems.
+
+## 005 — Aggressive Terrain Stamp Proving Ground
+
+### Summary
+
+Create a safe place to test stronger terrain stamps before applying them to key gameplay areas.
+
+### Terrain Shapes To Test
+
+The proving ground should test:
+
+- steeper hills;
+- larger hills;
+- steeper gullies;
+- deeper road cuts;
+- stronger shoreline and bank grades;
+- saddle shapes between landmarks.
+
+### Notes For Codex
+
+Do this in a contained test area before changing Folsom broadly. Player grounding, chest/prop grounding, path surfaces, fishing, and first-person held items must remain stable on slopes.
+
+## 006 — Openable Same-Location Doors
+
+### Summary
+
+Add interactable doors for structures that remain inside the same loaded location, such as Folsom tool shed or house doors.
+
+### Intended Behavior
+
+A local door should:
+
+- start closed;
+- open when the player presses interact;
+- use a simple readable hinge or sliding animation;
+- update collision to match the visible door state;
+- allow the player to pass after opening.
+
+### Notes For Codex
+
+Start with one controlled local door before generalizing. Do not make this a location transition system.
+
+## 007 — Audio Systems Milestone
+
+### Summary
+
+Audio should become a major future pillar, but it should be planned in an audio-focused pass rather than mixed into unrelated gameplay PRs.
+
+### Audio Direction
+
+Future audio should include:
+
+- satisfying fishing sounds;
+- reel and line sounds;
+- water ambience;
+- wind ambience;
+- campfire/fire ambience;
+- interaction sounds;
+- retro OST support;
+- future NPC dialogue support.
+
+### Notes For Codex
+
+Do not invent final audio assets. First build a lightweight audio pipeline that can load, trigger, loop, stop, mute, and scale volume safely on mobile browsers.
+
+## 008 — Simple NPC Dialogue Tree Foundation
+
+### Summary
+
+Create a simple future dialogue tree foundation for authored NPC conversations. The desired direction is straightforward and readable, closer to simple adventure-game dialogue than a complex RPG conversation simulator.
+
+### First-Pass Direction
+
+A first version should support:
+
+- NPC greeting text;
+- short follow-up lines;
+- optional player choices;
+- simple branch selection;
+- conversation exit;
+- optional state flags for later use.
+
+### Notes For Codex
+
+Keep the first dialogue system intentionally small, text-first, and mobile-readable. Voice or advanced narrative systems can come later after the basic authored dialogue flow works.
