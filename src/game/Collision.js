@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 
 const MAX_COLLISION_STEP_DISTANCE = 0.12;
+const TERRAIN_GROUND_PRIORITY = 0;
+const FALLBACK_GROUND_PRIORITY = -1000;
 
 function pointInRect(point, rect) {
   return point.x >= rect.minX && point.x <= rect.maxX && point.z >= rect.minZ && point.z <= rect.maxZ;
@@ -108,8 +110,14 @@ export class CollisionWorld {
   sampleWalkableY(x, z, fallbackY = this.defaultFloorY) {
     const point = { x, z };
     const outdoorY = this.outdoorTerrainSampler?.sampleOutdoorY?.(x, z);
-    const resolvedFallbackY = Number.isFinite(outdoorY) ? outdoorY : fallbackY;
-    let best = { y: resolvedFallbackY, priority: -Infinity, kind: Number.isFinite(outdoorY) ? 'oarbTerrain' : 'fallback', surface: this.outdoorTerrainSampler ?? null };
+    const hasOutdoorTerrain = Number.isFinite(outdoorY);
+    const resolvedFallbackY = hasOutdoorTerrain ? outdoorY : fallbackY;
+    let best = {
+      y: resolvedFallbackY,
+      priority: hasOutdoorTerrain ? TERRAIN_GROUND_PRIORITY : FALLBACK_GROUND_PRIORITY,
+      kind: hasOutdoorTerrain ? 'oarbTerrain' : 'fallback',
+      surface: this.outdoorTerrainSampler ?? null,
+    };
     this.walkableSurfaces.forEach((surface) => {
       let sample = null;
       if ((surface.kind === 'flatPolygon' || surface.kind === 'platformTop') && pointInPolygon(point, surface.footprint ?? [])) {

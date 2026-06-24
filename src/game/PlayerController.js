@@ -4,6 +4,13 @@ const DUNGEON_MOVE_SPEED = 3.7;
 const DUNGEON_STRAFE_SPEED = 2.9;
 const OUTDOOR_MOVE_SPEED = 9.25;
 const OUTDOOR_STRAFE_SPEED = 7.25;
+const TERRAIN_GROUND_MIN_CLEARANCE = 0.015;
+const TERRAIN_GROUND_MAX_SMOOTH_DROP_PER_SECOND = 2.4;
+
+function isOutdoorAuthoredGround(sampledFloor) {
+  return sampledFloor?.kind === 'oarbTerrain'
+    || sampledFloor?.surface?.tags?.includes?.('oarb-spline-path-support');
+}
 
 export class PlayerController {
   constructor(camera, collisionWorld, {
@@ -71,8 +78,22 @@ export class PlayerController {
     const sampledFloor = this.collisionWorld.sampleWalkableY?.(this.position.x, this.position.z, this.position.y - this.eyeHeight);
     if (sampledFloor) {
       const targetY = sampledFloor.y + this.eyeHeight;
-      const smoothing = sampledFloor.kind === 'stairRamp' ? 0.35 : 0.55;
-      this.position.y = THREE.MathUtils.lerp(this.position.y, targetY, THREE.MathUtils.clamp(smoothing + deltaSeconds * 4, 0, 1));
+      const isOutdoorGround = isOutdoorAuthoredGround(sampledFloor);
+      const minimumTerrainY = isOutdoorGround
+        ? targetY + TERRAIN_GROUND_MIN_CLEARANCE
+        : targetY;
+      if (this.position.y <= minimumTerrainY) {
+        this.position.y = minimumTerrainY;
+      } else {
+        const smoothing = sampledFloor.kind === 'stairRamp' ? 0.35 : 0.55;
+        const smoothedY = THREE.MathUtils.lerp(this.position.y, targetY, THREE.MathUtils.clamp(smoothing + deltaSeconds * 4, 0, 1));
+        if (isOutdoorGround) {
+          const maxDrop = TERRAIN_GROUND_MAX_SMOOTH_DROP_PER_SECOND * Math.max(0, deltaSeconds);
+          this.position.y = Math.max(smoothedY, this.position.y - maxDrop, minimumTerrainY);
+        } else {
+          this.position.y = smoothedY;
+        }
+      }
     }
 
     const look = controls.consumeLookDelta();
