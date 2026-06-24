@@ -208,6 +208,8 @@ export function buildOutdoorPond(input) {
   const wetShoreWidth = recipe.wetShore.wetShoreWidth * recipe.size.shoreScale * (1 - depthT * 0.22);
   const mudOffsets = variedOffsets(waterOutline.length, mudMargin, 0.12 + recipe.shape.edgeRoughness * 0.35, random);
   const shoreOffsets = variedOffsets(waterOutline.length, wetShoreWidth, 0.14 + recipe.shape.edgeRoughness * 0.3, random);
+  const waterShoreOverlap = Math.max(0, finite(recipe.water.shoreOverlap, 0.42));
+  const visualWaterOutline = expandPondOutlineRadially(waterOutline, recipe.center, waterShoreOverlap);
   const mudBedOutline = expandPondOutlinePerVertex(waterOutline, recipe.center, mudOffsets);
   const outerShoreOutline = expandPondOutlinePerVertex(mudBedOutline, recipe.center, shoreOffsets);
   // The Expo terrain grid is intentionally coarse for mobile. Keep the support
@@ -231,10 +233,10 @@ export function buildOutdoorPond(input) {
   };
   const footprint = {
     recipe: 'per-vertex-expansion-irregular-polygon', center: recipe.center, waterRadius: [recipe.size.radiusX, recipe.size.radiusZ],
-    waterOutline, mudBedOutline, outerShoreOutline, mudOffsets, outerShoreOffsets: shoreOffsets,
+    waterOutline, visualWaterOutline, mudBedOutline, outerShoreOutline, mudOffsets, outerShoreOffsets: shoreOffsets,
     mudOffset: mudMargin, outerShoreOffset: wetShoreWidth, terrainSupportOutline, terrainSafetyMargin,
     terrainMaxY, minMudMarginWorld: 0.34,
-    minVisibleMudBandWorld: 0.18, shorelineSampleStepWorld: 0.25,
+    minVisibleMudBandWorld: 0.18, shorelineSampleStepWorld: 0.25, waterShoreOverlap,
     layerHeights: { ...layers, terrainSafetyGap: 0.035, mudAboveWater: mudBedY - waterY, shoreShelfDepth, visibleShelfDepth, visibleMudWidth: mudMargin, wetBankWidth: wetShoreWidth, underwaterMudDepth: waterY - waterFloorY, shoreSlope: (mudBedY - innerMudY) / Math.max(0.1, mudMargin), bankSlope: (outerBankY - mudBedY) / Math.max(0.1, wetShoreWidth) },
     depthProfile: recipe.terrain.depthProfile, depthClass: recipe.terrain.depthProfile, centerDepthBias: recipe.terrain.centerDepthBias,
     visualBandTargets: { waterDominant: true, brightMudWorld: mudMargin, wetBankWorld: wetShoreWidth }, debug: recipe.debug,

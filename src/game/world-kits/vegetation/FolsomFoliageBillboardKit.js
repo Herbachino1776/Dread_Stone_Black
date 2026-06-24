@@ -80,7 +80,7 @@ export function createFolsomFoliageBillboardVariants() {
   ]);
 }
 
-export function createFolsomFoliageSwathe({ idPrefix, center, radiusX, radiusZ, count, seed = 1, layerMix = { redwood: 1 }, variants, variantWeights = {}, avoidZones = [], terrainSampler, bounds, tags = [] }) {
+export function createFolsomFoliageSwathe({ idPrefix, center, radiusX, radiusZ, count, seed = 1, layerMix = { redwood: 1 }, variants, variantWeights = {}, avoidZones = [], terrainSampler, bounds, tags = [], harvestable = null, intentionalHarvestableCount = 0 }) {
   const random = seededRandom(seed);
   const layerChoices = Object.entries(layerMix).map(([layer, weight]) => ({ layer, weight }));
   const byLayer = new Map();
@@ -89,6 +89,7 @@ export function createFolsomFoliageSwathe({ idPrefix, center, radiusX, radiusZ, 
     byLayer.get(variant.layer).push({ ...variant, weight: variantWeights[variant.band] ?? variantWeights[variant.layer] ?? variant.weight ?? 1 });
   });
   const placements = [];
+  let intentionalHarvestablesRemaining = Math.max(0, Math.floor(Number(intentionalHarvestableCount) || 0));
   let attempts = 0;
   while (placements.length < count && attempts < count * 120) {
     attempts += 1;
@@ -101,8 +102,11 @@ export function createFolsomFoliageSwathe({ idPrefix, center, radiusX, radiusZ, 
     const layer = chooseWeighted(layerChoices, random).layer;
     const variant = chooseWeighted(byLayer.get(layer), random);
     const jitter = 1 + (random() * 2 - 1) * variant.scaleJitter;
+    const id = `${idPrefix}_${String(placements.length + 1).padStart(3, '0')}`;
+    const isIntentionalHarvestable = layer === 'redwood' && intentionalHarvestablesRemaining > 0;
+    if (isIntentionalHarvestable) intentionalHarvestablesRemaining -= 1;
     placements.push(Object.freeze({
-      id: `${idPrefix}_${String(placements.length + 1).padStart(3, '0')}`,
+      id,
       variantId: variant.id,
       spritePath: variant.path,
       position: [Number(x.toFixed(3)), Number((terrainSampler?.sampleOutdoorY?.(x, z) ?? 0).toFixed(3)), Number(z.toFixed(3))],
@@ -114,7 +118,8 @@ export function createFolsomFoliageSwathe({ idPrefix, center, radiusX, radiusZ, 
       groundOffset: variant.groundOffset ?? 0,
       sinkIntoGround: variant.sinkIntoGround,
       layer,
-      tags: ['folsom-foliage-billboard', `${layer}-layer`, ...tags],
+      harvestable: isIntentionalHarvestable ? true : (harvestable ?? undefined),
+      tags: ['folsom-foliage-billboard', `${layer}-layer`, ...tags, ...(isIntentionalHarvestable ? ['intentional-harvestable-redwood'] : [])],
     }));
   }
   return Object.freeze(placements);

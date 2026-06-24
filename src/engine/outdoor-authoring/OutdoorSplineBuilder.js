@@ -45,6 +45,8 @@ function sanitizeTrail(trail) {
     edgeHeight: Number.isFinite(Number(trail.edgeHeight)) ? Number(trail.edgeHeight) : null,
     edgeThickness: Number.isFinite(Number(trail.edgeThickness)) ? Number(trail.edgeThickness) : null,
     supportYOffset: Number.isFinite(Number(trail.supportYOffset)) ? Number(trail.supportYOffset) : null,
+    edgeMeshes: trail.edgeMeshes !== false,
+    pathSupport: trail.pathSupport !== false,
   };
 }
 
@@ -110,7 +112,7 @@ export function createOutdoorSplinePathSupportSurfaces(splineTrails = [], { terr
   const surfaces = [];
   splineTrails.forEach((trail) => {
     const safe = sanitizeTrail(trail);
-    if (!safe) return;
+    if (!safe || !safe.pathSupport) return;
     const supportOffset = safe.supportYOffset ?? yOffset;
     for (let index = 0; index < safe.points.length - 1; index += 1) {
       const from = safe.points[index];
@@ -137,7 +139,7 @@ export function createOutdoorSplineTrailEdgeMeshes(splineTrails = [], { terrainS
   const groups = [];
   splineTrails.forEach((trail) => {
     const safe = sanitizeTrail(trail);
-    if (!safe) return;
+    if (!safe || !safe.edgeMeshes) return;
     const materialKey = safe.edgeMaterialKey ?? OARB_SPLINE_PATH_EDGE_DEFAULTS.materialKey;
     const profile = textures[materialKey] ?? textures.darkStone ?? OARB_SPLINE_TRAIL_FALLBACK_MATERIAL_PROFILE;
     const material = typeof makeMaterial === 'function'
@@ -230,7 +232,9 @@ export function createOutdoorSplineTrailMesh(trail, { terrainSampler, textures =
     sampledHeights,
     yOffset,
     flattenRequested: safe.flattenRequested,
-    collisionNote: 'Visual dirt ribbon only; DungeonScene attaches generated spline path support surfaces for walkable collision.',
+    collisionNote: safe.pathSupport
+      ? 'Visual dirt ribbon; optional generated spline path support may be attached by DungeonScene.'
+      : 'Visual dirt ribbon only; this trail intentionally uses terrain/polygon floors for player grounding instead of hidden path support slabs.',
   };
   return mesh;
 }
