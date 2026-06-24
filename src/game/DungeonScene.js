@@ -137,10 +137,12 @@ const CAMPFIRE_FLAME_FRAME_PATHS = Object.freeze([
 const CAMPFIRE_FLAME_FRAME_DURATION_MS = 110;
 const CAMPFIRE_FLAME_ORIGINAL_WIDTH = 0.74;
 const CAMPFIRE_FLAME_ORIGINAL_HEIGHT = 0.96;
-const CAMPFIRE_FLAME_VISUAL_SCALE = 1.4;
-const CAMPFIRE_FLAME_PLANE_WIDTH = CAMPFIRE_FLAME_ORIGINAL_WIDTH * CAMPFIRE_FLAME_VISUAL_SCALE;
-const CAMPFIRE_FLAME_PLANE_HEIGHT = CAMPFIRE_FLAME_ORIGINAL_HEIGHT * CAMPFIRE_FLAME_VISUAL_SCALE;
-const CAMPFIRE_FLAME_OPACITY = 0.65;
+const CAMPFIRE_FLAME_PREVIOUS_VISUAL_SCALE = 1.4;
+const CAMPFIRE_FLAME_WIDTH_MULTIPLIER = 1.4;
+const CAMPFIRE_FLAME_HEIGHT_MULTIPLIER = 0.94;
+const CAMPFIRE_FLAME_PLANE_WIDTH = CAMPFIRE_FLAME_ORIGINAL_WIDTH * CAMPFIRE_FLAME_PREVIOUS_VISUAL_SCALE * CAMPFIRE_FLAME_WIDTH_MULTIPLIER;
+const CAMPFIRE_FLAME_PLANE_HEIGHT = CAMPFIRE_FLAME_ORIGINAL_HEIGHT * CAMPFIRE_FLAME_PREVIOUS_VISUAL_SCALE * CAMPFIRE_FLAME_HEIGHT_MULTIPLIER;
+const CAMPFIRE_FLAME_OPACITY = 0.25;
 const CAMPFIRE_FLAME_ALPHA_AUDIT_SUMMARY = Object.freeze({
   frames: 6,
   size: '512x512',
@@ -2958,8 +2960,8 @@ export class DungeonScene {
     root.name = 'field-campfire-animated-single-flame-billboard';
     root.position.y = 0.31;
 
-    // Final visible flame: 1.036w x 1.344h, 40% larger than the original
-    // 0.74w x 0.96h card, with the bottom tucked just inside the log pile.
+    // Final visible flame: 1.4504w x 1.26336h: 40% wider than the previous
+    // transparent single-card flame, with height slightly reduced and bottom tucked inside the log pile.
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(CAMPFIRE_FLAME_PLANE_WIDTH, CAMPFIRE_FLAME_PLANE_HEIGHT), material);
     plane.name = 'field-campfire-flame-single-camera-facing-plane';
     plane.position.y = CAMPFIRE_FLAME_PLANE_HEIGHT / 2 - 0.06;
