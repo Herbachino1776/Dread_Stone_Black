@@ -68,12 +68,7 @@ export class PlayerController {
     movement.addScaledVector(right, moveX * this.strafeSpeed * deltaSeconds);
 
     this.position = this.collisionWorld.moveWithCollision(this.position, movement);
-    const sampledFloor = this.collisionWorld.sampleWalkableY?.(this.position.x, this.position.z, this.position.y - this.eyeHeight);
-    if (sampledFloor) {
-      const targetY = sampledFloor.y + this.eyeHeight;
-      const smoothing = sampledFloor.kind === 'stairRamp' ? 0.35 : 0.55;
-      this.position.y = THREE.MathUtils.lerp(this.position.y, targetY, THREE.MathUtils.clamp(smoothing + deltaSeconds * 4, 0, 1));
-    }
+    this.resolveGroundSupport(deltaSeconds);
 
     const look = controls.consumeLookDelta();
     if (typeof look === 'number') {
@@ -95,6 +90,27 @@ export class PlayerController {
     this.syncCamera();
   }
 
+  resolveGroundSupport(deltaSeconds = 0, { snapDown = false } = {}) {
+    const sampledFloor = this.collisionWorld?.sampleWalkableY?.(this.position.x, this.position.z, this.position.y - this.eyeHeight);
+    if (!sampledFloor) return;
+
+    const targetY = sampledFloor.y + this.eyeHeight;
+    if (!Number.isFinite(targetY)) return;
+
+    // Uphill terrain/path support must be authoritative so the camera never lags
+    // below the visible outdoor mesh; first-person items clipping away is a
+    // symptom of that camera/ground mismatch, not a view-model rendering issue.
+    if (targetY >= this.position.y || snapDown) {
+      this.position.y = targetY;
+      return;
+    }
+
+    const smoothing = sampledFloor.kind === 'stairRamp' ? 0.35 : 0.55;
+    const smoothedY = THREE.MathUtils.lerp(this.position.y, targetY, THREE.MathUtils.clamp(smoothing + deltaSeconds * 4, 0, 1));
+    const maxDownwardStep = Math.max(0.08, deltaSeconds * 3.5);
+    this.position.y = Math.max(targetY, Math.max(smoothedY, this.position.y - maxDownwardStep));
+  }
+
   getKeyboardMove() {
     let x = 0;
     let y = 0;
@@ -113,8 +129,7 @@ export class PlayerController {
 
   reset() {
     this.position.copy(this.spawnPosition);
-    const sampledFloor = this.collisionWorld?.sampleWalkableY?.(this.position.x, this.position.z, this.position.y - this.eyeHeight);
-    if (sampledFloor) this.position.y = sampledFloor.y + this.eyeHeight;
+    this.resolveGroundSupport(0, { snapDown: true });
     this.yaw = this.spawnYaw;
     this.pitch = 0;
     this.syncCamera();
