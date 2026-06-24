@@ -135,6 +135,8 @@ const CAMPFIRE_FLAME_FRAME_PATHS = Object.freeze([
   './assets/sprites/fire/campfire_flame_billboard_06.png',
 ]);
 const CAMPFIRE_FLAME_FRAME_DURATION_MS = 110;
+const CAMPFIRE_FLAME_VISUAL_SCALE = 1.4;
+const CAMPFIRE_FLAME_OPACITY = 0.65;
 
 const FIELD_SMALL_FOLIAGE_SPRITES = OUTDOOR_SMALL_FOLIAGE_SPRITES;
 const FIELD_REDWOOD_SPRITES = OUTDOOR_REDWOOD_FOLIAGE_SPRITES;
@@ -2880,7 +2882,7 @@ export class DungeonScene {
       map: frames[0],
       color: 0xffffff,
       transparent: true,
-      opacity: 0.86,
+      opacity: CAMPFIRE_FLAME_OPACITY,
       alphaTest: 0.04,
       depthWrite: false,
       side: THREE.DoubleSide,
@@ -2890,7 +2892,7 @@ export class DungeonScene {
     root.name = 'field-campfire-animated-crossed-flame-billboard';
     root.position.y = 0.34;
     [0, Math.PI / 2].forEach((yaw, index) => {
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.74, 0.96), material);
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.74 * CAMPFIRE_FLAME_VISUAL_SCALE, 0.96 * CAMPFIRE_FLAME_VISUAL_SCALE), material);
       plane.name = `field-campfire-flame-cross-plane-${index + 1}`;
       plane.position.y = 0.34;
       plane.rotation.y = yaw;
