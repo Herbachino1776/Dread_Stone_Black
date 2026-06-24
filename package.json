@@ -14,7 +14,8 @@
     "validate:oarb-terrain": "node scripts/validate-oarb-terrain-sampling.mjs && node scripts/validate-folsom.mjs",
     "validate:folsom": "node scripts/validate-folsom.mjs",
     "validate:reliquary-startup": "node scripts/validate-reliquary-field-startup.mjs",
-    "validate:no-player-arms": "node scripts/validate-no-player-arms.mjs"
+    "validate:no-player-arms": "node scripts/validate-no-player-arms.mjs",
+    "audit:campfire-flame-alpha": "node scripts/audit-campfire-flame-alpha.mjs"
   },
   "dependencies": {
     "three": "^0.184.0",

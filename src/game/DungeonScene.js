@@ -135,8 +135,23 @@ const CAMPFIRE_FLAME_FRAME_PATHS = Object.freeze([
   './assets/sprites/fire/campfire_flame_billboard_06.png',
 ]);
 const CAMPFIRE_FLAME_FRAME_DURATION_MS = 110;
+const CAMPFIRE_FLAME_ORIGINAL_WIDTH = 0.74;
+const CAMPFIRE_FLAME_ORIGINAL_HEIGHT = 0.96;
 const CAMPFIRE_FLAME_VISUAL_SCALE = 1.4;
+const CAMPFIRE_FLAME_PLANE_WIDTH = CAMPFIRE_FLAME_ORIGINAL_WIDTH * CAMPFIRE_FLAME_VISUAL_SCALE;
+const CAMPFIRE_FLAME_PLANE_HEIGHT = CAMPFIRE_FLAME_ORIGINAL_HEIGHT * CAMPFIRE_FLAME_VISUAL_SCALE;
 const CAMPFIRE_FLAME_OPACITY = 0.65;
+const CAMPFIRE_FLAME_ALPHA_AUDIT_SUMMARY = Object.freeze({
+  frames: 6,
+  size: '512x512',
+  hasUsefulAlpha: true,
+  alpha0: [199520, 198796, 203300, 193042, 200735, 197908],
+  alpha1To254: [6687, 6504, 6617, 7260, 6742, 6589],
+  alpha255: [55937, 56844, 52227, 61842, 54667, 57647],
+  transparentCorners: true,
+  transparentEdges: true,
+  effectivelyOpaque: false,
+});
 
 const FIELD_SMALL_FOLIAGE_SPRITES = OUTDOOR_SMALL_FOLIAGE_SPRITES;
 const FIELD_REDWOOD_SPRITES = OUTDOOR_REDWOOD_FOLIAGE_SPRITES;
@@ -2940,17 +2955,40 @@ export class DungeonScene {
     });
     material.name = 'campfire-six-frame-transparent-flame-billboard-material';
     const root = new THREE.Group();
-    root.name = 'field-campfire-animated-crossed-flame-billboard';
-    root.position.y = 0.34;
-    [0, Math.PI / 2].forEach((yaw, index) => {
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.74 * CAMPFIRE_FLAME_VISUAL_SCALE, 0.96 * CAMPFIRE_FLAME_VISUAL_SCALE), material);
-      plane.name = `field-campfire-flame-cross-plane-${index + 1}`;
-      plane.position.y = 0.34;
-      plane.rotation.y = yaw;
-      plane.renderOrder = 12;
-      root.add(plane);
-    });
-    root.userData = { objectCategory: 'campfireFlame', billboard: 'crossed', frames, frameDurationMs: CAMPFIRE_FLAME_FRAME_DURATION_MS, elapsedMs: 0, frameIndex: 0, material };
+    root.name = 'field-campfire-animated-single-flame-billboard';
+    root.position.y = 0.31;
+
+    // Final visible flame: 1.036w x 1.344h, 40% larger than the original
+    // 0.74w x 0.96h card, with the bottom tucked just inside the log pile.
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(CAMPFIRE_FLAME_PLANE_WIDTH, CAMPFIRE_FLAME_PLANE_HEIGHT), material);
+    plane.name = 'field-campfire-flame-single-camera-facing-plane';
+    plane.position.y = CAMPFIRE_FLAME_PLANE_HEIGHT / 2 - 0.06;
+    plane.renderOrder = 12;
+    root.add(plane);
+
+    root.userData = {
+      objectCategory: 'campfireFlame',
+      billboard: 'single-camera-facing-plane',
+      frames,
+      frameDurationMs: CAMPFIRE_FLAME_FRAME_DURATION_MS,
+      elapsedMs: 0,
+      frameIndex: 0,
+      material,
+      finalPlaneWidth: CAMPFIRE_FLAME_PLANE_WIDTH,
+      finalPlaneHeight: CAMPFIRE_FLAME_PLANE_HEIGHT,
+      opacity: CAMPFIRE_FLAME_OPACITY,
+      alphaAuditSummary: CAMPFIRE_FLAME_ALPHA_AUDIT_SUMMARY,
+    };
+    if (import.meta.env?.DEV && !this.loggedCampfireFlameDiagnostic) {
+      this.loggedCampfireFlameDiagnostic = true;
+      console.info('[Folsom campfire flame]', {
+        finalPlaneWidth: CAMPFIRE_FLAME_PLANE_WIDTH,
+        finalPlaneHeight: CAMPFIRE_FLAME_PLANE_HEIGHT,
+        materialOpacity: material.opacity,
+        frameCount: frames.length,
+        alphaAuditSummary: CAMPFIRE_FLAME_ALPHA_AUDIT_SUMMARY,
+      });
+    }
     this.fieldCampfireFlames.push(root);
     return root;
   }
@@ -2966,6 +3004,10 @@ export class DungeonScene {
         if (nextFrameIndex !== data.frameIndex) {
           data.frameIndex = nextFrameIndex;
           data.material.map = frames[nextFrameIndex];
+          data.material.transparent = true;
+          data.material.opacity = CAMPFIRE_FLAME_OPACITY;
+          data.material.alphaTest = 0.04;
+          data.material.depthWrite = false;
           data.material.needsUpdate = true;
         }
       }
