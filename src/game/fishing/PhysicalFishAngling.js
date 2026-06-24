@@ -231,7 +231,7 @@ export class PhysicalFishAngling {
     const playerPos = player?.position ?? fishPosition;
     const preferredShore = this.dungeon.getRawFishLandingPosition?.(player, this.zone);
     if (preferredShore && !this.pointInZone(preferredShore, this.zone)) {
-      const terrainY = this.dungeon.outdoorTerrainRuntime?.sampleOutdoorY?.(preferredShore.x, preferredShore.z);
+      const terrainY = this.dungeon.resolveOutdoorVisibleSurfaceY?.(preferredShore.x, preferredShore.z, { water: false })?.y;
       preferredShore.y = Number.isFinite(terrainY) ? terrainY : (this.dungeon.sampleFishLandingSurfaceY?.(preferredShore, null) ?? playerPos.y ?? 0);
       return preferredShore;
     }
@@ -245,7 +245,7 @@ export class PhysicalFishAngling {
       if (awayFromWater.lengthSq() > 0.001) awayFromWater.normalize(); else awayFromWater.set(0, 0, 1);
       landing.copy(playerPos).addScaledVector(awayFromWater, SAFE_GROUND_FALLBACK_DISTANCE);
     }
-    const terrainY = this.dungeon.outdoorTerrainRuntime?.sampleOutdoorY?.(landing.x, landing.z);
+    const terrainY = this.dungeon.resolveOutdoorVisibleSurfaceY?.(landing.x, landing.z, { water: false })?.y;
     landing.y = Number.isFinite(terrainY) ? terrainY : (this.dungeon.sampleFishLandingSurfaceY?.(landing, null) ?? player.position.y ?? 0);
     return landing;
   }
