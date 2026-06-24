@@ -1,5 +1,6 @@
 import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
 import { EQUIPMENT_SLOTS } from '../engine/equipment/EquipmentSlot.js';
+import { preloadLocationDefinition } from './locations/locationRegistry.js';
 
 const INTERACT_RANGE = 3.0;
 const KEY_RANGE = 2.55;
@@ -125,7 +126,7 @@ export class Interactions {
     return null;
   }
 
-  useOutdoorInteraction(interaction) {
+  async useOutdoorInteraction(interaction) {
     this.emitObjectiveEvent(OBJECTIVE_EVENTS.interactionUsed, {
       interactionId: interaction.id,
       sourceId: interaction.id,
@@ -177,12 +178,10 @@ export class Interactions {
       this.hud.showMessage(interaction.message);
       this.emitObjectiveEvent(OBJECTIVE_EVENTS.locationExited, {
         interactionId: interaction.id,
-        targetId: interaction.area ?? 'dungeon',
+        targetId: interaction.area ?? interaction.targetLocationId ?? interaction.toLocation ?? 'dungeon',
         tags: ['transition'],
       });
-      window.setTimeout(() => {
-        window.location.assign(`${window.location.pathname}?area=${interaction.area ?? 'dungeon'}`);
-      }, 220);
+      this.transitionToLocation(interaction.area ?? interaction.targetLocationId ?? interaction.toLocation ?? 'dungeon', { delayMs: 220 });
       return false;
     }
 
@@ -199,12 +198,28 @@ export class Interactions {
       targetId: 'reliquary-field',
       tags: ['transition', 'indoor_exit'],
     });
-    window.setTimeout(() => {
-      window.location.assign(`${window.location.pathname}?area=field&from=${fromArea}`);
-    }, 160);
+    this.transitionToLocation('reliquary-field', { areaParam: 'field', fromArea, delayMs: 160 });
     return false;
   }
 
+
+  async transitionToLocation(locationId, { areaParam = locationId, fromArea = null, delayMs = 0 } = {}) {
+    try {
+      await preloadLocationDefinition(locationId);
+    } catch (error) {
+      console.error(`[Dread Stone Black] Location ${locationId} could not be loaded.`, error);
+      this.setTemporaryHint('The way is sealed for now.', 1400);
+      this.hud.showMessage('Location unavailable. The way is sealed for now.');
+      return false;
+    }
+
+    window.setTimeout(() => {
+      const params = new URLSearchParams({ area: areaParam });
+      if (fromArea) params.set('from', fromArea);
+      window.location.assign(`${window.location.pathname}?${params.toString()}`);
+    }, delayMs);
+    return false;
+  }
 
   getDebugAreaEntranceGates() {
     if (!import.meta.env.DEV) return [];
