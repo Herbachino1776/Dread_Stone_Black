@@ -18,6 +18,45 @@ const ROD_DOWNWARD_PITCH_MAX = 0.38;
 const ROD_GROUND_CLEARANCE = 0.08;
 const ROD_CLEARANCE_SAMPLE_T_VALUES = Object.freeze([0.08, 0.5, 0.96]);
 
+const HELD_ROD_VIEWMODEL_RENDER_ORDER = 10000;
+const HELD_ROD_VIEWMODEL_DEPTH_OVERRIDE_NOTE = 'held Rod A1 only; prevents terrain/grass from visually covering the first-person rod';
+
+function markHeldRodViewmodel(object) {
+  let meshCount = 0;
+  object.userData = {
+    ...object.userData,
+    viewmodelDepthOverride: HELD_ROD_VIEWMODEL_DEPTH_OVERRIDE_NOTE,
+    viewmodelRenderOrder: HELD_ROD_VIEWMODEL_RENDER_ORDER,
+  };
+  object.traverse((child) => {
+    if (!child.isMesh || !child.material) return;
+    meshCount += 1;
+    child.renderOrder = HELD_ROD_VIEWMODEL_RENDER_ORDER;
+    child.userData = {
+      ...child.userData,
+      viewmodelDepthOverride: HELD_ROD_VIEWMODEL_DEPTH_OVERRIDE_NOTE,
+      viewmodelRenderOrder: HELD_ROD_VIEWMODEL_RENDER_ORDER,
+    };
+    const isMaterialArray = Array.isArray(child.material);
+    const materials = isMaterialArray ? child.material : [child.material];
+    const cloned = materials.map((material) => {
+      const next = material.clone();
+      next.depthTest = false;
+      next.depthWrite = false;
+      next.needsUpdate = true;
+      next.userData = {
+        ...(next.userData ?? {}),
+        viewmodelDepthOverride: HELD_ROD_VIEWMODEL_DEPTH_OVERRIDE_NOTE,
+        isolatedFromSharedRodMaterials: true,
+      };
+      return next;
+    });
+    child.material = isMaterialArray ? cloned : cloned[0];
+  });
+  object.userData.viewmodelMarkedMeshCount = meshCount;
+  return meshCount;
+}
+
 export class FishingRodView {
   constructor({ camera, equipmentRuntime, gameState, dungeon } = {}) {
     this.camera = camera;
@@ -31,6 +70,7 @@ export class FishingRodView {
     this.root.position.set(ROD_REST_POS.x, ROD_REST_POS.y, ROD_REST_POS.z);
     this.root.rotation.set(ROD_REST_ROT.x, ROD_REST_ROT.y, ROD_REST_ROT.z);
     this.rod = createRodA1Mesh({ id: 'first-person-rodA1', origin: new THREE.Vector3(), yaw: Math.PI / 2, includeLine: false });
+    this.heldRodViewmodelMeshCount = markHeldRodViewmodel(this.rod);
     this.rod.scale.setScalar(0.66);
     this.root.add(this.rod);
     this.camera.add(this.root);
