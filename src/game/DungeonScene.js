@@ -3658,6 +3658,9 @@ export class DungeonScene {
     )).map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime)).filter(Boolean);
     if (factionAnchors.length === 0) return;
 
+    const isFolsomBloodFeud = runtime.locationId === 'folsom'
+      && factionAnchors.length === 3
+      && factionAnchors.every((anchor) => anchor.tags?.includes('folsom-blood-feud'));
     this.blackGrassFactionManager = new BlackGrassTempleFactionManager({
       scene: this.scene,
       collision: this.collision,
@@ -3666,8 +3669,14 @@ export class DungeonScene {
       encounterZones: runtime.encounterZones,
       onGoreEvent: (payload) => this.handleFactionGoreEvent(payload),
       enableBattleDirector: false,
-      enableRespawns: false,
+      enableRespawns: isFolsomBloodFeud,
+      encounterMode: isFolsomBloodFeud ? 'folsom_neckman_blood_feud' : 'faction_war',
+      respawnCooldownSeconds: isFolsomBloodFeud ? 30 : undefined,
     });
+    if (isFolsomBloodFeud) {
+      this.blackGrassFactionManager.spawnInitialAnchors(factionAnchors);
+      return;
+    }
     const policy = this.createGeneratedEnemySpawnPolicy(runtime);
     this.generatedEnemyRuntime = {
       anchors: factionAnchors,
@@ -4565,7 +4574,7 @@ export class DungeonScene {
   }
 
   consumeEnemyContactDamage(playerPosition) {
-    if (this.area === 'black-grass-temple' || this.generatedEnemyRuntime) {
+    if (this.area === 'black-grass-temple' || this.generatedEnemyRuntime || this.blackGrassFactionManager) {
       return this.blackGrassFactionManager?.consumeEnemyContactDamage(playerPosition) ?? null;
     }
 
@@ -4581,7 +4590,7 @@ export class DungeonScene {
   }
 
   damageEnemyFromPlayerAttack(attack) {
-    if (this.area === 'black-grass-temple' || this.generatedEnemyRuntime) {
+    if (this.area === 'black-grass-temple' || this.generatedEnemyRuntime || this.blackGrassFactionManager) {
       const hit = this.blackGrassFactionManager?.damageEnemyFromPlayerAttack(attack) ?? null;
       this.emitPlayerAttackGore(hit, attack);
       return hit;
