@@ -172,6 +172,14 @@ function createFactionTemplate(template, scaleMultiplier, encounterMode) {
     minimumBodySeparation: FOLSOM_BLOOD_FEUD_COMBAT_SPACING.minimumBodySeparation,
     desiredCombatDistance: FOLSOM_BLOOD_FEUD_COMBAT_SPACING.desiredCombatDistance,
     tooCloseDistance: FOLSOM_BLOOD_FEUD_COMBAT_SPACING.tooCloseDistance,
+    enemyAttackAnimations: Object.freeze(['punch_left', 'punch_right']),
+    animationMap: Object.freeze({
+      ...scaled.animationMap,
+      seek_enemy_faction: 'walk',
+      combat_lunge: 'walk',
+      jump_attack_enemy_faction: 'punch_left',
+      attack_player_fallback: 'punch_left',
+    }),
   });
 }
 
@@ -237,6 +245,11 @@ const FOLSOM_BLOOD_FEUD_STUCK_RETARGET_SECONDS = 0.55;
 const ENEMY_PERSONAL_SPACE = 1.15;
 const ENEMY_SEPARATION_STRENGTH = 0.32;
 const FOLSOM_BLOOD_FEUD_FOOT_LIFT = 0.02;
+const FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS = 0.1;
+const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_SECONDS = 0.18;
+const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_DISTANCE = 0.18;
+const FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE = 1.65;
+const FOLSOM_BLOOD_FEUD_ANIMATION_STATES = Object.freeze(['idle', 'walk', 'punch_left', 'punch_right', 'die']);
 const FOLSOM_BLOOD_FEUD_COMBAT_SPACING = Object.freeze({
   desiredCombatDistance: 0.9,
   tooCloseDistance: 0.45,
@@ -545,7 +558,11 @@ class BlackGrassFactionEnemy {
     this.bloodFeudAttackCommitElapsed = 0;
     this.lastSeparationSuppressedApproach = false;
     this.lastMovedDistance = 0;
-    this.bloodFeudDiagnosticLogElapsed = Math.random();
+    this.bloodFeudDiagnosticLogElapsed = Math.random() * DEV_DIAGNOSTIC_INTERVAL_SECONDS;
+    this.bloodFeudAiElapsed = Math.random() * FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS;
+    this.bloodFeudGroundElapsed = FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_SECONDS;
+    this.bloodFeudGroundSample = null;
+    this.bloodFeudGroundSamplePosition = null;
   }
 
   load() {
@@ -563,9 +580,14 @@ class BlackGrassFactionEnemy {
       this.resolveStateAnimation('dead'),
       ...this.template.enemyAttackAnimations,
     ]);
-    const allStates = Object.keys(this.template.assets);
+    const isFolsomFeudNeckman = this.encounterMode === 'folsom_neckman_blood_feud' && this.species === 'neck_man';
+    const allStates = isFolsomFeudNeckman
+      ? FOLSOM_BLOOD_FEUD_ANIMATION_STATES.filter((state) => this.template.assets[state])
+      : Object.keys(this.template.assets);
     const priorityRemaining = allStates.filter((candidate) => candidate !== idleState && primaryStates.has(candidate));
-    const optionalRemaining = allStates.filter((candidate) => candidate !== idleState && !primaryStates.has(candidate));
+    const optionalRemaining = isFolsomFeudNeckman
+      ? allStates.filter((candidate) => candidate !== idleState && !primaryStates.has(candidate))
+      : allStates.filter((candidate) => candidate !== idleState && !primaryStates.has(candidate));
 
     this.actor = createCreatureActor(this.template.creatureConfigId, {
       scene: this.scene,
@@ -592,8 +614,8 @@ class BlackGrassFactionEnemy {
           stateMachine: FACTION_STATE_MACHINE,
           targetPriority: this.encounterMode === 'folsom_neckman_blood_feud' ? ['nearest living blood-feud neckman'] : ['nearest living opposing faction enemy', 'player fallback', 'patrol target'],
           animationMapping: this.template.animationMap,
-          assetUrls: this.template.assets,
-          expectedAnimationStates: Object.keys(this.template.assets),
+          assetUrls: isFolsomFeudNeckman ? Object.fromEntries(allStates.map((state) => [state, this.template.assets[state]])) : this.template.assets,
+          expectedAnimationStates: allStates,
           health: this.health,
           spawnScaleMultiplier: this.spawnScaleMultiplier,
           bloodFeud: this.encounterMode === 'folsom_neckman_blood_feud',
@@ -601,11 +623,12 @@ class BlackGrassFactionEnemy {
           groundDiagnostics: this.encounterMode === 'folsom_neckman_blood_feud' ? this.sampleCurrentGroundY(this.spawnAnchor.position) : undefined,
           combatSpacingProfile: this.encounterMode === 'folsom_neckman_blood_feud' ? 'folsom_blood_feud_close_combat' : undefined,
         };
-        if (this.encounterMode === 'folsom_neckman_blood_feud') this.applyDynamicGrounding(this.group.position);
+        if (this.encounterMode === 'folsom_neckman_blood_feud') this.applyDynamicGrounding(this.group.position, { force: true });
 
         this.setBehaviorState('spawn', { force: true });
         this.ensureSingleVisibleAnimationRoot();
         this.applyEncounterVisualTreatment();
+        this.applyEncounterPerformanceTreatment();
         this.addDevMarker();
         this.isLoaded = true;
         this.refreshAnimationUserData();
@@ -641,6 +664,16 @@ class BlackGrassFactionEnemy {
       });
     });
     this.group.userData.visualTreatment = 'folsom_blood_feud_high_contrast_cloned_materials';
+  }
+
+  applyEncounterPerformanceTreatment() {
+    if (this.encounterMode !== 'folsom_neckman_blood_feud' || !this.group) return;
+    this.group.traverse((child) => {
+      if (!child.isMesh) return;
+      child.castShadow = false;
+      child.receiveShadow = false;
+    });
+    this.group.userData.performanceTreatment = 'folsom_blood_feud_shadows_disabled_limited_animation_set';
   }
 
 
@@ -771,6 +804,7 @@ class BlackGrassFactionEnemy {
     this.awarenessReactionDelay = Math.max(0, this.awarenessReactionDelay - deltaSeconds);
     this.currentUpdateContext = context;
     this.steeringProbeTimer = Math.max(0, this.steeringProbeTimer - deltaSeconds);
+    if (this.encounterMode === 'folsom_neckman_blood_feud') this.bloodFeudGroundElapsed += deltaSeconds;
     if (aiTickAllowed) this.decayBlockedSegmentCooldowns(deltaSeconds);
     if (!this.group || this.isRemoved) return;
 
@@ -784,6 +818,7 @@ class BlackGrassFactionEnemy {
       this.group.userData.generatedAiSkipped = false;
     }
 
+    const isFolsomFeud = this.encounterMode === 'folsom_neckman_blood_feud';
     this.applyDynamicGrounding(this.group.position);
 
     if (this.behaviorState === 'dead') {
@@ -799,6 +834,20 @@ class BlackGrassFactionEnemy {
     this.animationStateElapsed += deltaSeconds;
     const attackCommitted = this.behaviorState === 'attack_enemy_faction' || this.behaviorState === 'jump_attack_enemy_faction' || this.behaviorState === 'attack_player_fallback';
     this.updateFolsomBloodFeudNoTargetTimer(deltaSeconds, context, attackCommitted);
+    if (isFolsomFeud && !attackCommitted) {
+      this.bloodFeudAiElapsed += deltaSeconds;
+      if (this.bloodFeudAiElapsed < FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS) {
+        const targetPosition = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy?.group?.position : null;
+        if (targetPosition) {
+          const face = targetPosition.clone().sub(this.group.position);
+          face.y = 0;
+          if (face.lengthSq() > 0.001) this.faceDirection(face.normalize(), deltaSeconds);
+        }
+        this.updateDevNavigationMarkers();
+        return;
+      }
+      this.bloodFeudAiElapsed = 0;
+    }
     if (!attackCommitted && (this.retargetElapsed >= RETARGET_INTERVAL_SECONDS || !this.isTargetStillValid(context))) {
       this.retargetElapsed = 0;
       this.selectTarget(context);
@@ -1066,7 +1115,10 @@ class BlackGrassFactionEnemy {
       return;
     }
 
-    const directClear = this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS);
+    const isFolsomFeudTarget = this.isFolsomBloodFeudEnemyTarget(target);
+    const directClear = isFolsomFeudTarget && distance <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE
+      ? true
+      : this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS);
     this.blockedTargetElapsed = directClear ? 0 : this.blockedTargetElapsed + deltaSeconds;
     if (this.blockedTargetElapsed >= BLOCKED_TARGET_REPATH_SECONDS) this.blockCurrentDirectSegment();
 
@@ -1098,36 +1150,53 @@ class BlackGrassFactionEnemy {
       && enemy?.species === this.species;
   }
 
-  sampleCurrentGroundY(position) {
+  sampleCurrentGroundY(position, { force = false } = {}) {
     const x = position?.x;
     const z = position?.z;
     const fallbackY = Number.isFinite(position?.y) ? position.y : this.spawnAnchor?.position?.y ?? 0;
+    if (this.encounterMode === 'folsom_neckman_blood_feud' && !force && this.bloodFeudGroundSample && this.bloodFeudGroundSamplePosition) {
+      const moved = horizontalDistance(position, this.bloodFeudGroundSamplePosition);
+      if (moved < FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_DISTANCE && this.bloodFeudGroundElapsed < FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_SECONDS) return this.bloodFeudGroundSample;
+    }
     const visible = this.outdoorVisibleSurfaceSampler?.(x, z, { water: false, fallbackY });
     if (visible && Number.isFinite(visible.y)) {
-      return {
+      const ground = {
         y: visible.y,
         visualY: visible.y + FOLSOM_BLOOD_FEUD_FOOT_LIFT,
         source: visible.floorId ?? visible.zoneId ?? visible.source ?? 'visible-outdoor-surface',
         kind: visible.source ?? 'visible-outdoor-surface',
         priority: 'visible',
       };
+      this.cacheFolsomBloodFeudGround(position, ground);
+      return ground;
     }
     const sampled = this.collision?.sampleWalkableY?.(x, z, fallbackY);
     if (sampled && Number.isFinite(sampled.y)) {
-      return {
+      const ground = {
         y: sampled.y,
         visualY: sampled.y + FOLSOM_BLOOD_FEUD_FOOT_LIFT,
         source: sampled.surface?.id ?? sampled.surface?.userData?.id ?? sampled.kind ?? 'walkable-surface',
         kind: sampled.kind ?? 'unknown',
         priority: sampled.priority ?? null,
       };
+      this.cacheFolsomBloodFeudGround(position, ground);
+      return ground;
     }
-    return { y: fallbackY, visualY: fallbackY + FOLSOM_BLOOD_FEUD_FOOT_LIFT, source: 'spawn-fallback', kind: 'fallback', priority: null };
+    const ground = { y: fallbackY, visualY: fallbackY + FOLSOM_BLOOD_FEUD_FOOT_LIFT, source: 'spawn-fallback', kind: 'fallback', priority: null };
+    this.cacheFolsomBloodFeudGround(position, ground);
+    return ground;
   }
 
-  applyDynamicGrounding(position = this.group?.position) {
+  cacheFolsomBloodFeudGround(position, ground) {
+    if (this.encounterMode !== 'folsom_neckman_blood_feud' || !position || !ground) return;
+    this.bloodFeudGroundSample = ground;
+    this.bloodFeudGroundSamplePosition = position.clone();
+    this.bloodFeudGroundElapsed = 0;
+  }
+
+  applyDynamicGrounding(position = this.group?.position, { force = false } = {}) {
     if (this.encounterMode !== 'folsom_neckman_blood_feud' || !position) return position;
-    const ground = this.sampleCurrentGroundY(position);
+    const ground = this.sampleCurrentGroundY(position, { force });
     position.y = ground.visualY;
     if (this.group?.userData) this.group.userData.folsomBloodFeudGrounding = ground;
     return position;
@@ -1192,8 +1261,8 @@ class BlackGrassFactionEnemy {
     };
     this.group.userData.folsomBloodFeudCombat = diagnostics;
     if (IS_DEV) {
-      this.bloodFeudDiagnosticLogElapsed = (this.bloodFeudDiagnosticLogElapsed ?? 0) + 1 / 60;
-      if (this.bloodFeudDiagnosticLogElapsed >= 1) {
+      this.bloodFeudDiagnosticLogElapsed = (this.bloodFeudDiagnosticLogElapsed ?? 0) + FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS;
+      if (this.bloodFeudDiagnosticLogElapsed >= DEV_DIAGNOSTIC_INTERVAL_SECONDS) {
         this.bloodFeudDiagnosticLogElapsed = 0;
         console.info('[FolsomBloodFeud] combat geometry diagnostic', { id: this.id, ...diagnostics });
       }
@@ -1202,7 +1271,9 @@ class BlackGrassFactionEnemy {
 
   updateEnemyCombat(deltaSeconds, target, distance, toTarget) {
     const isFolsomFeudTarget = this.isFolsomBloodFeudEnemyTarget(target);
-    const directClear = this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS);
+    const directClear = isFolsomFeudTarget && distance <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE
+      ? true
+      : this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS);
     const feudAttackCommitRange = FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRange;
     if (!directClear && !(isFolsomFeudTarget && distance <= feudAttackCommitRange && this.isTargetRoughlyInFront(target))) {
       this.blockedTargetElapsed += deltaSeconds;

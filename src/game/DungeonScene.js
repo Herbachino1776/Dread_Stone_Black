@@ -448,6 +448,13 @@ export class DungeonScene {
       scene: this.scene,
       registry: createGameGoreRegistry(),
       locationId: this.area,
+      budgets: this.area === 'folsom' ? {
+        maxActiveParticles: 72,
+        maxDecalsGlobal: 42,
+        maxDecalsPerRoom: 12,
+        maxCorpsesGlobal: 5,
+        maxCorpsesPerRoom: 2,
+      } : {},
       getRoomIdForPosition: (position) => this.findRoomIdForPosition(position),
       getFloorYForPosition: (position) => this.getFloorYForPosition(position),
     });
