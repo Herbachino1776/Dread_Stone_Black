@@ -447,7 +447,7 @@ function toVector3(value, fallbackY = 0) {
 
 
 class BlackGrassFactionEnemy {
-  constructor({ scene, collision, navigationGraph = null, species, id, spawnAnchor, patrolPoints = null, onLoaded = null, onGoreEvent = null }) {
+  constructor({ scene, collision, navigationGraph = null, species, id, spawnAnchor, patrolPoints = null, onLoaded = null, onGoreEvent = null, encounterMode = 'faction_war' }) {
     this.scene = scene;
     this.collision = collision;
     this.navigationGraph = navigationGraph;
@@ -486,6 +486,7 @@ class BlackGrassFactionEnemy {
     this.corpseTimer = CORPSE_SECONDS;
     this.onLoaded = onLoaded;
     this.onGoreEvent = onGoreEvent;
+    this.encounterMode = encounterMode;
     this.devMarker = null;
     this.pathMarker = null;
     this.stuckMarker = null;
@@ -553,16 +554,19 @@ class BlackGrassFactionEnemy {
           spawnAnchorId: this.spawnAnchor.id,
           spawnPosition: vectorSummary(this.spawnAnchor.position),
           stateMachine: FACTION_STATE_MACHINE,
-          targetPriority: ['nearest living opposing faction enemy', 'player fallback', 'patrol target'],
+          targetPriority: this.encounterMode === 'folsom_neckman_blood_feud' ? ['nearest living blood-feud neckman'] : ['nearest living opposing faction enemy', 'player fallback', 'patrol target'],
           animationMapping: this.template.animationMap,
           assetUrls: this.template.assets,
           expectedAnimationStates: Object.keys(this.template.assets),
           health: this.health,
           spawnScaleMultiplier: this.spawnScaleMultiplier,
+          bloodFeud: this.encounterMode === 'folsom_neckman_blood_feud',
+          freeForAllFaction: this.encounterMode === 'folsom_neckman_blood_feud',
         };
 
         this.setBehaviorState('spawn', { force: true });
         this.ensureSingleVisibleAnimationRoot();
+        this.applyEncounterVisualTreatment();
         this.addDevMarker();
         this.isLoaded = true;
         this.refreshAnimationUserData();
@@ -573,6 +577,23 @@ class BlackGrassFactionEnemy {
         console.warn(`Black Grass Temple ${this.template.displayName} failed to load idle model; faction spawn skipped.`, error);
       });
   }
+
+  applyEncounterVisualTreatment() {
+    if (this.encounterMode !== 'folsom_neckman_blood_feud' || !this.group) return;
+    this.group.traverse((child) => {
+      if (!child.isMesh) return;
+      const materials = (Array.isArray(child.material) ? child.material : [child.material]).filter(Boolean);
+      materials.forEach((material) => {
+        material.color?.multiplyScalar?.(1.18);
+        material.emissive?.setHex?.(0x1a0b06);
+        material.emissiveIntensity = Math.max(material.emissiveIntensity ?? 0, 0.035);
+        if ('roughness' in material) material.roughness = Math.min(1, Math.max(0.72, material.roughness ?? 0.9));
+        material.needsUpdate = true;
+      });
+    });
+    this.group.userData.visualTreatment = 'folsom_blood_feud_high_contrast_cloned_materials';
+  }
+
 
   addDevMarker() {
     if (!IS_DEV || !this.group || this.devMarker) return;
@@ -857,6 +878,7 @@ class BlackGrassFactionEnemy {
   }
 
   shouldTargetPlayer(context, opposingEnemy) {
+    if (this.encounterMode === 'folsom_neckman_blood_feud') return false;
     if (!context.playerPosition || !this.group) return false;
     const playerDistance = horizontalDistance(this.group.position, context.playerPosition);
     const opposingDistance = opposingEnemy?.group ? horizontalDistance(this.group.position, opposingEnemy.group.position) : Infinity;
@@ -873,7 +895,10 @@ class BlackGrassFactionEnemy {
     let nearestDistance = Infinity;
     let nearestAwareness = null;
     context.enemies.forEach((enemy) => {
-      if (enemy === this || enemy.species !== this.template.opposingFactionId || !enemy.isAlive || !enemy.group) return;
+      const hostileByEncounter = this.encounterMode === 'folsom_neckman_blood_feud'
+        ? enemy !== this && enemy.encounterMode === this.encounterMode && enemy.species === this.species
+        : enemy !== this && enemy.species === this.template.opposingFactionId;
+      if (!hostileByEncounter || !enemy.isAlive || !enemy.group) return;
       const awareness = this.getOpposingAwareness(enemy, context);
       if (this.blockedSegmentCooldowns.has(enemy.id) && awareness.tier !== 'melee') return;
       if (awareness.tier === 'none' || awareness.distance >= nearestDistance) return;
@@ -1318,6 +1343,10 @@ class BlackGrassFactionEnemy {
       direction,
       weaponId: this.species === 'sheep_demon' ? 'claw' : 'unarmed',
     });
+    if (this.encounterMode === 'folsom_neckman_blood_feud') {
+      event.hitStrength = result?.killed ? 3.2 : 2.35;
+      event.tags = ['folsom_neckman_blood_feud', 'heavy_feud_gore', ...(event.tags ?? [])];
+    }
     this.onGoreEvent({ kind: result?.killed ? 'death' : 'hit', event });
   }
 
@@ -1826,7 +1855,7 @@ class BlackGrassFactionEnemy {
 }
 
 export class BlackGrassTempleFactionManager {
-  constructor({ scene, collision, anchors, navigationGraph = null, encounterZones = null, onGoreEvent = null, enableBattleDirector = true, enableRespawns = true } = {}) {
+  constructor({ scene, collision, anchors, navigationGraph = null, encounterZones = null, onGoreEvent = null, enableBattleDirector = true, enableRespawns = true, encounterMode = 'faction_war', respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS } = {}) {
     this.scene = scene;
     this.collision = collision;
     this.anchors = anchors;
@@ -1840,9 +1869,11 @@ export class BlackGrassTempleFactionManager {
     this.onGoreEvent = onGoreEvent;
     this.enableBattleDirector = enableBattleDirector;
     this.enableRespawns = enableRespawns;
+    this.encounterMode = encounterMode;
+    this.respawnCooldownSeconds = respawnCooldownSeconds;
+    this.bloodFeudRespawnTimer = null;
     this.encounterZones = this.createEncounterZones(encounterZones);
     this.maxActiveByFaction = MAX_ACTIVE_BY_FACTION;
-    this.respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS;
     this.userData = {
       scope: 'Black Grass Temple only',
       factions: ['sheep_demon', 'neck_man'],
@@ -2083,6 +2114,7 @@ export class BlackGrassTempleFactionManager {
           patrolPoints: anchor.patrolPoints,
           onLoaded: () => this.logDevStatus('enemy-loaded'),
           onGoreEvent: this.onGoreEvent,
+          encounterMode: this.encounterMode,
         });
         this.enemies.push(enemy);
         enemy.load();
@@ -2120,6 +2152,12 @@ export class BlackGrassTempleFactionManager {
     });
     this.updateDevStatus(deltaSeconds);
 
+    if (this.encounterMode === 'folsom_neckman_blood_feud') {
+      this.updateFolsomNeckmanBloodFeud(deltaSeconds);
+      this.enemies = this.enemies.filter((enemy) => !enemy.isRemoved || enemy.isAlive);
+      return;
+    }
+
     if (!this.enableRespawns) {
       this.enemies = this.enemies.filter((enemy) => !enemy.isRemoved || enemy.isAlive);
       return;
@@ -2144,6 +2182,44 @@ export class BlackGrassTempleFactionManager {
     this.enemies = this.enemies.filter((enemy) => !enemy.isRemoved || enemy.isAlive);
   }
 
+
+  updateFolsomNeckmanBloodFeud(deltaSeconds) {
+    const living = this.getLivingEnemies('neck_man');
+    if (living.length > 1) {
+      this.bloodFeudRespawnTimer = null;
+      living.forEach((enemy) => { enemy.retargetElapsed = RETARGET_INTERVAL_SECONDS; });
+      return;
+    }
+    if (living.length !== 1) return;
+    if (this.bloodFeudRespawnTimer === null) {
+      this.bloodFeudRespawnTimer = this.respawnCooldownSeconds;
+      return;
+    }
+    this.bloodFeudRespawnTimer -= deltaSeconds;
+    if (this.bloodFeudRespawnTimer > 0) return;
+
+    const livingIds = new Set(living.map((enemy) => enemy.spawnAnchor?.id));
+    const missingAnchors = this.anchors.filter((anchor) => anchor.preferredFaction === 'neck_man' && !livingIds.has(anchor.id)).slice(0, 2);
+    missingAnchors.forEach((anchor) => {
+      const enemy = new BlackGrassFactionEnemy({
+        scene: this.scene,
+        collision: this.collision,
+        navigationGraph: this.navigationGraph,
+        species: 'neck_man',
+        id: anchor.id,
+        spawnAnchor: anchor,
+        patrolPoints: anchor.patrolPoints,
+        onLoaded: () => this.logDevStatus('folsom-blood-feud-respawn-loaded'),
+        onGoreEvent: this.onGoreEvent,
+        encounterMode: this.encounterMode,
+      });
+      this.enemies.push(enemy);
+      enemy.load();
+    });
+    this.bloodFeudRespawnTimer = null;
+    this.enemies.forEach((enemy) => { enemy.retargetElapsed = RETARGET_INTERVAL_SECONDS; });
+  }
+
   spawnFaction(species, requestedCount, { initialWave = false, playerPosition = null, directorZone = null } = {}) {
     const livingCount = this.getLivingEnemies(species).length;
     const count = Math.max(0, Math.min(requestedCount, this.maxActiveByFaction[species] - livingCount));
@@ -2161,6 +2237,7 @@ export class BlackGrassTempleFactionManager {
         patrolPoints: anchor.patrolPoints,
         onLoaded: () => this.logDevStatus('enemy-loaded'),
         onGoreEvent: this.onGoreEvent,
+        encounterMode: this.encounterMode,
       });
       this.enemies.push(enemy);
       enemy.load();
