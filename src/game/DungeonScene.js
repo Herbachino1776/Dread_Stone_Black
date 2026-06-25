@@ -893,6 +893,7 @@ export class DungeonScene {
       this.scene.add(this.compiledLocationRuntime.group);
       this.torchFlickerController.registerFromObject(this.compiledLocationRuntime.group);
     }
+    this.addCompiledLocationEnemies(this.compiledLocationRuntime, { source: 'compiled-outdoor' });
     this.addAuthoredOutdoorChests(definition);
     this.addAuthoredOutdoorSurvivalObjects(definition);
     this.addAuthoredOutdoorInteractions(definition);
@@ -3649,8 +3650,9 @@ export class DungeonScene {
     this.fieldSurvivalObjects.set(id, group);
   }
 
-  addCompiledLocationEnemies(runtime = this.compiledLocationRuntime) {
+  addCompiledLocationEnemies(runtime = this.compiledLocationRuntime, options = {}) {
     if (!runtime || runtime.locationId === 'black-grass-temple') return;
+    if (this.compiledLocationEnemiesSpawnedFor === runtime.locationId) return;
     const factionSpawns = runtime.spawnAnchors.filter((spawn) => (
       spawn.kind === 'enemy'
       && ['sheep_demon', 'neck_man'].includes(spawn.species)
@@ -3671,6 +3673,7 @@ export class DungeonScene {
       ? folsomBloodFeudAnchors
       : factionSpawns.map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime)).filter(Boolean));
     if (factionAnchors.length === 0) return;
+    this.compiledLocationEnemiesSpawnedFor = runtime.locationId;
     this.blackGrassFactionManager = new BlackGrassTempleFactionManager({
       scene: this.scene,
       collision: this.collision,
@@ -3685,6 +3688,9 @@ export class DungeonScene {
     });
     if (isFolsomBloodFeud) {
       this.blackGrassFactionManager.spawnInitialAnchors(factionAnchors);
+      if (options.source === 'compiled-outdoor' && import.meta.env.DEV) {
+        console.info(`[FolsomBloodFeud] compiled outdoor path spawned ${factionAnchors.length} neckmen`);
+      }
       return;
     }
     const policy = this.createGeneratedEnemySpawnPolicy(runtime);
