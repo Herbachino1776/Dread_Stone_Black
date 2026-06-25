@@ -217,6 +217,8 @@ const STEERING_PROBE_DISTANCE = 0.82;
 const STEERING_PROBE_SECONDS = 0.5;
 const BLOCKED_TARGET_REPATH_SECONDS = 1.7;
 const BLOCKED_SEGMENT_COOLDOWN_SECONDS = 3.0;
+const FOLSOM_BLOOD_FEUD_IDLE_RETARGET_SECONDS = 0.18;
+const FOLSOM_BLOOD_FEUD_STUCK_RETARGET_SECONDS = 0.55;
 const ENEMY_PERSONAL_SPACE = 1.15;
 const ENEMY_SEPARATION_STRENGTH = 0.32;
 const LOCOMOTION_ANIMATION_HOLD_SECONDS = Object.freeze({
@@ -510,6 +512,7 @@ class BlackGrassFactionEnemy {
     this.playerRevengeTimer = 0;
     this.playerFightProximityElapsed = 0;
     this.farIrrelevantElapsed = 0;
+    this.bloodFeudNoTargetElapsed = 0;
   }
 
   load() {
@@ -757,6 +760,7 @@ class BlackGrassFactionEnemy {
     this.directorTargetLockTimer = Math.max(0, this.directorTargetLockTimer - deltaSeconds);
     this.animationStateElapsed += deltaSeconds;
     const attackCommitted = this.behaviorState === 'attack_enemy_faction' || this.behaviorState === 'jump_attack_enemy_faction' || this.behaviorState === 'attack_player_fallback';
+    this.updateFolsomBloodFeudNoTargetTimer(deltaSeconds, context, attackCommitted);
     if (!attackCommitted && (this.retargetElapsed >= RETARGET_INTERVAL_SECONDS || !this.isTargetStillValid(context))) {
       this.retargetElapsed = 0;
       this.selectTarget(context);
@@ -813,6 +817,43 @@ class BlackGrassFactionEnemy {
 
     this.updatePatrol(deltaSeconds);
     this.updateDevNavigationMarkers();
+  }
+
+  updateFolsomBloodFeudNoTargetTimer(deltaSeconds, context, attackCommitted) {
+    if (this.encounterMode !== 'folsom_neckman_blood_feud' || attackCommitted || !this.isAlive) {
+      this.bloodFeudNoTargetElapsed = 0;
+      return;
+    }
+    const livingFeudNeckmen = context.enemies.filter((enemy) => (
+      enemy?.isAlive
+      && enemy !== this
+      && enemy.encounterMode === this.encounterMode
+      && enemy.species === this.species
+      && enemy.group
+    ));
+    if (livingFeudNeckmen.length <= 0) {
+      this.bloodFeudNoTargetElapsed = 0;
+      return;
+    }
+    this.bloodFeudNoTargetElapsed = this.currentTarget?.type === 'enemy'
+      ? 0
+      : this.bloodFeudNoTargetElapsed + deltaSeconds;
+    if (this.bloodFeudNoTargetElapsed >= FOLSOM_BLOOD_FEUD_IDLE_RETARGET_SECONDS) {
+      this.forceFolsomBloodFeudRetarget();
+    }
+  }
+
+  forceFolsomBloodFeudRetarget() {
+    if (this.encounterMode !== 'folsom_neckman_blood_feud') return;
+    this.currentTarget = null;
+    this.targetLockTimer = 0;
+    this.retargetElapsed = RETARGET_INTERVAL_SECONDS;
+    this.pathRepathElapsed = WAYPOINT_REPATH_SECONDS;
+    this.activeWaypoint = null;
+    this.localAvoidanceWaypoint = null;
+    this.blockedSegmentCooldowns.clear();
+    this.stuckElapsed = 0;
+    this.bloodFeudNoTargetElapsed = 0;
   }
 
   updateDirectorPressureTimers(deltaSeconds, context) {
@@ -1707,6 +1748,9 @@ class BlackGrassFactionEnemy {
         const detour = blocker ? this.findLocalDetourWaypoint(this.group.position, desiredTarget, blocker) : null;
         if (detour) this.localAvoidanceWaypoint = detour;
       }
+      if (this.encounterMode === 'folsom_neckman_blood_feud' && this.stuckElapsed >= FOLSOM_BLOOD_FEUD_STUCK_RETARGET_SECONDS) {
+        this.forceFolsomBloodFeudRetarget();
+      }
       if (this.stuckElapsed >= HARD_STUCK_SECONDS && this.unstuckTimer <= 0) this.triggerUnstuck();
       if (this.stuckElapsed >= ABANDON_STUCK_SECONDS) {
         this.currentTarget = null;
@@ -1839,7 +1883,10 @@ class BlackGrassFactionEnemy {
     const requested = (state === 'attack_enemy_faction' || state === 'jump_attack_enemy_faction') && this.pendingAttackAnimation
       ? this.pendingAttackAnimation
       : this.template.animationMap[state] ?? 'idle';
-    return resolveAnimationState({ species: this.species, requestedState: requested, assets: this.template.assets });
+    const encounterRequested = this.encounterMode === 'folsom_neckman_blood_feud' && requested === 'run'
+      ? 'walk'
+      : requested;
+    return resolveAnimationState({ species: this.species, requestedState: encounterRequested, assets: this.template.assets });
   }
 
   setBehaviorState(state, { force = false } = {}) {
@@ -2202,7 +2249,9 @@ export class BlackGrassTempleFactionManager {
     const living = this.getLivingEnemies('neck_man');
     if (living.length > 1) {
       this.bloodFeudRespawnTimer = null;
-      living.forEach((enemy) => { enemy.retargetElapsed = RETARGET_INTERVAL_SECONDS; });
+      living.forEach((enemy) => {
+        if (!enemy.currentTarget || !enemy.isTargetStillValid({ enemies: living, playerPosition: null })) enemy.forceFolsomBloodFeudRetarget?.();
+      });
       return;
     }
     if (living.length !== 1) return;
@@ -2234,7 +2283,7 @@ export class BlackGrassTempleFactionManager {
       enemy.load();
     });
     this.bloodFeudRespawnTimer = null;
-    this.enemies.forEach((enemy) => { enemy.retargetElapsed = RETARGET_INTERVAL_SECONDS; });
+    this.enemies.forEach((enemy) => { enemy.forceFolsomBloodFeudRetarget?.(); });
   }
 
   spawnFaction(species, requestedCount, { initialWave = false, playerPosition = null, directorZone = null } = {}) {
