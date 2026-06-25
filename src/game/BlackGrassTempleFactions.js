@@ -221,15 +221,16 @@ const FOLSOM_BLOOD_FEUD_IDLE_RETARGET_SECONDS = 0.18;
 const FOLSOM_BLOOD_FEUD_STUCK_RETARGET_SECONDS = 0.55;
 const ENEMY_PERSONAL_SPACE = 1.15;
 const ENEMY_SEPARATION_STRENGTH = 0.32;
-const FOLSOM_BLOOD_FEUD_FOOT_LIFT = 0.055;
+const FOLSOM_BLOOD_FEUD_FOOT_LIFT = 0.02;
 const FOLSOM_BLOOD_FEUD_COMBAT_SPACING = Object.freeze({
-  minimumBodySeparation: 0.72,
-  tooCloseDistance: 0.62,
-  separationStrengthNearAttackRange: 0.06,
-  attackCommitHoldSeconds: 0.34,
-  attackCommitRangeMultiplier: 1.12,
-  attackImpactRangeMultiplier: 1.16,
-  facingDot: 0.28,
+  minimumBodySeparation: 0.18,
+  tooCloseDistance: 0.42,
+  separationStrengthNearAttackRange: 0,
+  attackCommitHoldSeconds: 0.5,
+  attackCommitRangeMultiplier: 1.55,
+  attackImpactRangeMultiplier: 1.7,
+  visualContactRangeMultiplier: 1.45,
+  facingDot: 0.18,
 });
 const LOCOMOTION_ANIMATION_HOLD_SECONDS = Object.freeze({
   spawn: 0.4,
@@ -459,10 +460,11 @@ function toVector3(value, fallbackY = 0) {
 
 
 class BlackGrassFactionEnemy {
-  constructor({ scene, collision, navigationGraph = null, species, id, spawnAnchor, patrolPoints = null, onLoaded = null, onGoreEvent = null, encounterMode = 'faction_war' }) {
+  constructor({ scene, collision, navigationGraph = null, outdoorVisibleSurfaceSampler = null, species, id, spawnAnchor, patrolPoints = null, onLoaded = null, onGoreEvent = null, encounterMode = 'faction_war' }) {
     this.scene = scene;
     this.collision = collision;
     this.navigationGraph = navigationGraph;
+    this.outdoorVisibleSurfaceSampler = outdoorVisibleSurfaceSampler;
     this.species = species;
     this.spawnScaleMultiplier = resolveSpawnScaleMultiplier(spawnAnchor);
     this.template = createScaledFactionTemplate(FACTIONS[species], this.spawnScaleMultiplier);
@@ -525,6 +527,8 @@ class BlackGrassFactionEnemy {
     this.bloodFeudNoTargetElapsed = 0;
     this.bloodFeudAttackCommitElapsed = 0;
     this.lastSeparationSuppressedApproach = false;
+    this.lastMovedDistance = 0;
+    this.bloodFeudDiagnosticLogElapsed = Math.random();
   }
 
   load() {
@@ -1081,6 +1085,16 @@ class BlackGrassFactionEnemy {
     const x = position?.x;
     const z = position?.z;
     const fallbackY = Number.isFinite(position?.y) ? position.y : this.spawnAnchor?.position?.y ?? 0;
+    const visible = this.outdoorVisibleSurfaceSampler?.(x, z, { water: false, fallbackY });
+    if (visible && Number.isFinite(visible.y)) {
+      return {
+        y: visible.y,
+        visualY: visible.y + FOLSOM_BLOOD_FEUD_FOOT_LIFT,
+        source: visible.floorId ?? visible.zoneId ?? visible.source ?? 'visible-outdoor-surface',
+        kind: visible.source ?? 'visible-outdoor-surface',
+        priority: 'visible',
+      };
+    }
     const sampled = this.collision?.sampleWalkableY?.(x, z, fallbackY);
     if (sampled && Number.isFinite(sampled.y)) {
       return {
@@ -1119,6 +1133,12 @@ class BlackGrassFactionEnemy {
       : this.template.attackImpactRange;
   }
 
+  getVisualContactRangeForTarget(target) {
+    return this.isFolsomBloodFeudEnemyTarget(target)
+      ? this.template.visualContactRange * FOLSOM_BLOOD_FEUD_COMBAT_SPACING.visualContactRangeMultiplier
+      : this.template.visualContactRange;
+  }
+
   shouldForceBloodFeudAttack(deltaSeconds, target, distance, attackCommitRange) {
     if (!this.isFolsomBloodFeudEnemyTarget(target) || this.attackCooldown > 0) {
       this.bloodFeudAttackCommitElapsed = 0;
@@ -1136,21 +1156,34 @@ class BlackGrassFactionEnemy {
 
   updateBloodFeudCombatDiagnostics(target, distance, { attackCommitRange, impactRange, separationSuppressed } = {}) {
     if (this.encounterMode !== 'folsom_neckman_blood_feud' || !this.group) return;
-    this.group.userData.folsomBloodFeudCombat = {
+    const diagnostics = {
       targetId: target?.id ?? null,
       targetDistance: Number(distance.toFixed(3)),
-      attackRange: Number((attackCommitRange ?? this.template.attackCommitRange).toFixed(3)),
-      impactRange: Number((impactRange ?? this.getAttackImpactRangeForTarget(target)).toFixed(3)),
-      separationSuppressingApproach: Boolean(separationSuppressed),
+      attackCommitRange: Number((attackCommitRange ?? this.template.attackCommitRange).toFixed(3)),
+      attackImpactRange: Number((impactRange ?? this.getAttackImpactRangeForTarget(target)).toFixed(3)),
+      visualContactRange: Number(this.getVisualContactRangeForTarget(target).toFixed(3)),
+      separationIgnoredOrReducedForCurrentTarget: Boolean(separationSuppressed),
+      sampledGroundY: this.group.userData.folsomBloodFeudGrounding?.y ?? null,
+      modelRootY: Number(this.group.position.y.toFixed(3)),
+      actualMovedDistanceThisFrame: Number((this.lastMovedDistance ?? 0).toFixed(3)),
       attackAttempted: ['attack_enemy_faction', 'jump_attack_enemy_faction'].includes(this.behaviorState),
       attackCommitElapsed: Number((this.bloodFeudAttackCommitElapsed ?? 0).toFixed(3)),
     };
+    this.group.userData.folsomBloodFeudCombat = diagnostics;
+    if (IS_DEV) {
+      this.bloodFeudDiagnosticLogElapsed = (this.bloodFeudDiagnosticLogElapsed ?? 0) + 1 / 60;
+      if (this.bloodFeudDiagnosticLogElapsed >= 1) {
+        this.bloodFeudDiagnosticLogElapsed = 0;
+        console.info('[FolsomBloodFeud] combat geometry diagnostic', { id: this.id, ...diagnostics });
+      }
+    }
   }
 
   updateEnemyCombat(deltaSeconds, target, distance, toTarget) {
     const isFolsomFeudTarget = this.isFolsomBloodFeudEnemyTarget(target);
     const directClear = this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS);
-    if (!directClear) {
+    const feudAttackCommitRange = this.template.attackCommitRange * FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRangeMultiplier;
+    if (!directClear && !(isFolsomFeudTarget && distance <= feudAttackCommitRange && this.isTargetRoughlyInFront(target))) {
       this.blockedTargetElapsed += deltaSeconds;
       if (this.blockedTargetElapsed >= BLOCKED_TARGET_REPATH_SECONDS) this.blockCurrentDirectSegment();
       this.moveToPosition(target.group.position, this.template.seekSpeed * 0.72, deltaSeconds, Math.max(0, distance - this.template.attackRange * 0.92), 'seek_enemy_faction');
@@ -1164,7 +1197,8 @@ class BlackGrassFactionEnemy {
 
     const minimumBodySeparation = isFolsomFeudTarget ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.minimumBodySeparation : this.template.minimumBodySeparation;
     const tooCloseDistance = isFolsomFeudTarget ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.tooCloseDistance : this.template.tooCloseDistance;
-    const attackCommitRange = isFolsomFeudTarget ? this.template.attackCommitRange * FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRangeMultiplier : this.template.attackCommitRange;
+    const attackCommitRange = isFolsomFeudTarget ? feudAttackCommitRange : this.template.attackCommitRange;
+    const visualContactRange = this.getVisualContactRangeForTarget(target);
     this.updateBloodFeudCombatDiagnostics(target, distance, { attackCommitRange, impactRange: this.getAttackImpactRangeForTarget(target), separationSuppressed: this.lastSeparationSuppressedApproach });
     if (isFolsomFeudTarget && this.shouldForceBloodFeudAttack(deltaSeconds, target, distance, attackCommitRange)) {
       this.chooseAndBeginEnemyAttack(distance);
@@ -1179,9 +1213,13 @@ class BlackGrassFactionEnemy {
       return;
     }
 
-    if (this.attackCooldown <= 0 && distance <= attackCommitRange && directClear) {
-      if (distance > this.template.visualContactRange) {
-        this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: minimumBodySeparation });
+    if (this.attackCooldown <= 0 && distance <= attackCommitRange && (directClear || isFolsomFeudTarget)) {
+      if (isFolsomFeudTarget && (!directClear || this.lastMovedDistance < STUCK_MOVEMENT_THRESHOLD || distance <= visualContactRange || this.isTargetRoughlyInFront(target))) {
+        this.chooseAndBeginEnemyAttack(distance);
+        return;
+      }
+      if (distance > visualContactRange) {
+        this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - visualContactRange), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: minimumBodySeparation });
         this.logCombatEvent('maneuver', { target, maneuver: 'contact-lunge', distance });
         return;
       }
@@ -1199,14 +1237,14 @@ class BlackGrassFactionEnemy {
       return;
     }
 
-    if (this.combatManeuver === 'lunge' && distance > this.template.visualContactRange * 0.9) {
-      this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange * 0.88), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: minimumBodySeparation });
+    if (this.combatManeuver === 'lunge' && distance > visualContactRange * 0.9) {
+      this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - visualContactRange * 0.88), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: minimumBodySeparation });
       this.logCombatEvent('maneuver', { target, maneuver: 'lunge', distance });
       return;
     }
 
     if (distance > this.template.desiredCombatDistance + 0.45) {
-      this.moveToward(direction, this.template.seekSpeed * 0.86, deltaSeconds, Math.max(0, distance - this.template.desiredCombatDistance), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: this.template.minimumBodySeparation });
+      this.moveToward(direction, this.template.seekSpeed * 0.86, deltaSeconds, Math.max(0, distance - this.template.desiredCombatDistance), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: minimumBodySeparation });
       return;
     }
 
@@ -1339,18 +1377,25 @@ class BlackGrassFactionEnemy {
         const animationState = this.resolveStateAnimation(this.behaviorState);
         const duration = this.getActionDuration(animationState, 0.9);
         const progress = this.attackElapsed / Math.max(duration, 0.001);
+        const target = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy : null;
+        const visualContactRange = target ? this.getVisualContactRangeForTarget(target) : this.template.visualContactRange;
+        const attackCommitRange = target && this.isFolsomBloodFeudEnemyTarget(target)
+          ? this.template.attackCommitRange * FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRangeMultiplier
+          : this.template.attackCommitRange;
+        const directClear = this.hasClearMovementSegment(this.group.position, targetPosition, NAV_CLEARANCE_RADIUS);
         const canLungeIn = progress < this.template.attackDamageWindow.start
-          && distance > this.template.visualContactRange
-          && distance <= this.template.attackCommitRange
-          && this.hasClearMovementSegment(this.group.position, targetPosition, NAV_CLEARANCE_RADIUS);
+          && distance > visualContactRange
+          && distance <= attackCommitRange
+          && directClear
+          && !(target && this.isFolsomBloodFeudEnemyTarget(target) && this.lastMovedDistance < STUCK_MOVEMENT_THRESHOLD);
         if (canLungeIn) {
           this.moveToward(
             direction,
             this.template.lungeSpeed * 0.82,
             deltaSeconds,
-            Math.min(this.template.attackLungeDistance, Math.max(0, distance - this.template.visualContactRange)),
+            Math.min(this.template.attackLungeDistance, Math.max(0, distance - visualContactRange)),
             this.behaviorState,
-            { suppressStuckTracking: true, desiredTarget: targetPosition, faceTarget: targetPosition, minimumTargetDistance: this.template.minimumBodySeparation },
+            { suppressStuckTracking: true, desiredTarget: targetPosition, faceTarget: targetPosition, minimumTargetDistance: target && this.isFolsomBloodFeudEnemyTarget(target) ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.minimumBodySeparation : this.template.minimumBodySeparation },
           );
         }
       }
@@ -1848,6 +1893,7 @@ class BlackGrassFactionEnemy {
       }
     }
     const movedDistance = horizontalDistance(previous, this.group.position);
+    this.lastMovedDistance = movedDistance;
     if (!suppressStuckTracking) {
       this.stuckElapsed = movedDistance < STUCK_MOVEMENT_THRESHOLD ? this.stuckElapsed + deltaSeconds : 0;
       if (this.stuckElapsed >= SOFT_STUCK_SECONDS && !this.localAvoidanceWaypoint && desiredTarget) {
@@ -1936,8 +1982,8 @@ class BlackGrassFactionEnemy {
       const targetEnemy = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy : null;
       const isFeudTarget = this.isFolsomBloodFeudEnemyTarget(enemy) && enemy === targetEnemy;
       const nearAttackRange = isFeudTarget && distance <= this.template.attackCommitRange * FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRangeMultiplier;
-      if (isFeudTarget && nearAttackRange) {
-        strength = Math.min(strength, FOLSOM_BLOOD_FEUD_COMBAT_SPACING.separationStrengthNearAttackRange);
+      if (isFeudTarget) {
+        if (nearAttackRange) strength = Math.min(strength, FOLSOM_BLOOD_FEUD_COMBAT_SPACING.separationStrengthNearAttackRange);
         suppressedApproach = true;
         return;
       }
@@ -2034,11 +2080,12 @@ class BlackGrassFactionEnemy {
 }
 
 export class BlackGrassTempleFactionManager {
-  constructor({ scene, collision, anchors, navigationGraph = null, encounterZones = null, onGoreEvent = null, enableBattleDirector = true, enableRespawns = true, encounterMode = 'faction_war', respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS } = {}) {
+  constructor({ scene, collision, anchors, navigationGraph = null, outdoorVisibleSurfaceSampler = null, encounterZones = null, onGoreEvent = null, enableBattleDirector = true, enableRespawns = true, encounterMode = 'faction_war', respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS } = {}) {
     this.scene = scene;
     this.collision = collision;
     this.anchors = anchors;
     this.navigationGraph = navigationGraph;
+    this.outdoorVisibleSurfaceSampler = outdoorVisibleSurfaceSampler;
     this.enemies = [];
     this.spawnSerial = 0;
     this.respawnTimers = { sheep_demon: null, neck_man: null };
@@ -2288,6 +2335,7 @@ export class BlackGrassTempleFactionManager {
           scene: this.scene,
           collision: this.collision,
           navigationGraph: this.navigationGraph,
+          outdoorVisibleSurfaceSampler: this.outdoorVisibleSurfaceSampler,
           species,
           id: `${anchor.id ?? 'generated-anchor'}-${species}-${this.spawnSerial += 1}`,
           spawnAnchor: anchor,
@@ -2393,6 +2441,7 @@ export class BlackGrassTempleFactionManager {
         scene: this.scene,
         collision: this.collision,
         navigationGraph: this.navigationGraph,
+        outdoorVisibleSurfaceSampler: this.outdoorVisibleSurfaceSampler,
         species: 'neck_man',
         id: anchor.id,
         spawnAnchor: anchor,
@@ -2419,6 +2468,7 @@ export class BlackGrassTempleFactionManager {
         scene: this.scene,
         collision: this.collision,
         navigationGraph: this.navigationGraph,
+        outdoorVisibleSurfaceSampler: this.outdoorVisibleSurfaceSampler,
         species,
         id: `black-grass-temple-${species}-${this.spawnSerial += 1}`,
         spawnAnchor: anchor,

@@ -3679,6 +3679,7 @@ export class DungeonScene {
       collision: this.collision,
       anchors: factionAnchors,
       navigationGraph: runtime.navGraph,
+      outdoorVisibleSurfaceSampler: (x, z, options) => this.resolveOutdoorVisibleSurfaceY(x, z, options),
       encounterZones: runtime.encounterZones,
       onGoreEvent: (payload) => this.handleFactionGoreEvent(payload),
       enableBattleDirector: false,
