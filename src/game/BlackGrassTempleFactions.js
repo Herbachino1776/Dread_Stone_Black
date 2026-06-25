@@ -221,6 +221,16 @@ const FOLSOM_BLOOD_FEUD_IDLE_RETARGET_SECONDS = 0.18;
 const FOLSOM_BLOOD_FEUD_STUCK_RETARGET_SECONDS = 0.55;
 const ENEMY_PERSONAL_SPACE = 1.15;
 const ENEMY_SEPARATION_STRENGTH = 0.32;
+const FOLSOM_BLOOD_FEUD_FOOT_LIFT = 0.055;
+const FOLSOM_BLOOD_FEUD_COMBAT_SPACING = Object.freeze({
+  minimumBodySeparation: 0.72,
+  tooCloseDistance: 0.62,
+  separationStrengthNearAttackRange: 0.06,
+  attackCommitHoldSeconds: 0.34,
+  attackCommitRangeMultiplier: 1.12,
+  attackImpactRangeMultiplier: 1.16,
+  facingDot: 0.28,
+});
 const LOCOMOTION_ANIMATION_HOLD_SECONDS = Object.freeze({
   spawn: 0.4,
   patrol: 0.8,
@@ -513,6 +523,8 @@ class BlackGrassFactionEnemy {
     this.playerFightProximityElapsed = 0;
     this.farIrrelevantElapsed = 0;
     this.bloodFeudNoTargetElapsed = 0;
+    this.bloodFeudAttackCommitElapsed = 0;
+    this.lastSeparationSuppressedApproach = false;
   }
 
   load() {
@@ -565,7 +577,10 @@ class BlackGrassFactionEnemy {
           spawnScaleMultiplier: this.spawnScaleMultiplier,
           bloodFeud: this.encounterMode === 'folsom_neckman_blood_feud',
           freeForAllFaction: this.encounterMode === 'folsom_neckman_blood_feud',
+          groundDiagnostics: this.encounterMode === 'folsom_neckman_blood_feud' ? this.sampleCurrentGroundY(this.spawnAnchor.position) : undefined,
+          combatSpacingProfile: this.encounterMode === 'folsom_neckman_blood_feud' ? 'folsom_blood_feud_close_combat' : undefined,
         };
+        if (this.encounterMode === 'folsom_neckman_blood_feud') this.applyDynamicGrounding(this.group.position);
 
         this.setBehaviorState('spawn', { force: true });
         this.ensureSingleVisibleAnimationRoot();
@@ -747,6 +762,8 @@ class BlackGrassFactionEnemy {
       this.group.userData.generatedAiLod = updateTier;
       this.group.userData.generatedAiSkipped = false;
     }
+
+    this.applyDynamicGrounding(this.group.position);
 
     if (this.behaviorState === 'dead') {
       this.corpseTimer -= deltaSeconds;
@@ -1052,7 +1069,86 @@ class BlackGrassFactionEnemy {
     this.moveToPosition(target.group.position, speed, deltaSeconds, Math.max(0, distance - stopDistance), state);
   }
 
+
+  isFolsomBloodFeudEnemyTarget(enemy) {
+    return this.encounterMode === 'folsom_neckman_blood_feud'
+      && enemy?.encounterMode === this.encounterMode
+      && enemy !== this
+      && enemy?.species === this.species;
+  }
+
+  sampleCurrentGroundY(position) {
+    const x = position?.x;
+    const z = position?.z;
+    const fallbackY = Number.isFinite(position?.y) ? position.y : this.spawnAnchor?.position?.y ?? 0;
+    const sampled = this.collision?.sampleWalkableY?.(x, z, fallbackY);
+    if (sampled && Number.isFinite(sampled.y)) {
+      return {
+        y: sampled.y,
+        visualY: sampled.y + FOLSOM_BLOOD_FEUD_FOOT_LIFT,
+        source: sampled.surface?.id ?? sampled.surface?.userData?.id ?? sampled.kind ?? 'walkable-surface',
+        kind: sampled.kind ?? 'unknown',
+        priority: sampled.priority ?? null,
+      };
+    }
+    return { y: fallbackY, visualY: fallbackY + FOLSOM_BLOOD_FEUD_FOOT_LIFT, source: 'spawn-fallback', kind: 'fallback', priority: null };
+  }
+
+  applyDynamicGrounding(position = this.group?.position) {
+    if (this.encounterMode !== 'folsom_neckman_blood_feud' || !position) return position;
+    const ground = this.sampleCurrentGroundY(position);
+    position.y = ground.visualY;
+    if (this.group?.userData) this.group.userData.folsomBloodFeudGrounding = ground;
+    return position;
+  }
+
+  isTargetRoughlyInFront(target) {
+    if (!target?.group || !this.group) return false;
+    const toTarget = target.group.position.clone().sub(this.group.position);
+    toTarget.y = 0;
+    if (toTarget.lengthSq() < 0.001) return true;
+    toTarget.normalize();
+    const facing = new THREE.Vector3(Math.sin(this.group.rotation.y), 0, Math.cos(this.group.rotation.y)).normalize();
+    const requiredDot = this.isFolsomBloodFeudEnemyTarget(target) ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.facingDot : 0.45;
+    return facing.dot(toTarget) >= requiredDot;
+  }
+
+  getAttackImpactRangeForTarget(target) {
+    return this.isFolsomBloodFeudEnemyTarget(target)
+      ? this.template.attackImpactRange * FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackImpactRangeMultiplier
+      : this.template.attackImpactRange;
+  }
+
+  shouldForceBloodFeudAttack(deltaSeconds, target, distance, attackCommitRange) {
+    if (!this.isFolsomBloodFeudEnemyTarget(target) || this.attackCooldown > 0) {
+      this.bloodFeudAttackCommitElapsed = 0;
+      return false;
+    }
+    const inCommitRange = distance <= attackCommitRange;
+    const inFront = this.isTargetRoughlyInFront(target);
+    if (!inCommitRange || !inFront) {
+      this.bloodFeudAttackCommitElapsed = 0;
+      return false;
+    }
+    this.bloodFeudAttackCommitElapsed += deltaSeconds;
+    return this.bloodFeudAttackCommitElapsed >= FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitHoldSeconds;
+  }
+
+  updateBloodFeudCombatDiagnostics(target, distance, { attackCommitRange, impactRange, separationSuppressed } = {}) {
+    if (this.encounterMode !== 'folsom_neckman_blood_feud' || !this.group) return;
+    this.group.userData.folsomBloodFeudCombat = {
+      targetId: target?.id ?? null,
+      targetDistance: Number(distance.toFixed(3)),
+      attackRange: Number((attackCommitRange ?? this.template.attackCommitRange).toFixed(3)),
+      impactRange: Number((impactRange ?? this.getAttackImpactRangeForTarget(target)).toFixed(3)),
+      separationSuppressingApproach: Boolean(separationSuppressed),
+      attackAttempted: ['attack_enemy_faction', 'jump_attack_enemy_faction'].includes(this.behaviorState),
+      attackCommitElapsed: Number((this.bloodFeudAttackCommitElapsed ?? 0).toFixed(3)),
+    };
+  }
+
   updateEnemyCombat(deltaSeconds, target, distance, toTarget) {
+    const isFolsomFeudTarget = this.isFolsomBloodFeudEnemyTarget(target);
     const directClear = this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS);
     if (!directClear) {
       this.blockedTargetElapsed += deltaSeconds;
@@ -1066,7 +1162,16 @@ class BlackGrassFactionEnemy {
     const direction = distance > 0.001 ? toTarget.clone().normalize() : new THREE.Vector3(Math.sin(this.group.rotation.y), 0, Math.cos(this.group.rotation.y));
     const strafe = new THREE.Vector3(direction.z * this.combatStrafeSign, 0, -direction.x * this.combatStrafeSign).normalize();
 
-    if (distance < this.template.minimumBodySeparation) {
+    const minimumBodySeparation = isFolsomFeudTarget ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.minimumBodySeparation : this.template.minimumBodySeparation;
+    const tooCloseDistance = isFolsomFeudTarget ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.tooCloseDistance : this.template.tooCloseDistance;
+    const attackCommitRange = isFolsomFeudTarget ? this.template.attackCommitRange * FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRangeMultiplier : this.template.attackCommitRange;
+    this.updateBloodFeudCombatDiagnostics(target, distance, { attackCommitRange, impactRange: this.getAttackImpactRangeForTarget(target), separationSuppressed: this.lastSeparationSuppressedApproach });
+    if (isFolsomFeudTarget && this.shouldForceBloodFeudAttack(deltaSeconds, target, distance, attackCommitRange)) {
+      this.chooseAndBeginEnemyAttack(distance);
+      return;
+    }
+
+    if (distance < minimumBodySeparation) {
       const sideBias = Math.random() < 0.55 ? strafe.multiplyScalar(0.75) : new THREE.Vector3();
       const backstep = direction.clone().multiplyScalar(-1).add(sideBias).normalize();
       this.moveToward(backstep, this.template.backstepSpeed, deltaSeconds, Infinity, 'defensive_backstep');
@@ -1074,9 +1179,9 @@ class BlackGrassFactionEnemy {
       return;
     }
 
-    if (this.attackCooldown <= 0 && distance <= this.template.attackCommitRange && directClear) {
+    if (this.attackCooldown <= 0 && distance <= attackCommitRange && directClear) {
       if (distance > this.template.visualContactRange) {
-        this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: this.template.minimumBodySeparation });
+        this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: minimumBodySeparation });
         this.logCombatEvent('maneuver', { target, maneuver: 'contact-lunge', distance });
         return;
       }
@@ -1086,7 +1191,7 @@ class BlackGrassFactionEnemy {
 
     if (this.combatManeuverTimer <= 0) this.chooseCombatManeuver(distance);
 
-    if (distance < this.template.tooCloseDistance) {
+    if (distance < tooCloseDistance) {
       const sideBias = Math.random() < 0.55 ? strafe.multiplyScalar(0.75) : new THREE.Vector3();
       const backstep = direction.clone().multiplyScalar(-1).add(sideBias).normalize();
       this.moveToward(backstep, this.template.backstepSpeed, deltaSeconds, Infinity, 'defensive_backstep');
@@ -1095,7 +1200,7 @@ class BlackGrassFactionEnemy {
     }
 
     if (this.combatManeuver === 'lunge' && distance > this.template.visualContactRange * 0.9) {
-      this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange * 0.88), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: this.template.minimumBodySeparation });
+      this.moveToward(direction, this.template.lungeSpeed, deltaSeconds, Math.max(0, distance - this.template.visualContactRange * 0.88), 'combat_lunge', { desiredTarget: target.group.position, faceTarget: target.group.position, minimumTargetDistance: minimumBodySeparation });
       this.logCombatEvent('maneuver', { target, maneuver: 'lunge', distance });
       return;
     }
@@ -1276,7 +1381,7 @@ class BlackGrassFactionEnemy {
 
     if (this.currentTarget?.type === 'enemy') {
       const target = this.currentTarget.enemy;
-      if (target?.isAlive && horizontalDistance(this.group.position, target.group.position) <= this.template.attackImpactRange && this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS)) {
+      if (target?.isAlive && horizontalDistance(this.group.position, target.group.position) <= this.getAttackImpactRangeForTarget(target) && this.isTargetRoughlyInFront(target) && this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS)) {
         const result = target.receiveFactionDamage(this.template.attackDamage, this.template.displayName);
         this.attackHasDamaged = true;
         this.emitFactionGore({ target, damage: this.template.attackDamage, result });
@@ -1705,7 +1810,7 @@ class BlackGrassFactionEnemy {
     const previous = this.group.position.clone();
     const movementDirection = this.getAdjustedMovementDirection(direction, stepDistance, desiredTarget);
     const next = this.group.position.clone().add(movementDirection.clone().multiplyScalar(stepDistance));
-    next.y = this.spawnAnchor.position.y;
+    this.applyDynamicGrounding(next);
     if (this.canStandAtFloorPosition(next)) {
       this.group.position.copy(next);
       this.setBehaviorState(movingState);
@@ -1713,7 +1818,7 @@ class BlackGrassFactionEnemy {
       const probeDirection = this.chooseSteeringProbeDirection(movementDirection, desiredTarget ?? next);
       if (probeDirection) {
         const probeNext = this.group.position.clone().add(probeDirection.clone().multiplyScalar(stepDistance));
-        probeNext.y = this.spawnAnchor.position.y;
+        this.applyDynamicGrounding(probeNext);
         if (this.canStandAtFloorPosition(probeNext)) {
           this.group.position.copy(probeNext);
           this.steeringProbeDirection.copy(probeDirection);
@@ -1724,8 +1829,10 @@ class BlackGrassFactionEnemy {
       if (horizontalDistance(previous, this.group.position) < 0.001) {
         const slideX = this.group.position.clone();
         slideX.x = next.x;
+        this.applyDynamicGrounding(slideX);
         const slideZ = this.group.position.clone();
         slideZ.z = next.z;
+        this.applyDynamicGrounding(slideZ);
         if (this.canStandAtFloorPosition(slideX)) {
           this.group.position.copy(slideX);
           this.setBehaviorState(movingState);
@@ -1783,9 +1890,10 @@ class BlackGrassFactionEnemy {
       }
     }
 
-    const separation = this.getEnemySeparationVector();
-    if (separation.lengthSq() > 0.0001) {
-      adjusted.add(separation.multiplyScalar(ENEMY_SEPARATION_STRENGTH)).normalize();
+    const separation = this.getEnemySeparationVector(desiredTarget);
+    this.lastSeparationSuppressedApproach = separation.suppressedApproach;
+    if (separation.vector.lengthSq() > 0.0001) {
+      adjusted.add(separation.vector.multiplyScalar(separation.strength)).normalize();
     }
     return adjusted;
   }
@@ -1801,7 +1909,7 @@ class BlackGrassFactionEnemy {
     angles.forEach((degrees) => {
       const candidate = rotateHorizontal(direction, THREE.MathUtils.degToRad(degrees)).normalize();
       const probe = this.group.position.clone().add(candidate.clone().multiplyScalar(STEERING_PROBE_DISTANCE));
-      probe.y = this.spawnAnchor.position.y;
+      this.applyDynamicGrounding(probe);
       if (!this.isWaypointWalkable(probe, NAV_CLEARANCE_RADIUS * 0.75)) return;
       if (!this.hasClearMovementSegment(this.group.position, probe, NAV_CLEARANCE_RADIUS * 0.65)) return;
       const progress = candidate.dot(desired);
@@ -1815,20 +1923,32 @@ class BlackGrassFactionEnemy {
     return best;
   }
 
-  getEnemySeparationVector() {
+  getEnemySeparationVector(desiredTarget = null) {
     const separation = new THREE.Vector3();
+    let strength = ENEMY_SEPARATION_STRENGTH;
+    let suppressedApproach = false;
     const enemies = this.currentUpdateContext?.enemies ?? [];
     enemies.forEach((enemy) => {
       if (enemy === this || !enemy.isAlive || !enemy.group) return;
       const away = this.group.position.clone().sub(enemy.group.position);
       away.y = 0;
       const distance = away.length();
-      const personalSpace = Math.max(ENEMY_PERSONAL_SPACE, enemy.template?.minimumBodySeparation ?? 0, this.template.minimumBodySeparation ?? 0);
+      const targetEnemy = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy : null;
+      const isFeudTarget = this.isFolsomBloodFeudEnemyTarget(enemy) && enemy === targetEnemy;
+      const nearAttackRange = isFeudTarget && distance <= this.template.attackCommitRange * FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRangeMultiplier;
+      if (isFeudTarget && nearAttackRange) {
+        strength = Math.min(strength, FOLSOM_BLOOD_FEUD_COMBAT_SPACING.separationStrengthNearAttackRange);
+        suppressedApproach = true;
+        return;
+      }
+      const personalSpace = isFeudTarget
+        ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.minimumBodySeparation
+        : Math.max(ENEMY_PERSONAL_SPACE, enemy.template?.minimumBodySeparation ?? 0, this.template.minimumBodySeparation ?? 0);
       if (distance <= 0.001 || distance >= personalSpace) return;
       separation.add(away.normalize().multiplyScalar((personalSpace - distance) / personalSpace));
     });
     if (separation.lengthSq() > 0.001) separation.normalize();
-    return separation;
+    return { vector: separation, strength, suppressedApproach };
   }
 
   getEnemyBodyPenalty(point) {
@@ -1837,6 +1957,8 @@ class BlackGrassFactionEnemy {
     enemies.forEach((enemy) => {
       if (enemy === this || !enemy.isAlive || !enemy.group) return;
       const distance = horizontalDistance(point, enemy.group.position);
+      const targetEnemy = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy : null;
+      if (this.isFolsomBloodFeudEnemyTarget(enemy) && enemy === targetEnemy) return;
       if (distance < ENEMY_PERSONAL_SPACE) penalty += (ENEMY_PERSONAL_SPACE - distance) / ENEMY_PERSONAL_SPACE;
     });
     return penalty;
