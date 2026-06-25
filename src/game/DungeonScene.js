@@ -3651,16 +3651,26 @@ export class DungeonScene {
 
   addCompiledLocationEnemies(runtime = this.compiledLocationRuntime) {
     if (!runtime || runtime.locationId === 'black-grass-temple') return;
-    const factionAnchors = runtime.spawnAnchors.filter((spawn) => (
+    const factionSpawns = runtime.spawnAnchors.filter((spawn) => (
       spawn.kind === 'enemy'
       && ['sheep_demon', 'neck_man'].includes(spawn.species)
       && (spawn.allowedForInitialWave || spawn.initialWave || spawn.tags?.includes('initial-wave'))
-    )).map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime)).filter(Boolean);
-    if (factionAnchors.length === 0) return;
+    ));
+    const folsomBloodFeudSpawns = runtime.locationId === 'folsom'
+      ? factionSpawns.filter((spawn) => spawn.tags?.includes('folsom-blood-feud'))
+      : [];
+    const folsomBloodFeudAnchors = folsomBloodFeudSpawns
+      .map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime))
+      .filter(Boolean);
+    const isFolsomBloodFeud = runtime.locationId === 'folsom' && folsomBloodFeudAnchors.length === 3;
+    if (runtime.locationId === 'folsom' && import.meta.env.DEV) {
+      console.info(`[FolsomBloodFeud] found anchors: ${folsomBloodFeudAnchors.length}`);
+    }
 
-    const isFolsomBloodFeud = runtime.locationId === 'folsom'
-      && factionAnchors.length === 3
-      && factionAnchors.every((anchor) => anchor.tags?.includes('folsom-blood-feud'));
+    const factionAnchors = (isFolsomBloodFeud
+      ? folsomBloodFeudAnchors
+      : factionSpawns.map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime)).filter(Boolean));
+    if (factionAnchors.length === 0) return;
     this.blackGrassFactionManager = new BlackGrassTempleFactionManager({
       scene: this.scene,
       collision: this.collision,

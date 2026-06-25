@@ -574,6 +574,9 @@ class BlackGrassFactionEnemy {
         this.onLoaded?.(this);
       })
       .catch((error) => {
+        if (this.encounterMode === 'folsom_neckman_blood_feud') {
+          console.warn(`[FolsomBloodFeud] model load failed: ${this.template.creatureConfigId}`, error);
+        }
         console.warn(`Black Grass Temple ${this.template.displayName} failed to load idle model; faction spawn skipped.`, error);
       });
   }
@@ -2100,6 +2103,7 @@ export class BlackGrassTempleFactionManager {
   }
 
   spawnInitialAnchors(anchors = this.anchors.filter((anchor) => anchor.initialWave)) {
+    let spawnedCount = 0;
     anchors
       .filter((anchor) => FACTIONS[anchor.preferredFaction])
       .forEach((anchor) => {
@@ -2117,9 +2121,13 @@ export class BlackGrassTempleFactionManager {
           encounterMode: this.encounterMode,
         });
         this.enemies.push(enemy);
+        spawnedCount += 1;
         enemy.load();
       });
     this.initialWaveSpawned = true;
+    if (IS_DEV && this.encounterMode === 'folsom_neckman_blood_feud') {
+      console.info(`[FolsomBloodFeud] spawned initial neckmen: ${spawnedCount}`);
+    }
   }
 
   update(deltaSeconds, playerPosition, options = {}) {
@@ -2193,6 +2201,7 @@ export class BlackGrassTempleFactionManager {
     if (living.length !== 1) return;
     if (this.bloodFeudRespawnTimer === null) {
       this.bloodFeudRespawnTimer = this.respawnCooldownSeconds;
+      if (IS_DEV) console.info(`[FolsomBloodFeud] living count: ${living.length} when the respawn timer starts`);
       return;
     }
     this.bloodFeudRespawnTimer -= deltaSeconds;
@@ -2200,6 +2209,7 @@ export class BlackGrassTempleFactionManager {
 
     const livingIds = new Set(living.map((enemy) => enemy.spawnAnchor?.id));
     const missingAnchors = this.anchors.filter((anchor) => anchor.preferredFaction === 'neck_man' && !livingIds.has(anchor.id)).slice(0, 2);
+    if (IS_DEV) console.info(`[FolsomBloodFeud] living count: ${living.length} when the respawn timer completes`);
     missingAnchors.forEach((anchor) => {
       const enemy = new BlackGrassFactionEnemy({
         scene: this.scene,
