@@ -575,7 +575,14 @@ class BlackGrassFactionEnemy {
       })
       .catch((error) => {
         if (this.encounterMode === 'folsom_neckman_blood_feud') {
-          console.warn(`[FolsomBloodFeud] model load failed: ${this.template.creatureConfigId}`, error);
+          console.error('[FolsomBloodFeud] Neckman model asset load failed', {
+            creatureConfigId: this.template.creatureConfigId,
+            spawnAnchorId: this.spawnAnchor?.id,
+            idleState,
+            idleAsset: this.template.assets?.[idleState],
+            assetUrls: this.template.assets,
+            error,
+          });
         }
         console.warn(`Black Grass Temple ${this.template.displayName} failed to load idle model; faction spawn skipped.`, error);
       });
