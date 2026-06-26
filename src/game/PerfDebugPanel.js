@@ -96,18 +96,23 @@ export class PerfDebugPanel {
     const enemies = this.game.dungeon?.blackGrassFactionManager?.enemies ?? this.game.dungeon?.sheepDemonEnemies ?? [];
     const activeEnemies = enemies.filter((e) => e?.isAlive !== false && !e?.isRemoved).length + (this.game.dungeon?.sheepDemonEnemy?.isAlive ? 1 : 0);
     const activeNeckmen = enemies.filter((e) => e?.species === 'neck_man' && e?.isAlive !== false && !e?.isRemoved).length;
+    const neckmanStateCounts = enemies
+      .filter((e) => e?.species === 'neck_man' && e?.isAlive !== false && !e?.isRemoved)
+      .map((e) => `${e.id ?? e.group?.name ?? 'neckman'}:${e.animation?.getLoadedStates?.().join('|') ?? e.group?.userData?.loadedAnimationStates?.join('|') ?? 'none'}`);
+    const activeAnimationMixers = enemies.reduce((sum, e) => sum + (e?.animation?.getActiveMixerCount?.() ?? 0), 0);
+    const loadedCreatureAnimationRoots = enemies.reduce((sum, e) => sum + (e?.animation?.getLoadedRootCount?.() ?? 0), 0);
     const gore = this.game.dungeon?.goreRuntime?.getDebugSummary?.() ?? {};
     const info = this.game.renderer?.info;
     const size = new THREE.Vector2(); this.game.renderer?.getDrawingBufferSize?.(size);
     const avgMs = this.samples.reduce((s, x) => s + x.ms, 0) / Math.max(1, this.samples.length);
-    return { currentFps: 1000 / (this.samples.at(-1)?.ms ?? 16.7), avgFps: 1000 / avgMs, worstMs: Math.max(0, ...this.samples.map((x) => x.ms)), calls: info?.render?.calls ?? 0, tris: info?.render?.triangles ?? 0, geoms: info?.memory?.geometries ?? 0, textures: info?.memory?.textures ?? 0, objects, meshes, skinned, transparent, materials: materials.size, lights, shadows, activeEnemies, activeNeckmen, goreCount: (gore.activeParticles ?? 0) + (gore.decals ?? 0) + (gore.corpses ?? 0) + (gore.wounds ?? 0), dpr: this.game.renderer?.getPixelRatio?.() ?? window.devicePixelRatio, width: size.x, height: size.y, location: this.game.locationId ?? this.game.dungeon?.area ?? 'unknown' };
+    return { currentFps: 1000 / (this.samples.at(-1)?.ms ?? 16.7), avgFps: 1000 / avgMs, worstMs: Math.max(0, ...this.samples.map((x) => x.ms)), calls: info?.render?.calls ?? 0, tris: info?.render?.triangles ?? 0, geoms: info?.memory?.geometries ?? 0, textures: info?.memory?.textures ?? 0, objects, meshes, skinned, transparent, materials: materials.size, lights, shadows, activeEnemies, activeNeckmen, activeAnimationMixers, loadedCreatureAnimationRoots, neckmanStateCounts, goreCount: (gore.activeParticles ?? 0) + (gore.decals ?? 0) + (gore.corpses ?? 0) + (gore.wounds ?? 0), dpr: this.game.renderer?.getPixelRatio?.() ?? window.devicePixelRatio, width: size.x, height: size.y, location: this.game.locationId ?? this.game.dungeon?.area ?? 'unknown' };
   }
 
   render(force = false) {
     const now = performance.now(); if (!force && now - this.lastRender < UPDATE_MS) return; this.lastRender = now;
     const m = this.collect();
     const toggleLine = `neckmen ${this.toggles.neckmen ? 'on' : 'off'}, foliage ${this.toggles.foliage ? 'on' : 'off'}, shadows ${this.toggles.shadows ? 'on' : 'off'}, gore ${this.toggles.gore ? 'on' : 'off'}, water ${this.toggles.water ? 'on' : 'off'}, dprCap ${this.toggles.lowDpr ? 'on' : 'off'}`;
-    this.lastReport = `Location: ${m.location}\nFPS: ${m.currentFps.toFixed(0)} / avg ${m.avgFps.toFixed(0)} / worst ${m.worstMs.toFixed(1)}ms\nRenderer: ${m.calls} calls / ${m.tris} tris / ${m.geoms} geoms / ${m.textures} textures\nScene: ${m.objects} objects / ${m.meshes} meshes / ${m.skinned} skinned / ${m.transparent} transparent / ${m.materials} materials / ${m.lights} lights / ${m.shadows} shadows\nGameplay: ${m.activeEnemies} enemies / ${m.activeNeckmen} neckmen / ${m.goreCount} gore\nDPR: ${m.dpr.toFixed(2)}  Canvas: ${m.width}x${m.height}\nToggles: ${toggleLine}`;
+    this.lastReport = `Location: ${m.location}\nFPS: ${m.currentFps.toFixed(0)} / avg ${m.avgFps.toFixed(0)} / worst ${m.worstMs.toFixed(1)}ms\nRenderer: ${m.calls} calls / ${m.tris} tris / ${m.geoms} geoms / ${m.textures} textures\nScene: ${m.objects} objects / ${m.meshes} meshes / ${m.skinned} skinned / ${m.transparent} transparent / ${m.materials} materials / ${m.lights} lights / ${m.shadows} shadows\nGameplay: ${m.activeEnemies} enemies / ${m.activeNeckmen} neckmen / ${m.goreCount} gore\nCreature anim: ${m.activeAnimationMixers} active mixers / ${m.loadedCreatureAnimationRoots} loaded roots\nNeckman states: ${m.neckmanStateCounts.length ? m.neckmanStateCounts.join(', ') : 'none'}\nDPR: ${m.dpr.toFixed(2)}  Canvas: ${m.width}x${m.height}\nToggles: ${toggleLine}`;
     this.reportEl.textContent = this.lastReport;
   }
 }
