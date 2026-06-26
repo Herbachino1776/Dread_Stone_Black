@@ -33,7 +33,7 @@ export class CreatureActor {
     this.refreshUserData();
   }
 
-  load({ initialStates = null, lazyStates = null, addToScene = true } = {}) {
+  load({ initialStates = null, lazyStates = null, addToScene = true, lazyLoadDelayMs = 0 } = {}) {
     const expected = this.config.assets?.expectedAnimations ?? Object.keys(this.config.assets?.animationFiles ?? {});
     const initial = initialStates ?? expected;
     const lazy = lazyStates ?? [];
@@ -46,12 +46,16 @@ export class CreatureActor {
         this.isLoaded = true;
         this.refreshUserData();
         this.logLoadSummaryOnce();
-        lazy.forEach((state) => {
-          this.animationSet.loadState(state)
-            .then(() => {
-              this.refreshUserData();
-            })
-            .catch(() => {});
+        lazy.forEach((state, index) => {
+          const load = () => {
+            this.animationSet.loadState(state)
+              .then(() => {
+                this.refreshUserData();
+              })
+              .catch(() => {});
+          };
+          if (lazyLoadDelayMs > 0) window.setTimeout(load, lazyLoadDelayMs * (index + 1));
+          else load();
         });
         return this;
       })

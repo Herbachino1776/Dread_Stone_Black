@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
 const gltfLoader = new GLTFLoader();
+const modelCache = new Map();
 
 function prepareMaterials(root) {
   root.traverse((child) => {
@@ -59,7 +61,14 @@ function centerAndScale(root, { targetHeight = 1, maxWidth = 1.15, scaleMultipli
   return { box: centeredBox, scale };
 }
 
-export function loadDungeonModel({ url, targetHeight, maxWidth, scaleMultiplier = 1, groundOffset = 0, yOffset = 0 } = {}) {
+function cloneLoadedModel(cached) {
+  const root = cloneSkeleton(cached.root);
+  root.userData = { ...(root.userData ?? {}), sourceUrl: cached.url, clonedFromModelCache: true };
+  const box = cached.box?.clone?.() ?? cached.box;
+  return { root, gltf: cached.gltf, scale: cached.scale, box };
+}
+
+function loadDungeonModelIntoCache({ url, targetHeight, maxWidth, scaleMultiplier = 1, groundOffset = 0, yOffset = 0 } = {}) {
   return new Promise((resolve, reject) => {
     gltfLoader.load(
       url,
@@ -73,10 +82,20 @@ export function loadDungeonModel({ url, targetHeight, maxWidth, scaleMultiplier 
 
         prepareMaterials(root);
         const { box, scale } = centerAndScale(root, { targetHeight, maxWidth, scaleMultiplier, groundOffset, yOffset });
-        resolve({ root, gltf, scale, box });
+        root.visible = false;
+        root.userData = { ...(root.userData ?? {}), sourceUrl: url, modelCacheSource: true };
+        resolve({ url, root, gltf, scale, box });
       },
       undefined,
       (error) => reject(error),
     );
   });
+}
+
+export function loadDungeonModel({ url, targetHeight, maxWidth, scaleMultiplier = 1, groundOffset = 0, yOffset = 0 } = {}) {
+  const cacheKey = JSON.stringify({ url, targetHeight, maxWidth, scaleMultiplier, groundOffset, yOffset });
+  if (!modelCache.has(cacheKey)) {
+    modelCache.set(cacheKey, loadDungeonModelIntoCache({ url, targetHeight, maxWidth, scaleMultiplier, groundOffset, yOffset }));
+  }
+  return modelCache.get(cacheKey).then((cached) => cloneLoadedModel(cached));
 }

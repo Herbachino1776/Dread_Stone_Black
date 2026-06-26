@@ -39,6 +39,8 @@ export class CreatureAnimationSet {
     this.mixers = [];
     this.currentState = null;
     this.currentRequestedState = null;
+    this.previousFade = null;
+    this.lastActiveMixerCount = 0;
     this.missingStates = new Set();
     this.loadingStates = new Map();
     this.warnedFallbacks = new Set();
@@ -166,6 +168,7 @@ export class CreatureAnimationSet {
     } else {
       nextTrack.action?.reset().fadeIn(fade).play();
       previousTrack?.action?.fadeOut(fade);
+      this.previousFade = previousTrack && fade > 0 ? { track: previousTrack, remaining: fade } : null;
     }
 
     this.currentState = resolvedState;
@@ -174,7 +177,24 @@ export class CreatureAnimationSet {
   }
 
   update(deltaSeconds) {
-    this.mixers.forEach((mixer) => mixer.update(deltaSeconds));
+    const activeMixers = new Set();
+    const currentTrack = this.currentState ? this.tracks[this.currentState] : null;
+    if (currentTrack?.mixer) activeMixers.add(currentTrack.mixer);
+    if (this.previousFade?.track?.mixer && this.previousFade.remaining > 0) {
+      activeMixers.add(this.previousFade.track.mixer);
+      this.previousFade.remaining -= deltaSeconds;
+      if (this.previousFade.remaining <= 0) this.previousFade = null;
+    }
+    activeMixers.forEach((mixer) => mixer.update(deltaSeconds));
+    this.lastActiveMixerCount = activeMixers.size;
+  }
+
+  getActiveMixerCount() {
+    return this.lastActiveMixerCount;
+  }
+
+  getLoadedRootCount() {
+    return Object.keys(this.tracks).length;
   }
 
   getDuration(state = this.currentState, fallback = 0) {
@@ -199,5 +219,7 @@ export class CreatureAnimationSet {
     this.mixers = [];
     this.currentState = null;
     this.currentRequestedState = null;
+    this.previousFade = null;
+    this.lastActiveMixerCount = 0;
   }
 }

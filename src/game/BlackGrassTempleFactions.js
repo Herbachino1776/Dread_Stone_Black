@@ -172,13 +172,13 @@ function createFactionTemplate(template, scaleMultiplier, encounterMode) {
     minimumBodySeparation: FOLSOM_BLOOD_FEUD_COMBAT_SPACING.minimumBodySeparation,
     desiredCombatDistance: FOLSOM_BLOOD_FEUD_COMBAT_SPACING.desiredCombatDistance,
     tooCloseDistance: FOLSOM_BLOOD_FEUD_COMBAT_SPACING.tooCloseDistance,
-    enemyAttackAnimations: Object.freeze(['punch_left', 'punch_right']),
+    enemyAttackAnimations: Object.freeze(['punch_right']),
     animationMap: Object.freeze({
       ...scaled.animationMap,
       seek_enemy_faction: 'walk',
       combat_lunge: 'walk',
-      jump_attack_enemy_faction: 'punch_left',
-      attack_player_fallback: 'punch_left',
+      jump_attack_enemy_faction: 'punch_right',
+      attack_player_fallback: 'punch_right',
     }),
   });
 }
@@ -249,7 +249,7 @@ const FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS = 0.1;
 const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_SECONDS = 0.18;
 const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_DISTANCE = 0.18;
 const FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE = 1.65;
-const FOLSOM_BLOOD_FEUD_ANIMATION_STATES = Object.freeze(['idle', 'walk', 'punch_left', 'punch_right', 'die']);
+const FOLSOM_BLOOD_FEUD_ANIMATION_STATES = Object.freeze(['idle', 'walk', 'punch_right', 'die']);
 const FOLSOM_BLOOD_FEUD_COMBAT_SPACING = Object.freeze({
   desiredCombatDistance: 0.9,
   tooCloseDistance: 0.45,
@@ -597,7 +597,7 @@ class BlackGrassFactionEnemy {
       config: this.creatureConfigOverride,
     });
 
-    return this.actor.load({ initialStates: [idleState], lazyStates: [...priorityRemaining, ...optionalRemaining] })
+    return this.actor.load({ initialStates: [idleState], lazyStates: [...priorityRemaining, ...optionalRemaining], lazyLoadDelayMs: isFolsomFeudNeckman ? 90 : 0 })
       .then((actor) => {
         this.group = actor.group;
         this.group.visible = true;
@@ -749,6 +749,9 @@ class BlackGrassFactionEnemy {
     this.group.userData.normalizedScale = Object.fromEntries(Object.entries(tracks).map(([state, track]) => [state, track.scale]));
     this.group.userData.visibleAnimationState = this.group.userData.animationState;
     this.group.userData.visibleAnimationRootCount = Object.values(tracks).filter((track) => track.root.visible).length;
+    this.group.userData.loadedCreatureAnimationRoots = this.animation.getLoadedRootCount?.() ?? Object.keys(tracks).length;
+    this.group.userData.activeAnimationMixerCount = this.animation.getActiveMixerCount?.() ?? 0;
+    this.group.userData.loadedCreatureAnimationStateCount = Object.keys(tracks).length;
     this.group.userData.boundingBoxSize = boxSizeSummary(this.group);
     this.group.userData.worldPosition = vectorSummary(this.group.getWorldPosition(new THREE.Vector3()));
   }
@@ -796,7 +799,7 @@ class BlackGrassFactionEnemy {
     const updateTier = context?.updateTier ?? 'near';
     const aiTickAllowed = context?.aiTickAllowed !== false;
     const animationDelta = generatedRuntime && updateTier === 'sleep' ? 0 : deltaSeconds;
-    if (animationDelta > 0) this.animation?.mixers.forEach((mixer) => mixer.update(animationDelta));
+    if (animationDelta > 0) this.animation?.update(animationDelta);
     this.attackCooldown = Math.max(0, this.attackCooldown - deltaSeconds);
     this.devCombatLogElapsed += deltaSeconds;
     this.jumpAttackCooldown = Math.max(0, this.jumpAttackCooldown - deltaSeconds);
