@@ -1119,7 +1119,7 @@ export class DungeonScene {
     this.updateRawFishPickups(deltaSeconds);
     this.updateCookedFishPickups(deltaSeconds);
     this.updateFieldCampfireFlames(deltaSeconds, player);
-    this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
+    if (this.perfDebugToggles?.gore !== false) this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
     this.updateAnimatedDungeonMaterials(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
     this.updateBalthazanFloorCoverageQa(player);
@@ -1138,6 +1138,10 @@ export class DungeonScene {
 
   updateOutdoorFoliageBillboards(player = null) {
     if (!player?.position || !this.fieldFoliageBillboards.length) return;
+    if (this.perfDebugToggles?.foliage === false) {
+      this.fieldFoliageBillboards.forEach((billboard) => { billboard.visible = false; });
+      return;
+    }
 
     this.fieldFoliageBillboards.forEach((billboard) => {
       const dx = player.position.x - billboard.position.x;
@@ -3914,12 +3918,14 @@ export class DungeonScene {
 
   handleFactionGoreEvent({ kind, event }) {
     if (!event) return;
+    if (this.perfDebugToggles?.gore === false) return;
     if (kind === 'death') this.goreRuntime.emitDeathGore(event);
     else this.goreRuntime.emitHitGore(event);
   }
 
   emitPlayerAttackGore(hit, attack) {
     if (!hit?.goreEvent) return;
+    if (this.perfDebugToggles?.gore === false) return;
     const event = {
       ...hit.goreEvent,
       weaponId: hit.goreEvent.weaponId ?? attack.goreProfileId ?? attack.weaponId ?? 'sword',
@@ -4060,6 +4066,7 @@ export class DungeonScene {
 
   updateAnimatedDungeonMaterials(deltaSeconds) {
     this.animatedTextureFlipbooks.forEach((flipbook) => {
+      if (flipbook.material?.userData?.perfWaterAnimationDisabled) return;
       flipbook.elapsedMs += deltaSeconds * 1000;
       const nextFrameIndex = Math.floor(flipbook.elapsedMs / flipbook.frameDurationMs) % flipbook.frames.length;
       if (nextFrameIndex === flipbook.frameIndex) return;
@@ -4071,6 +4078,7 @@ export class DungeonScene {
     if (!this.scene) return;
     this.scene.traverse((object) => {
       if (!object.isMesh || object.userData?.animated !== 'canalWater') return;
+      if (object.userData?.perfWaterAnimationDisabled) return;
       const material = object.material;
       const texture = material?.map;
       if (!texture) return;
@@ -4581,8 +4589,21 @@ export class DungeonScene {
 
   updateBlackGrassFactionEnemies(deltaSeconds, player) {
     if (!this.blackGrassFactionManager || !player?.position) return;
+    if (this.perfDebugToggles?.neckmen === false && this.blackGrassFactionManager.encounterMode === 'folsom_neckman_blood_feud') {
+      this.blackGrassFactionManager.enemies?.forEach((enemy) => {
+        if (enemy.species !== 'neck_man') return;
+        if (enemy.group) enemy.group.visible = false;
+        enemy.currentTarget = null;
+      });
+      return;
+    }
     this.updateGeneratedEnemyActivation(player.position);
     this.blackGrassFactionManager.update(deltaSeconds, player.position, { generatedRuntime: this.generatedEnemyRuntime });
+    if (this.perfDebugToggles?.neckmen !== false) {
+      this.blackGrassFactionManager.enemies?.forEach((enemy) => {
+        if (enemy.species === 'neck_man' && enemy.group) enemy.group.visible = true;
+      });
+    }
   }
 
   updateSheepDemonEnemy(deltaSeconds, player) {
