@@ -15,6 +15,7 @@ import { GameState } from './GameState.js';
 import { Hud } from './Hud.js';
 import { Interactions } from './Interactions.js';
 import { MobileControls } from './MobileControls.js';
+import { PerfDebugPanel } from './PerfDebugPanel.js';
 import { PlayerController } from './PlayerController.js';
 import { BroadswordView } from './weapons/BroadswordView.js';
 import { BroadswordGestureController } from './weapons/BroadswordGestureController.js';
@@ -73,6 +74,7 @@ export class Game {
   async startUnsafe() {
     const query = new URLSearchParams(window.location.search);
     this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
+    this.perfDebugEnabled = query.get('perf') === '1';
     this.isPaused = false;
     this.resetConfirmTimer = null;
     this.wasKeyboardInteractHeld = false;
@@ -177,6 +179,7 @@ export class Game {
     this.bindHudToolbar();
     this.emitLocationEntered();
     this.playFieldReturnReactionIfNeeded({ query });
+    if (this.perfDebugEnabled) this.perfDebugPanel = new PerfDebugPanel({ game: this });
 
     this.renderer.setAnimationLoop((time) => this.update(time));
   }
@@ -480,6 +483,7 @@ export class Game {
 
   update() {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
+    this.perfDebugPanel?.update();
 
     if (this.isPaused) {
       this.controls.consumeAttack();
@@ -516,6 +520,7 @@ export class Game {
     this.hud.updateDebug(this.player, this.castingController?.debug, this.broadswordGestureController?.debug);
     this.feedback.update(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
+    this.perfDebugPanel?.render();
   }
 
   bindHudToolbar() {
