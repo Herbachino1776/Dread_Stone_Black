@@ -150,6 +150,7 @@ export const FOLSOM_FOLIAGE_SWATHE_SPECS = Object.freeze([
   { idPrefix: 'folsom_north_road_cedar_redwoods', center: [24, 62], radiusX: 28, radiusZ: 28, count: 36, seed: 177608, layerMix: { redwood: 4, cedar: 3, understory: 2 }, tags: ['north-road-corridor', 'inside-edge-tree-belt'], harvestable: false, intentionalHarvestableCount: 1 },
   { idPrefix: 'folsom_reliquary_dark_cedar_redwoods', center: [76, 24], radiusX: 14, radiusZ: 24, count: 28, seed: 177609, layerMix: { redwood: 5, cedar: 4, understory: 1 }, variantWeights: { tall: 2.2, giant: 1.6, ancient: 1.2, young: 0.2 }, tags: ['rusty-reliquary-ominous'], harvestable: false },
 ]);
+export const FOLSOM_PINE_SWATHE_SPECS = FOLSOM_FOLIAGE_SWATHE_SPECS;
 const folsomFoliageBillboards = Object.freeze(FOLSOM_FOLIAGE_SWATHE_SPECS.flatMap((spec) => createFolsomFoliageSwathe({
   ...spec, variants: folsomFoliageBillboardVariants, avoidZones: folsomFoliageAvoidZones, terrainSampler: folsomTerrainSampler, bounds: FOLSOM_VISIBLE_TREE_BOUNDS,
 })));
