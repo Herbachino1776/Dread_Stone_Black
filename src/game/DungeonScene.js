@@ -22,7 +22,7 @@ import { createGameGoreRegistry } from './gore/goreRegistry.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
 import './creatures/creatureRegistry.js';
-import { FISH_SPECS, FISH_TEXTURE_PROFILES, PhysicalFishAngling, createFishMesh, resolveFishSizeGroup } from './world-scene/FishingWorldRuntime.js';
+import { FISH_TEXTURE_PROFILES, createFishMesh, createFishingWorldRuntime, resolveFishSizeGroup } from './world-scene/FishingWorldRuntime.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -356,8 +356,19 @@ export class DungeonScene {
     this.compiledSkyDomes = [];
     this.fieldRedwoodHarvestables = [];
     this.fieldSurvivalObjects = new Map();
-    this.fieldFishingZones = [];
-    this.fieldRawFishPickups = [];
+    this.fishingWorldRuntime = createFishingWorldRuntime({
+      scene: this.scene,
+      dungeon: this,
+      outdoorInteractions: this.outdoorInteractions,
+      isOutdoorActive: () => this.area === 'field' || this.isCompiledOutdoorFieldArea(),
+      resolveOutdoorVisibleSurfaceY: (x, z, options) => this.resolveOutdoorVisibleSurfaceY(x, z, options),
+      alignObjectBottomToSurface: (object, surfaceY, epsilon) => this.alignObjectBottomToSurface(object, surfaceY, epsilon),
+      resolveRawFishPickupMaterial: (reference, fallback) => this.resolveRawFishPickupMaterial(reference, fallback),
+      fieldHalfSize: FIELD_HALF_SIZE,
+      maxRawFishPickups: MAX_FIELD_RAW_FISH_PICKUPS,
+    });
+    this.fieldFishingZones = this.fishingWorldRuntime.fishingZones;
+    this.fieldRawFishPickups = this.fishingWorldRuntime.rawFishPickups;
     this.outdoorTerrainRuntime = null;
     this.outdoorVisiblePathSurfaceRuntime = null;
     this.outdoorVisibleSurfaceRuntime = null;
@@ -1070,7 +1081,7 @@ export class DungeonScene {
     this.updateSheepDemonEnemy(deltaSeconds, player);
     this.updateCompiledSkyDomes(player);
     this.updateOutdoorFoliageBillboards(player);
-    this.updateRawFishPickups(deltaSeconds);
+    this.fishingWorldRuntime?.update(deltaSeconds);
     this.updateCookedFishPickups(deltaSeconds);
     this.updateFieldCampfireFlames(deltaSeconds, player);
     if (this.perfDebugToggles?.gore !== false) this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
@@ -1474,7 +1485,7 @@ export class DungeonScene {
     this.outdoorTerrainRuntime = runtime.terrainSampler;
     this.outdoorVisiblePathSurfaceRuntime = runtime.pathSurfaceSampler;
     this.outdoorVisibleSurfaceRuntime = { sampleOutdoorY: (x, z) => this.resolveOutdoorVisibleSurfaceY(x, z).y };
-    this.fieldFishingZones.push(...runtime.fishingZones);
+    this.fishingWorldRuntime.registerFishingZones(runtime.fishingZones);
     this.fieldFoliageBillboards.push(...runtime.foliageBillboards);
     if (this.collision && (this.area === 'field' || this.isCompiledOutdoorFieldArea())) this.collision.outdoorTerrainSampler = this.outdoorVisibleSurfaceRuntime;
   }
@@ -1620,7 +1631,7 @@ export class DungeonScene {
       mesh.userData = { collision: 'visual-only water boundary', fishing: true, performance: 'single static low-poly strip; no reflections, physics, or per-frame raycasts' };
       this.scene.add(mesh);
     });
-    this.fieldFishingZones = specs.map((spec) => ({
+    this.fishingWorldRuntime.registerFishingZones(specs.map((spec) => ({
       id: `field_river_fishing_${spec.name}`,
       name: spec.name,
       minX: spec.pos[0] - spec.size[0] / 2,
@@ -1629,110 +1640,23 @@ export class DungeonScene {
       maxZ: spec.pos[1] + spec.size[1] / 2,
       interactPadding: FIELD_FISHING_INTERACT_PADDING,
       position: new THREE.Vector3(spec.pos[0], 0, spec.pos[1]),
-    }));
+    })), { replace: true });
   }
 
   getNearbyFishingZone(position) {
-    if (!(this.area === 'field' || this.isCompiledOutdoorFieldArea()) || !position) return null;
-    return this.fieldFishingZones.find((zone) => {
-      if (zone.shape === 'ellipse') {
-        const padding = zone.interactPadding ?? 0;
-        const dx = position.x - zone.centerX;
-        const dz = position.z - zone.centerZ;
-        const rx = zone.radiusX + padding;
-        const rz = zone.radiusZ + padding;
-        return ((dx * dx) / (rx * rx)) + ((dz * dz) / (rz * rz)) <= 1;
-      }
-      return position.x >= zone.minX - zone.interactPadding
-        && position.x <= zone.maxX + zone.interactPadding
-        && position.z >= zone.minZ - zone.interactPadding
-        && position.z <= zone.maxZ + zone.interactPadding;
-    }) ?? null;
+    return this.fishingWorldRuntime?.getNearbyFishingZone(position) ?? null;
   }
 
   isPositionInFishingWater(position, margin = 0.35) {
-    if (!(this.area === 'field' || this.isCompiledOutdoorFieldArea()) || !position) return false;
-    return this.fieldFishingZones.some((zone) => {
-      if (zone.shape === 'ellipse') {
-        const dx = position.x - zone.centerX;
-        const dz = position.z - zone.centerZ;
-        const rx = zone.radiusX + margin;
-        const rz = zone.radiusZ + margin;
-        return ((dx * dx) / (rx * rx)) + ((dz * dz) / (rz * rz)) <= 1;
-      }
-      return position.x >= zone.minX - margin
-        && position.x <= zone.maxX + margin
-        && position.z >= zone.minZ - margin
-        && position.z <= zone.maxZ + margin;
-    });
+    return this.fishingWorldRuntime?.isPositionInFishingWater(position, margin) ?? false;
   }
 
   getRawFishLandingPosition(player, fishingZone = null) {
-    if (!player?.position) return null;
-    const zone = fishingZone ?? this.getNearbyFishingZone(player.position);
-    if (zone?.shape === 'ellipse' && [zone.centerX, zone.centerZ, zone.radiusX, zone.radiusZ].every(Number.isFinite)) {
-      const center = new THREE.Vector3(zone.centerX, 0, zone.centerZ);
-      const outward = player.position.clone().sub(center);
-      outward.y = 0;
-      if (outward.lengthSq() < 0.001) {
-        outward.set(Math.cos(stableHash(zone.id) % 360), 0, Math.sin(stableHash(`${zone.id}:shore`) % 360));
-      }
-      outward.normalize();
-      const denom = Math.sqrt((outward.x * outward.x) / (zone.radiusX * zone.radiusX) + (outward.z * outward.z) / (zone.radiusZ * zone.radiusZ));
-      const edgeDistance = denom > 0 ? 1 / denom : Math.max(zone.radiusX, zone.radiusZ);
-      const shoreOffset = 1.2;
-      const maxPlayerDistance = 2.65;
-      const minWaterClearance = 0.45;
-      const waterEdge = center.clone().addScaledVector(outward, edgeDistance);
-      const preferred = waterEdge.clone().addScaledVector(outward, shoreOffset);
-      const playerDistance = horizontalDistance(preferred, player.position);
-      const landing = playerDistance > maxPlayerDistance
-        ? player.position.clone().addScaledVector(preferred.clone().sub(player.position).setY(0).normalize(), maxPlayerDistance)
-        : preferred;
-      const minOutside = edgeDistance + minWaterClearance;
-      const fromCenter = landing.clone().sub(center);
-      fromCenter.y = 0;
-      const landingDistance = fromCenter.length();
-      if (landingDistance < minOutside) landing.copy(center).addScaledVector(outward, minOutside);
-      landing.x = THREE.MathUtils.clamp(landing.x, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
-      landing.z = THREE.MathUtils.clamp(landing.z, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
-      landing.y = this.sampleFishLandingSurfaceY(landing, zone);
-      landing.userData = { rawFishLanding: 'pond-shoreline-edge', waterEdgePoint: { x: waterEdge.x, z: waterEdge.z }, outsideWater: !this.isPositionInFishingWater(landing, 0) };
-      if (!this.isPositionInFishingWater(landing, 0)) return landing;
-    }
-    const forward = typeof player.getLookDirection === 'function'
-      ? player.getLookDirection().clone()
-      : new THREE.Vector3(Math.sin(player.yaw ?? 0), 0, Math.cos(player.yaw ?? 0));
-    forward.y = 0;
-    if (forward.lengthSq() < 0.001) forward.set(0, 0, 1);
-    forward.normalize();
-    const right = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
-    const base = player.position.clone();
-    const clampToField = (position) => {
-      position.x = THREE.MathUtils.clamp(position.x, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
-      position.z = THREE.MathUtils.clamp(position.z, -FIELD_HALF_SIZE + 3, FIELD_HALF_SIZE - 3);
-      position.y = this.sampleFishLandingSurfaceY(position, zone);
-      return position;
-    };
-    const candidates = [
-      base.clone().addScaledVector(forward, 1.15),
-      base.clone().addScaledVector(forward, 1.35),
-      base.clone().addScaledVector(forward, 0.95).addScaledVector(right, 0.55),
-      base.clone().addScaledVector(forward, 0.95).addScaledVector(right, -0.55),
-      base.clone().addScaledVector(right, 0.75),
-      base.clone().addScaledVector(right, -0.75),
-    ].map(clampToField);
-    return candidates.find((candidate) => !this.isPositionInFishingWater(candidate)) ?? candidates[0] ?? null;
+    return this.fishingWorldRuntime?.getRawFishLandingPosition(player, fishingZone) ?? null;
   }
 
   sampleFishLandingSurfaceY(position, fishingZone = null) {
-    if (!position) return 0;
-    const zone = fishingZone ?? this.getNearbyFishingZone?.(position);
-    if (zone && this.isPositionInFishingWater(position, -0.05)) {
-      const waterY = zone.position?.y;
-      if (Number.isFinite(waterY)) return waterY + 0.035;
-    }
-    return this.resolveOutdoorVisibleSurfaceY(position.x, position.z, { water: false }).y;
+    return this.fishingWorldRuntime?.sampleFishLandingSurfaceY(position, fishingZone) ?? 0;
   }
 
   resolveOutdoorVisibleSurfaceY(x, z, options = {}) {
@@ -2423,9 +2347,7 @@ export class DungeonScene {
   }
 
   selectFishSpeciesForZone(zone) {
-    const pool = zone?.fishSpeciesPool?.length ? zone.fishSpeciesPool : ['smallRiverFish'];
-    const counter = (zone.catchCounter = (zone.catchCounter ?? 0) + 1);
-    return pool[stableHash(`${zone.fishCatchSeed ?? zone.id}:${counter}`) % pool.length] ?? 'smallRiverFish';
+    return this.fishingWorldRuntime?.selectFishSpeciesForZone(zone) ?? 'smallRiverFish';
   }
 
   resolveRawFishPickupMaterial(reference, fallback = {}) {
@@ -2441,173 +2363,48 @@ export class DungeonScene {
   }
 
   createRawFishPickupMesh(fishSpecies = 'smallRiverFish') {
-    const resolvedSpecies = FISH_SPECS[fishSpecies] ? fishSpecies : 'smallRiverFish';
-    const group = createFishMesh(resolvedSpecies, {
-      materialResolver: (reference, fallback) => this.resolveRawFishPickupMaterial(reference, fallback),
-      id: `raw-fish-pickup-${resolvedSpecies}`,
-      baseUserData: {
-        itemId: 'raw_fish',
-        fishSpecies: resolvedSpecies,
-        objectCategory: 'rawFishPickup',
-        generatedBy: 'DungeonScene:createRawFishPickupMesh',
-        pickupScale: 'small-readable-field-pickup',
-      },
-    });
-    group.userData = {
-      ...group.userData,
-      itemId: 'raw_fish',
-      fishSpecies: resolvedSpecies,
-      objectCategory: 'rawFishPickupVisual',
-      visualSource: 'sharedKerovacFishSpeciesFactory',
-      pickupGroundOrientation: 'stable-root-yaw-plus-visual-side-roll',
-      localFishAxis: 'X=head-tail-horizontal',
-    };
-    group.scale.setScalar(0.48);
-    group.rotation.set(Math.PI / 2 + 0.18, 0, 0);
-
-    const root = new THREE.Group();
-    root.name = `raw-fish-pickup-ground-root-${resolvedSpecies}`;
-    root.userData = {
-      itemId: 'raw_fish',
-      fishSpecies: resolvedSpecies,
-      objectCategory: 'rawFishPickup',
-      visualSource: 'sharedKerovacFishSpeciesFactory',
-      pickupGroundOrientation: 'stable-root-yaw-plus-visual-side-roll',
-      localFishAxis: 'X=head-tail-horizontal',
-      interactionTargetStable: true,
-      animatedVisualChild: true,
-      flopAnimation: { rollAmplitude: [0.25, 0.45], hopHeight: [0.04, 0.1], pulseDuration: [0.18, 0.35], interval: [0.8, 1.6] },
-    };
-    root.add(group);
-    root.userData.visualChild = group;
-    return root;
+    return this.fishingWorldRuntime?.createRawFishPickupMesh(fishSpecies) ?? null;
   }
 
   setFishingFeedback(feedback = null) {
     this.fishingFeedback = feedback;
+    this.fishingWorldRuntime?.setFishingFeedback(feedback);
   }
 
   ensurePhysicalFishAngling() {
-    if (!this.physicalFishAngling) this.physicalFishAngling = new PhysicalFishAngling({ scene: this.scene, dungeon: this, feedback: this.fishingFeedback });
-    this.physicalFishAngling.feedback = this.fishingFeedback;
-    return this.physicalFishAngling;
+    return this.fishingWorldRuntime?.ensurePhysicalFishAngling() ?? null;
   }
 
   updatePhysicalFishAngling(deltaSeconds, context = {}) {
-    return this.ensurePhysicalFishAngling().update(deltaSeconds, context);
+    return this.fishingWorldRuntime?.updatePhysicalFishAngling(deltaSeconds, context);
   }
 
   cancelPhysicalFishAngling(physics, reason = 'lost') {
-    this.physicalFishAngling?.cancelHookedFish?.(physics, reason);
+    this.fishingWorldRuntime?.cancelPhysicalFishAngling(physics, reason);
   }
 
   registerPhysicalLureLanding() {
-    this.ensurePhysicalFishAngling();
+    this.fishingWorldRuntime?.registerPhysicalLureLanding();
   }
 
-  spawnRawFishPickupAtPosition(position, fishingZone = null, player = null, { fishSpecies = null, fishSizeGroup = 'medium' } = {}) {
-    if (!position) return null;
-    const landingPlayer = {
-      position: position.clone?.() ?? new THREE.Vector3(position.x ?? 0, position.y ?? 0, position.z ?? 0),
-      yaw: player?.yaw ?? 0,
-      getLookDirection: () => {
-        const outward = player?.position ? player.position.clone().sub(position).setY(0) : new THREE.Vector3(0, 0, 1);
-        return outward.lengthSq() > 0.001 ? outward.normalize() : new THREE.Vector3(0, 0, 1);
-      },
-    };
-    return this.spawnRawFishPickupForPlayer(landingPlayer, fishingZone, { fishSpecies, fishSizeGroup, landingOverride: position });
+  spawnRawFishPickupAtPosition(position, fishingZone = null, player = null, options = {}) {
+    return this.fishingWorldRuntime?.spawnRawFishPickupAtPosition(position, fishingZone, player, options) ?? null;
   }
 
   spawnRawFishPickupFromCast(lurePosition, fishingZone = null, player = null) {
-    if (!lurePosition || !fishingZone) return null;
-    const castPlayer = {
-      position: lurePosition.clone?.() ?? new THREE.Vector3(lurePosition.x ?? 0, lurePosition.y ?? 0, lurePosition.z ?? 0),
-      yaw: player?.yaw ?? 0,
-      getLookDirection: () => {
-        if (player?.position) {
-          const outward = (player.position.clone?.() ?? new THREE.Vector3()).sub(lurePosition).setY(0);
-          if (outward.lengthSq() > 0.001) return outward.normalize();
-        }
-        return new THREE.Vector3(0, 0, 1);
-      },
-    };
-    return this.spawnRawFishPickupForPlayer(castPlayer, fishingZone);
+    return this.fishingWorldRuntime?.spawnRawFishPickupFromCast(lurePosition, fishingZone, player) ?? null;
   }
 
   spawnRawFishPickupForPlayer(player, fishingZone = null, options = {}) {
-    if (!(this.area === 'field' || this.isCompiledOutdoorFieldArea())) return null;
-    const zone = fishingZone ?? this.getNearbyFishingZone(player?.position);
-    const landing = options.landingOverride?.clone?.() ?? this.getRawFishLandingPosition(player, zone);
-    if (!landing) return null;
-    if (this.fieldRawFishPickups.length >= MAX_FIELD_RAW_FISH_PICKUPS) {
-      this.removeRawFishPickup(this.fieldRawFishPickups[0]);
-    }
-    const pickupId = `field_raw_fish_${Date.now()}_${this.fieldRawFishPickups.length + 1}`;
-    const fishSpecies = options.fishSpecies ?? this.selectFishSpeciesForZone(zone);
-    const fishSizeGroup = options.fishSizeGroup ?? 'medium';
-    const fishSize = resolveFishSizeGroup(fishSizeGroup);
-    const mesh = this.createRawFishPickupMesh(fishSpecies);
-    mesh.scale.multiplyScalar(fishSize.scale);
-    mesh.name = `${pickupId}-${fishSpecies}-raw-fish-pickup`;
-    const surfaceY = this.resolveOutdoorVisibleSurfaceY(landing.x, landing.z, { fallbackY: landing.y ?? 0 }).y;
-    mesh.position.set(landing.x, surfaceY + 0.9, landing.z);
-    const shoreHeading = zone?.shape === 'ellipse'
-      ? Math.atan2(landing.x - zone.centerX, landing.z - zone.centerZ) + Math.PI / 2
-      : (player?.yaw ?? 0) + Math.PI / 2;
-    mesh.rotation.y = shoreHeading;
-    this.scene.add(mesh);
-    this.alignObjectBottomToSurface(mesh, surfaceY);
-    const seed = stableHash(`${pickupId}:${fishSpecies}`);
-    const visual = mesh.userData.visualChild ?? mesh.children[0] ?? mesh;
-    const flop = {
-      visual,
-      baseY: visual.position.y,
-      baseRotation: visual.rotation.clone(),
-      elapsed: (seed % 1000) / 1000,
-      interval: 0.8 + ((seed >>> 8) % 800) / 1000,
-      duration: 0.18 + ((seed >>> 16) % 170) / 1000,
-      rollAmplitude: 0.25 + ((seed >>> 4) % 200) / 1000,
-      hopHeight: 0.04 + ((seed >>> 12) % 60) / 1000,
-      direction: seed % 2 === 0 ? 1 : -1,
-    };
-    const target = mesh.position.clone();
-    const start = target.clone().setY(target.y + 0.64);
-    mesh.position.copy(start);
-    const pickup = { id: pickupId, mesh, itemId: 'raw_fish', fishSpecies, fishSizeGroup, hungerSeconds: fishSize.hungerSeconds, start, target, elapsed: 0, duration: 0.55, landing: landing.clone().setY(surfaceY), surfaceY, flop };
-    this.fieldRawFishPickups.push(pickup);
-    this.outdoorInteractions.push({ id: pickupId, label: 'Raw Fish', target: landing.clone().setY(surfaceY + 0.35), range: 2.85, hint: 'Pick up Raw Fish', message: 'Raw Fish Acquired.', type: 'rawFishPickup', pickup, itemId: 'raw_fish', fishSpecies, fishSizeGroup, hungerSeconds: fishSize.hungerSeconds });
-    return pickup;
+    return this.fishingWorldRuntime?.spawnRawFishPickupForPlayer(player, fishingZone, options) ?? null;
   }
 
   updateRawFishPickups(deltaSeconds) {
-    this.fieldRawFishPickups.forEach((pickup) => {
-      if (!pickup.mesh) return;
-      if (pickup.elapsed < pickup.duration) {
-        pickup.elapsed = Math.min(pickup.duration, pickup.elapsed + deltaSeconds);
-        const t = pickup.elapsed / pickup.duration;
-        pickup.mesh.position.lerpVectors(pickup.start, pickup.target, t);
-        pickup.mesh.position.y = THREE.MathUtils.lerp(pickup.start.y, pickup.target.y, t) + Math.sin(t * Math.PI) * 0.32;
-      }
-      const flop = pickup.flop;
-      if (!flop?.visual || pickup.elapsed < pickup.duration) return;
-      flop.elapsed += deltaSeconds;
-      const cycle = flop.elapsed % flop.interval;
-      const pulseT = cycle / flop.duration;
-      const active = pulseT >= 0 && pulseT <= 1;
-      const pulse = active ? Math.sin(pulseT * Math.PI) : 0;
-      const snap = active ? Math.sin(pulseT * Math.PI * 2) : 0;
-      flop.visual.rotation.copy(flop.baseRotation);
-      flop.visual.rotation.x += pulse * flop.rollAmplitude * flop.direction;
-      flop.visual.rotation.y += snap * 0.12;
-      flop.visual.position.y = flop.baseY + pulse * flop.hopHeight;
-    });
+    this.fishingWorldRuntime?.updateRawFishPickups(deltaSeconds);
   }
 
   removeRawFishPickup(pickup) {
-    if (!pickup) return;
-    if (pickup.mesh) this.scene.remove(pickup.mesh);
-    this.fieldRawFishPickups = this.fieldRawFishPickups.filter((entry) => entry !== pickup);
-    this.outdoorInteractions = this.outdoorInteractions.filter((entry) => entry.pickup !== pickup);
+    this.fishingWorldRuntime?.removeRawFishPickup(pickup);
   }
 
   updateCookedFishPickups(deltaSeconds) {

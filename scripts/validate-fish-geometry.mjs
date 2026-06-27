@@ -292,16 +292,20 @@ for (const root of fishRoots) {
 }
 
 
-const dungeonSceneSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8'));
-if (dungeonSceneSource.includes('FIELD_FISH_SPECIES')) fail('Duplicate local FIELD_FISH_SPECIES registry returned; raw fish pickups must use shared Kerovac species.');
-if (!dungeonSceneSource.includes("visualSource: 'sharedKerovacFishSpeciesFactory'")) fail('Raw fish pickup invalid: shared Kerovac fish factory visual source metadata is missing.');
-if (!dungeonSceneSource.includes('pickupGroundOrientation')) fail('Raw fish pickup invalid: fish pickup root has no ground orientation transform metadata.');
-if (!dungeonSceneSource.includes('animatedVisualChild: true') || !dungeonSceneSource.includes('flopAnimation')) fail('Raw fish pickup invalid: flopping animation metadata is missing for raw fish pickups.');
-if (!dungeonSceneSource.includes('interactionTargetStable: true')) fail('Raw fish pickup invalid: pickup interaction target is not marked stable while visual child flops.');
-if (!dungeonSceneSource.includes("zone?.shape === 'ellipse'") || !dungeonSceneSource.includes("rawFishLanding: 'pond-shoreline-edge'") || !dungeonSceneSource.includes('waterEdge')) fail('Pond Expo raw fish landing invalid: shoreline ellipse/water-edge landing logic is missing.');
-if (!dungeonSceneSource.includes('this.getRawFishLandingPosition(player, zone)')) fail('Raw fish spawn invalid: active fishing zone is not passed into landing calculation.');
-if (!dungeonSceneSource.includes('new THREE.Box3().setFromObject(object)') || !dungeonSceneSource.includes('groundedByBoundingBox')) fail('Fish pickup invalid: grounded placement does not account for mesh bounding box.');
-if (!dungeonSceneSource.includes('sampleFishLandingSurfaceY')) fail('Fish pickup invalid: landing surface height is not sampled before grounding.');
+const readSource = (path) => import('node:fs/promises').then((fs) => fs.readFile(new URL(path, import.meta.url), 'utf8'));
+const dungeonSceneSource = await readSource('../src/game/DungeonScene.js');
+const fishingWorldRuntimeSource = await readSource('../src/game/world-scene/FishingWorldRuntime.js');
+const fishingRuntimeSource = `${dungeonSceneSource}
+${fishingWorldRuntimeSource}`;
+if (fishingRuntimeSource.includes('FIELD_FISH_SPECIES')) fail('Duplicate local FIELD_FISH_SPECIES registry returned; raw fish pickups must use shared Kerovac species.');
+if (!fishingRuntimeSource.includes("visualSource: 'sharedKerovacFishSpeciesFactory'")) fail('Raw fish pickup invalid: shared Kerovac fish factory visual source metadata is missing.');
+if (!fishingRuntimeSource.includes('pickupGroundOrientation')) fail('Raw fish pickup invalid: fish pickup root has no ground orientation transform metadata.');
+if (!fishingRuntimeSource.includes('animatedVisualChild: true') || !fishingRuntimeSource.includes('flopAnimation')) fail('Raw fish pickup invalid: flopping animation metadata is missing for raw fish pickups.');
+if (!fishingRuntimeSource.includes('interactionTargetStable: true')) fail('Raw fish pickup invalid: pickup interaction target is not marked stable while visual child flops.');
+if (!fishingRuntimeSource.includes("zone?.shape === 'ellipse'") || !fishingRuntimeSource.includes("rawFishLanding: 'pond-shoreline-edge'") || !fishingRuntimeSource.includes('waterEdge')) fail('Pond Expo raw fish landing invalid: shoreline ellipse/water-edge landing logic is missing.');
+if (!fishingRuntimeSource.includes('this.getRawFishLandingPosition(player, zone)')) fail('Raw fish spawn invalid: active fishing zone is not passed into landing calculation.');
+if (!fishingRuntimeSource.includes('new THREE.Box3().setFromObject(object)') || !fishingRuntimeSource.includes('groundedByBoundingBox')) fail('Fish pickup invalid: grounded placement does not account for mesh bounding box.');
+if (!fishingRuntimeSource.includes('sampleFishLandingSurfaceY')) fail('Fish pickup invalid: landing surface height is not sampled before grounding.');
 
 const pondExpoDefinition = await import('../src/game/locations/oarbOutdoorExpo.definition.js').then((module) => module.oarbOutdoorExpoDefinition ?? module.default ?? module);
 const waterBodies = pondExpoDefinition.waterBodies ?? pondExpoDefinition.ponds ?? [];
