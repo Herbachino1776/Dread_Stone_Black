@@ -2,14 +2,23 @@ import * as THREE from 'three';
 import { compileDungeonLocation } from '../engine/dungeon-authoring/DungeonCompiler.js';
 import { DungeonDebugRenderer } from '../engine/dungeon-authoring/DungeonDebugRenderer.js';
 import { registerDungeonRuntime } from '../engine/dungeon-authoring/DungeonRuntimeRegistry.js';
-import { createOutdoorTerrainMesh } from '../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
-import { createPondCompositeGeometry, createPondOutlineDiscGeometry, createPondOutlineRingGeometry } from '../engine/outdoor-authoring/PondCompositeBuilder.js';
-import { createOutdoorSplinePathSupportSurfaces, createOutdoorSplineTrailEdgeMeshes, createOutdoorSplineTrailMeshes, createOutdoorSplineVisibleSurfaceSampler } from '../engine/outdoor-authoring/OutdoorSplineBuilder.js';
-import { createOutdoorCurvedBlockers } from '../engine/outdoor-authoring/OutdoorBlockerBuilder.js';
-import { createOutdoorPrimitiveMeshes } from '../engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
-import { createPondDecorGroups } from '../engine/outdoor-authoring/PondDecorBuilder.js';
-import { OUTDOOR_FOLIAGE_SPRITES, OUTDOOR_REDWOOD_FOLIAGE_SPRITES, OUTDOOR_SMALL_FOLIAGE_SPRITES } from '../engine/outdoor-authoring/OutdoorFoliageRegistry.js';
-import { createCreatureActor } from '../engine/creatures/CreatureActorFactory.js';
+import {
+  OUTDOOR_FOLIAGE_SPRITES,
+  OUTDOOR_REDWOOD_FOLIAGE_SPRITES,
+  OUTDOOR_SMALL_FOLIAGE_SPRITES,
+  createOutdoorCurvedBlockers,
+  createOutdoorPrimitiveMeshes,
+  createOutdoorSplinePathSupportSurfaces,
+  createOutdoorSplineTrailEdgeMeshes,
+  createOutdoorSplineTrailMeshes,
+  createOutdoorSplineVisibleSurfaceSampler,
+  createOutdoorTerrainMesh,
+  createPondCompositeGeometry,
+  createPondDecorGroups,
+  createPondOutlineDiscGeometry,
+  createPondOutlineRingGeometry,
+} from './world-scene/OutdoorWorldRuntime.js';
+import { RAM_MAN_FRIENDLY_ANIMATION_FILES, createCreatureActor } from './world-scene/CreatureWorldRuntime.js';
 import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
 import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
 import { CollisionWorld } from './Collision.js';
@@ -20,10 +29,7 @@ import { createGameGoreRegistry } from './gore/goreRegistry.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
 import './creatures/creatureRegistry.js';
-import { RAM_MAN_FRIENDLY_ANIMATION_FILES } from './creatures/ramManFriendly.config.js';
-import { FISH_SPECS, FISH_TEXTURE_PROFILES, createFishMesh } from './fishing/FishMeshFactory.js';
-import { PhysicalFishAngling } from './fishing/PhysicalFishAngling.js';
-import { resolveFishSizeGroup } from './fishing/FishSizeGroups.js';
+import { FISH_SPECS, FISH_TEXTURE_PROFILES, PhysicalFishAngling, createFishMesh, resolveFishSizeGroup } from './world-scene/FishingWorldRuntime.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;

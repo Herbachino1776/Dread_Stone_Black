@@ -1,5 +1,6 @@
 import { EQUIPMENT_SLOTS } from '../../engine/equipment/EquipmentSlot.js';
 import { EQUIPMENT_EVENTS } from '../../engine/equipment/EquipmentEvents.js';
+import { SurvivalInventoryBridge } from './SurvivalInventoryBridge.js';
 
 const POCKETS = Object.freeze([
   { id: 'weapons', label: 'Weapons', icon: '⚔' },
@@ -24,6 +25,7 @@ export class EquipmentPanel {
     this.root = root;
     this.equipmentRuntime = equipmentRuntime;
     this.gameState = gameState;
+    this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime, gameState });
     this.panel = root.querySelector('[data-equipment-panel]');
     this.stopPanelEvent = (event) => event.stopPropagation();
     this.currentWeapon = root.querySelector('[data-equipment="current-weapon"]');
@@ -119,22 +121,25 @@ export class EquipmentPanel {
       detail: { ...details, damage: details.damage ?? weapon.damage, type: details.type ?? weapon.weaponType ?? 'Weapon' },
       onActivate: () => {
         const isEquipped = this.equipmentRuntime.getEquippedWeaponProfile().id === weapon.id;
-        if (this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, isEquipped ? 'unarmed' : weapon.id)) {
-          this.gameState?.equipFieldTool?.(!isEquipped && ['wood_axe', 'fishing_rod'].includes(weapon.id) ? weapon.id : null);
+        const nextWeaponId = isEquipped ? 'unarmed' : weapon.id;
+        if (['wood_axe', 'fishing_rod'].includes(weapon.id)) {
+          this.survivalInventory.equipWeapon(isEquipped ? null : weapon.id);
+        } else {
+          this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, nextWeaponId);
         }
       },
     };
   }
 
   createItemEntries() {
-    const equippedItem = this.gameState?.getEquippedFieldItem?.();
+    const equippedItem = this.survivalInventory.getEquippedConsumable();
     const items = [
       ['wood', 'Wood', 'Campfire fuel.'],
       ['raw_fish', 'Raw Fish', 'Can be cooked at a campfire.'],
       ['cooked_fish', 'Cooked Fish', 'Restores hunger when eaten.'],
     ];
     return items.flatMap(([id, name, description]) => {
-      const count = this.gameState?.getFieldItemCount?.(id) ?? 0;
+      const count = this.survivalInventory.getItemCount(id);
       if (count < 1) return [];
       return [{
         id, name, description, quantity: count,
@@ -143,8 +148,8 @@ export class EquipmentPanel {
         equipped: equippedItem === id,
         detail: ITEM_DETAILS[id],
         onActivate: () => {
-          const nextItem = this.gameState?.getEquippedFieldItem?.() === id ? null : id;
-          if (!this.gameState?.equipFieldItem?.(nextItem)) this.gameState?.equipFieldItem?.(null);
+          const nextItem = this.survivalInventory.getEquippedConsumable() === id ? null : id;
+          if (!this.survivalInventory.equipConsumable(nextItem)) this.survivalInventory.equipConsumable(null);
           window.dispatchEvent(new CustomEvent('field-item-equipped-changed'));
         },
       }];
@@ -152,15 +157,14 @@ export class EquipmentPanel {
   }
 
   createOffhandEntries() {
-    if (!this.gameState?.hasFieldOffhandItem?.('torch') && !this.equipmentRuntime?.hasItem?.('torch')) return [];
-    const equippedOffhand = this.equipmentRuntime?.getEquippedOffhandId?.() ?? this.gameState?.getEquippedFieldOffhand?.();
+    if (!this.survivalInventory.hasItem('torch')) return [];
+    const equippedOffhand = this.survivalInventory.getEquippedOffhand();
     return [{
       id: 'torch', name: 'Torch', stats: equippedOffhand === 'torch' ? 'Equipped' : 'Offhand', meta: 'Light',
       description: 'A wooden torch wrapped in cloth. Provides light in dark places.', equipped: equippedOffhand === 'torch', detail: ITEM_DETAILS.torch,
       onActivate: () => {
-        const isEquipped = this.equipmentRuntime?.getEquippedOffhandId?.() === 'torch';
-        if (this.equipmentRuntime?.equip(EQUIPMENT_SLOTS.offhand, isEquipped ? null : 'torch')) {
-          this.gameState?.equipFieldOffhand?.(isEquipped ? null : 'torch');
+        const isEquipped = this.survivalInventory.getEquippedOffhand() === 'torch';
+        if (this.survivalInventory.equipOffhand(isEquipped ? null : 'torch')) {
           window.dispatchEvent(new CustomEvent('field-offhand-equipped-changed'));
         }
       },
@@ -168,7 +172,7 @@ export class EquipmentPanel {
   }
 
   createKeyItemEntries() {
-    if (!this.gameState?.hasFieldKeyItem?.('flint_stick')) return [];
+    if (!this.survivalInventory.hasKeyItem('flint_stick')) return [];
     return [{ id: 'flint_stick', name: 'Flint Stick', stats: 'Key Item', meta: 'Campfire', description: 'Reusable campfire starter.', detail: ITEM_DETAILS.flint_stick }];
   }
 

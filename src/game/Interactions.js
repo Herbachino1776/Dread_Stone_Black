@@ -1,5 +1,6 @@
 import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
 import { EQUIPMENT_SLOTS } from '../engine/equipment/EquipmentSlot.js';
+import { SurvivalInventoryBridge } from './equipment/SurvivalInventoryBridge.js';
 import { preloadLocationDefinition } from './locations/locationRegistry.js';
 
 const INTERACT_RANGE = 3.0;
@@ -21,6 +22,7 @@ export class Interactions {
     this.hud = hud;
     this.feedback = feedback;
     this.equipmentRuntime = equipmentRuntime;
+    this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime, gameState: dungeon?.gameState });
     this.objectiveRuntime = objectiveRuntime;
     this.hasKey = false;
     this.currentHint = '';
@@ -398,15 +400,10 @@ export class Interactions {
     }
 
     this.dungeon.gameState?.markFieldChestLooted?.(interaction.id);
-    this.dungeon.gameState?.addFieldItem?.(interaction.itemId);
-    if (interaction.itemId === 'wood_axe') {
-      this.equipmentRuntime?.acquireItem?.('wood_axe', { source: interaction.id, tags: ['weapon', 'axe', 'woodcutting', 'field-survival'] });
-    }
-    if (interaction.itemId === 'fishing_rod') {
-      this.equipmentRuntime?.acquireItem?.('fishing_rod', { source: interaction.id, tags: ['weapon', 'tool', 'fishing', 'field-survival'] });
-    }
-    if (interaction.itemId === 'torch') {
-      this.equipmentRuntime?.acquireItem?.('torch', { source: interaction.id, tags: ['offhand', 'torch', 'light', 'dungeon-utility'] });
+    if (this.survivalInventory.isSurvivalItem(interaction.itemId)) {
+      this.survivalInventory.acquireItem(interaction.itemId, { source: interaction.id, tags: ['field-survival'] });
+    } else {
+      this.dungeon.gameState?.addFieldItem?.(interaction.itemId);
     }
     if (interaction.itemId === 'rusted_sword') {
       this.equipmentRuntime?.acquireItem?.('rusted_sword', { source: interaction.id, tags: ['weapon', 'starter-weapon', 'dungeon-utility'] });
@@ -427,7 +424,7 @@ export class Interactions {
       return false;
     }
 
-    const hasAxe = this.dungeon.gameState?.hasFieldItem?.('wood_axe') || this.equipmentRuntime?.hasItem?.('wood_axe');
+    const hasAxe = this.survivalInventory.hasItem('wood_axe');
     const equippedAxe = this.equipmentRuntime
       ? this.equipmentRuntime.getEquippedWeaponProfile?.().id === 'wood_axe'
       : this.dungeon.gameState?.getEquippedFieldTool?.() === 'wood_axe';
@@ -834,7 +831,7 @@ export class Interactions {
 
   decorateOutdoorInteraction(interaction) {
     if (interaction.type === 'fieldHarvestableTree' && !this.dungeon.gameState?.hasHarvestedFieldTree?.(interaction.id)) {
-      const hasAxe = this.dungeon.gameState?.hasFieldItem?.('wood_axe') || this.equipmentRuntime?.hasItem?.('wood_axe');
+      const hasAxe = this.survivalInventory.hasItem('wood_axe');
       const equippedAxe = this.equipmentRuntime
         ? this.equipmentRuntime.getEquippedWeaponProfile?.().id === 'wood_axe'
         : this.dungeon.gameState?.getEquippedFieldTool?.() === 'wood_axe';

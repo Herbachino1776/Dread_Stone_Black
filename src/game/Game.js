@@ -9,6 +9,7 @@ import { ObjectiveRuntime } from '../engine/objectives/ObjectiveRuntime.js';
 import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
 import { Feedback } from './Feedback.js';
 import { EquipmentPanel } from './equipment/EquipmentPanel.js';
+import { SurvivalInventoryBridge } from './equipment/SurvivalInventoryBridge.js';
 import { equipmentRegistry } from './equipment/equipmentRegistry.js';
 import { startingEquipment } from './equipment/startingEquipment.js';
 import { GameState } from './GameState.js';
@@ -108,6 +109,7 @@ export class Game {
       this.saveEquipmentState();
       if (slotId === 'offhand') this.setPlayerTorchEnabled(itemId === 'torch');
     });
+    this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
     this.dungeon = new DungeonScene({ area, fieldSpawn, gameState: this.gameState });
     this.scene = this.dungeon.build();
     this.scene.add(this.camera);
