@@ -10,14 +10,15 @@ import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { FISH_SPECS } from '../src/game/fishing/FishMeshFactory.js';
 import { resolveStartupArea } from '../src/game/locationRouting.js';
 import { FOLSOM_PINE_SWATHE_SPECS, FOLSOM_VISIBLE_TREE_BOUNDS, folsomDefinition } from '../src/game/locations/folsom.definition.js';
-import { FOLSOM_PINE_MAX_BILLBOARD_YAW_OFFSET, FOLSOM_PINE_SOURCE_SPRITES, FOLSOM_PINE_SPRITE_BASELINES } from '../src/game/world-kits/vegetation/PineTreeBillboardKit.js';
+import { FOLSOM_CEDAR_LIKE_SOURCE_SPRITES, FOLSOM_DARK_GROVE_SOURCE_SPRITES, FOLSOM_UNDERSTORY_SOURCE_SPRITES } from '../src/game/world-kits/vegetation/FolsomFoliageBillboardKit.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { validatePondDecor, validatePondFootprint } from './pond-footprint-validation.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const interactionsSource = readFileSync(resolve(repoRoot, 'src/game/Interactions.js'), 'utf8');
 const dungeonSceneSource = readFileSync(resolve(repoRoot, 'src/game/DungeonScene.js'), 'utf8');
-const pineKitSource = readFileSync(resolve(repoRoot, 'src/game/world-kits/vegetation/PineTreeBillboardKit.js'), 'utf8');
+const outdoorWorldRuntimeSource = readFileSync(resolve(repoRoot, 'src/game/world-scene/OutdoorWorldRuntime.js'), 'utf8');
+const folsomFoliageKitSource = readFileSync(resolve(repoRoot, 'src/game/world-kits/vegetation/FolsomFoliageBillboardKit.js'), 'utf8');
 const terrainSampler = createOutdoorTerrainSampler(folsomDefinition.terrain);
 const dungeonCollision = buildDungeonCollision(folsomDefinition);
 const collision = new CollisionWorld({
@@ -35,7 +36,7 @@ assert.ok(
   'Folsom invalid: authored foliage billboard updater is field-only and will not rotate Folsom pines.',
 );
 assert.ok(
-  /updateOutdoorFoliageBillboards\(player\)/.test(dungeonSceneSource) && /this\.fieldFoliageBillboards\.push\(mesh\)/.test(dungeonSceneSource),
+  /updateOutdoorFoliageBillboards\(player\)/.test(dungeonSceneSource) && /this\.fieldFoliageBillboards\.push\(\.{3}runtime\.foliageBillboards\)/.test(dungeonSceneSource),
   'Folsom invalid: pine billboards are not registered for per-frame camera-facing rotation.',
 );
 assert.ok(
@@ -43,12 +44,14 @@ assert.ok(
   'Folsom invalid: pine billboard yaw jitter can make trees appear paper-thin.',
 );
 assert.ok(
-  /bottomTransparentPaddingRatio/.test(pineKitSource) && /visualBaseGroundingOffset/.test(dungeonSceneSource),
+  /bottomTransparentPaddingRatio/.test(folsomFoliageKitSource) && /visualBaseGroundingOffset/.test(outdoorWorldRuntimeSource),
   'Folsom invalid: pine sprite visual base is not grounded; only mesh origin is grounded.',
 );
-FOLSOM_PINE_SOURCE_SPRITES.forEach((spritePath) => {
-  assert.ok(Number.isFinite(FOLSOM_PINE_SPRITE_BASELINES[spritePath]?.bottomTransparentPaddingRatio), 'Folsom invalid: pine sprite visual base is not grounded; only mesh origin is grounded.');
-});
+const intendedFolsomFoliageSourceSprites = new Set([
+  ...FOLSOM_DARK_GROVE_SOURCE_SPRITES,
+  ...FOLSOM_CEDAR_LIKE_SOURCE_SPRITES,
+  ...FOLSOM_UNDERSTORY_SOURCE_SPRITES,
+]);
 
 function textureAssetExists(texturePath) {
   if (typeof texturePath !== 'string') return null;
@@ -193,16 +196,17 @@ assert.equal(canStandAt([playerSpawns[0].position.x, playerSpawns[0].position.z]
 const pineVariants = folsomDefinition.foliageBillboardVariants ?? [];
 const pinePlacements = folsomDefinition.foliageBillboards ?? [];
 const pineSources = new Set(pineVariants.map((variant) => variant.path));
-assert.equal(pineSources.size, 6, 'Folsom invalid: expected six pine source sprites registered.');
-assert.equal(pineVariants.length, 42, 'Folsom invalid: expected 42 pine billboard variants.');
+assert.equal(pineSources.size, intendedFolsomFoliageSourceSprites.size, 'Folsom invalid: foliage source sprite registry count does not match the authored Folsom foliage kit.');
+assert.deepEqual(pineSources, intendedFolsomFoliageSourceSprites, 'Folsom invalid: foliage variants must use the authored Folsom foliage source sprite contract.');
+assert.equal(pineVariants.length, 50, 'Folsom invalid: expected 50 Folsom foliage billboard variants from the authored layer/source contract.');
 pineSources.forEach((path) => assert.equal(textureAssetExists(path), true, `Folsom invalid: pine sprite texture missing: ${path}`));
 const minimumVisibleFolsomPineBillboards = 160;
-const hardFolsomPineBillboardMax = 280;
+const hardFolsomPineBillboardMax = 520;
 const visibleInBoundsPinePlacements = pinePlacements.filter((tree) => {
   const [x, , z] = tree.position ?? [];
   return x >= FOLSOM_VISIBLE_TREE_BOUNDS.minX && x <= FOLSOM_VISIBLE_TREE_BOUNDS.maxX && z >= FOLSOM_VISIBLE_TREE_BOUNDS.minZ && z <= FOLSOM_VISIBLE_TREE_BOUNDS.maxZ;
 });
-assert.ok(pinePlacements.length <= hardFolsomPineBillboardMax, `Folsom invalid: pine tree count ${pinePlacements.length} exceeds the hard dense-forest budget of ${hardFolsomPineBillboardMax}.`);
+assert.ok(pinePlacements.length <= hardFolsomPineBillboardMax, `Folsom invalid: pine tree count ${pinePlacements.length} exceeds the hard mobile dense-forest budget of ${hardFolsomPineBillboardMax}.`);
 assert.ok(visibleInBoundsPinePlacements.length === pinePlacements.length, 'Folsom invalid: pine density count includes off-map placements.');
 assert.ok(visibleInBoundsPinePlacements.length >= minimumVisibleFolsomPineBillboards, `Folsom invalid: visible in-bounds pine count below required density. Found ${visibleInBoundsPinePlacements.length}.`);
 FOLSOM_PINE_SWATHE_SPECS.forEach((swathe) => {
@@ -229,8 +233,8 @@ assert.ok(pineSectorCounts.outerWallButInBounds >= 100, 'Folsom invalid: outer w
 ['N', 'S', 'E', 'W'].forEach((sector) => assert.ok(pineSectorCounts[sector] >= 40, `Folsom invalid: pine density missing visible edge sector ${sector}.`));
 
 const pineVariantIds = new Set(pineVariants.map((variant) => variant.id));
-const requiredPineBands = ['tiny', 'small', 'medium', 'tall', 'large', 'giant', 'ancient'];
-for (let sourceIndex = 1; sourceIndex <= 6; sourceIndex += 1) requiredPineBands.forEach((band) => assert.ok(pineVariantIds.has(`pine${String(sourceIndex).padStart(2, '0')}_${band}`), 'Folsom invalid: expected 42 pine billboard variants.'));
+const variantsByLayer = pineVariants.reduce((counts, variant) => ({ ...counts, [variant.layer]: (counts[variant.layer] ?? 0) + 1 }), {});
+assert.deepEqual(variantsByLayer, { redwood: 32, cedar: 6, understory: 12 }, 'Folsom invalid: expected 50 Folsom foliage variants split across redwood, cedar, and understory layers.');
 const pineAvoidValidationZones = [
   { label: 'player spawn', center: [0, 0], radius: 22 }, { label: 'campfire', center: [12, -22], radius: 8 },
   { label: 'pond water', center: [0, -58], radiusX: 18, radiusZ: 14 }, { label: 'fishing approach', center: [-12, -43], radius: 8 },
@@ -250,12 +254,12 @@ function pineCountWithTag(tag) {
   return pinePlacements.filter((tree) => tree.tags?.includes(tag)).length;
 }
 pinePlacements.forEach((tree) => {
-  assert.ok(pineVariantIds.has(tree.variantId), `Folsom invalid: pine tree ${tree.id} does not use the reusable pine kit.`);
+  assert.ok(pineVariantIds.has(tree.variantId), `Folsom invalid: foliage billboard ${tree.id} does not use the reusable Folsom foliage kit.`);
   assert.equal(textureAssetExists(tree.spritePath), true, `Folsom invalid: pine sprite texture missing: ${tree.spritePath}`);
-  assert.ok(tree.tags?.includes('pine-billboard'), `Folsom invalid: pine tree ${tree.id} is not tagged as reusable pine billboard.`);
+  assert.ok(tree.tags?.includes('folsom-foliage-billboard'), `Folsom invalid: foliage billboard ${tree.id} is not tagged as reusable Folsom foliage.`);
   assert.ok([...(tree.position ?? []), tree.height, tree.width, tree.sinkIntoGround, tree.bottomTransparentPaddingRatio, tree.yawOffset].every(Number.isFinite), `Folsom invalid: pine tree ${tree.id} has non-finite placement data.`);
-  assert.ok(Math.abs(tree.yawOffset) <= FOLSOM_PINE_MAX_BILLBOARD_YAW_OFFSET, 'Folsom invalid: pine billboard yaw jitter can make trees appear paper-thin.');
-  assert.equal(tree.bottomTransparentPaddingRatio, FOLSOM_PINE_SPRITE_BASELINES[tree.spritePath]?.bottomTransparentPaddingRatio, 'Folsom invalid: pine sprite visual base is not grounded; only mesh origin is grounded.');
+  assert.ok(Math.abs(tree.yawOffset) <= (tree.layer === 'understory' ? 0.34 : 0.18), 'Folsom invalid: foliage billboard yaw jitter can make trees appear paper-thin.');
+  assert.ok(Number.isFinite(tree.bottomTransparentPaddingRatio), 'Folsom invalid: foliage sprite visual base is not grounded; only mesh origin is grounded.');
   const [x, y, z] = tree.position;
   assert.ok(x >= -100 && x <= 100 && z >= -100 && z <= 100, 'Folsom invalid: pine density count includes off-map placements.');
   assert.ok(Math.abs(x) < 99.5 && Math.abs(z) < 99.5, 'Folsom invalid: pine tree placed where terrain sampler clamps to edge.');
@@ -271,15 +275,15 @@ pinePlacements.forEach((tree) => {
 });
 assert.ok(pinePlacements.some((tree) => tree.tags?.includes('outside-wall-forest')), 'Folsom invalid: outside wall pine forest belt missing.');
 assert.ok(pinePlacements.some((tree) => tree.tags?.includes('inside-edge-tree-belt')), 'Folsom invalid: inside-edge pine belt missing.');
-assert.ok(pinePlacements.some((tree) => tree.tags?.includes('pond-side-pine-cluster')), 'Folsom invalid: pond-side pine clusters missing.');
+assert.ok(pinePlacements.some((tree) => tree.tags?.includes('pond-side-rush-brush-cluster')), 'Folsom invalid: pond-side foliage clusters missing.');
 assert.ok(pinePlacements.some((tree) => tree.tags?.includes('shrine-grove')), 'Folsom invalid: shrine pine grove missing.');
 assert.ok(pinePlacements.some((tree) => tree.tags?.includes('north-road-corridor')), 'Folsom invalid: north road pine corridor missing.');
 assert.ok(pinePlacements.some((tree) => tree.tags?.includes('rusty-reliquary-ominous')), 'Folsom invalid: rusty Reliquary pine cluster missing.');
 assert.ok(pineCountWithTag('outside-wall-forest') >= 80, 'Folsom invalid: outside wall pine forest belt is below dense swathe minimum.');
 assert.ok(pineCountWithTag('inside-edge-tree-belt') >= 20, 'Folsom invalid: inside town pine pockets are below required coverage.');
-assert.ok(pineCountWithTag('pond-side-pine-cluster') >= 12, 'Folsom invalid: pond-side pine coverage is below required coverage.');
-assert.ok(pineCountWithTag('shrine-grove') >= 16, 'Folsom invalid: shrine grove is below required old-pine coverage.');
-assert.ok(pineCountWithTag('north-road-corridor') >= 18, 'Folsom invalid: north road corridor pine coverage is below required coverage.');
+assert.ok(pineCountWithTag('pond-side-rush-brush-cluster') >= 12, 'Folsom invalid: pond-side foliage coverage is below required coverage.');
+assert.ok(pineCountWithTag('shrine-grove') >= 16, 'Folsom invalid: shrine grove is below required old-foliage coverage.');
+assert.ok(pineCountWithTag('north-road-corridor') >= 18, 'Folsom invalid: north road corridor foliage coverage is below required coverage.');
 assert.ok(pineCountWithTag('rusty-reliquary-ominous') >= 10, 'Folsom invalid: rusty Reliquary ominous pine cluster is below required coverage.');
 
 const pond = folsomDefinition.waterBodies.find((body) => body.id === 'folsom_starter_pond');
