@@ -11,17 +11,14 @@ import {
   createOutdoorFieldBlockers,
   createOutdoorTerrainMesh,
 } from './world-scene/OutdoorWorldRuntime.js';
-import { RAM_MAN_FRIENDLY_ANIMATION_FILES, createCreatureActor } from './world-scene/CreatureWorldRuntime.js';
+import { RAM_MAN_FRIENDLY_ANIMATION_FILES, createCreatureActor, createCreatureWorldRuntime } from './world-scene/CreatureWorldRuntime.js';
 import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
 import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
 import { CollisionWorld } from './Collision.js';
 import { loadDungeonModel } from './ModelLoader.js';
-import { BlackGrassTempleFactionManager } from './BlackGrassTempleFactions.js';
-import { SheepDemonEnemy } from './SheepDemonEnemy.js';
 import { createGameGoreRegistry } from './gore/goreRegistry.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
-import './creatures/creatureRegistry.js';
 import { FISH_TEXTURE_PROFILES, createFishMesh, createFishingWorldRuntime, resolveFishSizeGroup } from './world-scene/FishingWorldRuntime.js';
 
 const WALL_HEIGHT = 3.2;
@@ -181,14 +178,6 @@ const FIELD_OARB_OUTDOOR_EXPO_RETURN_YAW = Math.PI;
 const FIELD_WALKABLE_RECT = { minX: -197.5, maxX: 197.5, minZ: -197.5, maxZ: 197.5 };
 
 const OUTDOOR_INTERACTION_RANGE = 4.25;
-const GENERATED_ENEMY_ACTIVE_CAP = 3;
-const GENERATED_ENEMY_INITIAL_CAP = 2;
-const GENERATED_ENEMY_WAKE_RADIUS = 20;
-const GENERATED_ENEMY_SLEEP_RADIUS = 38;
-const GENERATED_ENEMY_AI_NEAR_RADIUS = 18;
-const GENERATED_ENEMY_AI_MID_RADIUS = 30;
-const GENERATED_ENEMY_RESPAWN_COOLDOWN_MS = 15000;
-const GENERATED_ENEMY_MAX_WAKE_PER_SECOND = 1;
 const BGT_EXTERIOR_ENTRANCE_TARGET = new THREE.Vector3(-184, 1, 31);
 const FIELD_KEEPER_HOUSE_ENTRANCE_TARGET = new THREE.Vector3(142, 1, -77);
 const DDPLUS_LEVEL1_TEST_ENTRANCE_TARGET = new THREE.Vector3(154, 1, 110);
@@ -311,13 +300,6 @@ function babyLabyrinthWallBlockerRects() {
   }));
 }
 
-function horizontalDistance(a, b) {
-  if (!a || !b) return Infinity;
-  const dx = a.x - b.x;
-  const dz = a.z - b.z;
-  return Math.hypot(dx, dz);
-}
-
 function pointInFootprint(x, z, footprint = []) {
   let inside = false;
   for (let i = 0, j = footprint.length - 1; i < footprint.length; j = i, i += 1) {
@@ -403,6 +385,16 @@ export class DungeonScene {
     this.ramManNpcMoveTarget = 1;
     this.ramManNpcPauseTimer = 0;
     this.ramManNpcAnimation = null;
+    this.creatureWorldRuntime = createCreatureWorldRuntime({
+      scene: this.scene,
+      collision: this.collision,
+      area: this.area,
+      perfDebugToggles: this.perfDebugToggles,
+      playerSpawn: this.playerSpawn,
+      resolveOutdoorVisibleSurfaceY: (x, z, options) => this.resolveOutdoorVisibleSurfaceY(x, z, options),
+      onGoreEvent: (payload) => this.handleFactionGoreEvent(payload),
+      emitPlayerAttackGore: (hit, attack) => this.emitPlayerAttackGore(hit, attack),
+    });
     this.sheepDemonEnemy = null;
     this.blackGrassFactionManager = null;
     this.generatedEnemyRuntime = null;
@@ -1077,8 +1069,14 @@ export class DungeonScene {
 
     this.updateTorchFlicker(deltaSeconds);
     this.updateRamManNpcPatrol(deltaSeconds);
-    this.updateBlackGrassFactionEnemies(deltaSeconds, player);
-    this.updateSheepDemonEnemy(deltaSeconds, player);
+    if (this.creatureWorldRuntime) {
+      this.creatureWorldRuntime.perfDebugToggles = this.perfDebugToggles;
+      this.creatureWorldRuntime.setArea(this.area);
+      this.creatureWorldRuntime.update(deltaSeconds, player);
+    }
+    this.blackGrassFactionManager = this.creatureWorldRuntime?.blackGrassFactionManager ?? null;
+    this.generatedEnemyRuntime = this.creatureWorldRuntime?.generatedEnemyRuntime ?? null;
+    this.sheepDemonEnemy = this.creatureWorldRuntime?.sheepDemonEnemy ?? null;
     this.updateCompiledSkyDomes(player);
     this.updateOutdoorFoliageBillboards(player);
     this.fishingWorldRuntime?.update(deltaSeconds);
@@ -3200,199 +3198,11 @@ export class DungeonScene {
   }
 
   addCompiledLocationEnemies(runtime = this.compiledLocationRuntime, options = {}) {
-    if (!runtime || runtime.locationId === 'black-grass-temple') return;
-    if (this.compiledLocationEnemiesSpawnedFor === runtime.locationId) return;
-    const factionSpawns = runtime.spawnAnchors.filter((spawn) => (
-      spawn.kind === 'enemy'
-      && ['sheep_demon', 'neck_man'].includes(spawn.species)
-      && (spawn.allowedForInitialWave || spawn.initialWave || spawn.tags?.includes('initial-wave'))
-    ));
-    const folsomBloodFeudSpawns = runtime.locationId === 'folsom'
-      ? factionSpawns.filter((spawn) => spawn.tags?.includes('folsom-blood-feud'))
-      : [];
-    const folsomBloodFeudAnchors = folsomBloodFeudSpawns
-      .map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime))
-      .filter(Boolean);
-    const isFolsomBloodFeud = runtime.locationId === 'folsom' && folsomBloodFeudAnchors.length === 3;
-    if (runtime.locationId === 'folsom' && import.meta.env.DEV) {
-      console.info(`[FolsomBloodFeud] found anchors: ${folsomBloodFeudAnchors.length}`);
-    }
-
-    const factionAnchors = (isFolsomBloodFeud
-      ? folsomBloodFeudAnchors
-      : factionSpawns.map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime)).filter(Boolean));
-    if (factionAnchors.length === 0) return;
-    this.compiledLocationEnemiesSpawnedFor = runtime.locationId;
-    this.blackGrassFactionManager = new BlackGrassTempleFactionManager({
-      scene: this.scene,
-      collision: this.collision,
-      anchors: factionAnchors,
-      navigationGraph: runtime.navGraph,
-      outdoorVisibleSurfaceSampler: (x, z, options) => this.resolveOutdoorVisibleSurfaceY(x, z, options),
-      encounterZones: runtime.encounterZones,
-      onGoreEvent: (payload) => this.handleFactionGoreEvent(payload),
-      enableBattleDirector: false,
-      enableRespawns: isFolsomBloodFeud,
-      encounterMode: isFolsomBloodFeud ? 'folsom_neckman_blood_feud' : 'faction_war',
-      respawnCooldownSeconds: isFolsomBloodFeud ? 30 : undefined,
-    });
-    if (isFolsomBloodFeud) {
-      this.blackGrassFactionManager.spawnInitialAnchors(factionAnchors);
-      if (options.source === 'compiled-outdoor' && import.meta.env.DEV) {
-        console.info(`[FolsomBloodFeud] compiled outdoor path spawned ${factionAnchors.length} neckmen`);
-      }
-      return;
-    }
-    const policy = this.createGeneratedEnemySpawnPolicy(runtime);
-    this.generatedEnemyRuntime = {
-      anchors: factionAnchors,
-      activeAnchorIds: new Set(),
-      sleepingUntil: new Map(),
-      lastWakeAt: 0,
-      devStats: { wakeCount: 0, sleepCount: 0, elapsedSeconds: 0 },
-      policy,
-    };
-    const initialPlayerPosition = this.playerSpawn?.spawnPosition ?? factionAnchors[0]?.position;
-    const initialAnchors = this.selectGeneratedEnemyWakeAnchors(initialPlayerPosition, policy.initialEnemyCap);
-    this.spawnGeneratedEnemyAnchors(initialAnchors);
-  }
-
-  createGeneratedEnemySpawnPolicy(runtime) {
-    const policy = runtime?.definition?.runtimeSpawnPolicy ?? {};
-    const activeEnemyCap = Math.max(1, Number(policy.activeEnemyCap ?? GENERATED_ENEMY_ACTIVE_CAP));
-    return {
-      activeEnemyCap,
-      initialEnemyCap: Math.max(1, Math.min(activeEnemyCap, Number(policy.initialEnemyCap ?? GENERATED_ENEMY_INITIAL_CAP))),
-      wakeRadius: Math.max(1, Number(policy.wakeRadius ?? GENERATED_ENEMY_WAKE_RADIUS)),
-      sleepRadius: Math.max(1, Number(policy.sleepRadius ?? GENERATED_ENEMY_SLEEP_RADIUS)),
-      respawnCooldownMs: Math.max(0, Number(policy.respawnCooldownMs ?? GENERATED_ENEMY_RESPAWN_COOLDOWN_MS)),
-      maxWakePerSecond: Math.max(0.1, Number(policy.maxWakePerSecond ?? GENERATED_ENEMY_MAX_WAKE_PER_SECOND)),
-      generatedAiLod: policy.generatedAiLod !== false,
-      aiNearRadius: Math.max(1, Number(policy.aiNearRadius ?? GENERATED_ENEMY_AI_NEAR_RADIUS)),
-      aiMidRadius: Math.max(1, Number(policy.aiMidRadius ?? GENERATED_ENEMY_AI_MID_RADIUS)),
-    };
-  }
-
-  selectGeneratedEnemyWakeAnchors(playerPosition, limit) {
-    if (!this.generatedEnemyRuntime || !playerPosition) return [];
-    const now = Date.now();
-    const { anchors, activeAnchorIds, sleepingUntil, policy } = this.generatedEnemyRuntime;
-    const capacity = Math.max(0, Math.min(limit, policy.activeEnemyCap - activeAnchorIds.size));
-    if (capacity <= 0) return [];
-    return anchors
-      .filter((anchor) => !activeAnchorIds.has(anchor.id) && (sleepingUntil.get(anchor.id) ?? 0) <= now)
-      .map((anchor) => ({ anchor, distance: horizontalDistance(anchor.position, playerPosition) }))
-      .filter(({ distance }) => distance <= policy.wakeRadius)
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, capacity)
-      .map(({ anchor }) => anchor);
-  }
-
-  spawnGeneratedEnemyAnchors(anchors) {
-    if (!anchors?.length || !this.blackGrassFactionManager || !this.generatedEnemyRuntime) return;
-    this.blackGrassFactionManager.spawnInitialAnchors(anchors);
-    anchors.forEach((anchor) => this.generatedEnemyRuntime.activeAnchorIds.add(anchor.id));
-  }
-
-  updateGeneratedEnemyActivation(playerPosition) {
-    if (!this.generatedEnemyRuntime || !this.blackGrassFactionManager || !playerPosition) return;
-    const { activeAnchorIds, sleepingUntil, policy, devStats } = this.generatedEnemyRuntime;
-    const now = Date.now();
-
-    this.blackGrassFactionManager.enemies.forEach((enemy) => {
-      const anchorId = enemy.spawnAnchor?.id;
-      if (!anchorId || !activeAnchorIds.has(anchorId) || !enemy.group || enemy.isRemoved) return;
-      const distance = horizontalDistance(enemy.group.position, playerPosition);
-      const isEngaged = enemy.playerRevengeTimer > 0
-        || enemy.behaviorState === 'attack_player_fallback'
-        || enemy.behaviorState === 'attack_enemy_faction'
-        || enemy.behaviorState === 'jump_attack_enemy_faction';
-      if (distance > policy.sleepRadius && !isEngaged) {
-        enemy.hideCorpse();
-        activeAnchorIds.delete(anchorId);
-        sleepingUntil.set(anchorId, now + policy.respawnCooldownMs);
-        if (devStats) devStats.sleepCount += 1;
-      }
-    });
-
-    this.blackGrassFactionManager.enemies = this.blackGrassFactionManager.enemies.filter((enemy) => !enemy.isRemoved || enemy.isAlive);
-    const wakeIntervalMs = 1000 / policy.maxWakePerSecond;
-    if (now - (this.generatedEnemyRuntime.lastWakeAt ?? 0) >= wakeIntervalMs) {
-      const anchors = this.selectGeneratedEnemyWakeAnchors(playerPosition, 1);
-      if (anchors.length) {
-        this.spawnGeneratedEnemyAnchors(anchors);
-        this.generatedEnemyRuntime.lastWakeAt = now;
-        if (devStats) devStats.wakeCount += anchors.length;
-      }
-    }
-  }
-
-  createRuntimeEnemyAnchor(spawn, runtime) {
-    const safePosition = this.findSafeCompiledEnemySpawnPosition(spawn, runtime);
-    if (!safePosition) {
-      console.warn(`Skipping generated enemy spawn ${spawn.id}: no safe walkable point found.`);
-      return null;
-    }
-    const preferredFaction = ['sheep_demon', 'neck_man'].includes(spawn.preferredFaction)
-      ? spawn.preferredFaction
-      : ['sheep_demon', 'neck_man'].includes(spawn.faction)
-        ? spawn.faction
-        : spawn.species;
-    const patrolPoints = (spawn.patrolPoints?.length ? spawn.patrolPoints : this.createFallbackPatrolPoints(safePosition))
-      .map((point) => this.findSafeCompiledEnemySpawnPosition({ ...spawn, id: `${spawn.id}:patrol`, position: point }, runtime) ?? safePosition.clone());
-    return {
-      id: spawn.id,
-      preferredFaction,
-      faction: spawn.faction,
-      species: spawn.species,
-      position: safePosition,
-      yaw: spawn.yaw,
-      scale: spawn.scale,
-      roomId: spawn.roomId ?? this.findCompiledRoomIdForPoint(safePosition, runtime),
-      initialWave: spawn.initialWave || spawn.allowedForInitialWave || spawn.tags?.includes('initial-wave'),
-      allowedForInitialWave: spawn.allowedForInitialWave,
-      allowedForRespawn: spawn.allowedForRespawn,
-      minDistanceFromPlayer: spawn.minDistanceFromPlayer,
-      actionBubblePriority: spawn.actionBubblePriority,
-      tags: spawn.tags ?? [],
-      userData: spawn.userData ?? {},
-      patrolPoints: Object.freeze(patrolPoints.map((point) => point.clone())),
-    };
-  }
-
-  findSafeCompiledEnemySpawnPosition(spawn, runtime) {
-    const position = spawn.position?.clone?.() ?? this.toVector3(spawn.position, 0);
-    position.y = this.collision?.sampleWalkableY?.(position.x, position.z, position.y)?.y ?? position.y;
-    if (this.collision?.canStandAtFloorPosition?.(position) ?? this.collision?.canStandAt(position)) return position;
-    const room = runtime.navGraph?.rooms?.[spawn.roomId] ?? this.findCompiledRoomForPoint(position, runtime);
-    const candidates = [];
-    if (room) {
-      const clamped = position.clone();
-      clamped.x = THREE.MathUtils.clamp(clamped.x, room.minX + 0.9, room.maxX - 0.9);
-      clamped.z = THREE.MathUtils.clamp(clamped.z, room.minZ + 0.9, room.maxZ - 0.9);
-      candidates.push(clamped, room.center?.clone?.());
-    }
-    candidates.push(...this.createFallbackPatrolPoints(position, 1.5));
-    return candidates.find((candidate) => candidate && (this.collision?.canStandAtFloorPosition?.(candidate) ?? this.collision?.canStandAt(candidate)))?.clone() ?? null;
-  }
-
-  findCompiledRoomForPoint(point, runtime) {
-    return Object.values(runtime.navGraph?.rooms ?? {}).find((room) => (
-      point.x >= room.minX && point.x <= room.maxX && point.z >= room.minZ && point.z <= room.maxZ
-    )) ?? null;
-  }
-
-  findCompiledRoomIdForPoint(point, runtime) {
-    return this.findCompiledRoomForPoint(point, runtime)?.id ?? null;
-  }
-
-  createFallbackPatrolPoints(position, radius = 3) {
-    return [
-      position.clone().add(new THREE.Vector3(-radius, 0, -radius)),
-      position.clone().add(new THREE.Vector3(radius, 0, -radius)),
-      position.clone().add(new THREE.Vector3(radius, 0, radius)),
-      position.clone().add(new THREE.Vector3(-radius, 0, radius)),
-    ];
+    this.creatureWorldRuntime?.setPlayerSpawn(this.playerSpawn);
+    this.creatureWorldRuntime?.addCompiledLocationEnemies(runtime, options);
+    this.blackGrassFactionManager = this.creatureWorldRuntime?.blackGrassFactionManager ?? null;
+    this.generatedEnemyRuntime = this.creatureWorldRuntime?.generatedEnemyRuntime ?? null;
+    this.compiledLocationEnemiesSpawnedFor = this.creatureWorldRuntime?.compiledLocationEnemiesSpawnedFor ?? this.compiledLocationEnemiesSpawnedFor;
   }
 
   buildBlackGrassTempleInterior() {
@@ -3416,15 +3226,13 @@ export class DungeonScene {
   }
 
   addBlackGrassTempleEnemies() {
-    this.blackGrassFactionManager = new BlackGrassTempleFactionManager({
-      scene: this.scene,
-      collision: this.collision,
+    this.creatureWorldRuntime?.setArea(this.area);
+    this.creatureWorldRuntime?.addBlackGrassTempleEnemies({
       anchors: this.blackGrassFactionSpawnAnchors,
       navigationGraph: this.blackGrassNavigationGraph,
       encounterZones: this.blackGrassRuntime?.encounterZones,
-      onGoreEvent: (payload) => this.handleFactionGoreEvent(payload),
     });
-    this.blackGrassFactionManager.spawnInitialWave();
+    this.blackGrassFactionManager = this.creatureWorldRuntime?.blackGrassFactionManager ?? null;
   }
 
   findRoomIdForPosition(position) {
@@ -4116,81 +3924,28 @@ export class DungeonScene {
   }
 
   addSheepDemonEnemy() {
-    if (this.area !== 'dungeon') return;
-
-    this.sheepDemonEnemy = new SheepDemonEnemy({
-      scene: this.scene,
-      collision: this.collision,
-    });
-    this.sheepDemonEnemy.load();
+    this.creatureWorldRuntime?.setArea(this.area);
+    this.creatureWorldRuntime?.addStandaloneSheepDemonEnemy();
+    this.sheepDemonEnemy = this.creatureWorldRuntime?.sheepDemonEnemy ?? null;
   }
 
   updateBlackGrassFactionEnemies(deltaSeconds, player) {
-    if (!this.blackGrassFactionManager || !player?.position) return;
-    if (this.perfDebugToggles?.neckmen === false && this.blackGrassFactionManager.encounterMode === 'folsom_neckman_blood_feud') {
-      this.blackGrassFactionManager.enemies?.forEach((enemy) => {
-        if (enemy.species !== 'neck_man') return;
-        if (enemy.group) enemy.group.visible = false;
-        enemy.currentTarget = null;
-      });
-      return;
-    }
-    this.updateGeneratedEnemyActivation(player.position);
-    this.blackGrassFactionManager.update(deltaSeconds, player.position, { generatedRuntime: this.generatedEnemyRuntime });
-    if (this.perfDebugToggles?.neckmen !== false) {
-      this.blackGrassFactionManager.enemies?.forEach((enemy) => {
-        if (enemy.species === 'neck_man' && enemy.group) enemy.group.visible = true;
-      });
-    }
+    this.creatureWorldRuntime?.updateBlackGrassFactionEnemies(deltaSeconds, player);
+    this.blackGrassFactionManager = this.creatureWorldRuntime?.blackGrassFactionManager ?? null;
+    this.generatedEnemyRuntime = this.creatureWorldRuntime?.generatedEnemyRuntime ?? null;
   }
 
   updateSheepDemonEnemy(deltaSeconds, player) {
-    if (!player || this.area === 'black-grass-temple') return;
-
-    if (this.sheepDemonEnemies?.length) {
-      this.sheepDemonEnemies.forEach((enemy) => enemy.update(deltaSeconds, player.position));
-      return;
-    }
-
-    if (!this.sheepDemonEnemy) return;
-    this.sheepDemonEnemy.update(deltaSeconds, player.position);
+    this.creatureWorldRuntime?.updateSheepDemonEnemy(deltaSeconds, player);
+    this.sheepDemonEnemy = this.creatureWorldRuntime?.sheepDemonEnemy ?? null;
   }
 
   consumeEnemyContactDamage(playerPosition) {
-    if (this.area === 'black-grass-temple' || this.generatedEnemyRuntime || this.blackGrassFactionManager) {
-      return this.blackGrassFactionManager?.consumeEnemyContactDamage(playerPosition) ?? null;
-    }
-
-    if (this.sheepDemonEnemies?.length) {
-      for (const enemy of this.sheepDemonEnemies) {
-        const hit = enemy.consumeContactDamage(playerPosition);
-        if (hit) return hit;
-      }
-      return null;
-    }
-
-    return this.sheepDemonEnemy?.consumeContactDamage(playerPosition) ?? null;
+    return this.creatureWorldRuntime?.consumeEnemyContactDamage(playerPosition) ?? null;
   }
 
   damageEnemyFromPlayerAttack(attack) {
-    if (this.area === 'black-grass-temple' || this.generatedEnemyRuntime || this.blackGrassFactionManager) {
-      const hit = this.blackGrassFactionManager?.damageEnemyFromPlayerAttack(attack) ?? null;
-      this.emitPlayerAttackGore(hit, attack);
-      return hit;
-    }
-
-    if (this.sheepDemonEnemies?.length) {
-      for (const enemy of this.sheepDemonEnemies) {
-        const hit = enemy.receivePlayerAttack(attack);
-        this.emitPlayerAttackGore(hit, attack);
-        if (hit) return hit;
-      }
-      return null;
-    }
-
-    const hit = this.sheepDemonEnemy?.receivePlayerAttack(attack) ?? null;
-    this.emitPlayerAttackGore(hit, attack);
-    return hit;
+    return this.creatureWorldRuntime?.damageEnemyFromPlayerAttack(attack) ?? null;
   }
 
   addGate() {
