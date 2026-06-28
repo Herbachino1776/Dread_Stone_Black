@@ -107,9 +107,9 @@ export class ProgressionHost {
     };
     const onAttackResolved = ({ weaponProfile, hit }) => this.emitCombatHit({ weaponProfile, hit });
 
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, onItemAcquired);
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, onEquippedChanged);
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.attackResolved, onAttackResolved);
+    this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, onItemAcquired));
+    this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, onEquippedChanged));
+    this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.attackResolved, onAttackResolved));
   }
 
   emitLocationEntered() {

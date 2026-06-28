@@ -11,9 +11,9 @@ export class PerfDebugPanel {
     this.lastRender = 0;
     this.expanded = false;
     this.toggles = { neckmen: true, foliage: true, shadows: true, gore: true, water: true, skybox: true, hud: true, lowDpr: false };
-    this.originalBackground = game.scene?.background ?? null;
-    this.originalFog = game.scene?.fog ?? null;
-    this.originalShadowEnabled = game.renderer?.shadowMap?.enabled ?? true;
+    this.originalBackground = this.scene?.background ?? null;
+    this.originalFog = this.scene?.fog ?? null;
+    this.originalShadowEnabled = this.renderer?.shadowMap?.enabled ?? true;
     this.normalPixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     this.createUi();
     this.applyToggles();
@@ -39,7 +39,7 @@ export class PerfDebugPanel {
     copyButton.hidden = !navigator.clipboard;
     copyButton.addEventListener('pointerdown', (e) => { e.preventDefault(); navigator.clipboard?.writeText(this.lastReport ?? ''); });
     Object.keys(this.toggles).forEach((key) => this.addToggle(key));
-    this.game.viewport?.append(this.root);
+    this.game.hudHost?.viewport?.append(this.root);
   }
 
   addToggle(key) {
@@ -53,8 +53,13 @@ export class PerfDebugPanel {
     button.textContent = `${label}: ${this.toggles[key] ? 'on' : 'off'}`;
   }
 
+  get renderer() { return this.game.rendererHost?.renderer; }
+  get scene() { return this.game.sceneSessionHost?.scene; }
+  get dungeon() { return this.game.sceneSessionHost?.dungeon; }
+  get locationId() { return this.game.sceneSessionHost?.locationId; }
+
   setExpanded(expanded) { this.expanded = expanded; this.panel.hidden = !expanded; if (expanded) this.render(true); }
-  resetCounters() { this.samples = []; this.lastTime = performance.now(); this.game.renderer?.info?.reset?.(); this.render(true); }
+  resetCounters() { this.samples = []; this.lastTime = performance.now(); this.renderer?.info?.reset?.(); this.render(true); }
 
   update() {
     const now = performance.now();
@@ -66,13 +71,14 @@ export class PerfDebugPanel {
   }
 
   applyToggles() {
-    const d = this.game.dungeon;
+    const d = this.dungeon;
+    if (!d) return;
     d.perfDebugToggles = { ...this.toggles };
     d.fieldFoliageBillboards?.forEach((o) => { o.visible = this.toggles.foliage && o.visible; o.userData.perfHidden = !this.toggles.foliage; });
     d.compiledSkyDomes?.forEach((o) => { o.visible = this.toggles.skybox; });
-    if (this.game.scene) { this.game.scene.background = this.toggles.skybox ? this.originalBackground : null; this.game.scene.fog = this.toggles.skybox ? this.originalFog : null; }
-    if (this.game.renderer?.shadowMap) this.game.renderer.shadowMap.enabled = this.toggles.shadows && this.originalShadowEnabled;
-    this.game.scene?.traverse((o) => {
+    if (this.scene) { this.scene.background = this.toggles.skybox ? this.originalBackground : null; this.scene.fog = this.toggles.skybox ? this.originalFog : null; }
+    if (this.renderer?.shadowMap) this.renderer.shadowMap.enabled = this.toggles.shadows && this.originalShadowEnabled;
+    this.scene?.traverse((o) => {
       if (o.castShadow !== undefined) { if (o.userData.perfOriginalCastShadow === undefined) o.userData.perfOriginalCastShadow = o.castShadow; o.castShadow = this.toggles.shadows && o.userData.perfOriginalCastShadow; }
       const isWater = o.userData?.kind === 'pond' || /water/i.test(o.name ?? '');
       if (isWater) {
@@ -85,27 +91,27 @@ export class PerfDebugPanel {
     });
     this.game.app?.querySelector('.hud-top')?.toggleAttribute('hidden', !this.toggles.hud);
     this.game.app?.querySelector('.control-deck')?.toggleAttribute('hidden', !this.toggles.hud);
-    this.game.renderer?.setPixelRatio(this.toggles.lowDpr ? Math.min(window.devicePixelRatio || 1, 1) : this.normalPixelRatio);
+    this.renderer?.setPixelRatio(this.toggles.lowDpr ? Math.min(window.devicePixelRatio || 1, 1) : this.normalPixelRatio);
     this.game.resize?.();
     this.togglesEl?.querySelectorAll('[data-toggle]').forEach((button) => { const key = button.dataset.toggle; button.textContent = `${key === 'lowDpr' ? 'DPR cap' : key}: ${this.toggles[key] ? 'on' : 'off'}`; });
   }
 
   collect() {
     let objects = 0, meshes = 0, skinned = 0, transparent = 0, materials = new Set(), lights = 0, shadows = 0;
-    this.game.scene?.traverse((o) => { objects += 1; if (o.isMesh || o.isSprite) { meshes += 1; if (o.isSkinnedMesh) skinned += 1; const mats = Array.isArray(o.material) ? o.material : [o.material].filter(Boolean); mats.forEach((m) => { materials.add(m.uuid ?? m.id ?? m); if (m.transparent || m.opacity < 1) transparent += 1; }); } if (o.isLight) lights += 1; if (o.castShadow) shadows += 1; });
-    const enemies = this.game.dungeon?.blackGrassFactionManager?.enemies ?? this.game.dungeon?.sheepDemonEnemies ?? [];
-    const activeEnemies = enemies.filter((e) => e?.isAlive !== false && !e?.isRemoved).length + (this.game.dungeon?.sheepDemonEnemy?.isAlive ? 1 : 0);
+    this.scene?.traverse((o) => { objects += 1; if (o.isMesh || o.isSprite) { meshes += 1; if (o.isSkinnedMesh) skinned += 1; const mats = Array.isArray(o.material) ? o.material : [o.material].filter(Boolean); mats.forEach((m) => { materials.add(m.uuid ?? m.id ?? m); if (m.transparent || m.opacity < 1) transparent += 1; }); } if (o.isLight) lights += 1; if (o.castShadow) shadows += 1; });
+    const enemies = this.dungeon?.blackGrassFactionManager?.enemies ?? this.dungeon?.sheepDemonEnemies ?? [];
+    const activeEnemies = enemies.filter((e) => e?.isAlive !== false && !e?.isRemoved).length + (this.dungeon?.sheepDemonEnemy?.isAlive ? 1 : 0);
     const activeNeckmen = enemies.filter((e) => e?.species === 'neck_man' && e?.isAlive !== false && !e?.isRemoved).length;
     const neckmanStateCounts = enemies
       .filter((e) => e?.species === 'neck_man' && e?.isAlive !== false && !e?.isRemoved)
       .map((e) => `${e.id ?? e.group?.name ?? 'neckman'}:${e.animation?.getLoadedStates?.().join('|') ?? e.group?.userData?.loadedAnimationStates?.join('|') ?? 'none'}`);
     const activeAnimationMixers = enemies.reduce((sum, e) => sum + (e?.animation?.getActiveMixerCount?.() ?? 0), 0);
     const loadedCreatureAnimationRoots = enemies.reduce((sum, e) => sum + (e?.animation?.getLoadedRootCount?.() ?? 0), 0);
-    const gore = this.game.dungeon?.goreRuntime?.getDebugSummary?.() ?? {};
-    const info = this.game.renderer?.info;
-    const size = new THREE.Vector2(); this.game.renderer?.getDrawingBufferSize?.(size);
+    const gore = this.dungeon?.goreRuntime?.getDebugSummary?.() ?? {};
+    const info = this.renderer?.info;
+    const size = new THREE.Vector2(); this.renderer?.getDrawingBufferSize?.(size);
     const avgMs = this.samples.reduce((s, x) => s + x.ms, 0) / Math.max(1, this.samples.length);
-    return { currentFps: 1000 / (this.samples.at(-1)?.ms ?? 16.7), avgFps: 1000 / avgMs, worstMs: Math.max(0, ...this.samples.map((x) => x.ms)), calls: info?.render?.calls ?? 0, tris: info?.render?.triangles ?? 0, geoms: info?.memory?.geometries ?? 0, textures: info?.memory?.textures ?? 0, objects, meshes, skinned, transparent, materials: materials.size, lights, shadows, activeEnemies, activeNeckmen, activeAnimationMixers, loadedCreatureAnimationRoots, neckmanStateCounts, goreCount: (gore.activeParticles ?? 0) + (gore.decals ?? 0) + (gore.corpses ?? 0) + (gore.wounds ?? 0), dpr: this.game.renderer?.getPixelRatio?.() ?? window.devicePixelRatio, width: size.x, height: size.y, location: this.game.locationId ?? this.game.dungeon?.area ?? 'unknown' };
+    return { currentFps: 1000 / (this.samples.at(-1)?.ms ?? 16.7), avgFps: 1000 / avgMs, worstMs: Math.max(0, ...this.samples.map((x) => x.ms)), calls: info?.render?.calls ?? 0, tris: info?.render?.triangles ?? 0, geoms: info?.memory?.geometries ?? 0, textures: info?.memory?.textures ?? 0, objects, meshes, skinned, transparent, materials: materials.size, lights, shadows, activeEnemies, activeNeckmen, activeAnimationMixers, loadedCreatureAnimationRoots, neckmanStateCounts, goreCount: (gore.activeParticles ?? 0) + (gore.decals ?? 0) + (gore.corpses ?? 0) + (gore.wounds ?? 0), dpr: this.renderer?.getPixelRatio?.() ?? window.devicePixelRatio, width: size.x, height: size.y, location: this.locationId ?? this.dungeon?.area ?? 'unknown' };
   }
 
   render(force = false) {
@@ -114,5 +120,10 @@ export class PerfDebugPanel {
     const toggleLine = `neckmen ${this.toggles.neckmen ? 'on' : 'off'}, foliage ${this.toggles.foliage ? 'on' : 'off'}, shadows ${this.toggles.shadows ? 'on' : 'off'}, gore ${this.toggles.gore ? 'on' : 'off'}, water ${this.toggles.water ? 'on' : 'off'}, dprCap ${this.toggles.lowDpr ? 'on' : 'off'}`;
     this.lastReport = `Location: ${m.location}\nFPS: ${m.currentFps.toFixed(0)} / avg ${m.avgFps.toFixed(0)} / worst ${m.worstMs.toFixed(1)}ms\nRenderer: ${m.calls} calls / ${m.tris} tris / ${m.geoms} geoms / ${m.textures} textures\nScene: ${m.objects} objects / ${m.meshes} meshes / ${m.skinned} skinned / ${m.transparent} transparent / ${m.materials} materials / ${m.lights} lights / ${m.shadows} shadows\nGameplay: ${m.activeEnemies} enemies / ${m.activeNeckmen} neckmen / ${m.goreCount} gore\nCreature anim: ${m.activeAnimationMixers} active mixers / ${m.loadedCreatureAnimationRoots} loaded roots\nNeckman states: ${m.neckmanStateCounts.length ? m.neckmanStateCounts.join(', ') : 'none'}\nDPR: ${m.dpr.toFixed(2)}  Canvas: ${m.width}x${m.height}\nToggles: ${toggleLine}`;
     this.reportEl.textContent = this.lastReport;
+  }
+
+  dispose() {
+    this.root?.remove?.();
+    this.game = null;
   }
 }

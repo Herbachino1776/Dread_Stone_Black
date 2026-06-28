@@ -14,27 +14,31 @@ This tracker records the staged Game.js foundation split so each PR can preserve
 - PR #260: Extracted `SceneSessionHost` as the owner of the active world session, including camera creation, `DungeonScene` creation, startup location resolution, return-spawn resolution, player creation, scene update handoff, rendering handoff, transition URL orchestration, reload/reset session API, compatibility accessors, and session cleanup.
 - PR #261: Extracted `ProgressionHost` as the owner of objective runtime creation, objective pack registration, save snapshot coordination, objective debug panel wiring, location-entered and room-entered objective events, room tracking, equipment objective events, and combat-hit objective events.
 - PR #262: Extracted `SurvivalHost` as the owner of hunger/starvation update coordination, starvation damage handoff to combat, hunger HUD sync through `HudHost`, survival save snapshot coordination through `SaveHost`, cooked/raw fish pickup handoff, cooked fish eating, campfire build persistence, and raw-fish-to-cooked-fish campfire cooking consumption. `SurvivalInventoryBridge` remains the equipment/inventory bridge rather than being duplicated.
-- Current PR: Extracted `FirstPersonViewmodelHost` as the owner of camera-attached first-person equipment presentation: Rod A1 view setup/update, physical casting controller wiring, broadsword view/gesture wiring, fallback attack animation coordination, torch/offhand light attachment, equipment-driven torch visibility sync, torch flicker updates, and first-person debug summaries.
+- PR #263: Extracted `FirstPersonViewmodelHost` as the owner of camera-attached first-person equipment presentation: Rod A1 view setup/update, physical casting controller wiring, broadsword view/gesture wiring, fallback attack animation coordination, torch/offhand light attachment, equipment-driven torch visibility sync, torch flicker updates, and first-person debug summaries.
+- Current PR: Finalized the `Game.js` coordinator audit by removing stale renderer/HUD/viewmodel compatibility aliases, moving the perf debug panel to read renderer/scene/session state through existing hosts, adding explicit top-level disposal ordering, and making document-level input gesture blockers disposable through `InputHost`.
 
-## Remaining Game.js responsibilities
+## Game.js responsibilities after the coordinator audit
 
-- Top-level boot sequencing and host wiring.
-- Equipment runtime and survival inventory bridge construction.
-- Compatibility handoff of `ProgressionHost.getObjectiveRuntime()` to interaction systems that already emit authored interaction objective events.
-- First-person viewmodel ordering now delegates Rod A1, casting, broadsword gesture/view, fallback attack visuals, and torch/offhand light presentation to `FirstPersonViewmodelHost`; `Game.js` keeps compatibility references for perf/debug panels while it remains the top-level coordinator.
-- Interaction, combat, feedback, and authored prompt/use flow coordination. Combat still owns damage resolution while calling `FirstPersonViewmodelHost.handleAttackStarted()` for first-person weapon animation. Fishing mechanics remain in the existing Rod A1 casting/fishing runtimes owned by the viewmodel host and world runtime rather than being duplicated in `Game.js`.
-- Survival loop ordering now delegates hunger/starvation and survival-facing fish/campfire save/HUD coordination to `SurvivalHost`; `Game.js` only calls the host during the animation loop and wires dependencies.
-- Pause/reset UI state and saved-progress reset behavior.
-- Main animation loop ordering across hosts and gameplay facades.
+`Game.js` is now intentionally the application coordinator. It still owns:
+
+- Top-level boot sequencing and host construction order.
+- Wiring dependencies between hosts and existing gameplay facades.
+- Equipment runtime and `SurvivalInventoryBridge` construction because they are shared cross-system state rather than one host's private implementation detail.
+- `EquipmentPanel`, `Interactions`, `Combat`, and `Feedback` construction until those systems get coherent domain-specific ownership boundaries.
+- The main animation-loop ordering across scene/session, first-person viewmodel, combat, survival, progression, interactions, feedback, rendering, and optional perf diagnostics.
+- Pause state, reset-confirmation UI flow, saved-progress reset, startup error display, and top-level disposal.
+- Lightweight read-only coordinator accessors (`dungeon`, `scene`, `camera`, `player`, and `locationId`) that forward to `SceneSessionHost` so debug consumers do not keep stale duplicated session references.
+
+The current god-object refactor phase is considered complete: renderer, input, save, HUD, scene session, progression, survival, and first-person viewmodel internals are owned by hosts/runtimes rather than by `Game.js`.
 
 ## Known intentional leftovers
 
-- `Interactions` still owns proximity checks, timed-action lifecycle, prompts, authored interaction decisions, and objective event emission for chest opens, altar activations, gate unlocks, lever pulls, and location exits. Survival-specific consequences now call into `SurvivalHost`, but moving timed actions themselves should happen with an interaction/runtime boundary rather than by making `SurvivalHost` own all interaction decisions.
-- `GameState` still owns the serialized field survival data shape and save-compatible repair helpers. `SurvivalHost` coordinates when that state changes and how it reaches HUD/save/combat, while `GameState` preserves compatibility with existing localStorage snapshots.
-- `Game.js` keeps temporary `castingController` and `broadswordGestureController` compatibility properties for existing debug/perf consumers. The lifecycle and per-frame updates are owned by `FirstPersonViewmodelHost`; removing these aliases should be part of a final coordinator audit once debug panels read host summaries directly.
-- Field return shrine reaction remains in `Game.js` for now because it is a one-off startup reaction that coordinates shrine visuals, HUD message, interaction hint, feedback shake, and save state. It should move only when a broader field-event or progression-reaction runtime exists.
-- `EquipmentPanel` still reads survival inventory through `SurvivalInventoryBridge` because the panel is a UI facade; a later equipment UI pass can decide whether panel refresh/save signals should route through a host.
+- `Interactions` still owns proximity checks, timed-action lifecycle, prompts, authored interaction decisions, and objective event emission for chest opens, altar activations, gate unlocks, lever pulls, and location exits. Survival-specific consequences call into `SurvivalHost`, but moving timed actions should happen only with a real interaction/runtime boundary.
+- `Combat` still owns player attack resolution, creature damage handoff, death state, and gore-facing hit results. `Game.js` only wires its attack-start callback into `FirstPersonViewmodelHost` so first-person weapon animation remains synchronized.
+- `EquipmentPanel` still reads survival inventory through `SurvivalInventoryBridge` because the panel is a UI facade. A later equipment UI pass can decide whether panel refresh/save signals should route through a host.
+- Field return shrine reaction remains in `Game.js` because it is a small startup-only cross-system reaction that coordinates shrine visuals, HUD message, interaction hint, feedback shake, and save state. It should move only if a broader field-event or progression-reaction runtime is introduced.
+- `GameState` still owns serialized field survival data shape and save-compatible repair helpers. Hosts coordinate when that state changes, while `GameState` preserves compatibility with existing localStorage snapshots.
 
-## Next recommended PR
+## Next recommended non-refactor priority
 
-Run a final `Game.js` cleanup/coordinator audit: remove temporary compatibility aliases where debug panels can read host summaries, consider an interaction/runtime host for proximity prompts and timed actions, and decide whether the one-off field-return shrine reaction belongs in a field-event/progression-reaction runtime. Keep `Game.js` focused on boot sequencing, host wiring, pause/reset, and animation-loop ordering.
+Shift from foundation refactoring to playable-content validation and mobile performance hardening for Folsom and the Reliquary path. Recommended next work: run a device-focused smoke/performance pass around Folsom startup, Rod A1 physical fishing, campfire cooking, torch/offhand lighting, gates/return spawns, and combat/gore, then address the highest measured mobile bottleneck or the most obvious starter-loop usability issue before starting another architecture split.
