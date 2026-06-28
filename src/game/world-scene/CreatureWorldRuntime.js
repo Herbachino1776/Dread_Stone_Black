@@ -28,6 +28,9 @@ function createNeckmanDebugTogglesFromQuery() {
     neckmanFeudOff: query.get('neckmanFeudOff') === '1',
     neckmanCollisionOff: query.get('neckmanCollisionOff') === '1',
     neckmanTargetingOff: query.get('neckmanTargetingOff') === '1',
+    neckmanMovementOff: query.get('neckmanMovementOff') === '1',
+    neckmanCombatOff: query.get('neckmanCombatOff') === '1',
+    neckmanStateMachineOff: query.get('neckmanStateMachineOff') === '1',
     neckmanRenderLite: query.get('neckmanRenderLite') === '1',
     neckmanPerfTrace: query.get('neckmanPerfTrace') === '1',
   };

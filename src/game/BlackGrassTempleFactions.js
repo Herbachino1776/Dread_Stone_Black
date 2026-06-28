@@ -1243,6 +1243,13 @@ class BlackGrassFactionEnemy {
 
   getOpposingAwareness(enemy, context = null) {
     if (!this.group || !enemy?.group) return { tier: 'none', distance: Infinity, roomPath: [] };
+    if (this.isFolsomBloodFeudEnemyTarget(enemy)) {
+      const distanceSq = horizontalDistanceSq(this.group.position, enemy.group.position);
+      const loseRangeSq = FOLSOM_BLOOD_FEUD_TARGET_LOSE_RANGE * FOLSOM_BLOOD_FEUD_TARGET_LOSE_RANGE;
+      if (distanceSq > loseRangeSq) return { tier: 'none', distance: Math.sqrt(distanceSq), roomPath: [] };
+      const engageSq = this.template.combatEngageDistance * this.template.combatEngageDistance;
+      return { tier: distanceSq <= engageSq ? 'melee' : 'combat', distance: Math.sqrt(distanceSq), roomPath: [] };
+    }
     const distance = horizontalDistance(this.group.position, enemy.group.position);
     const visible = this.hasLineOfMovement(this.group.position, enemy.group.position);
     const targetBlockedRecently = this.blockedSegmentCooldowns.has(enemy.id);
@@ -1300,6 +1307,10 @@ class BlackGrassFactionEnemy {
     const toTarget = target.group.position.clone().sub(this.group.position);
     toTarget.y = 0;
     const distance = toTarget.length();
+    if (context?.perfDebugToggles?.neckmanMovementOff === true && this.encounterMode === 'folsom_neckman_blood_feud') {
+      if (distance > 0.001) this.faceDirection(toTarget.clone().multiplyScalar(1 / distance), deltaSeconds);
+      return;
+    }
 
     if (this.awarenessReactionDelay > 0) {
       this.setBehaviorState(awareness.tier === 'far' || awareness.tier === 'adjacent_room' || awareness.tier === 'short_route' ? 'investigate_enemy_faction' : 'combat_enter');
@@ -1315,7 +1326,7 @@ class BlackGrassFactionEnemy {
     this.blockedTargetElapsed = directClear ? 0 : this.blockedTargetElapsed + deltaSeconds;
     if (this.blockedTargetElapsed >= BLOCKED_TARGET_REPATH_SECONDS) this.blockCurrentDirectSegment();
 
-    if ((distance <= this.template.combatEngageDistance || awareness.tier === 'melee' || awareness.tier === 'combat') && directClear) {
+    if (context?.perfDebugToggles?.neckmanCombatOff !== true && (distance <= this.template.combatEngageDistance || awareness.tier === 'melee' || awareness.tier === 'combat') && directClear) {
       this.updateEnemyCombat(deltaSeconds, target, distance, toTarget, context);
       return;
     }
@@ -1463,6 +1474,7 @@ class BlackGrassFactionEnemy {
   }
 
   updateEnemyCombat(deltaSeconds, target, distance, toTarget, context = null) {
+    if (context?.perfDebugToggles?.neckmanCombatOff === true && this.encounterMode === 'folsom_neckman_blood_feud') return;
     const isFolsomFeudTarget = this.isFolsomBloodFeudEnemyTarget(target);
     const directClear = context?.perfDebugToggles?.neckmanCollisionOff === true
       ? true
@@ -2021,6 +2033,8 @@ class BlackGrassFactionEnemy {
   }
 
   hasClearMovementSegment(start, end, clearanceRadius = NAV_CLEARANCE_RADIUS) {
+    const collisionStart = performance?.now?.() ?? Date.now();
+    try {
     if (!this.collision) return true;
     const delta = end.clone().sub(start);
     delta.y = 0;
@@ -2034,6 +2048,9 @@ class BlackGrassFactionEnemy {
       if (!this.isWaypointWalkable(probe, clearanceRadius)) return false;
     }
     return !this.segmentIntersectsAnyBlocker(start, end, clearanceRadius);
+    } finally {
+      if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.collisionMs += (performance?.now?.() ?? Date.now()) - collisionStart;
+    }
   }
 
   segmentIntersectsAnyBlocker(start, end, clearanceRadius = NAV_CLEARANCE_RADIUS) {
@@ -2137,6 +2154,8 @@ class BlackGrassFactionEnemy {
   }
 
   moveToward(direction, speed, deltaSeconds, maxDistance = Infinity, movingState = 'patrol', { suppressStuckTracking = false, desiredTarget = null, faceTarget = null, minimumTargetDistance = 0 } = {}) {
+    const movementStart = performance?.now?.() ?? Date.now();
+    try {
     const targetLimitedDistance = desiredTarget && minimumTargetDistance > 0
       ? Math.max(0, horizontalDistance(this.group.position, desiredTarget) - minimumTargetDistance)
       : Infinity;
@@ -2204,6 +2223,9 @@ class BlackGrassFactionEnemy {
     if (combatFacing) combatFacing.y = 0;
     this.faceDirection(combatFacing?.lengthSq() > 0.001 ? combatFacing.normalize() : (movedDistance > 0.001 ? this.group.position.clone().sub(previous).normalize() : movementDirection), deltaSeconds);
     return movedDistance;
+    } finally {
+      if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.movementMs += (performance?.now?.() ?? Date.now()) - movementStart;
+    }
   }
 
   getAdjustedMovementDirection(direction, stepDistance, desiredTarget) {
@@ -2353,6 +2375,8 @@ class BlackGrassFactionEnemy {
   }
 
   setBehaviorState(state, { force = false } = {}) {
+    const stateStart = performance?.now?.() ?? Date.now();
+    if (this.currentUpdateContext?.perfDebugToggles?.neckmanStateMachineOff === true && this.encounterMode === 'folsom_neckman_blood_feud' && !force) return;
     if (!this.animation || (!force && this.behaviorState === state)) return;
     const animationState = this.resolveStateAnimation(state);
     const currentAnimationState = this.resolveStateAnimation(this.behaviorState ?? 'spawn');
@@ -2368,6 +2392,7 @@ class BlackGrassFactionEnemy {
     this.group.userData.animationState = animationState;
     this.group.userData.visibleAnimationState = this.actor.animationSet.currentState ?? animationState;
     this.group.userData.visibleAnimationRootCount = 1;
+    if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.stateMachineMs += (performance?.now?.() ?? Date.now()) - stateStart;
   }
 
   getActionDuration(animationState, fallback) {
@@ -2402,6 +2427,8 @@ export class BlackGrassTempleFactionManager {
     this.mobileAiTickElapsed = 0;
     this.mobileAiSkippedTicks = 0;
     this.mobileAiAllowedTicks = 0;
+    this.mobileAiEnemyIndex = 0;
+    this.perfSpikeHistory = [];
     this.folsomBloodFeudTargeting = this.createFolsomBloodFeudTargetingCache();
     this.encounterZones = this.createEncounterZones(encounterZones);
     this.maxActiveByFaction = MAX_ACTIVE_BY_FACTION;
@@ -2629,7 +2656,9 @@ export class BlackGrassTempleFactionManager {
       aiMs: 0,
       targetingMs: 0,
       collisionMs: 0,
+      movementMs: 0,
       combatMs: 0,
+      stateMachineMs: 0,
       debugMs: 0,
       targetScans: 0,
       targetSwitches: 0,
@@ -2658,6 +2687,7 @@ export class BlackGrassTempleFactionManager {
       targetCacheReusesPerSecond: 0,
       collisionChecksPerSecond: 0,
       stateTransitionsPerSecond: 0,
+      recentWorst: null,
     };
   }
 
@@ -2682,14 +2712,39 @@ export class BlackGrassTempleFactionManager {
       deferredTargetingOpsPerSecond: this.perfStats.deferredTargetingOpsPerSecond,
       collisionChecksPerSecond: this.perfStats.collisionChecksPerSecond,
       stateTransitionsPerSecond: this.perfStats.stateTransitionsPerSecond,
+      recentWorst: this.perfStats.recentWorst ?? null,
       lastSecondAt: this.perfStats.lastSecondAt,
     };
     this.perfStats = { ...this.createPerfStats(), ...keep, frameStartedAt: now };
   }
 
+  recordNeckmanSpikeSample(now) {
+    const enemyWorst = (this.perfStats.enemyUpdateMs ?? []).reduce((best, entry) => (!best || entry.ms > best.ms ? entry : best), null);
+    const sample = {
+      t: now,
+      frame: this.perfStats.frames + 1,
+      subsystemMs: this.perfStats.subsystemMs,
+      managerMs: this.perfStats.managerMs,
+      enemyMs: enemyWorst?.ms ?? 0,
+      enemyId: enemyWorst?.id ?? null,
+      targetingMs: this.perfStats.targetingMs,
+      movementMs: this.perfStats.movementMs,
+      collisionMs: this.perfStats.collisionMs,
+      combatMs: this.perfStats.combatMs,
+      mixerMs: this.perfStats.mixerMs,
+      stateMachineMs: this.perfStats.stateMachineMs,
+      debugMs: this.perfStats.debugMs,
+    };
+    this.perfSpikeHistory.push(sample);
+    while (this.perfSpikeHistory.length > 120 || (this.perfSpikeHistory[0] && now - this.perfSpikeHistory[0].t > 5000)) this.perfSpikeHistory.shift();
+    const worst = this.perfSpikeHistory.reduce((best, entry) => (!best || entry.subsystemMs > best.subsystemMs ? entry : best), null);
+    this.perfStats.recentWorst = worst ? { ...worst, ageFrames: Math.max(0, this.perfStats.frames + 1 - worst.frame), ageSeconds: Math.max(0, (now - worst.t) / 1000) } : null;
+  }
+
   finishFramePerf() {
     const now = performance?.now?.() ?? Date.now();
     this.perfStats.subsystemMs = now - this.perfStats.frameStartedAt;
+    this.recordNeckmanSpikeSample(now);
     this.perfStats.frames += 1;
     if (now - this.perfStats.lastSecondAt >= 1000) {
       const scale = 1000 / Math.max(1, now - this.perfStats.lastSecondAt);
@@ -2875,11 +2930,12 @@ export class BlackGrassTempleFactionManager {
     const folsomBloodFeudTargeting = isMobileFolsomFeud ? this.updateFolsomBloodFeudTargetingCache(deltaSeconds) : null;
     const baseContext = { enemies: this.enemies, playerPosition, director, generatedRuntime: Boolean(generatedRuntime), folsomBloodFeudTargeting, requestFolsomTargetingOperation: (enemy) => this.requestFolsomTargetingOperation(enemy) };
     const policy = generatedRuntime?.policy ?? null;
+    const folsomAiEnemyIndex = isMobileFolsomFeud && mobileAiTickAllowed ? (this.mobileAiEnemyIndex++ % Math.max(1, this.enemies.length)) : -1;
     const lodEnabled = Boolean(generatedRuntime && policy?.generatedAiLod);
     this.enemies.forEach((enemy, index) => {
       if (!lodEnabled || !enemy.group || enemy.isRemoved || !enemy.isAlive) {
         const enemyStart = performance?.now?.() ?? Date.now();
-        enemy.update(deltaSeconds, { ...baseContext, aiTickAllowed: this.perfDebugToggles?.neckmanAiOff === true ? false : mobileAiTickAllowed, perfStats: this.perfStats, perfDebugToggles: this.perfDebugToggles });
+        enemy.update(deltaSeconds, { ...baseContext, aiTickAllowed: this.perfDebugToggles?.neckmanAiOff === true ? false : (isMobileFolsomFeud ? mobileAiTickAllowed && index === folsomAiEnemyIndex : mobileAiTickAllowed), perfStats: this.perfStats, perfDebugToggles: this.perfDebugToggles });
         if (isMobileFolsomFeud) this.perfStats.enemyUpdateMs.push({ id: enemy.id, ms: (performance?.now?.() ?? Date.now()) - enemyStart });
         return;
       }
@@ -3125,6 +3181,9 @@ export class BlackGrassTempleFactionManager {
       feudManagerActive: this.perfDebugToggles?.neckmanFeudOff !== true,
       targetingActive: this.perfDebugToggles?.neckmanTargetingOff !== true,
       collisionActive: this.perfDebugToggles?.neckmanCollisionOff !== true,
+      movementActive: this.perfDebugToggles?.neckmanMovementOff !== true,
+      combatActive: this.perfDebugToggles?.neckmanCombatOff !== true,
+      stateMachineActive: this.perfDebugToggles?.neckmanStateMachineOff !== true,
       perfTrace: this.perfStats,
       targetSummary: neckmen.map((enemy) => ({ id: enemy.id, target: enemy.group?.userData.targetId ?? null, type: enemy.group?.userData.targetType ?? null, lock: enemy.group?.userData.targetLockRemaining ?? 0 })),
     };
