@@ -12,7 +12,7 @@ import { EquipmentPanel } from './equipment/EquipmentPanel.js';
 import { SurvivalInventoryBridge } from './equipment/SurvivalInventoryBridge.js';
 import { equipmentRegistry } from './equipment/equipmentRegistry.js';
 import { startingEquipment } from './equipment/startingEquipment.js';
-import { Hud } from './Hud.js';
+import { HudHost } from './hosts/HudHost.js';
 import { InputHost } from './hosts/InputHost.js';
 import { RendererHost } from './hosts/RendererHost.js';
 import { SaveHost } from './hosts/SaveHost.js';
@@ -66,10 +66,21 @@ export class Game {
     this.resetConfirmTimer = null;
     this.wasKeyboardInteractHeld = false;
     this.resetConfirmExpiresAt = 0;
-    this.rendererHost = new RendererHost({ root: this.app, shellHtml: this.renderShell() });
+    this.hudHost = new HudHost({
+      root: this.app,
+      debugEnabled: this.debugHudEnabled,
+      onPauseToggle: () => this.togglePause(),
+      onResume: () => this.setPaused(false),
+      onReset: () => this.requestProgressReset(),
+    });
+    this.rendererHost = new RendererHost({ root: this.app });
     // Compatibility references for lightweight debug helpers while Game.js is being split.
-    this.canvas = this.rendererHost.canvas;
-    this.viewport = this.rendererHost.viewport;
+    this.canvas = this.hudHost.canvas;
+    this.viewport = this.hudHost.viewport;
+    this.pauseOverlay = this.hudHost.pauseOverlay;
+    this.pauseButton = this.hudHost.pauseButton;
+    this.resumeButton = this.hudHost.resumeButton;
+    this.resetButtons = this.hudHost.resetButtons;
     this.renderer = this.rendererHost.renderer;
 
     const { width, height } = this.rendererHost.getViewportSize();
@@ -122,7 +133,7 @@ export class Game {
       ...this.dungeon.playerSpawn,
       ...movementProfile,
     });
-    this.hud = new Hud(this.app, { debugEnabled: this.debugHudEnabled });
+    this.hud = this.hudHost.hud;
     this.feedback = new Feedback(this.camera);
     this.objectivePanel = new ObjectivePanel({
       root: this.app,
@@ -161,7 +172,6 @@ export class Game {
     });
 
     this.bindObjectiveEquipmentEvents();
-    this.bindHudToolbar();
     this.emitLocationEntered();
     this.playFieldReturnReactionIfNeeded({ query });
     if (this.perfDebugEnabled) this.perfDebugPanel = new PerfDebugPanel({ game: this });
@@ -185,8 +195,8 @@ export class Game {
     this.rendererHost?.setAnimationLoop?.(null);
 
     if (import.meta.env.DEV) {
-      if (!this.app.innerHTML) this.app.innerHTML = this.renderShell();
-      const viewport = this.app.querySelector('[data-game="viewport"]');
+      if (!this.app.innerHTML) this.hudHost = new HudHost({ root: this.app, debugEnabled: this.debugHudEnabled });
+      const viewport = this.hudHost?.viewport ?? this.app.querySelector('[data-game="viewport"]');
       const message = document.createElement('p');
       message.setAttribute('role', 'alert');
       message.style.cssText = 'position:absolute;inset:auto 1rem 1rem 1rem;z-index:20;margin:0;padding:0.75rem;background:rgba(32,8,8,0.92);color:#ffd8c2;border:1px solid #a45f3a;font:12px/1.4 monospace;';
@@ -375,95 +385,6 @@ export class Game {
     this.saveHost.saveObjectiveState(this.gameState, this.objectiveRuntime);
   }
 
-  renderShell() {
-    const debugReadout = this.debugHudEnabled
-      ? '<p class="debug-readout" data-hud="debug" aria-label="Debug runtime state">POS 0.0, 0.0 · YAW 0° · PITCH 0°</p>'
-      : '';
-
-    return `
-      <main class="reliquary-shell" aria-label="Dread Stone Black handheld reliquary interface">
-        <header class="hud-top" aria-label="Player status and game toolbar">
-          <section class="top-stat-row" aria-label="Player status">
-            <div class="stat stat-hp"><span>HP</span><strong data-stat="hp">100</strong></div>
-            <div class="stat stat-mp"><span>MP</span><strong>24</strong></div>
-            <div class="stat stat-power"><span>POWER</span><strong data-stat="power">10</strong></div>
-            <div class="stat stat-magic"><span>MAGIC</span><strong>3</strong></div>
-            <div class="stat stat-hunger"><span>HUNGER</span><strong data-stat="hunger">3:00</strong></div>
-          </section>
-
-          <nav class="top-toolbar" aria-label="Game toolbar">
-            <button class="toolbar-button toolbar-button--equipment" data-action="equipment" type="button" aria-label="Open equipment">EQ</button>
-            <button class="toolbar-button toolbar-button--reset" data-action="reset" type="button" aria-label="Reset progress">RESET</button>
-            <button class="toolbar-button toolbar-button--pause" data-action="pause" type="button" aria-label="Pause game">PAUSE</button>
-          </nav>
-        </header>
-
-        <section class="viewport-frame" aria-label="Framed game viewport">
-          <div class="viewport-ornament viewport-ornament-top" aria-hidden="true">✦</div>
-          <div class="viewport-stage" data-game="viewport">
-            <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
-            <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
-            <p class="field-kit-status" data-hud="field-kit" aria-live="polite" hidden></p>
-            <div class="timed-action-progress-ring" data-hud="timed-action-progress" aria-hidden="true"></div>
-            <div class="damage-flash" data-hud="damage" aria-hidden="true"></div>
-            <section class="pause-overlay" data-pause-overlay aria-label="Paused" aria-hidden="true">
-              <div class="pause-card">
-                <p class="pause-title">PAUSED</p>
-                <div class="pause-actions">
-                  <button class="pause-action-button" data-action="resume" type="button">RESUME</button>
-                  <button class="pause-action-button pause-action-button--reset" data-action="reset" type="button">RESET</button>
-                </div>
-              </div>
-            </section>
-            <section class="equipment-panel" data-equipment-panel aria-label="Inventory" aria-hidden="true">
-              <div class="equipment-panel__header">
-                <h2>Inventory</h2>
-                <button class="equipment-close" data-equipment="close" type="button" aria-label="Close inventory">X</button>
-              </div>
-              <p class="equipment-current">Weapon: <strong data-equipment="current-weapon">Unarmed</strong></p>
-              <div class="inventory-shell">
-                <div class="inventory-tabs" data-inventory="pocket-tabs" role="tablist" aria-label="Inventory pockets"></div>
-                <div class="inventory-content">
-                  <article class="inventory-detail" data-inventory="detail" aria-live="polite"></article>
-                  <div class="equipment-list" data-inventory="list"></div>
-                </div>
-              </div>
-            </section>
-          </div>
-          <div class="viewport-ornament viewport-ornament-bottom" aria-hidden="true">◆</div>
-        </section>
-
-        <section class="control-deck" aria-label="Touch controls">
-          <div class="deck-engraving" aria-hidden="true"></div>
-          <div class="stick-zone move-zone" data-control="move" aria-label="Move">
-            <div class="stick-ring">
-              <div class="stick-cardinal stick-cardinal-up">▲</div>
-              <div class="stick-cardinal stick-cardinal-down">▼</div>
-              <div class="stick-knob" data-control="move-knob"></div>
-            </div>
-            <span>MOVE</span>
-          </div>
-
-          <div class="action-cluster" aria-label="Action buttons">
-            <button class="interact-button action-button" data-action="interact" type="button" aria-label="Interact"><span>X</span></button>
-            <button class="attack-button action-button" data-action="attack" type="button" aria-label="Attack"><span>A</span></button>
-          </div>
-
-          <div class="stick-zone look-zone" data-control="look" aria-label="Look">
-            <div class="stick-ring">
-              <div class="stick-cardinal stick-cardinal-left">◀</div>
-              <div class="stick-cardinal stick-cardinal-right">▶</div>
-              <div class="stick-knob" data-control="look-knob"></div>
-            </div>
-            <span>LOOK</span>
-          </div>
-        </section>
-
-        ${debugReadout}
-      </main>
-    `;
-  }
-
   update() {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
     this.perfDebugPanel?.update();
@@ -506,43 +427,13 @@ export class Game {
     this.perfDebugPanel?.render();
   }
 
-  bindHudToolbar() {
-    this.pauseOverlay = this.app.querySelector('[data-pause-overlay]');
-    this.pauseButton = this.app.querySelector('[data-action="pause"]');
-    this.resumeButton = this.app.querySelector('[data-action="resume"]');
-    this.resetButtons = [...this.app.querySelectorAll('[data-action="reset"]')];
-
-    this.pauseButton?.addEventListener('pointerdown', (event) => {
-      event.preventDefault();
-      this.togglePause();
-    });
-    this.resumeButton?.addEventListener('pointerdown', (event) => {
-      event.preventDefault();
-      this.setPaused(false);
-    });
-    this.resetButtons.forEach((button) => {
-      button.addEventListener('pointerdown', (event) => {
-        event.preventDefault();
-        this.requestProgressReset();
-      });
-    });
-    window.addEventListener('keydown', (event) => {
-      if (event.code !== 'Escape') return;
-      event.preventDefault();
-      this.togglePause();
-    });
-  }
-
   togglePause() {
     this.setPaused(!this.isPaused);
   }
 
   setPaused(isPaused) {
     this.isPaused = isPaused;
-    this.app.classList.toggle('is-paused', this.isPaused);
-    this.pauseOverlay?.classList.toggle('is-open', this.isPaused);
-    this.pauseOverlay?.setAttribute('aria-hidden', String(!this.isPaused));
-    if (this.pauseButton) this.pauseButton.textContent = this.isPaused ? 'RESUME' : 'PAUSE';
+    this.hudHost?.setPaused(this.isPaused);
     if (!this.isPaused) this.clearResetConfirmation();
   }
 
@@ -568,9 +459,7 @@ export class Game {
   }
 
   setResetButtonLabels(label) {
-    this.resetButtons?.forEach((button) => {
-      button.textContent = label;
-    });
+    this.hudHost?.setResetButtonLabels(label);
   }
 
   performProgressReset() {
