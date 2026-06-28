@@ -2,8 +2,17 @@ import './styles/base.css';
 import './styles/hud.css';
 import './styles/controls.css';
 import { Game } from './game/Game.js';
+import { SaveHost } from './game/hosts/SaveHost.js';
+import { TitleScreen } from './game/title/TitleScreen.js';
 
 const app = document.querySelector('#app');
-const game = new Game(app);
+const titleScreen = new TitleScreen();
+const selection = await titleScreen.waitForSelection();
 
-game.start();
+if (selection.action === 'new') {
+  new SaveHost().resetAllProgress();
+}
+
+const game = new Game(app);
+await game.start();
+titleScreen.dispose();
