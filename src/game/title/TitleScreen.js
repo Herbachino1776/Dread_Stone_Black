@@ -2,6 +2,8 @@ import { TitleAmbience } from '../audio/TitleAmbience.js';
 
 const MENU_ITEMS = Object.freeze(['new', 'continue']);
 const CONFIRM_CODES = new Set(['Enter', 'Space', 'NumpadEnter', 'KeyA', 'Gamepad0']);
+const WAKING_FALLBACK_MS = 3000;
+const AUDIO_UNLOCK_TIMEOUT_MS = 1200;
 
 export class TitleScreen {
   constructor({ storage = window.localStorage, ambience = new TitleAmbience() } = {}) {
@@ -10,6 +12,7 @@ export class TitleScreen {
     this.stage = 'boot';
     this.selectedIndex = 0;
     this.disposers = [];
+    this.wakingFallbackTimer = null;
     this.hasSave = this.detectExistingSave();
     this.resolveChoice = null;
     this.root = this.createRoot();
@@ -84,11 +87,25 @@ export class TitleScreen {
     if (this.stage !== 'boot') return;
     this.stage = 'waking';
     this.wakeText.textContent = 'Waking...';
-    await this.ambience.unlockAndPlay();
-    this.showMenu();
+    this.wakingFallbackTimer = window.setTimeout(() => {
+      if (this.stage !== 'waking') return;
+      console.warn('[Dread Stone Black] Title wake took too long; forcing the start menu open.');
+      this.showMenu();
+    }, WAKING_FALLBACK_MS);
+
+    try {
+      await this.ambience.unlockAndPlay({ timeoutMs: AUDIO_UNLOCK_TIMEOUT_MS });
+    } catch (error) {
+      console.warn('[Dread Stone Black] Title audio unlock failed. Showing menu without title audio.', error);
+    } finally {
+      this.showMenu();
+    }
   }
 
   showMenu() {
+    if (this.stage === 'menu' || this.stage === 'starting') return;
+    window.clearTimeout(this.wakingFallbackTimer);
+    this.wakingFallbackTimer = null;
     this.stage = 'menu';
     this.root.classList.remove('title-screen--boot');
     this.root.classList.add('title-screen--menu');
@@ -144,8 +161,11 @@ export class TitleScreen {
   }
 
   dispose() {
+    window.clearTimeout(this.wakingFallbackTimer);
+    this.wakingFallbackTimer = null;
     this.disposers.forEach((dispose) => dispose());
     this.disposers = [];
+    this.wakingFallbackTimer = null;
     this.root?.remove();
   }
 }
