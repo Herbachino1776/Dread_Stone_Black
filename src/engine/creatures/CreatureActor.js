@@ -9,7 +9,7 @@ import { buildCreatureDebugInfo } from './CreatureDebugInfo.js';
 const devLoadSummaryLogged = new Set();
 
 export class CreatureActor {
-  constructor(config, { scene = null, position = null, yaw = null, name = null } = {}) {
+  constructor(config, { scene = null, position = null, yaw = null, name = null, singleActorRoot = false } = {}) {
     this.config = config;
     this.scene = scene;
     this.group = new THREE.Group();
@@ -23,11 +23,13 @@ export class CreatureActor {
     this.isLoaded = false;
     this.loadError = null;
     this.lastLoadSummary = null;
+    this.singleActorRoot = singleActorRoot;
     this.animationSet = new CreatureAnimationSet({
       config,
       rootGroup: this.group,
       materialProfile: this.materialProfile,
       onTrackLoaded: () => this.refreshUserData(),
+      singleActorRoot,
     });
     this.spawnProfile.applyToGroup(this.group, { position, yaw });
     this.refreshUserData();
@@ -133,12 +135,17 @@ export class CreatureActor {
       opposingFaction: this.config.identity?.opposingFactionId,
       tags: this.config.identity?.tags ?? [],
       assetUrls: this.config.assets?.animationFiles ?? {},
-      animationStrategy: 'separate GLB scenes are swapped inside one CreatureActor root',
+      animationStrategy: this.singleActorRoot ? 'single actor root with one mixer and shared actions' : 'legacy separate GLB scenes are swapped inside one CreatureActor root',
       loadedAnimationStates: this.animationSet.getLoadedStates(),
       expectedAnimationStates: this.config.assets?.expectedAnimations ?? Object.keys(this.config.assets?.animationFiles ?? {}),
       missingAnimationStates: this.animationSet.getMissingStates(),
       animationState: this.animationSet.currentState,
       visibleAnimationState: this.animationSet.currentState,
+      liveAnimationRoots: this.animationSet.getLiveAnimationRootCount?.() ?? this.animationSet.getLoadedRootCount(),
+      liveSkinnedRoots: this.animationSet.getLiveSkinnedRootCount?.() ?? 0,
+      activeAnimationMixers: this.animationSet.getActiveMixerCount?.() ?? 0,
+      extraStateRootsAlive: this.animationSet.hasExtraStateRootsAlive?.() ?? false,
+      animationActionCount: this.animationSet.getActionCount?.() ?? 0,
       normalizedScale: Object.fromEntries(Object.entries(this.animationSet.tracks).map(([state, track]) => [state, track.scale])),
       materialTuning: Object.fromEntries(Object.entries(this.animationSet.tracks).map(([state, track]) => [state, track.materialSummary])),
       health: this.health,

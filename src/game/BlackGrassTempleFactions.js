@@ -606,6 +606,7 @@ class BlackGrassFactionEnemy {
       yaw: this.spawnAnchor.yaw ?? 0,
       name: this.id,
       config: this.creatureConfigOverride,
+      singleActorRoot: isFolsomFeudNeckman,
     });
 
     return this.actor.load({ initialStates: [idleState], lazyStates: [...priorityRemaining, ...optionalRemaining], lazyLoadDelayMs: isFolsomFeudNeckman ? MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.loadStaggerMs : 0 })
@@ -770,8 +771,12 @@ class BlackGrassFactionEnemy {
     this.group.userData.loadedAnimationStates = Object.keys(tracks);
     this.group.userData.normalizedScale = Object.fromEntries(Object.entries(tracks).map(([state, track]) => [state, track.scale]));
     this.group.userData.visibleAnimationState = this.group.userData.animationState;
-    this.group.userData.visibleAnimationRootCount = Object.values(tracks).filter((track) => track.root.visible).length;
+    this.group.userData.visibleAnimationRootCount = new Set(Object.values(tracks).map((track) => track.root).filter((root) => root?.visible)).size;
     this.group.userData.loadedCreatureAnimationRoots = this.animation.getLoadedRootCount?.() ?? Object.keys(tracks).length;
+    this.group.userData.liveAnimationRoots = this.animation.getLiveAnimationRootCount?.() ?? this.group.userData.loadedCreatureAnimationRoots;
+    this.group.userData.liveSkinnedRoots = this.animation.getLiveSkinnedRootCount?.() ?? 0;
+    this.group.userData.extraStateRootsAlive = this.animation.hasExtraStateRootsAlive?.() ?? false;
+    this.group.userData.animationActionCount = this.animation.getActionCount?.() ?? 0;
     this.group.userData.activeAnimationMixerCount = this.animation.getActiveMixerCount?.() ?? 0;
     this.lifecycle.loadedStates = this.animation.getLoadedStates?.() ?? [];
     this.group.userData.mobileEnemyLifecycle = this.lifecycle;
@@ -785,9 +790,14 @@ class BlackGrassFactionEnemy {
     this.group.visible = true;
     const animationState = this.resolveStateAnimation(this.behaviorState ?? 'spawn');
     const visibleState = this.animation.tracks[animationState] ? animationState : Object.keys(this.animation.tracks)[0];
-    Object.entries(this.animation.tracks).forEach(([trackState, track]) => {
-      track.root.visible = trackState === visibleState;
-    });
+    if (this.animation.singleActorRoot) {
+      const root = this.animation.actorRootTrack?.root ?? Object.values(this.animation.tracks)[0]?.root;
+      if (root) root.visible = true;
+    } else {
+      Object.entries(this.animation.tracks).forEach(([trackState, track]) => {
+        track.root.visible = trackState === visibleState;
+      });
+    }
     this.group.userData.animationState = visibleState;
     this.group.userData.visibleAnimationState = visibleState;
     this.group.userData.visibleAnimationRootCount = 1;
@@ -2760,6 +2770,9 @@ export class BlackGrassTempleFactionManager {
       sleepingEnemies: byState('sleeping'),
       loadedActorRoots: enemies.filter((enemy) => enemy.actor?.group).length,
       loadedAnimationRoots: enemies.reduce((sum, enemy) => sum + (enemy.animation?.getLoadedRootCount?.() ?? 0), 0),
+      liveSkinnedRoots: enemies.reduce((sum, enemy) => sum + (enemy.animation?.getLiveSkinnedRootCount?.() ?? 0), 0),
+      extraStateRootsAlive: enemies.some((enemy) => enemy.animation?.hasExtraStateRootsAlive?.()),
+      clipsActionsPerEnemy: neckmen.map((enemy) => ({ id: enemy.id, clips: enemy.animation?.getLoadedStates?.().length ?? 0, actions: enemy.animation?.getActionCount?.() ?? 0 })),
       activeMixers: enemies.reduce((sum, enemy) => sum + (enemy.animation?.getActiveMixerCount?.() ?? 0), 0),
       loadFailures: enemies.map((enemy) => enemy.loadFailure).filter(Boolean),
       loadedStatesPerEnemy: neckmen.map((enemy) => ({ id: enemy.id, lifecycle: enemy.lifecycle?.state, states: enemy.animation?.getLoadedStates?.() ?? enemy.lifecycle?.loadedStates ?? [], failure: enemy.loadFailure ?? null })),
