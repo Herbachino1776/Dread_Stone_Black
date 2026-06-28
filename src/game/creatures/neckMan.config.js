@@ -1,5 +1,14 @@
 import * as THREE from 'three';
 
+export const NECK_MAN_CANONICAL_MOBILE_MODEL_FILE = './assets/enemies/neck_man/neck_man_folsom_mobile.glb';
+export const NECK_MAN_FOLSOM_MOBILE_CLIP_NAMES = Object.freeze(['idle', 'walk', 'punch_right', 'die']);
+export const NECK_MAN_FOLSOM_MOBILE_CLIP_MAP = Object.freeze({
+  idle: 'idle',
+  walk: 'walk',
+  punch_right: 'punch_right',
+  die: 'die',
+});
+
 export const NECK_MAN_ANIMATION_FILES = Object.freeze({
   idle: './assets/enemies/neck_man/neckman_01_optimized_idle.glb',
   walk: './assets/enemies/neck_man/neckman_01_optimized_walk.glb',
@@ -45,7 +54,19 @@ export const neckManConfig = Object.freeze({
   }),
   assets: Object.freeze({
     basePath: './assets/enemies/neck_man/',
+    canonicalModelFile: NECK_MAN_CANONICAL_MOBILE_MODEL_FILE,
+    mobileModelFile: NECK_MAN_CANONICAL_MOBILE_MODEL_FILE,
+    clipBundle: Object.freeze({
+      strategy: 'canonical-multiclip',
+      modelFile: NECK_MAN_CANONICAL_MOBILE_MODEL_FILE,
+      requiredClips: NECK_MAN_FOLSOM_MOBILE_CLIP_NAMES,
+      clipMap: NECK_MAN_FOLSOM_MOBILE_CLIP_MAP,
+      legacyFallback: 'singleActorRoot-extracted-clips',
+    }),
+    mobileClipNames: NECK_MAN_FOLSOM_MOBILE_CLIP_NAMES,
     animationFiles: NECK_MAN_ANIMATION_FILES,
+    legacyAnimationFiles: NECK_MAN_ANIMATION_FILES,
+    legacySeparateAnimationMode: 'fallback-heavy-legacy',
     expectedAnimations: Object.freeze(Object.keys(NECK_MAN_ANIMATION_FILES)),
     fallbackAnimations: Object.freeze({
       attack: 'punch_right',
@@ -75,6 +96,7 @@ export const neckManConfig = Object.freeze({
     die: 'die',
     talk: 'talk',
     special: 'talk',
+    mobileClipMap: NECK_MAN_FOLSOM_MOBILE_CLIP_MAP,
     factionStateToAnimation: NECK_MAN_FACTION_STATE_TO_ANIMATION,
     fallbackMapping: Object.freeze({
       attack_player_fallback: 'punch_left',

@@ -17,7 +17,12 @@ import { FOLSOM_CEDAR_LIKE_SOURCE_SPRITES, FOLSOM_DARK_GROVE_SOURCE_SPRITES, FOL
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { createCreatureWorldRuntime } from '../src/game/world-scene/CreatureWorldRuntime.js';
 import { FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES, MOBILE_ENEMY_BUDGETS } from '../src/game/creatures/MobileEnemyRuntimeContract.js';
-import { NECK_MAN_ANIMATION_FILES } from '../src/game/creatures/neckMan.config.js';
+import {
+  NECK_MAN_ANIMATION_FILES,
+  NECK_MAN_CANONICAL_MOBILE_MODEL_FILE,
+  NECK_MAN_FOLSOM_MOBILE_CLIP_MAP,
+  neckManConfig,
+} from '../src/game/creatures/neckMan.config.js';
 import { validatePondDecor, validatePondFootprint } from './pond-footprint-validation.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -238,7 +243,16 @@ const folsomBloodFeudSpawns = folsomCompiledRuntime.spawnAnchors.filter((spawn) 
 assert.equal(folsomBloodFeudSpawns.length, 3, 'Folsom has exactly 3 folsom-blood-feud Neckman enemy spawns.');
 
 assert.deepEqual(FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES, ['idle', 'walk', 'punch_right', 'die'], 'Folsom Neckman mobile runtime keeps the required 4-state subset.');
-assert.deepEqual(Object.keys(NECK_MAN_ANIMATION_FILES).filter((state) => FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES.includes(state)), FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES, 'Folsom Neckman mobile subset maps to existing Neckman GLB states.');
+assert.deepEqual(neckManConfig.assets.mobileClipNames, FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES, 'Folsom Neckman canonical mobile clips are exactly idle, walk, punch_right, die.');
+assert.equal(neckManConfig.assets.canonicalModelFile, './assets/enemies/neck_man/neck_man_folsom_mobile.glb', 'Folsom Neckman canonical mobile GLB path is configured.');
+assert.equal(neckManConfig.assets.mobileModelFile, NECK_MAN_CANONICAL_MOBILE_MODEL_FILE, 'Folsom Neckman mobile model uses the canonical GLB path.');
+assert.equal(existsSync(resolve(repoRoot, NECK_MAN_CANONICAL_MOBILE_MODEL_FILE.replace(/^\.\//, 'public/'))), true, 'Folsom Neckman canonical mobile GLB asset exists.');
+assert.equal(neckManConfig.assets.clipBundle?.strategy, 'canonical-multiclip', 'Folsom Neckman prefers canonical multi-clip mode.');
+assert.deepEqual(neckManConfig.assets.clipBundle?.requiredClips, FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES, 'Folsom Neckman canonical bundle requires exactly the four runtime clips.');
+assert.deepEqual(NECK_MAN_FOLSOM_MOBILE_CLIP_MAP, { idle: 'idle', walk: 'walk', punch_right: 'punch_right', die: 'die' }, 'Folsom Neckman canonical clip map names the four required clips.');
+assert.deepEqual(Object.keys(NECK_MAN_ANIMATION_FILES).filter((state) => FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES.includes(state)), FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES, 'Folsom Neckman legacy fallback subset maps to existing Neckman GLB states.');
+assert.equal(neckManConfig.assets.legacySeparateAnimationMode, 'fallback-heavy-legacy', 'Legacy separate-animation Neckman GLBs remain marked as fallback/heavy/legacy.');
+assert.ok(neckManConfig.assets.animationFiles.idle !== NECK_MAN_CANONICAL_MOBILE_MODEL_FILE && neckManConfig.assets.animationFiles.walk !== NECK_MAN_CANONICAL_MOBILE_MODEL_FILE && neckManConfig.assets.animationFiles.punch_right !== NECK_MAN_CANONICAL_MOBILE_MODEL_FILE && neckManConfig.assets.animationFiles.die !== NECK_MAN_CANONICAL_MOBILE_MODEL_FILE, 'Folsom canonical mode does not point idle/walk/punch_right/die at separate GLB loading when the canonical bundle exists.');
 assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.requiresStagedLoading, true, 'Folsom Neckman mobile budget requires staged loading.');
 assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.loadQueueConcurrency, 1, 'Folsom Neckman mobile budget prevents simultaneous three-enemy GLB warmup.');
 assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.allowAllAnimationPreload, false, 'Folsom Neckman mobile budget forbids all-animation preload.');
@@ -270,6 +284,8 @@ assert.ok(folsomMobileSummary, 'Folsom blood-feud exposes explicit mobile enemy 
 assert.equal(folsomMobileSummary.enemyAiTickRate, '10hz fixed', 'Folsom Neckman uses fixed-tick mobile AI reporting.');
 assert.equal(folsomMobileSummary.spawnedNeckmen, 0, 'Validate-only Folsom runtime does not spawn/load/animate Neckman actors.');
 assert.equal(folsomMobileSummary.loadedAnimationRoots, 0, 'Validate-only Folsom runtime reports zero live animation roots before actors load.');
+assert.equal(folsomMobileSummary.assetStrategy, 'none', 'Validate-only Folsom runtime has no loaded enemy asset strategy before actors spawn.');
+assert.equal(folsomMobileSummary.canonicalPath, NECK_MAN_CANONICAL_MOBILE_MODEL_FILE, 'Folsom mobile runtime reports the canonical Neckman path for perf diagnostics.');
 assert.equal(folsomMobileSummary.extraStateRootsAlive, false, 'Folsom mobile runtime diagnostics expose no hidden per-state animation roots.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.collisionAvailable, true, 'Folsom blood-feud validation reached CreatureWorldRuntime with collision available.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.found, 3, 'CreatureWorldRuntime found 3 Folsom blood-feud authored spawns.');

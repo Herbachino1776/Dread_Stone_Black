@@ -47,6 +47,11 @@ export class CreatureAnimationSet {
     this.singleActorRoot = singleActorRoot;
     this.actorRootTrack = null;
     this.actorMixer = null;
+    this.assetStrategy = this.config.assets?.clipBundle?.strategy ?? (this.singleActorRoot ? 'singleActorRoot-extracted-clips' : 'legacy-separate-roots');
+    this.canonicalPath = this.config.assets?.clipBundle?.modelFile ?? this.config.assets?.canonicalModelFile ?? null;
+    this.canonicalError = null;
+    this.canonicalAttempted = false;
+    this.canonicalDisabled = false;
   }
 
   get animationFiles() {
@@ -69,6 +74,15 @@ export class CreatureAnimationSet {
   }
 
   loadStates(states = []) {
+    if (this.shouldUseCanonicalBundle()) {
+      return this.loadCanonicalBundle(states).catch((error) => {
+        this.canonicalError = error;
+        this.canonicalDisabled = true;
+        this.assetStrategy = 'singleActorRoot-extracted-clips';
+        console.warn(`[CreatureAnimationSet] Canonical multi-clip GLB failed for ${this.config.id}: ${this.canonicalPath}. Falling back to legacy singleActorRoot extraction.`, error);
+        return this.loadStates(states);
+      });
+    }
     const uniqueStates = [...new Set(states.map((state) => this.resolveState(state)).filter(Boolean))];
     return Promise.all(uniqueStates.map((state) => this.loadState(state).catch((error) => {
       this.missingStates.add(state);
@@ -80,6 +94,7 @@ export class CreatureAnimationSet {
   }
 
   loadState(state) {
+    if (this.shouldUseCanonicalBundle()) return this.loadCanonicalBundle([state]).then(() => this.tracks[this.resolveState(state)]);
     const resolvedState = this.resolveState(state);
     if (this.tracks[resolvedState]) return Promise.resolve(this.tracks[resolvedState]);
     if (this.loadingStates.has(resolvedState)) return this.loadingStates.get(resolvedState);
@@ -115,6 +130,83 @@ export class CreatureAnimationSet {
     return loadPromise;
   }
 
+  shouldUseCanonicalBundle() {
+    return Boolean(this.config.assets?.clipBundle?.modelFile) && !this.canonicalDisabled;
+  }
+
+  resolveCanonicalClip(state, clips = []) {
+    const map = this.animationProfile.mobileClipMap ?? this.config.assets?.clipBundle?.clipMap ?? {};
+    const wanted = map[state] ?? state;
+    const lowerWanted = String(wanted).toLowerCase();
+    const exact = clips.find((clip) => String(clip.name ?? '').toLowerCase() === lowerWanted);
+    return exact ?? chooseClipForState(wanted, clips);
+  }
+
+  loadCanonicalBundle(states = []) {
+    const bundle = this.config.assets?.clipBundle ?? {};
+    const url = bundle.modelFile ?? this.config.assets?.canonicalModelFile;
+    const requiredStates = [...new Set([...(bundle.requiredClips ?? []), ...states].filter(Boolean))];
+    if (requiredStates.every((state) => this.tracks[state])) return Promise.resolve(requiredStates.map((state) => this.tracks[state]));
+    if (this.loadingStates.has('__canonical_bundle__')) return this.loadingStates.get('__canonical_bundle__');
+    const scale = this.config.scale ?? {};
+    this.canonicalAttempted = true;
+    const loadPromise = loadDungeonModel({
+      url,
+      targetHeight: scale.targetHeight,
+      maxWidth: scale.maxWidth,
+      scaleMultiplier: scale.scaleMultiplier,
+      groundOffset: scale.groundOffset,
+      yOffset: scale.yOffset,
+    }).then((model) => {
+      const clips = model.gltf.animations ?? [];
+      const clipNames = clips.map((clip) => clip.name || '(unnamed clip)');
+      const missing = requiredStates.filter((state) => !this.resolveCanonicalClip(state, clips));
+      if (missing.length) throw new Error(`Canonical multi-clip GLB ${url} is missing required clips/states: ${missing.join(', ')}. Available clips: ${clipNames.join(', ') || 'none'}.`);
+      model.root.name = `${this.config.id}-canonical-mobile-actor-model`;
+      model.root.visible = true;
+      model.root.rotation.y += this.config.scale?.rotationOffset ?? 0;
+      const materialSummary = this.materialProfile?.apply(model.root) ?? null;
+      this.actorMixer = new THREE.AnimationMixer(model.root);
+      const clipSummaries = summarizeClips(clips);
+      requiredStates.forEach((state) => {
+        const clip = this.resolveCanonicalClip(state, clips);
+        const action = this.createActionForClipWithMixer(state, clip, this.actorMixer, model.root);
+        this.tracks[state] = {
+          state,
+          root: model.root,
+          mixer: this.actorMixer,
+          action,
+          clip,
+          scale: model.scale,
+          box: model.box,
+          materialSummary,
+          clipNames,
+          clipSummaries,
+          usesCanonicalClipBundle: true,
+          canonicalPath: url,
+        };
+      });
+      this.actorRootTrack = this.tracks[requiredStates[0]];
+      if (!this.mixers.includes(this.actorMixer)) this.mixers.push(this.actorMixer);
+      if (model.root && !model.root.parent) this.rootGroup.add(model.root);
+      this.assetStrategy = 'canonical-multiclip';
+      requiredStates.forEach((state) => this.onTrackLoaded?.(state, this.tracks[state]));
+      return requiredStates.map((state) => this.tracks[state]);
+    }).finally(() => this.loadingStates.delete('__canonical_bundle__'));
+    this.loadingStates.set('__canonical_bundle__', loadPromise);
+    return loadPromise;
+  }
+
+  createActionForClipWithMixer(state, clip, mixer, root = undefined) {
+    if (!clip || !mixer) return null;
+    const action = mixer.clipAction(clip, root);
+    const oneShotStates = this.animationProfile.oneShotStates ?? DEFAULT_ONE_SHOT_STATES;
+    const isOneShot = oneShotStates.includes(state);
+    action.setLoop(isOneShot ? THREE.LoopOnce : THREE.LoopRepeat, isOneShot ? 1 : Infinity);
+    action.clampWhenFinished = isOneShot;
+    action.enabled = true;
+    return action;
+  }
 
   createSingleRootTrack(state, { root, gltf, scale, box }) {
     const clips = gltf.animations ?? [];
@@ -164,14 +256,7 @@ export class CreatureAnimationSet {
   }
 
   createActionForClip(state, clip) {
-    if (!clip || !this.actorMixer) return null;
-    const action = this.actorMixer.clipAction(clip, this.actorRootTrack?.root);
-    const oneShotStates = this.animationProfile.oneShotStates ?? DEFAULT_ONE_SHOT_STATES;
-    const isOneShot = oneShotStates.includes(state);
-    action.setLoop(isOneShot ? THREE.LoopOnce : THREE.LoopRepeat, isOneShot ? 1 : Infinity);
-    action.clampWhenFinished = isOneShot;
-    action.enabled = true;
-    return action;
+    return this.createActionForClipWithMixer(state, clip, this.actorMixer, this.actorRootTrack?.root);
   }
 
   disposeDetachedModelRoot(root) {
@@ -286,7 +371,16 @@ export class CreatureAnimationSet {
   }
 
   hasExtraStateRootsAlive() {
+    if (this.assetStrategy === 'canonical-multiclip') return false;
     return this.singleActorRoot ? false : Object.keys(this.tracks).length > 1;
+  }
+
+  getAssetStrategy() {
+    return this.assetStrategy;
+  }
+
+  getCanonicalPath() {
+    return this.canonicalPath;
   }
 
   getActionCount() {
@@ -319,5 +413,10 @@ export class CreatureAnimationSet {
     this.lastActiveMixerCount = 0;
     this.actorRootTrack = null;
     this.actorMixer = null;
+    this.assetStrategy = this.config.assets?.clipBundle?.strategy ?? (this.singleActorRoot ? 'singleActorRoot-extracted-clips' : 'legacy-separate-roots');
+    this.canonicalPath = this.config.assets?.clipBundle?.modelFile ?? this.config.assets?.canonicalModelFile ?? null;
+    this.canonicalError = null;
+    this.canonicalAttempted = false;
+    this.canonicalDisabled = false;
   }
 }

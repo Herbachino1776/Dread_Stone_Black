@@ -9,6 +9,8 @@ import {
 import {
   neckManConfig,
   NECK_MAN_ANIMATION_FILES,
+  NECK_MAN_CANONICAL_MOBILE_MODEL_FILE,
+  NECK_MAN_FOLSOM_MOBILE_CLIP_MAP,
   NECK_MAN_FACTION_STATE_TO_ANIMATION,
 } from './creatures/neckMan.config.js';
 import {
@@ -189,7 +191,38 @@ function createFactionTemplate(template, scaleMultiplier, encounterMode) {
   });
 }
 
-function createScaledCreatureConfig(species, scaleMultiplier) {
+function createFolsomNeckmanMobileConfig(scaleMultiplier = 1) {
+  const multiplier = Number.isFinite(scaleMultiplier) && scaleMultiplier > 0 ? scaleMultiplier : 1;
+  return {
+    ...neckManConfig,
+    assets: Object.freeze({
+      ...neckManConfig.assets,
+      expectedAnimations: FOLSOM_BLOOD_FEUD_ANIMATION_STATES,
+      clipBundle: Object.freeze({
+        ...neckManConfig.assets.clipBundle,
+        strategy: 'canonical-multiclip',
+        modelFile: NECK_MAN_CANONICAL_MOBILE_MODEL_FILE,
+        requiredClips: FOLSOM_BLOOD_FEUD_ANIMATION_STATES,
+        clipMap: NECK_MAN_FOLSOM_MOBILE_CLIP_MAP,
+      }),
+    }),
+    animationProfile: Object.freeze({
+      ...neckManConfig.animationProfile,
+      mobileClipMap: NECK_MAN_FOLSOM_MOBILE_CLIP_MAP,
+      attack: 'punch_right',
+      jump: 'punch_right',
+      attackAnimationChoices: Object.freeze(['punch_right']),
+      oneShotStates: Object.freeze(['punch_right', 'die']),
+    }),
+    scale: Object.freeze({
+      ...neckManConfig.scale,
+      scaleMultiplier: (neckManConfig.scale?.scaleMultiplier ?? 1) * multiplier,
+    }),
+  };
+}
+
+function createScaledCreatureConfig(species, scaleMultiplier, encounterMode = null) {
+  if (encounterMode === 'folsom_neckman_blood_feud' && species === 'neck_man') return createFolsomNeckmanMobileConfig(scaleMultiplier);
   const baseConfig = CREATURE_CONFIGS_BY_SPECIES[species];
   if (!baseConfig || scaleMultiplier === 1) return null;
   return {
@@ -504,7 +537,7 @@ class BlackGrassFactionEnemy {
     this.species = species;
     this.spawnScaleMultiplier = resolveSpawnScaleMultiplier(spawnAnchor);
     this.template = createFactionTemplate(FACTIONS[species], this.spawnScaleMultiplier, encounterMode);
-    this.creatureConfigOverride = createScaledCreatureConfig(species, this.spawnScaleMultiplier);
+    this.creatureConfigOverride = createScaledCreatureConfig(species, this.spawnScaleMultiplier, encounterMode);
     this.id = id;
     this.spawnAnchor = spawnAnchor;
     this.actor = null;
@@ -626,7 +659,9 @@ class BlackGrassFactionEnemy {
           stateMachine: FACTION_STATE_MACHINE,
           targetPriority: this.encounterMode === 'folsom_neckman_blood_feud' ? ['nearest living blood-feud neckman'] : ['nearest living opposing faction enemy', 'player fallback', 'patrol target'],
           animationMapping: this.template.animationMap,
-          assetUrls: isFolsomFeudNeckman ? Object.fromEntries(allStates.map((state) => [state, this.template.assets[state]])) : this.template.assets,
+          assetUrls: isFolsomFeudNeckman ? { canonical: NECK_MAN_CANONICAL_MOBILE_MODEL_FILE } : this.template.assets,
+          animationStrategy: this.animation?.getAssetStrategy?.() ?? undefined,
+          canonicalModelPath: this.animation?.getCanonicalPath?.() ?? undefined,
           expectedAnimationStates: allStates,
           health: this.health,
           spawnScaleMultiplier: this.spawnScaleMultiplier,
@@ -777,6 +812,8 @@ class BlackGrassFactionEnemy {
     this.group.userData.liveSkinnedRoots = this.animation.getLiveSkinnedRootCount?.() ?? 0;
     this.group.userData.extraStateRootsAlive = this.animation.hasExtraStateRootsAlive?.() ?? false;
     this.group.userData.animationActionCount = this.animation.getActionCount?.() ?? 0;
+    this.group.userData.animationStrategy = this.animation.getAssetStrategy?.() ?? this.group.userData.animationStrategy;
+    this.group.userData.canonicalModelPath = this.animation.getCanonicalPath?.() ?? this.group.userData.canonicalModelPath;
     this.group.userData.activeAnimationMixerCount = this.animation.getActiveMixerCount?.() ?? 0;
     this.lifecycle.loadedStates = this.animation.getLoadedStates?.() ?? [];
     this.group.userData.mobileEnemyLifecycle = this.lifecycle;
@@ -2772,7 +2809,9 @@ export class BlackGrassTempleFactionManager {
       loadedAnimationRoots: enemies.reduce((sum, enemy) => sum + (enemy.animation?.getLoadedRootCount?.() ?? 0), 0),
       liveSkinnedRoots: enemies.reduce((sum, enemy) => sum + (enemy.animation?.getLiveSkinnedRootCount?.() ?? 0), 0),
       extraStateRootsAlive: enemies.some((enemy) => enemy.animation?.hasExtraStateRootsAlive?.()),
-      clipsActionsPerEnemy: neckmen.map((enemy) => ({ id: enemy.id, clips: enemy.animation?.getLoadedStates?.().length ?? 0, actions: enemy.animation?.getActionCount?.() ?? 0 })),
+      assetStrategy: [...new Set(neckmen.map((enemy) => enemy.animation?.getAssetStrategy?.() ?? 'unknown'))].join(',') || 'none',
+      canonicalPath: NECK_MAN_CANONICAL_MOBILE_MODEL_FILE,
+      clipsActionsPerEnemy: neckmen.map((enemy) => ({ id: enemy.id, strategy: enemy.animation?.getAssetStrategy?.() ?? 'unknown', canonicalPath: enemy.animation?.getCanonicalPath?.() ?? null, clips: enemy.animation?.getLoadedStates?.().length ?? 0, actions: enemy.animation?.getActionCount?.() ?? 0 })),
       activeMixers: enemies.reduce((sum, enemy) => sum + (enemy.animation?.getActiveMixerCount?.() ?? 0), 0),
       loadFailures: enemies.map((enemy) => enemy.loadFailure).filter(Boolean),
       loadedStatesPerEnemy: neckmen.map((enemy) => ({ id: enemy.id, lifecycle: enemy.lifecycle?.state, states: enemy.animation?.getLoadedStates?.() ?? enemy.lifecycle?.loadedStates ?? [], failure: enemy.loadFailure ?? null })),
