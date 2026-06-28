@@ -16,6 +16,8 @@ import { FOLSOM_PINE_SWATHE_SPECS, FOLSOM_VISIBLE_TREE_BOUNDS, folsomDefinition 
 import { FOLSOM_CEDAR_LIKE_SOURCE_SPRITES, FOLSOM_DARK_GROVE_SOURCE_SPRITES, FOLSOM_UNDERSTORY_SOURCE_SPRITES } from '../src/game/world-kits/vegetation/FolsomFoliageBillboardKit.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { createCreatureWorldRuntime } from '../src/game/world-scene/CreatureWorldRuntime.js';
+import { FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES, MOBILE_ENEMY_BUDGETS } from '../src/game/creatures/MobileEnemyRuntimeContract.js';
+import { NECK_MAN_ANIMATION_FILES } from '../src/game/creatures/neckMan.config.js';
 import { validatePondDecor, validatePondFootprint } from './pond-footprint-validation.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -234,6 +236,14 @@ const folsomRuntimeCollision = buildFolsomRuntimeCollision(folsomCompiledRuntime
 folsomCompiledRuntime.collisionWorld = folsomRuntimeCollision;
 const folsomBloodFeudSpawns = folsomCompiledRuntime.spawnAnchors.filter((spawn) => spawn.kind === 'enemy' && spawn.species === 'neck_man' && spawn.tags?.includes('folsom-blood-feud'));
 assert.equal(folsomBloodFeudSpawns.length, 3, 'Folsom has exactly 3 folsom-blood-feud Neckman enemy spawns.');
+
+assert.deepEqual(FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES, ['idle', 'walk', 'punch_right', 'die'], 'Folsom Neckman mobile runtime keeps the required 4-state subset.');
+assert.deepEqual(Object.keys(NECK_MAN_ANIMATION_FILES).filter((state) => FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES.includes(state)), FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES, 'Folsom Neckman mobile subset maps to existing Neckman GLB states.');
+assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.requiresStagedLoading, true, 'Folsom Neckman mobile budget requires staged loading.');
+assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.loadQueueConcurrency, 1, 'Folsom Neckman mobile budget prevents simultaneous three-enemy GLB warmup.');
+assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.allowAllAnimationPreload, false, 'Folsom Neckman mobile budget forbids all-animation preload.');
+assert.equal(MOBILE_ENEMY_BUDGETS.normalMobileEnemy.allowAllAnimationPreload, false, 'Normal mobile enemies explicitly opt out of all-animation preload by default.');
+
 assert.deepEqual(folsomBloodFeudSpawns.map((spawn) => spawn.id).sort(), ['folsom_neckman_feud_01', 'folsom_neckman_feud_02', 'folsom_neckman_feud_03'], 'Folsom blood-feud Neckman spawn ids stay authored.');
 folsomBloodFeudSpawns.forEach((spawn) => {
   assert.equal(spawn.allowedForInitialWave, true, `${spawn.id} is allowed for the initial wave.`);
@@ -252,6 +262,10 @@ folsomCreatureRuntime.addCompiledLocationEnemies(folsomCompiledRuntime, { source
 assert.equal(folsomCreatureRuntime.blackGrassFactionManager?.encounterMode, 'folsom_neckman_blood_feud', 'Folsom blood-feud encounter mode is not skipped.');
 assert.equal(folsomCreatureRuntime.blackGrassFactionManager?.enableRespawns, true, 'Folsom blood-feud respawns remain enabled.');
 assert.equal(folsomCreatureRuntime.blackGrassFactionManager?.respawnCooldownSeconds, 30, 'Folsom blood-feud respawn cooldown remains 30 seconds.');
+const folsomMobileSummary = folsomCreatureRuntime.blackGrassFactionManager?.getMobileRuntimeSummary?.();
+assert.ok(folsomMobileSummary, 'Folsom blood-feud exposes explicit mobile enemy lifecycle/load-state reporting.');
+assert.equal(folsomMobileSummary.enemyAiTickRate, '10hz fixed', 'Folsom Neckman uses fixed-tick mobile AI reporting.');
+assert.equal(folsomMobileSummary.spawnedNeckmen, 0, 'Validate-only Folsom runtime does not spawn/load/animate Neckman actors.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.collisionAvailable, true, 'Folsom blood-feud validation reached CreatureWorldRuntime with collision available.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.found, 3, 'CreatureWorldRuntime found 3 Folsom blood-feud authored spawns.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.spawned, 3, 'CreatureWorldRuntime produced 3 Folsom blood-feud anchors.');
