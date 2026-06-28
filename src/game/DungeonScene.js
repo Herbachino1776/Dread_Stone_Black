@@ -509,6 +509,7 @@ export class DungeonScene {
     this.blackGrassRuntime = locationId === 'black-grass-temple' ? runtime : this.blackGrassRuntime;
     this.compiledLocationRuntime = runtime;
     this.collision = runtime.collisionWorld;
+    this.creatureWorldRuntime?.setCollision(this.collision);
 
     const exit = runtime.exits.find((candidate) => candidate.toLocation === 'reliquary-field') ?? runtime.exits[0];
     this.indoorExitTarget = exit?.position?.clone() ?? new THREE.Vector3(0, 1.2, -30);
@@ -555,6 +556,7 @@ export class DungeonScene {
     });
 
     runtime.collisionWorld = this.collision;
+    this.creatureWorldRuntime?.setCollision(this.collision);
     this.compiledLocationRuntime = runtime;
     this.inspectInteractions = (definition.interactions ?? []).map((interaction) => ({
       ...interaction,
@@ -1485,7 +1487,10 @@ export class DungeonScene {
     this.outdoorVisibleSurfaceRuntime = { sampleOutdoorY: (x, z) => this.resolveOutdoorVisibleSurfaceY(x, z).y };
     this.fishingWorldRuntime.registerFishingZones(runtime.fishingZones);
     this.fieldFoliageBillboards.push(...runtime.foliageBillboards);
-    if (this.collision && (this.area === 'field' || this.isCompiledOutdoorFieldArea())) this.collision.outdoorTerrainSampler = this.outdoorVisibleSurfaceRuntime;
+    if (this.collision && (this.area === 'field' || this.isCompiledOutdoorFieldArea())) {
+      this.collision.outdoorTerrainSampler = this.outdoorVisibleSurfaceRuntime;
+      this.creatureWorldRuntime?.setCollision(this.collision);
+    }
   }
 
 
@@ -3198,6 +3203,7 @@ export class DungeonScene {
   }
 
   addCompiledLocationEnemies(runtime = this.compiledLocationRuntime, options = {}) {
+    this.creatureWorldRuntime?.setCollision(this.collision);
     this.creatureWorldRuntime?.setPlayerSpawn(this.playerSpawn);
     this.creatureWorldRuntime?.addCompiledLocationEnemies(runtime, options);
     this.blackGrassFactionManager = this.creatureWorldRuntime?.blackGrassFactionManager ?? null;

@@ -45,9 +45,11 @@ export class CreatureWorldRuntime {
     this.blackGrassFactionManager = null;
     this.generatedEnemyRuntime = null;
     this.compiledLocationEnemiesSpawnedFor = null;
+    this.bloodFeudSpawnDebug = null;
   }
 
   setArea(area) { this.area = area; }
+  setCollision(collision) { this.collision = collision; }
   setPlayerSpawn(playerSpawn) { this.playerSpawn = playerSpawn; }
 
   addStandaloneSheepDemonEnemy() {
@@ -79,9 +81,25 @@ export class CreatureWorldRuntime {
     const folsomBloodFeudSpawns = runtime.locationId === 'folsom'
       ? factionSpawns.filter((spawn) => spawn.tags?.includes('folsom-blood-feud'))
       : [];
+    if (runtime.locationId === 'folsom') {
+      this.bloodFeudSpawnDebug = {
+        locationId: runtime.locationId,
+        collisionAvailable: Boolean(this.collision),
+        found: folsomBloodFeudSpawns.length,
+        spawned: 0,
+        skipped: 0,
+        skipReasons: [],
+        encounterMode: null,
+      };
+    }
     const folsomBloodFeudAnchors = folsomBloodFeudSpawns.map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime)).filter(Boolean);
     const isFolsomBloodFeud = runtime.locationId === 'folsom' && folsomBloodFeudAnchors.length === 3;
-    if (runtime.locationId === 'folsom' && import.meta.env.DEV) console.info(`[FolsomBloodFeud] found anchors: ${folsomBloodFeudAnchors.length}`);
+    if (runtime.locationId === 'folsom') {
+      this.bloodFeudSpawnDebug.spawned = folsomBloodFeudAnchors.length;
+      this.bloodFeudSpawnDebug.skipped = Math.max(0, folsomBloodFeudSpawns.length - folsomBloodFeudAnchors.length);
+      this.bloodFeudSpawnDebug.encounterMode = isFolsomBloodFeud ? 'folsom_neckman_blood_feud' : null;
+      if (import.meta.env?.DEV) console.info(`[FolsomBloodFeud] found ${folsomBloodFeudSpawns.length} authored spawns, resolved ${folsomBloodFeudAnchors.length} safe anchors, skipped ${this.bloodFeudSpawnDebug.skipped}`, this.bloodFeudSpawnDebug);
+    }
 
     const factionAnchors = isFolsomBloodFeud ? folsomBloodFeudAnchors : factionSpawns.map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime)).filter(Boolean);
     if (factionAnchors.length === 0) return;
@@ -99,9 +117,10 @@ export class CreatureWorldRuntime {
       encounterMode: isFolsomBloodFeud ? 'folsom_neckman_blood_feud' : 'faction_war',
       respawnCooldownSeconds: isFolsomBloodFeud ? 30 : undefined,
     });
+    if (options.validateOnly) return;
     if (isFolsomBloodFeud) {
       this.blackGrassFactionManager.spawnInitialAnchors(factionAnchors);
-      if (options.source === 'compiled-outdoor' && import.meta.env.DEV) console.info(`[FolsomBloodFeud] compiled outdoor path spawned ${factionAnchors.length} neckmen`);
+      if (options.source === 'compiled-outdoor' && import.meta.env?.DEV) console.info(`[FolsomBloodFeud] compiled outdoor path spawned ${factionAnchors.length} neckmen`);
       return;
     }
     const policy = this.createGeneratedEnemySpawnPolicy(runtime);
@@ -128,7 +147,9 @@ export class CreatureWorldRuntime {
   createRuntimeEnemyAnchor(spawn, runtime) {
     const safePosition = this.findSafeCompiledEnemySpawnPosition(spawn, runtime);
     if (!safePosition) {
-      console.warn(`Skipping generated enemy spawn ${spawn.id}: no safe walkable point found.`);
+      const reason = this.collision ? 'no-safe-walkable-point' : 'collision-unavailable';
+      if (spawn.tags?.includes('folsom-blood-feud') && this.bloodFeudSpawnDebug) this.bloodFeudSpawnDebug.skipReasons.push({ id: spawn.id, reason });
+      console.warn(`Skipping generated enemy spawn ${spawn.id}: ${reason}.`);
       return null;
     }
     const preferredFaction = ['sheep_demon', 'neck_man'].includes(spawn.preferredFaction) ? spawn.preferredFaction : ['sheep_demon', 'neck_man'].includes(spawn.faction) ? spawn.faction : spawn.species;
@@ -138,6 +159,7 @@ export class CreatureWorldRuntime {
   }
 
   findSafeCompiledEnemySpawnPosition(spawn, runtime) {
+    if (!this.collision) return null;
     const position = spawn.position?.clone?.() ?? new THREE.Vector3(spawn.position?.x ?? 0, spawn.position?.y ?? 0, spawn.position?.z ?? 0);
     position.y = this.collision?.sampleWalkableY?.(position.x, position.z, position.y)?.y ?? position.y;
     if (this.collision?.canStandAtFloorPosition?.(position) ?? this.collision?.canStandAt(position)) return position;
@@ -273,6 +295,7 @@ export class CreatureWorldRuntime {
       neckmanStateCounts: this.blackGrassFactionManager?.getNeckmanStateCounts?.() ?? [],
       generatedEnemyRuntime: this.generatedEnemyRuntime,
       encounterMode: this.blackGrassFactionManager?.encounterMode ?? null,
+      folsomBloodFeud: this.bloodFeudSpawnDebug,
     };
   }
 

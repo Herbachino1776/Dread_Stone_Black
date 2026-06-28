@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as THREE from 'three';
+import { compileDungeonLocation } from '../src/engine/dungeon-authoring/DungeonCompiler.js';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
 import { createOutdoorCurvedBlockers } from '../src/engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 import { createOutdoorTerrainSampler } from '../src/engine/outdoor-authoring/OutdoorTerrainBuilder.js';
@@ -13,6 +15,7 @@ import { listLocationDefinitions } from '../src/game/locations/locationRegistry.
 import { FOLSOM_PINE_SWATHE_SPECS, FOLSOM_VISIBLE_TREE_BOUNDS, folsomDefinition } from '../src/game/locations/folsom.definition.js';
 import { FOLSOM_CEDAR_LIKE_SOURCE_SPRITES, FOLSOM_DARK_GROVE_SOURCE_SPRITES, FOLSOM_UNDERSTORY_SOURCE_SPRITES } from '../src/game/world-kits/vegetation/FolsomFoliageBillboardKit.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
+import { createCreatureWorldRuntime } from '../src/game/world-scene/CreatureWorldRuntime.js';
 import { validatePondDecor, validatePondFootprint } from './pond-footprint-validation.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -58,6 +61,37 @@ function textureAssetExists(texturePath) {
   if (typeof texturePath !== 'string') return null;
   const publicPath = texturePath.replace(/^\.\//, 'public/');
   return existsSync(resolve(repoRoot, publicPath));
+}
+
+
+function buildFolsomRuntimeCollision(runtime) {
+  const [sizeX = 400, sizeZ = 400] = Array.isArray(folsomDefinition.terrain.size) ? folsomDefinition.terrain.size : [];
+  const walkableRect = {
+    id: 'folsom-terrain-walkable-bounds',
+    minX: -sizeX * 0.5,
+    maxX: sizeX * 0.5,
+    minZ: -sizeZ * 0.5,
+    maxZ: sizeZ * 0.5,
+  };
+  const roomRects = (folsomDefinition.rooms ?? [])
+    .filter((room) => [room.minX, room.maxX, room.minZ, room.maxZ].every(Number.isFinite))
+    .map((room) => ({ id: room.id, minX: room.minX, maxX: room.maxX, minZ: room.minZ, maxZ: room.maxZ }));
+  return new CollisionWorld({
+    walkableRects: roomRects.length ? roomRects : [walkableRect],
+    blockerRects: [...runtime.blockerRects, ...createOutdoorCurvedBlockers(folsomDefinition.curvedBlockers)],
+    playerRadius: 0.5,
+    walkableSurfaces: runtime.walkableSurfaces,
+    defaultFloorY: folsomDefinition.defaultFloorY ?? folsomDefinition.terrain.baseY ?? 0,
+    outdoorTerrainSampler: terrainSampler,
+  });
+}
+
+function createFolsomCompiledRuntimeForValidation() {
+  return compileDungeonLocation(folsomDefinition, {
+    logValidation: false,
+    materialFactory: () => new THREE.MeshBasicMaterial(),
+    torchFactory: () => new THREE.Group(),
+  });
 }
 
 function canStandAt([x, z]) {
@@ -193,6 +227,36 @@ const playerSpawns = folsomDefinition.spawns.filter((spawn) => spawn.kind === 'p
 assert.equal(playerSpawns.length, 1, 'Folsom has exactly one player spawn.');
 assert.equal(canStandAt([playerSpawns[0].position.x, playerSpawns[0].position.z]), true, 'Folsom player spawn is clear of authored geometry.');
 
+
+
+const folsomCompiledRuntime = createFolsomCompiledRuntimeForValidation();
+const folsomRuntimeCollision = buildFolsomRuntimeCollision(folsomCompiledRuntime);
+folsomCompiledRuntime.collisionWorld = folsomRuntimeCollision;
+const folsomBloodFeudSpawns = folsomCompiledRuntime.spawnAnchors.filter((spawn) => spawn.kind === 'enemy' && spawn.species === 'neck_man' && spawn.tags?.includes('folsom-blood-feud'));
+assert.equal(folsomBloodFeudSpawns.length, 3, 'Folsom has exactly 3 folsom-blood-feud Neckman enemy spawns.');
+assert.deepEqual(folsomBloodFeudSpawns.map((spawn) => spawn.id).sort(), ['folsom_neckman_feud_01', 'folsom_neckman_feud_02', 'folsom_neckman_feud_03'], 'Folsom blood-feud Neckman spawn ids stay authored.');
+folsomBloodFeudSpawns.forEach((spawn) => {
+  assert.equal(spawn.allowedForInitialWave, true, `${spawn.id} is allowed for the initial wave.`);
+  assert.equal(spawn.allowedForRespawn, true, `${spawn.id} is allowed to respawn.`);
+});
+const folsomCreatureRuntime = createCreatureWorldRuntime({
+  scene: new THREE.Scene(),
+  collision: folsomRuntimeCollision,
+  area: 'folsom',
+  playerSpawn: { spawnPosition: new THREE.Vector3(0, 1.55, 0), spawnYaw: 0 },
+  resolveOutdoorVisibleSurfaceY: (x, z) => terrainSampler.sampleOutdoorY(x, z),
+});
+const resolvedBloodFeudAnchors = folsomBloodFeudSpawns.map((spawn) => folsomCreatureRuntime.createRuntimeEnemyAnchor(spawn, folsomCompiledRuntime));
+assert.equal(resolvedBloodFeudAnchors.filter(Boolean).length, 3, 'Folsom blood-feud Neckman positions resolve to safe walkable enemy anchors using runtime collision.');
+folsomCreatureRuntime.addCompiledLocationEnemies(folsomCompiledRuntime, { source: 'compiled-outdoor', validateOnly: true });
+assert.equal(folsomCreatureRuntime.blackGrassFactionManager?.encounterMode, 'folsom_neckman_blood_feud', 'Folsom blood-feud encounter mode is not skipped.');
+assert.equal(folsomCreatureRuntime.blackGrassFactionManager?.enableRespawns, true, 'Folsom blood-feud respawns remain enabled.');
+assert.equal(folsomCreatureRuntime.blackGrassFactionManager?.respawnCooldownSeconds, 30, 'Folsom blood-feud respawn cooldown remains 30 seconds.');
+assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.collisionAvailable, true, 'Folsom blood-feud validation reached CreatureWorldRuntime with collision available.');
+assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.found, 3, 'CreatureWorldRuntime found 3 Folsom blood-feud authored spawns.');
+assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.spawned, 3, 'CreatureWorldRuntime produced 3 Folsom blood-feud anchors.');
+assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.skipped, 0, 'CreatureWorldRuntime did not skip Folsom blood-feud anchors.');
+folsomCreatureRuntime.dispose();
 
 const pineVariants = folsomDefinition.foliageBillboardVariants ?? [];
 const pinePlacements = folsomDefinition.foliageBillboards ?? [];
