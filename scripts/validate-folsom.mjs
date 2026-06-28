@@ -11,10 +11,9 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { FISH_SPECS } from '../src/game/fishing/FishMeshFactory.js';
 import { getLocationExitDefinition, resolveStartupArea } from '../src/game/locationRouting.js';
-import { listLocationDefinitions } from '../src/game/locations/locationRegistry.js';
+import { getLocationDefinition, hasLocationDefinition, getLoadedLocationDefinitionIds } from '../src/game/locations/locationRegistry.js';
 import { FOLSOM_PINE_SWATHE_SPECS, FOLSOM_VISIBLE_TREE_BOUNDS, folsomDefinition } from '../src/game/locations/folsom.definition.js';
 import { FOLSOM_CEDAR_LIKE_SOURCE_SPRITES, FOLSOM_DARK_GROVE_SOURCE_SPRITES, FOLSOM_UNDERSTORY_SOURCE_SPRITES } from '../src/game/world-kits/vegetation/FolsomFoliageBillboardKit.js';
-import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
 import { createCreatureWorldRuntime } from '../src/game/world-scene/CreatureWorldRuntime.js';
 import { FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES, MOBILE_ENEMY_BUDGETS } from '../src/game/creatures/MobileEnemyRuntimeContract.js';
 import {
@@ -33,6 +32,8 @@ const outdoorWorldRuntimeSource = readFileSync(resolve(repoRoot, 'src/game/world
 const blackGrassFactionSource = readFileSync(resolve(repoRoot, 'src/game/BlackGrassTempleFactions.js'), 'utf8');
 const creatureWorldRuntimeSource = readFileSync(resolve(repoRoot, 'src/game/world-scene/CreatureWorldRuntime.js'), 'utf8');
 const perfDebugPanelSource = readFileSync(resolve(repoRoot, 'src/game/PerfDebugPanel.js'), 'utf8');
+const sceneSessionHostSource = readFileSync(resolve(repoRoot, 'src/game/hosts/SceneSessionHost.js'), 'utf8');
+const locationRegistrySource = readFileSync(resolve(repoRoot, 'src/game/locations/locationRegistry.js'), 'utf8');
 const mobileEnemyRuntimeContractSource = readFileSync(resolve(repoRoot, 'src/game/creatures/MobileEnemyRuntimeContract.js'), 'utf8');
 const folsomFoliageKitSource = readFileSync(resolve(repoRoot, 'src/game/world-kits/vegetation/FolsomFoliageBillboardKit.js'), 'utf8');
 const terrainSampler = createOutdoorTerrainSampler(folsomDefinition.terrain);
@@ -234,6 +235,11 @@ assert.equal(folsomDefinition.id, 'folsom');
 assert.equal(folsomDefinition.displayName, 'Folsom');
 assert.equal(resolveStartupArea(null), 'folsom', 'Folsom is the default no-query game root.');
 assert.equal(resolveStartupArea('field'), 'field', 'The direct Reliquary Field fallback/dev route remains available.');
+assert.deepEqual(getLoadedLocationDefinitionIds(), ['folsom'], 'Folsom validation starts with only the eager Folsom definition loaded.');
+assert.equal(getLocationDefinition('reliquary-field'), null, 'Reliquary Field is not loaded while validating standalone Folsom startup.');
+assert.match(locationRegistrySource, /getLocationRegistryDebugSummary/, 'Location registry exposes loaded/lazy location diagnostics.');
+assert.match(sceneSessionHostSource, /getLocationLoadDebugSummary/, 'Scene session host exposes location load diagnostics for ?perf=1.');
+assert.match(perfDebugPanelSource, /Off-location: objects/, '?perf=1 reports off-location object/collision/creature counts.');
 
 const playerSpawns = folsomDefinition.spawns.filter((spawn) => spawn.kind === 'player');
 assert.equal(playerSpawns.length, 1, 'Folsom has exactly one player spawn.');
@@ -535,28 +541,10 @@ assert.ok(underworks && canStandAt([underworks.target.x, underworks.target.z - 2
 const rustyDoor = folsomDefinition.exits.find((exit) => exit.id === 'folsom_rusted_reliquary_door');
 assert.ok(rustyDoor, 'Folsom has the mandatory rusted Reliquary door.');
 assert.equal(rustyDoor.toLocation, 'reliquary-field');
-assert.ok(reliquaryFieldDefinition.spawns.some((spawn) => spawn.id === rustyDoor.destinationSpawnId), 'Rusted door resolves to the current Reliquary Field return spawn.');
-assert.ok(reliquaryFieldDefinition.exits.some((exit) => exit.toLocation === 'folsom'), 'Reliquary Field preserves a return route to Folsom.');
-
-const locationDefinitions = await listLocationDefinitions();
-const definitionsById = new Map(locationDefinitions.map((definition) => [definition.id, definition]));
-assert.ok(definitionsById.has(resolveStartupArea(null)), 'Folsom startup route resolves to a known location definition.');
-for (const definition of locationDefinitions) {
-  for (const exit of definition.exits ?? []) {
-    const targetDefinition = definitionsById.get(exit.toLocation);
-    assert.ok(targetDefinition, `${definition.id} exit ${exit.id} targets known location ${exit.toLocation}.`);
-    assert.ok(targetDefinition.spawns?.some((spawn) => spawn.id === exit.destinationSpawnId), `${definition.id} exit ${exit.id} destination spawn ${exit.destinationSpawnId} exists in ${exit.toLocation}.`);
-  }
-}
-['folsom', 'black-grass-temple', 'kerovac', 'oarbFeatureYard', 'oarbOutdoorExpo'].forEach((locationId) => {
-  const definition = definitionsById.get(locationId);
-  const returnExit = getLocationExitDefinition(definition, { toLocation: 'reliquary-field' });
-  assert.ok(returnExit?.destinationSpawnId, `${locationId} declares an authored return exit to Reliquary Field.`);
-  assert.ok(reliquaryFieldDefinition.spawns.some((spawn) => spawn.id === returnExit.destinationSpawnId), `${locationId} return exit lands on a real Reliquary Field return spawn.`);
-});
-assert.equal(getLocationExitDefinition(reliquaryFieldDefinition, { toLocation: 'folsom' })?.destinationSpawnId, 'folsom_reliquary_return', 'Reliquary Field return to Folsom lands at the authored Folsom return anchor.');
-assert.equal(getLocationExitDefinition(reliquaryFieldDefinition, { toLocation: 'kerovac' })?.destinationSpawnId, 'kerovac_player_start', 'Reliquary Field Kerovac route lands at Kerovac player start.');
-assert.equal(getLocationExitDefinition(reliquaryFieldDefinition, { toLocation: 'oarbOutdoorExpo' })?.destinationSpawnId, 'oarb_outdoor_expo_player_start', 'Reliquary Field OARB Outdoor Expo route lands at the authored player start.');
+assert.equal(hasLocationDefinition(rustyDoor.toLocation), true, 'Rusted door target is registered as a lazy-loadable location.');
+assert.equal(getLocationDefinition('reliquary-field'), null, 'Folsom gate validation remains metadata-only and does not instantiate Reliquary Field.');
+assert.equal(getLocationExitDefinition(folsomDefinition, { toLocation: 'reliquary-field' })?.destinationSpawnId, 'field_folsom_return', 'Folsom stores only the Reliquary target spawn metadata until travel.');
+assert.deepEqual(getLoadedLocationDefinitionIds(), ['folsom'], 'Standalone Folsom validation does not load any off-location definitions.');
 
 const cityWallValidation = folsomDefinition.validation?.cityBorderWoodenWall;
 assert.ok(cityWallValidation, 'Folsom invalid: city border wall missing.');

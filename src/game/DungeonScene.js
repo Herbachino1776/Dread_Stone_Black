@@ -467,7 +467,7 @@ export class DungeonScene {
       this.configureCompiledLocationRuntime(this.area);
     } else {
       this.collision = this.area === 'field'
-        ? new CollisionWorld({ walkableRects: [FIELD_WALKABLE_RECT], blockerRects: this.createOutdoorBlockers(), playerRadius: 0.5, outdoorTerrainSampler: this.outdoorTerrainRuntime })
+        ? new CollisionWorld({ walkableRects: [FIELD_WALKABLE_RECT], blockerRects: this.createOutdoorBlockers(), playerRadius: 0.5, outdoorTerrainSampler: this.outdoorTerrainRuntime, sourceLocationId: 'reliquary-field' })
         : new CollisionWorld({
           walkableRects: indoorWalkableRects,
           blockerRects: [this.gateBlocker, ...indoorWallBlockers],
@@ -509,6 +509,7 @@ export class DungeonScene {
     this.blackGrassRuntime = locationId === 'black-grass-temple' ? runtime : this.blackGrassRuntime;
     this.compiledLocationRuntime = runtime;
     this.collision = runtime.collisionWorld;
+    this.collision.sourceLocationId = locationId;
     this.creatureWorldRuntime?.setCollision(this.collision);
 
     const exit = runtime.exits.find((candidate) => candidate.toLocation === 'reliquary-field') ?? runtime.exits[0];
@@ -553,8 +554,10 @@ export class DungeonScene {
       walkableSurfaces: runtime.walkableSurfaces,
       defaultFloorY: definition.defaultFloorY ?? definition.terrain.baseY ?? 0,
       outdoorTerrainSampler: this.outdoorTerrainRuntime,
+      sourceLocationId: locationId,
     });
 
+    this.collision.sourceLocationId = locationId;
     runtime.collisionWorld = this.collision;
     this.creatureWorldRuntime?.setCollision(this.collision);
     this.compiledLocationRuntime = runtime;
@@ -1476,7 +1479,7 @@ export class DungeonScene {
       createHarvestable: (placement, mesh) => this.createRedwoodHarvestable(placement, mesh),
       gameState: this.gameState,
       constants: {
-        terrainName: 'TERRAIN01-reliquary-field-oarb-heightfield-terrain',
+        terrainName: `${outdoorDefinition.id ?? this.area ?? 'outdoor'}-oarb-heightfield-terrain`,
         visibleDistanceSq: FIELD_REDWOOD_VISIBLE_DISTANCE_SQ,
         alphaTest: FIELD_FOLIAGE_ALPHA_TEST,
       },
@@ -1493,6 +1496,30 @@ export class DungeonScene {
     }
   }
 
+
+
+  countOffLocationSceneObjects(currentLocationId = this.area) {
+    let count = 0;
+    this.scene?.traverse?.((object) => {
+      const objectLocationId = object.userData?.locationId ?? object.userData?.definitionId ?? object.userData?.sourceLocationId;
+      if (objectLocationId && objectLocationId !== currentLocationId) count += 1;
+    });
+    return count;
+  }
+
+  countOffLocationCollisionEntries(currentLocationId = this.area) {
+    const collision = this.collision;
+    if (!collision) return 0;
+    const entries = [
+      ...(collision.blockerRects ?? []),
+      ...(collision.walkableRects ?? []),
+      ...(collision.walkableSurfaces ?? []),
+    ];
+    return entries.filter((entry) => {
+      const sourceLocationId = entry?.sourceLocationId ?? entry?.locationId ?? entry?.userData?.locationId;
+      return sourceLocationId && sourceLocationId !== currentLocationId;
+    }).length;
+  }
 
   getMeaningfulWorldLabelText(value) {
     if (typeof value !== 'string') return null;

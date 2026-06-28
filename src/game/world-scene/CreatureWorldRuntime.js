@@ -343,9 +343,18 @@ export class CreatureWorldRuntime {
     return hit;
   }
 
+  countOffLocationCreatures(currentLocationId = this.area) {
+    const enemies = this.blackGrassFactionManager?.enemies ?? [];
+    return enemies.filter((enemy) => {
+      const locationId = enemy.locationId ?? enemy.group?.userData?.locationId ?? enemy.spawn?.locationId ?? this.compiledLocationEnemiesSpawnedFor ?? this.area;
+      return locationId && locationId !== currentLocationId && enemy.isAlive !== false && !enemy.isRemoved;
+    }).length;
+  }
+
   getDebugSummary() {
     const enemies = this.blackGrassFactionManager?.enemies ?? [];
     return {
+      locationId: this.compiledLocationEnemiesSpawnedFor ?? this.area,
       activeEnemies: enemies.filter((enemy) => enemy.isAlive && !enemy.isRemoved).length,
       activeNeckmen: enemies.filter((enemy) => enemy.species === 'neck_man' && enemy.isAlive && !enemy.isRemoved).length,
       activeAnimationMixers: enemies.reduce((count, enemy) => count + (enemy.animation?.getActiveMixerCount?.() ?? enemy.actor?.animationSet?.getActiveMixerCount?.() ?? 0), 0),
