@@ -1,0 +1,55 @@
+const DEFAULT_TITLE_AMBIENCE_SRC = '/assets/audio/title_drone_loop.mp3';
+const DEFAULT_TITLE_AMBIENCE_VOLUME = 0.28;
+
+export class TitleAmbience {
+  constructor({ src = DEFAULT_TITLE_AMBIENCE_SRC, volume = DEFAULT_TITLE_AMBIENCE_VOLUME } = {}) {
+    this.src = src;
+    this.volume = volume;
+    this.audio = null;
+    this.audioContext = null;
+    this.warned = false;
+  }
+
+  async unlockAndPlay() {
+    await this.resumeAudioContext();
+    await this.playLoop();
+  }
+
+  async resumeAudioContext() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    try {
+      this.audioContext ??= new AudioContextClass();
+      if (this.audioContext.state === 'suspended') await this.audioContext.resume();
+    } catch (error) {
+      this.warnOnce('Could not resume WebAudio context for title ambience.', error);
+    }
+  }
+
+  async playLoop() {
+    try {
+      const audio = this.ensureAudioElement();
+      await audio.play();
+    } catch (error) {
+      this.warnOnce(`Could not play title ambience at ${this.src}. The game will continue without title audio.`, error);
+    }
+  }
+
+  ensureAudioElement() {
+    if (this.audio) return this.audio;
+
+    const audio = new Audio(this.src);
+    audio.loop = true;
+    audio.preload = 'auto';
+    audio.volume = this.volume;
+    this.audio = audio;
+    return audio;
+  }
+
+  warnOnce(message, error) {
+    if (this.warned) return;
+    this.warned = true;
+    console.warn(`[Dread Stone Black] ${message}`, error);
+  }
+}
