@@ -12,10 +12,11 @@ import { EquipmentPanel } from './equipment/EquipmentPanel.js';
 import { SurvivalInventoryBridge } from './equipment/SurvivalInventoryBridge.js';
 import { equipmentRegistry } from './equipment/equipmentRegistry.js';
 import { startingEquipment } from './equipment/startingEquipment.js';
-import { GameState } from './GameState.js';
 import { Hud } from './Hud.js';
+import { InputHost } from './hosts/InputHost.js';
+import { RendererHost } from './hosts/RendererHost.js';
+import { SaveHost } from './hosts/SaveHost.js';
 import { Interactions } from './Interactions.js';
-import { MobileControls } from './MobileControls.js';
 import { PerfDebugPanel } from './PerfDebugPanel.js';
 import { PlayerController } from './PlayerController.js';
 import { BroadswordView } from './weapons/BroadswordView.js';
@@ -65,19 +66,18 @@ export class Game {
     this.resetConfirmTimer = null;
     this.wasKeyboardInteractHeld = false;
     this.resetConfirmExpiresAt = 0;
-    this.app.innerHTML = this.renderShell();
+    this.rendererHost = new RendererHost({ root: this.app, shellHtml: this.renderShell() });
+    // Compatibility references for lightweight debug helpers while Game.js is being split.
+    this.canvas = this.rendererHost.canvas;
+    this.viewport = this.rendererHost.viewport;
+    this.renderer = this.rendererHost.renderer;
 
-    this.canvas = this.app.querySelector('#game-canvas');
-    this.viewport = this.app.querySelector('[data-game="viewport"]');
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-    const { width, height } = this.getViewportSize();
-    this.renderer.setSize(width, height, false);
-
+    const { width, height } = this.rendererHost.getViewportSize();
     this.camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 260);
+    this.rendererHost.onResize(({ width: resizeWidth, height: resizeHeight }) => {
+      this.camera.aspect = resizeWidth / resizeHeight;
+      this.camera.updateProjectionMatrix();
+    });
     const requestedArea = query.get('area');
     const returnedFrom = query.get('from');
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
@@ -86,7 +86,8 @@ export class Game {
       ? await resolveLocationReturnSpawn(returnedFrom)
       : 'start';
     await this.preloadStartupLocation(area);
-    this.gameState = new GameState();
+    this.saveHost = new SaveHost();
+    this.gameState = this.saveHost.loadInitialState();
     this.equipmentRuntime = new EquipmentRuntime({
       weaponProfiles: equipmentRegistry.weapons,
       startingEquipment: this.gameState.getEquipmentSnapshot() ?? startingEquipment,
@@ -130,7 +131,8 @@ export class Game {
     });
     this.createPlayerTorchLight();
     this.setPlayerTorchEnabled(this.equipmentRuntime.getEquippedOffhandId?.() === 'torch');
-    this.controls = new MobileControls(this.app);
+    this.inputHost = new InputHost({ root: this.app });
+    this.controls = this.inputHost.controls;
     this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
     this.fishingRodView = new FishingRodView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState, dungeon: this.dungeon });
     this.broadswordView = new BroadswordView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
@@ -158,19 +160,13 @@ export class Game {
       },
     });
 
-    this.preventMobilePageGestures();
-    window.addEventListener('resize', () => this.resize());
-    window.addEventListener('orientationchange', () => window.setTimeout(() => this.resize(), 250));
-    this.viewportResizeObserver = new ResizeObserver(() => this.resize());
-    this.viewportResizeObserver.observe(this.viewport);
-
     this.bindObjectiveEquipmentEvents();
     this.bindHudToolbar();
     this.emitLocationEntered();
     this.playFieldReturnReactionIfNeeded({ query });
     if (this.perfDebugEnabled) this.perfDebugPanel = new PerfDebugPanel({ game: this });
 
-    this.renderer.setAnimationLoop((time) => this.update(time));
+    this.rendererHost.setAnimationLoop((time) => this.update(time));
   }
 
   async preloadStartupLocation(area) {
@@ -186,7 +182,7 @@ export class Game {
 
   handleStartupError(error) {
     console.error('[Dread Stone Black] Startup failed before the scene became playable.', error);
-    this.renderer?.setAnimationLoop?.(null);
+    this.rendererHost?.setAnimationLoop?.(null);
 
     if (import.meta.env.DEV) {
       if (!this.app.innerHTML) this.app.innerHTML = this.renderShell();
@@ -372,11 +368,11 @@ export class Game {
   }
 
   saveEquipmentState() {
-    this.gameState.saveEquipmentSnapshot(this.equipmentRuntime.getSnapshot());
+    this.saveHost.saveEquipmentState(this.gameState, this.equipmentRuntime);
   }
 
   saveObjectiveState() {
-    this.gameState.saveObjectiveSnapshot(this.objectiveRuntime.getSnapshot());
+    this.saveHost.saveObjectiveState(this.gameState, this.objectiveRuntime);
   }
 
   renderShell() {
@@ -476,7 +472,7 @@ export class Game {
       this.controls.consumeAttack();
       this.controls.consumeInteract();
       this.hud.updateDebug(this.player, this.castingController?.debug, this.broadswordGestureController?.debug);
-      this.renderer.render(this.scene, this.camera);
+      this.rendererHost.render(this.scene, this.camera);
       return;
     }
 
@@ -506,7 +502,7 @@ export class Game {
 
     this.hud.updateDebug(this.player, this.castingController?.debug, this.broadswordGestureController?.debug);
     this.feedback.update(deltaSeconds);
-    this.renderer.render(this.scene, this.camera);
+    this.rendererHost.render(this.scene, this.camera);
     this.perfDebugPanel?.render();
   }
 
@@ -579,7 +575,7 @@ export class Game {
 
   performProgressReset() {
     this.clearResetConfirmation();
-    GameState.resetAllProgress(window.localStorage);
+    this.saveHost.resetAllProgress();
     window.location.reload();
   }
 
@@ -602,25 +598,11 @@ export class Game {
   }
 
   getViewportSize() {
-    const rect = this.viewport.getBoundingClientRect();
-    return {
-      width: Math.max(1, Math.floor(rect.width || window.innerWidth)),
-      height: Math.max(1, Math.floor(rect.height || window.innerHeight)),
-    };
+    return this.rendererHost.getViewportSize();
   }
 
   resize() {
-    if (!this.viewport || !this.renderer || !this.camera) return;
-
-    const { width, height } = this.getViewportSize();
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height, false);
+    this.rendererHost.resize();
   }
 
-  preventMobilePageGestures() {
-    // CSS handles most cases; this catches iOS Safari's page drag on the document.
-    document.addEventListener('touchmove', (event) => event.preventDefault(), { passive: false });
-    document.addEventListener('contextmenu', (event) => event.preventDefault());
-  }
 }
