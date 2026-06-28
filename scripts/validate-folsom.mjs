@@ -29,6 +29,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const interactionsSource = readFileSync(resolve(repoRoot, 'src/game/Interactions.js'), 'utf8');
 const dungeonSceneSource = readFileSync(resolve(repoRoot, 'src/game/DungeonScene.js'), 'utf8');
 const outdoorWorldRuntimeSource = readFileSync(resolve(repoRoot, 'src/game/world-scene/OutdoorWorldRuntime.js'), 'utf8');
+const blackGrassFactionSource = readFileSync(resolve(repoRoot, 'src/game/BlackGrassTempleFactions.js'), 'utf8');
 const folsomFoliageKitSource = readFileSync(resolve(repoRoot, 'src/game/world-kits/vegetation/FolsomFoliageBillboardKit.js'), 'utf8');
 const terrainSampler = createOutdoorTerrainSampler(folsomDefinition.terrain);
 const dungeonCollision = buildDungeonCollision(folsomDefinition);
@@ -287,6 +288,16 @@ assert.equal(folsomMobileSummary.loadedAnimationRoots, 0, 'Validate-only Folsom 
 assert.equal(folsomMobileSummary.assetStrategy, 'none', 'Validate-only Folsom runtime has no loaded enemy asset strategy before actors spawn.');
 assert.equal(folsomMobileSummary.canonicalPath, NECK_MAN_CANONICAL_MOBILE_MODEL_FILE, 'Folsom mobile runtime reports the canonical Neckman path for perf diagnostics.');
 assert.equal(folsomMobileSummary.extraStateRootsAlive, false, 'Folsom mobile runtime diagnostics expose no hidden per-state animation roots.');
+
+assert.match(blackGrassFactionSource, /FOLSOM_BLOOD_FEUD_TARGET_HOLD_SECONDS\s*=\s*2\.1/, 'Folsom Neckman targeting keeps sticky targets for at least 1.5 seconds.');
+assert.match(blackGrassFactionSource, /FOLSOM_BLOOD_FEUD_MAX_TARGETING_OPS_PER_FRAME\s*=\s*1/, 'Folsom Neckman targeting catch-up is clamped to one targeting operation per frame.');
+assert.match(blackGrassFactionSource, /requestFolsomTargetingOperation/, 'Folsom Neckman targeting is scheduled through a per-frame budget gate.');
+assert.match(blackGrassFactionSource, /targetingWorkMode:\s*'spread one-enemy-per-frame'/, 'Folsom Neckman perf diagnostics report spread targeting work.');
+assert.match(blackGrassFactionSource, /enemy\?\.species !== 'neck_man' \|\| enemy\.encounterMode !== 'folsom_neckman_blood_feud'/, 'Folsom blood-feud candidates are limited to authored feud Neckmen.');
+assert.match(blackGrassFactionSource, /never scan scene objects, meshes, colliders, paths, or LOS during targeting/, 'Folsom targeting validation documents that target scans avoid scene meshes, objects, colliders, LOS, and path work.');
+const folsomTargetFunctionSource = blackGrassFactionSource.slice(blackGrassFactionSource.indexOf('selectFolsomBloodFeudTarget'), blackGrassFactionSource.indexOf('  shouldTargetPlayer'));
+assert.doesNotMatch(folsomTargetFunctionSource, /\.sort\(/, 'Folsom Neckman targeting does not sort or rebuild per-enemy target lists.');
+assert.doesNotMatch(folsomTargetFunctionSource, /hasClearMovementSegment/, 'Folsom Neckman target acquisition does not perform collision/LOS checks.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.collisionAvailable, true, 'Folsom blood-feud validation reached CreatureWorldRuntime with collision available.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.found, 3, 'CreatureWorldRuntime found 3 Folsom blood-feud authored spawns.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.spawned, 3, 'CreatureWorldRuntime produced 3 Folsom blood-feud anchors.');
