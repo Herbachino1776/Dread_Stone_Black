@@ -1,7 +1,6 @@
 import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
 import { EQUIPMENT_SLOTS } from '../engine/equipment/EquipmentSlot.js';
 import { SurvivalInventoryBridge } from './equipment/SurvivalInventoryBridge.js';
-import { preloadLocationDefinition } from './locations/locationRegistry.js';
 
 const INTERACT_RANGE = 3.0;
 const KEY_RANGE = 2.55;
@@ -16,7 +15,7 @@ const EATING_COOKED_FISH_TIMED_ACTION_SECONDS = 2.75;
 const TIMED_ACTION_MOVE_CANCEL_DISTANCE = 1.4;
 
 export class Interactions {
-  constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null, objectiveRuntime = null }) {
+  constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null, objectiveRuntime = null, transitionToLocation = null }) {
     this.player = player;
     this.dungeon = dungeon;
     this.hud = hud;
@@ -24,6 +23,7 @@ export class Interactions {
     this.equipmentRuntime = equipmentRuntime;
     this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime, gameState: dungeon?.gameState });
     this.objectiveRuntime = objectiveRuntime;
+    this.transitionToLocationHandler = transitionToLocation;
     this.hasKey = false;
     this.currentHint = '';
     this.feedbackHint = '';
@@ -205,22 +205,16 @@ export class Interactions {
   }
 
 
-  async transitionToLocation(locationId, { areaParam = locationId, fromArea = null, delayMs = 0 } = {}) {
+  async transitionToLocation(locationId, options = {}) {
+    if (!this.transitionToLocationHandler) return false;
     try {
-      await preloadLocationDefinition(locationId);
+      return await this.transitionToLocationHandler(locationId, options);
     } catch (error) {
       console.error(`[Dread Stone Black] Location ${locationId} could not be loaded.`, error);
       this.setTemporaryHint('The way is sealed for now.', 1400);
       this.hud.showMessage('Location unavailable. The way is sealed for now.');
       return false;
     }
-
-    window.setTimeout(() => {
-      const params = new URLSearchParams({ area: areaParam });
-      if (fromArea) params.set('from', fromArea);
-      window.location.assign(`${window.location.pathname}?${params.toString()}`);
-    }, delayMs);
-    return false;
   }
 
   getDebugAreaEntranceGates() {
