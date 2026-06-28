@@ -23,6 +23,7 @@ import {
   NECK_MAN_FOLSOM_MOBILE_CLIP_MAP,
   neckManConfig,
 } from '../src/game/creatures/neckMan.config.js';
+import { RAM_MAN_CANONICAL_MOBILE_MODEL_FILE, ramManConfig } from '../src/game/creatures/ramMan.config.js';
 import { validatePondDecor, validatePondFootprint } from './pond-footprint-validation.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -300,7 +301,7 @@ assert.doesNotMatch(blackGrassFactionSource, /while\s*\([^)]*mobileAiTickElapsed
 assert.match(blackGrassFactionSource, /index === folsomAiEnemyIndex/, 'Folsom Neckman behavior work rotates through one selected enemy per frame.');
 assert.match(blackGrassFactionSource, /horizontalDistanceSq\(this\.group\.position, desiredTarget\) > FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE \* FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE/, 'Folsom Neckman collision separation is gated by squared-distance range checks.');
 assert.match(blackGrassFactionSource, /context\?\.perfDebugToggles\?\.neckmanCombatOff/, 'Folsom Neckman combat debug toggle remains present.');
-['neckmanTargetingOff', 'neckmanCollisionOff', 'neckmanMovementOff', 'neckmanCombatOff', 'neckmanStateMachineOff', 'neckmanAiOff', 'neckmanStatic', 'neckmanPerfTrace'].forEach((toggle) => {
+['neckmanTargetingOff', 'neckmanCollisionOff', 'neckmanMovementOff', 'neckmanCombatOff', 'neckmanStateMachineOff', 'neckmanAiOff', 'neckmanStatic', 'neckmanPerfTrace', 'ramHerd', 'rammanStatic', 'rammanAiOff', 'rammanActorsHidden', 'neckmanTargetRamMen'].forEach((toggle) => {
   assert.match(`${blackGrassFactionSource}\n${creatureWorldRuntimeSource}\n${perfDebugPanelSource}`, new RegExp(toggle), `Folsom Neckman debug toggle ${toggle} remains present.`);
 });
 
@@ -308,7 +309,15 @@ assert.match(blackGrassFactionSource, /FOLSOM_BLOOD_FEUD_TARGET_HOLD_SECONDS\s*=
 assert.match(blackGrassFactionSource, /FOLSOM_BLOOD_FEUD_MAX_TARGETING_OPS_PER_FRAME\s*=\s*1/, 'Folsom Neckman targeting catch-up is clamped to one targeting operation per frame.');
 assert.match(blackGrassFactionSource, /requestFolsomTargetingOperation/, 'Folsom Neckman targeting is scheduled through a per-frame budget gate.');
 assert.match(blackGrassFactionSource, /targetingWorkMode:\s*'spread one-enemy-per-frame'/, 'Folsom Neckman perf diagnostics report spread targeting work.');
-assert.match(blackGrassFactionSource, /enemy\?\.species !== 'neck_man' \|\| enemy\.encounterMode !== 'folsom_neckman_blood_feud'/, 'Folsom blood-feud candidates are limited to authored feud Neckmen.');
+assert.match(blackGrassFactionSource, /enemy\.species !== 'neck_man' && enemy\.species !== 'ram_man'/, 'Folsom blood-feud targeting cache is limited to authored Neckmen plus cached RamMan prey candidates.');
+assert.match(blackGrassFactionSource, /cache\.preyCandidates\.push\(enemy\)/, 'Folsom RamMan prey candidates are cached on the shared targeting cache.');
+assert.match(blackGrassFactionSource, /cache\.predatorCandidates\.push\(enemy\)/, 'Folsom RamMan predator candidates reuse the shared Neckman cache.');
+assert.match(blackGrassFactionSource, /neckmanTargetRamMen/, 'Folsom Neckmen expose a toggle for RamMan prey targeting.');
+assert.match(creatureWorldRuntimeSource, /folsomRamManHerdAnchors[\s\S]*spawnRamManHerd/, 'CreatureWorldRuntime wires the Folsom RamMan herd through authored runtime anchors.');
+assert.match(creatureWorldRuntimeSource, /slice\(0, FOLSOM_RAM_MAN_HERD_MAX\)|cappedMax: 5/, 'Folsom RamMan herd count is capped at five.');
+assert.equal(ramManConfig.id, 'ram_man', 'RamMan prey creature config exists.');
+assert.equal(existsSync(resolve(repoRoot, RAM_MAN_CANONICAL_MOBILE_MODEL_FILE.replace(/^\.\//, 'public/'))), true, 'Existing RamMan optimized GLB asset exists.');
+assert.match(ramManConfig.identity.role, /prey|neutral|herd/, 'RamMan config identifies the herd as prey/neutral.');
 assert.match(blackGrassFactionSource, /never scan scene objects, meshes, colliders, paths, or LOS during targeting/, 'Folsom targeting validation documents that target scans avoid scene meshes, objects, colliders, LOS, and path work.');
 const folsomTargetFunctionSource = blackGrassFactionSource.slice(blackGrassFactionSource.indexOf('selectFolsomBloodFeudTarget'), blackGrassFactionSource.indexOf('  shouldTargetPlayer'));
 assert.doesNotMatch(folsomTargetFunctionSource, /\.sort\(/, 'Folsom Neckman targeting does not sort or rebuild per-enemy target lists.');

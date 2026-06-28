@@ -33,6 +33,11 @@ function createNeckmanDebugTogglesFromQuery() {
     neckmanStateMachineOff: query.get('neckmanStateMachineOff') === '1',
     neckmanRenderLite: query.get('neckmanRenderLite') === '1',
     neckmanPerfTrace: query.get('neckmanPerfTrace') === '1',
+    ramHerd: query.get('ramHerd') !== '0',
+    rammanStatic: query.get('rammanStatic') === '1',
+    rammanAiOff: query.get('rammanAiOff') === '1',
+    rammanActorsHidden: query.get('rammanActorsHidden') === '1',
+    neckmanTargetRamMen: query.get('neckmanTargetRamMen') !== '0',
   };
 }
 
@@ -115,6 +120,7 @@ export class CreatureWorldRuntime {
     }
     const folsomBloodFeudAnchors = folsomBloodFeudSpawns.map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime)).filter(Boolean);
     const isFolsomBloodFeud = runtime.locationId === 'folsom' && folsomBloodFeudAnchors.length === 3;
+    const folsomRamManHerdAnchors = isFolsomBloodFeud ? this.createFolsomRamManHerdAnchors(runtime).map((spawn) => this.createRuntimeEnemyAnchor(spawn, runtime)).filter(Boolean) : [];
     if (runtime.locationId === 'folsom') {
       this.bloodFeudSpawnDebug.spawned = folsomBloodFeudAnchors.length;
       this.bloodFeudSpawnDebug.skipped = Math.max(0, folsomBloodFeudSpawns.length - folsomBloodFeudAnchors.length);
@@ -142,12 +148,37 @@ export class CreatureWorldRuntime {
     if (options.validateOnly) return;
     if (isFolsomBloodFeud) {
       this.blackGrassFactionManager.spawnInitialAnchors(factionAnchors);
+      this.blackGrassFactionManager.spawnRamManHerd?.(folsomRamManHerdAnchors);
       if (options.source === 'compiled-outdoor' && import.meta.env?.DEV) console.info(`[FolsomBloodFeud] compiled outdoor path spawned ${factionAnchors.length} neckmen`);
       return;
     }
     const policy = this.createGeneratedEnemySpawnPolicy(runtime);
     this.generatedEnemyRuntime = { anchors: factionAnchors, activeAnchorIds: new Set(), sleepingUntil: new Map(), lastWakeAt: 0, devStats: { wakeCount: 0, sleepCount: 0, elapsedSeconds: 0 }, policy };
     this.spawnGeneratedEnemyAnchors(this.selectGeneratedEnemyWakeAnchors(this.playerSpawn?.spawnPosition ?? factionAnchors[0]?.position, policy.initialEnemyCap));
+  }
+
+  createFolsomRamManHerdAnchors(runtime) {
+    const positions = [
+      { x: -32, y: 0, z: -42 },
+      { x: -36, y: 0, z: -47 },
+      { x: -28, y: 0, z: -49 },
+      { x: -40, y: 0, z: -39 },
+      { x: -24, y: 0, z: -43 },
+    ];
+    return positions.map((position, index) => ({
+      id: `folsom_ram_man_herd_${String(index + 1).padStart(2, '0')}`,
+      kind: 'enemy',
+      species: 'ram_man',
+      preferredFaction: 'ram_man',
+      faction: 'ram_man',
+      position: new THREE.Vector3(position.x, position.y, position.z),
+      yaw: Math.PI * (0.2 + index * 0.17),
+      allowedForInitialWave: true,
+      initialWave: true,
+      tags: ['folsom-ram-man-herd', 'prey', 'neutral'],
+      userData: { herd: 'folsom_ram_man_prey_test', cappedMax: 5 },
+      patrolPoints: this.createFallbackPatrolPoints(new THREE.Vector3(position.x, position.y, position.z), 3.2),
+    }));
   }
 
   createGeneratedEnemySpawnPolicy(runtime) {
@@ -266,7 +297,7 @@ export class CreatureWorldRuntime {
     }
     this.updateGeneratedEnemyActivation(player.position);
     this.blackGrassFactionManager.update(deltaSeconds, player.position, { generatedRuntime: this.generatedEnemyRuntime });
-    if (this.blackGrassFactionManager.encounterMode === 'folsom_neckman_blood_feud') this.blackGrassFactionManager.enemies?.forEach((enemy) => { if (enemy.species === 'neck_man' && enemy.group) enemy.group.visible = this.perfDebugToggles?.neckmanActorsHidden === true ? false : true; });
+    if (this.blackGrassFactionManager.encounterMode === 'folsom_neckman_blood_feud') this.blackGrassFactionManager.enemies?.forEach((enemy) => { if (enemy.species === 'neck_man' && enemy.group) enemy.group.visible = this.perfDebugToggles?.neckmanActorsHidden === true ? false : true; if (enemy.species === 'ram_man' && enemy.group) enemy.group.visible = this.perfDebugToggles?.rammanActorsHidden === true ? false : true; });
   }
 
   updateSheepDemonEnemy(deltaSeconds, player) {

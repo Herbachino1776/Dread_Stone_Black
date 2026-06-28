@@ -14,6 +14,12 @@ import {
   NECK_MAN_FACTION_STATE_TO_ANIMATION,
 } from './creatures/neckMan.config.js';
 import {
+  ramManConfig,
+  RAM_MAN_ANIMATION_FILES,
+  RAM_MAN_CANONICAL_MOBILE_MODEL_FILE,
+  RAM_MAN_PREY_STATE_TO_ANIMATION,
+} from './creatures/ramMan.config.js';
+import {
   MOBILE_ENEMY_BUDGETS,
   FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES,
   createMobileEnemyLifecycle,
@@ -24,6 +30,26 @@ export const BLACK_GRASS_SHEEP_DEMON_ANIMATION_ASSETS = SHEEP_DEMON_ANIMATION_FI
 export const BLACK_GRASS_NECK_MAN_ANIMATION_ASSETS = NECK_MAN_ANIMATION_FILES;
 
 const FACTIONS = Object.freeze({
+  ram_man: Object.freeze({
+    creatureConfigId: ramManConfig.id,
+    factionId: 'ram_man',
+    displayName: ramManConfig.identity.displayName,
+    opposingFactionId: 'neck_man',
+    assets: RAM_MAN_ANIMATION_FILES,
+    animationMap: RAM_MAN_PREY_STATE_TO_ANIMATION,
+    targetHeight: ramManConfig.scale.targetHeight,
+    maxWidth: ramManConfig.scale.maxWidth,
+    maxHealth: ramManConfig.combatProfile.maxHealth,
+    walkSpeed: ramManConfig.aiProfile.navigationPreferences.patrolSpeed,
+    seekSpeed: ramManConfig.aiProfile.navigationPreferences.fleeSpeed,
+    attackDamage: 0, playerAttackDamage: 0, playerAttackRange: ramManConfig.combatProfile.playerAttackRange,
+    attackRange: 0, visualContactRange: ramManConfig.combatProfile.visualContactRange, attackCommitRange: 0, attackImpactRange: 0,
+    attackLungeDistance: 0, minimumBodySeparation: ramManConfig.combatProfile.minimumBodySeparation,
+    attackCooldownSeconds: 999, attackDamageWindow: Object.freeze({ start: 0, end: 0 }), desiredCombatDistance: 0, tooCloseDistance: 0,
+    combatEngageDistance: ramManConfig.aiProfile.detectionRanges.threatRadius, circleSpeed: 0, backstepSpeed: ramManConfig.aiProfile.navigationPreferences.fleeSpeed, lungeSpeed: 0,
+    defensiveManeuverChance: 0, offensiveLungeChance: 0, jumpAttackChance: 0, jumpAttackCooldownSeconds: 999, turnSpeed: 4.2,
+    enemyAttackAnimations: Object.freeze([]),
+  }),
   sheep_demon: Object.freeze({
     creatureConfigId: sheepDemonConfig.id,
     factionId: 'sheep_demon',
@@ -129,6 +155,7 @@ const FACTION_STATE_MACHINE = Object.freeze([
 ]);
 
 const CREATURE_CONFIGS_BY_SPECIES = Object.freeze({
+  ram_man: ramManConfig,
   sheep_demon: sheepDemonConfig,
   neck_man: neckManConfig,
 });
@@ -223,6 +250,7 @@ function createFolsomNeckmanMobileConfig(scaleMultiplier = 1) {
 
 function createScaledCreatureConfig(species, scaleMultiplier, encounterMode = null) {
   if (encounterMode === 'folsom_neckman_blood_feud' && species === 'neck_man') return createFolsomNeckmanMobileConfig(scaleMultiplier);
+  if (encounterMode === 'folsom_neckman_blood_feud' && species === 'ram_man') return { ...ramManConfig, scale: Object.freeze({ ...ramManConfig.scale, scaleMultiplier: (ramManConfig.scale?.scaleMultiplier ?? 1) * (Number.isFinite(scaleMultiplier) && scaleMultiplier > 0 ? scaleMultiplier : 1) }) };
   const baseConfig = CREATURE_CONFIGS_BY_SPECIES[species];
   if (!baseConfig || scaleMultiplier === 1) return null;
   return {
@@ -295,6 +323,10 @@ const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_SECONDS = 0.18;
 const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_DISTANCE = 0.18;
 const FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE = 1.65;
 const FOLSOM_BLOOD_FEUD_ANIMATION_STATES = FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES;
+const FOLSOM_RAM_MAN_HERD_MAX = 5;
+const FOLSOM_RAM_MAN_AI_TICK_SECONDS = 0.24;
+const FOLSOM_RAM_MAN_THREAT_RADIUS = 8;
+const FOLSOM_RAM_MAN_FLEE_RADIUS = 5;
 const FOLSOM_BLOOD_FEUD_COMBAT_SPACING = Object.freeze({
   desiredCombatDistance: 0.9,
   tooCloseDistance: 0.45,
@@ -634,9 +666,10 @@ class BlackGrassFactionEnemy {
       ...this.template.enemyAttackAnimations,
     ]);
     const isFolsomFeudNeckman = this.encounterMode === 'folsom_neckman_blood_feud' && this.species === 'neck_man';
+    const isFolsomRamMan = this.encounterMode === 'folsom_neckman_blood_feud' && this.species === 'ram_man';
     const allStates = isFolsomFeudNeckman
       ? FOLSOM_BLOOD_FEUD_ANIMATION_STATES.filter((state) => this.template.assets[state])
-      : Object.keys(this.template.assets);
+      : (isFolsomRamMan ? ['idle', 'walk', 'die'].filter((state) => this.template.assets[state]) : Object.keys(this.template.assets));
     assertMobileEnemyBudget({ encounterMode: this.encounterMode, species: this.species, animationStates: allStates, stagedLoading: isFolsomFeudNeckman });
     const priorityRemaining = allStates.filter((candidate) => candidate !== idleState && primaryStates.has(candidate));
     const optionalRemaining = isFolsomFeudNeckman
@@ -649,17 +682,17 @@ class BlackGrassFactionEnemy {
       yaw: this.spawnAnchor.yaw ?? 0,
       name: this.id,
       config: this.creatureConfigOverride,
-      singleActorRoot: isFolsomFeudNeckman,
+      singleActorRoot: isFolsomFeudNeckman || isFolsomRamMan,
     });
 
-    return this.actor.load({ initialStates: [idleState], lazyStates: [...priorityRemaining, ...optionalRemaining], lazyLoadDelayMs: isFolsomFeudNeckman ? MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.loadStaggerMs : 0 })
+    return this.actor.load({ initialStates: [idleState], lazyStates: [...priorityRemaining, ...optionalRemaining], lazyLoadDelayMs: isFolsomFeudNeckman || isFolsomRamMan ? MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.loadStaggerMs : 0 })
       .then((actor) => {
         this.group = actor.group;
         this.group.visible = true;
         this.animation = actor.animationSet;
         this.group.userData = {
           ...this.group.userData,
-          hostile: true,
+          hostile: this.species !== 'ram_man',
           blackGrassTempleFactionEnemy: true,
           faction: this.species,
           opposingFaction: this.template.opposingFactionId,
@@ -667,15 +700,16 @@ class BlackGrassFactionEnemy {
           spawnAnchorId: this.spawnAnchor.id,
           spawnPosition: vectorSummary(this.spawnAnchor.position),
           stateMachine: FACTION_STATE_MACHINE,
-          targetPriority: this.encounterMode === 'folsom_neckman_blood_feud' ? ['nearest living blood-feud neckman'] : ['nearest living opposing faction enemy', 'player fallback', 'patrol target'],
+          targetPriority: this.encounterMode === 'folsom_neckman_blood_feud' ? (this.species === 'neck_man' ? ['cached living ram_man prey', 'nearest living blood-feud neckman fallback'] : ['wander', 'flee cached living neck_man predators']) : ['nearest living opposing faction enemy', 'player fallback', 'patrol target'],
           animationMapping: this.template.animationMap,
-          assetUrls: isFolsomFeudNeckman ? { canonical: NECK_MAN_CANONICAL_MOBILE_MODEL_FILE } : this.template.assets,
+          assetUrls: isFolsomFeudNeckman ? { canonical: NECK_MAN_CANONICAL_MOBILE_MODEL_FILE } : (isFolsomRamMan ? { canonical: RAM_MAN_CANONICAL_MOBILE_MODEL_FILE, separateFallback: this.template.assets } : this.template.assets),
           animationStrategy: this.animation?.getAssetStrategy?.() ?? undefined,
           canonicalModelPath: this.animation?.getCanonicalPath?.() ?? undefined,
           expectedAnimationStates: allStates,
           health: this.health,
           spawnScaleMultiplier: this.spawnScaleMultiplier,
           bloodFeud: this.encounterMode === 'folsom_neckman_blood_feud',
+          prey: this.species === 'ram_man',
           freeForAllFaction: this.encounterMode === 'folsom_neckman_blood_feud',
           groundDiagnostics: this.encounterMode === 'folsom_neckman_blood_feud' ? this.sampleCurrentGroundY(this.spawnAnchor.position) : undefined,
           combatSpacingProfile: this.encounterMode === 'folsom_neckman_blood_feud' ? 'folsom_blood_feud_close_combat' : undefined,
@@ -879,7 +913,7 @@ class BlackGrassFactionEnemy {
     const generatedRuntime = context?.generatedRuntime === true;
     const updateTier = context?.updateTier ?? 'near';
     const aiTickAllowed = context?.aiTickAllowed !== false;
-    const animationDelta = (context?.perfDebugToggles?.neckmanStatic === true || (generatedRuntime && updateTier === 'sleep')) ? 0 : deltaSeconds;
+    const animationDelta = ((this.species === 'neck_man' && context?.perfDebugToggles?.neckmanStatic === true) || (this.species === 'ram_man' && context?.perfDebugToggles?.rammanStatic === true) || (generatedRuntime && updateTier === 'sleep')) ? 0 : deltaSeconds;
     if (animationDelta > 0) {
       const mixerStart = performance?.now?.() ?? Date.now();
       this.animation?.update(animationDelta);
@@ -897,6 +931,11 @@ class BlackGrassFactionEnemy {
     if (!this.group || this.isRemoved || this.lifecycle.state === 'loading' || this.lifecycle.state === 'pendingLoad') {
       this.skippedAiTicks = (this.skippedAiTicks ?? 0) + 1;
       if (context?.perfStats) context.perfStats.intentionallySkippedAiTicks += 1;
+      return;
+    }
+
+    if (this.encounterMode === 'folsom_neckman_blood_feud' && this.species === 'ram_man') {
+      this.updateFolsomRamManPrey(deltaSeconds, context, aiTickAllowed);
       return;
     }
 
@@ -1029,6 +1068,44 @@ class BlackGrassFactionEnemy {
     this.updateDevNavigationMarkers();
   }
 
+  updateFolsomRamManPrey(deltaSeconds, context, aiTickAllowed) {
+    if (!this.group || this.isRemoved || this.lifecycle.state === 'loading' || this.lifecycle.state === 'pendingLoad') return;
+    this.applyDynamicGrounding(this.group.position);
+    if (this.behaviorState === 'dead') {
+      this.corpseTimer -= deltaSeconds;
+      if (this.corpseTimer <= 0) this.hideCorpse();
+      return;
+    }
+    this.bloodFeudAiElapsed = (this.bloodFeudAiElapsed ?? Math.random() * FOLSOM_RAM_MAN_AI_TICK_SECONDS) + deltaSeconds;
+    if (!aiTickAllowed || context?.perfDebugToggles?.rammanAiOff === true || this.bloodFeudAiElapsed < FOLSOM_RAM_MAN_AI_TICK_SECONDS) {
+      this.setBehaviorState(this.pauseTimer > 0 ? 'spawn' : this.behaviorState ?? 'spawn');
+      return;
+    }
+    this.bloodFeudAiElapsed = 0;
+    if (context?.perfStats) context.perfStats.ramManAiUpdates += 1;
+    const predators = context?.folsomBloodFeudTargeting?.predatorCandidates ?? [];
+    let nearest = null;
+    let nearestDistanceSq = Infinity;
+    for (let i = 0; i < predators.length; i += 1) {
+      const predator = predators[i];
+      if (!predator?.isAlive || !predator.group) continue;
+      const d = horizontalDistanceSq(this.group.position, predator.group.position);
+      if (d < nearestDistanceSq) { nearest = predator; nearestDistanceSq = d; }
+    }
+    const fleeSq = FOLSOM_RAM_MAN_FLEE_RADIUS * FOLSOM_RAM_MAN_FLEE_RADIUS;
+    const threatSq = FOLSOM_RAM_MAN_THREAT_RADIUS * FOLSOM_RAM_MAN_THREAT_RADIUS;
+    if (nearest && nearestDistanceSq <= threatSq) {
+      const away = this.group.position.clone().sub(nearest.group.position); away.y = 0;
+      if (away.lengthSq() < 0.001) away.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+      this.moveToward(away.normalize(), nearestDistanceSq <= fleeSq ? this.template.seekSpeed : this.template.walkSpeed * 1.25, deltaSeconds, Infinity, 'defensive_backstep');
+      this.group.userData.preyState = nearestDistanceSq <= fleeSq ? 'flee' : 'avoid';
+      this.group.userData.nearestPredatorId = nearest.id;
+      return;
+    }
+    this.group.userData.preyState = 'wander';
+    this.updatePatrol(deltaSeconds);
+  }
+
   updateFolsomBloodFeudNoTargetTimer(deltaSeconds, context, attackCommitted) {
     if (this.encounterMode !== 'folsom_neckman_blood_feud' || attackCommitted || !this.isAlive) {
       this.bloodFeudNoTargetElapsed = 0;
@@ -1138,7 +1215,9 @@ class BlackGrassFactionEnemy {
   }
 
   isFolsomBloodFeudTargetStillValid(enemy) {
-    if (!enemy?.isAlive || !enemy.group || enemy === this || enemy.encounterMode !== this.encounterMode || enemy.species !== this.species) return false;
+    if (!enemy?.isAlive || !enemy.group || enemy === this || enemy.encounterMode !== this.encounterMode) return false;
+    if (this.species === 'neck_man' && enemy.species !== 'neck_man' && enemy.species !== 'ram_man') return false;
+    else if (this.species !== 'neck_man' && enemy.species !== this.species) return false;
     if (!this.group) return false;
     return horizontalDistanceSq(this.group.position, enemy.group.position) <= FOLSOM_BLOOD_FEUD_TARGET_LOSE_RANGE * FOLSOM_BLOOD_FEUD_TARGET_LOSE_RANGE;
   }
@@ -1150,7 +1229,7 @@ class BlackGrassFactionEnemy {
       if (cache?.perfStats) cache.perfStats.targetCacheReuses += 1;
       return;
     }
-    const candidates = cache?.candidates ?? context?.enemies ?? [];
+    const candidates = (this.species === 'neck_man' && context?.perfDebugToggles?.neckmanTargetRamMen !== false && (cache?.preyCandidates?.length ?? 0) > 0) ? cache.preyCandidates : (cache?.candidates ?? context?.enemies ?? []);
     let nearest = null;
     let nearestDistance = Infinity;
     for (let i = 0; i < candidates.length; i += 1) {
@@ -1172,7 +1251,8 @@ class BlackGrassFactionEnemy {
         this.awarenessReactionDelay = 0.06;
         this.combatManeuverTimer = 0;
       }
-      this.group.userData.targetType = 'folsom_blood_feud';
+      this.group.userData.targetType = nearest.species === 'ram_man' ? 'folsom_ram_man_prey' : 'folsom_blood_feud';
+      this.group.userData.targetSpecies = nearest.species;
       this.group.userData.targetId = nearest.id;
       this.group.userData.awarenessTier = this.awarenessTier;
       this.group.userData.roomPathToEnemy = [];
@@ -1354,7 +1434,7 @@ class BlackGrassFactionEnemy {
     return this.encounterMode === 'folsom_neckman_blood_feud'
       && enemy?.encounterMode === this.encounterMode
       && enemy !== this
-      && enemy?.species === this.species;
+      && (enemy?.species === this.species || (this.species === 'neck_man' && enemy?.species === 'ram_man'));
   }
 
   sampleCurrentGroundY(position, { force = false } = {}) {
@@ -2679,6 +2759,9 @@ export class BlackGrassTempleFactionManager {
       targetingRollingMs: 0,
       targetingWorstMs: 0,
       targetCacheSize: 0,
+      predatorTargetCacheSize: 0,
+      ramMenSpawned: 0, ramMenAlive: 0, ramMenDead: 0, ramMenFailed: 0,
+      ramManUpdateMs: 0, ramManAiUpdates: 0, ramManAiUpdatesPerSecond: 0,
       targetingOpsThisFrame: 0,
       targetingOps: 0,
       targetingOpsPerSecond: 0,
@@ -2743,6 +2826,7 @@ export class BlackGrassTempleFactionManager {
       deferredAiPerSecond: this.perfStats.deferredAiPerSecond,
       droppedCatchUpPerSecond: this.perfStats.droppedCatchUpPerSecond,
       stateTransitionsPerSecond: this.perfStats.stateTransitionsPerSecond,
+      ramManAiUpdatesPerSecond: this.perfStats.ramManAiUpdatesPerSecond,
       recentWorst: this.perfStats.recentWorst ?? null,
       lastSecondAt: this.perfStats.lastSecondAt,
     };
@@ -2794,6 +2878,7 @@ export class BlackGrassTempleFactionManager {
       this.perfStats.targetCacheReusesPerSecond = Math.round(this.perfStats.targetCacheReuses * scale);
       this.perfStats.targetCandidatesPerScan = this.perfStats.targetScans > 0 ? Number((this.perfStats.targetCandidatesConsidered / this.perfStats.targetScans).toFixed(1)) : 0;
       this.perfStats.stateTransitionsPerSecond = Math.round(this.perfStats.stateTransitions * scale);
+      this.perfStats.ramManAiUpdatesPerSecond = Math.round((this.perfStats.ramManAiUpdates ?? 0) * scale);
       this.perfStats.targetScans = 0;
       this.perfStats.collisionChecks = 0;
       this.perfStats.combatChecks = 0;
@@ -2803,6 +2888,7 @@ export class BlackGrassTempleFactionManager {
       this.perfStats.deferredAiTicks = 0;
       this.perfStats.droppedCatchUpTicks = 0;
       this.perfStats.stateTransitions = 0;
+      this.perfStats.ramManAiUpdates = 0;
       this.perfStats.targetSwitches = 0;
       this.perfStats.targetingOps = 0;
       this.perfStats.deferredTargetingOps = 0;
@@ -2815,6 +2901,8 @@ export class BlackGrassTempleFactionManager {
   createFolsomBloodFeudTargetingCache() {
     return {
       candidates: [],
+      preyCandidates: [],
+      predatorCandidates: [],
       elapsed: FOLSOM_BLOOD_FEUD_TARGET_SCAN_SECONDS,
       lastBuiltAt: performance?.now?.() ?? Date.now(),
       scanFrameUsed: false,
@@ -2834,7 +2922,10 @@ export class BlackGrassTempleFactionManager {
     this.perfStats.targetCacheAgeSeconds = ((performance?.now?.() ?? Date.now()) - cache.lastBuiltAt) / 1000;
     if (this.perfDebugToggles?.neckmanTargetingOff === true) {
       cache.candidates.length = 0;
+      cache.preyCandidates.length = 0;
+      cache.predatorCandidates.length = 0;
       this.perfStats.targetCacheSize = 0;
+      this.perfStats.predatorTargetCacheSize = 0;
       return cache;
     }
     // Folsom blood-feud targeting has exactly three authored Neckmen. Keep one shared,
@@ -2845,12 +2936,18 @@ export class BlackGrassTempleFactionManager {
       cache.elapsed = 0;
       const start = performance?.now?.() ?? Date.now();
       cache.candidates.length = 0;
+      cache.preyCandidates.length = 0;
+      cache.predatorCandidates.length = 0;
       let considered = 0;
       for (let i = 0; i < this.enemies.length; i += 1) {
         const enemy = this.enemies[i];
-        if (enemy?.species !== 'neck_man' || enemy.encounterMode !== 'folsom_neckman_blood_feud') continue;
+        if (!enemy || enemy.encounterMode !== 'folsom_neckman_blood_feud') continue;
+        if (enemy.species !== 'neck_man' && enemy.species !== 'ram_man') continue;
         considered += 1;
-        if (enemy.isAlive && !enemy.isRemoved && enemy.group) cache.candidates.push(enemy);
+        if (enemy.isAlive && !enemy.isRemoved && enemy.group) {
+          if (enemy.species === 'neck_man') { cache.candidates.push(enemy); cache.predatorCandidates.push(enemy); }
+          if (enemy.species === 'ram_man') cache.preyCandidates.push(enemy);
+        }
       }
       const elapsedMs = (performance?.now?.() ?? Date.now()) - start;
       this.perfStats.targetScans += 1;
@@ -2861,7 +2958,8 @@ export class BlackGrassTempleFactionManager {
       cache.lastBuiltAt = performance?.now?.() ?? Date.now();
       this.perfStats.targetCacheAgeSeconds = 0;
     }
-    this.perfStats.targetCacheSize = cache.candidates.length;
+    this.perfStats.targetCacheSize = cache.preyCandidates.length || cache.candidates.length;
+    this.perfStats.predatorTargetCacheSize = cache.predatorCandidates.length;
     return cache;
   }
 
@@ -2869,7 +2967,7 @@ export class BlackGrassTempleFactionManager {
     const cache = this.folsomBloodFeudTargeting;
     if (!cache || this.perfDebugToggles?.neckmanTargetingOff === true) return false;
     if (cache.opsThisFrame >= FOLSOM_BLOOD_FEUD_MAX_TARGETING_OPS_PER_FRAME) return false;
-    const candidates = cache.candidates;
+    const candidates = enemy?.species === 'neck_man' && this.perfDebugToggles?.neckmanTargetRamMen !== false && cache.preyCandidates.length ? cache.preyCandidates : cache.candidates;
     const count = candidates.length;
     if (count > 1) {
       const expected = candidates[cache.nextEnemyIndex % count];
@@ -2895,6 +2993,31 @@ export class BlackGrassTempleFactionManager {
         status: this.getStatusSummary(),
       });
     }
+  }
+
+  spawnRamManHerd(anchors = []) {
+    if (this.encounterMode !== 'folsom_neckman_blood_feud' || this.perfDebugToggles?.ramHerd === false) return 0;
+    const herdAnchors = anchors.filter((anchor) => anchor.preferredFaction === 'ram_man').slice(0, FOLSOM_RAM_MAN_HERD_MAX);
+    herdAnchors.forEach((anchor) => {
+      const enemy = new BlackGrassFactionEnemy({
+        scene: this.scene,
+        collision: this.collision,
+        navigationGraph: this.navigationGraph,
+        outdoorVisibleSurfaceSampler: this.outdoorVisibleSurfaceSampler,
+        species: 'ram_man',
+        id: `${anchor.id ?? 'folsom-ram-man'}-${this.spawnSerial += 1}`,
+        spawnAnchor: anchor,
+        patrolPoints: anchor.patrolPoints,
+        onLoaded: () => this.logDevStatus('folsom-ram-man-loaded'),
+        onGoreEvent: this.onGoreEvent,
+        encounterMode: this.encounterMode,
+      });
+      enemy.lifecycle.state = 'pendingLoad';
+      this.enemies.push(enemy);
+      this.mobileLoadQueue.push(enemy);
+    });
+    this.pumpMobileLoadQueue();
+    return herdAnchors.length;
   }
 
   spawnInitialAnchors(anchors = this.anchors.filter((anchor) => anchor.initialWave)) {
@@ -2973,7 +3096,7 @@ export class BlackGrassTempleFactionManager {
           const candidateIndex = this.mobileAiEnemyIndex % count;
           this.mobileAiEnemyIndex = (this.mobileAiEnemyIndex + 1) % count;
           const candidate = this.enemies[candidateIndex];
-          if (candidate?.isAlive && candidate.group && !candidate.isRemoved) {
+          if (candidate?.species === 'neck_man' && candidate?.isAlive && candidate.group && !candidate.isRemoved) {
             folsomAiEnemyIndex = candidateIndex;
             this.mobileAiAllowedTicks += 1;
             break;
@@ -3000,11 +3123,13 @@ export class BlackGrassTempleFactionManager {
     this.enemies.forEach((enemy, index) => {
       if (!lodEnabled || !enemy.group || enemy.isRemoved || !enemy.isAlive) {
         const enemyStart = performance?.now?.() ?? Date.now();
-        enemy.update(deltaSeconds, { ...baseContext, aiTickAllowed: this.perfDebugToggles?.neckmanAiOff === true ? false : (isMobileFolsomFeud ? index === folsomAiEnemyIndex : mobileAiTickAllowed), folsomBehaviorSlice: isMobileFolsomFeud && index === folsomAiEnemyIndex, perfStats: this.perfStats, perfDebugToggles: this.perfDebugToggles });
-        if (isMobileFolsomFeud && index === folsomAiEnemyIndex) this.perfStats.enemiesProcessedThisFrame += 1;
+        const ramManAiAllowed = isMobileFolsomFeud && enemy.species === 'ram_man' ? (this.perfDebugToggles?.rammanAiOff !== true && this.perfStats.frames % 3 === index % 3) : null;
+        enemy.update(deltaSeconds, { ...baseContext, aiTickAllowed: ramManAiAllowed ?? (this.perfDebugToggles?.neckmanAiOff === true ? false : (isMobileFolsomFeud ? index === folsomAiEnemyIndex : mobileAiTickAllowed)), folsomBehaviorSlice: isMobileFolsomFeud && index === folsomAiEnemyIndex, perfStats: this.perfStats, perfDebugToggles: this.perfDebugToggles });
+        if (isMobileFolsomFeud && (index === folsomAiEnemyIndex || ramManAiAllowed)) this.perfStats.enemiesProcessedThisFrame += 1;
         if (isMobileFolsomFeud) {
           const elapsedEnemyMs = (performance?.now?.() ?? Date.now()) - enemyStart;
           this.perfStats.enemyUpdateMs.push({ id: enemy.id, ms: elapsedEnemyMs });
+          if (enemy.species === 'ram_man') this.perfStats.ramManUpdateMs += elapsedEnemyMs;
           if (index === folsomAiEnemyIndex && elapsedEnemyMs > FOLSOM_BLOOD_FEUD_FRAME_BUDGET_MS) this.perfStats.budgetExceededFrames += 1;
         }
         return;
@@ -3219,6 +3344,7 @@ export class BlackGrassTempleFactionManager {
     const enemies = this.enemies ?? [];
     const byState = (state, species = null) => enemies.filter((enemy) => (!species || enemy.species === species) && enemy.lifecycle?.state === state).length;
     const neckmen = enemies.filter((enemy) => enemy.species === 'neck_man');
+    const ramMen = enemies.filter((enemy) => enemy.species === 'ram_man');
     return {
       encounterMode: this.encounterMode,
       warmupComplete: this.encounterMode === 'folsom_neckman_blood_feud' ? this.mobileLoadQueueWarmupComplete : true,
@@ -3228,6 +3354,7 @@ export class BlackGrassTempleFactionManager {
       skippedAiTicks: this.mobileAiSkippedTicks,
       allowedAiTicks: this.mobileAiAllowedTicks,
       spawnedNeckmen: neckmen.length,
+      ramManHerd: { enabled: this.perfDebugToggles?.ramHerd !== false, spawned: ramMen.length, alive: ramMen.filter((enemy) => enemy.isAlive).length, dead: ramMen.filter((enemy) => enemy.behaviorState === 'dead' || (!enemy.isAlive && enemy.lifecycle?.state !== 'failed')).length, failed: byState('failed', 'ram_man'), assetStrategy: [...new Set(ramMen.map((enemy) => enemy.animation?.getAssetStrategy?.() ?? 'pending'))].join(',') || 'none', canonicalPath: RAM_MAN_CANONICAL_MOBILE_MODEL_FILE, actorRoots: ramMen.filter((enemy) => enemy.actor?.group).length, skinnedRoots: ramMen.reduce((sum, enemy) => sum + (enemy.animation?.getLiveSkinnedRootCount?.() ?? 0), 0), mixers: ramMen.reduce((sum, enemy) => sum + (enemy.animation?.getActiveMixerCount?.() ?? 0), 0), updateMs: this.perfStats.ramManUpdateMs, aiUpdatesPerSecond: this.perfStats.ramManAiUpdatesPerSecond },
       pendingLoadNeckmen: byState('pendingLoad', 'neck_man'),
       loadingNeckmen: byState('loading', 'neck_man'),
       loadedNeckmen: neckmen.filter((enemy) => ['loaded', 'visible', 'active'].includes(enemy.lifecycle?.state) || enemy.isLoaded).length,
@@ -3255,7 +3382,7 @@ export class BlackGrassTempleFactionManager {
       combatActive: this.perfDebugToggles?.neckmanCombatOff !== true,
       stateMachineActive: this.perfDebugToggles?.neckmanStateMachineOff !== true,
       perfTrace: this.perfStats,
-      targetSummary: neckmen.map((enemy) => ({ id: enemy.id, target: enemy.group?.userData.targetId ?? null, type: enemy.group?.userData.targetType ?? null, lock: enemy.group?.userData.targetLockRemaining ?? 0 })),
+      targetSummary: neckmen.map((enemy) => ({ id: enemy.id, target: enemy.group?.userData.targetId ?? null, type: enemy.group?.userData.targetType ?? null, targetSpecies: enemy.group?.userData.targetSpecies ?? null, lock: enemy.group?.userData.targetLockRemaining ?? 0 })),
     };
   }
 
