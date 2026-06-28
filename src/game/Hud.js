@@ -21,7 +21,7 @@ export class Hud {
   }
 
   playAttack() {
-    // Combat feedback remains HUD-only; no first-person arm or hand overlay is rendered.
+    // Attack feedback remains HUD-only; no first-person arm or hand overlay is rendered.
   }
 
   flashDamage() {

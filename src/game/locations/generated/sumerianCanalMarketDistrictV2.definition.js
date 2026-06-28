@@ -91,18 +91,14 @@ export const sumerianCanalMarketDistrictV2Definition = Object.freeze({
     { id: 'v2_market_collapsed_broken_pillar_02', kind: 'brokenPillar', position: [-23, 0, 20], radius: 0.34, height: 1.0, tilt: 0.18, material: 'blackStone', roomId: 'v2_market_bounds' },
   ],
   blockers: [
-    { id: 'v2_market_canal_void_west', type: 'canal', minX: -21, maxX: -5.5, minZ: -19.5, maxZ: -12.4, height: 0.2, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'v2-blocker', 'invisible'], invisible: true, purpose: 'canal water boundary with bridge openings' },
-    { id: 'v2_market_canal_void_mid', type: 'canal', minX: -3, maxX: 8, minZ: -7.7, maxZ: 3.2, height: 0.2, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'v2-blocker', 'invisible'], invisible: true, purpose: 'canal water boundary between bridges' },
-    { id: 'v2_market_canal_void_east', type: 'canal', minX: 11, maxX: 25, minZ: 7.2, maxZ: 15.5, height: 0.2, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'v2-blocker', 'invisible'], invisible: true, purpose: 'canal water boundary with shrine-side edge' },
+    { id: 'v2_market_canal_void_west', type: 'canal', minX: -21, maxX: -5.5, minZ: -19.5, maxZ: -12.4, height: 0.2, blocksPlayer: true, blocksActors: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'v2-blocker', 'invisible'], invisible: true, purpose: 'canal water boundary with bridge openings' },
+    { id: 'v2_market_canal_void_mid', type: 'canal', minX: -3, maxX: 8, minZ: -7.7, maxZ: 3.2, height: 0.2, blocksPlayer: true, blocksActors: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'v2-blocker', 'invisible'], invisible: true, purpose: 'canal water boundary between bridges' },
+    { id: 'v2_market_canal_void_east', type: 'canal', minX: 11, maxX: 25, minZ: 7.2, maxZ: 15.5, height: 0.2, blocksPlayer: true, blocksActors: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'v2-blocker', 'invisible'], invisible: true, purpose: 'canal water boundary with shrine-side edge' },
   ],
   props: [],
   spawns: [
     { id: 'sumerian_canal_market_player_start', kind: 'player', position: { x: 0, y: 1.55, z: -28 }, yaw: 0, roomId: 'v2_market_bounds', tags: ['entry', 'playerStart'] },
     { id: 'sumerian_canal_market_return_threshold', kind: 'return', position: { x: 35.2, y: 1.2, z: 10 }, yaw: Math.PI / 2, roomId: 'v2_market_bounds', tags: ['exit', 'allow-near-wall'] },
-    { id: 'v2_market_sheep_demon_01', kind: 'enemy', species: 'sheep_demon', faction: 'market_remnant', position: { x: 20, y: 0, z: -19 }, yaw: -0.7, roomId: 'v2_market_bounds', allowedForInitialWave: true, allowedForRespawn: false, tags: ['spawn-anchor', 'market-spine'] },
-    { id: 'v2_market_sheep_demon_02', kind: 'enemy', species: 'sheep_demon', faction: 'market_remnant', position: { x: -18, y: 0, z: 24 }, yaw: 0.3, roomId: 'v2_market_bounds', allowedForInitialWave: false, allowedForRespawn: false, tags: ['spawn-anchor', 'collapsed-court'] },
-    { id: 'v2_market_neck_man_01', kind: 'enemy', species: 'neck_man', faction: 'market_remnant', position: { x: -23, y: 0, z: 4 }, yaw: 0.9, roomId: 'v2_market_bounds', allowedForInitialWave: true, allowedForRespawn: false, tags: ['spawn-anchor', 'admin-alley'] },
-    { id: 'v2_market_neck_man_02', kind: 'enemy', species: 'neck_man', faction: 'market_remnant', position: { x: 14, y: 1.35, z: 17 }, yaw: Math.PI, roomId: 'v2_market_bounds', allowedForInitialWave: false, allowedForRespawn: false, tags: ['spawn-anchor', 'shrine-terrace'] },
   ],
   exits: [{ id: 'sumerian_canal_market_exit_to_reliquary_field', fromLocation: 'sumerian-canal-market-district-v2', toLocation: 'reliquary-field', triggerRect: { minX: 33.6, maxX: 37, minZ: 7.2, maxZ: 12.6 }, position: { x: 35.5, y: 1.2, z: 10 }, destinationSpawnId: 'field_sumerian_canal_market_district_v2_return', promptText: 'Return to Reliquary Field', roomId: 'v2_market_bounds', wallGaps: [{ roomId: 'v2_market_bounds', position: { x: 37, y: 0, z: 10 }, width: 4.2 }], tags: ['field-return', 'exit-gate'] }],
   lights: [

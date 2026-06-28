@@ -34,11 +34,8 @@ export function createObjectiveFacts(snapshot = {}) {
     chestOpenedInteractionIds: new Set(snapshot.chestOpenedInteractionIds ?? []),
     visitedLocationIds: new Set(snapshot.visitedLocationIds ?? []),
     visitedRoomIds: new Set(snapshot.visitedRoomIds ?? []),
-    damagedEnemyIds: new Set(snapshot.damagedEnemyIds ?? []),
     damagedSpecies: new Set(snapshot.damagedSpecies ?? []),
-    killedEnemyIds: new Set(snapshot.killedEnemyIds ?? []),
     killedSpecies: new Set(snapshot.killedSpecies ?? []),
-    factionKills: new Map(Object.entries(snapshot.factionKills ?? {})),
     locationCompletionIds: new Set(snapshot.locationCompletionIds ?? []),
     acquiredRewardIds: new Set(snapshot.acquiredRewardIds ?? []),
   };
@@ -51,11 +48,8 @@ export function serializeFacts(facts) {
     chestOpenedInteractionIds: [...facts.chestOpenedInteractionIds],
     visitedLocationIds: [...facts.visitedLocationIds],
     visitedRoomIds: [...facts.visitedRoomIds],
-    damagedEnemyIds: [...facts.damagedEnemyIds],
     damagedSpecies: [...facts.damagedSpecies],
-    killedEnemyIds: [...facts.killedEnemyIds],
     killedSpecies: [...facts.killedSpecies],
-    factionKills: Object.fromEntries(facts.factionKills),
     locationCompletionIds: [...facts.locationCompletionIds],
     acquiredRewardIds: [...facts.acquiredRewardIds],
   };

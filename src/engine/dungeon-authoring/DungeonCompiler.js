@@ -88,7 +88,6 @@ export function compileDungeonLocation(definition, options = {}) {
     walkableRects: collision.walkableRects,
     walkableSurfaces: collision.walkableSurfaces,
     blockerRects: collision.blockerRects,
-    enemyBlockerRects: collision.enemyBlockerRects,
     lineOfMovementBlockerRects: collision.lineOfMovementBlockerRects,
     collisionWorld: collision.collisionWorld,
     navGraph,

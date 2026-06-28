@@ -148,13 +148,7 @@ export class DungeonDebugRenderer {
     });
 
     this.runtime.spawnAnchors.forEach((spawn) => {
-      const color = spawn.kind === 'player' || spawn.kind === 'return'
-        ? 0x4b8dff
-        : spawn.faction === 'neck_man'
-          ? 0xc46cff
-          : spawn.faction === 'sheep_demon'
-            ? 0xff6a4a
-            : 0x49ddb1;
+      const color = spawn.kind === 'player' || spawn.kind === 'return' ? 0x4b8dff : 0x49ddb1;
       const mesh = marker(spawn.position, color, spawn.kind === 'debug' ? 0.35 : 0.58);
       mesh.userData = { locationId: this.runtime.locationId, spawnId: spawn.id, devOnly: true };
       this.layers.spawns.add(mesh);

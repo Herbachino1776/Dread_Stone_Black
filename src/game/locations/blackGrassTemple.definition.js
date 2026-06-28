@@ -53,50 +53,6 @@ function connector(id, fromRoom, toRoom, x, z, width, wallGaps) {
   };
 }
 
-function patrolPoints(x, z, patrolSpread) {
-  return [
-    { x: x - patrolSpread, y: 0, z: z - patrolSpread * 0.45 },
-    { x: x + patrolSpread * 0.7, y: 0, z: z - patrolSpread * 0.65 },
-    { x: x + patrolSpread, y: 0, z: z + patrolSpread * 0.5 },
-    { x: x - patrolSpread * 0.65, y: 0, z: z + patrolSpread * 0.72 },
-  ];
-}
-
-function factionSpawn(id, faction, x, z, roomId, patrolSpread = 5.5, allowedForInitialWave = false) {
-  return {
-    id,
-    kind: 'enemy',
-    species: faction,
-    faction,
-    position: { x, y: 0, z },
-    yaw: 0,
-    roomId,
-    minDistanceFromPlayer: 10,
-    allowedForInitialWave,
-    allowedForRespawn: true,
-    tags: ['faction-war-anchor'],
-    userData: {
-      preferredFaction: faction,
-      patrolPoints: patrolPoints(x, z, patrolSpread),
-    },
-  };
-}
-
-function debugEnemySpawn(id, x, z, roomId, active = false) {
-  return {
-    id,
-    kind: 'debug',
-    species: 'sheep_demon',
-    faction: 'sheep_demon',
-    position: { x, y: 0, z },
-    yaw: 0,
-    roomId,
-    allowedForInitialWave: false,
-    allowedForRespawn: false,
-    tags: ['legacy-marker', active ? 'active-marker' : 'inactive-marker'],
-    userData: { activeMarker: active },
-  };
-}
 
 function blocker(id, type, minX, maxX, minZ, maxZ, height = 1.2) {
   return {
@@ -108,7 +64,7 @@ function blocker(id, type, minX, maxX, minZ, maxZ, height = 1.2) {
     maxZ,
     height,
     blocksPlayer: true,
-    blocksEnemies: true,
+    blocksActors: true,
     blocksLineOfMovement: true,
     tags: ['solid'],
   };
@@ -157,7 +113,7 @@ export const blackGrassTempleDefinition = Object.freeze({
   displayName: 'Black Grass Temple',
   type: 'temple',
   objectivePackId: 'black-grass-temple-foundation',
-  tags: ['interior', 'dungeon', 'faction-war', 'compiled-runtime'],
+  tags: ['interior', 'dungeon', 'compiled-runtime'],
   notes: 'Migrated from the hand-built Black Grass Temple scene. Keep this definition as the source of truth for BGT rooms, collision, spawns, nav, lights, exits, and encounter zones.',
   fog: { color: 0x242018, near: 12, far: 58 },
   lighting: { background: 0x100f0d },
@@ -173,15 +129,15 @@ export const blackGrassTempleDefinition = Object.freeze({
       'BGT-P17-empty-offering-stone-a',
       'BGT-P18-empty-offering-stone-b',
       'BGT-P19-cracked-west-shrine',
-      'BGT-P20-neck-man-scratch-stone',
-      'BGT-P21-sheep-bone-line-west',
-      'BGT-P22-neck-bone-line-east',
+      'BGT-P20-scratch-stone',
+      'BGT-P21-bone-line-west',
+      'BGT-P22-bone-line-east',
       'BGT-P23-silent-altar-basin',
       'BGT-GR01-entry-root-trickle',
       'BGT-GR02-offering-chest-grass',
       'BGT-GR03-west-shrine-creep',
       'BGT-GR04-gate-hall-creep',
-      'BGT-GR05-warring-crossing-dark-heart',
+      'BGT-GR05-silent-crossing-dark-heart',
       'BGT-GR06-lower-pillar-root-track',
       'BGT-GR07-silent-altar-root-ring',
       'BGT-BL01-old-blood-west',
@@ -196,9 +152,9 @@ export const blackGrassTempleDefinition = Object.freeze({
     room({ id: 'R03', label: 'Broken Offering Room', minX: -17, maxX: 17, minZ: -41, maxZ: -23, repeat: [5, 3], encounterWeight: 0.9, userData: { role: 'rusted sword chest and first authored objective beat', landmark: 'broken central offering slab' } }),
     room({ id: 'R04', label: 'West Shrine Nook', minX: -44, maxX: -24, minZ: -31, maxZ: -9, repeat: [3, 4], encounterWeight: 1.0, userData: { role: 'first Sheep Demon pressure branch', landmark: 'failed west shrine stones' } }),
     room({ id: 'R05', label: 'Rusted Gate Watch', minX: 24, maxX: 44, minZ: -31, maxZ: -9, repeat: [3, 4], encounterWeight: 1.0, userData: { role: 'first Neck Man pressure branch and return shortcut landmark', landmark: 'standing rusted gate' } }),
-    room({ id: 'R06', label: 'Black Grass Hall', minX: -25, maxX: 25, minZ: -13, maxZ: 13, floorTexture: 'grassFloor', repeat: [8, 5], encounterWeight: 1.2, userData: { role: 'wide early combat and navigation hub', landmark: 'grass where stone should be' } }),
+    room({ id: 'R06', label: 'Black Grass Hall', minX: -25, maxX: 25, minZ: -13, maxZ: 13, floorTexture: 'grassFloor', repeat: [8, 5], encounterWeight: 1.2, userData: { role: 'wide early navigation hub', landmark: 'grass where stone should be' } }),
     room({ id: 'R07', label: 'Rooted Service Loop', minX: -42, maxX: -26, minZ: -8, maxZ: 25, repeat: [3, 6], encounterWeight: 0.9, userData: { role: 'side loop back into the main route', landmark: 'thin root crawl along west wall' } }),
-    room({ id: 'R08', label: 'Warring Crossing', minX: -31, maxX: 31, minZ: 13, maxZ: 43, floorTexture: 'grassFloor', repeat: [9, 5], encounterWeight: 1.65, userData: { role: 'main faction combat arena', landmark: 'split grass floor and broken dividers' } }),
+    room({ id: 'R08', label: 'Silent Crossing', minX: -31, maxX: 31, minZ: 13, maxZ: 43, floorTexture: 'grassFloor', repeat: [9, 5], encounterWeight: 1.65, userData: { role: 'main quiet crossing arena', landmark: 'split grass floor and broken dividers' } }),
     room({ id: 'R09', label: 'Sheep Demon Rookery', minX: -56, maxX: -32, minZ: 39, maxZ: 65, floorTexture: 'mixedFloor', repeat: [4, 4], encounterWeight: 0.9, userData: { role: 'optional west threat pocket', landmark: 'pale bone line' } }),
     room({ id: 'R10', label: 'Neck Man Bone Store', minX: 32, maxX: 56, minZ: 39, maxZ: 65, floorTexture: 'mixedFloor', repeat: [4, 4], encounterWeight: 0.9, userData: { role: 'optional east threat pocket', landmark: 'low counter and dark smear' } }),
     room({ id: 'R11', label: 'Lower Rooted Room', minX: -25, maxX: 25, minZ: 50, maxZ: 74, repeat: [7, 4], encounterWeight: 1.25, userData: { navCenter: { x: 0, y: 0, z: 62 }, role: 'deep approach and survival objective space', landmark: 'four square pillars' } }),
@@ -276,15 +232,15 @@ export const blackGrassTempleDefinition = Object.freeze({
     prop('BGT-P17-empty-offering-stone-a', 'offering_stone', 'R03', -6.2, 0.22, -35.6, 1.25, 0.44, 0.85, null, 'offeringStone'),
     prop('BGT-P18-empty-offering-stone-b', 'offering_stone', 'R03', 6.4, 0.2, -34.6, 1.1, 0.4, 0.9, null, 'offeringStone'),
     prop('BGT-P19-cracked-west-shrine', 'shrine_stone', 'R04', -39.5, 0.55, -24.5, 2.2, 1.1, 1.4, null, 'offeringStone'),
-    prop('BGT-P20-neck-man-scratch-stone', 'scratch_stone', 'R05', 39.2, 0.5, -26.2, 2.1, 1.0, 1.2, null, 'propStone'),
-    prop('BGT-P21-sheep-bone-line-west', 'bone_marker', 'R09', -51.2, 0.08, 61.5, 4.6, 0.16, 0.55, null, 'bonePale'),
-    prop('BGT-P22-neck-bone-line-east', 'bone_marker', 'R10', 51.4, 0.08, 44.2, 4.2, 0.16, 0.55, null, 'bonePale'),
+    prop('BGT-P20-scratch-stone', 'scratch_stone', 'R05', 39.2, 0.5, -26.2, 2.1, 1.0, 1.2, null, 'propStone'),
+    prop('BGT-P21-bone-line-west', 'bone_marker', 'R09', -51.2, 0.08, 61.5, 4.6, 0.16, 0.55, null, 'bonePale'),
+    prop('BGT-P22-bone-line-east', 'bone_marker', 'R10', 51.4, 0.08, 44.2, 4.2, 0.16, 0.55, null, 'bonePale'),
     prop('BGT-P23-silent-altar-basin', 'ritual_basin', 'R12', 0, 1.75, 82, 3.4, 0.24, 2.0, null, 'bloodDark'),
     floorPatch('BGT-GR01-entry-root-trickle', 'R01', 0, -58.8, 2.2, 3.2),
     floorPatch('BGT-GR02-offering-chest-grass', 'R03', -12.4, -34.6, 4.2, 2.6),
     floorPatch('BGT-GR03-west-shrine-creep', 'R04', -34.5, -13.5, 6.8, 4.4),
     floorPatch('BGT-GR04-gate-hall-creep', 'R05', 34, -14.5, 6.4, 3.6),
-    floorPatch('BGT-GR05-warring-crossing-dark-heart', 'R08', 0, 28.5, 12, 6.2),
+    floorPatch('BGT-GR05-silent-crossing-dark-heart', 'R08', 0, 28.5, 12, 6.2),
     floorPatch('BGT-GR06-lower-pillar-root-track', 'R11', 0, 62, 7.8, 14),
     floorPatch('BGT-GR07-silent-altar-root-ring', 'R12', 0, 82, 10, 5.6),
     floorPatch('BGT-BL01-old-blood-west', 'R04', -31.5, -25.4, 3.4, 1.1, 'bloodDark'),
@@ -294,26 +250,14 @@ export const blackGrassTempleDefinition = Object.freeze({
   spawns: [
     { id: 'bgt_player_start', kind: 'player', position: { x: 0, y: 1.55, z: -72 }, yaw: 0, roomId: 'R01', tags: ['entry'] },
     { id: 'bgt_field_exit_interaction', kind: 'return', position: { x: 0, y: 1.2, z: -76 }, yaw: Math.PI, roomId: 'R01', tags: ['exit'] },
-    factionSpawn('E01', 'sheep_demon', 8, -31, 'R03', 3.2, true),
-    factionSpawn('E02', 'sheep_demon', -39, -18, 'R04', 3.4),
-    factionSpawn('E03', 'sheep_demon', -14, 2, 'R06', 4.2, true),
-    factionSpawn('E04', 'neck_man', 16, 8, 'R06', 4.2, true),
-    factionSpawn('E05', 'sheep_demon', -35, 12, 'R07', 3.6),
-    factionSpawn('E06', 'sheep_demon', -20, 28, 'R08', 4.0, true),
-    factionSpawn('E07', 'neck_man', 2, 33, 'R08', 4.0),
-    factionSpawn('E08', 'neck_man', 22, 22, 'R08', 4.0, true),
-    factionSpawn('E09', 'sheep_demon', -48, 60, 'R09', 3.6),
-    factionSpawn('E10', 'neck_man', -10, 61, 'R11', 3.8, true),
-    factionSpawn('E11', 'sheep_demon', 12, 66, 'R11', 3.8),
-    factionSpawn('E12', 'neck_man', 0, 80, 'R12', 3.2, true),
   ],
 
   encounterZones: [
-    { id: 'BGT_ZONE_ENTRY', label: 'onboarding and first objective beat', roomIds: ['R01', 'R02', 'R03'], center: { x: 0, y: 0, z: -42 }, radius: 24, weight: 0.7, maxActive: 1, allowedFactions: ['sheep_demon', 'neck_man'], actionBubblePriority: 1 },
-    { id: 'BGT_ZONE_BRANCHES', label: 'optional side branch pressure', roomIds: ['R04', 'R05', 'R07'], center: { x: 0, y: 0, z: -9 }, radius: 38, weight: 0.95, maxActive: 2, allowedFactions: ['sheep_demon', 'neck_man'], actionBubblePriority: 2 },
-    { id: 'BGT_ZONE_TAVERN', label: 'first black grass hall fight', roomIds: ['R06'], center: { x: 0, y: 0, z: 0 }, radius: 22, weight: 1.2, maxActive: 2, allowedFactions: ['sheep_demon', 'neck_man'], actionBubblePriority: 3 },
-    { id: 'BGT_ZONE_CROSSING', label: 'main faction combat crossing', roomIds: ['R08', 'R09', 'R10'], center: { x: 0, y: 0, z: 31 }, radius: 30, weight: 1.65, maxActive: 3, allowedFactions: ['sheep_demon', 'neck_man'], actionBubblePriority: 4 },
-    { id: 'BGT_ZONE_LOWER', label: 'endpoint pressure and altar approach', roomIds: ['R11', 'R12', 'R13'], center: { x: 0, y: 0, z: 76 }, radius: 28, weight: 1.25, maxActive: 2, allowedFactions: ['sheep_demon', 'neck_man'], actionBubblePriority: 3 },
+    { id: 'BGT_ZONE_ENTRY', label: 'onboarding and first objective beat', roomIds: ['R01', 'R02', 'R03'], center: { x: 0, y: 0, z: -42 }, radius: 24, weight: 0.7, maxActive: 1, allowedFactions: [], actionBubblePriority: 1 },
+    { id: 'BGT_ZONE_BRANCHES', label: 'optional side branch pressure', roomIds: ['R04', 'R05', 'R07'], center: { x: 0, y: 0, z: -9 }, radius: 38, weight: 0.95, maxActive: 2, allowedFactions: [], actionBubblePriority: 2 },
+    { id: 'BGT_ZONE_TAVERN', label: 'first black grass hall fight', roomIds: ['R06'], center: { x: 0, y: 0, z: 0 }, radius: 22, weight: 1.2, maxActive: 2, allowedFactions: [], actionBubblePriority: 3 },
+    { id: 'BGT_ZONE_CROSSING', label: 'main quiet crossing crossing', roomIds: ['R08', 'R09', 'R10'], center: { x: 0, y: 0, z: 31 }, radius: 30, weight: 1.65, maxActive: 3, allowedFactions: [], actionBubblePriority: 4 },
+    { id: 'BGT_ZONE_LOWER', label: 'endpoint pressure and altar approach', roomIds: ['R11', 'R12', 'R13'], center: { x: 0, y: 0, z: 76 }, radius: 28, weight: 1.25, maxActive: 2, allowedFactions: [], actionBubblePriority: 3 },
   ],
 
   exits: [
@@ -339,8 +283,8 @@ export const blackGrassTempleDefinition = Object.freeze({
     torchFixture('BGT-T05', 'R05', 'north', 4.0, 'dungeonTorch', { note: 'Rusted gate readability without occupying D08.' }),
     torchFixture('BGT-T06', 'R06', 'west', 7.0, 'dungeonTorch', { note: 'Black Grass Hall west-side route light.' }),
     torchFixture('BGT-T07', 'R06', 'east', 7.0, 'dungeonTorch', { note: 'Black Grass Hall east-side route light.' }),
-    torchFixture('BGT-T08', 'R08', 'west', 8.0, 'dungeonTorch', { note: 'Warring Crossing west divider silhouette.' }),
-    torchFixture('BGT-T09', 'R08', 'east', 8.0, 'dungeonTorch', { note: 'Warring Crossing east divider silhouette.' }),
+    torchFixture('BGT-T08', 'R08', 'west', 8.0, 'dungeonTorch', { note: 'Silent Crossing west divider silhouette.' }),
+    torchFixture('BGT-T09', 'R08', 'east', 8.0, 'dungeonTorch', { note: 'Silent Crossing east divider silhouette.' }),
     torchFixture('BGT-T10', 'R11', 'west', 6.0, 'dungeonTorch', { note: 'Lower rooted room west pillar rhythm.' }),
     torchFixture('BGT-T11', 'R11', 'east', 6.0, 'dungeonTorch', { note: 'Lower rooted room east pillar rhythm.' }),
   ],

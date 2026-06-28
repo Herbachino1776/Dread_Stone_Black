@@ -627,7 +627,7 @@ export const level1Definition = Object.freeze({
     maxZ: 15.4,
     height: 0.8,
     blocksPlayer: true,
-    blocksEnemies: true,
+    blocksActors: true,
     blocksLineOfMovement: true,
     tags: [
     "solid",
@@ -763,43 +763,7 @@ export const level1Definition = Object.freeze({
 ],
   lights: [],
   spawns: [
-  {
-    id: "E01",
-    kind: "enemy",
-    species: "sheep_demon",
-    faction: "none",
-    roomId: "R05",
-    position: {
-    x: 36,
-    y: 0,
-    z: 24
-  },
-    yaw: 0,
-    allowedForInitialWave: true,
-    allowedForRespawn: true,
-    tags: [
-    "skeleton"
   ],
-    userData: {
-    encounter: "sentinel"
-  }
-  },
-  {
-    id: "P01",
-    kind: "player",
-    roomId: "R04",
-    position: {
-    x: 23,
-    y: 1.55,
-    z: 27
-  },
-    yaw: 0,
-    tags: [
-    "start"
-  ],
-    userData: {}
-  }
-],
   exits: [
   {
     id: "X01",

@@ -200,7 +200,7 @@ function expoColumn(id, kind, x, z, overrides = {}) {
   return {
     id, kind, position: [x, 0, z], yaw: overrides.yaw ?? 0, height: overrides.height ?? 4.2, radius: overrides.radius, width: overrides.width, depth: overrides.depth, segments: overrides.segments, baseSize: overrides.baseSize, capitalSize: overrides.capitalSize, columnSpacing: overrides.columnSpacing, state: overrides.state, broken: overrides.broken, cracked: overrides.cracked, ruined: overrides.ruined,
     shaftMaterial: overrides.shaftMaterial ?? 'pack2SandstoneWorn', baseMaterial: overrides.baseMaterial ?? 'pack2DirtyBaseStone', capitalMaterial: overrides.capitalMaterial ?? 'pack2CrackedMarbleTrim', bandMaterial: overrides.bandMaterial ?? 'pack2BronzeTurquoiseBand', glyphMaterial: overrides.glyphMaterial ?? 'pack2RitualGlyphPanel', trimMaterial: overrides.trimMaterial ?? 'pack2ChippedBlackstoneTrim',
-    blocksPlayer: overrides.blocksPlayer ?? true, blocksEnemies: overrides.blocksEnemies ?? true, roomId: overrides.roomId ?? 'K03',
+    blocksPlayer: overrides.blocksPlayer ?? true, blocksActors: overrides.blocksActors ?? true, roomId: overrides.roomId ?? 'K03',
     tags: ['geometry-expo-center', 'darb-column-pillar-support-preview', kind, ...(overrides.tags ?? [])],
     userData: { purpose: 'Permanent Kerovac Geometry Expo Center swappable preview zone. Batch 4 displays DARB pillar, column, and structural support primitives using pack2 texture profiles.', displayChamber: overrides.displayChamber ?? 'K03 Civic Reliquary Court', authoredAsLocationDefinitionData: true, collisionTruth: 'Column primitives generate compact collision blockers from their visible footprint unless blocksPlayer is false.', debugOverlay: 'Primitive userData includes debugFootprint with dimensions, state, material slots, and blocker behavior.', ...(overrides.userData ?? {}) },
   };
@@ -277,8 +277,8 @@ export const kerovacDefinition = Object.freeze({
   geometry: { wallHeight: 8.8, wallThickness: 0.42, floorThickness: 0.2, ceilingThickness: 0.24 },
   collision: { playerRadius: 0.5 },
   runtimeSpawnPolicy: {
-    activeEnemyCap: 1,
-    initialEnemyCap: 1,
+    activeActorCap: 1,
+    initialActorCap: 1,
     wakeRadius: 18,
     sleepRadius: 34,
     respawnCooldownMs: 0,
@@ -430,16 +430,14 @@ export const kerovacDefinition = Object.freeze({
   ],
 
   blockers: [
-    { id: 'K_canal_water_blocker_west', type: 'hazard', minX: -18.8, maxX: -3.6, minZ: 42.1, maxZ: 47.9, height: 0.2, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: false, tags: ['canal', 'water-boundary'], userData: { visualStructureId: 'K_canal_water_trench', visibleBoundary: 'curbs and turquoise water trench' } },
-    { id: 'K_canal_water_blocker_east', type: 'hazard', minX: 3.6, maxX: 18.8, minZ: 42.1, maxZ: 47.9, height: 0.2, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: false, tags: ['canal', 'water-boundary'], userData: { visualStructureId: 'K_canal_water_trench', visibleBoundary: 'curbs and turquoise water trench' } },
+    { id: 'K_canal_water_blocker_west', type: 'hazard', minX: -18.8, maxX: -3.6, minZ: 42.1, maxZ: 47.9, height: 0.2, blocksPlayer: true, blocksActors: true, blocksLineOfMovement: false, tags: ['canal', 'water-boundary'], userData: { visualStructureId: 'K_canal_water_trench', visibleBoundary: 'curbs and turquoise water trench' } },
+    { id: 'K_canal_water_blocker_east', type: 'hazard', minX: 3.6, maxX: 18.8, minZ: 42.1, maxZ: 47.9, height: 0.2, blocksPlayer: true, blocksActors: true, blocksLineOfMovement: false, tags: ['canal', 'water-boundary'], userData: { visualStructureId: 'K_canal_water_trench', visibleBoundary: 'curbs and turquoise water trench' } },
   ],
 
   props: [],
   spawns: [
     { id: 'kerovac_player_start', kind: 'player', position: { x: 0, y: 1.55, z: -38 }, yaw: 0, roomId: 'K01', tags: ['entry', 'playerStart'] },
     { id: 'kerovac_return_threshold', kind: 'return', position: { x: 0, y: 1.2, z: -42 }, yaw: Math.PI, roomId: 'K01', tags: ['exit', 'allow-near-wall'] },
-    { id: 'kerovac_solar_guardian_01', kind: 'enemy', species: 'neck_man', faction: 'kerovac_solar_remnant', position: { x: 14, y: 0, z: 72 }, yaw: -0.6, roomId: 'K05', allowedForInitialWave: true, allowedForRespawn: false, tags: ['minimal-test-enemy', 'open-room'] },
-    { id: 'kerovac_solar_guardian_02', kind: 'enemy', species: 'sheep_demon', faction: 'kerovac_solar_remnant', position: { x: -13, y: 0, z: 124 }, yaw: 0.5, roomId: 'K07', allowedForInitialWave: false, allowedForRespawn: false, tags: ['minimal-test-enemy', 'open-room'] },
   ],
 
   exits: [

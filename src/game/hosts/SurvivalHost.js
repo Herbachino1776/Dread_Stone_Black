@@ -1,12 +1,11 @@
 export class SurvivalHost {
-  constructor({ gameState, hudHost = null, saveHost = null, sceneSessionHost = null, inventoryBridge = null, progressionHost = null, combat = null } = {}) {
+  constructor({ gameState, hudHost = null, saveHost = null, sceneSessionHost = null, inventoryBridge = null, progressionHost = null } = {}) {
     this.gameState = gameState;
     this.hudHost = hudHost;
     this.saveHost = saveHost;
     this.sceneSessionHost = sceneSessionHost;
     this.inventoryBridge = inventoryBridge;
     this.progressionHost = progressionHost;
-    this.combat = combat;
     this.session = null;
   }
 
@@ -25,7 +24,7 @@ export class SurvivalHost {
   }
 
   applyStarvationDamage(amount) {
-    this.combat?.takeDamage?.(amount, 'Starvation');
+    
   }
 
   syncHud(hunger = this.getHungerSnapshot()) {

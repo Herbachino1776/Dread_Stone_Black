@@ -25,13 +25,12 @@ export const southReliquaryCryptDefinition = Object.freeze({
     { id: 'R06', label: 'Reliquary Alcove', minX: -7, maxX: 7, minZ: 25, maxZ: 35, safeForSpawn: false, tags: ['known-walkable'] },
   ],
   blockers: [
-    { id: 'GATE01', type: 'gate', minX: 10.72, maxX: 11.28, minZ: -10.85, maxZ: -5.15, height: 2.7, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: true, tags: ['live-hand-coded'] },
-    { id: 'RELIC01', type: 'altar', minX: -2.5, maxX: 2.5, minZ: 31, maxZ: 33, height: 1.5, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: true, tags: ['live-hand-coded'] },
+    { id: 'GATE01', type: 'gate', minX: 10.72, maxX: 11.28, minZ: -10.85, maxZ: -5.15, height: 2.7, blocksPlayer: true, blocksActors: true, blocksLineOfMovement: true, tags: ['live-hand-coded'] },
+    { id: 'RELIC01', type: 'altar', minX: -2.5, maxX: 2.5, minZ: 31, maxZ: 33, height: 1.5, blocksPlayer: true, blocksActors: true, blocksLineOfMovement: true, tags: ['live-hand-coded'] },
   ],
   spawns: [
     { id: 'south_crypt_player_start', kind: 'player', position: { x: 0, y: 1.55, z: -30 }, yaw: 0, roomId: 'R01', tags: ['live'] },
     { id: 'south_crypt_field_exit', kind: 'return', position: { x: 0, y: 1.2, z: -32 }, yaw: Math.PI, roomId: 'R01', tags: ['live'] },
-    { id: 'south_crypt_ram_man_npc', kind: 'npc', species: 'ram_man', position: { x: 0, y: 0, z: 14 }, yaw: 0, roomId: 'R05', tags: ['live', 'friendly'] },
   ],
   exits: [
     {

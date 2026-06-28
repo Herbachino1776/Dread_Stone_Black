@@ -61,7 +61,7 @@ function blockerFromProp(id, type, x, z, width, depth, height, options = {}) {
     maxZ: z + depth / 2,
     height,
     blocksPlayer: options.blocksPlayer ?? true,
-    blocksEnemies: options.blocksEnemies ?? true,
+    blocksActors: options.blocksActors ?? true,
     blocksLineOfMovement: options.blocksLineOfMovement ?? true,
     tags: ['solid', ...(options.tags ?? [])],
     userData: options.userData ?? {},
@@ -114,7 +114,7 @@ export const fieldKeeperHouseDefinition = Object.freeze({
   displayName: 'Field Keeper House',
   type: 'house',
   tags: ['interior', 'house', 'ruined-house', 'compiled-runtime', 'physical-structure-test'],
-  notes: 'Compact ruined field house connected to Reliquary Field. Physical structure only for v0.1; no enemies or encounters.',
+  notes: 'Compact ruined field house connected to Reliquary Field. Physical structure only for v0.1; no encounters.',
   fog: { color: 0x1d1a16, near: 8, far: 46 },
   lighting: { background: 0x0f0e0c },
   textures: textureProfiles,
@@ -187,7 +187,6 @@ export const fieldKeeperHouseDefinition = Object.freeze({
   spawns: [
     { id: 'field_keeper_house_player_start', kind: 'player', position: { x: 0, y: 1.55, z: -27 }, yaw: 0, roomId: 'R01', tags: ['entry', 'playerStart'] },
     { id: 'field_keeper_house_return_threshold', kind: 'return', position: { x: 0, y: 1.2, z: -28.5 }, yaw: Math.PI, roomId: 'R01', tags: ['exit'] },
-    { id: 'FKH_E01_FUTURE_CELLAR', kind: 'debug', species: 'sheep_demon', faction: 'none', position: { x: 15, y: 0, z: -24 }, yaw: 0, roomId: 'R07', allowedForInitialWave: false, allowedForRespawn: false, tags: ['inactive-marker', 'future'], userData: { activeMarker: false } },
   ],
 
   exits: [
@@ -229,7 +228,7 @@ export const fieldKeeperHouseDefinition = Object.freeze({
   ],
 
   encounterZones: [
-    { id: 'FKH_ZONE_INTERIOR', label: 'interior traversal/debug grouping', roomIds: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07'], center: { x: 2, y: 0, z: -3 }, radius: 40, weight: 0, maxActive: 0, allowedFactions: [], actionBubblePriority: 0, tags: ['no-combat'] },
+    { id: 'FKH_ZONE_INTERIOR', label: 'interior traversal/debug grouping', roomIds: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07'], center: { x: 2, y: 0, z: -3 }, radius: 40, weight: 0, maxActive: 0, allowedFactions: [], actionBubblePriority: 0, tags: ['quiet'] },
   ],
 
   navigation: {

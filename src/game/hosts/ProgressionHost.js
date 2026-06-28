@@ -105,11 +105,9 @@ export class ProgressionHost {
         tags: ['equipment'],
       });
     };
-    const onAttackResolved = ({ weaponProfile, hit }) => this.emitCombatHit({ weaponProfile, hit });
 
     this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, onItemAcquired));
     this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, onEquippedChanged));
-    this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.attackResolved, onAttackResolved));
   }
 
   emitLocationEntered() {
@@ -152,31 +150,6 @@ export class ProgressionHost {
     });
   }
 
-  emitCombatHit({ weaponProfile, hit }) {
-    if (!hit) return;
-    const goreEvent = hit.goreEvent ?? {};
-    const basePayload = {
-      locationId: this.locationId,
-      roomId: goreEvent.roomId ?? this.currentRoomId,
-      weaponId: weaponProfile?.id ?? goreEvent.weaponId,
-      enemyId: goreEvent.targetId ?? null,
-      targetId: goreEvent.targetId ?? null,
-      species: goreEvent.species ?? goreEvent.creatureId ?? null,
-      factionId: goreEvent.factionId ?? null,
-      sourceId: goreEvent.sourceId ?? 'player',
-      tags: ['player_attack', ...(goreEvent.tags ?? [])],
-      metadata: {
-        damage: hit.damage,
-        remainingHealth: hit.remainingHealth,
-        target: hit.target,
-      },
-    };
-    this.objectiveRuntime.emit(OBJECTIVE_EVENTS.enemyDamaged, basePayload);
-    if (hit.killed) {
-      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.enemyKilled, basePayload);
-      if (basePayload.factionId) this.objectiveRuntime.emit(OBJECTIVE_EVENTS.factionEnemyKilled, basePayload);
-    }
-  }
 
   findCurrentRoomId() {
     return this.session?.dungeon?.findRoomIdForPosition?.(this.session?.player?.position) ?? this.locationId;

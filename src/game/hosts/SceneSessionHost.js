@@ -108,10 +108,8 @@ export class SceneSessionHost {
       loadedLocationIds: getLoadedLocationDefinitionIds(),
       activeSceneDefinitionId: this.dungeon?.compiledLocationRuntime?.locationId ?? this.locationId,
       activeCollisionSourceId: this.dungeon?.collision?.sourceLocationId ?? this.dungeon?.compiledLocationRuntime?.locationId ?? this.locationId,
-      activeCreatureRuntimeLocationId: this.dungeon?.creatureWorldRuntime?.getDebugSummary?.().locationId ?? this.dungeon?.area ?? null,
       offLocationObjectsCount: this.dungeon?.countOffLocationSceneObjects?.(this.locationId) ?? 0,
       offLocationCollisionEntriesCount: this.dungeon?.countOffLocationCollisionEntries?.(this.locationId) ?? 0,
-      offLocationCreaturesCount: this.dungeon?.creatureWorldRuntime?.countOffLocationCreatures?.(this.locationId) ?? 0,
       routeRegistryLoaded: registry.routeRegistryLoaded,
       lazyLocationsPending: registry.lazyLocationsPending,
       registry,
@@ -137,7 +135,6 @@ export class SceneSessionHost {
       if (Array.isArray(child.material)) child.material.forEach((material) => material?.dispose?.());
       else child.material?.dispose?.();
     });
-    this.dungeon?.creatureWorldRuntime?.dispose?.();
     this.dungeon?.fishingWorldRuntime?.dispose?.();
     this.dungeon = null;
     this.scene = null;
