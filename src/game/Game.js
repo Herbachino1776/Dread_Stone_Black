@@ -1,7 +1,5 @@
 import * as THREE from 'three';
 import { Combat } from './Combat.js';
-import { FishingRodView } from './fishing/FishingRodView.js';
-import { CastingController } from './fishing/CastingController.js';
 import { EQUIPMENT_EVENTS } from '../engine/equipment/EquipmentEvents.js';
 import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
 import { Feedback } from './Feedback.js';
@@ -16,26 +14,9 @@ import { SaveHost } from './hosts/SaveHost.js';
 import { ProgressionHost } from './hosts/ProgressionHost.js';
 import { SceneSessionHost } from './hosts/SceneSessionHost.js';
 import { SurvivalHost } from './hosts/SurvivalHost.js';
+import { FirstPersonViewmodelHost } from './hosts/FirstPersonViewmodelHost.js';
 import { Interactions } from './Interactions.js';
 import { PerfDebugPanel } from './PerfDebugPanel.js';
-import { BroadswordView } from './weapons/BroadswordView.js';
-import { BroadswordGestureController } from './weapons/BroadswordGestureController.js';
-
-const PLAYER_TORCH_POINT_LIGHT = Object.freeze({
-  color: 0xffb066,
-  intensity: 6.8,
-  distance: 36,
-  decay: 1.3,
-});
-
-const PLAYER_TORCH_SPOT_LIGHT = Object.freeze({
-  color: 0xffc078,
-  intensity: 7.2,
-  distance: 56,
-  angle: 0.78,
-  penumbra: 0.82,
-  decay: 1.25,
-});
 
 export class Game {
   constructor(app) {
@@ -85,10 +66,7 @@ export class Game {
       startingEquipment: this.gameState.getEquipmentSnapshot() ?? startingEquipment,
     });
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, () => this.saveEquipmentState());
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, ({ slotId, itemId }) => {
-      this.saveEquipmentState();
-      if (slotId === 'offhand') this.setPlayerTorchEnabled(itemId === 'torch');
-    });
+    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.saveEquipmentState());
     this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
     this.sceneSessionHost = new SceneSessionHost({ rendererHost: this.rendererHost, gameState: this.gameState, query });
     await this.sceneSessionHost.startInitialSession();
@@ -118,14 +96,23 @@ export class Game {
     this.objectiveRuntime = this.progressionHost.getObjectiveRuntime();
     this.hud = this.hudHost.hud;
     this.feedback = new Feedback(this.camera);
-    this.createPlayerTorchLight();
-    this.setPlayerTorchEnabled(this.equipmentRuntime.getEquippedOffhandId?.() === 'torch');
     this.inputHost = new InputHost({ root: this.app });
     this.controls = this.inputHost.controls;
     this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
-    this.fishingRodView = new FishingRodView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState, dungeon: this.dungeon });
-    this.broadswordView = new BroadswordView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
-    this.castingController = new CastingController({ app: this.app, camera: this.camera, player: this.player, dungeon: this.dungeon, hud: this.hud, rodView: this.fishingRodView, equipmentRuntime: this.equipmentRuntime, feedback: this.feedback });
+    this.viewmodelHost = new FirstPersonViewmodelHost({
+      app: this.app,
+      sceneSessionHost: this.sceneSessionHost,
+      equipmentRuntime: this.equipmentRuntime,
+      inventoryBridge: this.survivalInventory,
+      gameState: this.gameState,
+      hudHost: this.hudHost,
+      inputHost: this.inputHost,
+      feedback: this.feedback,
+    });
+    this.viewmodelHost.initializeForSession(this.sceneSessionHost);
+    // Compatibility references for debug panels while Game.js continues becoming a coordinator.
+    this.castingController = this.viewmodelHost.castingController;
+    this.broadswordGestureController = this.viewmodelHost.broadswordGestureController;
     this.interactions = new Interactions({
       player: this.player,
       dungeon: this.dungeon,
@@ -139,16 +126,13 @@ export class Game {
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.interactions.cancelActiveTimedAction?.());
     window.addEventListener('field-item-equipped-changed', () => this.interactions.cancelActiveTimedAction?.());
     window.addEventListener('field-offhand-equipped-changed', () => this.interactions.cancelActiveTimedAction?.());
-    this.broadswordGestureController = new BroadswordGestureController({ app: this.app, view: this.broadswordView, controls: this.controls, equipmentRuntime: this.equipmentRuntime });
     this.combat = new Combat({
       player: this.player,
       dungeon: this.dungeon,
       hud: this.hud,
       controls: this.controls,
       equipmentRuntime: this.equipmentRuntime,
-      onAttackPerformed: ({ weaponProfile }) => {
-        if (weaponProfile?.id === 'rusted_sword') this.broadswordGestureController?.notifyFallbackAttack?.('rightSlash');
-      },
+      onAttackPerformed: (context) => this.viewmodelHost?.handleAttackStarted(context),
     });
     this.survivalHost.combat = this.combat;
 
@@ -188,45 +172,6 @@ export class Game {
   }
 
 
-  createPlayerTorchLight() {
-    this.playerTorch = new THREE.Group();
-    this.playerTorch.position.set(-0.42, -0.28, -0.82);
-    this.playerTorchPointLight = new THREE.PointLight(
-      PLAYER_TORCH_POINT_LIGHT.color,
-      PLAYER_TORCH_POINT_LIGHT.intensity,
-      PLAYER_TORCH_POINT_LIGHT.distance,
-      PLAYER_TORCH_POINT_LIGHT.decay,
-    );
-    this.playerTorchPointLight.castShadow = false;
-    this.playerTorchPointLight.position.set(-0.18, -0.08, -0.18);
-    this.playerTorchSpotLight = new THREE.SpotLight(
-      PLAYER_TORCH_SPOT_LIGHT.color,
-      PLAYER_TORCH_SPOT_LIGHT.intensity,
-      PLAYER_TORCH_SPOT_LIGHT.distance,
-      PLAYER_TORCH_SPOT_LIGHT.angle,
-      PLAYER_TORCH_SPOT_LIGHT.penumbra,
-      PLAYER_TORCH_SPOT_LIGHT.decay,
-    );
-    this.playerTorchSpotLight.castShadow = false;
-    this.playerTorchSpotLight.position.set(-0.1, -0.08, -0.12);
-    this.playerTorchSpotLight.target.position.set(-0.25, -0.16, -6);
-    this.playerTorch.add(this.playerTorchPointLight, this.playerTorchSpotLight, this.playerTorchSpotLight.target);
-    this.playerTorch.visible = false;
-    this.camera.add(this.playerTorch);
-  }
-
-  setPlayerTorchEnabled(enabled) {
-    if (this.playerTorch) this.playerTorch.visible = Boolean(enabled);
-  }
-
-  updatePlayerTorchLight(deltaSeconds) {
-    if (!this.playerTorch?.visible) return;
-    this.playerTorchElapsed = (this.playerTorchElapsed ?? 0) + deltaSeconds;
-    const flicker = 0.97 + Math.sin(this.playerTorchElapsed * 6.7) * 0.02 + Math.sin(this.playerTorchElapsed * 11.3) * 0.012;
-    this.playerTorchPointLight.intensity = PLAYER_TORCH_POINT_LIGHT.intensity * flicker;
-    this.playerTorchSpotLight.intensity = PLAYER_TORCH_SPOT_LIGHT.intensity * (0.985 + (flicker - 0.97) * 0.55);
-  }
-
   saveEquipmentState() {
     this.saveHost.saveEquipmentState(this.gameState, this.equipmentRuntime);
   }
@@ -238,7 +183,7 @@ export class Game {
     if (this.isPaused) {
       this.controls.consumeAttack();
       this.controls.consumeInteract();
-      this.hud.updateDebug(this.player, this.castingController?.debug, this.broadswordGestureController?.debug);
+      this.viewmodelHost?.updateDebugHud(this.player);
       this.sceneSessionHost.render();
       return;
     }
@@ -248,17 +193,13 @@ export class Game {
       isPaused: false,
       isPlayerDead: this.combat.isPlayerDead,
     });
-    this.fishingRodView?.update(deltaSeconds, this.castingController?.state);
-    this.broadswordView?.update(deltaSeconds);
-    this.castingController?.update(deltaSeconds);
-    this.broadswordGestureController?.update(deltaSeconds);
+    this.viewmodelHost?.update(deltaSeconds);
     this.combat.update(deltaSeconds);
     this.survivalHost?.update(deltaSeconds, {
       paused: this.isPaused,
       equipmentPanelOpen: this.equipmentPanel?.isOpen,
       isPlayerDead: this.combat.isPlayerDead,
     });
-    this.updatePlayerTorchLight(deltaSeconds);
     this.progressionHost.update(deltaSeconds);
     this.interactions.updateHint();
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
@@ -271,7 +212,7 @@ export class Game {
     }
     this.wasKeyboardInteractHeld = keyboardInteractHeld;
 
-    this.hud.updateDebug(this.player, this.castingController?.debug, this.broadswordGestureController?.debug);
+    this.viewmodelHost?.updateDebugHud(this.player);
     this.feedback.update(deltaSeconds);
     this.sceneSessionHost.render();
     this.perfDebugPanel?.render();

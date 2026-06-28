@@ -324,14 +324,15 @@ for (const pond of waterBodies.filter((body) => body.fishable)) {
 
 
 const gameSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/Game.js', import.meta.url), 'utf8'));
+const firstPersonViewmodelHostSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/hosts/FirstPersonViewmodelHost.js', import.meta.url), 'utf8'));
 const interactionSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/Interactions.js', import.meta.url), 'utf8'));
 const castingSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/CastingController.js', import.meta.url), 'utf8'));
 const lureSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/LureProjectile.js', import.meta.url), 'utf8'));
 const linePhysicsSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/FishingLinePhysics.js', import.meta.url), 'utf8'));
 const physicalFishSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/PhysicalFishAngling.js', import.meta.url), 'utf8'));
 const tuningSource = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/game/fishing/CastingTuning.js', import.meta.url), 'utf8'));
-if (!gameSource.includes('gameState: this.gameState')) fail('Fishing invalid: FishingRodView does not receive GameState field tool equipment.');
-if (!gameSource.includes('new FishingRodView') || !gameSource.includes('new CastingController')) fail('Fishing invalid: Rod A1 view exists when equipped and cast controller exists checks failed.');
+if (!firstPersonViewmodelHostSource.includes('gameState: this.gameState')) fail('Fishing invalid: FishingRodView does not receive GameState field tool equipment.');
+if (!gameSource.includes('new FirstPersonViewmodelHost') || !firstPersonViewmodelHostSource.includes('new FishingRodView') || !firstPersonViewmodelHostSource.includes('new CastingController')) fail('Fishing invalid: Rod A1 view exists when equipped and cast controller exists checks failed.');
 if (interactionSource.includes("return this.startFishingTimedAction(interaction);")) fail('Fishing invalid: old proximity timer fishing remains primary while Rod A1 is equipped.');
 if (castingSource.includes('spawnRawFishPickupFromCast') || /FISH ON/i.test(castingSource)) fail('Fishing invalid: cast landing bypasses the physical fish loop or restores forbidden hook text.');
 if (!physicalFishSource.includes('spawnRawFishPickupAtPosition') || !physicalFishSource.includes("setState('liftingFromWater')")) fail('Fishing invalid: physical shore landing does not own successful fish pickup creation.');
