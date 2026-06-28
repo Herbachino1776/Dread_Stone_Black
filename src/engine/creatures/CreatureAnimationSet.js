@@ -30,7 +30,7 @@ function summarizeClips(clips = []) {
 }
 
 export class CreatureAnimationSet {
-  constructor({ config, rootGroup, materialProfile = null, onTrackLoaded = null } = {}) {
+  constructor({ config, rootGroup, materialProfile = null, onTrackLoaded = null, singleActorRoot = false } = {}) {
     this.config = config;
     this.rootGroup = rootGroup;
     this.materialProfile = materialProfile;
@@ -44,6 +44,9 @@ export class CreatureAnimationSet {
     this.missingStates = new Set();
     this.loadingStates = new Map();
     this.warnedFallbacks = new Set();
+    this.singleActorRoot = singleActorRoot;
+    this.actorRootTrack = null;
+    this.actorMixer = null;
   }
 
   get animationFiles() {
@@ -96,10 +99,12 @@ export class CreatureAnimationSet {
       groundOffset: scale.groundOffset,
       yOffset: scale.yOffset,
     }).then((model) => {
-      const track = this.createTrack(resolvedState, model);
+      const track = this.singleActorRoot
+        ? this.createSingleRootTrack(resolvedState, model)
+        : this.createTrack(resolvedState, model);
       this.tracks[resolvedState] = track;
-      this.mixers.push(track.mixer);
-      this.rootGroup.add(track.root);
+      if (!this.mixers.includes(track.mixer)) this.mixers.push(track.mixer);
+      if (track.root && !track.root.parent) this.rootGroup.add(track.root);
       this.onTrackLoaded?.(resolvedState, track);
       return track;
     }).finally(() => {
@@ -108,6 +113,74 @@ export class CreatureAnimationSet {
 
     this.loadingStates.set(resolvedState, loadPromise);
     return loadPromise;
+  }
+
+
+  createSingleRootTrack(state, { root, gltf, scale, box }) {
+    const clips = gltf.animations ?? [];
+    const clip = chooseClipForState(state, clips);
+    const clipNames = clips.map((candidate) => candidate.name || '(unnamed clip)');
+    const clipSummaries = summarizeClips(clips);
+
+    if (!this.actorRootTrack) {
+      root.name = `${this.config.id}-mobile-actor-model`;
+      root.visible = true;
+      root.rotation.y += this.config.scale?.rotationOffset ?? 0;
+      const materialSummary = this.materialProfile?.apply(root) ?? null;
+      this.actorMixer = new THREE.AnimationMixer(root);
+      const action = this.createActionForClip(state, clip);
+      const track = {
+        state,
+        root,
+        mixer: this.actorMixer,
+        action,
+        clip,
+        scale,
+        box,
+        materialSummary,
+        clipNames,
+        clipSummaries,
+        usesSharedActorRoot: true,
+      };
+      this.actorRootTrack = track;
+      return track;
+    }
+
+    this.disposeDetachedModelRoot(root);
+    return {
+      state,
+      root: this.actorRootTrack.root,
+      mixer: this.actorMixer,
+      action: this.createActionForClip(state, clip),
+      clip,
+      scale: this.actorRootTrack.scale ?? scale,
+      box: this.actorRootTrack.box ?? box,
+      materialSummary: this.actorRootTrack.materialSummary,
+      clipNames,
+      clipSummaries,
+      usesSharedActorRoot: true,
+      detachedSourceRootDisposed: true,
+    };
+  }
+
+  createActionForClip(state, clip) {
+    if (!clip || !this.actorMixer) return null;
+    const action = this.actorMixer.clipAction(clip, this.actorRootTrack?.root);
+    const oneShotStates = this.animationProfile.oneShotStates ?? DEFAULT_ONE_SHOT_STATES;
+    const isOneShot = oneShotStates.includes(state);
+    action.setLoop(isOneShot ? THREE.LoopOnce : THREE.LoopRepeat, isOneShot ? 1 : Infinity);
+    action.clampWhenFinished = isOneShot;
+    action.enabled = true;
+    return action;
+  }
+
+  disposeDetachedModelRoot(root) {
+    root?.traverse?.((child) => {
+      if (!child.isMesh) return;
+      child.geometry?.dispose?.();
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.filter(Boolean).forEach((material) => material.dispose?.());
+    });
   }
 
   createTrack(state, { root, gltf, scale, box }) {
@@ -158,9 +231,13 @@ export class CreatureAnimationSet {
     }
 
     const previousTrack = this.currentState ? this.tracks[this.currentState] : null;
-    Object.entries(this.tracks).forEach(([state, track]) => {
-      track.root.visible = state === resolvedState;
-    });
+    if (!this.singleActorRoot) {
+      Object.entries(this.tracks).forEach(([state, track]) => {
+        track.root.visible = state === resolvedState;
+      });
+    } else if (this.actorRootTrack?.root) {
+      this.actorRootTrack.root.visible = true;
+    }
 
     const fade = fadeSeconds ?? this.animationProfile.fadeDurations?.[requestedState] ?? this.animationProfile.defaultFadeSeconds ?? 0.12;
     if (previousTrack === nextTrack) {
@@ -194,7 +271,26 @@ export class CreatureAnimationSet {
   }
 
   getLoadedRootCount() {
-    return Object.keys(this.tracks).length;
+    return this.singleActorRoot && this.actorRootTrack ? 1 : Object.keys(this.tracks).length;
+  }
+
+  getLiveAnimationRootCount() {
+    return this.getLoadedRootCount();
+  }
+
+  getLiveSkinnedRootCount() {
+    const root = this.singleActorRoot ? this.actorRootTrack?.root : this.rootGroup;
+    let count = 0;
+    root?.traverse?.((child) => { if (child.isSkinnedMesh) count += 1; });
+    return count;
+  }
+
+  hasExtraStateRootsAlive() {
+    return this.singleActorRoot ? false : Object.keys(this.tracks).length > 1;
+  }
+
+  getActionCount() {
+    return Object.values(this.tracks).filter((track) => track.action).length;
   }
 
   getDuration(state = this.currentState, fallback = 0) {
@@ -213,7 +309,7 @@ export class CreatureAnimationSet {
   dispose() {
     Object.values(this.tracks).forEach((track) => {
       track.action?.stop();
-      this.rootGroup.remove(track.root);
+      if (!this.singleActorRoot || track === this.actorRootTrack) this.rootGroup.remove(track.root);
     });
     this.tracks = {};
     this.mixers = [];
@@ -221,5 +317,7 @@ export class CreatureAnimationSet {
     this.currentRequestedState = null;
     this.previousFade = null;
     this.lastActiveMixerCount = 0;
+    this.actorRootTrack = null;
+    this.actorMixer = null;
   }
 }

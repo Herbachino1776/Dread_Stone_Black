@@ -17,7 +17,7 @@ export const MOBILE_ENEMY_BUDGETS = Object.freeze({
   normalMobileEnemy: Object.freeze({
     maxVisibleActorRootsPerEnemy: 1,
     maxActiveMixersPerAnimatedEnemy: 1,
-    maxLoadedModelRootsPerEnemy: 4,
+    maxLoadedModelRootsPerEnemy: 1,
     allowAllAnimationPreload: false,
     requiresStagedLoading: true,
     aiTickSeconds: 0.1,
@@ -28,7 +28,7 @@ export const MOBILE_ENEMY_BUDGETS = Object.freeze({
     animationStates: FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES,
     maxVisibleActorRootsPerEnemy: 1,
     maxActiveMixersPerAnimatedEnemy: 1,
-    maxLoadedModelRootsPerEnemy: FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES.length,
+    maxLoadedModelRootsPerEnemy: 1,
     allowAllAnimationPreload: false,
     requiresStagedLoading: true,
     loadQueueConcurrency: 1,

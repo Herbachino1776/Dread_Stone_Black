@@ -242,7 +242,10 @@ assert.deepEqual(Object.keys(NECK_MAN_ANIMATION_FILES).filter((state) => FOLSOM_
 assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.requiresStagedLoading, true, 'Folsom Neckman mobile budget requires staged loading.');
 assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.loadQueueConcurrency, 1, 'Folsom Neckman mobile budget prevents simultaneous three-enemy GLB warmup.');
 assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.allowAllAnimationPreload, false, 'Folsom Neckman mobile budget forbids all-animation preload.');
+assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.maxLoadedModelRootsPerEnemy, 1, 'Folsom Neckman mobile budget allows only one live animation/model root per enemy.');
+assert.equal(MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.maxActiveMixersPerAnimatedEnemy, 1, 'Folsom Neckman mobile budget allows only one active mixer per enemy.');
 assert.equal(MOBILE_ENEMY_BUDGETS.normalMobileEnemy.allowAllAnimationPreload, false, 'Normal mobile enemies explicitly opt out of all-animation preload by default.');
+assert.equal(MOBILE_ENEMY_BUDGETS.normalMobileEnemy.maxLoadedModelRootsPerEnemy, 1, 'Normal mobile enemies cannot keep separate live roots per animation state.');
 
 assert.deepEqual(folsomBloodFeudSpawns.map((spawn) => spawn.id).sort(), ['folsom_neckman_feud_01', 'folsom_neckman_feud_02', 'folsom_neckman_feud_03'], 'Folsom blood-feud Neckman spawn ids stay authored.');
 folsomBloodFeudSpawns.forEach((spawn) => {
@@ -266,6 +269,8 @@ const folsomMobileSummary = folsomCreatureRuntime.blackGrassFactionManager?.getM
 assert.ok(folsomMobileSummary, 'Folsom blood-feud exposes explicit mobile enemy lifecycle/load-state reporting.');
 assert.equal(folsomMobileSummary.enemyAiTickRate, '10hz fixed', 'Folsom Neckman uses fixed-tick mobile AI reporting.');
 assert.equal(folsomMobileSummary.spawnedNeckmen, 0, 'Validate-only Folsom runtime does not spawn/load/animate Neckman actors.');
+assert.equal(folsomMobileSummary.loadedAnimationRoots, 0, 'Validate-only Folsom runtime reports zero live animation roots before actors load.');
+assert.equal(folsomMobileSummary.extraStateRootsAlive, false, 'Folsom mobile runtime diagnostics expose no hidden per-state animation roots.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.collisionAvailable, true, 'Folsom blood-feud validation reached CreatureWorldRuntime with collision available.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.found, 3, 'CreatureWorldRuntime found 3 Folsom blood-feud authored spawns.');
 assert.equal(folsomCreatureRuntime.bloodFeudSpawnDebug?.spawned, 3, 'CreatureWorldRuntime produced 3 Folsom blood-feud anchors.');
