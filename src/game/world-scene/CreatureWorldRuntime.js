@@ -290,12 +290,13 @@ export class CreatureWorldRuntime {
     return {
       activeEnemies: enemies.filter((enemy) => enemy.isAlive && !enemy.isRemoved).length,
       activeNeckmen: enemies.filter((enemy) => enemy.species === 'neck_man' && enemy.isAlive && !enemy.isRemoved).length,
-      activeAnimationMixers: enemies.filter((enemy) => enemy.actor?.isAnimationActive?.()).length,
-      loadedCreatureAnimationRoots: enemies.reduce((count, enemy) => count + (enemy.actor?.animationSet?.loadedRootCount ?? 0), 0),
+      activeAnimationMixers: enemies.reduce((count, enemy) => count + (enemy.animation?.getActiveMixerCount?.() ?? enemy.actor?.animationSet?.getActiveMixerCount?.() ?? 0), 0),
+      loadedCreatureAnimationRoots: enemies.reduce((count, enemy) => count + (enemy.animation?.getLoadedRootCount?.() ?? enemy.actor?.animationSet?.getLoadedRootCount?.() ?? 0), 0),
       neckmanStateCounts: this.blackGrassFactionManager?.getNeckmanStateCounts?.() ?? [],
       generatedEnemyRuntime: this.generatedEnemyRuntime,
       encounterMode: this.blackGrassFactionManager?.encounterMode ?? null,
       folsomBloodFeud: this.bloodFeudSpawnDebug,
+      mobileEnemyRuntime: this.blackGrassFactionManager?.getMobileRuntimeSummary?.() ?? null,
     };
   }
 

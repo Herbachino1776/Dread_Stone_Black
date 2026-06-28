@@ -11,6 +11,12 @@ import {
   NECK_MAN_ANIMATION_FILES,
   NECK_MAN_FACTION_STATE_TO_ANIMATION,
 } from './creatures/neckMan.config.js';
+import {
+  MOBILE_ENEMY_BUDGETS,
+  FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES,
+  createMobileEnemyLifecycle,
+  assertMobileEnemyBudget,
+} from './creatures/MobileEnemyRuntimeContract.js';
 
 export const BLACK_GRASS_SHEEP_DEMON_ANIMATION_ASSETS = SHEEP_DEMON_ANIMATION_FILES;
 export const BLACK_GRASS_NECK_MAN_ANIMATION_ASSETS = NECK_MAN_ANIMATION_FILES;
@@ -245,11 +251,11 @@ const FOLSOM_BLOOD_FEUD_STUCK_RETARGET_SECONDS = 0.55;
 const ENEMY_PERSONAL_SPACE = 1.15;
 const ENEMY_SEPARATION_STRENGTH = 0.32;
 const FOLSOM_BLOOD_FEUD_FOOT_LIFT = 0.02;
-const FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS = 0.1;
+const FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS = MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.aiTickSeconds;
 const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_SECONDS = 0.18;
 const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_DISTANCE = 0.18;
 const FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE = 1.65;
-const FOLSOM_BLOOD_FEUD_ANIMATION_STATES = Object.freeze(['idle', 'walk', 'punch_right', 'die']);
+const FOLSOM_BLOOD_FEUD_ANIMATION_STATES = FOLSOM_NECKMAN_MOBILE_ANIMATION_STATES;
 const FOLSOM_BLOOD_FEUD_COMBAT_SPACING = Object.freeze({
   desiredCombatDistance: 0.9,
   tooCloseDistance: 0.45,
@@ -503,6 +509,8 @@ class BlackGrassFactionEnemy {
     this.spawnAnchor = spawnAnchor;
     this.actor = null;
     this.group = null;
+    this.lifecycle = createMobileEnemyLifecycle('spawned', { spawnedAt: performance?.now?.() ?? Date.now() });
+    this.loadFailure = null;
     this.animation = null;
     this.behaviorState = null;
     this.health = this.template.maxHealth;
@@ -566,6 +574,8 @@ class BlackGrassFactionEnemy {
   }
 
   load() {
+    this.lifecycle.state = 'loading';
+    this.lifecycle.loadStartedAt = performance?.now?.() ?? Date.now();
     const idleState = this.resolveStateAnimation('spawn');
     const primaryStates = new Set([
       idleState,
@@ -584,6 +594,7 @@ class BlackGrassFactionEnemy {
     const allStates = isFolsomFeudNeckman
       ? FOLSOM_BLOOD_FEUD_ANIMATION_STATES.filter((state) => this.template.assets[state])
       : Object.keys(this.template.assets);
+    assertMobileEnemyBudget({ encounterMode: this.encounterMode, species: this.species, animationStates: allStates, stagedLoading: isFolsomFeudNeckman });
     const priorityRemaining = allStates.filter((candidate) => candidate !== idleState && primaryStates.has(candidate));
     const optionalRemaining = isFolsomFeudNeckman
       ? allStates.filter((candidate) => candidate !== idleState && !primaryStates.has(candidate))
@@ -597,7 +608,7 @@ class BlackGrassFactionEnemy {
       config: this.creatureConfigOverride,
     });
 
-    return this.actor.load({ initialStates: [idleState], lazyStates: [...priorityRemaining, ...optionalRemaining], lazyLoadDelayMs: isFolsomFeudNeckman ? 90 : 0 })
+    return this.actor.load({ initialStates: [idleState], lazyStates: [...priorityRemaining, ...optionalRemaining], lazyLoadDelayMs: isFolsomFeudNeckman ? MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.loadStaggerMs : 0 })
       .then((actor) => {
         this.group = actor.group;
         this.group.visible = true;
@@ -622,6 +633,7 @@ class BlackGrassFactionEnemy {
           freeForAllFaction: this.encounterMode === 'folsom_neckman_blood_feud',
           groundDiagnostics: this.encounterMode === 'folsom_neckman_blood_feud' ? this.sampleCurrentGroundY(this.spawnAnchor.position) : undefined,
           combatSpacingProfile: this.encounterMode === 'folsom_neckman_blood_feud' ? 'folsom_blood_feud_close_combat' : undefined,
+          mobileEnemyLifecycle: this.lifecycle,
         };
         if (this.encounterMode === 'folsom_neckman_blood_feud') this.applyDynamicGrounding(this.group.position, { force: true });
 
@@ -631,6 +643,12 @@ class BlackGrassFactionEnemy {
         this.applyEncounterPerformanceTreatment();
         this.addDevMarker();
         this.isLoaded = true;
+        const now = performance?.now?.() ?? Date.now();
+        this.lifecycle.state = 'active';
+        this.lifecycle.loadedAt = now;
+        this.lifecycle.visibleAt = now;
+        this.lifecycle.activeAt = now;
+        this.lifecycle.loadedStates = this.animation?.getLoadedStates?.() ?? [];
         this.refreshAnimationUserData();
         this.logLoadDiagnostics('idle-visible');
         this.onLoaded?.(this);
@@ -646,6 +664,10 @@ class BlackGrassFactionEnemy {
             error,
           });
         }
+        this.loadFailure = { message: error?.message ?? String(error), path: this.template.assets?.[idleState] ?? null, state: idleState };
+        this.lifecycle.state = 'failed';
+        this.lifecycle.failedAt = performance?.now?.() ?? Date.now();
+        this.lifecycle.failure = this.loadFailure;
         console.warn(`Black Grass Temple ${this.template.displayName} failed to load idle model; faction spawn skipped.`, error);
       });
   }
@@ -751,6 +773,8 @@ class BlackGrassFactionEnemy {
     this.group.userData.visibleAnimationRootCount = Object.values(tracks).filter((track) => track.root.visible).length;
     this.group.userData.loadedCreatureAnimationRoots = this.animation.getLoadedRootCount?.() ?? Object.keys(tracks).length;
     this.group.userData.activeAnimationMixerCount = this.animation.getActiveMixerCount?.() ?? 0;
+    this.lifecycle.loadedStates = this.animation.getLoadedStates?.() ?? [];
+    this.group.userData.mobileEnemyLifecycle = this.lifecycle;
     this.group.userData.loadedCreatureAnimationStateCount = Object.keys(tracks).length;
     this.group.userData.boundingBoxSize = boxSizeSummary(this.group);
     this.group.userData.worldPosition = vectorSummary(this.group.getWorldPosition(new THREE.Vector3()));
@@ -809,7 +833,17 @@ class BlackGrassFactionEnemy {
     this.steeringProbeTimer = Math.max(0, this.steeringProbeTimer - deltaSeconds);
     if (this.encounterMode === 'folsom_neckman_blood_feud') this.bloodFeudGroundElapsed += deltaSeconds;
     if (aiTickAllowed) this.decayBlockedSegmentCooldowns(deltaSeconds);
-    if (!this.group || this.isRemoved) return;
+    if (!this.group || this.isRemoved || this.lifecycle.state === 'loading' || this.lifecycle.state === 'pendingLoad') {
+      this.skippedAiTicks = (this.skippedAiTicks ?? 0) + 1;
+      return;
+    }
+
+    if (this.encounterMode === 'folsom_neckman_blood_feud' && !aiTickAllowed) {
+      this.skippedAiTicks = (this.skippedAiTicks ?? 0) + 1;
+      this.group.userData.mobileAiSkipped = true;
+      this.group.userData.mobileAiTickSeconds = FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS;
+      return;
+    }
 
     if (generatedRuntime && !aiTickAllowed) {
       this.group.userData.generatedAiLod = updateTier;
@@ -1662,6 +1696,8 @@ class BlackGrassFactionEnemy {
 
   hideCorpse() {
     if (!this.group || this.isRemoved) return;
+    this.lifecycle.state = 'disposed';
+    this.lifecycle.disposedAt = performance?.now?.() ?? Date.now();
     this.group.visible = false;
     this.group.userData.isRemoved = true;
     this.scene.remove(this.group);
@@ -2194,6 +2230,12 @@ export class BlackGrassTempleFactionManager {
     this.encounterMode = encounterMode;
     this.respawnCooldownSeconds = respawnCooldownSeconds;
     this.bloodFeudRespawnTimer = null;
+    this.mobileLoadQueue = [];
+    this.mobileLoadQueueActive = 0;
+    this.mobileLoadQueueWarmupComplete = false;
+    this.mobileAiTickElapsed = 0;
+    this.mobileAiSkippedTicks = 0;
+    this.mobileAiAllowedTicks = 0;
     this.encounterZones = this.createEncounterZones(encounterZones);
     this.maxActiveByFaction = MAX_ACTIVE_BY_FACTION;
     this.userData = {
@@ -2442,15 +2484,47 @@ export class BlackGrassTempleFactionManager {
         });
         this.enemies.push(enemy);
         spawnedCount += 1;
-        enemy.load();
+        if (this.encounterMode === 'folsom_neckman_blood_feud') {
+          enemy.lifecycle.state = 'pendingLoad';
+          this.mobileLoadQueue.push(enemy);
+        } else {
+          enemy.load();
+        }
       });
+    if (this.encounterMode === 'folsom_neckman_blood_feud') this.pumpMobileLoadQueue();
     this.initialWaveSpawned = true;
     if (IS_DEV && this.encounterMode === 'folsom_neckman_blood_feud') {
       console.info(`[FolsomBloodFeud] spawned initial neckmen: ${spawnedCount}`);
     }
   }
 
+  pumpMobileLoadQueue() {
+    if (this.encounterMode !== 'folsom_neckman_blood_feud') return;
+    const budget = MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud;
+    if (this.mobileLoadQueueActive >= budget.loadQueueConcurrency) return;
+    const enemy = this.mobileLoadQueue.shift();
+    if (!enemy) {
+      this.mobileLoadQueueWarmupComplete = this.enemies.length > 0 && this.enemies.every((candidate) => ['active', 'failed', 'disposed'].includes(candidate.lifecycle?.state));
+      return;
+    }
+    this.mobileLoadQueueActive += 1;
+    enemy.load().finally(() => {
+      this.mobileLoadQueueActive = Math.max(0, this.mobileLoadQueueActive - 1);
+      setTimeout(() => this.pumpMobileLoadQueue(), budget.loadStaggerMs);
+    });
+  }
+
   update(deltaSeconds, playerPosition, options = {}) {
+    this.pumpMobileLoadQueue();
+    const isMobileFolsomFeud = this.encounterMode === 'folsom_neckman_blood_feud';
+    this.mobileAiTickElapsed += isMobileFolsomFeud ? deltaSeconds : 0;
+    const mobileAiTickAllowed = !isMobileFolsomFeud || this.mobileAiTickElapsed >= FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS;
+    if (mobileAiTickAllowed && isMobileFolsomFeud) {
+      this.mobileAiTickElapsed = 0;
+      this.mobileAiAllowedTicks += 1;
+    } else if (isMobileFolsomFeud) {
+      this.mobileAiSkippedTicks += 1;
+    }
     const generatedRuntime = options.generatedRuntime ?? null;
     const director = this.enableBattleDirector
       ? this.updateBattleDirector(deltaSeconds, playerPosition)
@@ -2460,7 +2534,7 @@ export class BlackGrassTempleFactionManager {
     const lodEnabled = Boolean(generatedRuntime && policy?.generatedAiLod);
     this.enemies.forEach((enemy, index) => {
       if (!lodEnabled || !enemy.group || enemy.isRemoved || !enemy.isAlive) {
-        enemy.update(deltaSeconds, baseContext);
+        enemy.update(deltaSeconds, { ...baseContext, aiTickAllowed: mobileAiTickAllowed });
         return;
       }
       const distance = playerPosition ? horizontalDistance(enemy.group.position, playerPosition) : Infinity;
@@ -2474,7 +2548,7 @@ export class BlackGrassTempleFactionManager {
       else if (distance <= policy.aiMidRadius) updateTier = 'mid';
       const interval = updateTier === 'near' ? 0 : updateTier === 'mid' ? 0.16 : 0.5;
       enemy.generatedAiElapsed = (enemy.generatedAiElapsed ?? (index % 3) * 0.055) + deltaSeconds;
-      const aiTickAllowed = updateTier === 'near' || enemy.generatedAiElapsed >= interval;
+      const aiTickAllowed = mobileAiTickAllowed && (updateTier === 'near' || enemy.generatedAiElapsed >= interval);
       if (aiTickAllowed) enemy.generatedAiElapsed = 0;
       enemy.update(deltaSeconds, { ...baseContext, updateTier, aiTickAllowed });
     });
@@ -2547,8 +2621,14 @@ export class BlackGrassTempleFactionManager {
         encounterMode: this.encounterMode,
       });
       this.enemies.push(enemy);
-      enemy.load();
+      if (this.encounterMode === 'folsom_neckman_blood_feud') {
+        enemy.lifecycle.state = 'pendingLoad';
+        this.mobileLoadQueue.push(enemy);
+      } else {
+        enemy.load();
+      }
     });
+    this.pumpMobileLoadQueue();
     this.bloodFeudRespawnTimer = null;
     this.enemies.forEach((enemy) => { enemy.forceFolsomBloodFeudRetarget?.(); });
   }
@@ -2657,6 +2737,33 @@ export class BlackGrassTempleFactionManager {
         enemy.retargetElapsed = RETARGET_INTERVAL_SECONDS;
       }
     });
+  }
+
+  getMobileRuntimeSummary() {
+    const enemies = this.enemies ?? [];
+    const byState = (state, species = null) => enemies.filter((enemy) => (!species || enemy.species === species) && enemy.lifecycle?.state === state).length;
+    const neckmen = enemies.filter((enemy) => enemy.species === 'neck_man');
+    return {
+      encounterMode: this.encounterMode,
+      warmupComplete: this.encounterMode === 'folsom_neckman_blood_feud' ? this.mobileLoadQueueWarmupComplete : true,
+      queueDepth: this.mobileLoadQueue.length,
+      queueActive: this.mobileLoadQueueActive,
+      enemyAiTickRate: this.encounterMode === 'folsom_neckman_blood_feud' ? `${Math.round(1 / FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS)}hz fixed` : 'legacy faction-war variable',
+      skippedAiTicks: this.mobileAiSkippedTicks,
+      allowedAiTicks: this.mobileAiAllowedTicks,
+      spawnedNeckmen: neckmen.length,
+      pendingLoadNeckmen: byState('pendingLoad', 'neck_man'),
+      loadingNeckmen: byState('loading', 'neck_man'),
+      loadedNeckmen: neckmen.filter((enemy) => ['loaded', 'visible', 'active'].includes(enemy.lifecycle?.state) || enemy.isLoaded).length,
+      visibleNeckmen: neckmen.filter((enemy) => enemy.group?.visible).length,
+      failedNeckmen: byState('failed', 'neck_man'),
+      sleepingEnemies: byState('sleeping'),
+      loadedActorRoots: enemies.filter((enemy) => enemy.actor?.group).length,
+      loadedAnimationRoots: enemies.reduce((sum, enemy) => sum + (enemy.animation?.getLoadedRootCount?.() ?? 0), 0),
+      activeMixers: enemies.reduce((sum, enemy) => sum + (enemy.animation?.getActiveMixerCount?.() ?? 0), 0),
+      loadFailures: enemies.map((enemy) => enemy.loadFailure).filter(Boolean),
+      loadedStatesPerEnemy: neckmen.map((enemy) => ({ id: enemy.id, lifecycle: enemy.lifecycle?.state, states: enemy.animation?.getLoadedStates?.() ?? enemy.lifecycle?.loadedStates ?? [], failure: enemy.loadFailure ?? null })),
+    };
   }
 
   getLivingEnemies(species = null) {

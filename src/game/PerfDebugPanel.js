@@ -7,7 +7,8 @@ export class PerfDebugPanel {
   constructor({ game }) {
     this.game = game;
     this.samples = [];
-    this.lastTime = performance.now();
+    this.startedAt = performance.now();
+    this.lastTime = this.startedAt;
     this.lastRender = 0;
     this.expanded = false;
     this.toggles = { neckmen: true, foliage: true, shadows: true, gore: true, water: true, skybox: true, hud: true, lowDpr: false };
@@ -112,7 +113,9 @@ export class PerfDebugPanel {
     const info = this.renderer?.info;
     const size = new THREE.Vector2(); this.renderer?.getDrawingBufferSize?.(size);
     const avgMs = this.samples.reduce((s, x) => s + x.ms, 0) / Math.max(1, this.samples.length);
-    return { currentFps: 1000 / (this.samples.at(-1)?.ms ?? 16.7), avgFps: 1000 / avgMs, worstMs: Math.max(0, ...this.samples.map((x) => x.ms)), calls: info?.render?.calls ?? 0, tris: info?.render?.triangles ?? 0, geoms: info?.memory?.geometries ?? 0, textures: info?.memory?.textures ?? 0, objects, meshes, skinned, transparent, materials: materials.size, lights, shadows, activeEnemies: creatureSummary.activeEnemies ?? activeEnemies, activeNeckmen: creatureSummary.activeNeckmen ?? activeNeckmen, activeAnimationMixers: creatureSummary.activeAnimationMixers ?? activeAnimationMixers, loadedCreatureAnimationRoots: creatureSummary.loadedCreatureAnimationRoots ?? loadedCreatureAnimationRoots, neckmanStateCounts: creatureSummary.neckmanStateCounts ?? neckmanStateCounts, folsomBloodFeud: creatureSummary.folsomBloodFeud ?? null, goreCount: (gore.activeParticles ?? 0) + (gore.decals ?? 0) + (gore.corpses ?? 0) + (gore.wounds ?? 0), dpr: this.renderer?.getPixelRatio?.() ?? window.devicePixelRatio, width: size.x, height: size.y, location: this.locationId ?? this.dungeon?.area ?? 'unknown' };
+    const sessionAgeSeconds = (performance.now() - this.startedAt) / 1000;
+    const mobileEnemyRuntime = creatureSummary.mobileEnemyRuntime ?? null;
+    return { sessionAgeSeconds, mobileEnemyRuntime, currentFps: 1000 / (this.samples.at(-1)?.ms ?? 16.7), avgFps: 1000 / avgMs, worstMs: Math.max(0, ...this.samples.map((x) => x.ms)), calls: info?.render?.calls ?? 0, tris: info?.render?.triangles ?? 0, geoms: info?.memory?.geometries ?? 0, textures: info?.memory?.textures ?? 0, objects, meshes, skinned, transparent, materials: materials.size, lights, shadows, activeEnemies: creatureSummary.activeEnemies ?? activeEnemies, activeNeckmen: creatureSummary.activeNeckmen ?? activeNeckmen, activeAnimationMixers: creatureSummary.activeAnimationMixers ?? activeAnimationMixers, loadedCreatureAnimationRoots: creatureSummary.loadedCreatureAnimationRoots ?? loadedCreatureAnimationRoots, neckmanStateCounts: creatureSummary.neckmanStateCounts ?? neckmanStateCounts, folsomBloodFeud: creatureSummary.folsomBloodFeud ?? null, goreCount: (gore.activeParticles ?? 0) + (gore.decals ?? 0) + (gore.corpses ?? 0) + (gore.wounds ?? 0), dpr: this.renderer?.getPixelRatio?.() ?? window.devicePixelRatio, width: size.x, height: size.y, location: this.locationId ?? this.dungeon?.area ?? 'unknown' };
   }
 
   render(force = false) {
@@ -122,7 +125,9 @@ export class PerfDebugPanel {
     const bloodFeudLine = m.folsomBloodFeud
       ? `found ${m.folsomBloodFeud.found} / spawned ${m.folsomBloodFeud.spawned} / skipped ${m.folsomBloodFeud.skipped}${m.folsomBloodFeud.skipReasons?.length ? ` / reasons ${m.folsomBloodFeud.skipReasons.map((r) => `${r.id}:${r.reason}`).join(',')}` : ''}`
       : 'n/a';
-    this.lastReport = `Location: ${m.location}\nFPS: ${m.currentFps.toFixed(0)} / avg ${m.avgFps.toFixed(0)} / worst ${m.worstMs.toFixed(1)}ms\nRenderer: ${m.calls} calls / ${m.tris} tris / ${m.geoms} geoms / ${m.textures} textures\nScene: ${m.objects} objects / ${m.meshes} meshes / ${m.skinned} skinned / ${m.transparent} transparent / ${m.materials} materials / ${m.lights} lights / ${m.shadows} shadows\nGameplay: ${m.activeEnemies} enemies / ${m.activeNeckmen} neckmen / ${m.goreCount} gore\nCreature anim: ${m.activeAnimationMixers} active mixers / ${m.loadedCreatureAnimationRoots} loaded roots\nNeckman states: ${m.neckmanStateCounts.length ? m.neckmanStateCounts.join(', ') : 'none'}\nFolsom blood feud: ${bloodFeudLine}\nDPR: ${m.dpr.toFixed(2)}  Canvas: ${m.width}x${m.height}\nToggles: ${toggleLine}`;
+    const mobile = m.mobileEnemyRuntime;
+    const mobileLine = mobile ? `Session: ${m.sessionAgeSeconds.toFixed(1)}s / warmup ${mobile.warmupComplete ? 'yes' : 'no'} / AI ${mobile.enemyAiTickRate} / skipped ${mobile.skippedAiTicks}\nNeckmen lifecycle: spawned ${mobile.spawnedNeckmen} / pending ${mobile.pendingLoadNeckmen} / loading ${mobile.loadingNeckmen} / loaded ${mobile.loadedNeckmen} / visible ${mobile.visibleNeckmen} / failed ${mobile.failedNeckmen} / sleeping ${mobile.sleepingEnemies}\nEnemy roots: actors ${mobile.loadedActorRoots} / anim roots ${mobile.loadedAnimationRoots} / active mixers ${mobile.activeMixers}\nLoaded states: ${mobile.loadedStatesPerEnemy?.length ? mobile.loadedStatesPerEnemy.map((e) => `${e.id}:${e.lifecycle}:${(e.states ?? []).join('|') || 'none'}${e.failure ? ` fail=${e.failure.path}:${e.failure.message}` : ''}`).join(', ') : 'none'}\n` : `Session: ${m.sessionAgeSeconds.toFixed(1)}s / mobile enemy runtime n/a\n`;
+    this.lastReport = `Location: ${m.location}\n${mobileLine}FPS: ${m.currentFps.toFixed(0)} / avg ${m.avgFps.toFixed(0)} / worst ${m.worstMs.toFixed(1)}ms\nRenderer: ${m.calls} calls / ${m.tris} tris / ${m.geoms} geoms / ${m.textures} textures\nScene: ${m.objects} objects / ${m.meshes} meshes / ${m.skinned} skinned / ${m.transparent} transparent / ${m.materials} materials / ${m.lights} lights / ${m.shadows} shadows\nGameplay: ${m.activeEnemies} enemies / ${m.activeNeckmen} neckmen / ${m.goreCount} gore\nCreature anim: ${m.activeAnimationMixers} active mixers / ${m.loadedCreatureAnimationRoots} loaded roots\nNeckman states: ${m.neckmanStateCounts.length ? m.neckmanStateCounts.join(', ') : 'none'}\nFolsom blood feud: ${bloodFeudLine}\nDPR: ${m.dpr.toFixed(2)}  Canvas: ${m.width}x${m.height}\nToggles: ${toggleLine}`;
     this.reportEl.textContent = this.lastReport;
   }
 
