@@ -281,6 +281,9 @@ const BLOCKED_TARGET_REPATH_SECONDS = 1.7;
 const BLOCKED_SEGMENT_COOLDOWN_SECONDS = 3.0;
 const FOLSOM_BLOOD_FEUD_IDLE_RETARGET_SECONDS = 0.18;
 const FOLSOM_BLOOD_FEUD_STUCK_RETARGET_SECONDS = 0.55;
+const FOLSOM_BLOOD_FEUD_TARGET_SCAN_SECONDS = 0.33;
+const FOLSOM_BLOOD_FEUD_TARGET_HOLD_SECONDS = 1.35;
+const FOLSOM_BLOOD_FEUD_TARGET_LOSE_RANGE = 64;
 const ENEMY_PERSONAL_SPACE = 1.15;
 const ENEMY_SEPARATION_STRENGTH = 0.32;
 const FOLSOM_BLOOD_FEUD_FOOT_LIFT = 0.02;
@@ -1013,14 +1016,8 @@ class BlackGrassFactionEnemy {
       this.bloodFeudNoTargetElapsed = 0;
       return;
     }
-    const livingFeudNeckmen = context.enemies.filter((enemy) => (
-      enemy?.isAlive
-      && enemy !== this
-      && enemy.encounterMode === this.encounterMode
-      && enemy.species === this.species
-      && enemy.group
-    ));
-    if (livingFeudNeckmen.length <= 0) {
+    const livingFeudCount = context.folsomBloodFeudTargeting?.candidates?.length ?? 0;
+    if (livingFeudCount <= 1) {
       this.bloodFeudNoTargetElapsed = 0;
       return;
     }
@@ -1064,6 +1061,7 @@ class BlackGrassFactionEnemy {
   isTargetStillValid(context) {
     if (this.currentTarget?.type === 'enemy') {
       const enemy = this.currentTarget.enemy;
+      if (this.encounterMode === 'folsom_neckman_blood_feud') return this.isFolsomBloodFeudTargetStillValid(enemy);
       return enemy?.isAlive && this.getOpposingAwareness(enemy, context).tier !== 'none';
     }
     if (this.currentTarget?.type === 'player') {
@@ -1077,6 +1075,10 @@ class BlackGrassFactionEnemy {
 
   selectTarget(context) {
     const previousTargetId = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy?.id : null;
+    if (this.encounterMode === 'folsom_neckman_blood_feud') {
+      this.selectFolsomBloodFeudTarget(context, previousTargetId);
+      return;
+    }
     if (this.targetLockTimer > 0 && this.isTargetStillValid(context)) {
       this.group.userData.targetLockRemaining = Number(this.targetLockTimer.toFixed(2));
       return;
@@ -1117,6 +1119,55 @@ class BlackGrassFactionEnemy {
     this.group.userData.awarenessTier = 'none';
   }
 
+  isFolsomBloodFeudTargetStillValid(enemy) {
+    if (!enemy?.isAlive || !enemy.group || enemy === this || enemy.encounterMode !== this.encounterMode || enemy.species !== this.species) return false;
+    if (!this.group) return false;
+    return horizontalDistance(this.group.position, enemy.group.position) <= FOLSOM_BLOOD_FEUD_TARGET_LOSE_RANGE;
+  }
+
+  selectFolsomBloodFeudTarget(context, previousTargetId = null) {
+    const cache = context?.folsomBloodFeudTargeting;
+    if (this.targetLockTimer > 0 && this.isTargetStillValid(context)) {
+      this.group.userData.targetLockRemaining = Number(this.targetLockTimer.toFixed(2));
+      if (cache?.perfStats) cache.perfStats.targetCacheReuses += 1;
+      return;
+    }
+    const candidates = cache?.candidates ?? context?.enemies ?? [];
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (let i = 0; i < candidates.length; i += 1) {
+      const enemy = candidates[i];
+      if (enemy === this || !this.isFolsomBloodFeudTargetStillValid(enemy)) continue;
+      const distance = horizontalDistance(this.group.position, enemy.group.position);
+      if (distance < nearestDistance) {
+        nearest = enemy;
+        nearestDistance = distance;
+      }
+    }
+    if (nearest) {
+      this.awarenessTier = nearestDistance <= this.template.combatEngageDistance ? 'melee' : 'combat';
+      this.noOpposingTargetElapsed = 0;
+      this.currentTarget = { type: 'enemy', enemy: nearest };
+      if (previousTargetId !== nearest.id) {
+        this.targetLockTimer = FOLSOM_BLOOD_FEUD_TARGET_HOLD_SECONDS;
+        if (cache?.perfStats) cache.perfStats.targetSwitches += 1;
+        this.awarenessReactionDelay = 0.06;
+        this.combatManeuverTimer = 0;
+      }
+      this.group.userData.targetType = 'folsom_blood_feud';
+      this.group.userData.targetId = nearest.id;
+      this.group.userData.awarenessTier = this.awarenessTier;
+      this.group.userData.roomPathToEnemy = [];
+      return;
+    }
+    this.currentTarget = null;
+    this.targetLockTimer = 0;
+    this.awarenessTier = 'none';
+    this.group.userData.targetType = 'patrol';
+    this.group.userData.targetId = null;
+    this.group.userData.awarenessTier = 'none';
+  }
+
   shouldTargetPlayer(context, opposingEnemy) {
     if (this.encounterMode === 'folsom_neckman_blood_feud') return false;
     if (!context.playerPosition || !this.group) return false;
@@ -1131,6 +1182,7 @@ class BlackGrassFactionEnemy {
   }
 
   findNearestOpposingEnemy(context) {
+    if (this.encounterMode === 'folsom_neckman_blood_feud') return this.findNearestFolsomBloodFeudEnemy(context);
     if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.targetScans += 1;
     let nearest = null;
     let nearestDistance = Infinity;
@@ -1150,6 +1202,27 @@ class BlackGrassFactionEnemy {
     this.awarenessTier = nearestAwareness?.tier ?? 'none';
     this.group.userData.awarenessTier = this.awarenessTier;
     this.group.userData.roomPathToEnemy = nearestAwareness?.roomPath ?? [];
+    return nearest;
+  }
+
+  findNearestFolsomBloodFeudEnemy(context) {
+    const candidates = context?.folsomBloodFeudTargeting?.candidates ?? context?.enemies ?? [];
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (let i = 0; i < candidates.length; i += 1) {
+      const enemy = candidates[i];
+      if (enemy === this || !this.isFolsomBloodFeudTargetStillValid(enemy)) continue;
+      const distance = horizontalDistance(this.group.position, enemy.group.position);
+      if (distance < nearestDistance) {
+        nearest = enemy;
+        nearestDistance = distance;
+      }
+    }
+    this.awarenessTier = nearest ? (nearestDistance <= this.template.combatEngageDistance ? 'melee' : 'combat') : 'none';
+    if (this.group) {
+      this.group.userData.awarenessTier = this.awarenessTier;
+      this.group.userData.roomPathToEnemy = [];
+    }
     return nearest;
   }
 
@@ -2314,6 +2387,7 @@ export class BlackGrassTempleFactionManager {
     this.mobileAiTickElapsed = 0;
     this.mobileAiSkippedTicks = 0;
     this.mobileAiAllowedTicks = 0;
+    this.folsomBloodFeudTargeting = this.createFolsomBloodFeudTargetingCache();
     this.encounterZones = this.createEncounterZones(encounterZones);
     this.maxActiveByFaction = MAX_ACTIVE_BY_FACTION;
     this.userData = {
@@ -2543,12 +2617,20 @@ export class BlackGrassTempleFactionManager {
       combatMs: 0,
       debugMs: 0,
       targetScans: 0,
+      targetSwitches: 0,
+      targetCandidatesConsidered: 0,
+      targetCacheReuses: 0,
+      targetCacheAgeSeconds: 0,
+      targetScanRollingMs: 0,
       collisionChecks: 0,
       stateTransitions: 0,
       skippedAiTicks: 0,
       catchUpTicks: 0,
       lastSecondAt: performance?.now?.() ?? Date.now(),
       targetScansPerSecond: 0,
+      targetSwitchesPerSecond: 0,
+      targetCandidatesPerScan: 0,
+      targetCacheReusesPerSecond: 0,
       collisionChecksPerSecond: 0,
       stateTransitionsPerSecond: 0,
     };
@@ -2565,6 +2647,10 @@ export class BlackGrassTempleFactionManager {
     const now = performance?.now?.() ?? Date.now();
     const keep = {
       targetScansPerSecond: this.perfStats.targetScansPerSecond,
+      targetSwitchesPerSecond: this.perfStats.targetSwitchesPerSecond,
+      targetCandidatesPerScan: this.perfStats.targetCandidatesPerScan,
+      targetCacheReusesPerSecond: this.perfStats.targetCacheReusesPerSecond,
+      targetScanRollingMs: this.perfStats.targetScanRollingMs,
       collisionChecksPerSecond: this.perfStats.collisionChecksPerSecond,
       stateTransitionsPerSecond: this.perfStats.stateTransitionsPerSecond,
       lastSecondAt: this.perfStats.lastSecondAt,
@@ -2580,12 +2666,66 @@ export class BlackGrassTempleFactionManager {
       const scale = 1000 / Math.max(1, now - this.perfStats.lastSecondAt);
       this.perfStats.targetScansPerSecond = Math.round(this.perfStats.targetScans * scale);
       this.perfStats.collisionChecksPerSecond = Math.round(this.perfStats.collisionChecks * scale);
+      this.perfStats.targetSwitchesPerSecond = Math.round(this.perfStats.targetSwitches * scale);
+      this.perfStats.targetCacheReusesPerSecond = Math.round(this.perfStats.targetCacheReuses * scale);
+      this.perfStats.targetCandidatesPerScan = this.perfStats.targetScans > 0 ? Number((this.perfStats.targetCandidatesConsidered / this.perfStats.targetScans).toFixed(1)) : 0;
       this.perfStats.stateTransitionsPerSecond = Math.round(this.perfStats.stateTransitions * scale);
       this.perfStats.targetScans = 0;
       this.perfStats.collisionChecks = 0;
       this.perfStats.stateTransitions = 0;
+      this.perfStats.targetSwitches = 0;
+      this.perfStats.targetCandidatesConsidered = 0;
+      this.perfStats.targetCacheReuses = 0;
       this.perfStats.lastSecondAt = now;
     }
+  }
+
+  createFolsomBloodFeudTargetingCache() {
+    return {
+      candidates: [],
+      elapsed: FOLSOM_BLOOD_FEUD_TARGET_SCAN_SECONDS,
+      lastBuiltAt: performance?.now?.() ?? Date.now(),
+      scanFrameUsed: false,
+      perfStats: null,
+    };
+  }
+
+  updateFolsomBloodFeudTargetingCache(deltaSeconds) {
+    const cache = this.folsomBloodFeudTargeting;
+    if (!cache) return null;
+    cache.perfStats = this.perfStats;
+    cache.scanFrameUsed = false;
+    this.perfStats.targetCacheAgeSeconds = ((performance?.now?.() ?? Date.now()) - cache.lastBuiltAt) / 1000;
+    if (this.perfDebugToggles?.neckmanTargetingOff === true) {
+      cache.candidates.length = 0;
+      return cache;
+    }
+    cache.elapsed += deltaSeconds;
+    if (cache.elapsed < FOLSOM_BLOOD_FEUD_TARGET_SCAN_SECONDS) {
+      this.perfStats.targetCacheAgeSeconds = ((performance?.now?.() ?? Date.now()) - cache.lastBuiltAt) / 1000;
+      return cache;
+    }
+    cache.elapsed = 0;
+    cache.scanFrameUsed = true;
+    const start = performance?.now?.() ?? Date.now();
+    cache.candidates.length = 0;
+    let considered = 0;
+    for (let i = 0; i < this.enemies.length; i += 1) {
+      const enemy = this.enemies[i];
+      if (enemy?.species !== 'neck_man' || enemy.encounterMode !== 'folsom_neckman_blood_feud') continue;
+      considered += 1;
+      if (enemy.isAlive && !enemy.isRemoved && enemy.group) cache.candidates.push(enemy);
+    }
+    const elapsedMs = (performance?.now?.() ?? Date.now()) - start;
+    this.perfStats.targetingMs += elapsedMs;
+    this.perfStats.targetScans += 1;
+    this.perfStats.targetCandidatesConsidered += considered;
+    this.perfStats.targetScanRollingMs = this.perfStats.targetScanRollingMs > 0
+      ? (this.perfStats.targetScanRollingMs * 0.85) + (elapsedMs * 0.15)
+      : elapsedMs;
+    cache.lastBuiltAt = performance?.now?.() ?? Date.now();
+    this.perfStats.targetCacheAgeSeconds = 0;
+    return cache;
   }
 
   spawnInitialWave() {
@@ -2675,7 +2815,8 @@ export class BlackGrassTempleFactionManager {
     const director = this.enableBattleDirector
       ? this.updateBattleDirector(deltaSeconds, playerPosition)
       : { zone: null, nearbyCount: this.enemies.length, combatPairs: 0, quietSeconds: 0 };
-    const baseContext = { enemies: this.enemies, playerPosition, director, generatedRuntime: Boolean(generatedRuntime) };
+    const folsomBloodFeudTargeting = isMobileFolsomFeud ? this.updateFolsomBloodFeudTargetingCache(deltaSeconds) : null;
+    const baseContext = { enemies: this.enemies, playerPosition, director, generatedRuntime: Boolean(generatedRuntime), folsomBloodFeudTargeting };
     const policy = generatedRuntime?.policy ?? null;
     const lodEnabled = Boolean(generatedRuntime && policy?.generatedAiLod);
     this.enemies.forEach((enemy, index) => {
@@ -2928,6 +3069,7 @@ export class BlackGrassTempleFactionManager {
       targetingActive: this.perfDebugToggles?.neckmanTargetingOff !== true,
       collisionActive: this.perfDebugToggles?.neckmanCollisionOff !== true,
       perfTrace: this.perfStats,
+      targetSummary: neckmen.map((enemy) => ({ id: enemy.id, target: enemy.group?.userData.targetId ?? null, type: enemy.group?.userData.targetType ?? null, lock: enemy.group?.userData.targetLockRemaining ?? 0 })),
     };
   }
 
