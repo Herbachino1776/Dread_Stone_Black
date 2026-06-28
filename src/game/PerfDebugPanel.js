@@ -11,7 +11,8 @@ export class PerfDebugPanel {
     this.lastTime = this.startedAt;
     this.lastRender = 0;
     this.expanded = false;
-    this.toggles = { neckmen: true, foliage: true, shadows: true, gore: true, water: true, skybox: true, hud: true, lowDpr: false };
+    const query = new URLSearchParams(window.location.search);
+    this.toggles = { neckmen: query.get('neckmen') !== '0', neckmanActorsHidden: query.get('neckmanActorsHidden') === '1', neckmanStatic: query.get('neckmanStatic') === '1', neckmanAiOff: query.get('neckmanAiOff') === '1', neckmanFeudOff: query.get('neckmanFeudOff') === '1', neckmanCollisionOff: query.get('neckmanCollisionOff') === '1', neckmanTargetingOff: query.get('neckmanTargetingOff') === '1', neckmanRenderLite: query.get('neckmanRenderLite') === '1', neckmanPerfTrace: query.get('neckmanPerfTrace') === '1', foliage: true, shadows: true, gore: true, water: true, skybox: true, hud: true, lowDpr: false };
     this.originalBackground = this.scene?.background ?? null;
     this.originalFog = this.scene?.fog ?? null;
     this.originalShadowEnabled = this.renderer?.shadowMap?.enabled ?? true;
@@ -90,6 +91,20 @@ export class PerfDebugPanel {
       const isGore = o.userData?.goreDecal || o.userData?.goreWound || o.userData?.goreParticle || /gore|blood|corpse/i.test(o.name ?? '');
       if (isGore) o.visible = this.toggles.gore;
     });
+    this.dungeon?.blackGrassFactionManager?.enemies?.forEach((enemy) => {
+      if (enemy.species !== 'neck_man' || enemy.encounterMode !== 'folsom_neckman_blood_feud' || !enemy.group) return;
+      enemy.group.visible = this.toggles.neckmanActorsHidden ? false : this.toggles.neckmen;
+      if (this.toggles.neckmanRenderLite && !enemy.group.userData.neckmanRenderLiteApplied) {
+        enemy.group.traverse((child) => {
+          if (!child.isMesh) return;
+          child.castShadow = false;
+          child.receiveShadow = false;
+          const mats = Array.isArray(child.material) ? child.material : [child.material].filter(Boolean);
+          mats.forEach((m) => { m.skinning = child.isSkinnedMesh; m.flatShading = false; m.envMapIntensity = 0; m.needsUpdate = true; });
+        });
+        enemy.group.userData.neckmanRenderLiteApplied = true;
+      }
+    });
     this.game.app?.querySelector('.hud-top')?.toggleAttribute('hidden', !this.toggles.hud);
     this.game.app?.querySelector('.control-deck')?.toggleAttribute('hidden', !this.toggles.hud);
     this.renderer?.setPixelRatio(this.toggles.lowDpr ? Math.min(window.devicePixelRatio || 1, 1) : this.normalPixelRatio);
@@ -123,13 +138,16 @@ export class PerfDebugPanel {
   render(force = false) {
     const now = performance.now(); if (!force && now - this.lastRender < UPDATE_MS) return; this.lastRender = now;
     const m = this.collect();
+    const mobile = m.mobileEnemyRuntime;
+    const neckFlags = mobile?.perfDebugFlags ? Object.entries(mobile.perfDebugFlags).filter(([k, v]) => k.startsWith('neckman') || k === 'neckmen').map(([k, v]) => `${k}=${v ? 'on' : 'off'}`).join(', ') : 'none';
+    const trace = mobile?.perfTrace ?? {};
+    const traceLine = mobile ? `Neckman modes: ${neckFlags}\nNeckman active: actors ${mobile.actorVisible ? 'yes' : 'no'} / mixers ${mobile.mixersActive ? 'yes' : 'no'} / AI ${mobile.aiActive ? 'yes' : 'no'} / feud ${mobile.feudManagerActive ? 'yes' : 'no'} / targeting ${mobile.targetingActive ? 'yes' : 'no'} / collision ${mobile.collisionActive ? 'yes' : 'no'}\nNeckman ms: total ${(trace.subsystemMs ?? 0).toFixed?.(2) ?? 0} / manager ${(trace.managerMs ?? 0).toFixed?.(2) ?? 0} / enemies ${trace.enemyUpdateMs?.map?.((e) => `${e.id}:${e.ms.toFixed(2)}`).join(', ') || 'none'} / mixer ${(trace.mixerMs ?? 0).toFixed?.(2) ?? 0} / AI ${(trace.aiMs ?? 0).toFixed?.(2) ?? 0} / targeting ${(trace.targetingMs ?? 0).toFixed?.(2) ?? 0} / collision ${(trace.collisionMs ?? 0).toFixed?.(2) ?? 0} / combat ${(trace.combatMs ?? 0).toFixed?.(2) ?? 0} / debug ${(trace.debugMs ?? 0).toFixed?.(2) ?? 0}\nNeckman counters/s: target scans ${trace.targetScansPerSecond ?? 0} / collision checks ${trace.collisionChecksPerSecond ?? 0} / transitions ${trace.stateTransitionsPerSecond ?? 0} / skipped AI ${trace.skippedAiTicks ?? 0} / catch-up ${trace.catchUpTicks ?? 0}\n` : '';
     const toggleLine = `neckmen ${this.toggles.neckmen ? 'on' : 'off'}, foliage ${this.toggles.foliage ? 'on' : 'off'}, shadows ${this.toggles.shadows ? 'on' : 'off'}, gore ${this.toggles.gore ? 'on' : 'off'}, water ${this.toggles.water ? 'on' : 'off'}, dprCap ${this.toggles.lowDpr ? 'on' : 'off'}`;
     const bloodFeudLine = m.folsomBloodFeud
       ? `found ${m.folsomBloodFeud.found} / spawned ${m.folsomBloodFeud.spawned} / skipped ${m.folsomBloodFeud.skipped}${m.folsomBloodFeud.skipReasons?.length ? ` / reasons ${m.folsomBloodFeud.skipReasons.map((r) => `${r.id}:${r.reason}`).join(',')}` : ''}`
       : 'n/a';
-    const mobile = m.mobileEnemyRuntime;
     const mobileLine = mobile ? `Session: ${m.sessionAgeSeconds.toFixed(1)}s / warmup ${mobile.warmupComplete ? 'yes' : 'no'} / AI ${mobile.enemyAiTickRate} / skipped ${mobile.skippedAiTicks}\nNeckmen lifecycle: spawned ${mobile.spawnedNeckmen} / pending ${mobile.pendingLoadNeckmen} / loading ${mobile.loadingNeckmen} / loaded ${mobile.loadedNeckmen} / visible ${mobile.visibleNeckmen} / failed ${mobile.failedNeckmen} / sleeping ${mobile.sleepingEnemies}\nEnemy asset strategy: ${mobile.assetStrategy ?? 'unknown'}${mobile.canonicalPath ? ` / canonical ${mobile.canonicalPath}` : ''}\nEnemy roots: actors ${mobile.loadedActorRoots} / anim roots ${mobile.loadedAnimationRoots} / skinned roots ${mobile.liveSkinnedRoots ?? 'n/a'} / active mixers ${mobile.activeMixers} / extra state roots ${mobile.extraStateRootsAlive ? 'yes' : 'no'}\nClips/actions: ${mobile.clipsActionsPerEnemy?.length ? mobile.clipsActionsPerEnemy.map((e) => `${e.id}:${e.strategy ?? 'unknown'}:${e.clips} clips/${e.actions} actions`).join(', ') : 'none'}\nLoaded states: ${mobile.loadedStatesPerEnemy?.length ? mobile.loadedStatesPerEnemy.map((e) => `${e.id}:${e.lifecycle}:${(e.states ?? []).join('|') || 'none'}${e.failure ? ` fail=${e.failure.path}:${e.failure.message}` : ''}`).join(', ') : 'none'}\n` : `Session: ${m.sessionAgeSeconds.toFixed(1)}s / mobile enemy runtime n/a\n`;
-    this.lastReport = `Location: ${m.location}\n${mobileLine}FPS: ${m.currentFps.toFixed(0)} / avg ${m.avgFps.toFixed(0)} / worst ${m.worstMs.toFixed(1)}ms\nRenderer: ${m.calls} calls / ${m.tris} tris / ${m.geoms} geoms / ${m.textures} textures\nScene: ${m.objects} objects / ${m.meshes} meshes / ${m.skinned} skinned / ${m.transparent} transparent / ${m.materials} materials / ${m.lights} lights / ${m.shadows} shadows\nGameplay: ${m.activeEnemies} enemies / ${m.activeNeckmen} neckmen / ${m.goreCount} gore\nCreature anim: ${m.activeAnimationMixers} active mixers / ${m.loadedCreatureAnimationRoots} loaded roots / ${m.liveSkinnedRoots} live skinned roots / extra state roots ${m.extraStateRootsAlive ? 'yes' : 'no'}\nFolsom blood feud: ${bloodFeudLine}\nDPR: ${m.dpr.toFixed(2)}  Canvas: ${m.width}x${m.height}\nToggles: ${toggleLine}`;
+    this.lastReport = `Location: ${m.location}\n${mobileLine}${traceLine}FPS: ${m.currentFps.toFixed(0)} / avg ${m.avgFps.toFixed(0)} / worst ${m.worstMs.toFixed(1)}ms\nRenderer: ${m.calls} calls / ${m.tris} tris / ${m.geoms} geoms / ${m.textures} textures\nScene: ${m.objects} objects / ${m.meshes} meshes / ${m.skinned} skinned / ${m.transparent} transparent / ${m.materials} materials / ${m.lights} lights / ${m.shadows} shadows\nGameplay: ${m.activeEnemies} enemies / ${m.activeNeckmen} neckmen / ${m.goreCount} gore\nCreature anim: ${m.activeAnimationMixers} active mixers / ${m.loadedCreatureAnimationRoots} loaded roots / ${m.liveSkinnedRoots} live skinned roots / extra state roots ${m.extraStateRootsAlive ? 'yes' : 'no'}\nFolsom blood feud: ${bloodFeudLine}\nDPR: ${m.dpr.toFixed(2)}  Canvas: ${m.width}x${m.height}\nToggles: ${toggleLine}`;
     this.reportEl.textContent = this.lastReport;
   }
 

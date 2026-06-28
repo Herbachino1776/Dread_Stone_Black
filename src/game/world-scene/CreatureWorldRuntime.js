@@ -16,6 +16,23 @@ const GENERATED_ENEMY_AI_MID_RADIUS = 30;
 const GENERATED_ENEMY_RESPAWN_COOLDOWN_MS = 15000;
 const GENERATED_ENEMY_MAX_WAKE_PER_SECOND = 1;
 
+
+function createNeckmanDebugTogglesFromQuery() {
+  if (typeof window === 'undefined') return {};
+  const query = new URLSearchParams(window.location.search);
+  return {
+    neckmen: query.get('neckmen') !== '0',
+    neckmanActorsHidden: query.get('neckmanActorsHidden') === '1',
+    neckmanStatic: query.get('neckmanStatic') === '1',
+    neckmanAiOff: query.get('neckmanAiOff') === '1',
+    neckmanFeudOff: query.get('neckmanFeudOff') === '1',
+    neckmanCollisionOff: query.get('neckmanCollisionOff') === '1',
+    neckmanTargetingOff: query.get('neckmanTargetingOff') === '1',
+    neckmanRenderLite: query.get('neckmanRenderLite') === '1',
+    neckmanPerfTrace: query.get('neckmanPerfTrace') === '1',
+  };
+}
+
 function horizontalDistance(a, b) {
   if (!a || !b) return Infinity;
   return Math.hypot(a.x - b.x, a.z - b.z);
@@ -35,7 +52,7 @@ export class CreatureWorldRuntime {
     this.scene = scene;
     this.collision = collision;
     this.area = area;
-    this.perfDebugToggles = perfDebugToggles;
+    this.perfDebugToggles = { ...createNeckmanDebugTogglesFromQuery(), ...(perfDebugToggles ?? {}) };
     this.playerSpawn = playerSpawn;
     this.resolveOutdoorVisibleSurfaceY = resolveOutdoorVisibleSurfaceY;
     this.onGoreEvent = onGoreEvent;
@@ -66,6 +83,7 @@ export class CreatureWorldRuntime {
       navigationGraph,
       encounterZones,
       onGoreEvent: this.onGoreEvent,
+      perfDebugToggles: this.perfDebugToggles,
     });
     this.blackGrassFactionManager.spawnInitialWave();
   }
@@ -116,6 +134,7 @@ export class CreatureWorldRuntime {
       enableRespawns: isFolsomBloodFeud,
       encounterMode: isFolsomBloodFeud ? 'folsom_neckman_blood_feud' : 'faction_war',
       respawnCooldownSeconds: isFolsomBloodFeud ? 30 : undefined,
+      perfDebugToggles: this.perfDebugToggles,
     });
     if (options.validateOnly) return;
     if (isFolsomBloodFeud) {
@@ -236,13 +255,15 @@ export class CreatureWorldRuntime {
 
   updateBlackGrassFactionEnemies(deltaSeconds, player) {
     if (!this.blackGrassFactionManager || !player?.position) return;
+    this.perfDebugToggles = { ...createNeckmanDebugTogglesFromQuery(), ...(this.perfDebugToggles ?? {}) };
+    this.blackGrassFactionManager.perfDebugToggles = this.perfDebugToggles;
     if (this.perfDebugToggles?.neckmen === false && this.blackGrassFactionManager.encounterMode === 'folsom_neckman_blood_feud') {
       this.blackGrassFactionManager.enemies?.forEach((enemy) => { if (enemy.species === 'neck_man') { if (enemy.group) enemy.group.visible = false; enemy.currentTarget = null; } });
       return;
     }
     this.updateGeneratedEnemyActivation(player.position);
     this.blackGrassFactionManager.update(deltaSeconds, player.position, { generatedRuntime: this.generatedEnemyRuntime });
-    if (this.perfDebugToggles?.neckmen !== false) this.blackGrassFactionManager.enemies?.forEach((enemy) => { if (enemy.species === 'neck_man' && enemy.group) enemy.group.visible = true; });
+    if (this.blackGrassFactionManager.encounterMode === 'folsom_neckman_blood_feud') this.blackGrassFactionManager.enemies?.forEach((enemy) => { if (enemy.species === 'neck_man' && enemy.group) enemy.group.visible = this.perfDebugToggles?.neckmanActorsHidden === true ? false : true; });
   }
 
   updateSheepDemonEnemy(deltaSeconds, player) {
