@@ -8,7 +8,8 @@ import { createOutdoorTerrainSampler } from '../src/engine/outdoor-authoring/Out
 import { CollisionWorld } from '../src/game/Collision.js';
 import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { FISH_SPECS } from '../src/game/fishing/FishMeshFactory.js';
-import { resolveStartupArea } from '../src/game/locationRouting.js';
+import { getLocationExitDefinition, resolveStartupArea } from '../src/game/locationRouting.js';
+import { listLocationDefinitions } from '../src/game/locations/locationRegistry.js';
 import { FOLSOM_PINE_SWATHE_SPECS, FOLSOM_VISIBLE_TREE_BOUNDS, folsomDefinition } from '../src/game/locations/folsom.definition.js';
 import { FOLSOM_CEDAR_LIKE_SOURCE_SPRITES, FOLSOM_DARK_GROVE_SOURCE_SPRITES, FOLSOM_UNDERSTORY_SOURCE_SPRITES } from '../src/game/world-kits/vegetation/FolsomFoliageBillboardKit.js';
 import { reliquaryFieldDefinition } from '../src/game/locations/reliquaryField.definition.js';
@@ -394,6 +395,26 @@ assert.ok(rustyDoor, 'Folsom has the mandatory rusted Reliquary door.');
 assert.equal(rustyDoor.toLocation, 'reliquary-field');
 assert.ok(reliquaryFieldDefinition.spawns.some((spawn) => spawn.id === rustyDoor.destinationSpawnId), 'Rusted door resolves to the current Reliquary Field return spawn.');
 assert.ok(reliquaryFieldDefinition.exits.some((exit) => exit.toLocation === 'folsom'), 'Reliquary Field preserves a return route to Folsom.');
+
+const locationDefinitions = await listLocationDefinitions();
+const definitionsById = new Map(locationDefinitions.map((definition) => [definition.id, definition]));
+assert.ok(definitionsById.has(resolveStartupArea(null)), 'Folsom startup route resolves to a known location definition.');
+for (const definition of locationDefinitions) {
+  for (const exit of definition.exits ?? []) {
+    const targetDefinition = definitionsById.get(exit.toLocation);
+    assert.ok(targetDefinition, `${definition.id} exit ${exit.id} targets known location ${exit.toLocation}.`);
+    assert.ok(targetDefinition.spawns?.some((spawn) => spawn.id === exit.destinationSpawnId), `${definition.id} exit ${exit.id} destination spawn ${exit.destinationSpawnId} exists in ${exit.toLocation}.`);
+  }
+}
+['folsom', 'black-grass-temple', 'kerovac', 'oarbFeatureYard', 'oarbOutdoorExpo'].forEach((locationId) => {
+  const definition = definitionsById.get(locationId);
+  const returnExit = getLocationExitDefinition(definition, { toLocation: 'reliquary-field' });
+  assert.ok(returnExit?.destinationSpawnId, `${locationId} declares an authored return exit to Reliquary Field.`);
+  assert.ok(reliquaryFieldDefinition.spawns.some((spawn) => spawn.id === returnExit.destinationSpawnId), `${locationId} return exit lands on a real Reliquary Field return spawn.`);
+});
+assert.equal(getLocationExitDefinition(reliquaryFieldDefinition, { toLocation: 'folsom' })?.destinationSpawnId, 'folsom_reliquary_return', 'Reliquary Field return to Folsom lands at the authored Folsom return anchor.');
+assert.equal(getLocationExitDefinition(reliquaryFieldDefinition, { toLocation: 'kerovac' })?.destinationSpawnId, 'kerovac_player_start', 'Reliquary Field Kerovac route lands at Kerovac player start.');
+assert.equal(getLocationExitDefinition(reliquaryFieldDefinition, { toLocation: 'oarbOutdoorExpo' })?.destinationSpawnId, 'oarb_outdoor_expo_player_start', 'Reliquary Field OARB Outdoor Expo route lands at the authored player start.');
 
 const cityWallValidation = folsomDefinition.validation?.cityBorderWoodenWall;
 assert.ok(cityWallValidation, 'Folsom invalid: city border wall missing.');
