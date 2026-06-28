@@ -1,6 +1,6 @@
 export const LOCATION_TYPES = Object.freeze(['field', 'dungeon', 'crypt', 'temple']);
 export const BLOCKER_TYPES = Object.freeze(['wall', 'prop', 'altar', 'counter', 'divider', 'gate', 'exterior', 'hazard']);
-export const SPAWN_KINDS = Object.freeze(['player', 'enemy', 'npc', 'return', 'debug']);
+export const SPAWN_KINDS = Object.freeze(['player', 'return', 'debug']);
 export const LIGHT_KINDS = Object.freeze(['ambient', 'directional', 'point', 'torch']);
 export const HORIZONTAL_SURFACE_KINDS = Object.freeze(['floor', 'ceiling', 'roof', 'path', 'platformTop']);
 export const HORIZONTAL_SURFACE_SHAPES = Object.freeze(['rect', 'polygon']);

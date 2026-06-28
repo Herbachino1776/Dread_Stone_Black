@@ -90,7 +90,7 @@ function blocker(id, type, minX, maxX, minZ, maxZ, height = 1.1, tags = []) {
     maxZ,
     height,
     blocksPlayer: true,
-    blocksEnemies: true,
+    blocksActors: true,
     blocksLineOfMovement: true,
     tags: ['solid', ...tags],
   };
@@ -132,21 +132,6 @@ function torchFixture(id, roomId, wallSide, distanceAlongWall, profile = 'weakTo
   };
 }
 
-function enemySpawn(id, species, faction, roomId, x, z, tags = [], userData = {}) {
-  return {
-    id,
-    kind: 'enemy',
-    species,
-    faction,
-    roomId,
-    position: { x, y: 0, z },
-    yaw: 0,
-    allowedForInitialWave: true,
-    allowedForRespawn: true,
-    tags,
-    userData,
-  };
-}
 
 export const sumerianSunPalaceDistrictV1Definition = Object.freeze({
   id: 'sumerian-sun-palace-district-v1',
@@ -162,8 +147,8 @@ export const sumerianSunPalaceDistrictV1Definition = Object.freeze({
   collision: { playerRadius: 0.5 },
   geometry: { wallThickness: 0.35, floorThickness: 0.18, ceilingThickness: 0.18 },
   runtimeSpawnPolicy: {
-    activeEnemyCap: 3,
-    initialEnemyCap: 2,
+    activeActorCap: 3,
+    initialActorCap: 2,
     wakeRadius: 20,
     sleepRadius: 38,
     respawnCooldownMs: 15000,
@@ -349,32 +334,12 @@ export const sumerianSunPalaceDistrictV1Definition = Object.freeze({
 
   spawns: [
     { id: 'sumerian_sun_palace_player_start', kind: 'player', roomId: 'G01', position: { x: 50, y: 1.55, z: 4 }, yaw: 0, tags: ['start', 'city-gate'], userData: { note: 'Start just inside the south gate.' } },
-    enemySpawn('E001', 'sheep_demon', 'sheep_demon', 'M01', 38, 34, ['market-patrol'], { encounter: 'market brute' }),
-    enemySpawn('E002', 'neck_man', 'neck_man', 'E01', 82, 45, ['alley-patrol'], { encounter: 'east alley stalker' }),
-    enemySpawn('E003', 'sheep_demon', 'sheep_demon', 'W01', 18, 48, ['alley-patrol'], { encounter: 'west alley guard' }),
-    enemySpawn('E004', 'neck_man', 'neck_man', 'P01', 60, 71, ['plaza-patrol'], { encounter: 'temple plaza watcher' }),
-    enemySpawn('E005', 'sheep_demon', 'sheep_demon', 'E02', 84, 75, ['guard-court'], { encounter: 'guard court heavy' }),
-    enemySpawn('E006', 'neck_man', 'neck_man', 'B09', 90, 42, ['interior-ambush'], { encounter: 'bone washer ambush' }),
-    enemySpawn('E007', 'sheep_demon', 'sheep_demon', 'S01', 49, 16, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 49, y: 0, z: 12 }, { x: 51, y: 0, z: 20 }] }),
-    enemySpawn('E008', 'neck_man', 'neck_man', 'S02', 51, 52, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 51, y: 0, z: 44 }, { x: 49, y: 0, z: 58 }] }),
-    enemySpawn('E009', 'sheep_demon', 'sheep_demon', 'W02', 14, 66, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 10, y: 0, z: 64 }, { x: 21, y: 0, z: 76 }] }),
-    enemySpawn('E010', 'neck_man', 'neck_man', 'P01', 42, 78, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 38, y: 0, z: 74 }, { x: 62, y: 0, z: 78 }] }),
-    enemySpawn('E011', 'sheep_demon', 'sheep_demon', 'M01', 62, 28, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 55, y: 0, z: 26 }, { x: 70, y: 0, z: 38 }] }),
-    enemySpawn('E012', 'neck_man', 'neck_man', 'P01', 38, 68, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 30, y: 0, z: 65 }, { x: 46, y: 0, z: 78 }] }),
-    enemySpawn('E013', 'sheep_demon', 'sheep_demon', 'B01', 9, 18, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 8, y: 0, z: 13 }, { x: 12, y: 0, z: 21 }] }),
-    enemySpawn('E014', 'neck_man', 'neck_man', 'B04', 30, 15, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 28, y: 0, z: 12 }, { x: 32, y: 0, z: 20 }] }),
-    enemySpawn('E015', 'sheep_demon', 'sheep_demon', 'B12', 69, 52, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 66, y: 0, z: 48 }, { x: 72, y: 0, z: 56 }] }),
-    enemySpawn('E016', 'neck_man', 'neck_man', 'B16', 39, 17, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 36, y: 0, z: 14 }, { x: 42, y: 0, z: 20 }] }),
-    enemySpawn('E017', 'sheep_demon', 'sheep_demon', 'B18', 71, 17, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 68, y: 0, z: 14 }, { x: 74, y: 0, z: 20 }] }),
-    enemySpawn('E018', 'neck_man', 'neck_man', 'B21', 42, 74, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 38, y: 0, z: 68 }, { x: 46, y: 0, z: 78 }] }),
-    enemySpawn('E019', 'sheep_demon', 'sheep_demon', 'B23', 65, 74, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 62, y: 0, z: 68 }, { x: 70, y: 0, z: 78 }] }),
-    enemySpawn('E020', 'neck_man', 'neck_man', 'E02', 90, 66, ['generated-city-enemy', 'faction-war-anchor', 'initial-wave'], { patrolPoints: [{ x: 80, y: 0, z: 64 }, { x: 92, y: 0, z: 78 }] }),
   ],
 
   encounterZones: [
-    { id: 'EZ_MARKET', label: 'Market Court Clash', roomIds: ['M01', 'S01', 'S02'], center: { x: 50, y: 0, z: 34 }, radius: 24, allowedFactions: ['sheep_demon', 'neck_man'], tags: ['generated-city-encounter'] },
-    { id: 'EZ_TEMPLE', label: 'Temple Plaza Warband', roomIds: ['P01', 'Z01'], center: { x: 50, y: 0, z: 73 }, radius: 24, allowedFactions: ['sheep_demon', 'neck_man'], tags: ['generated-city-encounter'] },
-    { id: 'EZ_ALLEYS', label: 'Residential and Tax Alleys', roomIds: ['W01', 'W02', 'E01', 'E02'], center: { x: 50, y: 0, z: 50 }, radius: 46, allowedFactions: ['sheep_demon', 'neck_man'], tags: ['generated-city-encounter'] },
+    { id: 'EZ_MARKET', label: 'Market Court Clash', roomIds: ['M01', 'S01', 'S02'], center: { x: 50, y: 0, z: 34 }, radius: 24, allowedFactions: [], tags: ['generated-city-encounter'] },
+    { id: 'EZ_TEMPLE', label: 'Temple Plaza Warband', roomIds: ['P01', 'Z01'], center: { x: 50, y: 0, z: 73 }, radius: 24, allowedFactions: [], tags: ['generated-city-encounter'] },
+    { id: 'EZ_ALLEYS', label: 'Residential and Tax Alleys', roomIds: ['W01', 'W02', 'E01', 'E02'], center: { x: 50, y: 0, z: 50 }, radius: 46, allowedFactions: [], tags: ['generated-city-encounter'] },
   ],
 
   exits: [

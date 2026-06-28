@@ -14,8 +14,6 @@ export function buildDungeonSpawns(definition) {
     id: spawn.id,
     kind: spawn.kind,
     species: spawn.species,
-    faction: spawn.faction,
-    preferredFaction: spawn.faction ?? spawn.userData?.preferredFaction ?? 'neutral',
     position: toVector3(spawn.position),
     yaw: spawn.yaw ?? 0,
     roomId: spawn.roomId,

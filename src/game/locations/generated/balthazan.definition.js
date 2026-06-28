@@ -52,8 +52,8 @@ export const balthazanDefinition = Object.freeze({
   id: 'balthazan',
   displayName: 'Balthazan',
   type: 'city',
-  tags: ['generated', 'compiled-runtime', 'darb-v2', 'darb-v2.3', 'sumerian-city', 'balthazan', 'giant-sheep-demons', 'low-enemy-count'],
-  notes: 'Tall Sumerian canal city designed around very few twice-size sheep demon guardians. Primary routes, stairs, ramps, bridges, door gaps, and arches are intentionally wide/tall.',
+  tags: ['generated', 'compiled-runtime', 'darb-v2', 'darb-v2.3', 'sumerian-city', 'balthazan', 'quiet'],
+  notes: 'Tall Sumerian canal city. Primary routes, stairs, ramps, bridges, door gaps, and arches are intentionally wide/tall.',
   fog: { color: 0x4a351f, near: 40, far: 178 },
   lighting: { background: 0x24190e },
   textures,
@@ -178,8 +178,8 @@ export const balthazanDefinition = Object.freeze({
     { id: 'balthazan_processional_curb_right', kind: 'curb', from: [-37, -26], to: [19, -9], height: 0.24, thickness: 0.18, material: 'limestone', blocksPlayer: false },
   ],
   blockers: [
-    { id: 'balthazan_canal_void_main', type: 'canal', minX: -11.8, maxX: 31.8, minZ: -0.95, maxZ: 4.55, height: 0.2, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'invisible'], invisible: true },
-    { id: 'balthazan_canal_void_north', type: 'canal', minX: -3.8, maxX: 29.8, minZ: 14.9, maxZ: 20.1, height: 0.2, blocksPlayer: true, blocksEnemies: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'invisible'], invisible: true },
+    { id: 'balthazan_canal_void_main', type: 'canal', minX: -11.8, maxX: 31.8, minZ: -0.95, maxZ: 4.55, height: 0.2, blocksPlayer: true, blocksActors: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'invisible'], invisible: true },
+    { id: 'balthazan_canal_void_north', type: 'canal', minX: -3.8, maxX: 29.8, minZ: 14.9, maxZ: 20.1, height: 0.2, blocksPlayer: true, blocksActors: true, blocksLineOfMovement: false, tags: ['water', 'canal', 'invisible'], invisible: true },
   ],
   props: [
     { id: 'balthazan_sacred_reclaimed_tree_trunk', position: { x: 12.5, y: 2.25, z: 51.5 }, rotation: { x: 0, y: 0.18, z: 0 }, dimensions: { width: 0.55, height: 1.2, depth: 0.55 }, material: 'wood', roomId: 'balthazan_bounds_shrine', tags: ['sacred-tree', 'single-reclaimed-accent'] },
@@ -188,9 +188,6 @@ export const balthazanDefinition = Object.freeze({
   spawns: [
     { id: 'balthazan_player_start', kind: 'player', position: { x: -35, y: 1.55, z: -30 }, yaw: Math.PI / 2.8, roomId: 'balthazan_bounds_entry', tags: ['entry', 'playerStart'] },
     { id: 'balthazan_return_threshold', kind: 'return', position: { x: -41, y: 1.2, z: -31 }, yaw: -Math.PI / 2, roomId: 'balthazan_bounds_entry', tags: ['exit', 'allow-near-wall'] },
-    { id: 'balthazan_giant_sheep_guardian_01', kind: 'enemy', species: 'sheep_demon', faction: 'balthazan_guardian', position: { x: 19, y: 0, z: 6 }, yaw: -0.6, roomId: 'balthazan_bounds_market', minDistanceFromPlayer: 22, allowedForInitialWave: true, allowedForRespawn: false, tags: ['giant', 'rare', 'guardian'], scale: 2, userData: { scaleMultiplier: 2, visualScale: 2, combatScale: 2, title: 'Giant Sheep Demon Guardian', requiresTallArches: true } },
-    { id: 'balthazan_giant_sheep_guardian_02', kind: 'enemy', species: 'sheep_demon', faction: 'balthazan_guardian', position: { x: 22, y: 1.65, z: 43 }, yaw: Math.PI, roomId: 'balthazan_bounds_shrine', minDistanceFromPlayer: 34, allowedForInitialWave: true, allowedForRespawn: false, tags: ['giant', 'rare', 'guardian', 'shrine'], scale: 2, userData: { scaleMultiplier: 2, visualScale: 2, combatScale: 2, title: 'Giant Sheep Demon Guardian', requiresTallArches: true } },
-    { id: 'balthazan_giant_sheep_guardian_03', kind: 'enemy', species: 'sheep_demon', faction: 'balthazan_guardian', position: { x: -24, y: 0, z: 42 }, yaw: 0.2, roomId: 'balthazan_bounds_collapsed', minDistanceFromPlayer: 38, allowedForInitialWave: false, allowedForRespawn: false, tags: ['giant', 'rare', 'optional'], scale: 2, userData: { scaleMultiplier: 2, visualScale: 2, combatScale: 2, title: 'Sleeping Giant Sheep Demon', requiresTallArches: true } },
   ],
   exits: [{
     id: 'balthazan_exit_to_reliquary_field',
@@ -225,12 +222,9 @@ export const balthazanDefinition = Object.freeze({
     localAvoidanceHints: [],
     forbiddenZones: [{ id: 'main-canal', minX: -12, maxX: 32, minZ: -1, maxZ: 4.6 }, { id: 'north-canal', minX: -4, maxX: 30, minZ: 14.8, maxZ: 20.2 }],
     preferredPatrolRoutes: [
-      { id: 'balthazan_guardian_route_market', points: [[15, 7], [28, 8], [23, -8], [11, -9]] },
-      { id: 'balthazan_guardian_route_shrine', points: [[17, 36], [28, 39], [23, 50], [10, 45]] },
+      { id: 'balthazan_route_market', points: [[15, 7], [28, 8], [23, -8], [11, -9]] },
+      { id: 'balthazan_route_shrine', points: [[17, 36], [28, 39], [23, 50], [10, 45]] },
     ],
   },
-  encounterZones: [
-    { id: 'balthazan_guardian_encounter_market', roomIds: ['balthazan_bounds_market'], maxActiveEnemies: 1, species: ['sheep_demon'], tags: ['conservative', 'giant-only'] },
-    { id: 'balthazan_guardian_encounter_shrine', roomIds: ['balthazan_bounds_shrine'], maxActiveEnemies: 1, species: ['sheep_demon'], tags: ['conservative', 'giant-only'] },
-  ],
+  encounterZones: [],
 });

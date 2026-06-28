@@ -5,7 +5,6 @@ import { OARB_CURVED_BLOCKER_MAX_COORDINATE, OARB_CURVED_BLOCKER_MAX_RADIUS, OAR
 import { OARB_OUTDOOR_PRIMITIVE_FALLBACK_MATERIAL_PROFILES, OARB_OUTDOOR_PRIMITIVE_KINDS, OARB_OUTDOOR_PRIMITIVE_MAX_COORDINATE, OARB_OUTDOOR_PRIMITIVE_MAX_HEIGHT, OARB_OUTDOOR_PRIMITIVE_MAX_POINTS, OARB_OUTDOOR_PRIMITIVE_MAX_RADIUS, OARB_OUTDOOR_PRIMITIVE_MAX_THICKNESS } from '../outdoor-authoring/OutdoorPrimitiveBuilder.js';
 
 const loggedValidationKeys = new Set();
-const RUNTIME_ENEMY_SPECIES = new Set(['sheep_demon', 'neck_man']);
 const HORIZONTAL_SURFACE_KINDS = new Set(['floor', 'ceiling', 'roof', 'path', 'platformTop']);
 const HORIZONTAL_SURFACE_SHAPES = new Set(['rect', 'polygon']);
 
@@ -108,7 +107,7 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
       if (label === 'splineTrails' && isFinitePositive(spline.width) && spline.width > OARB_SPLINE_TRAIL_MAX_WIDTH) addIssue(errors, 'error', `${label} ${id} width must be <= ${OARB_SPLINE_TRAIL_MAX_WIDTH} for mobile-safe ribbon generation`, id);
       validateOutdoorMaterial(definition, spline.material, `${label} ${id}`, id, errors, warnings);
       if (spline.flatten !== undefined && typeof spline.flatten !== 'boolean') addIssue(errors, 'error', `${label} ${id} flatten must be boolean when present`, id);
-      if (spline.collision || spline.blocksPlayer || spline.blocksEnemies || spline.deformTerrain) addIssue(errors, 'error', `${label} ${id} cannot claim collision, blocking, or terrain deformation behavior yet`, id);
+      if (spline.collision || spline.blocksPlayer || spline.blocksActors || spline.deformTerrain) addIssue(errors, 'error', `${label} ${id} cannot claim collision, blocking, or terrain deformation behavior yet`, id);
       Object.keys(spline).filter((key) => !OUTDOOR_SPLINE_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `${label} ${id} uses unsupported field ${key}; rendering/collision behavior is not implemented in this foundation PR`, id));
     });
   });
@@ -163,7 +162,7 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
     const authoredPoints = [...asArray(primitive.points), primitive.center, primitive.from, primitive.to].filter(Boolean).map(xzPoint).filter(Boolean);
     if (authoredPoints.some((point) => Math.abs(point.x) > OARB_OUTDOOR_PRIMITIVE_MAX_COORDINATE || Math.abs(point.z) > OARB_OUTDOOR_PRIMITIVE_MAX_COORDINATE)) addIssue(errors, 'error', `outdoorPrimitive ${id} coordinates must stay within +/-${OARB_OUTDOOR_PRIMITIVE_MAX_COORDINATE}`, id);
     validateOutdoorMaterial(definition, primitive.material, `outdoorPrimitive ${id}`, id, errors, warnings);
-    if (primitive.collision || primitive.blocksPlayer || primitive.blocksEnemies || primitive.damage || primitive.hazard || primitive.gameplay) addIssue(errors, 'error', `outdoorPrimitive ${id} cannot claim collision, blocking, hazard, damage, or gameplay behavior yet; pair visible geometry with curvedBlockers instead`, id);
+    if (primitive.collision || primitive.blocksPlayer || primitive.blocksActors || primitive.damage || primitive.hazard || primitive.gameplay) addIssue(errors, 'error', `outdoorPrimitive ${id} cannot claim collision, blocking, hazard, damage, or gameplay behavior yet; pair visible geometry with curvedBlockers instead`, id);
     if (!visibleStructureIds.has(primitive.id)) addIssue(warnings, 'warning', `outdoor boundary primitive ${id} has no curvedBlocker visibleStructureId referencing it yet`, id);
     Object.keys(primitive).filter((key) => !OUTDOOR_PRIMITIVE_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `outdoorPrimitive ${id} uses unsupported field ${key}; visible boundary rendering only is implemented in this PR`, id));
   });
@@ -209,7 +208,7 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
     if (zone.points && !pointArrayIsFinite(zone.points, 3)) addIssue(errors, 'error', `decorationZone ${id} polygon needs at least three finite points`, id);
     if (zone.radius !== undefined && !isFinitePositive(zone.radius)) addIssue(errors, 'error', `decorationZone ${id} radius must be > 0`, id);
     if ((zone.width !== undefined && !isFinitePositive(zone.width)) || (zone.depth !== undefined && !isFinitePositive(zone.depth))) addIssue(errors, 'error', `decorationZone ${id} width/depth must be > 0 when present`, id);
-    if (zone.blocksPlayer || zone.blocksEnemies || zone.collision || zone.collisionRef) addIssue(errors, 'error', `decorationZone ${id} cannot claim collision/blocking behavior; add a paired curvedBlocker instead`, id);
+    if (zone.blocksPlayer || zone.blocksActors || zone.collision || zone.collisionRef) addIssue(errors, 'error', `decorationZone ${id} cannot claim collision/blocking behavior; add a paired curvedBlocker instead`, id);
   });
 }
 
@@ -373,7 +372,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
   const roomIds = new Set(rooms.map((room) => room.id));
   const spawnIds = new Set(spawns.map((spawn) => spawn.id));
   const blockerIds = new Set(blockers.map((blocker) => blocker.id));
-  const validatesGeneratedEnemyRuntime = asArray(definition.tags).some((tag) => ['ai-authored-location', 'ddplus-export'].includes(tag));
+  const validatesGeneratedRuntime = asArray(definition.tags).some((tag) => ['ai-authored-location', 'ddplus-export'].includes(tag));
   const usesOutdoorTerrain = definition.terrain !== undefined;
 
   validateTextureProfiles(definition, warnings, textureAssetExists);
@@ -593,7 +592,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     }
   });
 
-  const blockerRects = blockers.filter((blocker) => blocker.blocksPlayer !== false || blocker.blocksEnemies !== false);
+  const blockerRects = blockers.filter((blocker) => blocker.blocksPlayer !== false || blocker.blocksActors !== false);
   spawns.forEach((spawn) => {
     const position = positionOf(spawn.position);
     if (!position) {
@@ -602,7 +601,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     }
     const room = rooms.find((candidate) => candidate.id === spawn.roomId);
     const containingWalkable = rooms.find((candidate) => pointInRect(position, candidate));
-    const overlappingBlocker = blockerRects.find((blocker) => circleIntersectsRect(position, spawn.kind === 'enemy' ? 0.58 : 0.5, blocker));
+    const overlappingBlocker = blockerRects.find((blocker) => circleIntersectsRect(position, 0.5, blocker));
     const clearanceRect = containingWalkable ?? room;
     const clearance = clearanceRect ? pointRectClearance(position, clearanceRect) : -Infinity;
     const allowsNearWall = spawn.userData?.allowNearWall || asArray(spawn.tags).includes('allow-near-wall');
@@ -610,32 +609,13 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     if (spawn.roomId && !roomIds.has(spawn.roomId)) {
       addIssue(errors, 'error', `spawn ${spawn.id} references missing room ${spawn.roomId}`, spawn.id);
     }
-    if (['player', 'return', 'enemy'].includes(spawn.kind) && !containingWalkable && !usesOutdoorTerrain) {
+    if (['player', 'return'].includes(spawn.kind) && !containingWalkable && !usesOutdoorTerrain) {
       addIssue(errors, 'error', `${spawn.kind} spawn ${spawn.id} is outside walkable room rectangles`, spawn.id);
     }
-    if (['player', 'return', 'enemy'].includes(spawn.kind) && overlappingBlocker) {
+    if (['player', 'return'].includes(spawn.kind) && overlappingBlocker) {
       addIssue(errors, 'error', `${spawn.kind} spawn ${spawn.id} overlaps blocker ${overlappingBlocker.id}`, spawn.id);
     }
-    if (spawn.kind === 'enemy' && clearance < 0.75) {
-      addIssue(warnings, 'warning', `spawn ${spawn.id} has low clearance near room wall`, spawn.id);
-    }
-    if (validatesGeneratedEnemyRuntime && spawn.kind === 'enemy' && !RUNTIME_ENEMY_SPECIES.has(spawn.species)) {
-      addIssue(warnings, 'warning', `enemy spawn ${spawn.id} uses unknown runtime species ${spawn.species}`, spawn.id);
-    }
-    if (validatesGeneratedEnemyRuntime && spawn.kind === 'enemy' && !spawn.roomId) {
-      addIssue(warnings, 'warning', `enemy spawn ${spawn.id} is missing roomId`, spawn.id);
-    }
-    if (validatesGeneratedEnemyRuntime && spawn.kind === 'enemy') {
-      asArray(spawn.userData?.patrolPoints).forEach((point, index) => {
-        const patrolPosition = positionOf(point);
-        if (!patrolPosition || !rooms.some((candidate) => pointInRect(patrolPosition, candidate))) {
-          addIssue(warnings, 'warning', `enemy spawn ${spawn.id} patrol point ${index} is outside walkable room rectangles`, spawn.id);
-        } else if (blockerRects.find((blocker) => circleIntersectsRect(patrolPosition, 0.58, blocker))) {
-          addIssue(warnings, 'warning', `enemy spawn ${spawn.id} patrol point ${index} overlaps a blocker`, spawn.id);
-        }
-      });
-    }
-    if (['player', 'return', 'enemy'].includes(spawn.kind) && !usesOutdoorTerrain && !allowsNearWall && clearance < 0.7) {
+    if (['player', 'return'].includes(spawn.kind) && !usesOutdoorTerrain && !allowsNearWall && clearance < 0.7) {
       addIssue(warnings, 'warning', `spawn ${spawn.id} is close to a wall`, spawn.id);
     }
   });

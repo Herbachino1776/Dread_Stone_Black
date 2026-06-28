@@ -523,10 +523,6 @@ export function buildDungeonCollision(definition) {
     .filter((blocker) => blocker.blocksPlayer !== false)
     .map(blockerRect)
     .concat(wallBlockers);
-  const enemyBlockerRects = blockers
-    .filter((blocker) => blocker.blocksEnemies !== false)
-    .map(blockerRect)
-    .concat(wallBlockers);
   const lineOfMovementBlockerRects = blockers
     .filter((blocker) => blocker.blocksLineOfMovement !== false)
     .map(blockerRect)
@@ -536,7 +532,6 @@ export function buildDungeonCollision(definition) {
     walkableRects,
     walkableSurfaces,
     blockerRects,
-    enemyBlockerRects,
     lineOfMovementBlockerRects,
     collisionWorld: new CollisionWorld({
       walkableRects,

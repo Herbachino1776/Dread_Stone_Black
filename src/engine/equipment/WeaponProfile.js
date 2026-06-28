@@ -14,7 +14,6 @@ export function normalizeWeaponProfile(profile) {
     windupTime: Number(profile.windupTime ?? 0),
     recoveryTime: Number(profile.recoveryTime ?? 0),
     staminaCost: Number(profile.staminaCost ?? 0),
-    goreProfileId: profile.goreProfileId ?? profile.id,
     hitReactionType: profile.hitReactionType ?? 'light',
     tags: Object.freeze([...(profile.tags ?? [])]),
   });

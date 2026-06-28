@@ -265,9 +265,6 @@ export const folsomDefinition = Object.freeze({
   spawns: [
     { id: 'folsom_player_start', kind: 'player', position: { x: -4, y: 1.67, z: -11 }, yaw: -0.08, roomId: 'folsom_bounds', tags: ['default-start', 'courtyard'] },
     { id: 'folsom_reliquary_return', kind: 'return', position: { x: 73, y: 1.67, z: 4 }, yaw: -Math.PI / 2, roomId: 'folsom_bounds', tags: ['legacy-door-return'] },
-    { id: 'folsom_neckman_feud_01', kind: 'enemy', species: 'neck_man', faction: 'neck_man', preferredFaction: 'neck_man', position: { x: -18, y: 0.16, z: 20 }, yaw: 1.05, roomId: 'folsom_bounds', allowedForInitialWave: true, allowedForRespawn: true, minDistanceFromPlayer: 24, scale: 1.7, tags: ['folsom-blood-feud', 'initial-wave'], userData: { bloodFeud: true, freeForAllFaction: true, scaleMultiplier: 1.7 } },
-    { id: 'folsom_neckman_feud_02', kind: 'enemy', species: 'neck_man', faction: 'neck_man', preferredFaction: 'neck_man', position: { x: 8, y: 0.16, z: 22 }, yaw: -1.35, roomId: 'folsom_bounds', allowedForInitialWave: true, allowedForRespawn: true, minDistanceFromPlayer: 28, scale: 1.7, tags: ['folsom-blood-feud', 'initial-wave'], userData: { bloodFeud: true, freeForAllFaction: true, scaleMultiplier: 1.7 } },
-    { id: 'folsom_neckman_feud_03', kind: 'enemy', species: 'neck_man', faction: 'neck_man', preferredFaction: 'neck_man', position: { x: -4, y: 0.16, z: 44 }, yaw: 3.05, roomId: 'folsom_bounds', allowedForInitialWave: true, allowedForRespawn: true, minDistanceFromPlayer: 28, scale: 1.7, tags: ['folsom-blood-feud', 'initial-wave'], userData: { bloodFeud: true, freeForAllFaction: true, scaleMultiplier: 1.7 } },
   ],
   exits: [{
     id: 'folsom_rusted_reliquary_door', fromLocation: 'folsom', toLocation: 'reliquary-field',

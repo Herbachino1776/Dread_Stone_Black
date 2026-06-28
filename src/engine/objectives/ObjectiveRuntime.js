@@ -222,30 +222,9 @@ export class ObjectiveRuntime {
     if (event.type === OBJECTIVE_EVENTS.roomEntered && event.roomId) this.facts.visitedRoomIds.add(event.roomId);
     if (event.type === OBJECTIVE_EVENTS.interactionUsed && event.interactionId) this.facts.usedInteractionIds.add(event.interactionId);
     if (event.type === OBJECTIVE_EVENTS.chestOpened && event.interactionId) this.facts.chestOpenedInteractionIds.add(event.interactionId);
-    if (event.type === OBJECTIVE_EVENTS.enemyDamaged) {
-      if (event.enemyId) this.facts.damagedEnemyIds.add(event.enemyId);
-      if (event.targetId) this.facts.damagedEnemyIds.add(event.targetId);
-      if (event.species) this.facts.damagedSpecies.add(event.species);
-    }
-    if ([OBJECTIVE_EVENTS.enemyKilled, OBJECTIVE_EVENTS.factionEnemyKilled].includes(event.type)) {
-      if (event.enemyId) this.facts.killedEnemyIds.add(event.enemyId);
-      if (event.targetId) this.facts.killedEnemyIds.add(event.targetId);
-      if (event.species) this.facts.killedSpecies.add(event.species);
-      this.incrementFactionKill(event.factionId, event.species);
-    }
     if (event.type === OBJECTIVE_EVENTS.dungeonCompleted && event.locationId) {
       this.facts.locationCompletionIds.add(event.locationId);
     }
-  }
-
-  incrementFactionKill(factionId, species) {
-    [
-      `${factionId ?? '*'}:${species ?? '*'}`,
-      `${factionId ?? '*'}:*`,
-      `*:${species ?? '*'}`,
-    ].forEach((key) => {
-      this.facts.factionKills.set(key, (this.facts.factionKills.get(key) ?? 0) + 1);
-    });
   }
 
   getActiveObjectives() {

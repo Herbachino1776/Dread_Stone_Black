@@ -83,7 +83,6 @@ export function validateTorchPlacements(definition, torchFixtures) {
   const props = blockers.filter((blocker) => !['wall', 'exterior'].includes(blocker.type));
   const doors = asArray(definition.doors ?? definition.connectors);
   const exits = asArray(definition.exits);
-  const spawns = asArray(definition.spawns).filter((spawn) => spawn.kind === 'enemy');
   const navLinks = asArray(definition.navigation?.roomGraph?.links);
 
   torchFixtures.forEach((fixture) => {
@@ -147,13 +146,6 @@ export function validateTorchPlacements(definition, torchFixtures) {
     exits.forEach((exit) => {
       if (pointInRect(position, exit.triggerRect, fixture.exitClearance ?? 1.25)) {
         addIssue(warnings, 'warning', `torch ${id} is close to exit trigger ${exit.id}`, id);
-      }
-    });
-
-    spawns.forEach((spawn) => {
-      const spawnPosition = positionOf(spawn.position);
-      if (spawnPosition && pointDistance(position, spawnPosition) < (fixture.enemyClearance ?? 1.2)) {
-        addIssue(warnings, 'warning', `torch ${id} is close to enemy spawn ${spawn.id}`, id);
       }
     });
 

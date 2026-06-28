@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { Combat } from './Combat.js';
 import { EQUIPMENT_EVENTS } from '../engine/equipment/EquipmentEvents.js';
 import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
 import { Feedback } from './Feedback.js';
@@ -114,15 +113,8 @@ export class Game {
     window.addEventListener('field-offhand-equipped-changed', cancelTimedAction);
     this.disposers.push(() => window.removeEventListener('field-item-equipped-changed', cancelTimedAction));
     this.disposers.push(() => window.removeEventListener('field-offhand-equipped-changed', cancelTimedAction));
-    this.combat = new Combat({
-      player: this.player,
-      dungeon: this.dungeon,
-      hud: this.hud,
-      controls: this.controls,
-      equipmentRuntime: this.equipmentRuntime,
-      onAttackPerformed: (context) => this.viewmodelHost?.handleAttackStarted(context),
-    });
-    this.survivalHost.combat = this.combat;
+    this.isPlayerDead = false;
+
 
     this.playFieldReturnReactionIfNeeded({ query });
     if (this.perfDebugEnabled) this.perfDebugPanel = new PerfDebugPanel({ game: this });
@@ -179,20 +171,19 @@ export class Game {
     this.sceneSessionHost.update(deltaSeconds, {
       controls: this.controls,
       isPaused: false,
-      isPlayerDead: this.combat.isPlayerDead,
+      isPlayerDead: this.isPlayerDead,
     });
     this.viewmodelHost?.update(deltaSeconds);
-    this.combat.update(deltaSeconds);
     this.survivalHost?.update(deltaSeconds, {
       paused: this.isPaused,
       equipmentPanelOpen: this.equipmentPanel?.isOpen,
-      isPlayerDead: this.combat.isPlayerDead,
+      isPlayerDead: this.isPlayerDead,
     });
     this.progressionHost.update(deltaSeconds);
     this.interactions.updateHint();
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
     const keyboardInteractPressed = keyboardInteractHeld && !this.wasKeyboardInteractHeld;
-    this.interactions.updateTimedAction(deltaSeconds, this.equipmentPanel?.isOpen || this.isPaused || this.combat.isPlayerDead || this.controls.hasAttackQueued?.());
+    this.interactions.updateTimedAction(deltaSeconds, this.equipmentPanel?.isOpen || this.isPaused || this.isPlayerDead || this.controls.hasAttackQueued?.());
 
     if (this.controls.consumeInteract() || keyboardInteractPressed) {
       if (!this.interactions.useEquippedConsumable?.()) this.interactions.interact();

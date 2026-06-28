@@ -90,7 +90,7 @@ function blocker(id, type, minX, maxX, minZ, maxZ, height = 1.1, tags = []) {
     maxZ,
     height,
     blocksPlayer: true,
-    blocksEnemies: true,
+    blocksActors: true,
     blocksLineOfMovement: true,
     tags: ['solid', ...tags],
   };
@@ -132,21 +132,6 @@ function torchFixture(id, roomId, wallSide, distanceAlongWall, profile = 'weakTo
   };
 }
 
-function enemySpawn(id, species, faction, roomId, x, z, tags = [], userData = {}) {
-  return {
-    id,
-    kind: 'enemy',
-    species,
-    faction,
-    roomId,
-    position: { x, y: 0, z },
-    yaw: 0,
-    allowedForInitialWave: true,
-    allowedForRespawn: true,
-    tags,
-    userData,
-  };
-}
 
 export const sumerianCityBlockV0Definition = Object.freeze({
   id: 'sumerian-city-block-v0',
@@ -327,12 +312,6 @@ export const sumerianCityBlockV0Definition = Object.freeze({
 
   spawns: [
     { id: 'sumerian_city_block_player_start', kind: 'player', roomId: 'G01', position: { x: 50, y: 1.55, z: 4 }, yaw: 0, tags: ['start', 'city-gate'], userData: { note: 'Start just inside the south gate.' } },
-    enemySpawn('E001', 'sheep_demon', 'sheep_demon', 'M01', 38, 34, ['market-patrol'], { encounter: 'market brute' }),
-    enemySpawn('E002', 'neck_man', 'neck_man', 'E01', 82, 45, ['alley-patrol'], { encounter: 'east alley stalker' }),
-    enemySpawn('E003', 'sheep_demon', 'sheep_demon', 'W01', 18, 48, ['alley-patrol'], { encounter: 'west alley guard' }),
-    enemySpawn('E004', 'neck_man', 'neck_man', 'P01', 60, 71, ['plaza-patrol'], { encounter: 'temple plaza watcher' }),
-    enemySpawn('E005', 'sheep_demon', 'sheep_demon', 'E02', 84, 75, ['guard-court'], { encounter: 'guard court heavy' }),
-    enemySpawn('E006', 'neck_man', 'neck_man', 'B09', 90, 42, ['interior-ambush'], { encounter: 'bone washer ambush' }),
   ],
 
   exits: [

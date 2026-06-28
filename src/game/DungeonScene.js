@@ -11,12 +11,9 @@ import {
   createOutdoorFieldBlockers,
   createOutdoorTerrainMesh,
 } from './world-scene/OutdoorWorldRuntime.js';
-import { RAM_MAN_FRIENDLY_ANIMATION_FILES, createCreatureActor, createCreatureWorldRuntime } from './world-scene/CreatureWorldRuntime.js';
-import { GoreRuntime } from '../engine/gore/GoreRuntime.js';
 import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
 import { CollisionWorld } from './Collision.js';
 import { loadDungeonModel } from './ModelLoader.js';
-import { createGameGoreRegistry } from './gore/goreRegistry.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
 import { FISH_TEXTURE_PROFILES, createFishMesh, createFishingWorldRuntime, resolveFishSizeGroup } from './world-scene/FishingWorldRuntime.js';
@@ -26,26 +23,6 @@ const FLOOR_Y = 0;
 
 
 
-const RAM_MAN_NPC_POSITION = new THREE.Vector3(0, FLOOR_Y, 14);
-const RAM_MAN_NPC_PATROL_POINTS = [
-  new THREE.Vector3(-7, FLOOR_Y, 10),
-  new THREE.Vector3(7, FLOOR_Y, 10),
-  new THREE.Vector3(5, FLOOR_Y, 19),
-  new THREE.Vector3(-5, FLOOR_Y, 19),
-];
-
-
-function stableHash(value = '') {
-  let hash = 2166136261;
-  for (const char of String(value)) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-const RAM_MAN_NPC_PATROL_SPEED = 0.34;
-const RAM_MAN_NPC_TURN_SPEED = 3.2;
-const RAM_MAN_NPC_PATROL_PAUSE_SECONDS = 0.9;
 const ROOM_DOORWAY_Z = -4.35;
 const INDOOR_BACKGROUND_COLOR = 0x171311;
 const INDOOR_FOG_COLOR = 0x2b241d;
@@ -358,8 +335,6 @@ export class DungeonScene {
     this.animatedTextureFlipbooks = [];
     this.fieldCampfireFlames = [];
     this.fieldCookedFishPickups = [];
-    this.giantRamManFieldManifestation = null;
-    this.giantRamManFieldManifestationLoading = false;
     this.reliquaryBlock = null;
     this.reliquaryAwakeLight = null;
 
@@ -379,42 +354,9 @@ export class DungeonScene {
     this.shortcutOpen = false;
     this.secretWall = null;
     this.secretRevealed = false;
-    this.ramManNpcActor = null;
-    this.ramManNpc = null;
-    this.ramManNpcPatrolIndex = 0;
-    this.ramManNpcMoveTarget = 1;
-    this.ramManNpcPauseTimer = 0;
-    this.ramManNpcAnimation = null;
-    this.creatureWorldRuntime = createCreatureWorldRuntime({
-      scene: this.scene,
-      collision: this.collision,
-      area: this.area,
-      perfDebugToggles: this.perfDebugToggles,
-      playerSpawn: this.playerSpawn,
-      resolveOutdoorVisibleSurfaceY: (x, z, options) => this.resolveOutdoorVisibleSurfaceY(x, z, options),
-      onGoreEvent: (payload) => this.handleFactionGoreEvent(payload),
-      emitPlayerAttackGore: (hit, attack) => this.emitPlayerAttackGore(hit, attack),
-    });
-    this.sheepDemonEnemy = null;
-    this.blackGrassFactionManager = null;
-    this.generatedEnemyRuntime = null;
     this.blackGrassRuntime = null;
     this.compiledLocationRuntime = null;
     this.dungeonDebugRenderer = null;
-    this.goreRuntime = new GoreRuntime({
-      scene: this.scene,
-      registry: createGameGoreRegistry(),
-      locationId: this.area,
-      budgets: this.area === 'folsom' ? {
-        maxActiveParticles: 72,
-        maxDecalsGlobal: 42,
-        maxDecalsPerRoom: 12,
-        maxCorpsesGlobal: 5,
-        maxCorpsesPerRoom: 2,
-      } : {},
-      getRoomIdForPosition: (position) => this.findRoomIdForPosition(position),
-      getFloorYForPosition: (position) => this.getFloorYForPosition(position),
-    });
     this.torchFlickerController = new TorchFlickerController();
     this.torchLights = [];
     this.gateBlocker = { minX: 10.72, maxX: 11.28, minZ: -10.85, maxZ: -5.15 };
@@ -510,7 +452,6 @@ export class DungeonScene {
     this.compiledLocationRuntime = runtime;
     this.collision = runtime.collisionWorld;
     this.collision.sourceLocationId = locationId;
-    this.creatureWorldRuntime?.setCollision(this.collision);
 
     const exit = runtime.exits.find((candidate) => candidate.toLocation === 'reliquary-field') ?? runtime.exits[0];
     this.indoorExitTarget = exit?.position?.clone() ?? new THREE.Vector3(0, 1.2, -30);
@@ -559,7 +500,6 @@ export class DungeonScene {
 
     this.collision.sourceLocationId = locationId;
     runtime.collisionWorld = this.collision;
-    this.creatureWorldRuntime?.setCollision(this.collision);
     this.compiledLocationRuntime = runtime;
     this.inspectInteractions = (definition.interactions ?? []).map((interaction) => ({
       ...interaction,
@@ -582,22 +522,7 @@ export class DungeonScene {
   configureBlackGrassTempleRuntime() {
     this.blackGrassRuntime = this.configureCompiledLocationRuntime('black-grass-temple');
     this.blackGrassNavigationGraph = this.blackGrassRuntime.navGraph;
-    this.blackGrassFactionSpawnAnchors = Object.freeze(this.blackGrassRuntime.spawnAnchors
-      .filter((spawn) => spawn.tags?.includes('faction-war-anchor'))
-      .map((spawn) => ({
-        id: spawn.id,
-        preferredFaction: spawn.preferredFaction,
-        position: spawn.position.clone(),
-        yaw: spawn.yaw,
-        roomId: spawn.roomId,
-        initialWave: spawn.initialWave,
-        patrolPoints: Object.freeze((spawn.patrolPoints?.length ? spawn.patrolPoints : [
-          spawn.position.clone().add(new THREE.Vector3(-3, 0, -2)),
-          spawn.position.clone().add(new THREE.Vector3(3, 0, -2)),
-          spawn.position.clone().add(new THREE.Vector3(3, 0, 2)),
-          spawn.position.clone().add(new THREE.Vector3(-3, 0, 2)),
-        ]).map((point) => point.clone())),
-      })));
+
 
     const exit = this.blackGrassRuntime.exits.find((candidate) => candidate.id === 'bgt_exit_to_reliquary_field');
     this.indoorExitTarget = exit?.position?.clone() ?? this.indoorExitTarget;
@@ -826,8 +751,6 @@ export class DungeonScene {
     this.addBabyLabyrinthInterior();
     this.addBabyLabyrinthStaging();
     this.addTorches();
-    this.addRamManNpc();
-    this.addSheepDemonEnemy();
   }
 
   buildOutdoorField() {
@@ -843,7 +766,6 @@ export class DungeonScene {
     this.addReliquaryFieldStructures();
     this.addReliquaryFieldFoliage();
     this.addFieldSurvivalLoopObjects();
-    this.ensureGiantRamManFieldManifestation();
   }
 
 
@@ -862,7 +784,6 @@ export class DungeonScene {
       this.scene.add(this.compiledLocationRuntime.group);
       this.torchFlickerController.registerFromObject(this.compiledLocationRuntime.group);
     }
-    this.addCompiledLocationEnemies(this.compiledLocationRuntime, { source: 'compiled-outdoor' });
     this.addAuthoredOutdoorChests(definition);
     this.addAuthoredOutdoorSurvivalObjects(definition);
     this.addAuthoredOutdoorInteractions(definition);
@@ -983,81 +904,6 @@ export class DungeonScene {
     });
   }
 
-  shouldManifestGiantRamManInField(manifestation) {
-    if (this.area !== 'field' || !manifestation) return false;
-    if (manifestation.conditionFlag === 'blackGrassTempleAltarActivated') {
-      return Boolean(this.gameState?.hasBlackGrassTempleAltarActivated?.());
-    }
-    return false;
-  }
-
-  getGiantRamManFieldManifestationDefinition() {
-    return (getLocationDefinition('reliquary-field')?.fieldManifestations ?? [])
-      .find((manifestation) => manifestation.id === 'giant_ram_man_field_altar_manifestation') ?? null;
-  }
-
-  ensureGiantRamManFieldManifestation() {
-    const manifestation = this.getGiantRamManFieldManifestationDefinition();
-    if (!this.shouldManifestGiantRamManInField(manifestation)) return;
-    if (this.giantRamManFieldManifestation || this.giantRamManFieldManifestationLoading) return;
-
-    this.giantRamManFieldManifestationLoading = true;
-    loadDungeonModel({
-      url: manifestation.asset,
-      targetHeight: manifestation.targetHeight,
-      maxWidth: manifestation.maxWidth,
-      scaleMultiplier: manifestation.scaleMultiplier,
-    })
-      .then(({ root, scale, box }) => {
-        const group = new THREE.Group();
-        group.name = manifestation.id;
-        group.position.copy(this.toVector3(manifestation.position));
-        group.rotation.y = manifestation.yaw ?? 0;
-        group.userData = {
-          ...(manifestation.userData ?? {}),
-          fieldManifestation: true,
-          staticVisualActor: true,
-          id: manifestation.id,
-          species: manifestation.species,
-          asset: manifestation.asset,
-          conditionFlag: manifestation.conditionFlag,
-          collision: manifestation.collision ?? 'none',
-          combat: 'none',
-          interaction: 'none',
-          scale,
-          bounds: {
-            min: { x: box.min.x, y: box.min.y, z: box.min.z },
-            max: { x: box.max.x, y: box.max.y, z: box.max.z },
-          },
-          tags: manifestation.tags ?? [],
-        };
-
-        root.name = `${manifestation.id}-model`;
-        root.traverse((child) => {
-          if (!child.isMesh) return;
-          child.castShadow = true;
-          child.receiveShadow = true;
-        });
-        group.add(root);
-        this.enableOutdoorReadableShadows(group);
-        this.scene.add(group);
-        this.giantRamManFieldManifestation = group;
-
-        if (!this.giantRamManFieldManifestationLight) {
-          this.giantRamManFieldManifestationLight = new THREE.PointLight(0xd69a45, 1.1, 28, 1.45);
-          this.giantRamManFieldManifestationLight.name = 'S01-giant-ram-man-field-altar-manifestation-glow';
-          this.giantRamManFieldManifestationLight.position.set(0, 3.8, 3.2);
-          this.fieldShrineGroup?.add(this.giantRamManFieldManifestationLight);
-        }
-      })
-      .catch((error) => {
-        console.warn(`Giant Ram Man field manifestation failed to load from ${manifestation.asset}.`, error);
-      })
-      .finally(() => {
-        this.giantRamManFieldManifestationLoading = false;
-      });
-  }
-
   update(deltaSeconds, player = null) {
     if (this.key) {
       this.key.rotation.y += deltaSeconds * 1.7;
@@ -1073,21 +919,11 @@ export class DungeonScene {
     }
 
     this.updateTorchFlicker(deltaSeconds);
-    this.updateRamManNpcPatrol(deltaSeconds);
-    if (this.creatureWorldRuntime) {
-      this.creatureWorldRuntime.perfDebugToggles = this.perfDebugToggles;
-      this.creatureWorldRuntime.setArea(this.area);
-      this.creatureWorldRuntime.update(deltaSeconds, player);
-    }
-    this.blackGrassFactionManager = this.creatureWorldRuntime?.blackGrassFactionManager ?? null;
-    this.generatedEnemyRuntime = this.creatureWorldRuntime?.generatedEnemyRuntime ?? null;
-    this.sheepDemonEnemy = this.creatureWorldRuntime?.sheepDemonEnemy ?? null;
     this.updateCompiledSkyDomes(player);
     this.updateOutdoorFoliageBillboards(player);
     this.fishingWorldRuntime?.update(deltaSeconds);
     this.updateCookedFishPickups(deltaSeconds);
     this.updateFieldCampfireFlames(deltaSeconds, player);
-    if (this.perfDebugToggles?.gore !== false) this.goreRuntime.update(deltaSeconds, { playerPosition: player?.position });
     this.updateAnimatedDungeonMaterials(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
     this.updateBalthazanFloorCoverageQa(player);
@@ -1159,7 +995,6 @@ export class DungeonScene {
       shrineInteraction.message = 'The field answers.';
     }
 
-    this.ensureGiantRamManFieldManifestation();
 
     if (!this.fieldShrineGroup || this.fieldShrineAnswerLight) return;
 
@@ -1492,8 +1327,7 @@ export class DungeonScene {
     this.fieldFoliageBillboards.push(...runtime.foliageBillboards);
     if (this.collision && (this.area === 'field' || this.isCompiledOutdoorFieldArea())) {
       this.collision.outdoorTerrainSampler = this.outdoorVisibleSurfaceRuntime;
-      this.creatureWorldRuntime?.setCollision(this.collision);
-    }
+      }
   }
 
 
@@ -3213,7 +3047,6 @@ export class DungeonScene {
     this.logBalthazanTextureQa(runtime);
     this.torchFlickerController.registerFromObject(runtime.group);
     this.dungeonDebugRenderer = new DungeonDebugRenderer({ scene: this.scene, runtime });
-    this.addCompiledLocationEnemies(runtime);
     if (runtime.locationId === 'sumerian-sun-palace-district-v1') this.addSumerianSunPalaceTorchChest();
   }
 
@@ -3227,95 +3060,6 @@ export class DungeonScene {
     group.rotation.y = Math.PI * 0.5;
     this.scene.add(group);
     this.fieldSurvivalObjects.set(id, group);
-  }
-
-  addCompiledLocationEnemies(runtime = this.compiledLocationRuntime, options = {}) {
-    this.creatureWorldRuntime?.setCollision(this.collision);
-    this.creatureWorldRuntime?.setPlayerSpawn(this.playerSpawn);
-    this.creatureWorldRuntime?.addCompiledLocationEnemies(runtime, options);
-    this.blackGrassFactionManager = this.creatureWorldRuntime?.blackGrassFactionManager ?? null;
-    this.generatedEnemyRuntime = this.creatureWorldRuntime?.generatedEnemyRuntime ?? null;
-    this.compiledLocationEnemiesSpawnedFor = this.creatureWorldRuntime?.compiledLocationEnemiesSpawnedFor ?? this.compiledLocationEnemiesSpawnedFor;
-  }
-
-  buildBlackGrassTempleInterior() {
-    const runtime = this.blackGrassRuntime ?? this.compileLocationRuntime('black-grass-temple');
-    this.blackGrassRuntime = runtime;
-    this.scene.background = new THREE.Color(runtime.definition.lighting?.background ?? 0x100f0d);
-    this.scene.fog = new THREE.Fog(
-      runtime.definition.fog?.color ?? 0x242018,
-      runtime.definition.fog?.near ?? 12,
-      runtime.definition.fog?.far ?? 58,
-    );
-    this.scene.add(runtime.group);
-    this.torchFlickerController.registerFromObject(runtime.group);
-    this.reliquaryBlock = runtime.group.getObjectByName('BGT-P14-central-reliquary-block');
-    this.rustedSwordChest = runtime.group.getObjectByName('BGT-P16-rusted-sword-chest-placeholder');
-    if (this.gameState?.hasRustedSwordChestOpened?.()) {
-      this.markInteractionCollected('BGT_INT_RUSTED_SWORD_CHEST');
-    }
-    this.dungeonDebugRenderer = new DungeonDebugRenderer({ scene: this.scene, runtime });
-    this.addBlackGrassTempleEnemies();
-  }
-
-  addBlackGrassTempleEnemies() {
-    this.creatureWorldRuntime?.setArea(this.area);
-    this.creatureWorldRuntime?.addBlackGrassTempleEnemies({
-      anchors: this.blackGrassFactionSpawnAnchors,
-      navigationGraph: this.blackGrassNavigationGraph,
-      encounterZones: this.blackGrassRuntime?.encounterZones,
-    });
-    this.blackGrassFactionManager = this.creatureWorldRuntime?.blackGrassFactionManager ?? null;
-  }
-
-  findRoomIdForPosition(position) {
-    if (!position) return this.area;
-    const rooms = this.blackGrassRuntime?.rooms?.length
-      ? this.blackGrassRuntime.rooms
-      : [
-        { id: 'R01', minX: -4, maxX: 4, minZ: -34, maxZ: -16 },
-        { id: 'R02', minX: -11, maxX: 11, minZ: -18, maxZ: -6 },
-        { id: 'R03', minX: -30, maxX: -14, minZ: -16, maxZ: 0 },
-        { id: 'R04', minX: 14, maxX: 30, minZ: -16, maxZ: 0 },
-        { id: 'R05', minX: -15, maxX: 15, minZ: 2, maxZ: 26 },
-        { id: 'R06', minX: -7, maxX: 7, minZ: 25, maxZ: 35 },
-      ];
-    const room = rooms.find((candidate) => (
-      position.x >= candidate.minX
-      && position.x <= candidate.maxX
-      && position.z >= candidate.minZ
-      && position.z <= candidate.maxZ
-    ));
-    return room?.id ?? this.area;
-  }
-
-  getFloorYForPosition(position) {
-    const roomId = this.findRoomIdForPosition(position);
-    const authoredRoom = this.blackGrassRuntime?.rooms?.find((room) => room.id === roomId);
-    return authoredRoom?.floorY ?? FLOOR_Y;
-  }
-
-  handleFactionGoreEvent({ kind, event }) {
-    if (!event) return;
-    if (this.perfDebugToggles?.gore === false) return;
-    if (kind === 'death') this.goreRuntime.emitDeathGore(event);
-    else this.goreRuntime.emitHitGore(event);
-  }
-
-  emitPlayerAttackGore(hit, attack) {
-    if (!hit?.goreEvent) return;
-    if (this.perfDebugToggles?.gore === false) return;
-    const event = {
-      ...hit.goreEvent,
-      weaponId: hit.goreEvent.weaponId ?? attack.goreProfileId ?? attack.weaponId ?? 'sword',
-      direction: hit.goreEvent.direction ?? attack.direction,
-      roomId: hit.goreEvent.roomId ?? this.findRoomIdForPosition(hit.goreEvent.position),
-      damageAmount: hit.damage,
-      hitStrength: hit.killed ? 1.7 : 1.05,
-      tags: ['player_attack', ...(hit.goreEvent.tags ?? [])],
-    };
-    if (hit.killed) this.goreRuntime.emitDeathGore(event);
-    else this.goreRuntime.emitHitGore(event);
   }
 
   markInteractionCollected(interactionId) {
@@ -3359,10 +3103,6 @@ export class DungeonScene {
     guardianGlow.position.set(0, 2.35, 14);
     this.scene.add(guardianGlow);
 
-    const sheepDemonReadabilityGlow = new THREE.PointLight(0xf0b06e, 1.8, 13, 1.45);
-    sheepDemonReadabilityGlow.name = 'R04-sheep-demon-animation-readable-fill';
-    sheepDemonReadabilityGlow.position.set(22, 2.15, -8.2);
-    this.scene.add(sheepDemonReadabilityGlow);
 
     const reliquaryGlow = new THREE.PointLight(0x9fb7d6, 1.65, 15, 1.38);
     reliquaryGlow.name = 'R06-reliquary-alcove-dim-cold-fill';
@@ -3626,7 +3366,7 @@ export class DungeonScene {
     this.addBox({ size: new THREE.Vector3(3.1, WALL_HEIGHT, 0.35), position: new THREE.Vector3(3.25, WALL_HEIGHT / 2, -18.95), material: wallMat });
     this.addBox({ size: new THREE.Vector3(9.85, WALL_HEIGHT, 0.35), position: new THREE.Vector3(0, WALL_HEIGHT / 2, -22.55), material: wallMat });
 
-    // Space 3: a small east crypt chamber for the first enemy encounter.
+    // Space 3: a small east crypt chamber.
     this.addBox({ size: new THREE.Vector3(5.15, 0.18, 6.55), position: new THREE.Vector3(7.18, FLOOR_Y - 0.09, -21.05), material: floorMat, name: 'east-crypt-floor_worn_stone_01' });
     this.addBox({ size: new THREE.Vector3(5.15, 0.18, 6.55), position: new THREE.Vector3(7.18, WALL_HEIGHT, -21.05), material: ceilingMat, name: 'east-crypt-ceiling_dark_stone_01' });
     this.addBox({ size: new THREE.Vector3(0.35, WALL_HEIGHT, 6.55), position: new THREE.Vector3(9.85, WALL_HEIGHT / 2, -21.05), material: longWallMat });
@@ -3827,158 +3567,6 @@ export class DungeonScene {
 
   updateTorchFlicker(deltaSeconds) {
     this.torchFlickerController.update(deltaSeconds);
-  }
-
-  updateRamManNpcPatrol(deltaSeconds) {
-    this.ramManNpcActor?.update(deltaSeconds, { behaviorState: this.ramManNpcAnimation?.state ?? 'idle' });
-
-    if (!this.ramManNpc || RAM_MAN_NPC_PATROL_POINTS.length < 2) {
-      this.setRamManNpcAnimation('idle');
-      return;
-    }
-
-    if (this.ramManNpcPauseTimer > 0) {
-      this.ramManNpcPauseTimer = Math.max(0, this.ramManNpcPauseTimer - deltaSeconds);
-      this.setRamManNpcAnimation('idle');
-      return;
-    }
-
-    const target = RAM_MAN_NPC_PATROL_POINTS[this.ramManNpcMoveTarget];
-    const current = this.ramManNpc.position;
-    const toTarget = target.clone().sub(current);
-    toTarget.y = 0;
-    const distance = toTarget.length();
-
-    if (distance < 0.08) {
-      this.ramManNpcPatrolIndex = this.ramManNpcMoveTarget;
-      this.ramManNpcMoveTarget = (this.ramManNpcMoveTarget + 1) % RAM_MAN_NPC_PATROL_POINTS.length;
-      this.ramManNpcPauseTimer = RAM_MAN_NPC_PATROL_PAUSE_SECONDS;
-      this.setRamManNpcAnimation('idle');
-      return;
-    }
-
-    const direction = toTarget.normalize();
-    const stepDistance = Math.min(distance, RAM_MAN_NPC_PATROL_SPEED * deltaSeconds);
-    const next = current.clone().add(direction.clone().multiplyScalar(stepDistance));
-    next.y = FLOOR_Y;
-
-    if (this.collision.canStandAt(next)) {
-      current.copy(next);
-      this.setRamManNpcAnimation(stepDistance > 0.001 ? 'walk' : 'idle');
-    } else {
-      this.ramManNpcMoveTarget = (this.ramManNpcMoveTarget + 1) % RAM_MAN_NPC_PATROL_POINTS.length;
-      this.ramManNpcPauseTimer = RAM_MAN_NPC_PATROL_PAUSE_SECONDS;
-      this.setRamManNpcAnimation('idle');
-    }
-
-    const desiredYaw = Math.atan2(direction.x, direction.z);
-    this.ramManNpc.rotation.y = THREE.MathUtils.damp(this.ramManNpc.rotation.y, desiredYaw, RAM_MAN_NPC_TURN_SPEED, deltaSeconds);
-  }
-
-  setRamManNpcAnimation(state) {
-    const animation = this.ramManNpcAnimation;
-    if (!animation || animation.state === state) return;
-
-    if (!this.ramManNpcActor?.setAnimationState(state, { fadeSeconds: 0.16 })) return;
-    animation.state = state;
-    if (this.ramManNpc) this.ramManNpc.userData.behaviorState = state;
-  }
-
-  createRamManNpcAnimationTrack({ state, root, gltf, scale }) {
-    const mixer = new THREE.AnimationMixer(root);
-    const clips = gltf.animations ?? [];
-    const clip = clips.find((candidate) => candidate.name.toLowerCase().includes(state)) ?? clips[0];
-
-    if (!clip) {
-      console.warn(`Friendly Ram Man ${state} GLB loaded without animation clips.`);
-      return { root, mixer, action: null, clip: null, clipNames: [], clipSummaries: [] };
-    }
-
-    const action = mixer.clipAction(clip);
-    action.setLoop(THREE.LoopRepeat, Infinity);
-    action.clampWhenFinished = false;
-    action.enabled = true;
-
-    return {
-      root,
-      mixer,
-      action,
-      clip,
-      scale,
-      clipNames: clips.map((candidate) => candidate.name || '(unnamed clip)'),
-      clipSummaries: clips.map((candidate) => ({
-        name: candidate.name || '(unnamed clip)',
-        durationSeconds: Number(candidate.duration.toFixed(3)),
-        trackCount: candidate.tracks.length,
-      })),
-    };
-  }
-
-  addRamManNpc() {
-    // Friendly ambience-only NPC: no collision blocker, no enemy registration, no combat hooks.
-    const actor = createCreatureActor('ram_man_friendly', {
-      scene: this.scene,
-      position: RAM_MAN_NPC_POSITION,
-      yaw: 0,
-      name: 'ram-man-friendly-01',
-    });
-
-    actor.load({ initialStates: ['idle', 'walk'] })
-      .then(() => {
-        actor.group.userData = {
-          ...actor.group.userData,
-          friendly: true,
-          collision: 'none - visual roaming NPC only',
-          combat: 'none - not registered as an enemy or target',
-          placement: 'R05 guardian chamber around X 0, Z 14, clear of the reliquary route',
-          patrolSpeed: RAM_MAN_NPC_PATROL_SPEED,
-          patrolPauseSeconds: RAM_MAN_NPC_PATROL_PAUSE_SECONDS,
-          patrolPoints: RAM_MAN_NPC_PATROL_POINTS.map((point) => ({ x: point.x, y: point.y, z: point.z })),
-        };
-
-        this.ramManNpcActor = actor;
-        this.ramManNpc = actor.group;
-        this.ramManNpcAnimation = {
-          state: null,
-          tracks: actor.animationSet.tracks,
-        };
-        this.setRamManNpcAnimation('idle');
-
-        if (import.meta.env.DEV) console.info('Friendly Ram Man CreatureActor loaded:', actor.group.userData.debug);
-      })
-      .catch((error) => {
-        this.ramManNpcActor = null;
-        this.ramManNpcAnimation = null;
-        console.warn(
-          `Friendly Ram Man animated GLBs failed to load from ${RAM_MAN_FRIENDLY_ANIMATION_FILES.idle} or ${RAM_MAN_FRIENDLY_ANIMATION_FILES.walk}. The dungeon remains playable.`,
-          error,
-        );
-      });
-  }
-
-  addSheepDemonEnemy() {
-    this.creatureWorldRuntime?.setArea(this.area);
-    this.creatureWorldRuntime?.addStandaloneSheepDemonEnemy();
-    this.sheepDemonEnemy = this.creatureWorldRuntime?.sheepDemonEnemy ?? null;
-  }
-
-  updateBlackGrassFactionEnemies(deltaSeconds, player) {
-    this.creatureWorldRuntime?.updateBlackGrassFactionEnemies(deltaSeconds, player);
-    this.blackGrassFactionManager = this.creatureWorldRuntime?.blackGrassFactionManager ?? null;
-    this.generatedEnemyRuntime = this.creatureWorldRuntime?.generatedEnemyRuntime ?? null;
-  }
-
-  updateSheepDemonEnemy(deltaSeconds, player) {
-    this.creatureWorldRuntime?.updateSheepDemonEnemy(deltaSeconds, player);
-    this.sheepDemonEnemy = this.creatureWorldRuntime?.sheepDemonEnemy ?? null;
-  }
-
-  consumeEnemyContactDamage(playerPosition) {
-    return this.creatureWorldRuntime?.consumeEnemyContactDamage(playerPosition) ?? null;
-  }
-
-  damageEnemyFromPlayerAttack(attack) {
-    return this.creatureWorldRuntime?.damageEnemyFromPlayerAttack(attack) ?? null;
   }
 
   addGate() {

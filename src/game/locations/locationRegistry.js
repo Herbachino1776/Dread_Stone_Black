@@ -29,7 +29,7 @@ function normalizeKerovacPrimitive(primitive) {
     next = {
       ...next,
       blocksPlayer: false,
-      blocksEnemies: false,
+      blocksActors: false,
       tags: [
         ...(next.tags ?? []),
         'expo-entrance-clearance-fix',
