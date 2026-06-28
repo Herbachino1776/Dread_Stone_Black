@@ -20,7 +20,7 @@ import { PerfDebugPanel } from './PerfDebugPanel.js';
 import { PlayerController } from './PlayerController.js';
 import { BroadswordView } from './weapons/BroadswordView.js';
 import { BroadswordGestureController } from './weapons/BroadswordGestureController.js';
-import { resolveStartupArea } from './locationRouting.js';
+import { resolveLocationIdForArea, resolveLocationReturnSpawn, resolveStartupArea } from './locationRouting.js';
 import { getLocationDefinition, loadLocationDefinition } from './locations/locationRegistry.js';
 import { getObjectivePackForLocation } from './objectives/objectiveRegistry.js';
 import { objectiveMessages, resolveObjectiveMessage } from './objectives/objectiveMessages.js';
@@ -40,21 +40,6 @@ const PLAYER_TORCH_SPOT_LIGHT = Object.freeze({
   angle: 0.78,
   penumbra: 0.82,
   decay: 1.25,
-});
-
-const FIELD_RETURN_SPAWNS_BY_LOCATION = Object.freeze({
-  'black-grass-temple': 'blackGrassTempleExit',
-  'field-keeper-house': 'fieldKeeperHouseExit',
-  'level-1': 'ddplusLevel1Exit',
-  'sumerian-city-block-v0': 'sumerianCityBlockV0Exit',
-  'sumerian-sun-palace-district-v1': 'sumerianSunPalaceDistrictV1Exit',
-  'sumerian-canal-market-district-v2': 'sumerianCanalMarketDistrictV2Exit',
-  balthazan: 'balthazanExit',
-  kerovac: 'kerovacExit',
-  oarbFeatureYard: 'oarbFeatureYardExit',
-  oarbOutdoorExpo: 'oarbOutdoorExpoExit',
-  folsom: 'folsomExit',
-  dungeon: 'cryptAExit',
 });
 
 export class Game {
@@ -96,8 +81,10 @@ export class Game {
     const requestedArea = query.get('area');
     const returnedFrom = query.get('from');
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
-    const fieldSpawn = FIELD_RETURN_SPAWNS_BY_LOCATION[returnedFrom] ?? 'start';
     const area = resolveStartupArea(requestedArea);
+    const fieldSpawn = area === 'field'
+      ? await resolveLocationReturnSpawn(returnedFrom)
+      : 'start';
     await this.preloadStartupLocation(area);
     this.gameState = new GameState();
     this.equipmentRuntime = new EquipmentRuntime({
@@ -213,9 +200,7 @@ export class Game {
   }
 
   resolveLocationId(area) {
-    if (area === 'dungeon') return 'south-reliquary-crypt';
-    if (area === 'field') return 'reliquary-field';
-    return area;
+    return resolveLocationIdForArea(area);
   }
 
   createObjectiveRuntime() {

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 
-export const FIELD_SPAWN_IDS_BY_RUNTIME_KEY = Object.freeze({
+export const LEGACY_FIELD_SPAWN_IDS_BY_RUNTIME_KEY = Object.freeze({
   start: 'field_player_start',
   cryptAExit: 'field_south_reliquary_crypt_return',
   blackGrassTempleExit: 'field_black_grass_temple_return',
@@ -14,8 +14,21 @@ export const FIELD_SPAWN_IDS_BY_RUNTIME_KEY = Object.freeze({
   kerovacExit: 'field_kerovac_return',
   oarbFeatureYardExit: 'field_oarb_feature_yard_return',
   oarbOutdoorExpoExit: 'field_oarb_outdoor_expo_return',
+  v2TestShrineExit: 'field_v2_test_shrine_return',
   folsomExit: 'field_folsom_return',
 });
+
+export function getFieldSpawnIdsByRuntimeKey() {
+  const authoredEntries = (getLocationDefinition('reliquary-field')?.spawns ?? [])
+    .filter((spawn) => spawn.userData?.runtimeSpawnKey)
+    .map((spawn) => [spawn.userData.runtimeSpawnKey, spawn.id]);
+  return Object.freeze({
+    ...LEGACY_FIELD_SPAWN_IDS_BY_RUNTIME_KEY,
+    ...Object.fromEntries(authoredEntries),
+  });
+}
+
+export const FIELD_SPAWN_IDS_BY_RUNTIME_KEY = LEGACY_FIELD_SPAWN_IDS_BY_RUNTIME_KEY;
 
 export function isFiniteAuthoredPosition(position) {
   return position
@@ -37,8 +50,9 @@ export function resolveFieldPlayerSpawn(fieldSpawn = 'start', {
   fallbackYaw = 0,
   logger = console,
 } = {}) {
-  const spawnKey = FIELD_SPAWN_IDS_BY_RUNTIME_KEY[fieldSpawn] ? fieldSpawn : 'start';
-  const spawnId = FIELD_SPAWN_IDS_BY_RUNTIME_KEY[spawnKey];
+  const fieldSpawnIdsByRuntimeKey = getFieldSpawnIdsByRuntimeKey();
+  const spawnKey = fieldSpawnIdsByRuntimeKey[fieldSpawn] ? fieldSpawn : 'start';
+  const spawnId = fieldSpawnIdsByRuntimeKey[spawnKey];
   const spawn = getLocationDefinition('reliquary-field')?.spawns?.find((candidate) => candidate.id === spawnId);
 
   if (isFiniteAuthoredPosition(spawn?.position)) {
