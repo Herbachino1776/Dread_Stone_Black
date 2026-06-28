@@ -4,8 +4,6 @@ import { FishingRodView } from './fishing/FishingRodView.js';
 import { CastingController } from './fishing/CastingController.js';
 import { EQUIPMENT_EVENTS } from '../engine/equipment/EquipmentEvents.js';
 import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
-import { ObjectiveRuntime } from '../engine/objectives/ObjectiveRuntime.js';
-import { OBJECTIVE_EVENTS } from '../engine/objectives/ObjectiveEvents.js';
 import { Feedback } from './Feedback.js';
 import { EquipmentPanel } from './equipment/EquipmentPanel.js';
 import { SurvivalInventoryBridge } from './equipment/SurvivalInventoryBridge.js';
@@ -15,15 +13,12 @@ import { HudHost } from './hosts/HudHost.js';
 import { InputHost } from './hosts/InputHost.js';
 import { RendererHost } from './hosts/RendererHost.js';
 import { SaveHost } from './hosts/SaveHost.js';
+import { ProgressionHost } from './hosts/ProgressionHost.js';
 import { SceneSessionHost } from './hosts/SceneSessionHost.js';
 import { Interactions } from './Interactions.js';
 import { PerfDebugPanel } from './PerfDebugPanel.js';
 import { BroadswordView } from './weapons/BroadswordView.js';
 import { BroadswordGestureController } from './weapons/BroadswordGestureController.js';
-import { getLocationDefinition } from './locations/locationRegistry.js';
-import { getObjectivePackForLocation } from './objectives/objectiveRegistry.js';
-import { objectiveMessages, resolveObjectiveMessage } from './objectives/objectiveMessages.js';
-import { ObjectivePanel } from './ui/ObjectivePanel.js';
 
 const PLAYER_TORCH_POINT_LIGHT = Object.freeze({
   color: 0xffb066,
@@ -101,20 +96,18 @@ export class Game {
     this.camera = this.sceneSessionHost.camera;
     this.player = this.sceneSessionHost.player;
     this.locationId = this.sceneSessionHost.locationId;
-    this.objectiveRuntime = this.createObjectiveRuntime();
-    this.registerCurrentObjectivePack();
-    this.objectiveRuntime.loadSnapshot(this.gameState.getObjectiveSnapshot());
-    if (import.meta.env.DEV) {
-      window.dreadStoneObjectiveRuntime = this.objectiveRuntime;
-      window.dreadStoneObjectiveDebug = () => this.objectiveRuntime.getDebugInfo();
-    }
+    this.progressionHost = new ProgressionHost({
+      root: this.app,
+      gameState: this.gameState,
+      equipmentRuntime: this.equipmentRuntime,
+      hudHost: this.hudHost,
+      saveHost: this.saveHost,
+      debugEnabled: objectiveDebugUiEnabled,
+    });
+    this.progressionHost.initializeForSession(this.sceneSessionHost);
+    this.objectiveRuntime = this.progressionHost.getObjectiveRuntime();
     this.hud = this.hudHost.hud;
     this.feedback = new Feedback(this.camera);
-    this.objectivePanel = new ObjectivePanel({
-      root: this.app,
-      objectiveRuntime: this.objectiveRuntime,
-      enabled: objectiveDebugUiEnabled,
-    });
     this.createPlayerTorchLight();
     this.setPlayerTorchEnabled(this.equipmentRuntime.getEquippedOffhandId?.() === 'torch');
     this.inputHost = new InputHost({ root: this.app });
@@ -147,8 +140,6 @@ export class Game {
       },
     });
 
-    this.bindObjectiveEquipmentEvents();
-    this.emitLocationEntered();
     this.playFieldReturnReactionIfNeeded({ query });
     if (this.perfDebugEnabled) this.perfDebugPanel = new PerfDebugPanel({ game: this });
 
@@ -167,120 +158,6 @@ export class Game {
       message.style.cssText = 'position:absolute;inset:auto 1rem 1rem 1rem;z-index:20;margin:0;padding:0.75rem;background:rgba(32,8,8,0.92);color:#ffd8c2;border:1px solid #a45f3a;font:12px/1.4 monospace;';
       message.textContent = `Startup failed: ${error?.message ?? error}`;
       viewport?.append(message);
-    }
-  }
-
-  createObjectiveRuntime() {
-    const runtime = new ObjectiveRuntime({
-      context: {
-        equipmentRuntime: this.equipmentRuntime,
-      },
-      callbacks: {
-        resolveMessage: resolveObjectiveMessage,
-        showToast: (message) => {
-          this.objectivePanel?.showToast(message);
-        },
-        showLocationMessage: (message) => {
-          this.objectivePanel?.showToast(message);
-        },
-      },
-      validation: this.createObjectiveValidationContext(),
-    });
-    runtime.on('objectiveChanged', () => {
-      this.objectivePanel?.render();
-      this.saveObjectiveState();
-    });
-    runtime.on('objectiveEvent', () => this.saveObjectiveState());
-    return runtime;
-  }
-
-  createObjectiveValidationContext() {
-    const definitions = ['black-grass-temple', 'south-reliquary-crypt', 'field-keeper-house']
-      .map((id) => getLocationDefinition(id))
-      .filter(Boolean);
-    return {
-      knownInteractionIds: new Set(definitions.flatMap((definition) => (definition.interactions ?? []).map((interaction) => interaction.id))),
-      knownRoomIds: new Set(definitions.flatMap((definition) => (definition.rooms ?? []).map((room) => room.id))),
-      knownItemIds: new Set(Object.keys(equipmentRegistry.items ?? {})),
-      knownMessageIds: new Set(Object.keys(objectiveMessages)),
-    };
-  }
-
-  registerCurrentObjectivePack() {
-    const locationDefinition = getLocationDefinition(this.locationId);
-    const pack = getObjectivePackForLocation(this.locationId, locationDefinition?.objectivePackId);
-    if (!pack) return;
-    this.objectiveRuntime.registerLocationObjectives(pack.locationId, pack.definitions, {
-      objectivePackId: pack.id,
-      silent: pack.silent,
-    });
-  }
-
-  bindObjectiveEquipmentEvents() {
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, ({ item, metadata }) => {
-      const payload = {
-        locationId: this.locationId,
-        roomId: this.currentRoomId,
-        itemId: item.id,
-        equipmentId: item.id,
-        interactionId: metadata?.source ?? null,
-        sourceId: metadata?.source ?? 'equipment',
-        tags: metadata?.tags ?? [],
-      };
-      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.itemAcquired, payload);
-      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.equipmentAcquired, payload);
-    });
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, ({ itemId, slotId }) => {
-      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.equipmentEquipped, {
-        locationId: this.locationId,
-        roomId: this.currentRoomId,
-        itemId,
-        equipmentId: itemId,
-        sourceId: slotId,
-        tags: ['equipment'],
-      });
-    });
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.attackResolved, ({ weaponProfile, hit }) => {
-      this.emitObjectiveCombatHit({ weaponProfile, hit });
-    });
-  }
-
-  emitLocationEntered() {
-    this.currentRoomId = this.dungeon.findRoomIdForPosition?.(this.player.position) ?? this.locationId;
-    this.objectiveRuntime.emit(OBJECTIVE_EVENTS.locationEntered, {
-      locationId: this.locationId,
-      roomId: this.currentRoomId,
-      tags: [this.dungeon.area],
-    });
-    this.objectiveRuntime.emit(OBJECTIVE_EVENTS.roomEntered, {
-      locationId: this.locationId,
-      roomId: this.currentRoomId,
-    });
-  }
-
-  emitObjectiveCombatHit({ weaponProfile, hit }) {
-    if (!hit) return;
-    const goreEvent = hit.goreEvent ?? {};
-    const basePayload = {
-      locationId: this.locationId,
-      roomId: goreEvent.roomId ?? this.currentRoomId,
-      weaponId: weaponProfile?.id ?? goreEvent.weaponId,
-      enemyId: goreEvent.targetId ?? null,
-      targetId: goreEvent.targetId ?? null,
-      species: goreEvent.species ?? goreEvent.creatureId ?? null,
-      factionId: goreEvent.factionId ?? null,
-      sourceId: goreEvent.sourceId ?? 'player',
-      tags: ['player_attack', ...(goreEvent.tags ?? [])],
-      metadata: {
-        damage: hit.damage,
-        remainingHealth: hit.remainingHealth,
-        target: hit.target,
-      },
-    };
-    this.objectiveRuntime.emit(OBJECTIVE_EVENTS.enemyDamaged, basePayload);
-    if (hit.killed) {
-      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.enemyKilled, basePayload);
-      if (basePayload.factionId) this.objectiveRuntime.emit(OBJECTIVE_EVENTS.factionEnemyKilled, basePayload);
     }
   }
 
@@ -342,10 +219,6 @@ export class Game {
     this.saveHost.saveEquipmentState(this.gameState, this.equipmentRuntime);
   }
 
-  saveObjectiveState() {
-    this.saveHost.saveObjectiveState(this.gameState, this.objectiveRuntime);
-  }
-
   update() {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
     this.perfDebugPanel?.update();
@@ -371,7 +244,7 @@ export class Game {
     const hunger = this.gameState.updateHunger?.(deltaSeconds, { paused: this.equipmentPanel?.isOpen || this.isPaused, applyStarvationDamage: (amount) => this.combat.takeDamage?.(amount, 'Starvation') });
     if (hunger) this.hud.updateHunger?.(hunger);
     this.updatePlayerTorchLight(deltaSeconds);
-    this.updateObjectiveLocationTracking(deltaSeconds);
+    this.progressionHost.update(deltaSeconds);
     this.interactions.updateHint();
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
     const interactHeld = (this.controls.isInteractHeld?.() ?? false) || keyboardInteractHeld;
@@ -428,24 +301,6 @@ export class Game {
     this.clearResetConfirmation();
     this.saveHost.resetAllProgress();
     window.location.reload();
-  }
-
-  updateObjectiveLocationTracking(deltaSeconds) {
-    const roomId = this.dungeon.findRoomIdForPosition?.(this.player.position) ?? this.locationId;
-    if (roomId && roomId !== this.currentRoomId) {
-      this.currentRoomId = roomId;
-      this.objectiveRuntime.emit(OBJECTIVE_EVENTS.roomEntered, {
-        locationId: this.locationId,
-        roomId,
-      });
-    }
-
-    this.objectiveRuntime.update(deltaSeconds, {
-      equipmentRuntime: this.equipmentRuntime,
-      playerPosition: this.player.position,
-      locationId: this.locationId,
-      roomId: this.currentRoomId,
-    });
   }
 
   getViewportSize() {
