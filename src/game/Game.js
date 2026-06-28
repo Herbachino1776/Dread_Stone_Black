@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { Combat } from './Combat.js';
 import { FishingRodView } from './fishing/FishingRodView.js';
 import { CastingController } from './fishing/CastingController.js';
-import { DungeonScene } from './DungeonScene.js';
 import { EQUIPMENT_EVENTS } from '../engine/equipment/EquipmentEvents.js';
 import { EquipmentRuntime } from '../engine/equipment/EquipmentRuntime.js';
 import { ObjectiveRuntime } from '../engine/objectives/ObjectiveRuntime.js';
@@ -16,13 +15,12 @@ import { HudHost } from './hosts/HudHost.js';
 import { InputHost } from './hosts/InputHost.js';
 import { RendererHost } from './hosts/RendererHost.js';
 import { SaveHost } from './hosts/SaveHost.js';
+import { SceneSessionHost } from './hosts/SceneSessionHost.js';
 import { Interactions } from './Interactions.js';
 import { PerfDebugPanel } from './PerfDebugPanel.js';
-import { PlayerController } from './PlayerController.js';
 import { BroadswordView } from './weapons/BroadswordView.js';
 import { BroadswordGestureController } from './weapons/BroadswordGestureController.js';
-import { resolveLocationIdForArea, resolveLocationReturnSpawn, resolveStartupArea } from './locationRouting.js';
-import { getLocationDefinition, loadLocationDefinition } from './locations/locationRegistry.js';
+import { getLocationDefinition } from './locations/locationRegistry.js';
 import { getObjectivePackForLocation } from './objectives/objectiveRegistry.js';
 import { objectiveMessages, resolveObjectiveMessage } from './objectives/objectiveMessages.js';
 import { ObjectivePanel } from './ui/ObjectivePanel.js';
@@ -83,20 +81,7 @@ export class Game {
     this.resetButtons = this.hudHost.resetButtons;
     this.renderer = this.rendererHost.renderer;
 
-    const { width, height } = this.rendererHost.getViewportSize();
-    this.camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 260);
-    this.rendererHost.onResize(({ width: resizeWidth, height: resizeHeight }) => {
-      this.camera.aspect = resizeWidth / resizeHeight;
-      this.camera.updateProjectionMatrix();
-    });
-    const requestedArea = query.get('area');
-    const returnedFrom = query.get('from');
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
-    const area = resolveStartupArea(requestedArea);
-    const fieldSpawn = area === 'field'
-      ? await resolveLocationReturnSpawn(returnedFrom)
-      : 'start';
-    await this.preloadStartupLocation(area);
     this.saveHost = new SaveHost();
     this.gameState = this.saveHost.loadInitialState();
     this.equipmentRuntime = new EquipmentRuntime({
@@ -109,10 +94,13 @@ export class Game {
       if (slotId === 'offhand') this.setPlayerTorchEnabled(itemId === 'torch');
     });
     this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
-    this.dungeon = new DungeonScene({ area, fieldSpawn, gameState: this.gameState });
-    this.scene = this.dungeon.build();
-    this.scene.add(this.camera);
-    this.locationId = this.resolveLocationId(this.dungeon.area);
+    this.sceneSessionHost = new SceneSessionHost({ rendererHost: this.rendererHost, gameState: this.gameState, query });
+    await this.sceneSessionHost.startInitialSession();
+    this.dungeon = this.sceneSessionHost.dungeon;
+    this.scene = this.sceneSessionHost.scene;
+    this.camera = this.sceneSessionHost.camera;
+    this.player = this.sceneSessionHost.player;
+    this.locationId = this.sceneSessionHost.locationId;
     this.objectiveRuntime = this.createObjectiveRuntime();
     this.registerCurrentObjectivePack();
     this.objectiveRuntime.loadSnapshot(this.gameState.getObjectiveSnapshot());
@@ -120,19 +108,6 @@ export class Game {
       window.dreadStoneObjectiveRuntime = this.objectiveRuntime;
       window.dreadStoneObjectiveDebug = () => this.objectiveRuntime.getDebugInfo();
     }
-    const movementProfile = getLocationDefinition(this.locationId)?.type === 'field'
-      ? {
-        moveSpeed: PlayerController.OUTDOOR_MOVE_SPEED,
-        strafeSpeed: PlayerController.OUTDOOR_STRAFE_SPEED,
-      }
-      : {
-        moveSpeed: PlayerController.DUNGEON_MOVE_SPEED,
-        strafeSpeed: PlayerController.DUNGEON_STRAFE_SPEED,
-      };
-    this.player = new PlayerController(this.camera, this.dungeon.collision, {
-      ...this.dungeon.playerSpawn,
-      ...movementProfile,
-    });
     this.hud = this.hudHost.hud;
     this.feedback = new Feedback(this.camera);
     this.objectivePanel = new ObjectivePanel({
@@ -155,6 +130,7 @@ export class Game {
       feedback: this.feedback,
       equipmentRuntime: this.equipmentRuntime,
       objectiveRuntime: this.objectiveRuntime,
+      transitionToLocation: (...args) => this.sceneSessionHost.transitionToLocation(...args),
     });
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.interactions.cancelActiveTimedAction?.());
     window.addEventListener('field-item-equipped-changed', () => this.interactions.cancelActiveTimedAction?.());
@@ -179,17 +155,6 @@ export class Game {
     this.rendererHost.setAnimationLoop((time) => this.update(time));
   }
 
-  async preloadStartupLocation(area) {
-    const locationId = this.resolveLocationId(area);
-    if (getLocationDefinition(locationId)) return;
-    try {
-      await loadLocationDefinition(locationId);
-    } catch (error) {
-      console.error(`[Dread Stone Black] Could not load startup location definition ${locationId}.`, error);
-      throw error;
-    }
-  }
-
   handleStartupError(error) {
     console.error('[Dread Stone Black] Startup failed before the scene became playable.', error);
     this.rendererHost?.setAnimationLoop?.(null);
@@ -203,10 +168,6 @@ export class Game {
       message.textContent = `Startup failed: ${error?.message ?? error}`;
       viewport?.append(message);
     }
-  }
-
-  resolveLocationId(area) {
-    return resolveLocationIdForArea(area);
   }
 
   createObjectiveRuntime() {
@@ -393,14 +354,15 @@ export class Game {
       this.controls.consumeAttack();
       this.controls.consumeInteract();
       this.hud.updateDebug(this.player, this.castingController?.debug, this.broadswordGestureController?.debug);
-      this.rendererHost.render(this.scene, this.camera);
+      this.sceneSessionHost.render();
       return;
     }
 
-    if (!this.combat.isPlayerDead) {
-      this.player.update(deltaSeconds, this.controls);
-    }
-    this.dungeon.update(deltaSeconds, this.player);
+    this.sceneSessionHost.update(deltaSeconds, {
+      controls: this.controls,
+      isPaused: false,
+      isPlayerDead: this.combat.isPlayerDead,
+    });
     this.fishingRodView?.update(deltaSeconds, this.castingController?.state);
     this.broadswordView?.update(deltaSeconds);
     this.castingController?.update(deltaSeconds);
@@ -423,7 +385,7 @@ export class Game {
 
     this.hud.updateDebug(this.player, this.castingController?.debug, this.broadswordGestureController?.debug);
     this.feedback.update(deltaSeconds);
-    this.rendererHost.render(this.scene, this.camera);
+    this.sceneSessionHost.render();
     this.perfDebugPanel?.render();
   }
 
