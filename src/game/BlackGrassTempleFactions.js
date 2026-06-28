@@ -869,8 +869,12 @@ class BlackGrassFactionEnemy {
     const generatedRuntime = context?.generatedRuntime === true;
     const updateTier = context?.updateTier ?? 'near';
     const aiTickAllowed = context?.aiTickAllowed !== false;
-    const animationDelta = generatedRuntime && updateTier === 'sleep' ? 0 : deltaSeconds;
-    if (animationDelta > 0) this.animation?.update(animationDelta);
+    const animationDelta = (context?.perfDebugToggles?.neckmanStatic === true || (generatedRuntime && updateTier === 'sleep')) ? 0 : deltaSeconds;
+    if (animationDelta > 0) {
+      const mixerStart = performance?.now?.() ?? Date.now();
+      this.animation?.update(animationDelta);
+      if (context?.perfStats) context.perfStats.mixerMs += (performance?.now?.() ?? Date.now()) - mixerStart;
+    }
     this.attackCooldown = Math.max(0, this.attackCooldown - deltaSeconds);
     this.devCombatLogElapsed += deltaSeconds;
     this.jumpAttackCooldown = Math.max(0, this.jumpAttackCooldown - deltaSeconds);
@@ -882,11 +886,13 @@ class BlackGrassFactionEnemy {
     if (aiTickAllowed) this.decayBlockedSegmentCooldowns(deltaSeconds);
     if (!this.group || this.isRemoved || this.lifecycle.state === 'loading' || this.lifecycle.state === 'pendingLoad') {
       this.skippedAiTicks = (this.skippedAiTicks ?? 0) + 1;
+      if (context?.perfStats) context.perfStats.skippedAiTicks += 1;
       return;
     }
 
     if (this.encounterMode === 'folsom_neckman_blood_feud' && !aiTickAllowed) {
       this.skippedAiTicks = (this.skippedAiTicks ?? 0) + 1;
+      if (context?.perfStats) context.perfStats.skippedAiTicks += 1;
       this.group.userData.mobileAiSkipped = true;
       this.group.userData.mobileAiTickSeconds = FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS;
       return;
@@ -903,6 +909,7 @@ class BlackGrassFactionEnemy {
     }
 
     const isFolsomFeud = this.encounterMode === 'folsom_neckman_blood_feud';
+    const aiStart = performance?.now?.() ?? Date.now();
     this.applyDynamicGrounding(this.group.position);
 
     if (this.behaviorState === 'dead') {
@@ -934,7 +941,13 @@ class BlackGrassFactionEnemy {
     }
     if (!attackCommitted && (this.retargetElapsed >= RETARGET_INTERVAL_SECONDS || !this.isTargetStillValid(context))) {
       this.retargetElapsed = 0;
-      this.selectTarget(context);
+      if (context?.perfDebugToggles?.neckmanTargetingOff === true) {
+        this.currentTarget = null;
+      } else {
+        const targetStart = performance?.now?.() ?? Date.now();
+        this.selectTarget(context);
+        if (context?.perfStats) context.perfStats.targetingMs += (performance?.now?.() ?? Date.now()) - targetStart;
+      }
     }
 
     this.updateDirectorPressureTimers(deltaSeconds, context);
@@ -945,6 +958,7 @@ class BlackGrassFactionEnemy {
       this.activeWaypoint = null;
       this.moveToward(this.unstuckDirection, this.template.walkSpeed * 0.75, deltaSeconds, Infinity, 'patrol', { suppressStuckTracking: true });
       this.updateDevNavigationMarkers();
+      if (context?.perfStats) context.perfStats.aiMs += (performance?.now?.() ?? Date.now()) - aiStart;
       return;
     }
 
@@ -963,13 +977,17 @@ class BlackGrassFactionEnemy {
     }
 
     if (this.behaviorState === 'attack_enemy_faction' || this.behaviorState === 'jump_attack_enemy_faction' || this.behaviorState === 'attack_player_fallback') {
+      const combatStart = performance?.now?.() ?? Date.now();
       this.updateAttack(deltaSeconds, context);
+      if (context?.perfStats) context.perfStats.combatMs += (performance?.now?.() ?? Date.now()) - combatStart;
       this.updateDevNavigationMarkers();
       return;
     }
 
     if (this.currentTarget?.type === 'enemy') {
+      const combatStart = performance?.now?.() ?? Date.now();
       this.updateEnemyTarget(deltaSeconds, context);
+      if (context?.perfStats) context.perfStats.combatMs += (performance?.now?.() ?? Date.now()) - combatStart;
       this.updateDevNavigationMarkers();
       return;
     }
@@ -1113,6 +1131,7 @@ class BlackGrassFactionEnemy {
   }
 
   findNearestOpposingEnemy(context) {
+    if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.targetScans += 1;
     let nearest = null;
     let nearestDistance = Infinity;
     let nearestAwareness = null;
@@ -1200,14 +1219,16 @@ class BlackGrassFactionEnemy {
     }
 
     const isFolsomFeudTarget = this.isFolsomBloodFeudEnemyTarget(target);
-    const directClear = isFolsomFeudTarget && distance <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE
+    const directClear = context?.perfDebugToggles?.neckmanCollisionOff === true
       ? true
-      : this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS);
+      : (isFolsomFeudTarget && distance <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE
+        ? true
+        : this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS));
     this.blockedTargetElapsed = directClear ? 0 : this.blockedTargetElapsed + deltaSeconds;
     if (this.blockedTargetElapsed >= BLOCKED_TARGET_REPATH_SECONDS) this.blockCurrentDirectSegment();
 
     if ((distance <= this.template.combatEngageDistance || awareness.tier === 'melee' || awareness.tier === 'combat') && directClear) {
-      this.updateEnemyCombat(deltaSeconds, target, distance, toTarget);
+      this.updateEnemyCombat(deltaSeconds, target, distance, toTarget, context);
       return;
     }
 
@@ -1353,11 +1374,13 @@ class BlackGrassFactionEnemy {
     }
   }
 
-  updateEnemyCombat(deltaSeconds, target, distance, toTarget) {
+  updateEnemyCombat(deltaSeconds, target, distance, toTarget, context = null) {
     const isFolsomFeudTarget = this.isFolsomBloodFeudEnemyTarget(target);
-    const directClear = isFolsomFeudTarget && distance <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE
+    const directClear = context?.perfDebugToggles?.neckmanCollisionOff === true
       ? true
-      : this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS);
+      : (isFolsomFeudTarget && distance <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE
+        ? true
+        : this.hasClearMovementSegment(this.group.position, target.group.position, NAV_CLEARANCE_RADIUS));
     const feudAttackCommitRange = FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRange;
     if (!directClear && !(isFolsomFeudTarget && distance <= feudAttackCommitRange && this.isTargetRoughlyInFront(target))) {
       this.blockedTargetElapsed += deltaSeconds;
@@ -1559,7 +1582,7 @@ class BlackGrassFactionEnemy {
         const attackCommitRange = target && this.isFolsomBloodFeudEnemyTarget(target)
           ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRange
           : this.template.attackCommitRange;
-        const directClear = this.hasClearMovementSegment(this.group.position, targetPosition, NAV_CLEARANCE_RADIUS);
+        const directClear = context?.perfDebugToggles?.neckmanCollisionOff === true ? true : this.hasClearMovementSegment(this.group.position, targetPosition, NAV_CLEARANCE_RADIUS);
         const canLungeIn = progress < this.template.attackDamageWindow.start
           && distance > visualContactRange
           && distance <= attackCommitRange
@@ -2149,6 +2172,9 @@ class BlackGrassFactionEnemy {
   }
 
   getEnemySeparationVector(desiredTarget = null) {
+    if (this.currentUpdateContext?.perfDebugToggles?.neckmanCollisionOff === true) return { vector: new THREE.Vector3(), strength: 0, suppressedApproach: false };
+    const sepStart = performance?.now?.() ?? Date.now();
+    if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.collisionChecks += 1;
     const separation = new THREE.Vector3();
     let strength = ENEMY_SEPARATION_STRENGTH;
     let suppressedApproach = false;
@@ -2173,7 +2199,9 @@ class BlackGrassFactionEnemy {
       separation.add(away.normalize().multiplyScalar((personalSpace - distance) / personalSpace));
     });
     if (separation.lengthSq() > 0.001) separation.normalize();
-    return { vector: separation, strength, suppressedApproach };
+    const result = { vector: separation, strength, suppressedApproach };
+    if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.collisionMs += (performance?.now?.() ?? Date.now()) - sepStart;
+    return result;
   }
 
   getEnemyBodyPenalty(point) {
@@ -2245,6 +2273,7 @@ class BlackGrassFactionEnemy {
     if (!canOverride && this.animationStateElapsed < minimumHold) return;
     this.group.visible = true;
     if (!this.actor?.setAnimationState(animationState, { force, fadeSeconds: 0.1 })) return;
+    if (this.currentUpdateContext?.perfStats && this.behaviorState !== state) this.currentUpdateContext.perfStats.stateTransitions += 1;
     this.behaviorState = state;
     this.animationStateElapsed = 0;
     this.group.userData.behaviorState = state;
@@ -2259,7 +2288,7 @@ class BlackGrassFactionEnemy {
 }
 
 export class BlackGrassTempleFactionManager {
-  constructor({ scene, collision, anchors, navigationGraph = null, outdoorVisibleSurfaceSampler = null, encounterZones = null, onGoreEvent = null, enableBattleDirector = true, enableRespawns = true, encounterMode = 'faction_war', respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS } = {}) {
+  constructor({ scene, collision, anchors, navigationGraph = null, outdoorVisibleSurfaceSampler = null, encounterZones = null, onGoreEvent = null, enableBattleDirector = true, enableRespawns = true, encounterMode = 'faction_war', respawnCooldownSeconds = RESPAWN_COOLDOWN_SECONDS, perfDebugToggles = null } = {}) {
     this.scene = scene;
     this.collision = collision;
     this.anchors = anchors;
@@ -2276,6 +2305,8 @@ export class BlackGrassTempleFactionManager {
     this.enableRespawns = enableRespawns;
     this.encounterMode = encounterMode;
     this.respawnCooldownSeconds = respawnCooldownSeconds;
+    this.perfDebugToggles = perfDebugToggles;
+    this.perfStats = this.createPerfStats();
     this.bloodFeudRespawnTimer = null;
     this.mobileLoadQueue = [];
     this.mobileLoadQueueActive = 0;
@@ -2497,6 +2528,66 @@ export class BlackGrassTempleFactionManager {
     return true;
   }
 
+
+  createPerfStats() {
+    return {
+      frameStartedAt: 0,
+      frames: 0,
+      subsystemMs: 0,
+      managerMs: 0,
+      enemyUpdateMs: [],
+      mixerMs: 0,
+      aiMs: 0,
+      targetingMs: 0,
+      collisionMs: 0,
+      combatMs: 0,
+      debugMs: 0,
+      targetScans: 0,
+      collisionChecks: 0,
+      stateTransitions: 0,
+      skippedAiTicks: 0,
+      catchUpTicks: 0,
+      lastSecondAt: performance?.now?.() ?? Date.now(),
+      targetScansPerSecond: 0,
+      collisionChecksPerSecond: 0,
+      stateTransitionsPerSecond: 0,
+    };
+  }
+
+  timePerf(bucket, callback) {
+    const start = performance?.now?.() ?? Date.now();
+    const result = callback();
+    this.perfStats[bucket] += (performance?.now?.() ?? Date.now()) - start;
+    return result;
+  }
+
+  resetFramePerf() {
+    const now = performance?.now?.() ?? Date.now();
+    const keep = {
+      targetScansPerSecond: this.perfStats.targetScansPerSecond,
+      collisionChecksPerSecond: this.perfStats.collisionChecksPerSecond,
+      stateTransitionsPerSecond: this.perfStats.stateTransitionsPerSecond,
+      lastSecondAt: this.perfStats.lastSecondAt,
+    };
+    this.perfStats = { ...this.createPerfStats(), ...keep, frameStartedAt: now };
+  }
+
+  finishFramePerf() {
+    const now = performance?.now?.() ?? Date.now();
+    this.perfStats.subsystemMs = now - this.perfStats.frameStartedAt;
+    this.perfStats.frames += 1;
+    if (now - this.perfStats.lastSecondAt >= 1000) {
+      const scale = 1000 / Math.max(1, now - this.perfStats.lastSecondAt);
+      this.perfStats.targetScansPerSecond = Math.round(this.perfStats.targetScans * scale);
+      this.perfStats.collisionChecksPerSecond = Math.round(this.perfStats.collisionChecks * scale);
+      this.perfStats.stateTransitionsPerSecond = Math.round(this.perfStats.stateTransitions * scale);
+      this.perfStats.targetScans = 0;
+      this.perfStats.collisionChecks = 0;
+      this.perfStats.stateTransitions = 0;
+      this.perfStats.lastSecondAt = now;
+    }
+  }
+
   spawnInitialWave() {
     this.spawnFaction('sheep_demon', INITIAL_WAVE_BY_FACTION.sheep_demon, { initialWave: true });
     this.spawnFaction('neck_man', INITIAL_WAVE_BY_FACTION.neck_man, { initialWave: true });
@@ -2562,8 +2653,10 @@ export class BlackGrassTempleFactionManager {
   }
 
   update(deltaSeconds, playerPosition, options = {}) {
-    this.pumpMobileLoadQueue();
     const isMobileFolsomFeud = this.encounterMode === 'folsom_neckman_blood_feud';
+    if (isMobileFolsomFeud) this.resetFramePerf();
+    const managerStart = performance?.now?.() ?? Date.now();
+    this.pumpMobileLoadQueue();
     this.mobileAiTickElapsed += isMobileFolsomFeud ? deltaSeconds : 0;
     const mobileAiTickAllowed = !isMobileFolsomFeud || this.mobileAiTickElapsed >= FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS;
     if (mobileAiTickAllowed && isMobileFolsomFeud) {
@@ -2571,6 +2664,12 @@ export class BlackGrassTempleFactionManager {
       this.mobileAiAllowedTicks += 1;
     } else if (isMobileFolsomFeud) {
       this.mobileAiSkippedTicks += 1;
+    }
+    if (isMobileFolsomFeud && this.perfDebugToggles?.neckmanFeudOff === true) {
+      this.enemies.forEach((enemy) => { enemy.currentTarget = null; });
+      this.perfStats.managerMs = (performance?.now?.() ?? Date.now()) - managerStart;
+      this.finishFramePerf();
+      return;
     }
     const generatedRuntime = options.generatedRuntime ?? null;
     const director = this.enableBattleDirector
@@ -2581,7 +2680,9 @@ export class BlackGrassTempleFactionManager {
     const lodEnabled = Boolean(generatedRuntime && policy?.generatedAiLod);
     this.enemies.forEach((enemy, index) => {
       if (!lodEnabled || !enemy.group || enemy.isRemoved || !enemy.isAlive) {
-        enemy.update(deltaSeconds, { ...baseContext, aiTickAllowed: mobileAiTickAllowed });
+        const enemyStart = performance?.now?.() ?? Date.now();
+        enemy.update(deltaSeconds, { ...baseContext, aiTickAllowed: this.perfDebugToggles?.neckmanAiOff === true ? false : mobileAiTickAllowed, perfStats: this.perfStats, perfDebugToggles: this.perfDebugToggles });
+        if (isMobileFolsomFeud) this.perfStats.enemyUpdateMs.push({ id: enemy.id, ms: (performance?.now?.() ?? Date.now()) - enemyStart });
         return;
       }
       const distance = playerPosition ? horizontalDistance(enemy.group.position, playerPosition) : Infinity;
@@ -2597,13 +2698,17 @@ export class BlackGrassTempleFactionManager {
       enemy.generatedAiElapsed = (enemy.generatedAiElapsed ?? (index % 3) * 0.055) + deltaSeconds;
       const aiTickAllowed = mobileAiTickAllowed && (updateTier === 'near' || enemy.generatedAiElapsed >= interval);
       if (aiTickAllowed) enemy.generatedAiElapsed = 0;
-      enemy.update(deltaSeconds, { ...baseContext, updateTier, aiTickAllowed });
+      const enemyStart = performance?.now?.() ?? Date.now();
+      enemy.update(deltaSeconds, { ...baseContext, updateTier, aiTickAllowed, perfStats: this.perfStats, perfDebugToggles: this.perfDebugToggles });
+      if (isMobileFolsomFeud) this.perfStats.enemyUpdateMs.push({ id: enemy.id, ms: (performance?.now?.() ?? Date.now()) - enemyStart });
     });
     this.updateDevStatus(deltaSeconds);
 
     if (this.encounterMode === 'folsom_neckman_blood_feud') {
-      this.updateFolsomNeckmanBloodFeud(deltaSeconds);
+      this.perfStats.managerMs = (performance?.now?.() ?? Date.now()) - managerStart;
+      if (this.perfDebugToggles?.neckmanFeudOff !== true) this.timePerf('debugMs', () => this.updateFolsomNeckmanBloodFeud(deltaSeconds));
       this.enemies = this.enemies.filter((enemy) => !enemy.isRemoved || enemy.isAlive);
+      this.finishFramePerf();
       return;
     }
 
@@ -2815,6 +2920,14 @@ export class BlackGrassTempleFactionManager {
       activeMixers: enemies.reduce((sum, enemy) => sum + (enemy.animation?.getActiveMixerCount?.() ?? 0), 0),
       loadFailures: enemies.map((enemy) => enemy.loadFailure).filter(Boolean),
       loadedStatesPerEnemy: neckmen.map((enemy) => ({ id: enemy.id, lifecycle: enemy.lifecycle?.state, states: enemy.animation?.getLoadedStates?.() ?? enemy.lifecycle?.loadedStates ?? [], failure: enemy.loadFailure ?? null })),
+      perfDebugFlags: this.perfDebugToggles ?? {},
+      actorVisible: neckmen.every((enemy) => enemy.group?.visible !== false),
+      mixersActive: (this.perfDebugToggles?.neckmanStatic !== true),
+      aiActive: this.perfDebugToggles?.neckmanAiOff !== true,
+      feudManagerActive: this.perfDebugToggles?.neckmanFeudOff !== true,
+      targetingActive: this.perfDebugToggles?.neckmanTargetingOff !== true,
+      collisionActive: this.perfDebugToggles?.neckmanCollisionOff !== true,
+      perfTrace: this.perfStats,
     };
   }
 
