@@ -319,6 +319,7 @@ const FOLSOM_BLOOD_FEUD_FOOT_LIFT = 0.02;
 const FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS = MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.aiTickSeconds;
 const FOLSOM_BLOOD_FEUD_FRAME_BUDGET_MS = MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.frameBudgetMs;
 const FOLSOM_BLOOD_FEUD_MAX_BEHAVIOR_SLICES_PER_FRAME = MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.maxBehaviorSlicesPerFrame;
+const FOLSOM_BLOOD_FEUD_COLLISION_BUDGET = MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.collision;
 const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_SECONDS = 0.18;
 const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_DISTANCE = 0.18;
 const FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE = 1.65;
@@ -339,6 +340,12 @@ const FOLSOM_BLOOD_FEUD_COMBAT_SPACING = Object.freeze({
   attackCommitHoldSeconds: 0.2,
   facingDot: 0.18,
 });
+
+function isBehaviorCollisionDisabled(toggles) {
+  if (!toggles) return false;
+  if (Object.prototype.hasOwnProperty.call(toggles, 'neckmanBehaviorCollisionOff')) return toggles.neckmanBehaviorCollisionOff === true;
+  return toggles.neckmanCollisionOff === true;
+}
 const LOCOMOTION_ANIMATION_HOLD_SECONDS = Object.freeze({
   spawn: 0.4,
   patrol: 0.8,
@@ -925,6 +932,7 @@ class BlackGrassFactionEnemy {
     this.playerRevengeTimer = Math.max(0, this.playerRevengeTimer - deltaSeconds);
     this.awarenessReactionDelay = Math.max(0, this.awarenessReactionDelay - deltaSeconds);
     this.currentUpdateContext = context;
+    this.folsomCollisionActorCharged = false;
     this.steeringProbeTimer = Math.max(0, this.steeringProbeTimer - deltaSeconds);
     if (this.encounterMode === 'folsom_neckman_blood_feud') this.bloodFeudGroundElapsed += deltaSeconds;
     if (aiTickAllowed) this.decayBlockedSegmentCooldowns(deltaSeconds);
@@ -1401,7 +1409,7 @@ class BlackGrassFactionEnemy {
     }
 
     const isFolsomFeudTarget = this.isFolsomBloodFeudEnemyTarget(target);
-    const directClear = context?.perfDebugToggles?.neckmanCollisionOff === true
+    const directClear = isBehaviorCollisionDisabled(context?.perfDebugToggles)
       ? true
       : (isFolsomFeudTarget && distance <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE
         ? true
@@ -1559,8 +1567,11 @@ class BlackGrassFactionEnemy {
   updateEnemyCombat(deltaSeconds, target, distance, toTarget, context = null) {
     if (context?.perfDebugToggles?.neckmanCombatOff === true && this.encounterMode === 'folsom_neckman_blood_feud') return;
     const isFolsomFeudTarget = this.isFolsomBloodFeudEnemyTarget(target);
-    if (context?.perfStats) context.perfStats.combatChecks += 1;
-    const directClear = context?.perfDebugToggles?.neckmanCollisionOff === true
+    if (context?.perfStats) {
+      context.perfStats.combatChecks += 1;
+      if (distance <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE) context.perfStats.combatProximityChecks += 1;
+    }
+    const directClear = isBehaviorCollisionDisabled(context?.perfDebugToggles)
       ? true
       : (isFolsomFeudTarget && distance <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE
         ? true
@@ -1766,7 +1777,7 @@ class BlackGrassFactionEnemy {
         const attackCommitRange = target && this.isFolsomBloodFeudEnemyTarget(target)
           ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRange
           : this.template.attackCommitRange;
-        const directClear = context?.perfDebugToggles?.neckmanCollisionOff === true ? true : this.hasClearMovementSegment(this.group.position, targetPosition, NAV_CLEARANCE_RADIUS);
+        const directClear = isBehaviorCollisionDisabled(context?.perfDebugToggles) ? true : this.hasClearMovementSegment(this.group.position, targetPosition, NAV_CLEARANCE_RADIUS);
         const canLungeIn = progress < this.template.attackDamageWindow.start
           && distance > visualContactRange
           && distance <= attackCommitRange
@@ -2116,9 +2127,38 @@ class BlackGrassFactionEnemy {
     return this.hasClearMovementSegment(start, end, NAV_CLEARANCE_RADIUS);
   }
 
+  canRunFolsomBehaviorCollision(kind = 'obstacle') {
+    if (this.encounterMode !== 'folsom_neckman_blood_feud') return true;
+    const stats = this.currentUpdateContext?.perfStats;
+    if (isBehaviorCollisionDisabled(this.currentUpdateContext?.perfDebugToggles)) {
+      stats && (stats.collisionOperationsDeferred += 1);
+      return false;
+    }
+    if (this.currentUpdateContext?.folsomBehaviorSlice !== true) {
+      stats && (stats.collisionOperationsDeferred += 1);
+      return false;
+    }
+    if (stats && stats.behaviorCollisionActorsThisFrame >= FOLSOM_BLOOD_FEUD_COLLISION_BUDGET.maxBehaviorCollisionActorsPerFrame && !this.folsomCollisionActorCharged) {
+      stats.collisionOperationsDeferred += 1;
+      stats.collisionBudgetExceededCount += 1;
+      return false;
+    }
+    if (stats && !this.folsomCollisionActorCharged) {
+      stats.behaviorCollisionActorsThisFrame += 1;
+      this.folsomCollisionActorCharged = true;
+    }
+    if (kind === 'obstacle' && stats && stats.obstacleChecks >= FOLSOM_BLOOD_FEUD_COLLISION_BUDGET.maxObstacleChecksPerFrame) {
+      stats.collisionOperationsDeferred += 1;
+      return false;
+    }
+    return true;
+  }
+
   hasClearMovementSegment(start, end, clearanceRadius = NAV_CLEARANCE_RADIUS) {
     const collisionStart = performance?.now?.() ?? Date.now();
     try {
+    if (!this.canRunFolsomBehaviorCollision('obstacle')) return true;
+    if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.obstacleChecks += 1;
     if (!this.collision) return true;
     const delta = end.clone().sub(start);
     delta.y = 0;
@@ -2133,7 +2173,11 @@ class BlackGrassFactionEnemy {
     }
     return !this.segmentIntersectsAnyBlocker(start, end, clearanceRadius);
     } finally {
-      if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.collisionMs += (performance?.now?.() ?? Date.now()) - collisionStart;
+      if (this.currentUpdateContext?.perfStats) {
+        const elapsed = (performance?.now?.() ?? Date.now()) - collisionStart;
+        this.currentUpdateContext.perfStats.collisionMs += elapsed;
+        this.currentUpdateContext.perfStats.collisionWorstMs = Math.max(this.currentUpdateContext.perfStats.collisionWorstMs ?? 0, elapsed);
+      }
     }
   }
 
@@ -2142,6 +2186,8 @@ class BlackGrassFactionEnemy {
   }
 
   findBlockingRect(start, end, clearanceRadius = NAV_CLEARANCE_RADIUS) {
+    if (!this.canRunFolsomBehaviorCollision('obstacle')) return null;
+    if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.obstacleChecks += 1;
     const blockers = this.collision?.blockerRects ?? [];
     let nearest = null;
     let nearestDistance = Infinity;
@@ -2290,6 +2336,7 @@ class BlackGrassFactionEnemy {
     if (!suppressStuckTracking) {
       this.stuckElapsed = movedDistance < STUCK_MOVEMENT_THRESHOLD ? this.stuckElapsed + deltaSeconds : 0;
       if (this.stuckElapsed >= SOFT_STUCK_SECONDS && !this.localAvoidanceWaypoint && desiredTarget) {
+        if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.unstuckPathCorrectionChecks += 1;
         const blocker = this.findBlockingRect(this.group.position, desiredTarget, NAV_CLEARANCE_RADIUS)?.rect;
         const detour = blocker ? this.findLocalDetourWaypoint(this.group.position, desiredTarget, blocker) : null;
         if (detour) this.localAvoidanceWaypoint = detour;
@@ -2370,38 +2417,51 @@ class BlackGrassFactionEnemy {
   }
 
   getEnemySeparationVector(desiredTarget = null) {
-    if (this.currentUpdateContext?.perfDebugToggles?.neckmanCollisionOff === true) return { vector: new THREE.Vector3(), strength: 0, suppressedApproach: false };
+    if (isBehaviorCollisionDisabled(this.currentUpdateContext?.perfDebugToggles)) return { vector: new THREE.Vector3(), strength: 0, suppressedApproach: false };
+    if (!this.canRunFolsomBehaviorCollision('separation')) return { vector: new THREE.Vector3(), strength: 0, suppressedApproach: false };
     const sepStart = performance?.now?.() ?? Date.now();
     if (this.encounterMode === 'folsom_neckman_blood_feud' && desiredTarget && horizontalDistanceSq(this.group.position, desiredTarget) > FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE * FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE) {
       return { vector: new THREE.Vector3(), strength: 0, suppressedApproach: false };
     }
-    if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.collisionChecks += 1;
+    if (this.currentUpdateContext?.perfStats) {
+      this.currentUpdateContext.perfStats.collisionChecks += 1;
+      this.currentUpdateContext.perfStats.actorSeparationChecks += 1;
+    }
     const separation = new THREE.Vector3();
     let strength = ENEMY_SEPARATION_STRENGTH;
     let suppressedApproach = false;
     const enemies = this.currentUpdateContext?.enemies ?? [];
     enemies.forEach((enemy) => {
       if (enemy === this || !enemy.isAlive || !enemy.group) return;
-      const away = this.group.position.clone().sub(enemy.group.position);
-      away.y = 0;
-      const distance = away.length();
+      const dx = this.group.position.x - enemy.group.position.x;
+      const dz = this.group.position.z - enemy.group.position.z;
       const targetEnemy = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy : null;
       const isFeudTarget = this.isFolsomBloodFeudEnemyTarget(enemy) && enemy === targetEnemy;
+      const personalSpace = isFeudTarget
+        ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.minimumBodySeparation
+        : Math.max(ENEMY_PERSONAL_SPACE, enemy.template?.minimumBodySeparation ?? 0, this.template.minimumBodySeparation ?? 0);
+      const distanceSq = dx * dx + dz * dz;
+      if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.creaturePairsConsidered += 1;
+      if (distanceSq <= 0.000001 || distanceSq >= personalSpace * personalSpace) return;
+      const distance = Math.sqrt(distanceSq);
       const nearAttackRange = isFeudTarget && distance <= FOLSOM_BLOOD_FEUD_COMBAT_SPACING.attackCommitRange;
       if (isFeudTarget) {
         if (nearAttackRange) strength = Math.min(strength, FOLSOM_BLOOD_FEUD_COMBAT_SPACING.separationStrengthNearAttackRange);
         suppressedApproach = true;
         return;
       }
-      const personalSpace = isFeudTarget
-        ? FOLSOM_BLOOD_FEUD_COMBAT_SPACING.minimumBodySeparation
-        : Math.max(ENEMY_PERSONAL_SPACE, enemy.template?.minimumBodySeparation ?? 0, this.template.minimumBodySeparation ?? 0);
-      if (distance <= 0.001 || distance >= personalSpace) return;
-      separation.add(away.normalize().multiplyScalar((personalSpace - distance) / personalSpace));
+      const push = (personalSpace - distance) / personalSpace;
+      separation.x += (dx / distance) * push;
+      separation.z += (dz / distance) * push;
+      if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.creaturePairsResolved += 1;
     });
     if (separation.lengthSq() > 0.001) separation.normalize();
     const result = { vector: separation, strength, suppressedApproach };
-    if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.collisionMs += (performance?.now?.() ?? Date.now()) - sepStart;
+    if (this.currentUpdateContext?.perfStats) {
+      const elapsed = (performance?.now?.() ?? Date.now()) - sepStart;
+      this.currentUpdateContext.perfStats.collisionMs += elapsed;
+      this.currentUpdateContext.perfStats.collisionWorstMs = Math.max(this.currentUpdateContext.perfStats.collisionWorstMs ?? 0, elapsed);
+    }
     return result;
   }
 
@@ -2746,6 +2806,24 @@ export class BlackGrassTempleFactionManager {
       aiMs: 0,
       targetingMs: 0,
       collisionMs: 0,
+      collisionWorstMs: 0,
+      collisionOperationsThisFrame: 0,
+      collisionOperationsDeferred: 0,
+      collisionBudgetExceededCount: 0,
+      behaviorCollisionActorsThisFrame: 0,
+      actorSeparationChecks: 0,
+      actorSeparationChecksPerSecond: 0,
+      creaturePairsConsidered: 0,
+      creaturePairsConsideredPerSecond: 0,
+      creaturePairsResolved: 0,
+      creaturePairsResolvedPerSecond: 0,
+      obstacleChecks: 0,
+      obstacleChecksPerSecond: 0,
+      combatProximityChecks: 0,
+      combatProximityChecksPerSecond: 0,
+      unstuckPathCorrectionChecks: 0,
+      unstuckPathCorrectionChecksPerSecond: 0,
+      collisionOperationsDeferredPerSecond: 0,
       movementMs: 0,
       combatMs: 0,
       stateMachineMs: 0,
@@ -2819,6 +2897,13 @@ export class BlackGrassTempleFactionManager {
       targetingOpsPerSecond: this.perfStats.targetingOpsPerSecond,
       deferredTargetingOpsPerSecond: this.perfStats.deferredTargetingOpsPerSecond,
       collisionChecksPerSecond: this.perfStats.collisionChecksPerSecond,
+      actorSeparationChecksPerSecond: this.perfStats.actorSeparationChecksPerSecond,
+      obstacleChecksPerSecond: this.perfStats.obstacleChecksPerSecond,
+      combatProximityChecksPerSecond: this.perfStats.combatProximityChecksPerSecond,
+      unstuckPathCorrectionChecksPerSecond: this.perfStats.unstuckPathCorrectionChecksPerSecond,
+      collisionOperationsDeferredPerSecond: this.perfStats.collisionOperationsDeferredPerSecond,
+      creaturePairsConsideredPerSecond: this.perfStats.creaturePairsConsideredPerSecond,
+      creaturePairsResolvedPerSecond: this.perfStats.creaturePairsResolvedPerSecond,
       combatChecksPerSecond: this.perfStats.combatChecksPerSecond,
       movementUpdatesPerSecond: this.perfStats.movementUpdatesPerSecond,
       aiUpdatesRunPerSecond: this.perfStats.aiUpdatesRunPerSecond,
@@ -2827,6 +2912,7 @@ export class BlackGrassTempleFactionManager {
       droppedCatchUpPerSecond: this.perfStats.droppedCatchUpPerSecond,
       stateTransitionsPerSecond: this.perfStats.stateTransitionsPerSecond,
       ramManAiUpdatesPerSecond: this.perfStats.ramManAiUpdatesPerSecond,
+      collisionBudgetExceededCount: this.perfStats.collisionBudgetExceededCount,
       recentWorst: this.perfStats.recentWorst ?? null,
       lastSecondAt: this.perfStats.lastSecondAt,
     };
@@ -2866,6 +2952,13 @@ export class BlackGrassTempleFactionManager {
       const scale = 1000 / Math.max(1, now - this.perfStats.lastSecondAt);
       this.perfStats.targetScansPerSecond = Math.round(this.perfStats.targetScans * scale);
       this.perfStats.collisionChecksPerSecond = Math.round(this.perfStats.collisionChecks * scale);
+      this.perfStats.actorSeparationChecksPerSecond = Math.round(this.perfStats.actorSeparationChecks * scale);
+      this.perfStats.obstacleChecksPerSecond = Math.round(this.perfStats.obstacleChecks * scale);
+      this.perfStats.combatProximityChecksPerSecond = Math.round(this.perfStats.combatProximityChecks * scale);
+      this.perfStats.unstuckPathCorrectionChecksPerSecond = Math.round(this.perfStats.unstuckPathCorrectionChecks * scale);
+      this.perfStats.collisionOperationsDeferredPerSecond = Math.round(this.perfStats.collisionOperationsDeferred * scale);
+      this.perfStats.creaturePairsConsideredPerSecond = Math.round(this.perfStats.creaturePairsConsidered * scale);
+      this.perfStats.creaturePairsResolvedPerSecond = Math.round(this.perfStats.creaturePairsResolved * scale);
       this.perfStats.combatChecksPerSecond = Math.round(this.perfStats.combatChecks * scale);
       this.perfStats.movementUpdatesPerSecond = Math.round(this.perfStats.movementUpdates * scale);
       this.perfStats.aiUpdatesRunPerSecond = Math.round(this.perfStats.aiUpdatesRun * scale);
@@ -2881,6 +2974,13 @@ export class BlackGrassTempleFactionManager {
       this.perfStats.ramManAiUpdatesPerSecond = Math.round((this.perfStats.ramManAiUpdates ?? 0) * scale);
       this.perfStats.targetScans = 0;
       this.perfStats.collisionChecks = 0;
+      this.perfStats.actorSeparationChecks = 0;
+      this.perfStats.obstacleChecks = 0;
+      this.perfStats.combatProximityChecks = 0;
+      this.perfStats.unstuckPathCorrectionChecks = 0;
+      this.perfStats.collisionOperationsDeferred = 0;
+      this.perfStats.creaturePairsConsidered = 0;
+      this.perfStats.creaturePairsResolved = 0;
       this.perfStats.combatChecks = 0;
       this.perfStats.movementUpdates = 0;
       this.perfStats.aiUpdatesRun = 0;
@@ -3377,7 +3477,14 @@ export class BlackGrassTempleFactionManager {
       aiActive: this.perfDebugToggles?.neckmanAiOff !== true,
       feudManagerActive: this.perfDebugToggles?.neckmanFeudOff !== true,
       targetingActive: this.perfDebugToggles?.neckmanTargetingOff !== true,
-      collisionActive: this.perfDebugToggles?.neckmanCollisionOff !== true,
+      terrainGroundingActive: true,
+      behaviorCollisionActive: !isBehaviorCollisionDisabled(this.perfDebugToggles),
+      collisionActive: !isBehaviorCollisionDisabled(this.perfDebugToggles),
+      collisionAudit: {
+        terrainGrounding: 'on: applyDynamicGrounding samples outdoor visible surface/CollisionWorld independently of behavior collision toggles',
+        behaviorCollision: isBehaviorCollisionDisabled(this.perfDebugToggles) ? 'off: actor separation, obstacle probes, blocker scans, path correction, and combat clear-line checks are short-circuited' : 'on: budgeted and spread with one Neckman behavior slice per frame',
+        legacyToggle: 'neckmanCollisionOff remains supported as an alias for neckmanBehaviorCollisionOff',
+      },
       movementActive: this.perfDebugToggles?.neckmanMovementOff !== true,
       combatActive: this.perfDebugToggles?.neckmanCombatOff !== true,
       stateMachineActive: this.perfDebugToggles?.neckmanStateMachineOff !== true,

@@ -295,13 +295,21 @@ assert.equal(folsomMobileSummary.extraStateRootsAlive, false, 'Folsom mobile run
 
 assert.match(mobileEnemyRuntimeContractSource, /maxBehaviorSlicesPerFrame:\s*1/, 'Folsom Neckman mobile budget limits expensive behavior to one enemy per frame.');
 assert.match(mobileEnemyRuntimeContractSource, /frameBudgetMs:\s*0\.85/, 'Folsom Neckman mobile budget has a sub-1ms behavior frame budget.');
+assert.match(mobileEnemyRuntimeContractSource, /maxBehaviorCollisionActorsPerFrame:\s*1/, 'Folsom Neckman behavior collision has a one-actor-per-frame mobile budget.');
+assert.match(mobileEnemyRuntimeContractSource, /noCatchUpBursts:\s*true/, 'Folsom Neckman behavior collision budget forbids catch-up bursts.');
+assert.match(mobileEnemyRuntimeContractSource, /requiresSceneWideScan:\s*false/, 'Folsom Neckman/RamMan behavior collision does not require scene-wide scans.');
+assert.match(mobileEnemyRuntimeContractSource, /terrainGroundingIndependentFromBehaviorCollision:\s*true/, 'Folsom Neckman terrain grounding is budgeted independently from behavior collision.');
+assert.match(blackGrassFactionSource, /terrainGrounding:\s*'on:[^']*CollisionWorld independently of behavior collision toggles'/, 'Folsom Neckman perf audit documents terrain grounding remains on when behavior collision toggles off.');
+assert.match(blackGrassFactionSource, /neckmanBehaviorCollisionOff[^]*neckmanCollisionOff/, 'Folsom Neckman behavior collision supports the explicit toggle and legacy alias.');
+assert.match(blackGrassFactionSource, /behaviorCollisionActorsThisFrame/, 'Folsom Neckman behavior collision work is spread across the rotating frame budget.');
+assert.match(blackGrassFactionSource, /collisionOperationsDeferred/, 'Folsom Neckman behavior collision reports deferred operations when the mobile budget is spent.');
 assert.match(blackGrassFactionSource, /missed cadence is dropped instead of[\s\S]*recovered in a later catch-up burst/, 'Folsom Neckman scheduler documents dropped missed ticks instead of catch-up recovery.');
 assert.match(blackGrassFactionSource, /droppedCatchUpTicks/, 'Folsom Neckman perf diagnostics count dropped catch-up ticks.');
 assert.doesNotMatch(blackGrassFactionSource, /while\s*\([^)]*mobileAiTickElapsed/s, 'Folsom Neckman scheduler does not use catch-up while loops for missed AI ticks.');
 assert.match(blackGrassFactionSource, /index === folsomAiEnemyIndex/, 'Folsom Neckman behavior work rotates through one selected enemy per frame.');
 assert.match(blackGrassFactionSource, /horizontalDistanceSq\(this\.group\.position, desiredTarget\) > FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE \* FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE/, 'Folsom Neckman collision separation is gated by squared-distance range checks.');
 assert.match(blackGrassFactionSource, /context\?\.perfDebugToggles\?\.neckmanCombatOff/, 'Folsom Neckman combat debug toggle remains present.');
-['neckmanTargetingOff', 'neckmanCollisionOff', 'neckmanMovementOff', 'neckmanCombatOff', 'neckmanStateMachineOff', 'neckmanAiOff', 'neckmanStatic', 'neckmanPerfTrace', 'ramHerd', 'rammanStatic', 'rammanAiOff', 'rammanActorsHidden', 'neckmanTargetRamMen'].forEach((toggle) => {
+['neckmanTargetingOff', 'neckmanBehaviorCollisionOff', 'neckmanCollisionOff', 'neckmanMovementOff', 'neckmanCombatOff', 'neckmanStateMachineOff', 'neckmanAiOff', 'neckmanStatic', 'neckmanPerfTrace', 'ramHerd', 'rammanStatic', 'rammanAiOff', 'rammanActorsHidden', 'neckmanTargetRamMen'].forEach((toggle) => {
   assert.match(`${blackGrassFactionSource}\n${creatureWorldRuntimeSource}\n${perfDebugPanelSource}`, new RegExp(toggle), `Folsom Neckman debug toggle ${toggle} remains present.`);
 });
 
