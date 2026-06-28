@@ -26,6 +26,9 @@ function createNeckmanDebugTogglesFromQuery() {
     neckmanStatic: query.get('neckmanStatic') === '1',
     neckmanAiOff: query.get('neckmanAiOff') === '1',
     neckmanFeudOff: query.get('neckmanFeudOff') === '1',
+    // Back-compat: ?neckmanCollisionOff=1 now means "behavior collision off".
+    // Terrain/world grounding stays active through CollisionWorld sampling.
+    neckmanBehaviorCollisionOff: query.get('neckmanBehaviorCollisionOff') === '1' || query.get('neckmanCollisionOff') === '1',
     neckmanCollisionOff: query.get('neckmanCollisionOff') === '1',
     neckmanTargetingOff: query.get('neckmanTargetingOff') === '1',
     neckmanMovementOff: query.get('neckmanMovementOff') === '1',

@@ -38,6 +38,18 @@ export const MOBILE_ENEMY_BUDGETS = Object.freeze({
     aiTickSeconds: 0.1,
     maxBehaviorSlicesPerFrame: 1,
     frameBudgetMs: 0.85,
+    collision: Object.freeze({
+      maxBehaviorCollisionActorsPerFrame: 1,
+      maxObstacleChecksPerFrame: 2,
+      maxUnstuckChecksPerFrame: 1,
+      maxCombatProximityChecksPerFrame: 2,
+      obstacleCacheSeconds: 0.22,
+      unstuckCacheSeconds: 0.35,
+      closeSeparationRange: 1.65,
+      noCatchUpBursts: true,
+      requiresSceneWideScan: false,
+      terrainGroundingIndependentFromBehaviorCollision: true,
+    }),
   }),
 });
 
