@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 
 export class RendererHost {
-  constructor({ root, shellHtml }) {
+  constructor({ root, shellHtml = null }) {
     this.root = root;
-    this.root.innerHTML = shellHtml;
+    if (shellHtml !== null) this.root.innerHTML = shellHtml;
     this.canvas = this.root.querySelector('#game-canvas');
     this.viewport = this.root.querySelector('[data-game="viewport"]');
     this.renderer = new THREE.WebGLRenderer({
