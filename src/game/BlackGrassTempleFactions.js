@@ -289,6 +289,8 @@ const ENEMY_PERSONAL_SPACE = 1.15;
 const ENEMY_SEPARATION_STRENGTH = 0.32;
 const FOLSOM_BLOOD_FEUD_FOOT_LIFT = 0.02;
 const FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS = MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.aiTickSeconds;
+const FOLSOM_BLOOD_FEUD_FRAME_BUDGET_MS = MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.frameBudgetMs;
+const FOLSOM_BLOOD_FEUD_MAX_BEHAVIOR_SLICES_PER_FRAME = MOBILE_ENEMY_BUDGETS.folsomNeckmanBloodFeud.maxBehaviorSlicesPerFrame;
 const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_SECONDS = 0.18;
 const FOLSOM_BLOOD_FEUD_GROUND_RESAMPLE_DISTANCE = 0.18;
 const FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE = 1.65;
@@ -894,13 +896,13 @@ class BlackGrassFactionEnemy {
     if (aiTickAllowed) this.decayBlockedSegmentCooldowns(deltaSeconds);
     if (!this.group || this.isRemoved || this.lifecycle.state === 'loading' || this.lifecycle.state === 'pendingLoad') {
       this.skippedAiTicks = (this.skippedAiTicks ?? 0) + 1;
-      if (context?.perfStats) context.perfStats.skippedAiTicks += 1;
+      if (context?.perfStats) context.perfStats.intentionallySkippedAiTicks += 1;
       return;
     }
 
     if (this.encounterMode === 'folsom_neckman_blood_feud' && !aiTickAllowed) {
       this.skippedAiTicks = (this.skippedAiTicks ?? 0) + 1;
-      if (context?.perfStats) context.perfStats.skippedAiTicks += 1;
+      if (context?.perfStats) context.perfStats.intentionallySkippedAiTicks += 1;
       this.group.userData.mobileAiSkipped = true;
       this.group.userData.mobileAiTickSeconds = FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS;
       return;
@@ -933,7 +935,7 @@ class BlackGrassFactionEnemy {
     this.animationStateElapsed += deltaSeconds;
     const attackCommitted = this.behaviorState === 'attack_enemy_faction' || this.behaviorState === 'jump_attack_enemy_faction' || this.behaviorState === 'attack_player_fallback';
     this.updateFolsomBloodFeudNoTargetTimer(deltaSeconds, context, attackCommitted);
-    if (isFolsomFeud && !attackCommitted) {
+    if (isFolsomFeud && !attackCommitted && context?.folsomBehaviorSlice !== true) {
       this.bloodFeudAiElapsed += deltaSeconds;
       if (this.bloodFeudAiElapsed < FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS) {
         const targetPosition = this.currentTarget?.type === 'enemy' ? this.currentTarget.enemy?.group?.position : null;
@@ -947,6 +949,7 @@ class BlackGrassFactionEnemy {
       }
       this.bloodFeudAiElapsed = 0;
     }
+    if (isFolsomFeud && context?.perfStats) context.perfStats.aiUpdatesRun += 1;
     if (!attackCommitted && (this.retargetElapsed >= RETARGET_INTERVAL_SECONDS || !this.isTargetStillValid(context))) {
       if (context?.perfDebugToggles?.neckmanTargetingOff === true) {
         this.retargetElapsed = 0;
@@ -1476,6 +1479,7 @@ class BlackGrassFactionEnemy {
   updateEnemyCombat(deltaSeconds, target, distance, toTarget, context = null) {
     if (context?.perfDebugToggles?.neckmanCombatOff === true && this.encounterMode === 'folsom_neckman_blood_feud') return;
     const isFolsomFeudTarget = this.isFolsomBloodFeudEnemyTarget(target);
+    if (context?.perfStats) context.perfStats.combatChecks += 1;
     const directClear = context?.perfDebugToggles?.neckmanCollisionOff === true
       ? true
       : (isFolsomFeudTarget && distance <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE
@@ -2229,6 +2233,7 @@ class BlackGrassFactionEnemy {
   }
 
   getAdjustedMovementDirection(direction, stepDistance, desiredTarget) {
+    if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.movementUpdates += 1;
     let adjusted = direction.clone();
     adjusted.y = 0;
     if (adjusted.lengthSq() < 0.001) return adjusted;
@@ -2238,7 +2243,10 @@ class BlackGrassFactionEnemy {
       adjusted.copy(this.steeringProbeDirection);
     } else {
       const probeEnd = this.group.position.clone().add(adjusted.clone().multiplyScalar(Math.max(stepDistance, STEERING_PROBE_DISTANCE)));
-      if (!this.hasClearMovementSegment(this.group.position, probeEnd, NAV_CLEARANCE_RADIUS * 0.75)) {
+      const isFolsomFeud = this.encounterMode === 'folsom_neckman_blood_feud';
+      const targetDistanceSq = desiredTarget ? horizontalDistanceSq(this.group.position, desiredTarget) : 0;
+      const needsCloseCollision = !isFolsomFeud || targetDistanceSq <= FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE * FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE;
+      if (needsCloseCollision && !this.hasClearMovementSegment(this.group.position, probeEnd, NAV_CLEARANCE_RADIUS * 0.75)) {
         const probe = this.chooseSteeringProbeDirection(adjusted, desiredTarget ?? probeEnd);
         if (probe) {
           adjusted.copy(probe);
@@ -2284,6 +2292,9 @@ class BlackGrassFactionEnemy {
   getEnemySeparationVector(desiredTarget = null) {
     if (this.currentUpdateContext?.perfDebugToggles?.neckmanCollisionOff === true) return { vector: new THREE.Vector3(), strength: 0, suppressedApproach: false };
     const sepStart = performance?.now?.() ?? Date.now();
+    if (this.encounterMode === 'folsom_neckman_blood_feud' && desiredTarget && horizontalDistanceSq(this.group.position, desiredTarget) > FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE * FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE) {
+      return { vector: new THREE.Vector3(), strength: 0, suppressedApproach: false };
+    }
     if (this.currentUpdateContext?.perfStats) this.currentUpdateContext.perfStats.collisionChecks += 1;
     const separation = new THREE.Vector3();
     let strength = ENEMY_SEPARATION_STRENGTH;
@@ -2424,7 +2435,6 @@ export class BlackGrassTempleFactionManager {
     this.mobileLoadQueue = [];
     this.mobileLoadQueueActive = 0;
     this.mobileLoadQueueWarmupComplete = false;
-    this.mobileAiTickElapsed = 0;
     this.mobileAiSkippedTicks = 0;
     this.mobileAiAllowedTicks = 0;
     this.mobileAiEnemyIndex = 0;
@@ -2679,6 +2689,15 @@ export class BlackGrassTempleFactionManager {
       collisionChecks: 0,
       stateTransitions: 0,
       skippedAiTicks: 0,
+      intentionallySkippedAiTicks: 0,
+      deferredAiTicks: 0,
+      droppedCatchUpTicks: 0,
+      aiUpdatesRun: 0,
+      combatChecks: 0,
+      movementUpdates: 0,
+      enemiesProcessedThisFrame: 0,
+      schedulerMs: 0,
+      budgetExceededFrames: 0,
       catchUpTicks: 0,
       lastSecondAt: performance?.now?.() ?? Date.now(),
       targetScansPerSecond: 0,
@@ -2686,6 +2705,12 @@ export class BlackGrassTempleFactionManager {
       targetCandidatesPerScan: 0,
       targetCacheReusesPerSecond: 0,
       collisionChecksPerSecond: 0,
+      combatChecksPerSecond: 0,
+      movementUpdatesPerSecond: 0,
+      aiUpdatesRunPerSecond: 0,
+      intentionallySkippedPerSecond: 0,
+      deferredAiPerSecond: 0,
+      droppedCatchUpPerSecond: 0,
       stateTransitionsPerSecond: 0,
       recentWorst: null,
     };
@@ -2711,6 +2736,12 @@ export class BlackGrassTempleFactionManager {
       targetingOpsPerSecond: this.perfStats.targetingOpsPerSecond,
       deferredTargetingOpsPerSecond: this.perfStats.deferredTargetingOpsPerSecond,
       collisionChecksPerSecond: this.perfStats.collisionChecksPerSecond,
+      combatChecksPerSecond: this.perfStats.combatChecksPerSecond,
+      movementUpdatesPerSecond: this.perfStats.movementUpdatesPerSecond,
+      aiUpdatesRunPerSecond: this.perfStats.aiUpdatesRunPerSecond,
+      intentionallySkippedPerSecond: this.perfStats.intentionallySkippedPerSecond,
+      deferredAiPerSecond: this.perfStats.deferredAiPerSecond,
+      droppedCatchUpPerSecond: this.perfStats.droppedCatchUpPerSecond,
       stateTransitionsPerSecond: this.perfStats.stateTransitionsPerSecond,
       recentWorst: this.perfStats.recentWorst ?? null,
       lastSecondAt: this.perfStats.lastSecondAt,
@@ -2725,6 +2756,7 @@ export class BlackGrassTempleFactionManager {
       frame: this.perfStats.frames + 1,
       subsystemMs: this.perfStats.subsystemMs,
       managerMs: this.perfStats.managerMs,
+      schedulerMs: this.perfStats.schedulerMs,
       enemyMs: enemyWorst?.ms ?? 0,
       enemyId: enemyWorst?.id ?? null,
       targetingMs: this.perfStats.targetingMs,
@@ -2750,6 +2782,12 @@ export class BlackGrassTempleFactionManager {
       const scale = 1000 / Math.max(1, now - this.perfStats.lastSecondAt);
       this.perfStats.targetScansPerSecond = Math.round(this.perfStats.targetScans * scale);
       this.perfStats.collisionChecksPerSecond = Math.round(this.perfStats.collisionChecks * scale);
+      this.perfStats.combatChecksPerSecond = Math.round(this.perfStats.combatChecks * scale);
+      this.perfStats.movementUpdatesPerSecond = Math.round(this.perfStats.movementUpdates * scale);
+      this.perfStats.aiUpdatesRunPerSecond = Math.round(this.perfStats.aiUpdatesRun * scale);
+      this.perfStats.intentionallySkippedPerSecond = Math.round(this.perfStats.intentionallySkippedAiTicks * scale);
+      this.perfStats.deferredAiPerSecond = Math.round(this.perfStats.deferredAiTicks * scale);
+      this.perfStats.droppedCatchUpPerSecond = Math.round(this.perfStats.droppedCatchUpTicks * scale);
       this.perfStats.targetSwitchesPerSecond = Math.round(this.perfStats.targetSwitches * scale);
       this.perfStats.targetingOpsPerSecond = Math.round(this.perfStats.targetingOps * scale);
       this.perfStats.deferredTargetingOpsPerSecond = Math.round(this.perfStats.deferredTargetingOps * scale);
@@ -2758,6 +2796,12 @@ export class BlackGrassTempleFactionManager {
       this.perfStats.stateTransitionsPerSecond = Math.round(this.perfStats.stateTransitions * scale);
       this.perfStats.targetScans = 0;
       this.perfStats.collisionChecks = 0;
+      this.perfStats.combatChecks = 0;
+      this.perfStats.movementUpdates = 0;
+      this.perfStats.aiUpdatesRun = 0;
+      this.perfStats.intentionallySkippedAiTicks = 0;
+      this.perfStats.deferredAiTicks = 0;
+      this.perfStats.droppedCatchUpTicks = 0;
       this.perfStats.stateTransitions = 0;
       this.perfStats.targetSwitches = 0;
       this.perfStats.targetingOps = 0;
@@ -2909,14 +2953,36 @@ export class BlackGrassTempleFactionManager {
     if (isMobileFolsomFeud) this.resetFramePerf();
     const managerStart = performance?.now?.() ?? Date.now();
     this.pumpMobileLoadQueue();
-    this.mobileAiTickElapsed += isMobileFolsomFeud ? deltaSeconds : 0;
-    const mobileAiTickAllowed = !isMobileFolsomFeud || this.mobileAiTickElapsed >= FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS;
-    if (mobileAiTickAllowed && isMobileFolsomFeud) {
-      this.mobileAiTickElapsed = 0;
-      this.mobileAiAllowedTicks += 1;
-    } else if (isMobileFolsomFeud) {
-      this.mobileAiSkippedTicks += 1;
+    const schedulerStart = performance?.now?.() ?? Date.now();
+    let folsomAiEnemyIndex = -1;
+    let mobileAiTickAllowed = !isMobileFolsomFeud;
+    if (isMobileFolsomFeud) {
+      // Mobile Folsom Neckmen do not accrue AI debt. Each render frame may run at
+      // most one expensive behavior slice; missed cadence is dropped instead of
+      // recovered in a later catch-up burst.
+      if (deltaSeconds > FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS * 1.5) this.perfStats.droppedCatchUpTicks += 1;
+      const livingCount = this.enemies.filter((enemy) => enemy?.isAlive && enemy.group && !enemy.isRemoved).length;
+      const elapsedMs = (performance?.now?.() ?? Date.now()) - managerStart;
+      mobileAiTickAllowed = livingCount > 0
+        && this.perfDebugToggles?.neckmanAiOff !== true
+        && elapsedMs < FOLSOM_BLOOD_FEUD_FRAME_BUDGET_MS
+        && FOLSOM_BLOOD_FEUD_MAX_BEHAVIOR_SLICES_PER_FRAME > 0;
+      if (mobileAiTickAllowed) {
+        const count = Math.max(1, this.enemies.length);
+        for (let attempts = 0; attempts < count; attempts += 1) {
+          const candidateIndex = this.mobileAiEnemyIndex % count;
+          this.mobileAiEnemyIndex = (this.mobileAiEnemyIndex + 1) % count;
+          const candidate = this.enemies[candidateIndex];
+          if (candidate?.isAlive && candidate.group && !candidate.isRemoved) {
+            folsomAiEnemyIndex = candidateIndex;
+            this.mobileAiAllowedTicks += 1;
+            break;
+          }
+        }
+      }
+      if (folsomAiEnemyIndex < 0) this.perfStats.deferredAiTicks += livingCount;
     }
+    if (isMobileFolsomFeud) this.perfStats.schedulerMs += (performance?.now?.() ?? Date.now()) - schedulerStart;
     if (isMobileFolsomFeud && this.perfDebugToggles?.neckmanFeudOff === true) {
       this.enemies.forEach((enemy) => { enemy.currentTarget = null; });
       this.perfStats.managerMs = (performance?.now?.() ?? Date.now()) - managerStart;
@@ -2930,13 +2996,17 @@ export class BlackGrassTempleFactionManager {
     const folsomBloodFeudTargeting = isMobileFolsomFeud ? this.updateFolsomBloodFeudTargetingCache(deltaSeconds) : null;
     const baseContext = { enemies: this.enemies, playerPosition, director, generatedRuntime: Boolean(generatedRuntime), folsomBloodFeudTargeting, requestFolsomTargetingOperation: (enemy) => this.requestFolsomTargetingOperation(enemy) };
     const policy = generatedRuntime?.policy ?? null;
-    const folsomAiEnemyIndex = isMobileFolsomFeud && mobileAiTickAllowed ? (this.mobileAiEnemyIndex++ % Math.max(1, this.enemies.length)) : -1;
     const lodEnabled = Boolean(generatedRuntime && policy?.generatedAiLod);
     this.enemies.forEach((enemy, index) => {
       if (!lodEnabled || !enemy.group || enemy.isRemoved || !enemy.isAlive) {
         const enemyStart = performance?.now?.() ?? Date.now();
-        enemy.update(deltaSeconds, { ...baseContext, aiTickAllowed: this.perfDebugToggles?.neckmanAiOff === true ? false : (isMobileFolsomFeud ? mobileAiTickAllowed && index === folsomAiEnemyIndex : mobileAiTickAllowed), perfStats: this.perfStats, perfDebugToggles: this.perfDebugToggles });
-        if (isMobileFolsomFeud) this.perfStats.enemyUpdateMs.push({ id: enemy.id, ms: (performance?.now?.() ?? Date.now()) - enemyStart });
+        enemy.update(deltaSeconds, { ...baseContext, aiTickAllowed: this.perfDebugToggles?.neckmanAiOff === true ? false : (isMobileFolsomFeud ? index === folsomAiEnemyIndex : mobileAiTickAllowed), folsomBehaviorSlice: isMobileFolsomFeud && index === folsomAiEnemyIndex, perfStats: this.perfStats, perfDebugToggles: this.perfDebugToggles });
+        if (isMobileFolsomFeud && index === folsomAiEnemyIndex) this.perfStats.enemiesProcessedThisFrame += 1;
+        if (isMobileFolsomFeud) {
+          const elapsedEnemyMs = (performance?.now?.() ?? Date.now()) - enemyStart;
+          this.perfStats.enemyUpdateMs.push({ id: enemy.id, ms: elapsedEnemyMs });
+          if (index === folsomAiEnemyIndex && elapsedEnemyMs > FOLSOM_BLOOD_FEUD_FRAME_BUDGET_MS) this.perfStats.budgetExceededFrames += 1;
+        }
         return;
       }
       const distance = playerPosition ? horizontalDistance(enemy.group.position, playerPosition) : Infinity;
@@ -3154,7 +3224,7 @@ export class BlackGrassTempleFactionManager {
       warmupComplete: this.encounterMode === 'folsom_neckman_blood_feud' ? this.mobileLoadQueueWarmupComplete : true,
       queueDepth: this.mobileLoadQueue.length,
       queueActive: this.mobileLoadQueueActive,
-      enemyAiTickRate: this.encounterMode === 'folsom_neckman_blood_feud' ? `${Math.round(1 / FOLSOM_BLOOD_FEUD_AI_TICK_SECONDS)}hz fixed` : 'legacy faction-war variable',
+      enemyAiTickRate: this.encounterMode === 'folsom_neckman_blood_feud' ? 'one-enemy-per-frame no-catch-up' : 'legacy faction-war variable',
       skippedAiTicks: this.mobileAiSkippedTicks,
       allowedAiTicks: this.mobileAiAllowedTicks,
       spawnedNeckmen: neckmen.length,

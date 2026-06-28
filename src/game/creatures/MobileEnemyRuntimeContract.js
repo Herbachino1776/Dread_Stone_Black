@@ -21,6 +21,8 @@ export const MOBILE_ENEMY_BUDGETS = Object.freeze({
     allowAllAnimationPreload: false,
     requiresStagedLoading: true,
     aiTickSeconds: 0.1,
+    maxBehaviorSlicesPerFrame: 1,
+    frameBudgetMs: 0.85,
   }),
   folsomNeckmanBloodFeud: Object.freeze({
     species: 'neck_man',
@@ -34,6 +36,8 @@ export const MOBILE_ENEMY_BUDGETS = Object.freeze({
     loadQueueConcurrency: 1,
     loadStaggerMs: 260,
     aiTickSeconds: 0.1,
+    maxBehaviorSlicesPerFrame: 1,
+    frameBudgetMs: 0.85,
   }),
 });
 

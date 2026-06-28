@@ -30,6 +30,9 @@ const interactionsSource = readFileSync(resolve(repoRoot, 'src/game/Interactions
 const dungeonSceneSource = readFileSync(resolve(repoRoot, 'src/game/DungeonScene.js'), 'utf8');
 const outdoorWorldRuntimeSource = readFileSync(resolve(repoRoot, 'src/game/world-scene/OutdoorWorldRuntime.js'), 'utf8');
 const blackGrassFactionSource = readFileSync(resolve(repoRoot, 'src/game/BlackGrassTempleFactions.js'), 'utf8');
+const creatureWorldRuntimeSource = readFileSync(resolve(repoRoot, 'src/game/world-scene/CreatureWorldRuntime.js'), 'utf8');
+const perfDebugPanelSource = readFileSync(resolve(repoRoot, 'src/game/PerfDebugPanel.js'), 'utf8');
+const mobileEnemyRuntimeContractSource = readFileSync(resolve(repoRoot, 'src/game/creatures/MobileEnemyRuntimeContract.js'), 'utf8');
 const folsomFoliageKitSource = readFileSync(resolve(repoRoot, 'src/game/world-kits/vegetation/FolsomFoliageBillboardKit.js'), 'utf8');
 const terrainSampler = createOutdoorTerrainSampler(folsomDefinition.terrain);
 const dungeonCollision = buildDungeonCollision(folsomDefinition);
@@ -282,12 +285,24 @@ assert.equal(folsomCreatureRuntime.blackGrassFactionManager?.enableRespawns, tru
 assert.equal(folsomCreatureRuntime.blackGrassFactionManager?.respawnCooldownSeconds, 30, 'Folsom blood-feud respawn cooldown remains 30 seconds.');
 const folsomMobileSummary = folsomCreatureRuntime.blackGrassFactionManager?.getMobileRuntimeSummary?.();
 assert.ok(folsomMobileSummary, 'Folsom blood-feud exposes explicit mobile enemy lifecycle/load-state reporting.');
-assert.equal(folsomMobileSummary.enemyAiTickRate, '10hz fixed', 'Folsom Neckman uses fixed-tick mobile AI reporting.');
+assert.equal(folsomMobileSummary.enemyAiTickRate, 'one-enemy-per-frame no-catch-up', 'Folsom Neckman reports one-enemy-per-frame mobile AI without catch-up debt.');
 assert.equal(folsomMobileSummary.spawnedNeckmen, 0, 'Validate-only Folsom runtime does not spawn/load/animate Neckman actors.');
 assert.equal(folsomMobileSummary.loadedAnimationRoots, 0, 'Validate-only Folsom runtime reports zero live animation roots before actors load.');
 assert.equal(folsomMobileSummary.assetStrategy, 'none', 'Validate-only Folsom runtime has no loaded enemy asset strategy before actors spawn.');
 assert.equal(folsomMobileSummary.canonicalPath, NECK_MAN_CANONICAL_MOBILE_MODEL_FILE, 'Folsom mobile runtime reports the canonical Neckman path for perf diagnostics.');
 assert.equal(folsomMobileSummary.extraStateRootsAlive, false, 'Folsom mobile runtime diagnostics expose no hidden per-state animation roots.');
+
+assert.match(mobileEnemyRuntimeContractSource, /maxBehaviorSlicesPerFrame:\s*1/, 'Folsom Neckman mobile budget limits expensive behavior to one enemy per frame.');
+assert.match(mobileEnemyRuntimeContractSource, /frameBudgetMs:\s*0\.85/, 'Folsom Neckman mobile budget has a sub-1ms behavior frame budget.');
+assert.match(blackGrassFactionSource, /missed cadence is dropped instead of[\s\S]*recovered in a later catch-up burst/, 'Folsom Neckman scheduler documents dropped missed ticks instead of catch-up recovery.');
+assert.match(blackGrassFactionSource, /droppedCatchUpTicks/, 'Folsom Neckman perf diagnostics count dropped catch-up ticks.');
+assert.doesNotMatch(blackGrassFactionSource, /while\s*\([^)]*mobileAiTickElapsed/s, 'Folsom Neckman scheduler does not use catch-up while loops for missed AI ticks.');
+assert.match(blackGrassFactionSource, /index === folsomAiEnemyIndex/, 'Folsom Neckman behavior work rotates through one selected enemy per frame.');
+assert.match(blackGrassFactionSource, /horizontalDistanceSq\(this\.group\.position, desiredTarget\) > FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE \* FOLSOM_BLOOD_FEUD_CLOSE_COLLISION_RANGE/, 'Folsom Neckman collision separation is gated by squared-distance range checks.');
+assert.match(blackGrassFactionSource, /context\?\.perfDebugToggles\?\.neckmanCombatOff/, 'Folsom Neckman combat debug toggle remains present.');
+['neckmanTargetingOff', 'neckmanCollisionOff', 'neckmanMovementOff', 'neckmanCombatOff', 'neckmanStateMachineOff', 'neckmanAiOff', 'neckmanStatic', 'neckmanPerfTrace'].forEach((toggle) => {
+  assert.match(`${blackGrassFactionSource}\n${creatureWorldRuntimeSource}\n${perfDebugPanelSource}`, new RegExp(toggle), `Folsom Neckman debug toggle ${toggle} remains present.`);
+});
 
 assert.match(blackGrassFactionSource, /FOLSOM_BLOOD_FEUD_TARGET_HOLD_SECONDS\s*=\s*2\.1/, 'Folsom Neckman targeting keeps sticky targets for at least 1.5 seconds.');
 assert.match(blackGrassFactionSource, /FOLSOM_BLOOD_FEUD_MAX_TARGETING_OPS_PER_FRAME\s*=\s*1/, 'Folsom Neckman targeting catch-up is clamped to one targeting operation per frame.');
