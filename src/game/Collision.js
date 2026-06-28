@@ -92,13 +92,14 @@ function sampleSegmentSurface(point, surface) {
 }
 
 export class CollisionWorld {
-  constructor({ walkableRects, blockerRects = [], playerRadius = 0.35, walkableSurfaces = [], defaultFloorY = 0, outdoorTerrainSampler = null }) {
+  constructor({ walkableRects, blockerRects = [], playerRadius = 0.35, walkableSurfaces = [], defaultFloorY = 0, outdoorTerrainSampler = null, sourceLocationId = null }) {
     this.walkableRects = walkableRects;
     this.walkableSurfaces = walkableSurfaces;
     this.blockerRects = blockerRects;
     this.playerRadius = playerRadius;
     this.defaultFloorY = defaultFloorY;
     this.outdoorTerrainSampler = outdoorTerrainSampler;
+    this.sourceLocationId = sourceLocationId;
     this.eyeHeight = 1.55;
     this.maxStepUp = 0.38;
   }

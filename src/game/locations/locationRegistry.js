@@ -99,6 +99,25 @@ export function hasLocationDefinition(id) {
   return loadedLocationDefinitions.has(id) || Object.hasOwn(lazyLocationLoaders, id);
 }
 
+export function isLocationDefinitionLoaded(id) {
+  return loadedLocationDefinitions.has(id);
+}
+
+export function getLoadedLocationDefinitionIds() {
+  return [...loadedLocationDefinitions.keys()];
+}
+
+export function getLocationRegistryDebugSummary() {
+  const lazyIds = Object.keys(lazyLocationLoaders);
+  return {
+    loadedLocationIds: getLoadedLocationDefinitionIds(),
+    lazyLocationIds: lazyIds,
+    loadingLocationIds: [...loadingLocationDefinitions.keys()],
+    routeRegistryLoaded: true,
+    lazyLocationsPending: lazyIds.some((id) => !loadedLocationDefinitions.has(id)),
+  };
+}
+
 export async function loadLocationDefinition(id) {
   const cached = getLocationDefinition(id);
   if (cached) return cached;

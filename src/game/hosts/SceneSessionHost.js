@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { DungeonScene } from '../DungeonScene.js';
 import { PlayerController } from '../PlayerController.js';
 import { resolveLocationIdForArea, resolveLocationReturnSpawn, resolveStartupArea } from '../locationRouting.js';
-import { getLocationDefinition, loadLocationDefinition } from '../locations/locationRegistry.js';
+import { getLoadedLocationDefinitionIds, getLocationDefinition, getLocationRegistryDebugSummary, loadLocationDefinition } from '../locations/locationRegistry.js';
 
 export class SceneSessionHost {
   constructor({ rendererHost, gameState, query = new URLSearchParams(window.location.search) } = {}) {
@@ -101,6 +101,23 @@ export class SceneSessionHost {
     return resolveLocationIdForArea(area);
   }
 
+  getLocationLoadDebugSummary() {
+    const registry = getLocationRegistryDebugSummary();
+    return {
+      currentLocationId: this.locationId,
+      loadedLocationIds: getLoadedLocationDefinitionIds(),
+      activeSceneDefinitionId: this.dungeon?.compiledLocationRuntime?.locationId ?? this.locationId,
+      activeCollisionSourceId: this.dungeon?.collision?.sourceLocationId ?? this.dungeon?.compiledLocationRuntime?.locationId ?? this.locationId,
+      activeCreatureRuntimeLocationId: this.dungeon?.creatureWorldRuntime?.getDebugSummary?.().locationId ?? this.dungeon?.area ?? null,
+      offLocationObjectsCount: this.dungeon?.countOffLocationSceneObjects?.(this.locationId) ?? 0,
+      offLocationCollisionEntriesCount: this.dungeon?.countOffLocationCollisionEntries?.(this.locationId) ?? 0,
+      offLocationCreaturesCount: this.dungeon?.creatureWorldRuntime?.countOffLocationCreatures?.(this.locationId) ?? 0,
+      routeRegistryLoaded: registry.routeRegistryLoaded,
+      lazyLocationsPending: registry.lazyLocationsPending,
+      registry,
+    };
+  }
+
   getSessionSummary() {
     return {
       area: this.dungeon?.area ?? null,
@@ -108,6 +125,7 @@ export class SceneSessionHost {
       fieldSpawn: this.dungeon?.fieldSpawn ?? null,
       hasScene: Boolean(this.scene),
       hasPlayer: Boolean(this.player),
+      locationLoadDebug: this.getLocationLoadDebugSummary(),
     };
   }
 
