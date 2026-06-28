@@ -15,6 +15,7 @@ import { RendererHost } from './hosts/RendererHost.js';
 import { SaveHost } from './hosts/SaveHost.js';
 import { ProgressionHost } from './hosts/ProgressionHost.js';
 import { SceneSessionHost } from './hosts/SceneSessionHost.js';
+import { SurvivalHost } from './hosts/SurvivalHost.js';
 import { Interactions } from './Interactions.js';
 import { PerfDebugPanel } from './PerfDebugPanel.js';
 import { BroadswordView } from './weapons/BroadswordView.js';
@@ -105,6 +106,15 @@ export class Game {
       debugEnabled: objectiveDebugUiEnabled,
     });
     this.progressionHost.initializeForSession(this.sceneSessionHost);
+    this.survivalHost = new SurvivalHost({
+      gameState: this.gameState,
+      hudHost: this.hudHost,
+      saveHost: this.saveHost,
+      sceneSessionHost: this.sceneSessionHost,
+      inventoryBridge: this.survivalInventory,
+      progressionHost: this.progressionHost,
+    });
+    this.survivalHost.initializeForSession(this.sceneSessionHost);
     this.objectiveRuntime = this.progressionHost.getObjectiveRuntime();
     this.hud = this.hudHost.hud;
     this.feedback = new Feedback(this.camera);
@@ -124,6 +134,7 @@ export class Game {
       equipmentRuntime: this.equipmentRuntime,
       objectiveRuntime: this.objectiveRuntime,
       transitionToLocation: (...args) => this.sceneSessionHost.transitionToLocation(...args),
+      survivalHost: this.survivalHost,
     });
     this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.interactions.cancelActiveTimedAction?.());
     window.addEventListener('field-item-equipped-changed', () => this.interactions.cancelActiveTimedAction?.());
@@ -139,6 +150,7 @@ export class Game {
         if (weaponProfile?.id === 'rusted_sword') this.broadswordGestureController?.notifyFallbackAttack?.('rightSlash');
       },
     });
+    this.survivalHost.combat = this.combat;
 
     this.playFieldReturnReactionIfNeeded({ query });
     if (this.perfDebugEnabled) this.perfDebugPanel = new PerfDebugPanel({ game: this });
@@ -241,8 +253,11 @@ export class Game {
     this.castingController?.update(deltaSeconds);
     this.broadswordGestureController?.update(deltaSeconds);
     this.combat.update(deltaSeconds);
-    const hunger = this.gameState.updateHunger?.(deltaSeconds, { paused: this.equipmentPanel?.isOpen || this.isPaused, applyStarvationDamage: (amount) => this.combat.takeDamage?.(amount, 'Starvation') });
-    if (hunger) this.hud.updateHunger?.(hunger);
+    this.survivalHost?.update(deltaSeconds, {
+      paused: this.isPaused,
+      equipmentPanelOpen: this.equipmentPanel?.isOpen,
+      isPlayerDead: this.combat.isPlayerDead,
+    });
     this.updatePlayerTorchLight(deltaSeconds);
     this.progressionHost.update(deltaSeconds);
     this.interactions.updateHint();

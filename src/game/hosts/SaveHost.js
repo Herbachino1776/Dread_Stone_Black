@@ -17,6 +17,10 @@ export class SaveHost {
     gameState.saveObjectiveSnapshot(objectiveRuntime.getSnapshot());
   }
 
+  saveSurvivalState(gameState) {
+    gameState.saveFieldSurvivalState();
+  }
+
   resetAllProgress() {
     return GameState.resetAllProgress(this.storage);
   }

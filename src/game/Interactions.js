@@ -15,13 +15,14 @@ const EATING_COOKED_FISH_TIMED_ACTION_SECONDS = 2.75;
 const TIMED_ACTION_MOVE_CANCEL_DISTANCE = 1.4;
 
 export class Interactions {
-  constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null, objectiveRuntime = null, transitionToLocation = null }) {
+  constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null, objectiveRuntime = null, transitionToLocation = null, survivalHost = null }) {
     this.player = player;
     this.dungeon = dungeon;
     this.hud = hud;
     this.feedback = feedback;
     this.equipmentRuntime = equipmentRuntime;
-    this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime, gameState: dungeon?.gameState });
+    this.survivalInventory = survivalHost?.inventoryBridge ?? new SurvivalInventoryBridge({ equipmentRuntime, gameState: dungeon?.gameState });
+    this.survivalHost = survivalHost;
     this.objectiveRuntime = objectiveRuntime;
     this.transitionToLocationHandler = transitionToLocation;
     this.hasKey = false;
@@ -395,7 +396,8 @@ export class Interactions {
 
     this.dungeon.gameState?.markFieldChestLooted?.(interaction.id);
     if (this.survivalInventory.isSurvivalItem(interaction.itemId)) {
-      this.survivalInventory.acquireItem(interaction.itemId, { source: interaction.id, tags: ['field-survival'] });
+      this.survivalHost?.acquireSurvivalItem?.(interaction.itemId, { source: interaction.id, tags: ['field-survival'] })
+        ?? this.survivalInventory.acquireItem(interaction.itemId, { source: interaction.id, tags: ['field-survival'] });
     } else {
       this.dungeon.gameState?.addFieldItem?.(interaction.itemId);
     }
@@ -528,13 +530,13 @@ export class Interactions {
 
   completeFieldCampfireCraft(action = this.activeTimedAction) {
     if (!action || this.getCampfireRequirementMessage({ placement: action.placement })) return false;
-    if (!this.dungeon.gameState?.consumeFieldItems?.({ wood: 1 })) {
+    if (!(this.survivalHost?.consumeFieldItems?.({ wood: 1 }) ?? this.dungeon.gameState?.consumeFieldItems?.({ wood: 1 }))) {
       this.setTemporaryHint('Need Wood.', 1400);
       return false;
     }
 
     action.placement.y = 0;
-    this.dungeon.gameState?.markFieldCampfireBuilt?.(action.placement);
+    this.survivalHost?.handleCampfireBuilt?.(action.placement) ?? this.dungeon.gameState?.markFieldCampfireBuilt?.(action.placement);
     this.dungeon.addFieldCampfire?.(action.placement);
     this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: false });
     this.setTemporaryHint('Campfire Built.', 1600);
@@ -594,8 +596,12 @@ export class Interactions {
         && this.dungeon.gameState?.getFieldItemCount?.('raw_fish') > 0
         && this.horizontalDistanceTo(action.target) <= action.range,
       complete: (action) => {
-        const fishMeta = this.dungeon.gameState?.peekFishStackMetadata?.('raw_fish') ?? { fishSizeGroup: 'medium', hungerSeconds: 10 * 60 };
-        if (this.dungeon.gameState?.consumeFieldItems?.({ raw_fish: 1 })) {
+        const fishMeta = this.survivalHost?.handleCampfireCooked?.({ target: action.target })
+          ?? (() => {
+            const fallbackMeta = this.dungeon.gameState?.peekFishStackMetadata?.('raw_fish') ?? { fishSizeGroup: 'medium', hungerSeconds: 10 * 60 };
+            return this.dungeon.gameState?.consumeFieldItems?.({ raw_fish: 1 }) ? fallbackMeta : null;
+          })();
+        if (fishMeta) {
           this.dungeon.spawnCookedFishPickup?.(action.target, fishMeta);
           this.setTemporaryHint('Fish Cooked.', 1500);
           this.hud.showMessage('Fish Cooked.');
@@ -613,7 +619,8 @@ export class Interactions {
   }
 
   pickupCookedFish(interaction) {
-    this.dungeon.gameState?.addFieldItem?.('cooked_fish', 1, { fishSizeGroup: interaction.fishSizeGroup ?? interaction.pickup?.fishSizeGroup, hungerSeconds: interaction.hungerSeconds ?? interaction.pickup?.hungerSeconds });
+    this.survivalHost?.handleCookedFishCollected?.(interaction)
+      ?? this.dungeon.gameState?.addFieldItem?.('cooked_fish', 1, { fishSizeGroup: interaction.fishSizeGroup ?? interaction.pickup?.fishSizeGroup, hungerSeconds: interaction.hungerSeconds ?? interaction.pickup?.hungerSeconds });
     this.dungeon.removeCookedFishPickup?.(interaction.pickup);
     this.setTemporaryHint('Cooked Fish Acquired.', 1400);
     this.hud.showMessage('Cooked Fish Acquired.');
@@ -621,7 +628,8 @@ export class Interactions {
   }
 
   pickupRawFish(interaction) {
-    this.dungeon.gameState?.addFieldItem?.('raw_fish', 1, { fishSizeGroup: interaction.fishSizeGroup ?? interaction.pickup?.fishSizeGroup, hungerSeconds: interaction.hungerSeconds ?? interaction.pickup?.hungerSeconds });
+    this.survivalHost?.handleRawFishCollected?.(interaction)
+      ?? this.dungeon.gameState?.addFieldItem?.('raw_fish', 1, { fishSizeGroup: interaction.fishSizeGroup ?? interaction.pickup?.fishSizeGroup, hungerSeconds: interaction.hungerSeconds ?? interaction.pickup?.hungerSeconds });
     this.dungeon.removeRawFishPickup?.(interaction.pickup);
     this.setTemporaryHint('Raw Fish Acquired.', 1400);
     this.hud.showMessage('Raw Fish Acquired.');
@@ -650,7 +658,7 @@ export class Interactions {
       validate: () => this.dungeon.gameState?.getEquippedFieldItem?.() === 'cooked_fish'
         && this.dungeon.gameState?.getFieldItemCount?.('cooked_fish') > 0,
       complete: () => {
-        if (this.dungeon.gameState?.eatCookedFish?.()) {
+        if (this.survivalHost?.handleFoodConsumed?.('cooked_fish') ?? this.dungeon.gameState?.eatCookedFish?.()) {
           this.setTemporaryHint('Ate Cooked Fish.', 1300);
           this.hud.showMessage('Ate Cooked Fish.');
         }
