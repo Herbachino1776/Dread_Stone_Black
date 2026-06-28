@@ -49,14 +49,6 @@ export class Game {
       onReset: () => this.requestProgressReset(),
     });
     this.rendererHost = new RendererHost({ root: this.app });
-    // Compatibility references for lightweight debug helpers while Game.js is being split.
-    this.canvas = this.hudHost.canvas;
-    this.viewport = this.hudHost.viewport;
-    this.pauseOverlay = this.hudHost.pauseOverlay;
-    this.pauseButton = this.hudHost.pauseButton;
-    this.resumeButton = this.hudHost.resumeButton;
-    this.resetButtons = this.hudHost.resetButtons;
-    this.renderer = this.rendererHost.renderer;
 
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
     this.saveHost = new SaveHost();
@@ -65,16 +57,12 @@ export class Game {
       weaponProfiles: equipmentRegistry.weapons,
       startingEquipment: this.gameState.getEquipmentSnapshot() ?? startingEquipment,
     });
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, () => this.saveEquipmentState());
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.saveEquipmentState());
+    this.disposers = [];
+    this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, () => this.saveEquipmentState()));
+    this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.saveEquipmentState()));
     this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
     this.sceneSessionHost = new SceneSessionHost({ rendererHost: this.rendererHost, gameState: this.gameState, query });
     await this.sceneSessionHost.startInitialSession();
-    this.dungeon = this.sceneSessionHost.dungeon;
-    this.scene = this.sceneSessionHost.scene;
-    this.camera = this.sceneSessionHost.camera;
-    this.player = this.sceneSessionHost.player;
-    this.locationId = this.sceneSessionHost.locationId;
     this.progressionHost = new ProgressionHost({
       root: this.app,
       gameState: this.gameState,
@@ -110,9 +98,6 @@ export class Game {
       feedback: this.feedback,
     });
     this.viewmodelHost.initializeForSession(this.sceneSessionHost);
-    // Compatibility references for debug panels while Game.js continues becoming a coordinator.
-    this.castingController = this.viewmodelHost.castingController;
-    this.broadswordGestureController = this.viewmodelHost.broadswordGestureController;
     this.interactions = new Interactions({
       player: this.player,
       dungeon: this.dungeon,
@@ -123,9 +108,12 @@ export class Game {
       transitionToLocation: (...args) => this.sceneSessionHost.transitionToLocation(...args),
       survivalHost: this.survivalHost,
     });
-    this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.interactions.cancelActiveTimedAction?.());
-    window.addEventListener('field-item-equipped-changed', () => this.interactions.cancelActiveTimedAction?.());
-    window.addEventListener('field-offhand-equipped-changed', () => this.interactions.cancelActiveTimedAction?.());
+    this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.interactions.cancelActiveTimedAction?.()));
+    const cancelTimedAction = () => this.interactions.cancelActiveTimedAction?.();
+    window.addEventListener('field-item-equipped-changed', cancelTimedAction);
+    window.addEventListener('field-offhand-equipped-changed', cancelTimedAction);
+    this.disposers.push(() => window.removeEventListener('field-item-equipped-changed', cancelTimedAction));
+    this.disposers.push(() => window.removeEventListener('field-offhand-equipped-changed', cancelTimedAction));
     this.combat = new Combat({
       player: this.player,
       dungeon: this.dungeon,
@@ -203,7 +191,6 @@ export class Game {
     this.progressionHost.update(deltaSeconds);
     this.interactions.updateHint();
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
-    const interactHeld = (this.controls.isInteractHeld?.() ?? false) || keyboardInteractHeld;
     const keyboardInteractPressed = keyboardInteractHeld && !this.wasKeyboardInteractHeld;
     this.interactions.updateTimedAction(deltaSeconds, this.equipmentPanel?.isOpen || this.isPaused || this.combat.isPlayerDead || this.controls.hasAttackQueued?.());
 
@@ -265,6 +252,27 @@ export class Game {
 
   resize() {
     this.rendererHost.resize();
+  }
+
+  get dungeon() { return this.sceneSessionHost?.dungeon; }
+  get scene() { return this.sceneSessionHost?.scene; }
+  get camera() { return this.sceneSessionHost?.camera; }
+  get player() { return this.sceneSessionHost?.player; }
+  get locationId() { return this.sceneSessionHost?.locationId; }
+
+  dispose() {
+    this.rendererHost?.setAnimationLoop?.(null);
+    this.perfDebugPanel?.dispose?.();
+    this.clearResetConfirmation();
+    this.disposers?.forEach((dispose) => dispose?.());
+    this.disposers = [];
+    this.viewmodelHost?.dispose?.();
+    this.survivalHost?.dispose?.();
+    this.progressionHost?.dispose?.();
+    this.inputHost?.dispose?.();
+    this.hudHost?.dispose?.();
+    this.sceneSessionHost?.dispose?.();
+    this.rendererHost?.dispose?.();
   }
 
 }
