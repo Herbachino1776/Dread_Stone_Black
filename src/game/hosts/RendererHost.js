@@ -53,8 +53,18 @@ export class RendererHost {
     this.renderer.setAnimationLoop(callback);
   }
 
-  render(scene, camera) {
+  render(scene, camera, { viewmodelLayer = 1 } = {}) {
     this.renderer.render(scene, camera);
+    this.renderViewmodelOverlay(scene, camera, viewmodelLayer);
+  }
+
+  renderViewmodelOverlay(scene, camera, layer = 1) {
+    if (!scene || !camera) return;
+    const previousMask = camera.layers.mask;
+    camera.layers.set(layer);
+    this.renderer.clearDepth();
+    this.renderer.render(scene, camera);
+    camera.layers.mask = previousMask;
   }
 
   dispose() {

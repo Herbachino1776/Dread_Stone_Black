@@ -2,11 +2,15 @@ import * as THREE from 'three';
 import { FishingLinePhysics } from './FishingLinePhysics.js';
 import { FISH_BITE_SETTLE_MIN_MS, FISH_BITE_SETTLE_MAX_MS, LINE_SLACK_OPACITY, LINE_TAUT_OPACITY, LURE_RADIUS } from './CastingTuning.js';
 
+const segmentDeltaScratch = new THREE.Vector3();
+const segmentMidScratch = new THREE.Vector3();
+const segmentUp = new THREE.Vector3(0, 1, 0);
+
 export class LureProjectile {
   constructor({ scene, dungeon, waterResolver, onLanded, maxCastRange = 44 }) {
     this.scene = scene; this.dungeon = dungeon; this.waterResolver = waterResolver; this.onLanded = onLanded; this.maxCastRange = maxCastRange;
     this.physics = new FishingLinePhysics({ terrainSampler: dungeon?.outdoorVisibleSurfaceRuntime ?? dungeon?.outdoorTerrainRuntime }); this.position = this.physics.lurePosition; this.velocity = this.physics.lureVelocity; this.start = new THREE.Vector3();
-    this.mesh = null; this.lineMesh = null; this.linePositions = null; this.lineSegments = []; this.active = false; this.landed = false; this.settleMs = 0; this.settleAgeMs = 0; this.pendingWaterZone = null; this.debug = { enabled: false, lureHitType: 'none', fishableWaterId: null };
+    this.mesh = null; this.lineMesh = null; this.linePositions = null; this.lineSegments = []; this.lineCoreMaterial = null; this.lineHaloMaterial = null; this.active = false; this.landed = false; this.settleMs = 0; this.settleAgeMs = 0; this.pendingWaterZone = null; this.debug = { enabled: false, lureHitType: 'none', fishableWaterId: null };
   }
   ensureVisuals() {
     if (!this.mesh) {
@@ -22,13 +26,15 @@ export class LureProjectile {
       this.lineMesh.userData = { dynamicSpoolLength: true, tensionOpacity: true, multiPointConstraintLine: true, meshBasedLineRenderer: true, mobileSafeNotOnePixelGLLine: true, visibleFromMultipleViewAngles: true };
       const coreMaterial = new THREE.MeshBasicMaterial({ color: 0xd8d0b8, transparent: true, opacity: LINE_SLACK_OPACITY, depthWrite: false, depthTest: true });
       const haloMaterial = new THREE.MeshBasicMaterial({ color: 0xf4edd8, transparent: true, opacity: LINE_SLACK_OPACITY * 0.32, depthWrite: false, depthTest: true });
+      this.lineCoreMaterial = coreMaterial;
+      this.lineHaloMaterial = haloMaterial;
       const coreGeometry = new THREE.CylinderGeometry(0.0065, 0.0065, 1, 6, 1, true);
       const haloGeometry = new THREE.CylinderGeometry(0.012, 0.012, 1, 6, 1, true);
       this.lineSegments = [];
       for (let i = 0; i < this.physics.linePoints.length - 1; i += 1) {
         const segment = new THREE.Group();
-        const core = new THREE.Mesh(coreGeometry, coreMaterial.clone());
-        const halo = new THREE.Mesh(haloGeometry, haloMaterial.clone());
+        const core = new THREE.Mesh(coreGeometry, coreMaterial);
+        const halo = new THREE.Mesh(haloGeometry, haloMaterial);
         segment.add(halo, core); this.lineMesh.add(segment); this.lineSegments.push(segment);
       }
       this.scene.add(this.lineMesh);
@@ -37,13 +43,14 @@ export class LureProjectile {
   syncVisuals() {
     this.ensureVisuals(); this.mesh.position.copy(this.physics.lurePosition);
     const opacity = THREE.MathUtils.lerp(LINE_SLACK_OPACITY, LINE_TAUT_OPACITY, THREE.MathUtils.clamp(this.physics.lineTension / 7, 0, 1));
+    if (this.lineCoreMaterial) this.lineCoreMaterial.opacity = opacity;
+    if (this.lineHaloMaterial) this.lineHaloMaterial.opacity = opacity * 0.32;
     const visibleSegments = this.physics.isLureAirborne ? Math.max(1, Math.min(this.lineSegments.length, this.physics.activePoints - 1)) : this.lineSegments.length;
     for (let i = 0; i < this.lineSegments.length; i += 1) {
       const segment = this.lineSegments[i]; const a = this.physics.linePoints[i]; const b = this.physics.linePoints[i + 1];
-      const delta = b.clone().sub(a); const length = delta.length(); const visible = i < visibleSegments && length > 0.001; segment.visible = visible;
+      const delta = segmentDeltaScratch.copy(b).sub(a); const length = delta.length(); const visible = i < visibleSegments && length > 0.001; segment.visible = visible;
       if (!visible) continue;
-      segment.position.copy(a).addScaledVector(delta, 0.5); segment.scale.set(1, Math.max(length, 0.001), 1); segment.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
-      segment.children.forEach((child, childIndex) => { child.material.opacity = childIndex === 0 ? opacity * 0.32 : opacity; });
+      segment.position.copy(segmentMidScratch.copy(a).addScaledVector(delta, 0.5)); segment.scale.set(1, Math.max(length, 0.001), 1); segment.quaternion.setFromUnitVectors(segmentUp, delta.multiplyScalar(1 / length));
     }
   }
   readyAtRod(rodTip) { if (!rodTip) return; if (!this.mesh) this.physics.resetAtRodTip(rodTip); this.ensureVisuals(); this.physics.update(1 / 60, rodTip, { rodHeld: false }); this.active = false; this.landed = false; this.syncVisuals(); }
@@ -67,6 +74,6 @@ export class LureProjectile {
     else { const groundY = this.dungeon?.resolveOutdoorVisibleSurfaceY?.(this.physics.lurePosition.x, this.physics.lurePosition.z, { water: false, fallbackY: surfaceY })?.y ?? surfaceY; this.physics.enterGround(groundY); this.debug.lureHitType = forcedFail ? 'max-range' : 'ground'; this.onLanded?.({ position: this.physics.lurePosition.clone(), zone: null, success: false, settled: false }); }
   }
   finishWaterSettle() { const zone = this.pendingWaterZone; this.pendingWaterZone = null; this.landed = false; this.onLanded?.({ position: this.physics.lurePosition.clone(), zone, success: Boolean(zone?.fishSpeciesPool?.length), settled: true }); }
-  cleanup(removeVisuals = true) { if (removeVisuals) { if (this.mesh?.parent) this.mesh.parent.remove(this.mesh); if (this.lineMesh?.parent) this.lineMesh.parent.remove(this.lineMesh); this.mesh = null; this.lineMesh = null; this.linePositions = null; this.lineSegments = []; } this.active = false; this.landed = false; this.pendingWaterZone = null; }
+  cleanup(removeVisuals = true) { if (removeVisuals) { if (this.mesh?.parent) this.mesh.parent.remove(this.mesh); if (this.lineMesh?.parent) this.lineMesh.parent.remove(this.lineMesh); this.mesh = null; this.lineMesh = null; this.linePositions = null; this.lineSegments = []; this.lineCoreMaterial = null; this.lineHaloMaterial = null; } this.active = false; this.landed = false; this.pendingWaterZone = null; }
   getDebugState() { return { ...this.physics.getDebugState(), lureHitType: this.debug.lureHitType, fishableWaterId: this.debug.fishableWaterId }; }
 }
