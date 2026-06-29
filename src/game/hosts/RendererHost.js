@@ -54,17 +54,40 @@ export class RendererHost {
   }
 
   render(scene, camera, { viewmodelLayer = 1 } = {}) {
-    this.renderer.render(scene, camera);
+    if (!scene || !camera) return;
+
+    const previousMask = camera.layers.mask;
+    try {
+      camera.layers.set(0);
+      this.renderer.render(scene, camera);
+    } finally {
+      camera.layers.mask = previousMask;
+    }
+
     this.renderViewmodelOverlay(scene, camera, viewmodelLayer);
   }
 
   renderViewmodelOverlay(scene, camera, layer = 1) {
     if (!scene || !camera) return;
+
+    const previousAutoClear = this.renderer.autoClear;
     const previousMask = camera.layers.mask;
-    camera.layers.set(layer);
-    this.renderer.clearDepth();
-    this.renderer.render(scene, camera);
-    camera.layers.mask = previousMask;
+    const previousBackground = scene.background;
+    const previousFog = scene.fog;
+
+    try {
+      this.renderer.autoClear = false;
+      this.renderer.clearDepth();
+      scene.background = null;
+      scene.fog = null;
+      camera.layers.set(layer);
+      this.renderer.render(scene, camera);
+    } finally {
+      this.renderer.autoClear = previousAutoClear;
+      camera.layers.mask = previousMask;
+      scene.background = previousBackground;
+      scene.fog = previousFog;
+    }
   }
 
   dispose() {
