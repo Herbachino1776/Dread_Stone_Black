@@ -263,7 +263,7 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_future_road', label: 'North Road', target: { x: 0, y: 1, z: 88 }, range: 5, hint: 'Look beyond the north road', message: 'The old road follows a dry channel into the wilds.', type: 'outdoorInspect' },
   ],
   spawns: [
-    { id: 'folsom_player_start', kind: 'player', position: { x: -4, y: 1.67, z: -11 }, yaw: -0.08, roomId: 'folsom_bounds', tags: ['default-start', 'courtyard'] },
+    { id: 'folsom_player_start', kind: 'player', position: { x: -2, y: 1.71, z: -4 }, yaw: 0, roomId: 'folsom_bounds', tags: ['default-start', 'courtyard'] },
     { id: 'folsom_reliquary_return', kind: 'return', position: { x: 73, y: 1.67, z: 4 }, yaw: -Math.PI / 2, roomId: 'folsom_bounds', tags: ['legacy-door-return'] },
   ],
   exits: [{

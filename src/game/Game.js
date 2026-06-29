@@ -63,7 +63,8 @@ export class Game {
     this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.saveEquipmentState()));
     this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
     this.sceneSessionHost = new SceneSessionHost({ rendererHost: this.rendererHost, gameState: this.gameState, query });
-    await this.sceneSessionHost.startInitialSession();
+    const initialSession = await this.sceneSessionHost.startInitialSession();
+    this.hudHost.setStartupDebug(initialSession.startupDebug);
     this.progressionHost = new ProgressionHost({
       root: this.app,
       gameState: this.gameState,

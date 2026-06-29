@@ -135,6 +135,12 @@ export class CollisionWorld {
     return best;
   }
 
+  getIntersectingBlockers(position, radius = this.playerRadius) {
+    if (!position) return [];
+    const testPoint = { x: position.x, z: position.z };
+    return this.blockerRects.filter((rect) => circleIntersectsBlocker(testPoint, radius, rect));
+  }
+
   canStandAt(position) {
     const testPoint = { x: position.x, z: position.z };
     const inWalkableSpace = this.walkableRects.some((rect) => pointInRect(testPoint, rect));
@@ -146,9 +152,9 @@ export class CollisionWorld {
     const heightDelta = targetSurface.y - currentFloorY;
     if (heightDelta > this.maxStepUp && !['ramp', 'stairRamp'].includes(targetSurface.kind)) return false;
 
-    return !this.blockerRects.some((rect) => {
+    return !this.getIntersectingBlockers(position).some((rect) => {
       if (rect.type === 'canal' && targetSurface.kind === 'bridgeDeck') return false;
-      return circleIntersectsBlocker(testPoint, this.playerRadius, rect);
+      return true;
     });
   }
 
