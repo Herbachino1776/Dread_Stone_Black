@@ -737,11 +737,6 @@ export class DungeonScene {
   }
 
   buildIndoorDungeon() {
-    if (this.area === 'black-grass-temple') {
-      this.buildBlackGrassTempleInterior();
-      return;
-    }
-
     if (this.isCompiledRuntimeArea()) {
       this.buildCompiledLocationInterior();
       return;

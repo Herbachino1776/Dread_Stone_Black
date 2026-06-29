@@ -27,8 +27,10 @@ export class Game {
   async start() {
     try {
       await this.startUnsafe();
+      return true;
     } catch (error) {
       this.handleStartupError(error);
+      return false;
     }
   }
 
@@ -126,15 +128,13 @@ export class Game {
     console.error('[Dread Stone Black] Startup failed before the scene became playable.', error);
     this.rendererHost?.setAnimationLoop?.(null);
 
-    if (import.meta.env.DEV) {
-      if (!this.app.innerHTML) this.hudHost = new HudHost({ root: this.app, debugEnabled: this.debugHudEnabled });
-      const viewport = this.hudHost?.viewport ?? this.app.querySelector('[data-game="viewport"]');
-      const message = document.createElement('p');
-      message.setAttribute('role', 'alert');
-      message.style.cssText = 'position:absolute;inset:auto 1rem 1rem 1rem;z-index:20;margin:0;padding:0.75rem;background:rgba(32,8,8,0.92);color:#ffd8c2;border:1px solid #a45f3a;font:12px/1.4 monospace;';
-      message.textContent = `Startup failed: ${error?.message ?? error}`;
-      viewport?.append(message);
-    }
+    if (!this.app.innerHTML) this.hudHost = new HudHost({ root: this.app, debugEnabled: this.debugHudEnabled });
+    const viewport = this.hudHost?.viewport ?? this.app.querySelector('[data-game="viewport"]') ?? this.app;
+    const message = document.createElement('p');
+    message.setAttribute('role', 'alert');
+    message.style.cssText = 'position:absolute;inset:auto 1rem 1rem 1rem;z-index:20;margin:0;padding:0.75rem;background:rgba(32,8,8,0.92);color:#ffd8c2;border:1px solid #a45f3a;font:12px/1.4 monospace;';
+    message.textContent = `Startup failed: ${error?.message ?? error}`;
+    viewport?.append(message);
   }
 
   playFieldReturnReactionIfNeeded({ query }) {

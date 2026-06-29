@@ -14,5 +14,10 @@ if (selection.action === 'new') {
 }
 
 const game = new Game(app);
-await game.start();
-titleScreen.dispose();
+const startupSucceeded = await game.start();
+
+if (startupSucceeded) {
+  titleScreen.dispose();
+} else {
+  titleScreen.showStartupError();
+}

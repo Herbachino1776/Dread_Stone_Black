@@ -40,11 +40,15 @@ export class TitleScreen {
           <button class="title-screen__button" type="button" data-title-action="new">New Game</button>
           <button class="title-screen__button" type="button" data-title-action="continue">Continue</button>
         </nav>
+        <p class="title-screen__error" data-title-error role="alert" hidden></p>
+        <button class="title-screen__button title-screen__retry" type="button" data-title-retry hidden>Retry</button>
       </div>
     `;
     this.menu = root.querySelector('[data-menu]');
     this.wakeText = root.querySelector('[data-wake-text]');
     this.buttons = MENU_ITEMS.map((id) => root.querySelector(`[data-title-action="${id}"]`));
+    this.errorText = root.querySelector('[data-title-error]');
+    this.retryButton = root.querySelector('[data-title-retry]');
     this.updateMenuState();
     return root;
   }
@@ -54,6 +58,11 @@ export class TitleScreen {
       event.preventDefault();
       if (this.stage === 'boot') {
         this.wake();
+        return;
+      }
+      const retry = event.target?.closest?.('[data-title-retry]');
+      if (retry) {
+        window.location.reload();
         return;
       }
       const action = event.target?.closest?.('[data-title-action]')?.dataset?.titleAction;
@@ -132,6 +141,20 @@ export class TitleScreen {
     this.stage = 'starting';
     this.root.classList.add('title-screen--starting');
     this.resolveChoice?.({ action });
+  }
+
+  showStartupError(message = 'Startup failed. Check console.') {
+    this.stage = 'error';
+    window.clearTimeout(this.wakingFallbackTimer);
+    this.wakingFallbackTimer = null;
+    this.root.classList.remove('title-screen--boot', 'title-screen--starting');
+    this.root.classList.add('title-screen--menu', 'title-screen--error');
+    this.wakeText.hidden = true;
+    this.menu.hidden = false;
+    this.errorText.textContent = message;
+    this.errorText.hidden = false;
+    this.retryButton.hidden = false;
+    this.retryButton.focus?.({ preventScroll: true });
   }
 
   updateMenuState() {
