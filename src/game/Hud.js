@@ -10,6 +10,7 @@ export class Hud {
     this.powerEl = root.querySelector('[data-stat="power"]');
     this.hungerEl = root.querySelector('[data-stat="hunger"]');
     this.damageEl = root.querySelector('[data-hud="damage"]');
+    this.startupDebugEl = root.querySelector('[data-hud="startup-debug"]');
     this.fieldKitEl = root.querySelector('[data-hud="field-kit"]');
     this.timedActionProgressEl = root.querySelector('[data-hud="timed-action-progress"]') ?? root.querySelector('[data-hud="hold-progress"]');
     this.debugFrameSkip = 0;
@@ -47,6 +48,12 @@ export class Hud {
     const fishingState = fishing ? ` · FISH ${fishing.lureMode ?? 'none'} · SPOOL ${number(fishing.lineLength)} [${number(fishing.minLineLength)}, ${number(fishing.maxLineLength)}] · DIST ${number(fishing.lureDistance)} · REEL ${number(fishing.reelTargetRate)}/${number(fishing.reelActualRate)} @${number(fishing.reelAccelerationClamp, 0)} · GRACE ${fishing.castGraceActive ? 'Y' : 'N'} · END ${fishing.endpointConstraintActive ? 'Y' : 'N'} · TENSION ${number(fishing.lineTension)} · LURE V ${number(fishing.lureSpeed)} · GRAB ${number(fishing.grabT)} · TIP V ${number(tipSpeed)}` : '';
     const swordState = broadsword ? ` · SWORD ${broadsword.equipped ? 'Y' : 'N'} · GEST ${broadsword.gestureActive ? 'Y' : 'N'} · SWIPE ${number(broadsword.swipeDistance, 0)} · RELEASE ${number(broadsword.releaseSpeed, 0)} · ${broadsword.attackType}/${broadsword.attackPhase} · CD ${number(broadsword.cooldown)} · HIT ${broadsword.hitWindowActive ? 'Y' : 'N'}` : '';
     this.debugEl.textContent = `${playerState}${fishingState}${swordState}`;
+  }
+
+  setStartupDebug(message) {
+    if (!this.startupDebugEl) return;
+    this.startupDebugEl.textContent = message || '';
+    this.startupDebugEl.hidden = !message;
   }
 
   showHint(message) {
