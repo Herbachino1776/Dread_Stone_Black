@@ -173,29 +173,6 @@
 }
 
 
-.startup-debug-readout {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  z-index: 7;
-  max-width: calc(100% - 16px);
-  margin: 0;
-  padding: 6px 8px;
-  border: 1px solid rgba(255, 224, 150, 0.55);
-  border-radius: 6px;
-  background: rgba(2, 2, 3, 0.78);
-  color: #ffe8ae;
-  font: 0.62rem/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  white-space: pre-wrap;
-  text-shadow: 0 1px 2px #000;
-  pointer-events: none;
-}
-
-.startup-debug-readout:empty,
-.startup-debug-readout[hidden] {
-  display: none;
-}
-
 .interaction-hint {
   position: absolute;
   left: 50%;

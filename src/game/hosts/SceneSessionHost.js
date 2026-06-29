@@ -13,7 +13,6 @@ export class SceneSessionHost {
     this.scene = null;
     this.player = null;
     this.locationId = null;
-    this.startupDebug = null;
 
     const { width, height } = this.rendererHost.getViewportSize();
     this.camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 260);
@@ -47,7 +46,6 @@ export class SceneSessionHost {
       ...this.getMovementProfile(this.locationId),
     });
     this.validateStartupSpawn();
-    this.startupDebug = this.createStartupDebugText();
     return this.getSessionSummary();
   }
 
@@ -101,43 +99,6 @@ export class SceneSessionHost {
     this.player.syncCamera();
   }
 
-  findObjectInFrontOfCamera(maxDistance = 2.2) {
-    if (!this.scene || !this.camera) return 'none';
-    try {
-      this.camera.updateMatrixWorld(true);
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-      raycaster.near = 0;
-      raycaster.far = maxDistance;
-      const hits = raycaster.intersectObjects(this.scene.children, true)
-        .filter((hit) => hit.object !== this.camera && hit.object.visible !== false && hit.object.type !== 'PerspectiveCamera');
-      const hit = hits[0];
-      if (!hit) return 'none';
-      return `${hit.object.name || hit.object.type}@${hit.distance.toFixed(2)}m`;
-    } catch (error) {
-      console.warn('[Dread Stone Black] Startup view probe failed; gameplay will continue.', error);
-      return 'unavailable';
-    }
-  }
-
-  createStartupDebugText() {
-    if (!this.player) return '';
-    const sampledFloor = this.dungeon?.collision?.sampleWalkableY?.(this.player.position.x, this.player.position.z, 0);
-    const blockers = this.dungeon?.collision?.getIntersectingBlockers?.(this.player.position) ?? [];
-    const fmt = (value) => Number.isFinite(value) ? value.toFixed(2) : '-';
-    const yaw = THREE.MathUtils.radToDeg(this.player.yaw ?? 0);
-    const pitch = THREE.MathUtils.radToDeg(this.player.pitch ?? 0);
-    return [
-      `startup ${this.locationId ?? 'unknown'}`,
-      `pos ${fmt(this.player.position.x)} ${fmt(this.player.position.y)} ${fmt(this.player.position.z)}`,
-      `yaw/pitch ${fmt(yaw)} ${fmt(pitch)}`,
-      `floorY ${fmt(sampledFloor?.y)} ${sampledFloor?.kind ?? 'none'}`,
-      `camera ${fmt(this.camera.position.x)} ${fmt(this.camera.position.y)} ${fmt(this.camera.position.z)}`,
-      `near ${this.findObjectInFrontOfCamera()}`,
-      `blockers ${blockers.map((blocker) => blocker.id ?? blocker.name ?? blocker.type ?? 'blocker').join(', ') || 'none'}`,
-    ].join('\n');
-  }
-
   getMovementProfile(locationId) {
     return getLocationDefinition(locationId)?.type === 'field'
       ? {
@@ -187,7 +148,6 @@ export class SceneSessionHost {
       fieldSpawn: this.dungeon?.fieldSpawn ?? null,
       hasScene: Boolean(this.scene),
       hasPlayer: Boolean(this.player),
-      startupDebug: this.startupDebug,
       locationLoadDebug: this.getLocationLoadDebugSummary(),
     };
   }
@@ -205,7 +165,6 @@ export class SceneSessionHost {
     this.scene = null;
     this.player = null;
     this.locationId = null;
-    this.startupDebug = null;
   }
 
   dispose() {

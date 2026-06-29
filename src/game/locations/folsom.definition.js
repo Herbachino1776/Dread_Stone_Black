@@ -251,7 +251,6 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_wood_axe_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Tool Shed Axe Chest', position: { x: -39, y: 0.079, z: -29 }, itemId: 'wood_axe', acquiredMessage: 'Wood Axe Acquired.', tags: ['tool-shed', 'starter-loop'] },
     { id: 'folsom_flint_stick_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Work Yard Flint Chest', position: { x: -22, y: -0.343, z: -39 }, itemId: 'flint_stick', acquiredMessage: 'Flint Stick Acquired.', tags: ['work-yard', 'starter-loop'] },
     { id: 'folsom_torch_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'House Torch Chest', position: { x: 46, y: 0.21, z: -7 }, itemId: 'torch', acquiredMessage: 'Torch Acquired.', tags: ['house-interior', 'starter-loop'] },
-    { id: 'folsom_rusted_sword_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Underworks Sword Chest', position: { x: 35, y: 0.799, z: 38 }, itemId: 'rusted_sword', acquiredMessage: 'Rusted Sword Acquired.', tags: ['first-weapon', 'dungeon-route'] },
   ],
   outdoorCampfires: [{ id: 'folsom_courtyard_campfire', position: { x: -8, y: 0.16, z: -14 }, tags: ['courtyard', 'pond-path', 'starter-loop'] }],
   // The old folsom_work_yard_tree primitive cylinder/cone fake tree was removed; Folsom harvesting now uses the dark redwood billboard swathes.

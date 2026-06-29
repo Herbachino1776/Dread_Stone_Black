@@ -105,10 +105,6 @@ export class EquipmentRuntime {
     return this.equipped.offhand ?? null;
   }
 
-  emitAttack(payload) {
-    this.emit(EQUIPMENT_EVENTS.attackResolved, payload);
-  }
-
   getSnapshot() {
     return {
       acquiredItemIds: this.inventory.list().map((item) => item.id),

@@ -2,11 +2,7 @@ const SOUTH_RELIQUARY_FRAGMENT_KEY = 'dreadStoneBlack.hasSouthReliquaryFragment'
 const FIELD_SHRINE_REACTION_KEY = 'dreadStoneBlack.fieldShrineReactionSeen';
 const EQUIPMENT_STATE_KEY = 'dreadStoneBlack.equipmentState';
 const OBJECTIVE_STATE_KEY = 'dreadStoneBlack.objectiveState';
-const RUSTED_SWORD_CHEST_OPENED_KEY = 'dreadStoneBlack.blackGrassTemple.rustedSwordChestOpened';
-const BLACK_GRASS_TEMPLE_ALTAR_ACTIVATED_KEY = 'dreadStoneBlack.blackGrassTemple.altarActivated';
 const FIELD_SURVIVAL_STATE_KEY = 'dreadStoneBlack.reliquaryField.survivalState';
-const RUSTED_SWORD_ITEM_ID = 'rusted_sword';
-const RUSTED_SWORD_CHEST_INTERACTION_ID = 'BGT_INT_RUSTED_SWORD_CHEST';
 
 const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
   inventory: { wood_axe: false, fishing_rod: false, wood: 0, raw_fish: 0, cooked_fish: 0, torch: false },
@@ -46,17 +42,7 @@ export class GameState {
     this.storage = storage;
     this.hasSouthReliquaryFragment = this.readFlag(SOUTH_RELIQUARY_FRAGMENT_KEY, false);
     this.fieldShrineReactionSeen = this.readFlag(FIELD_SHRINE_REACTION_KEY, false);
-    this.rustedSwordChestOpened = this.readFlag(RUSTED_SWORD_CHEST_OPENED_KEY, false)
-      || this.inferRustedSwordChestOpenedFromObjectives();
-    this.blackGrassTempleAltarActivated = this.readFlag(BLACK_GRASS_TEMPLE_ALTAR_ACTIVATED_KEY, false)
-      || this.inferBlackGrassTempleAltarActivatedFromObjectives();
     this.fieldSurvivalState = this.repairFieldSurvivalState(this.readJson(FIELD_SURVIVAL_STATE_KEY, null));
-    if (this.rustedSwordChestOpened) {
-      this.writeFlag(RUSTED_SWORD_CHEST_OPENED_KEY, true);
-    }
-    if (this.blackGrassTempleAltarActivated) {
-      this.writeFlag(BLACK_GRASS_TEMPLE_ALTAR_ACTIVATED_KEY, true);
-    }
   }
 
   collectSouthReliquaryFragment() {
@@ -89,30 +75,6 @@ export class GameState {
 
   saveObjectiveSnapshot(snapshot) {
     this.writeJson(OBJECTIVE_STATE_KEY, snapshot);
-  }
-
-  hasRustedSwordChestOpened() {
-    return this.rustedSwordChestOpened;
-  }
-
-  hasBlackGrassTempleAltarActivated() {
-    return this.blackGrassTempleAltarActivated;
-  }
-
-  markBlackGrassTempleAltarActivated() {
-    if (this.blackGrassTempleAltarActivated) return false;
-
-    this.blackGrassTempleAltarActivated = true;
-    this.writeFlag(BLACK_GRASS_TEMPLE_ALTAR_ACTIVATED_KEY, true);
-    return true;
-  }
-
-  markRustedSwordChestOpened() {
-    if (this.rustedSwordChestOpened) return false;
-
-    this.rustedSwordChestOpened = true;
-    this.writeFlag(RUSTED_SWORD_CHEST_OPENED_KEY, true);
-    return true;
   }
 
   getFieldSurvivalSnapshot() {
@@ -399,9 +361,9 @@ export class GameState {
     if (!snapshot || typeof snapshot !== 'object') return snapshot;
 
     const acquiredItemIds = (snapshot.acquiredItemIds ?? [])
-      .filter((itemId) => this.rustedSwordChestOpened || itemId !== RUSTED_SWORD_ITEM_ID)
+      .filter((itemId) => itemId !== 'rusted_sword')
       .map((itemId) => itemId === 'field_axe' ? 'wood_axe' : itemId);
-    const weapon = snapshot.equipped?.weapon === RUSTED_SWORD_ITEM_ID && !this.rustedSwordChestOpened
+    const weapon = snapshot.equipped?.weapon === 'rusted_sword'
       ? 'unarmed'
       : snapshot.equipped?.weapon === 'field_axe'
         ? 'wood_axe'
@@ -420,42 +382,12 @@ export class GameState {
     };
   }
 
-  inferRustedSwordChestOpenedFromObjectives() {
-    const snapshot = this.readJson(OBJECTIVE_STATE_KEY, null);
-    if (!snapshot || typeof snapshot !== 'object') return false;
 
-    const facts = snapshot.facts ?? {};
-    if ((facts.chestOpenedInteractionIds ?? []).includes(RUSTED_SWORD_CHEST_INTERACTION_ID)) return true;
-    if (snapshot.lastEvent?.type === 'chest_opened' && snapshot.lastEvent?.interactionId === RUSTED_SWORD_CHEST_INTERACTION_ID) return true;
-
-    return (snapshot.objectiveStates ?? []).some((objectiveState) => (
-      objectiveState?.id === 'bgt_arm_yourself'
-      && objectiveState.stepStates?.take_rusted_sword?.status === 'complete'
-    ));
-  }
-
-
-  inferBlackGrassTempleAltarActivatedFromObjectives() {
-    const snapshot = this.readJson(OBJECTIVE_STATE_KEY, null);
-    if (!snapshot || typeof snapshot !== 'object') return false;
-
-    const facts = snapshot.facts ?? {};
-    if ((facts.flags ?? []).includes('bgt_silent_altar_touched')) return true;
-    if ((facts.usedInteractionIds ?? []).includes('BGT_INT06')) return true;
-    if (snapshot.lastEvent?.type === 'interaction_used' && snapshot.lastEvent?.interactionId === 'BGT_INT06') return true;
-
-    return (snapshot.objectiveStates ?? []).some((objectiveState) => (
-      objectiveState?.id === 'bgt_touch_silent_altar'
-      && (
-        objectiveState.status === 'complete'
-        || objectiveState.stepStates?.inspect_silent_altar?.status === 'complete'
-      )
-    ));
-  }
-
-  readFlag(key, fallback) {
+  readFlag(key, fallback = false) {
     try {
-      return this.storage?.getItem(key) === 'true' || fallback;
+      const value = this.storage?.getItem(key);
+      if (value === null || value === undefined) return fallback;
+      return value === 'true';
     } catch {
       return fallback;
     }
@@ -463,9 +395,9 @@ export class GameState {
 
   writeFlag(key, value) {
     try {
-      this.storage?.setItem(key, String(value));
+      this.storage?.setItem(key, value ? 'true' : 'false');
     } catch {
-      // Progression can still work for the current tab if storage is unavailable.
+      // Progress still works for the current tab if storage is unavailable.
     }
   }
 

@@ -2431,10 +2431,7 @@ export class DungeonScene {
   }
 
   addBrokenShrine() {
-    const shrineAwake = Boolean(
-      this.gameState?.hasSouthReliquaryFragment
-      || this.gameState?.hasBlackGrassTempleAltarActivated?.(),
-    );
+    const shrineAwake = Boolean(this.gameState?.hasSouthReliquaryFragment);
     const stoneMat = this.makeTexturedMaterial({
       path: TEXTURE_PATHS.wall,
       repeat: [1.4, 1.8],
