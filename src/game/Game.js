@@ -116,12 +116,17 @@ export class Game {
     this.disposers.push(() => window.removeEventListener('field-item-equipped-changed', cancelTimedAction));
     this.disposers.push(() => window.removeEventListener('field-offhand-equipped-changed', cancelTimedAction));
     this.isPlayerDead = false;
-
+    this.hasFatalRuntimeError = false;
+    this.hasRenderedFirstFrame = false;
+    this.firstFramePromise = new Promise((resolve) => {
+      this.resolveFirstFrame = resolve;
+    });
 
     this.playFieldReturnReactionIfNeeded({ query });
     if (this.perfDebugEnabled) this.perfDebugPanel = new PerfDebugPanel({ game: this });
 
     this.rendererHost.setAnimationLoop((time) => this.update(time));
+    return this.firstFramePromise;
   }
 
   handleStartupError(error) {
@@ -156,7 +161,22 @@ export class Game {
     this.saveHost.saveEquipmentState(this.gameState, this.equipmentRuntime);
   }
 
-  update() {
+  update(time) {
+    if (this.hasFatalRuntimeError) return;
+
+    try {
+      this.updateUnsafe(time);
+      if (!this.hasRenderedFirstFrame) {
+        this.hasRenderedFirstFrame = true;
+        this.resolveFirstFrame?.(true);
+        this.resolveFirstFrame = null;
+      }
+    } catch (error) {
+      this.handleRuntimeError(error);
+    }
+  }
+
+  updateUnsafe() {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
     this.perfDebugPanel?.update();
 
@@ -194,6 +214,61 @@ export class Game {
     this.feedback.update(deltaSeconds);
     this.sceneSessionHost.render();
     this.perfDebugPanel?.render();
+  }
+
+  handleRuntimeError(error) {
+    if (this.hasFatalRuntimeError) return;
+    this.hasFatalRuntimeError = true;
+    this.rendererHost?.setAnimationLoop?.(null);
+    console.error('[Dread Stone Black] Fatal runtime error during update/render.', error);
+    this.showFatalRuntimeOverlay(error);
+    if (!this.hasRenderedFirstFrame) {
+      this.resolveFirstFrame?.(false);
+      this.resolveFirstFrame = null;
+    }
+  }
+
+  showFatalRuntimeOverlay(error) {
+    const previous = document.querySelector('[data-game-fatal-overlay]');
+    previous?.remove?.();
+
+    const overlay = document.createElement('section');
+    overlay.dataset.gameFatalOverlay = 'true';
+    overlay.setAttribute('role', 'alert');
+    overlay.setAttribute('aria-live', 'assertive');
+    overlay.style.cssText = [
+      'position:fixed',
+      'inset:0',
+      'z-index:2000',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center',
+      'padding:calc(env(safe-area-inset-top) + 16px) calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 16px)',
+      'background:rgba(2,0,0,0.88)',
+      'color:#ffe0cf',
+      'font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
+      'pointer-events:auto',
+      'white-space:normal',
+    ].join(';');
+
+    const card = document.createElement('article');
+    card.style.cssText = 'width:min(100%,720px);max-height:88vh;overflow:auto;padding:1rem;border:1px solid #b86b42;background:rgba(38,8,5,0.96);box-shadow:0 0 28px rgba(0,0,0,0.7);';
+
+    const title = document.createElement('h1');
+    title.textContent = 'Dread Stone Black stopped';
+    title.style.cssText = 'margin:0 0 0.75rem;color:#ffd0a8;font:700 1.1rem/1.2 Georgia,serif;letter-spacing:0.06em;';
+
+    const intro = document.createElement('p');
+    intro.textContent = 'A fatal update/render error occurred before the game could continue. The animation loop was stopped so this is not a silent black screen.';
+    intro.style.margin = '0 0 0.75rem';
+
+    const message = document.createElement('pre');
+    message.textContent = `${error?.message ?? error ?? 'Unknown error'}${error?.stack ? `\n\n${error.stack}` : ''}`;
+    message.style.cssText = 'margin:0;overflow:auto;white-space:pre-wrap;user-select:text;-webkit-user-select:text;';
+
+    card.append(title, intro, message);
+    overlay.append(card);
+    document.body.append(overlay);
   }
 
   togglePause() {
