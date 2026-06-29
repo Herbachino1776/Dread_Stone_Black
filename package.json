@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "npm run validate:reliquary-startup && tsc -b && vite build",
+    "build": "npm run validate:reliquary-startup && npm run validate:objectives && tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "validate:bgt": "node scripts/validate-black-grass-temple.mjs",
     "validate:integrity": "node scripts/validate-dungeon-integrity.mjs",
@@ -13,6 +13,7 @@
     "validate:fish": "node scripts/validate-fish-geometry.mjs",
     "validate:oarb-terrain": "node scripts/validate-oarb-terrain-sampling.mjs && node scripts/validate-folsom.mjs",
     "validate:folsom": "node scripts/validate-folsom.mjs",
+    "validate:objectives": "node scripts/validate-objective-runtime.mjs",
     "validate:reliquary-startup": "node scripts/validate-reliquary-field-startup.mjs",
     "validate:no-player-arms": "node scripts/validate-no-player-arms.mjs",
     "audit:campfire-flame-alpha": "node scripts/audit-campfire-flame-alpha.mjs"

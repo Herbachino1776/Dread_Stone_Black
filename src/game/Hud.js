@@ -52,8 +52,9 @@ export class Hud {
 
   setStartupDebug(message) {
     if (!this.startupDebugEl) return;
-    this.startupDebugEl.textContent = message || '';
-    this.startupDebugEl.hidden = !message;
+    const visibleMessage = this.debugEnabled ? message : '';
+    this.startupDebugEl.textContent = visibleMessage || '';
+    this.startupDebugEl.hidden = !visibleMessage;
   }
 
   showHint(message) {

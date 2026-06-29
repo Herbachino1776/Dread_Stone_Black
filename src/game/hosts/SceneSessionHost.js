@@ -103,15 +103,21 @@ export class SceneSessionHost {
 
   findObjectInFrontOfCamera(maxDistance = 2.2) {
     if (!this.scene || !this.camera) return 'none';
-    this.camera.updateMatrixWorld(true);
-    const direction = new THREE.Vector3();
-    this.camera.getWorldDirection(direction);
-    const raycaster = new THREE.Raycaster(this.camera.position, direction, 0, maxDistance);
-    const hits = raycaster.intersectObjects(this.scene.children, true)
-      .filter((hit) => hit.object !== this.camera && hit.object.visible !== false && hit.object.type !== 'PerspectiveCamera');
-    const hit = hits[0];
-    if (!hit) return 'none';
-    return `${hit.object.name || hit.object.type}@${hit.distance.toFixed(2)}m`;
+    try {
+      this.camera.updateMatrixWorld(true);
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+      raycaster.near = 0;
+      raycaster.far = maxDistance;
+      const hits = raycaster.intersectObjects(this.scene.children, true)
+        .filter((hit) => hit.object !== this.camera && hit.object.visible !== false && hit.object.type !== 'PerspectiveCamera');
+      const hit = hits[0];
+      if (!hit) return 'none';
+      return `${hit.object.name || hit.object.type}@${hit.distance.toFixed(2)}m`;
+    } catch (error) {
+      console.warn('[Dread Stone Black] Startup view probe failed; gameplay will continue.', error);
+      return 'unavailable';
+    }
   }
 
   createStartupDebugText() {
