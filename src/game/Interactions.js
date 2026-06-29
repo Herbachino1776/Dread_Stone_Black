@@ -280,12 +280,6 @@ export class Interactions {
       return this.useSouthReliquary(interaction);
     }
 
-    if (interaction.id === 'BGT_INT06') {
-      this.dungeon.gameState?.markBlackGrassTempleAltarActivated?.();
-      this.dungeon.ensureGiantRamManFieldManifestation?.();
-      return false;
-    }
-
     this.setTemporaryHint(interaction.message, 1200);
     this.hud.showMessage(interaction.message);
     return false;
@@ -304,9 +298,6 @@ export class Interactions {
       return false;
     }
 
-    if (interaction.id === 'BGT_INT_RUSTED_SWORD_CHEST') {
-      this.dungeon.gameState?.markRustedSwordChestOpened?.();
-    }
     this.equipmentRuntime.acquireItem(interaction.itemId, {
       source: interaction.id,
       tags: ['pickup', this.dungeon.area],
@@ -400,9 +391,6 @@ export class Interactions {
         ?? this.survivalInventory.acquireItem(interaction.itemId, { source: interaction.id, tags: ['field-survival'] });
     } else {
       this.dungeon.gameState?.addFieldItem?.(interaction.itemId);
-    }
-    if (interaction.itemId === 'rusted_sword') {
-      this.equipmentRuntime?.acquireItem?.('rusted_sword', { source: interaction.id, tags: ['weapon', 'starter-weapon', 'dungeon-utility'] });
     }
     this.openFieldChestVisual(interaction.id);
     interaction.hint = interaction.repeatHint ?? 'The chest lies open and empty.';

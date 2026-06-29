@@ -2,8 +2,6 @@ import * as THREE from 'three';
 import { EQUIPMENT_EVENTS } from '../../engine/equipment/EquipmentEvents.js';
 import { CastingController } from '../fishing/CastingController.js';
 import { FishingRodView } from '../fishing/FishingRodView.js';
-import { BroadswordGestureController } from '../weapons/BroadswordGestureController.js';
-import { BroadswordView } from '../weapons/BroadswordView.js';
 
 const PLAYER_TORCH_POINT_LIGHT = Object.freeze({
   color: 0xffb066,
@@ -46,9 +44,7 @@ export class FirstPersonViewmodelHost {
 
     this.createPlayerTorchLight();
     this.fishingRodView = new FishingRodView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState, dungeon: this.dungeon });
-    this.broadswordView = new BroadswordView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
     this.castingController = new CastingController({ app: this.app, camera: this.camera, player: this.player, dungeon: this.dungeon, hud: this.hud, rodView: this.fishingRodView, equipmentRuntime: this.equipmentRuntime, feedback: this.feedback });
-    this.broadswordGestureController = new BroadswordGestureController({ app: this.app, view: this.broadswordView, controls: this.controls, equipmentRuntime: this.equipmentRuntime });
 
     this.disposers.push(this.equipmentRuntime?.on?.(EQUIPMENT_EVENTS.equippedChanged, (equipmentState) => this.handleEquipmentChanged(equipmentState)));
     this.syncEquipmentVisuals();
@@ -63,21 +59,15 @@ export class FirstPersonViewmodelHost {
     if (equipmentState.slotId === 'offhand' || context.force === true) this.syncEquipmentVisuals();
   }
 
-  handleAttackStarted({ weaponProfile } = {}) {
-    if (weaponProfile?.id === 'rusted_sword') this.broadswordGestureController?.notifyFallbackAttack?.('rightSlash');
-  }
-
   update(deltaSeconds, context = {}) {
     this.fishingRodView?.update(deltaSeconds, this.castingController?.state);
-    this.broadswordView?.update(deltaSeconds);
     this.castingController?.update(deltaSeconds);
-    this.broadswordGestureController?.update(deltaSeconds);
     this.updatePlayerTorchLight(deltaSeconds);
     return this.getDebugSummary(context);
   }
 
   updateDebugHud(player = this.player) {
-    this.hudHost?.hud?.updateDebug(player, this.castingController?.debug, this.broadswordGestureController?.debug);
+    this.hudHost?.hud?.updateDebug(player, this.castingController?.debug);
   }
 
   createPlayerTorchLight() {
@@ -124,11 +114,8 @@ export class FirstPersonViewmodelHost {
     return {
       hasFishingRodView: Boolean(this.fishingRodView),
       hasCastingController: Boolean(this.castingController),
-      hasBroadswordView: Boolean(this.broadswordView),
-      hasBroadswordGestureController: Boolean(this.broadswordGestureController),
       torchVisible: this.playerTorch?.visible === true,
       fishing: this.castingController?.debug ?? null,
-      broadsword: this.broadswordGestureController?.debug ?? null,
     };
   }
 

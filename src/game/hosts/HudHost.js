@@ -79,10 +79,6 @@ export class HudHost {
     this.hud.showHint(message);
   }
 
-  setStartupDebug(message) {
-    this.hud.setStartupDebug(message);
-  }
-
   updateVitals({ hp, power, hunger } = {}) {
     if (hp !== undefined && this.hud.hpEl) this.hud.hpEl.textContent = Math.ceil(hp);
     if (power !== undefined && this.hud.powerEl) this.hud.powerEl.textContent = Math.floor(power);
@@ -131,7 +127,6 @@ export class HudHost {
             <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
             <p class="interaction-hint" data-hud="hint" aria-live="polite"></p>
             <p class="field-kit-status" data-hud="field-kit" aria-live="polite" hidden></p>
-            <pre class="startup-debug-readout" data-hud="startup-debug" aria-label="Startup spawn debug"></pre>
             <div class="timed-action-progress-ring" data-hud="timed-action-progress" aria-hidden="true"></div>
             <div class="damage-flash" data-hud="damage" aria-hidden="true"></div>
             <section class="pause-overlay" data-pause-overlay aria-label="Paused" aria-hidden="true">

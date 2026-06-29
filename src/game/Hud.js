@@ -10,7 +10,6 @@ export class Hud {
     this.powerEl = root.querySelector('[data-stat="power"]');
     this.hungerEl = root.querySelector('[data-stat="hunger"]');
     this.damageEl = root.querySelector('[data-hud="damage"]');
-    this.startupDebugEl = root.querySelector('[data-hud="startup-debug"]');
     this.fieldKitEl = root.querySelector('[data-hud="field-kit"]');
     this.timedActionProgressEl = root.querySelector('[data-hud="timed-action-progress"]') ?? root.querySelector('[data-hud="hold-progress"]');
     this.debugFrameSkip = 0;
@@ -21,10 +20,6 @@ export class Hud {
     if (this.powerEl) this.powerEl.textContent = Math.floor(power);
   }
 
-  playAttack() {
-    // Attack feedback remains HUD-only; no first-person arm or hand overlay is rendered.
-  }
-
   flashDamage() {
     if (!this.damageEl) return;
 
@@ -33,7 +28,7 @@ export class Hud {
     this.damageEl.classList.add('is-flashing');
   }
 
-  updateDebug(player, fishing = null, broadsword = null) {
+  updateDebug(player, fishing = null) {
     if (!this.debugEnabled || !this.debugEl) return;
 
     this.debugFrameSkip = (this.debugFrameSkip + 1) % 8;
@@ -42,19 +37,11 @@ export class Hud {
     const yawDegrees = Math.round(THREE.MathUtils.radToDeg(player.yaw));
     const pitchDegrees = Math.round(THREE.MathUtils.radToDeg(player.pitch));
     const playerState = `POS ${player.position.x.toFixed(1)}, ${player.position.z.toFixed(1)} · YAW ${yawDegrees}° · PITCH ${pitchDegrees}°`;
-    if (!fishing && !broadsword) { this.debugEl.textContent = playerState; return; }
+    if (!fishing) { this.debugEl.textContent = playerState; return; }
     const number = (value, digits = 2) => Number.isFinite(value) ? value.toFixed(digits) : '-';
     const tipSpeed = fishing?.rodTipVelocity?.length?.() ?? 0;
     const fishingState = fishing ? ` · FISH ${fishing.lureMode ?? 'none'} · SPOOL ${number(fishing.lineLength)} [${number(fishing.minLineLength)}, ${number(fishing.maxLineLength)}] · DIST ${number(fishing.lureDistance)} · REEL ${number(fishing.reelTargetRate)}/${number(fishing.reelActualRate)} @${number(fishing.reelAccelerationClamp, 0)} · GRACE ${fishing.castGraceActive ? 'Y' : 'N'} · END ${fishing.endpointConstraintActive ? 'Y' : 'N'} · TENSION ${number(fishing.lineTension)} · LURE V ${number(fishing.lureSpeed)} · GRAB ${number(fishing.grabT)} · TIP V ${number(tipSpeed)}` : '';
-    const swordState = broadsword ? ` · SWORD ${broadsword.equipped ? 'Y' : 'N'} · GEST ${broadsword.gestureActive ? 'Y' : 'N'} · SWIPE ${number(broadsword.swipeDistance, 0)} · RELEASE ${number(broadsword.releaseSpeed, 0)} · ${broadsword.attackType}/${broadsword.attackPhase} · CD ${number(broadsword.cooldown)} · HIT ${broadsword.hitWindowActive ? 'Y' : 'N'}` : '';
-    this.debugEl.textContent = `${playerState}${fishingState}${swordState}`;
-  }
-
-  setStartupDebug(message) {
-    if (!this.startupDebugEl) return;
-    const visibleMessage = this.debugEnabled ? message : '';
-    this.startupDebugEl.textContent = visibleMessage || '';
-    this.startupDebugEl.hidden = !visibleMessage;
+    this.debugEl.textContent = `${playerState}${fishingState}`;
   }
 
   showHint(message) {

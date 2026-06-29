@@ -36,19 +36,5 @@ export const weaponProfiles = createWeaponProfileRegistry([
     weaponType: 'tool',
     damage: 2, attackRange: 2.0, attackCooldown: 1.2, windupTime: 0.1, recoveryTime: 0.2, staminaCost: 1, hitReactionType: 'light_stagger',
     tags: ['weapon', 'tool', 'fishing', 'field-survival'],
-  },
-  {
-    id: 'rusted_sword',
-    displayName: 'Broadsword',
-    description: 'The ritual broadsword recovered from the old temple. It keeps the old sword balance but now appears as a 3D first-person blade.',
-    weaponType: 'sword',
-    damage: 17,
-    attackRange: 3.05,
-    attackCooldown: 1.05,
-    windupTime: 0.12,
-    recoveryTime: 0.34,
-    staminaCost: 4,
-    hitReactionType: 'slash_stagger',
-    tags: ['weapon', 'melee', 'blade', 'black_grass_temple'],
-  },
+  }
 ]);

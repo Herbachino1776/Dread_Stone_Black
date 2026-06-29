@@ -1,13 +1,6 @@
-import { blackGrassTempleObjectivePackId, blackGrassTempleObjectives } from './blackGrassTempleObjectives.js';
 import { southReliquaryCryptObjectivePackId, southReliquaryCryptObjectives } from './southReliquaryCryptObjectives.js';
 
 const objectivePacks = Object.freeze({
-  [blackGrassTempleObjectivePackId]: Object.freeze({
-    id: blackGrassTempleObjectivePackId,
-    locationId: 'black-grass-temple',
-    silent: true,
-    definitions: blackGrassTempleObjectives,
-  }),
   [southReliquaryCryptObjectivePackId]: Object.freeze({
     id: southReliquaryCryptObjectivePackId,
     locationId: 'south-reliquary-crypt',
@@ -16,7 +9,6 @@ const objectivePacks = Object.freeze({
 });
 
 const locationObjectivePackIds = Object.freeze({
-  'black-grass-temple': blackGrassTempleObjectivePackId,
   'south-reliquary-crypt': southReliquaryCryptObjectivePackId,
 });
 

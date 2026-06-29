@@ -63,8 +63,7 @@ export class Game {
     this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.saveEquipmentState()));
     this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
     this.sceneSessionHost = new SceneSessionHost({ rendererHost: this.rendererHost, gameState: this.gameState, query });
-    const initialSession = await this.sceneSessionHost.startInitialSession();
-    this.hudHost.setStartupDebug(initialSession.startupDebug);
+    await this.sceneSessionHost.startInitialSession();
     this.progressionHost = new ProgressionHost({
       root: this.app,
       gameState: this.gameState,
@@ -127,69 +126,7 @@ export class Game {
     if (this.perfDebugEnabled) this.perfDebugPanel = new PerfDebugPanel({ game: this });
 
     this.rendererHost.setAnimationLoop((time) => this.update(time));
-    this.installDevDebugHook();
     return this.firstFramePromise;
-  }
-
-  installDevDebugHook() {
-    if (!import.meta.env.DEV) return;
-    this.debugStateHook = () => this.getDebugState();
-    window.dreadStoneDebugState = this.debugStateHook;
-  }
-
-  getDebugState() {
-    const player = this.player;
-    const camera = this.camera;
-    const scene = this.scene;
-    const dungeon = this.dungeon;
-    const collision = dungeon?.collision;
-    const canvas = this.rendererHost?.canvas;
-    const viewport = this.rendererHost?.viewport;
-    const canvasRect = canvas?.getBoundingClientRect?.();
-    const viewportRect = viewport?.getBoundingClientRect?.();
-    const canvasStyle = canvas ? window.getComputedStyle(canvas) : null;
-    const sampledFloor = player
-      ? collision?.sampleWalkableY?.(player.position.x, player.position.z, player.position.y - (player.eyeHeight ?? 0))
-      : null;
-    let sceneChildCount = 0;
-    scene?.traverse?.(() => { sceneChildCount += 1; });
-
-    const vector = (value) => value ? { x: value.x, y: value.y, z: value.z } : null;
-    const rect = (value) => value ? { x: value.x, y: value.y, width: value.width, height: value.height } : null;
-    const title = document.querySelector('.title-screen');
-
-    return {
-      locationId: this.locationId ?? null,
-      area: dungeon?.area ?? null,
-      playerPosition: vector(player?.position),
-      cameraPosition: vector(camera?.position),
-      yaw: player?.yaw ?? null,
-      pitch: player?.pitch ?? null,
-      sceneChildCount,
-      sceneBackground: scene?.background?.isColor ? `#${scene.background.getHexString()}` : (scene?.background?.name ?? scene?.background?.type ?? null),
-      sceneFog: scene?.fog ? { color: `#${scene.fog.color.getHexString()}`, near: scene.fog.near, far: scene.fog.far } : null,
-      sampledFloor: sampledFloor ? { y: sampledFloor.y, kind: sampledFloor.kind ?? null } : null,
-      collisionValid: Boolean(player && collision?.canStandAt?.(player.position)),
-      intersectingBlockers: player
-        ? (collision?.getIntersectingBlockers?.(player.position) ?? []).map((blocker) => blocker.id ?? blocker.name ?? blocker.type ?? 'blocker')
-        : [],
-      canvas: canvas ? {
-        width: canvas.width,
-        height: canvas.height,
-        rect: rect(canvasRect),
-        display: canvasStyle?.display,
-        visibility: canvasStyle?.visibility,
-        opacity: canvasStyle?.opacity,
-        zIndex: canvasStyle?.zIndex,
-      } : null,
-      viewport: rect(viewportRect),
-      viewportSize: { width: window.innerWidth, height: window.innerHeight },
-      hudExists: Boolean(this.hudHost?.root?.querySelector?.('.hud-top')),
-      animationLoopRunning: Boolean(this.hasRenderedFirstFrame && !this.hasFatalRuntimeError),
-      movementEnabled: Boolean(player && this.controls && !this.isPaused && !this.isPlayerDead && !this.hasFatalRuntimeError),
-      titleState: title ? { className: title.className, connected: title.isConnected } : { className: null, connected: false },
-      locationLoad: this.sceneSessionHost?.getLocationLoadDebugSummary?.() ?? null,
-    };
   }
 
   handleStartupError(error) {
@@ -263,10 +200,8 @@ export class Game {
       isPlayerDead: this.isPlayerDead,
     });
     this.progressionHost.update(deltaSeconds);
-    // Combat no longer consumes the queued A-button attack input. Keep the button
-    // available for viewmodel/future weapon hooks above, then clear it here so a
-    // stale attack press cannot poison timed interactions such as campfire
-    // building or cooking.
+    // A remains a visible mobile affordance, but Player + Fish gameplay has no
+    // attack runtime. Clear the queued press before timed interactions can read it.
     this.controls.consumeAttack();
     this.interactions.updateHint();
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
@@ -397,7 +332,6 @@ export class Game {
 
   dispose() {
     this.rendererHost?.setAnimationLoop?.(null);
-    if (import.meta.env.DEV && window.dreadStoneDebugState === this.debugStateHook) delete window.dreadStoneDebugState;
     this.perfDebugPanel?.dispose?.();
     this.clearResetConfirmation();
     this.disposers?.forEach((dispose) => dispose?.());

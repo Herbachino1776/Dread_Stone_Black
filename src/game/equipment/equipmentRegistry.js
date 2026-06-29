@@ -29,13 +29,6 @@ export const equipmentRegistry = Object.freeze({
       tags: ['key-item', 'campfire', 'field-survival'],
       source: 'field_survival_flint_stick_chest',
     }),
-    rusted_sword: Object.freeze({
-      id: 'rusted_sword',
-      displayName: 'Broadsword',
-      itemType: 'weapon',
-      weaponProfileId: 'rusted_sword',
-      source: 'black_grass_temple_rusted_sword_chest',
-    }),
     torch: Object.freeze({
       id: 'torch',
       name: 'Torch',
