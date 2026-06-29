@@ -23,7 +23,7 @@ const ROD_CAMERA_SPACE_MAX_Y = 0.72;
 
 const HELD_ROD_VIEWMODEL_RENDER_ORDER = 10000;
 const HELD_ROD_VIEWMODEL_DEPTH_OVERRIDE_NOTE = 'held Rod A1 overlay layer; rendered after world depth clear so water/terrain/grass cannot cover it';
-const HELD_ROD_VIEWMODEL_LAYER = 1;
+export const HELD_ROD_VIEWMODEL_LAYER = 1;
 
 function markHeldRodViewmodel(object) {
   let meshCount = 0;
@@ -121,7 +121,12 @@ export class FishingRodView {
     return true;
   }
 
-  setGestureState(castState = {}) { this.gestureState = { ...this.gestureState, ...castState }; }
+  setGestureState(castState = {}) {
+    const previousReleaseSnap = this.gestureState.releaseSnap ?? 0;
+    const nextReleaseSnap = castState.releaseSnap ?? previousReleaseSnap;
+    if (nextReleaseSnap > previousReleaseSnap) this.pose.snap = Math.max(this.pose.snap, nextReleaseSnap);
+    this.gestureState = { ...this.gestureState, ...castState };
+  }
 
   getRodLocalPointAt(t, target = new THREE.Vector3()) {
     const tipSource = this.rod?.userData?.tipLocalPosition;
@@ -275,12 +280,14 @@ export class FishingRodView {
     const targetOffset = active
       ? targetOffsetScratch.set(this.gestureState.rootOffsetX ?? 0, this.gestureState.rootOffsetY ?? 0, this.gestureState.rootOffsetZ ?? 0)
       : targetOffsetScratch.set(0, 0, 0);
-    const follow = active ? 0.62 : Math.min(1, dt * 7.4);
-    this.pose.rootOffset.lerp(targetOffset, active ? 0.55 : Math.min(1, dt * 8.4));
+    const follow = 1 - Math.exp(-(active ? 48 : 7.4) * dt);
+    const rootFollow = 1 - Math.exp(-(active ? 42 : 8.4) * dt);
+    this.pose.rootOffset.lerp(targetOffset, rootFollow);
     this.pose.yaw = THREE.MathUtils.lerp(this.pose.yaw, targetYaw, follow);
     this.pose.pitch = THREE.MathUtils.lerp(this.pose.pitch, targetPitch, follow);
-    this.pose.bend = THREE.MathUtils.lerp(this.pose.bend, active ? load : 0, active ? 0.32 : Math.min(1, dt * 9));
-    this.pose.snap = Math.max(0, Math.max(this.pose.snap, this.gestureState.releaseSnap ?? 0) - dt * 5.4);
+    const bendFollow = 1 - Math.exp(-(active ? 23 : 9) * dt);
+    this.pose.bend = THREE.MathUtils.lerp(this.pose.bend, active ? load : 0, bendFollow);
+    this.pose.snap = Math.max(0, this.pose.snap - dt * 5.4);
     const downwardPitch = Math.max(0, this.pose.pitch);
     const effectivePitch = this.pose.pitch < 0 ? this.pose.pitch : Math.min(ROD_DOWNWARD_PITCH_MAX, downwardPitch * ROD_DOWNWARD_PITCH_SCALE);
     this.debug.downwardPitch = { raw: this.pose.pitch, effective: effectivePitch, scale: ROD_DOWNWARD_PITCH_SCALE, max: ROD_DOWNWARD_PITCH_MAX };

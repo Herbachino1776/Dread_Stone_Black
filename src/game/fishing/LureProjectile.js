@@ -10,7 +10,7 @@ export class LureProjectile {
   constructor({ scene, dungeon, waterResolver, onLanded, maxCastRange = 44 }) {
     this.scene = scene; this.dungeon = dungeon; this.waterResolver = waterResolver; this.onLanded = onLanded; this.maxCastRange = maxCastRange;
     this.physics = new FishingLinePhysics({ terrainSampler: dungeon?.outdoorVisibleSurfaceRuntime ?? dungeon?.outdoorTerrainRuntime }); this.position = this.physics.lurePosition; this.velocity = this.physics.lureVelocity; this.start = new THREE.Vector3();
-    this.mesh = null; this.lineMesh = null; this.linePositions = null; this.lineSegments = []; this.lineCoreMaterial = null; this.lineHaloMaterial = null; this.active = false; this.landed = false; this.settleMs = 0; this.settleAgeMs = 0; this.pendingWaterZone = null; this.debug = { enabled: false, lureHitType: 'none', fishableWaterId: null };
+    this.mesh = null; this.lineMesh = null; this.linePositions = null; this.lineSegments = []; this.lineCoreMaterial = null; this.lineHaloMaterial = null; this.active = false; this.landed = false; this.recovered = true; this.settleMs = 0; this.settleAgeMs = 0; this.pendingWaterZone = null; this.debug = { enabled: false, lureHitType: 'none', fishableWaterId: null };
   }
   ensureVisuals() {
     if (!this.mesh) {
@@ -41,7 +41,9 @@ export class LureProjectile {
     }
   }
   syncVisuals() {
+    if (this.recovered) return;
     this.ensureVisuals(); this.mesh.position.copy(this.physics.lurePosition);
+    this.mesh.visible = true; this.lineMesh.visible = true;
     const opacity = THREE.MathUtils.lerp(LINE_SLACK_OPACITY, LINE_TAUT_OPACITY, THREE.MathUtils.clamp(this.physics.lineTension / 7, 0, 1));
     if (this.lineCoreMaterial) this.lineCoreMaterial.opacity = opacity;
     if (this.lineHaloMaterial) this.lineHaloMaterial.opacity = opacity * 0.32;
@@ -53,13 +55,17 @@ export class LureProjectile {
       segment.position.copy(segmentMidScratch.copy(a).addScaledVector(delta, 0.5)); segment.scale.set(1, Math.max(length, 0.001), 1); segment.quaternion.setFromUnitVectors(segmentUp, delta.multiplyScalar(1 / length));
     }
   }
-  readyAtRod(rodTip) { if (!rodTip) return; if (!this.mesh) this.physics.resetAtRodTip(rodTip); this.ensureVisuals(); this.physics.update(1 / 60, rodTip, { rodHeld: false }); this.active = false; this.landed = false; this.syncVisuals(); }
-  launch(start, velocity) { this.cleanup(false); this.physics.resetAtRodTip(start); this.start.copy(start); this.physics.launch(start, velocity); this.active = true; this.landed = false; this.settleAgeMs = 0; this.pendingWaterZone = null; this.debug.lureHitType = 'airborne'; this.ensureVisuals(); this.syncVisuals(); }
+  finishRecovery() {
+    this.recovered = true; this.active = false; this.landed = false; this.pendingWaterZone = null;
+    if (this.mesh) this.mesh.visible = false;
+    if (this.lineMesh) this.lineMesh.visible = false;
+  }
+  launch(start, velocity) { this.physics.resetAtRodTip(start); this.start.copy(start); this.physics.launch(start, velocity); this.recovered = false; this.active = true; this.landed = false; this.settleAgeMs = 0; this.pendingWaterZone = null; this.debug.lureHitType = 'airborne'; this.ensureVisuals(); this.syncVisuals(); }
   update(deltaSeconds, rodTip = null, options = {}) {
     const dt = Math.max(0, Math.min(0.05, deltaSeconds)); if (!rodTip) return;
-    if (!this.mesh) this.readyAtRod(rodTip);
+    if (this.recovered) return;
     this.physics.update(dt, rodTip, options); this.position = this.physics.lurePosition; this.velocity = this.physics.lureVelocity;
-    if (this.physics.isLureHeldNearRod) { this.active = false; this.landed = false; this.pendingWaterZone = null; }
+    if (this.physics.isLureHeldNearRod) { this.finishRecovery(); return; }
     if (this.active && this.physics.isLureAirborne) {
       const surfaceY = this.dungeon?.sampleFishLandingSurfaceY?.(this.physics.lurePosition) ?? 0; const tooFar = this.physics.lurePosition.distanceTo(this.start) > this.maxCastRange;
       if (this.physics.lurePosition.y <= surfaceY + 0.04 || tooFar) this.land(surfaceY, tooFar);
@@ -74,6 +80,6 @@ export class LureProjectile {
     else { const groundY = this.dungeon?.resolveOutdoorVisibleSurfaceY?.(this.physics.lurePosition.x, this.physics.lurePosition.z, { water: false, fallbackY: surfaceY })?.y ?? surfaceY; this.physics.enterGround(groundY); this.debug.lureHitType = forcedFail ? 'max-range' : 'ground'; this.onLanded?.({ position: this.physics.lurePosition.clone(), zone: null, success: false, settled: false }); }
   }
   finishWaterSettle() { const zone = this.pendingWaterZone; this.pendingWaterZone = null; this.landed = false; this.onLanded?.({ position: this.physics.lurePosition.clone(), zone, success: Boolean(zone?.fishSpeciesPool?.length), settled: true }); }
-  cleanup(removeVisuals = true) { if (removeVisuals) { if (this.mesh?.parent) this.mesh.parent.remove(this.mesh); if (this.lineMesh?.parent) this.lineMesh.parent.remove(this.lineMesh); this.mesh = null; this.lineMesh = null; this.linePositions = null; this.lineSegments = []; this.lineCoreMaterial = null; this.lineHaloMaterial = null; } this.active = false; this.landed = false; this.pendingWaterZone = null; }
+  cleanup(removeVisuals = true) { this.finishRecovery(); this.physics.resetAtRodTip(this.physics.rodTipWorldPosition); if (removeVisuals) { if (this.mesh?.parent) this.mesh.parent.remove(this.mesh); if (this.lineMesh?.parent) this.lineMesh.parent.remove(this.lineMesh); this.mesh = null; this.lineMesh = null; this.linePositions = null; this.lineSegments = []; this.lineCoreMaterial = null; this.lineHaloMaterial = null; } }
   getDebugState() { return { ...this.physics.getDebugState(), lureHitType: this.debug.lureHitType, fishableWaterId: this.debug.fishableWaterId }; }
 }

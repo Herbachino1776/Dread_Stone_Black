@@ -1,7 +1,15 @@
 import * as THREE from 'three';
 import { EQUIPMENT_EVENTS } from '../../engine/equipment/EquipmentEvents.js';
 import { CastingController } from '../fishing/CastingController.js';
-import { FishingRodView } from '../fishing/FishingRodView.js';
+import { FishingRodView, HELD_ROD_VIEWMODEL_LAYER } from '../fishing/FishingRodView.js';
+
+const ROD_VIEWMODEL_LIGHTING = Object.freeze({
+  skyColor: 0xffe2b8,
+  groundColor: 0x60452f,
+  hemisphereIntensity: 1.35,
+  keyColor: 0xffd0a0,
+  keyIntensity: 2.1,
+});
 
 const PLAYER_TORCH_POINT_LIGHT = Object.freeze({
   color: 0xffb066,
@@ -42,6 +50,7 @@ export class FirstPersonViewmodelHost {
     this.hud = this.hudHost?.hud;
     this.controls = this.inputHost?.controls;
 
+    this.createRodViewmodelLights();
     this.createPlayerTorchLight();
     this.fishingRodView = new FishingRodView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState, dungeon: this.dungeon });
     this.castingController = new CastingController({ app: this.app, camera: this.camera, player: this.player, dungeon: this.dungeon, hud: this.hud, rodView: this.fishingRodView, equipmentRuntime: this.equipmentRuntime, feedback: this.feedback });
@@ -68,6 +77,30 @@ export class FirstPersonViewmodelHost {
 
   updateDebugHud(player = this.player) {
     this.hudHost?.hud?.updateDebug(player, this.castingController?.debug);
+  }
+
+  createRodViewmodelLights() {
+    if (!this.camera || this.rodViewmodelLights) return;
+    this.rodViewmodelLights = new THREE.Group();
+    this.rodViewmodelLights.name = 'rod-a1-viewmodel-lighting';
+    this.rodViewmodelLights.layers.set(HELD_ROD_VIEWMODEL_LAYER);
+
+    this.rodViewmodelHemisphereLight = new THREE.HemisphereLight(
+      ROD_VIEWMODEL_LIGHTING.skyColor,
+      ROD_VIEWMODEL_LIGHTING.groundColor,
+      ROD_VIEWMODEL_LIGHTING.hemisphereIntensity,
+    );
+    this.rodViewmodelKeyLight = new THREE.DirectionalLight(
+      ROD_VIEWMODEL_LIGHTING.keyColor,
+      ROD_VIEWMODEL_LIGHTING.keyIntensity,
+    );
+    this.rodViewmodelKeyLight.position.set(-0.8, 0.9, 0.7);
+    this.rodViewmodelKeyLight.target.position.set(0.35, -0.25, -3.5);
+    this.rodViewmodelKeyLight.castShadow = false;
+
+    this.rodViewmodelLights.add(this.rodViewmodelHemisphereLight, this.rodViewmodelKeyLight, this.rodViewmodelKeyLight.target);
+    this.rodViewmodelLights.traverse((child) => child.layers?.set?.(HELD_ROD_VIEWMODEL_LAYER));
+    this.camera.add(this.rodViewmodelLights);
   }
 
   createPlayerTorchLight() {
@@ -122,7 +155,11 @@ export class FirstPersonViewmodelHost {
   dispose() {
     this.disposers.forEach((dispose) => dispose?.());
     this.disposers = [];
+    this.camera?.remove?.(this.rodViewmodelLights);
     this.camera?.remove?.(this.playerTorch);
+    this.rodViewmodelLights = null;
+    this.rodViewmodelHemisphereLight = null;
+    this.rodViewmodelKeyLight = null;
     this.playerTorch = null;
     this.playerTorchPointLight = null;
     this.playerTorchSpotLight = null;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { LureProjectile } from './LureProjectile.js';
 import { FishingWaterResolver } from './FishingWaterResolver.js';
-import { CAST_GESTURE_HISTORY_MS, CAST_MIN_DRAG_DISTANCE, CAST_MIN_RELEASE_SPEED, CAST_MAX_RELEASE_SPEED, CAST_POWER_FROM_VELOCITY, CAST_POWER_FROM_LOAD, CAST_SIDE_AIM_SCALE, CAST_VERTICAL_ARC_SCALE, CAST_ROD_BEND_SCALE, CAST_MAX_RANGE, ROD_GRAB_SPRING, ROD_GRAB_DAMPING, ROD_ANGULAR_SPRING, ROD_ANGULAR_DAMPING, ROD_MASS_FEEL, ROD_BEND_RELEASE_SCALE, ROD_RELEASE_SNAP_SCALE, REEL_GESTURE_INNER_DEADZONE, REEL_GESTURE_MIN_ARC_RAD, REEL_GESTURE_MAX_ARC_PER_SAMPLE, REEL_GESTURE_RATE_PER_RADIAN, REEL_GESTURE_MAX_RATE, REEL_GESTURE_TARGET_SMOOTHING, REEL_GESTURE_INPUT_HOLD_SECONDS, REEL_GESTURE_MAX_ACCELERATION, REEL_GESTURE_MAX_DECELERATION } from './CastingTuning.js';
+import { CAST_GESTURE_HISTORY_MS, CAST_MIN_DRAG_DISTANCE, CAST_MIN_RELEASE_SPEED, CAST_MAX_RELEASE_SPEED, CAST_POWER_FROM_VELOCITY, CAST_POWER_FROM_LOAD, CAST_SIDE_AIM_SCALE, CAST_VERTICAL_ARC_SCALE, CAST_ROD_BEND_SCALE, CAST_MAX_RANGE, ROD_GRAB_SPRING, ROD_GRAB_DAMPING, ROD_ANGULAR_SPRING, ROD_ANGULAR_DAMPING, ROD_MASS_FEEL, ROD_BEND_RELEASE_SCALE, ROD_RELEASE_SNAP_SCALE, REEL_GESTURE_INNER_DEADZONE, REEL_GESTURE_MIN_ARC_RAD, REEL_GESTURE_MAX_ARC_PER_SAMPLE, REEL_GESTURE_RATE_PER_RADIAN, REEL_GESTURE_MAX_RATE, REEL_GESTURE_TARGET_SMOOTHING, REEL_GESTURE_INPUT_HOLD_SECONDS, REEL_GESTURE_MAX_ACCELERATION, REEL_GESTURE_MAX_DECELERATION, REEL_GESTURE_HAPTIC_ARC_RAD, REEL_GESTURE_HAPTIC_COOLDOWN_SECONDS } from './CastingTuning.js';
 
 const tmpForward = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
@@ -31,11 +31,11 @@ export class CastingController {
     this.bind();
   }
   createIdleState() { return { dragging: false, loadAmount: 0, gestureHistory: [], rodYaw: 0, rodPitch: 0, rodYawVelocity: 0, rodPitchVelocity: 0, targetYaw: 0, targetPitch: 0, rootOffsetX: 0, rootOffsetY: 0, rootOffsetZ: 0, rootVelocityX: 0, rootVelocityY: 0, rootVelocityZ: 0, targetRootOffsetX: 0, targetRootOffsetY: 0, targetRootOffsetZ: 0, releaseSnap: 0, motionSmoothness: 0, grabT: 0, angularVelocity: 0, tipSpeed: 0 }; }
-  createIdleReelState() { return { active: false, pointerId: null, centerX: 0, centerY: 0, lastAngle: 0, lastTimeMs: 0, lastClockwiseTimeMs: -Infinity, targetRate: 0, actualRate: 0, rate: 0, accumulatedClockwise: 0, frameClockwiseRadians: 0 }; }
+  createIdleReelState() { return { active: false, pointerId: null, centerX: 0, centerY: 0, lastAngle: 0, lastTimeMs: 0, lastClockwiseTimeMs: -Infinity, lastHapticTimeMs: -Infinity, targetRate: 0, actualRate: 0, rate: 0, accumulatedClockwise: 0, frameClockwiseRadians: 0 }; }
   isEquipped() { return this.rodView?.isEquipped?.() === true; }
   isLineDeployed() {
     const physics = this.projectile?.physics;
-    return Boolean(physics && !physics.isLureHeldNearRod && (this.projectile.active || this.projectile.landed || physics.isLureAirborne || physics.isLureOnWater || physics.isLureGrounded || physics.isFishHooked));
+    return Boolean(physics && !this.projectile.recovered && !physics.isLureHeldNearRod && (this.projectile.active || this.projectile.landed || physics.isLureAirborne || physics.isLureOnWater || physics.isLureGrounded || physics.isFishHooked));
   }
   isFishingRuntimeActive() {
     return this.state.dragging === true || this.reelState.active === true || this.reelState.actualRate > 0.001 || this.isLineDeployed();
@@ -103,9 +103,12 @@ export class CastingController {
       this.reelState.lastClockwiseTimeMs = now;
       this.reelState.accumulatedClockwise += clockwise;
       this.reelState.frameClockwiseRadians = (this.reelState.frameClockwiseRadians ?? 0) + clockwise;
-      if (this.reelState.accumulatedClockwise >= Math.PI / 2) {
-        navigator.vibrate?.(8);
-        this.reelState.accumulatedClockwise %= Math.PI / 2;
+      if (this.reelState.accumulatedClockwise >= REEL_GESTURE_HAPTIC_ARC_RAD) {
+        if (now - this.reelState.lastHapticTimeMs >= REEL_GESTURE_HAPTIC_COOLDOWN_SECONDS * 1000) {
+          navigator.vibrate?.(8);
+          this.reelState.lastHapticTimeMs = now;
+        }
+        this.reelState.accumulatedClockwise %= REEL_GESTURE_HAPTIC_ARC_RAD;
       }
     }
     this.reelState.lastAngle = angle; this.reelState.lastTimeMs = now;
@@ -176,6 +179,7 @@ export class CastingController {
     if (runtimeActive && rodTip) {
       this.projectile.update(dt, rodTip, { rodHeld: this.state.dragging === true, reelBoost, manualReelRate: this.reelState.actualRate });
       const physics = this.projectile.physics;
+      if (this.projectile.recovered) this.reelState = this.createIdleReelState();
       const anglingActive = physics?.isFishHooked || physics?.isLureOnWater || this.projectile.active || this.projectile.landed;
       if (anglingActive) this.dungeon.updatePhysicalFishAngling?.(dt, { player: this.player, lure: this.projectile, rodTip, manualReelRate: this.reelState.actualRate, reelClockwiseRadians: this.reelState.frameClockwiseRadians ?? 0, rodState: this.state, physics });
       this.reelState.frameClockwiseRadians = 0;
