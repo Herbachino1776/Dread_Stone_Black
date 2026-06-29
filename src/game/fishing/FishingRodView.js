@@ -5,21 +5,25 @@ import { REEL_GESTURE_FALLBACK_RADIUS, REEL_GESTURE_ZONE_RADIUS, ROD_GRAB_HIT_RA
 const screenPoint = new THREE.Vector3();
 const worldPoint = new THREE.Vector3();
 const lastTipScratch = new THREE.Vector3();
+const targetOffsetScratch = new THREE.Vector3();
+const rodLocalScratch = new THREE.Vector3();
+const rodHandleScratch = new THREE.Vector3();
+const rodTipScratch = new THREE.Vector3();
 const pivotDesiredWorld = new THREE.Vector3();
 const pivotActualWorld = new THREE.Vector3();
 const pivotDesiredCamera = new THREE.Vector3();
 const pivotActualCamera = new THREE.Vector3();
-const clearanceWorld = new THREE.Vector3();
-const clearanceLocalBefore = new THREE.Vector3();
-const clearanceLocalAfter = new THREE.Vector3();
 
 const ROD_DOWNWARD_PITCH_SCALE = 0.42;
 const ROD_DOWNWARD_PITCH_MAX = 0.38;
-const ROD_GROUND_CLEARANCE = 0.08;
-const ROD_CLEARANCE_SAMPLE_T_VALUES = Object.freeze([0.08, 0.5, 0.96]);
+const ROD_STABLE_FORWARD_PITCH_OFFSET = -0.12;
+const ROD_STABLE_CAMERA_Y_OFFSET = 0.08;
+const ROD_CAMERA_SPACE_MIN_Y = -0.92;
+const ROD_CAMERA_SPACE_MAX_Y = 0.72;
 
 const HELD_ROD_VIEWMODEL_RENDER_ORDER = 10000;
-const HELD_ROD_VIEWMODEL_DEPTH_OVERRIDE_NOTE = 'held Rod A1 only; prevents terrain/grass from visually covering the first-person rod';
+const HELD_ROD_VIEWMODEL_DEPTH_OVERRIDE_NOTE = 'held Rod A1 overlay layer; rendered after world depth clear so water/terrain/grass cannot cover it';
+const HELD_ROD_VIEWMODEL_LAYER = 1;
 
 function markHeldRodViewmodel(object) {
   let meshCount = 0;
@@ -31,6 +35,7 @@ function markHeldRodViewmodel(object) {
   object.traverse((child) => {
     if (!child.isMesh || !child.material) return;
     meshCount += 1;
+    child.layers.set(HELD_ROD_VIEWMODEL_LAYER);
     child.renderOrder = HELD_ROD_VIEWMODEL_RENDER_ORDER;
     child.userData = {
       ...child.userData,
@@ -41,8 +46,8 @@ function markHeldRodViewmodel(object) {
     const materials = isMaterialArray ? child.material : [child.material];
     const cloned = materials.map((material) => {
       const next = material.clone();
-      next.depthTest = false;
-      next.depthWrite = false;
+      next.depthTest = true;
+      next.depthWrite = true;
       next.needsUpdate = true;
       next.userData = {
         ...(next.userData ?? {}),
@@ -67,9 +72,11 @@ export class FishingRodView {
     this.root = new THREE.Group();
     this.root.name = 'first-person-canonical-Rod-A1-view-raised-diagonal-touch-surface';
     this.root.visible = false;
-    this.root.position.set(ROD_REST_POS.x, ROD_REST_POS.y, ROD_REST_POS.z);
-    this.root.rotation.set(ROD_REST_ROT.x, ROD_REST_ROT.y, ROD_REST_ROT.z);
+    this.root.layers.set(HELD_ROD_VIEWMODEL_LAYER);
+    this.root.position.set(ROD_REST_POS.x, ROD_REST_POS.y + ROD_STABLE_CAMERA_Y_OFFSET, ROD_REST_POS.z);
+    this.root.rotation.set(ROD_REST_ROT.x + ROD_STABLE_FORWARD_PITCH_OFFSET, ROD_REST_ROT.y, ROD_REST_ROT.z);
     this.rod = createRodA1Mesh({ id: 'first-person-rodA1', origin: new THREE.Vector3(), yaw: Math.PI / 2, includeLine: false });
+    this.rod.layers.set(HELD_ROD_VIEWMODEL_LAYER);
     this.heldRodViewmodelMeshCount = markHeldRodViewmodel(this.rod);
     this.rod.scale.setScalar(0.66);
     this.root.add(this.rod);
@@ -79,47 +86,19 @@ export class FishingRodView {
     this.lastTipPosition = new THREE.Vector3();
     this.tipVelocity = new THREE.Vector3();
     this.hasLastTip = false;
-    this.debug = { enabled: false, rodHitSamples: [], grabPoint: null, grabT: 0, hitRadius: 0, grabbedPointBefore: null, grabbedPointAfter: null, handPivot: null, pointerMode: 'none', downwardPitch: null, groundClearanceCorrection: 0, groundClearanceSamples: [] };
+    this.debug = { enabled: false, rodHitSamples: [], grabPoint: null, grabT: 0, hitRadius: 0, grabbedPointBefore: null, grabbedPointAfter: null, handPivot: null, pointerMode: 'none', downwardPitch: null, cameraSpaceClamp: 0 };
+    this.root.traverse((child) => child.layers?.set?.(HELD_ROD_VIEWMODEL_LAYER));
   }
 
 
-  getVisibleGroundY(point) {
-    const surface = this.dungeon?.resolveOutdoorVisibleSurfaceY?.(point.x, point.z, { fallbackY: Number.NEGATIVE_INFINITY });
-    if (Number.isFinite(surface?.y)) return surface.y;
-    const terrainY = this.dungeon?.outdoorVisibleSurfaceRuntime?.sampleOutdoorY?.(point.x, point.z)
-      ?? this.dungeon?.outdoorTerrainRuntime?.sampleOutdoorY?.(point.x, point.z);
-    return Number.isFinite(terrainY) ? terrainY : null;
-  }
-
-  applyGroundClearanceSafeguard() {
-    if (!this.dungeon || !this.root.visible) return 0;
-    this.camera.updateMatrixWorld();
-    this.root.updateMatrixWorld(true);
-    let correction = 0;
-    const samples = [];
-    for (const t of ROD_CLEARANCE_SAMPLE_T_VALUES) {
-      const point = this.getWorldPointAt(t);
-      const groundY = this.getVisibleGroundY(point);
-      if (!Number.isFinite(groundY)) continue;
-      const needed = groundY + ROD_GROUND_CLEARANCE - point.y;
-      correction = Math.max(correction, needed);
-      samples.push({ t, y: point.y, groundY, needed: Math.max(0, needed) });
-    }
-    correction = THREE.MathUtils.clamp(correction, 0, 0.42);
-    if (correction > 0) {
-      clearanceLocalBefore.copy(this.root.position);
-      clearanceWorld.copy(this.root.position);
-      this.camera.localToWorld(clearanceWorld);
-      clearanceWorld.y += correction;
-      clearanceLocalAfter.copy(clearanceWorld);
-      this.camera.worldToLocal(clearanceLocalAfter);
-      this.root.position.add(clearanceLocalAfter.sub(clearanceLocalBefore));
-      this.root.updateMatrixWorld(true);
-    }
-    this.debug.groundClearanceCorrection = correction;
-    this.debug.groundClearanceSamples = samples;
+  applyCameraSpaceClamp() {
+    const clampedY = THREE.MathUtils.clamp(this.root.position.y, ROD_CAMERA_SPACE_MIN_Y, ROD_CAMERA_SPACE_MAX_Y);
+    const correction = clampedY - this.root.position.y;
+    if (correction !== 0) this.root.position.y = clampedY;
+    this.debug.cameraSpaceClamp = correction;
     return correction;
   }
+
 
   getVisibleStateReason() {
     const equippedWeaponId = this.equipmentRuntime?.getEquippedWeaponProfile?.().id ?? null;
@@ -144,25 +123,27 @@ export class FishingRodView {
 
   setGestureState(castState = {}) { this.gestureState = { ...this.gestureState, ...castState }; }
 
-  getRodLocalPointAt(t) {
-    const tip = this.rod?.userData?.tipLocalPosition?.clone?.() ?? new THREE.Vector3(0, 0.34, 2.25);
-    const handle = this.rod?.userData?.handleLocalPosition?.clone?.() ?? new THREE.Vector3(0, 0.16, -2.4);
-    return handle.lerp(tip, THREE.MathUtils.clamp(t, 0, 1));
+  getRodLocalPointAt(t, target = new THREE.Vector3()) {
+    const tipSource = this.rod?.userData?.tipLocalPosition;
+    const handleSource = this.rod?.userData?.handleLocalPosition;
+    rodTipScratch.copy(tipSource ?? { x: 0, y: 0.34, z: 2.25 });
+    rodHandleScratch.copy(handleSource ?? { x: 0, y: 0.16, z: -2.4 });
+    return target.lerpVectors(rodHandleScratch, rodTipScratch, THREE.MathUtils.clamp(t, 0, 1));
   }
 
-  getWorldPointAt(t) {
-    const point = this.getRodLocalPointAt(t);
-    return this.rod.localToWorld(point);
+  getWorldPointAt(t, target = new THREE.Vector3()) {
+    this.getRodLocalPointAt(t, target);
+    return this.rod.localToWorld(target);
   }
 
   getRodTipWorldPosition() {
     const tipAnchor = this.rod?.userData?.tipAnchor;
-    if (tipAnchor?.getWorldPosition) return tipAnchor.getWorldPosition(new THREE.Vector3());
-    return this.getWorldPointAt(1);
+    if (tipAnchor?.getWorldPosition) return tipAnchor.getWorldPosition(lastTipScratch);
+    return lastTipScratch.copy(this.getWorldPointAt(1, rodLocalScratch));
   }
 
   getWorldTipPosition() { return this.getRodTipWorldPosition(); }
-  getWorldTipVelocity() { return this.tipVelocity.clone(); }
+  getWorldTipVelocity(target = new THREE.Vector3()) { return target.copy(this.tipVelocity); }
 
 
   getProjectedReelCenter(viewport) {
@@ -260,7 +241,7 @@ export class FishingRodView {
     const steps = 28;
     for (let i = 0; i <= steps; i += 1) {
       const t = i / steps;
-      worldPoint.copy(this.getWorldPointAt(t));
+      worldPoint.copy(this.getWorldPointAt(t, rodLocalScratch));
       screenPoint.copy(worldPoint).project(this.camera);
       if (screenPoint.z < -1 || screenPoint.z > 1) continue;
       const sx = (screenPoint.x * 0.5 + 0.5) * rect.width;
@@ -292,8 +273,8 @@ export class FishingRodView {
     const targetYaw = active ? THREE.MathUtils.clamp(this.gestureState.rodYaw ?? 0, -1.25, 1.25) : 0;
     const targetPitch = active ? THREE.MathUtils.clamp(this.gestureState.rodPitch ?? 0, -0.95, 1.05) : 0;
     const targetOffset = active
-      ? new THREE.Vector3(this.gestureState.rootOffsetX ?? 0, this.gestureState.rootOffsetY ?? 0, this.gestureState.rootOffsetZ ?? 0)
-      : new THREE.Vector3();
+      ? targetOffsetScratch.set(this.gestureState.rootOffsetX ?? 0, this.gestureState.rootOffsetY ?? 0, this.gestureState.rootOffsetZ ?? 0)
+      : targetOffsetScratch.set(0, 0, 0);
     const follow = active ? 0.62 : Math.min(1, dt * 7.4);
     this.pose.rootOffset.lerp(targetOffset, active ? 0.55 : Math.min(1, dt * 8.4));
     this.pose.yaw = THREE.MathUtils.lerp(this.pose.yaw, targetYaw, follow);
@@ -303,29 +284,28 @@ export class FishingRodView {
     const downwardPitch = Math.max(0, this.pose.pitch);
     const effectivePitch = this.pose.pitch < 0 ? this.pose.pitch : Math.min(ROD_DOWNWARD_PITCH_MAX, downwardPitch * ROD_DOWNWARD_PITCH_SCALE);
     this.debug.downwardPitch = { raw: this.pose.pitch, effective: effectivePitch, scale: ROD_DOWNWARD_PITCH_SCALE, max: ROD_DOWNWARD_PITCH_MAX };
-    const t = performance.now() / 1000;
-    const snapForward = Math.sin(this.pose.snap * Math.PI) * 0.38;
+    const snapForward = Math.sin(this.pose.snap * Math.PI) * 0.32;
     this.root.position.x = ROD_REST_POS.x + this.pose.rootOffset.x;
-    this.root.position.y = ROD_REST_POS.y + this.pose.rootOffset.y;
+    this.root.position.y = ROD_REST_POS.y + ROD_STABLE_CAMERA_Y_OFFSET + this.pose.rootOffset.y;
     this.root.position.z = ROD_REST_POS.z + this.pose.rootOffset.z;
-    this.root.rotation.set(ROD_REST_ROT.x, ROD_REST_ROT.y, ROD_REST_ROT.z);
+    this.root.rotation.set(ROD_REST_ROT.x + ROD_STABLE_FORWARD_PITCH_OFFSET, ROD_REST_ROT.y, ROD_REST_ROT.z);
     this.root.updateMatrixWorld(true);
     // Keep the lower grip planted in camera space so casts pivot from an implied hand instead of the rod root.
-    pivotDesiredWorld.copy(this.getWorldPointAt(0.08));
-    this.root.rotation.x = ROD_REST_ROT.x + effectivePitch * 0.72 - this.pose.bend * 0.3 + snapForward + Math.sin(t * 2.1) * 0.004;
+    pivotDesiredWorld.copy(this.getWorldPointAt(0.08, rodLocalScratch));
+    this.root.rotation.x = ROD_REST_ROT.x + ROD_STABLE_FORWARD_PITCH_OFFSET + effectivePitch * 0.72 - this.pose.bend * 0.3 + snapForward;
     this.root.rotation.y = ROD_REST_ROT.y + this.pose.yaw * 0.72;
     this.root.rotation.z = ROD_REST_ROT.z + this.pose.yaw * 0.46 + this.pose.bend * 0.18 - snapForward * 0.2;
     this.root.position.y -= this.pose.bend * 0.03;
     this.root.position.z -= Math.max(0, effectivePitch) * 0.035;
     this.root.updateMatrixWorld(true);
-    pivotActualWorld.copy(this.getWorldPointAt(0.08));
+    pivotActualWorld.copy(this.getWorldPointAt(0.08, rodLocalScratch));
     pivotDesiredCamera.copy(pivotDesiredWorld); this.camera.worldToLocal(pivotDesiredCamera);
     pivotActualCamera.copy(pivotActualWorld); this.camera.worldToLocal(pivotActualCamera);
     this.root.position.add(pivotDesiredCamera.sub(pivotActualCamera));
-    this.debug.handPivot = { x: pivotDesiredWorld.x, y: pivotDesiredWorld.y, z: pivotDesiredWorld.z, cameraLocal: this.root.position.clone() };
+    this.debug.handPivot = { x: pivotDesiredWorld.x, y: pivotDesiredWorld.y, z: pivotDesiredWorld.z, cameraLocal: { x: this.root.position.x, y: this.root.position.y, z: this.root.position.z } };
     this.rod.rotation.z = Math.PI / 2 - this.pose.bend * 0.2 + snapForward * 0.24;
     this.rod.rotation.x = this.pose.yaw * 0.09;
-    this.applyGroundClearanceSafeguard();
+    this.applyCameraSpaceClamp();
     lastTipScratch.copy(this.getWorldTipPosition());
     if (this.hasLastTip) this.tipVelocity.copy(lastTipScratch).sub(this.lastTipPosition).divideScalar(dt);
     this.lastTipPosition.copy(lastTipScratch); this.hasLastTip = true;
