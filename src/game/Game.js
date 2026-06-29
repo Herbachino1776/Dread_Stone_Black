@@ -263,10 +263,16 @@ export class Game {
       isPlayerDead: this.isPlayerDead,
     });
     this.progressionHost.update(deltaSeconds);
+    // Combat no longer consumes the queued A-button attack input. Keep the button
+    // available for viewmodel/future weapon hooks above, then clear it here so a
+    // stale attack press cannot poison timed interactions such as campfire
+    // building or cooking.
+    this.controls.consumeAttack();
     this.interactions.updateHint();
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
     const keyboardInteractPressed = keyboardInteractHeld && !this.wasKeyboardInteractHeld;
-    this.interactions.updateTimedAction(deltaSeconds, this.equipmentPanel?.isOpen || this.isPaused || this.isPlayerDead || this.controls.hasAttackQueued?.());
+    const timedActionCancelRequested = this.equipmentPanel?.isOpen || this.isPaused || this.isPlayerDead;
+    this.interactions.updateTimedAction(deltaSeconds, timedActionCancelRequested);
 
     if (this.controls.consumeInteract() || keyboardInteractPressed) {
       if (!this.interactions.useEquippedConsumable?.()) this.interactions.interact();
