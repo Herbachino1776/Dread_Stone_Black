@@ -1,0 +1,39 @@
+DREAD STONE BLACK
+Stage 4E — Final Design-Locked Master Assembly Summary
+
+Created:
+- dread_stone_black_strategy_guide_DESIGN_LOCKED_MASTER_01-19.md
+
+Source batches:
+- Stage 4A Chapters 1–5
+- Stage 4B Chapters 6–10
+- Stage 4C Chapters 11–15
+- Stage 4D Chapters 16–19
+
+What Stage 4E did:
+1. Assembled all 19 design-locked chapters into one master file.
+2. Removed batch-level prefaces and change logs from the main walkthrough.
+3. Preserved chapter walkthroughs, completion checklists, core routes, and developer notes.
+4. Added global item / record / route rules.
+5. Added appendices for tools, Memory Shards, route/network states, boss ladder, endings, and implementation priority.
+6. Kept Stage 3 design locks reflected directly in the guide text.
+
+Master design locks now represented:
+- Maps are map updates.
+- Records hold lore/documents.
+- Memory Shards live in the Memory interface.
+- Route progress is world-state, not inventory clutter.
+- Pale Gate Network is a network/map layer.
+- Chapel Clapper upgrades Old Procession Bell.
+- White Interface Core I/II becomes White Interface Level I/II.
+- Black Sample Shard is dangerous and affects ending risk.
+- Dreadstone Avatar is the final combat boss.
+- Open Anchor is the final system resolution.
+- Best ending is Containment Restored.
+- Quiet Folsom Return is the best epilogue variant.
+
+Recommended next step:
+Do not rewrite more immediately. Read/use the Design-Locked Master as the canonical guide target.
+
+When ready for implementation work, start with:
+Physical destructible black growth v1 in Folsom.
