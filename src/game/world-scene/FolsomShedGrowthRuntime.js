@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BLACK_GROWTH_TEXTURES, createBlackGrowthPlaneMaterial, loadBlackGrowthTexture } from './BlackGrowthVisuals.js';
 
 const GROWTH_TARGET = new THREE.Vector3(-35, 1.85, -35.82);
 export const FOLSOM_SHED_GROWTH_RULES = Object.freeze({
@@ -7,24 +8,7 @@ export const FOLSOM_SHED_GROWTH_RULES = Object.freeze({
   stateSequence: Object.freeze(['intact', 'damaged', 'cleared']),
   saveKey: 'folsom_tool_shed_open',
 });
-export const FOLSOM_SHED_GROWTH_TEXTURES = Object.freeze({
-  intact: ['./assets/textures/growth/black_growth_scab_intact_01.png', './assets/textures/growth/black_growth_scab_intact_02.png'],
-  damaged: ['./assets/textures/growth/black_growth_scab_damaged_01.png', './assets/textures/growth/black_growth_scab_damaged_02.png'],
-  cord: './assets/textures/growth/black_growth_cord_surface_01.png',
-  hit: './assets/sprites/effects/growth/black_growth_hit_decal_01.png',
-});
-
-function configureTexture(texture) {
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.anisotropy = 2;
-  return texture;
-}
-
-function growthMaterial(map, opacity = 1) {
-  return new THREE.MeshBasicMaterial({ map, color: 0x756f63, transparent: true, opacity, alphaTest: 0.08, depthWrite: false, side: THREE.DoubleSide });
-}
+export const FOLSOM_SHED_GROWTH_TEXTURES = BLACK_GROWTH_TEXTURES;
 
 export class FolsomShedGrowthRuntime {
   constructor({ scene, collision, compiledGroup, gameState, textureLoader }) {
@@ -50,10 +34,10 @@ export class FolsomShedGrowthRuntime {
   }
 
   loadTextures() {
-    this.intactTextures = FOLSOM_SHED_GROWTH_TEXTURES.intact.map((path) => configureTexture(this.textureLoader.load(path)));
-    this.damagedTextures = FOLSOM_SHED_GROWTH_TEXTURES.damaged.map((path) => configureTexture(this.textureLoader.load(path)));
-    this.cordTexture = configureTexture(this.textureLoader.load(FOLSOM_SHED_GROWTH_TEXTURES.cord));
-    this.hitTexture = configureTexture(this.textureLoader.load(FOLSOM_SHED_GROWTH_TEXTURES.hit));
+    this.intactTextures = FOLSOM_SHED_GROWTH_TEXTURES.intact.map((path) => loadBlackGrowthTexture(this.textureLoader, path));
+    this.damagedTextures = FOLSOM_SHED_GROWTH_TEXTURES.damaged.map((path) => loadBlackGrowthTexture(this.textureLoader, path));
+    this.cordTexture = loadBlackGrowthTexture(this.textureLoader, FOLSOM_SHED_GROWTH_TEXTURES.cord);
+    this.hitTexture = loadBlackGrowthTexture(this.textureLoader, FOLSOM_SHED_GROWTH_TEXTURES.hit);
   }
 
   buildGrowth() {
@@ -64,7 +48,7 @@ export class FolsomShedGrowthRuntime {
       { x: 0.82, y: 1.63, width: 1.9, height: 0.46, rotation: 0.02, texture: 0 },
     ];
     this.scabs = scabSpecs.map((spec, index) => {
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(spec.width, spec.height), growthMaterial(this.intactTextures[spec.texture]));
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(spec.width, spec.height), createBlackGrowthPlaneMaterial(this.intactTextures[spec.texture]));
       mesh.name = `folsom-shed-growth-scab-${index + 1}`;
       mesh.position.set(spec.x, spec.y, index * 0.002);
       mesh.rotation.z = spec.rotation;
@@ -78,7 +62,7 @@ export class FolsomShedGrowthRuntime {
       { y: -0.72, rotation: 0.15, width: 3.85 },
     ];
     this.cords = cordSpecs.map((spec, index) => {
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(spec.width, 0.34), growthMaterial(this.cordTexture));
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(spec.width, 0.34), createBlackGrowthPlaneMaterial(this.cordTexture));
       mesh.name = `folsom-shed-growth-cord-${index + 1}`;
       mesh.position.set(0, spec.y, 0.012 + index * 0.002);
       mesh.rotation.z = spec.rotation;
@@ -136,7 +120,7 @@ export class FolsomShedGrowthRuntime {
   spawnOilImpact(strength) {
     const count = strength >= 1 ? 11 : strength > 0.6 ? 5 : 3;
     for (let index = 0; index < count; index += 1) {
-      const material = growthMaterial(this.hitTexture, 0.9);
+      const material = createBlackGrowthPlaneMaterial(this.hitTexture, { opacity: 0.9 });
       material.color.setHex(index % 3 === 0 ? 0x5b5145 : 0x27231f);
       const size = (0.2 + Math.random() * 0.34) * strength;
       const splash = new THREE.Mesh(new THREE.PlaneGeometry(size, size * (0.75 + Math.random() * 0.7)), material);

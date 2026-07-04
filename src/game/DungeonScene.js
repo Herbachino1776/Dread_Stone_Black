@@ -17,6 +17,7 @@ import { loadDungeonModel } from './ModelLoader.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
 import { FISH_TEXTURE_PROFILES, createFishMesh, createFishingWorldRuntime, resolveFishSizeGroup } from './world-scene/FishingWorldRuntime.js';
+import { FolsomConnectedGrowthRuntime } from './world-scene/FolsomConnectedGrowthRuntime.js';
 import { FolsomShedGrowthRuntime } from './world-scene/FolsomShedGrowthRuntime.js';
 
 const WALL_HEIGHT = 3.2;
@@ -316,6 +317,7 @@ export class DungeonScene {
     this.compiledSkyDomes = [];
     this.fieldRedwoodHarvestables = [];
     this.fieldSurvivalObjects = new Map();
+    this.folsomConnectedGrowthRuntime = null;
     this.folsomShedGrowthRuntime = null;
     this.fishingWorldRuntime = createFishingWorldRuntime({
       scene: this.scene,
@@ -784,17 +786,23 @@ export class DungeonScene {
     this.addAuthoredOutdoorChests(definition);
     this.addAuthoredOutdoorSurvivalObjects(definition);
     this.addAuthoredOutdoorInteractions(definition);
-    if (definition.id === 'folsom') this.addFolsomShedProofLoop(definition);
+    if (definition.id === 'folsom') this.addFolsomGrowthFoundation(definition);
     this.addCompiledOutdoorExitCues(definition);
   }
 
-  addFolsomShedProofLoop(definition) {
+  addFolsomGrowthFoundation(definition) {
     this.folsomShedGrowthRuntime = new FolsomShedGrowthRuntime({
       scene: this.scene,
       collision: this.collision,
       compiledGroup: this.compiledLocationRuntime?.group,
       gameState: this.gameState,
       textureLoader: this.textureLoader,
+    });
+    this.folsomConnectedGrowthRuntime = new FolsomConnectedGrowthRuntime({
+      scene: this.scene,
+      network: definition.connectedGrowthNetwork,
+      textureLoader: this.textureLoader,
+      sampleSurfaceY: (x, z) => this.resolveOutdoorVisibleSurfaceY(x, z, { water: false }).y,
     });
 
     const knife = (definition.outdoorPickups ?? []).find((pickup) => pickup.itemId === 'old_work_knife');

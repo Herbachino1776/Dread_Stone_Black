@@ -169,6 +169,49 @@ const folsomCityBorderWoodenWall = createCityBorderWoodenWall({
   tags: ['folsom', 'protective-perimeter'],
 });
 
+export const FOLSOM_CONNECTED_GROWTH_NETWORK = Object.freeze({
+  id: 'folsom_underworks_growth_network',
+  anchorGroup: 'folsom_underworks',
+  tags: Object.freeze(['connected-growth-root', 'chapter-2-preview', 'static-world-authoring']),
+  lock: Object.freeze({
+    id: 'folsom_underworks_growth_lock',
+    position: Object.freeze([42, 2.42, 43.58]),
+    anchorGroup: 'folsom_underworks',
+    tags: Object.freeze(['underworks-growth-lock', 'connected-growth-root', 'chapter-2-preview', 'blocks-underworks']),
+  }),
+  anchors: Object.freeze([
+    Object.freeze({
+      id: 'folsom_growth_anchor_fire', type: 'fire', position: Object.freeze([-10.8, -15.8]), fallbackY: 0.16,
+      anchorGroup: 'folsom_underworks', tags: Object.freeze(['fire-anchor', 'connected-growth-anchor', 'common-fire', 'not-collectible']),
+    }),
+    Object.freeze({
+      id: 'folsom_growth_anchor_pond', type: 'pond', position: Object.freeze([8.8, -47.2]), fallbackY: -0.05,
+      anchorGroup: 'folsom_underworks', tags: Object.freeze(['pond-anchor', 'wet-root-anchor', 'connected-growth-anchor', 'not-collectible']),
+    }),
+    Object.freeze({
+      id: 'folsom_growth_anchor_shrine', type: 'shrine', position: Object.freeze([-42, 39.12]), fallbackY: 0.788,
+      anchorGroup: 'folsom_underworks', tags: Object.freeze(['shrine-anchor', 'white-stone-anchor', 'connected-growth-anchor', 'not-collectible']),
+    }),
+  ]),
+  feeds: Object.freeze([
+    Object.freeze({
+      id: 'folsom_growth_feed_fire', anchorId: 'folsom_growth_anchor_fire', width: 0.46,
+      tags: Object.freeze(['connected-growth-feed', 'fire-feed']), knotPointIndices: Object.freeze([2, 4, 6]),
+      points: Object.freeze([[42, 43.35], [35, 36], [27, 28], [18, 19], [9, 10], [1, 0], [-5, -9], [-10.8, -15.8]]),
+    }),
+    Object.freeze({
+      id: 'folsom_growth_feed_pond', anchorId: 'folsom_growth_anchor_pond', width: 0.4,
+      tags: Object.freeze(['connected-growth-feed', 'pond-feed', 'wet-root-feed']), knotPointIndices: Object.freeze([2, 4, 6]),
+      points: Object.freeze([[42, 43.35], [34, 33], [25, 22], [17, 10], [12, -5], [11, -21], [10, -37], [8.8, -47.2]]),
+    }),
+    Object.freeze({
+      id: 'folsom_growth_feed_shrine', anchorId: 'folsom_growth_anchor_shrine', width: 0.44,
+      tags: Object.freeze(['connected-growth-feed', 'shrine-feed', 'white-stone-feed']), knotPointIndices: Object.freeze([1, 3, 5]),
+      points: Object.freeze([[42, 43.35], [28, 41], [12, 40.5], [-4, 40], [-20, 39.6], [-34, 39.25], [-42, 39.12]]),
+    }),
+  ]),
+});
+
 export const folsomDefinition = Object.freeze({
   id: 'folsom',
   displayName: 'Folsom',
@@ -190,6 +233,7 @@ export const folsomDefinition = Object.freeze({
   defaultFloorY: 0,
   geometry: { wallHeight: 3.8, wallThickness: 0.38, floorThickness: 0.18, ceilingThickness: 0.18 },
   terrain: folsomTerrain,
+  connectedGrowthNetwork: FOLSOM_CONNECTED_GROWTH_NETWORK,
   rooms: [{ id: 'folsom_bounds', label: 'Folsom Town Bounds', minX: -98, maxX: 98, minZ: -98, maxZ: 98, floorY: 0, ceilingY: 18, visibleGeometry: false, wallGeometry: false, safeForSpawn: true, tags: ['field-bounds', 'starter-town'] }],
   splineTrails: [
     { id: 'folsom_courtyard_to_pond', points: [[0, -5], [-2, -22], [-8, -38], [0, -45]], width: 5.6, material: 'townPath', flatten: true, tags: ['walkable-route', 'pond-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
@@ -274,7 +318,7 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_shrine_altar', kind: 'altar', position: [-42, 0.76, 40], width: 2.8, depth: 1.5, height: 1, material: 'shrineStone', blocksPlayer: true, tags: ['shrine', 'interactable-placeholder'] },
     { id: 'folsom_shrine_column_left', kind: 'brokenColumn', position: [-49, 0.76, 34], radius: 0.65, height: 4.4, material: 'darkStone', blocksPlayer: true, tags: ['shrine', 'open-ceiling'] },
     { id: 'folsom_shrine_column_right', kind: 'brokenColumn', position: [-35, 0.76, 34], radius: 0.65, height: 3.2, material: 'darkStone', blocksPlayer: true, tags: ['shrine', 'open-ceiling'] },
-    { id: 'folsom_cellar_gate', kind: 'lockedRitualGate', position: [42, 0.34, 44], yaw: 0, width: 5.8, height: 4.5, depth: 0.7, material: 'rustedIron', state: 'locked', passable: false, blocksPlayer: false, tags: ['first-dungeon-placeholder', 'folsom-underworks'], userData: { collision: 'visual-only locked gate; inspect interaction supplies the Underworks blocker messaging' } },
+    { id: 'folsom_cellar_gate', kind: 'lockedRitualGate', position: [42, 0.34, 44], yaw: 0, width: 5.8, height: 4.5, depth: 0.7, material: 'rustedIron', state: 'locked', passable: false, blocksPlayer: false, tags: ['first-dungeon-placeholder', 'folsom-underworks', 'blocks-underworks'], userData: { collision: 'visual-only locked gate; connected growth and inspect interaction keep the Underworks sealed', growthLockId: 'folsom_underworks_growth_lock' } },
     { id: 'folsom_reliquary_door', kind: 'brokenGateFrame', position: [82, 0.28, 4], yaw: Math.PI / 2, width: 6, height: 4.6, depth: 0.75, material: 'rustedIron', state: 'open', passable: true, blocksOpening: false, tags: ['authored-gate', 'rusty-border-door', 'legacy-route'] },
     { id: 'folsom_north_road_marker_left', kind: 'brokenColumn', position: [-4.5, 0.08, 88], radius: 0.55, height: 2.2, material: 'darkStone', blocksPlayer: true, tags: ['future-road-exit'] },
     { id: 'folsom_north_road_marker_right', kind: 'brokenColumn', position: [4.5, 0.08, 88], radius: 0.55, height: 1.7, material: 'darkStone', blocksPlayer: true, tags: ['future-road-exit'] },
@@ -306,7 +350,7 @@ export const folsomDefinition = Object.freeze({
   outdoorInteractions: [
     { id: 'folsom_shrine_altar_inspect', label: 'Weathered Shrine Altar', target: { x: -42, y: 1.7, z: 38.5 }, range: 3.4, hint: 'Inspect the weathered altar', message: 'Old offerings have weathered into the stone.', type: 'outdoorInspect' },
     { id: 'folsom_house_note_placeholder', label: 'Caretaker Note', target: { x: 37, y: 1, z: -7 }, range: 3, hint: 'Read the faded note', message: 'The last caretaker left the lamps trimmed.', type: 'outdoorInspect' },
-    { id: 'folsom_underworks_locked', label: 'Folsom Underworks', target: { x: 42, y: 1.4, z: 40.5 }, range: 4, hint: 'Inspect the locked Underworks gate', message: 'The Folsom Underworks are sealed for now.', type: 'outdoorInspect' },
+    { id: 'folsom_underworks_locked', label: 'Folsom Underworks', target: { x: 42, y: 1.4, z: 40.5 }, range: 4, hint: 'Inspect the locked Underworks gate', message: 'The Underworks are sealed by living growth.', type: 'outdoorInspect' },
     { id: 'folsom_future_road', label: 'North Road', target: { x: 0, y: 1, z: 88 }, range: 5, hint: 'Look beyond the north road', message: 'The old road follows a dry channel into the wilds.', type: 'outdoorInspect' },
   ],
   spawns: [

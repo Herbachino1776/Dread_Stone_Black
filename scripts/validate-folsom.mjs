@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
 import { getLocationDefinition } from '../src/game/locations/locationRegistry.js';
+import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
+import { FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
 
 const folsom = getLocationDefinition('folsom');
@@ -19,6 +22,8 @@ const shedRewardSpace = (folsom.architecturalPrimitives ?? []).find((primitive) 
 const axeChest = (folsom.outdoorChests ?? []).find((chest) => chest.itemId === 'wood_axe');
 const torchChest = (folsom.outdoorChests ?? []).find((chest) => chest.itemId === 'torch');
 const knifePickup = (folsom.outdoorPickups ?? []).find((pickup) => pickup.itemId === 'old_work_knife');
+const underworksGate = (folsom.architecturalPrimitives ?? []).find((primitive) => primitive.id === 'folsom_cellar_gate');
+const growthNetwork = folsom.connectedGrowthNetwork;
 const shedCollision = buildDungeonCollision(folsom).blockerRects.filter((blocker) => blocker.id.includes('folsom_shed'));
 const pointIsBlocked = ([x, z]) => shedCollision.some((blocker) => x >= blocker.minX && x <= blocker.maxX && z >= blocker.minZ && z <= blocker.maxZ);
 
@@ -41,10 +46,44 @@ assert.deepEqual(FOLSOM_SHED_GROWTH_TEXTURES.intact, ['./assets/textures/growth/
 assert.deepEqual(FOLSOM_SHED_GROWTH_TEXTURES.damaged, ['./assets/textures/growth/black_growth_scab_damaged_01.png', './assets/textures/growth/black_growth_scab_damaged_02.png']);
 assert.equal(FOLSOM_SHED_GROWTH_TEXTURES.cord, './assets/textures/growth/black_growth_cord_surface_01.png');
 assert.equal(FOLSOM_SHED_GROWTH_TEXTURES.hit, './assets/sprites/effects/growth/black_growth_hit_decal_01.png');
+assert.equal(FOLSOM_SHED_GROWTH_TEXTURES, BLACK_GROWTH_TEXTURES, 'Shed and connected growth share one locked asset contract.');
 assert.ok(pointIsBlocked([-35.82, -35.34]) && pointIsBlocked([-34.18, -35.34]), 'Closed shed door panels have matching authored collision.');
 [
   [-35, -37.2], [-44, -30], [-42.8, -22.2], [-35, -21.8], [-27.2, -22.2], [-26, -30], [-24.7, -31],
 ].forEach((point) => assert.equal(pointIsBlocked(point), false, `Tool shed approach clearance remains open at ${point.join(', ')}.`));
 assert.ok((folsom.waterBodies ?? []).some((water) => water.fishable), 'Folsom keeps fishable pond after the shed rebuild.');
 
-console.log('Folsom keeps its starter systems and has the three-swipe shed growth loop, rear work knife, and interior Axe + Torch rewards.');
+assert.equal(growthNetwork?.lock?.id, 'folsom_underworks_growth_lock', 'Folsom authors the larger Underworks growth lock.');
+assert.ok(growthNetwork.lock.tags.includes('blocks-underworks') && growthNetwork.lock.tags.includes('connected-growth-root'), 'Underworks growth lock is tagged as the connected root obstruction.');
+assert.equal(underworksGate?.state, 'locked', 'Folsom Underworks gate remains locked.');
+assert.equal(underworksGate?.passable, false, 'Folsom Underworks gate remains unavailable.');
+assert.equal((folsom.exits ?? []).some((exit) => /beneath|underworks/i.test(exit.toLocation ?? '')), false, 'No Beneath Folsom or Underworks exit is authored yet.');
+
+const anchors = growthNetwork.anchors ?? [];
+assert.deepEqual(anchors.map((anchor) => anchor.id).sort(), ['folsom_growth_anchor_fire', 'folsom_growth_anchor_pond', 'folsom_growth_anchor_shrine'], 'Folsom has exactly the three locked connected-growth anchors.');
+assert.ok(anchors.every((anchor) => anchor.tags.includes('connected-growth-anchor') && anchor.tags.includes('not-collectible')), 'Growth anchors are physical world sources, not collectibles.');
+assert.ok(anchors.every((anchor) => !('itemId' in anchor) && !('saveKey' in anchor) && !('hitsRequired' in anchor)), 'Growth anchors add no inventory, clearing, or save progression state.');
+const pondAnchor = anchors.find((anchor) => anchor.type === 'pond');
+assert.ok(pondAnchor.position[0] > 6 && pondAnchor.position[1] > -50, 'Pond anchor stays east of the north-bank fishing lane and outside the water center.');
+
+const feeds = growthNetwork.feeds ?? [];
+assert.equal(feeds.length, 3, 'Folsom authors one visible growth feed for each anchor.');
+assert.deepEqual(feeds.map((feed) => feed.anchorId).sort(), anchors.map((anchor) => anchor.id).sort(), 'Fire, pond, and shrine anchors each connect back to the Underworks root.');
+assert.ok(feeds.every((feed) => feed.points.length >= 6 && feed.tags.includes('connected-growth-feed')), 'Each feed has a readable authored route across Folsom.');
+
+const growthScene = new THREE.Scene();
+const connectedGrowth = new FolsomConnectedGrowthRuntime({
+  scene: growthScene,
+  network: growthNetwork,
+  textureLoader: { load: () => new THREE.Texture() },
+  sampleSurfaceY: () => 0,
+});
+const anchorGroups = anchors.map((anchor) => connectedGrowth.root.getObjectByName(anchor.id));
+const feedMeshes = feeds.map((feed) => connectedGrowth.root.getObjectByName(`${feed.id}-cord-ribbon`));
+const growthLock = connectedGrowth.root.getObjectByName(growthNetwork.lock.id);
+assert.ok(anchorGroups.every((group) => group?.userData?.collectible === false), 'Runtime anchor groups remain explicitly non-collectible.');
+assert.ok(feedMeshes.every((mesh) => mesh?.isMesh && mesh.geometry?.getAttribute('position')?.count > 8), 'Runtime builds three terrain-following feed ribbons with valid geometry.');
+assert.ok(growthLock?.children?.length >= 9 && growthLock.userData.blocksUnderworks, 'Runtime builds a substantial scab, cord, and knot mass over the Underworks gate.');
+assert.equal(typeof connectedGrowth.update, 'undefined', 'Connected growth V1 is static and adds no per-frame update cost.');
+
+console.log('Folsom keeps its starter systems, shed proof loop, and static fire/pond/shrine growth network while Underworks remains sealed.');
