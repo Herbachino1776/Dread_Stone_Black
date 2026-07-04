@@ -5,6 +5,7 @@ import {
   createBlackGrowthKnotMaterial,
   createBlackGrowthPlaneMaterial,
   loadBlackGrowthTexture,
+  loadWrappedBlackGrowthTexture,
 } from './BlackGrowthVisuals.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -45,13 +46,14 @@ export class FolsomConnectedGrowthRuntime {
 
   loadMaterials(textureLoader) {
     const intact = BLACK_GROWTH_TEXTURES.intact.map((path) => loadBlackGrowthTexture(textureLoader, path));
+    const wrappedIntact = BLACK_GROWTH_TEXTURES.intact.map((path) => loadWrappedBlackGrowthTexture(textureLoader, path));
     const cord = loadBlackGrowthTexture(textureLoader, BLACK_GROWTH_TEXTURES.cord);
     configureBlackGrowthTexture(cord).wrapS = THREE.RepeatWrapping;
     this.materials = {
       scab: intact.map((texture) => createBlackGrowthPlaneMaterial(texture, { color: 0x625e56 })),
       cord: createBlackGrowthPlaneMaterial(cord, { color: 0x59564f }),
       repeatingCord: createBlackGrowthPlaneMaterial(cord, { color: 0x55534d }),
-      knot: createBlackGrowthKnotMaterial(),
+      knot: wrappedIntact.map((texture) => createBlackGrowthKnotMaterial(texture)),
     };
   }
 
@@ -95,34 +97,16 @@ export class FolsomConnectedGrowthRuntime {
     return mesh;
   }
 
-  addKnot(parent, { name, position = [0, 0.3, 0], scale = [1, 1, 1], data, facing = 'ground', texture = 0 }) {
-    const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.58, 0), this.materials.knot);
+  addKnot(parent, { name, position = [0, 0.3, 0], scale = [1, 1, 1], data, texture = 0 }) {
+    const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.58, 0), this.materials.knot[texture % this.materials.knot.length]);
     mesh.name = name;
     mesh.position.set(position[0], position[1], position[2]);
     mesh.scale.set(scale[0], scale[1], scale[2]);
     mesh.rotation.set(0.18, 0.62, -0.12);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.userData = data;
+    mesh.userData = { ...data, wrappedHealthyGrowthTexture: true, growthTextureState: 'intact' };
     parent.add(mesh);
-
-    // Keep the cheap low-poly core for silhouette and shadow, but skin its most
-    // readable face with the same oily scab art used by the shed proof loop.
-    const cap = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.08 * scale[0], 0.86 * (facing === 'vertical' ? scale[1] : scale[2])),
-      this.materials.scab[texture % this.materials.scab.length],
-    );
-    cap.name = `${name}-textured-scab-skin`;
-    if (facing === 'vertical') {
-      cap.position.set(position[0], position[1], position[2] - 0.46 * scale[2]);
-      cap.rotation.z = -0.16;
-    } else {
-      cap.position.set(position[0], position[1] + 0.48 * scale[1], position[2]);
-      cap.rotation.set(-Math.PI / 2, 0, 0.22);
-    }
-    cap.renderOrder = 4;
-    cap.userData = data;
-    parent.add(cap);
     return mesh;
   }
 
@@ -145,7 +129,7 @@ export class FolsomConnectedGrowthRuntime {
       { width: 4.8, position: [0, -0.78, 0.043], rotation: 0.1 },
       { width: 4.35, position: [0, -1.37, 0.047], rotation: -0.04 },
     ].forEach((spec, index) => this.addCordPlane(group, { ...spec, name: `${lock.id}-gripping-cord-${index + 1}`, data }));
-    this.addKnot(group, { name: `${lock.id}-central-knot`, position: [0.12, -0.05, -0.18], scale: [1.55, 1.85, 0.72], facing: 'vertical', texture: 1, data });
+    this.addKnot(group, { name: `${lock.id}-central-knot`, position: [0.12, -0.05, -0.18], scale: [1.55, 1.85, 0.72], texture: 1, data });
 
     const rootCollar = new THREE.Group();
     rootCollar.name = `${lock.id}-feed-root-collar`;

@@ -81,15 +81,19 @@ const connectedGrowth = new FolsomConnectedGrowthRuntime({
 const anchorGroups = anchors.map((anchor) => connectedGrowth.root.getObjectByName(anchor.id));
 const feedMeshes = feeds.map((feed) => connectedGrowth.root.getObjectByName(`${feed.id}-cord-ribbon`));
 const growthLock = connectedGrowth.root.getObjectByName(growthNetwork.lock.id);
+const wrappedKnots = [];
 const knotSkins = [];
 connectedGrowth.root.traverse((object) => {
+  if (object.userData?.wrappedHealthyGrowthTexture) wrappedKnots.push(object);
   if (object.name?.endsWith('-textured-scab-skin')) knotSkins.push(object);
 });
 assert.ok(anchorGroups.every((group) => group?.userData?.collectible === false), 'Runtime anchor groups remain explicitly non-collectible.');
 assert.ok(feedMeshes.every((mesh) => mesh?.isMesh && mesh.geometry?.getAttribute('position')?.count > 24), 'Runtime builds three closely sampled terrain-following feed ribbons with valid geometry.');
 assert.ok(growthLock?.children?.length >= 9 && growthLock.userData.blocksUnderworks, 'Runtime builds a substantial scab, cord, and knot mass over the Underworks gate.');
 assert.ok(connectedGrowth.root.getObjectByName(`${growthNetwork.lock.id}-feed-root-collar`), 'Underworks lock has a textured ground collar where the three feeds visibly converge.');
-assert.ok(knotSkins.length >= 15 && knotSkins.every((mesh) => mesh.material?.map), 'Anchor, route, and Underworks knots use locked textured scab skins rather than bare placeholder cores.');
+assert.equal(knotSkins.length, 0, 'Knot texturing uses wrapped mesh materials rather than planar scab overlays.');
+assert.ok(wrappedKnots.length >= 15 && wrappedKnots.every((mesh) => mesh.material?.map && mesh.material.map.wrapS === THREE.RepeatWrapping && mesh.material.map.wrapT === THREE.RepeatWrapping), 'Anchor, route, and Underworks knot geometry is wrapped in repeating healthy-growth textures like field boulders.');
+assert.ok(wrappedKnots.every((mesh) => mesh.userData.growthTextureState === 'intact'), 'Every connected-growth knot uses the healthy undamaged texture state.');
 assert.equal(typeof connectedGrowth.update, 'undefined', 'Connected growth V1 is static and adds no per-frame update cost.');
 
 console.log('Folsom keeps its starter systems, shed proof loop, and static fire/pond/shrine growth network while Underworks remains sealed.');

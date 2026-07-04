@@ -28,6 +28,20 @@ export function loadBlackGrowthTexture(textureLoader, path) {
   return textureCache.get(path);
 }
 
+export function loadWrappedBlackGrowthTexture(textureLoader, path, repeat = [1.15, 1.15]) {
+  const cacheKey = `wrapped:${path}:${repeat.join('x')}`;
+  if (!textureCache.has(cacheKey)) {
+    const texture = textureLoader.load(path);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(repeat[0], repeat[1]);
+    texture.anisotropy = 2;
+    textureCache.set(cacheKey, texture);
+  }
+  return textureCache.get(cacheKey);
+}
+
 export function createBlackGrowthPlaneMaterial(map, { opacity = 1, color = 0x756f63 } = {}) {
   return new THREE.MeshBasicMaterial({
     map,
@@ -40,12 +54,13 @@ export function createBlackGrowthPlaneMaterial(map, { opacity = 1, color = 0x756
   });
 }
 
-export function createBlackGrowthKnotMaterial() {
+export function createBlackGrowthKnotMaterial(map) {
   return new THREE.MeshStandardMaterial({
-    color: 0x171816,
-    roughness: 0.38,
-    metalness: 0.18,
+    map,
+    color: 0x77736b,
+    roughness: 0.72,
+    metalness: 0.08,
     emissive: 0x090a08,
-    emissiveIntensity: 0.18,
+    emissiveIntensity: 0.12,
   });
 }
