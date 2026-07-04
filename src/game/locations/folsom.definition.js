@@ -350,12 +350,13 @@ export const folsomDefinition = Object.freeze({
   outdoorInteractions: [
     { id: 'folsom_shrine_altar_inspect', label: 'Weathered Shrine Altar', target: { x: -42, y: 1.7, z: 38.5 }, range: 3.4, hint: 'Inspect the weathered altar', message: 'Old offerings have weathered into the stone.', type: 'outdoorInspect' },
     { id: 'folsom_house_note_placeholder', label: 'Caretaker Note', target: { x: 37, y: 1, z: -7 }, range: 3, hint: 'Read the faded note', message: 'The last caretaker left the lamps trimmed.', type: 'outdoorInspect' },
-    { id: 'folsom_underworks_locked', label: 'Folsom Underworks', target: { x: 42, y: 1.4, z: 40.5 }, range: 4, hint: 'Inspect the locked Underworks gate', message: 'The Underworks are sealed by living growth.', type: 'outdoorInspect' },
+    { id: 'folsom_underworks_locked', label: 'Folsom Underworks', target: { x: 42, y: 1.4, z: 40.5 }, range: 4, hint: 'Inspect the locked Underworks gate', message: 'The Underworks are sealed by living growth.', type: 'areaEntrance', targetLocationId: 'beneath-folsom', destinationSpawnId: 'beneath_folsom_underworks_arrival', requiredWorldState: 'folsom_underworks_growth_unsealed', tags: ['folsom-underworks', 'conditional-transition'] },
     { id: 'folsom_future_road', label: 'North Road', target: { x: 0, y: 1, z: 88 }, range: 5, hint: 'Look beyond the north road', message: 'The old road follows a dry channel into the wilds.', type: 'outdoorInspect' },
   ],
   spawns: [
     { id: 'folsom_player_start', kind: 'player', position: { x: -2, y: 1.71, z: -4 }, yaw: 0, roomId: 'folsom_bounds', tags: ['default-start', 'courtyard'] },
     { id: 'folsom_reliquary_return', kind: 'return', position: { x: 73, y: 1.67, z: 4 }, yaw: -Math.PI / 2, roomId: 'folsom_bounds', tags: ['legacy-door-return'] },
+    { id: 'folsom_underworks_return', kind: 'return', position: { x: 42, y: 1.9, z: 38.2 }, yaw: Math.PI, roomId: 'folsom_bounds', tags: ['beneath-folsom', 'underworks-return'], userData: { returnFromLocation: 'beneath-folsom' } },
   ],
   exits: [{
     id: 'folsom_rusted_reliquary_door', fromLocation: 'folsom', toLocation: 'reliquary-field',

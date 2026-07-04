@@ -19,9 +19,9 @@ Current locks override older documents when they conflict.
 
 ## Current target
 
-The shed proof loop is complete. The active target is Folsom Anchor Clearing V1: clear the fire, pond, and shrine growth sources, visibly break each feed, and persistently unseal the above-ground Underworks gate after all three clear.
+The shed proof loop and Folsom Anchor Clearing V1 are complete. The active target is Beneath Folsom Entry V1: connect the persistently opened Underworks gate to a small production-intentional underground landing/chamber and provide a reliable return to Folsom.
 
-Do not add tutorial popups, inventory tokens, Beneath Folsom, or later Chapter 2 systems.
+Do not add tutorial popups, inventory tokens, the full Beneath Folsom dungeon, or later Chapter 2 systems.
 
 ## Technical and workflow grounding
 

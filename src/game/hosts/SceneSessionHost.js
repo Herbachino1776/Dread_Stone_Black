@@ -25,19 +25,20 @@ export class SceneSessionHost {
   async startInitialSession() {
     const requestedArea = this.query.get('area');
     const returnedFrom = this.query.get('from');
+    const spawnId = this.query.get('spawn');
     const area = resolveStartupArea(requestedArea);
     const fieldSpawn = area === 'field'
       ? await resolveLocationReturnSpawn(returnedFrom)
       : 'start';
 
     await this.preloadLocationForArea(area);
-    this.createSession({ area, fieldSpawn });
+    this.createSession({ area, fieldSpawn, spawnId });
     return this.getSessionSummary();
   }
 
-  createSession({ area, fieldSpawn = 'start' } = {}) {
+  createSession({ area, fieldSpawn = 'start', spawnId = null } = {}) {
     this.disposeCurrentSession();
-    this.dungeon = new DungeonScene({ area, fieldSpawn, gameState: this.gameState });
+    this.dungeon = new DungeonScene({ area, fieldSpawn, spawnId, gameState: this.gameState });
     this.scene = this.dungeon.build();
     this.scene.add(this.camera);
     this.locationId = this.resolveLocationId(this.dungeon.area);
@@ -52,15 +53,17 @@ export class SceneSessionHost {
   async reloadCurrentSession() {
     const area = this.dungeon?.area ?? resolveStartupArea(this.query.get('area'));
     const fieldSpawn = this.dungeon?.fieldSpawn ?? 'start';
+    const spawnId = this.dungeon?.spawnId ?? null;
     await this.preloadLocationForArea(area);
-    return this.createSession({ area, fieldSpawn });
+    return this.createSession({ area, fieldSpawn, spawnId });
   }
 
-  async transitionToLocation(locationId, { areaParam = locationId, fromArea = null, delayMs = 0 } = {}) {
+  async transitionToLocation(locationId, { areaParam = locationId, fromArea = null, destinationSpawnId = null, delayMs = 0 } = {}) {
     await loadLocationDefinition(locationId);
     window.setTimeout(() => {
       const params = new URLSearchParams({ area: areaParam });
       if (fromArea) params.set('from', fromArea);
+      if (destinationSpawnId) params.set('spawn', destinationSpawnId);
       window.location.assign(`${window.location.pathname}?${params.toString()}`);
     }, delayMs);
     return false;

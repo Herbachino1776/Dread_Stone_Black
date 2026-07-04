@@ -297,9 +297,10 @@ export const FIELD_SURVIVAL_PLACEMENTS = Object.freeze({
 });
 
 export class DungeonScene {
-  constructor({ area = 'field', fieldSpawn = 'start', gameState = null } = {}) {
+  constructor({ area = 'field', fieldSpawn = 'start', spawnId = null, gameState = null } = {}) {
     this.area = area;
     this.fieldSpawn = fieldSpawn;
+    this.spawnId = spawnId;
     this.gameState = gameState;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(INDOOR_BACKGROUND_COLOR);
@@ -423,7 +424,10 @@ export class DungeonScene {
 
   getAuthoredLocationPlayerSpawn() {
     const definition = getLocationDefinition(this.area);
-    const playerSpawn = definition?.spawns?.find((spawn) => spawn.kind === 'player');
+    const requestedSpawn = this.spawnId
+      ? definition?.spawns?.find((spawn) => spawn.id === this.spawnId)
+      : null;
+    const playerSpawn = requestedSpawn ?? definition?.spawns?.find((spawn) => spawn.kind === 'player');
     if (playerSpawn?.position) {
       const position = this.toVector3(playerSpawn.position, 1.55);
       if (this.isCompiledOutdoorFieldArea()) {
@@ -464,7 +468,8 @@ export class DungeonScene {
       target: this.toVector3(interaction.target, 1.2),
     }));
 
-    const playerStart = runtime.spawnAnchors.find((spawn) => spawn.kind === 'player');
+    const playerStart = (this.spawnId ? runtime.spawnAnchors.find((spawn) => spawn.id === this.spawnId) : null)
+      ?? runtime.spawnAnchors.find((spawn) => spawn.kind === 'player');
     if (playerStart) {
       this.playerSpawn = {
         spawnPosition: playerStart.position.clone(),
@@ -509,7 +514,8 @@ export class DungeonScene {
       ...interaction,
       target: this.toVector3(interaction.target, 1.2),
     }));
-    const playerStart = runtime.spawnAnchors.find((spawn) => spawn.kind === 'player');
+    const playerStart = (this.spawnId ? runtime.spawnAnchors.find((spawn) => spawn.id === this.spawnId) : null)
+      ?? runtime.spawnAnchors.find((spawn) => spawn.kind === 'player');
     if (playerStart) {
       const terrainSampler = createOutdoorTerrainMesh(definition.terrain, { textures: definition.textures }).userData.terrainSampler;
       const groundY = terrainSampler?.sampleOutdoorY?.(playerStart.position.x, playerStart.position.z);
@@ -3152,9 +3158,12 @@ export class DungeonScene {
 
   syncFolsomUnderworksInteraction() {
     const interaction = this.outdoorInteractions.find((candidate) => candidate.id === 'folsom_underworks_locked');
-    if (!interaction || !this.gameState?.isFolsomUnderworksGrowthUnsealed?.()) return;
-    interaction.hint = 'Folsom Underworks';
-    interaction.message = 'The open stair descends into unfinished dark.';
+    if (!interaction) return;
+    const unsealed = this.gameState?.isFolsomUnderworksGrowthUnsealed?.() === true;
+    interaction.functional = unsealed;
+    if (!unsealed) return;
+    interaction.hint = 'Descend into the Underworks';
+    interaction.message = 'Cold air moves below Folsom.';
   }
 
   addLights() {

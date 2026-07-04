@@ -228,7 +228,10 @@ export class Interactions {
         targetId: interaction.area ?? interaction.targetLocationId ?? interaction.toLocation ?? 'dungeon',
         tags: ['transition'],
       });
-      this.transitionToLocation(interaction.area ?? interaction.targetLocationId ?? interaction.toLocation ?? 'dungeon', { delayMs: 220 });
+      this.transitionToLocation(interaction.area ?? interaction.targetLocationId ?? interaction.toLocation ?? 'dungeon', {
+        destinationSpawnId: interaction.targetSpawnId ?? interaction.destinationSpawnId ?? null,
+        delayMs: 220,
+      });
       return false;
     }
 
@@ -237,15 +240,27 @@ export class Interactions {
   }
 
   useIndoorExit() {
+    const exit = this.getNearbyIndoorExit();
+    if (!exit || exit === true) return false;
     const fromArea = this.dungeon.area === 'dungeon' ? 'dungeon' : this.dungeon.area;
-    const hint = this.dungeon.area === 'black-grass-temple' ? '' : this.dungeon.area === 'field-keeper-house' ? 'Cold field air leaks under the threshold.' : 'Cold field air seeps down the stair.';
+    const destination = exit.toLocation;
+    const returningToField = destination === 'reliquary-field';
+    const hint = exit.userData?.transitionMessage
+      ?? (returningToField
+        ? (this.dungeon.area === 'black-grass-temple' ? '' : this.dungeon.area === 'field-keeper-house' ? 'Cold field air leaks under the threshold.' : 'Cold field air seeps down the stair.')
+        : '');
     this.setTemporaryHint(hint, 900);
     this.emitObjectiveEvent(OBJECTIVE_EVENTS.locationExited, {
-      interactionId: `${this.getLocationId()}_exit`,
-      targetId: 'reliquary-field',
+      interactionId: exit.id ?? `${this.getLocationId()}_exit`,
+      targetId: destination,
       tags: ['transition', 'indoor_exit'],
     });
-    this.transitionToLocation('reliquary-field', { areaParam: 'field', fromArea, delayMs: 160 });
+    this.transitionToLocation(destination, {
+      areaParam: returningToField ? 'field' : destination,
+      fromArea: returningToField ? fromArea : null,
+      destinationSpawnId: exit.destinationSpawnId ?? null,
+      delayMs: 160,
+    });
     return false;
   }
 
@@ -916,7 +931,9 @@ export class Interactions {
     if (this.dungeon.area === 'field') return null;
     if (!this.dungeon.indoorExitTarget) return null;
     if (!this.isCloseEnough(this.dungeon.indoorExitTarget, INDOOR_EXIT_RANGE)) return null;
-    return this.dungeon.compiledLocationRuntime?.exits?.find((exit) => exit.toLocation === 'reliquary-field') ?? true;
+    return this.dungeon.compiledLocationRuntime?.exits?.find((exit) => exit.position?.equals?.(this.dungeon.indoorExitTarget))
+      ?? this.dungeon.compiledLocationRuntime?.exits?.[0]
+      ?? true;
   }
 
   isNearKey() {

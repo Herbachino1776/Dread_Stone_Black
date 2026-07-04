@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
-import { getLocationDefinition } from '../src/game/locations/locationRegistry.js';
+import { compileDungeonLocation } from '../src/engine/dungeon-authoring/DungeonCompiler.js';
+import { DungeonScene } from '../src/game/DungeonScene.js';
+import { getLocationDefinition, hasLocationDefinition, loadLocationDefinition } from '../src/game/locations/locationRegistry.js';
 import { GameState } from '../src/game/GameState.js';
 import { Interactions } from '../src/game/Interactions.js';
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
@@ -9,6 +11,9 @@ import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
 
 const folsom = getLocationDefinition('folsom');
+assert.equal(hasLocationDefinition('beneath-folsom'), true, 'Beneath Folsom is registered.');
+const beneathFolsom = await loadLocationDefinition('beneath-folsom');
+const beneathFolsomRuntime = compileDungeonLocation(beneathFolsom, { logValidation: false });
 assert.ok(folsom, 'Folsom definition is registered.');
 assert.equal(folsom.id, 'folsom');
 assert.equal((folsom.spawns ?? []).some((spawn) => ['enemy', 'npc'].includes(spawn.kind)), false, 'Folsom has no enemy or NPC spawns.');
@@ -25,6 +30,8 @@ const axeChest = (folsom.outdoorChests ?? []).find((chest) => chest.itemId === '
 const torchChest = (folsom.outdoorChests ?? []).find((chest) => chest.itemId === 'torch');
 const knifePickup = (folsom.outdoorPickups ?? []).find((pickup) => pickup.itemId === 'old_work_knife');
 const underworksGate = (folsom.architecturalPrimitives ?? []).find((primitive) => primitive.id === 'folsom_cellar_gate');
+const underworksInteraction = (folsom.outdoorInteractions ?? []).find((interaction) => interaction.id === 'folsom_underworks_locked');
+const underworksReturnSpawn = (folsom.spawns ?? []).find((spawn) => spawn.id === 'folsom_underworks_return');
 const growthNetwork = folsom.connectedGrowthNetwork;
 const shedCollision = buildDungeonCollision(folsom).blockerRects.filter((blocker) => blocker.id.includes('folsom_shed'));
 const pointIsBlocked = ([x, z]) => shedCollision.some((blocker) => x >= blocker.minX && x <= blocker.maxX && z >= blocker.minZ && z <= blocker.maxZ);
@@ -59,7 +66,46 @@ assert.equal(growthNetwork?.lock?.id, 'folsom_underworks_growth_lock', 'Folsom a
 assert.ok(growthNetwork.lock.tags.includes('blocks-underworks') && growthNetwork.lock.tags.includes('connected-growth-root'), 'Underworks growth lock is tagged as the connected root obstruction.');
 assert.equal(underworksGate?.state, 'locked', 'Folsom Underworks gate remains locked.');
 assert.equal(underworksGate?.passable, false, 'Folsom Underworks gate remains unavailable.');
-assert.equal((folsom.exits ?? []).some((exit) => /beneath|underworks/i.test(exit.toLocation ?? '')), false, 'No Beneath Folsom or Underworks exit is authored yet.');
+assert.equal(underworksInteraction?.targetLocationId, 'beneath-folsom', 'The Underworks interaction targets Beneath Folsom.');
+assert.equal(underworksInteraction?.destinationSpawnId, 'beneath_folsom_underworks_arrival', 'The Underworks interaction targets the safe underground arrival spawn.');
+assert.equal(underworksInteraction?.requiredWorldState, 'folsom_underworks_growth_unsealed', 'The Underworks transition is gated by the existing unsealed world-state flag.');
+assert.equal(underworksReturnSpawn?.userData?.returnFromLocation, 'beneath-folsom', 'Folsom authors a return spawn beside the opened Underworks gate.');
+
+assert.equal(beneathFolsom.id, 'beneath-folsom');
+assert.equal(beneathFolsom.displayName, 'Beneath Folsom');
+assert.equal(beneathFolsomRuntime.validation.ok, true, `Beneath Folsom compiles cleanly: ${beneathFolsomRuntime.validation.errors.join('; ')}`);
+const beneathArrival = beneathFolsomRuntime.spawnAnchors.find((spawn) => spawn.id === 'beneath_folsom_underworks_arrival' && spawn.kind === 'player');
+assert.ok(beneathArrival, 'Beneath Folsom has a valid player arrival spawn.');
+assert.equal(beneathFolsomRuntime.collisionWorld.canStandAt(beneathArrival.position), true, 'The Beneath Folsom arrival spawn is on navigable collision.');
+assert.deepEqual(beneathFolsomRuntime.collisionWorld.getIntersectingBlockers(beneathArrival.position), [], 'The Beneath Folsom arrival spawn does not intersect a blocker.');
+const beneathReturn = beneathFolsomRuntime.exits.find((exit) => exit.id === 'beneath_folsom_return_to_folsom');
+assert.equal(beneathReturn?.toLocation, 'folsom', 'Beneath Folsom has a return route to Folsom.');
+assert.equal(beneathReturn?.destinationSpawnId, 'folsom_underworks_return', 'The return route targets the Folsom Underworks return spawn.');
+assert.equal((beneathFolsom.spawns ?? []).some((spawn) => ['enemy', 'npc'].includes(spawn.kind)), false, 'Beneath Folsom Entry V1 has no enemies or NPCs.');
+assert.equal((beneathFolsom.encounterZones ?? []).length, 0, 'Beneath Folsom Entry V1 has no encounter zones.');
+const beneathFolsomSource = JSON.stringify(beneathFolsom).toLowerCase();
+['keeper\'s lantern', 'keeper_lantern', 'iron drain bar', 'iron_drain_bar', 'records ui', 'memory ui'].forEach((deferredFeature) => {
+  assert.equal(beneathFolsomSource.includes(deferredFeature), false, `Beneath Folsom does not add deferred feature: ${deferredFeature}.`);
+});
+assert.ok((beneathFolsom.props ?? []).some((prop) => prop.tags?.includes('black-growth') && prop.tags?.includes('atmospheric-only')), 'Underground growth is atmospheric foreshadowing only.');
+
+const returnTransitions = [];
+const returnRouteInteractions = new Interactions({
+  player: { position: beneathReturn.position.clone(), getLookDirection: () => new THREE.Vector3(0, 0, -1) },
+  dungeon: {
+    area: 'beneath-folsom',
+    indoorExitTarget: beneathReturn.position.clone(),
+    compiledLocationRuntime: beneathFolsomRuntime,
+    inspectInteractions: [],
+  },
+  hud: { showHint: () => {}, showMessage: () => {}, updateFieldKitStatus: () => {} },
+  transitionToLocation: (locationId, options) => returnTransitions.push({ locationId, options }),
+});
+returnRouteInteractions.useIndoorExit();
+assert.deepEqual(returnTransitions[0], {
+  locationId: 'folsom',
+  options: { areaParam: 'folsom', fromArea: null, destinationSpawnId: 'folsom_underworks_return', delayMs: 160 },
+}, 'The live indoor-exit convention returns to the authored Folsom Underworks spawn.');
 
 const anchors = growthNetwork.anchors ?? [];
 assert.deepEqual(anchors.map((anchor) => anchor.id).sort(), ['folsom_growth_anchor_fire', 'folsom_growth_anchor_pond', 'folsom_growth_anchor_shrine'], 'Folsom has exactly the three locked connected-growth anchors.');
@@ -127,6 +173,12 @@ const liveStorage = {
   removeItem: (key) => liveStorageValues.delete(key),
 };
 const liveGameState = new GameState(liveStorage);
+const lockedUnderworksRuntimeInteraction = { ...underworksInteraction, functional: false };
+DungeonScene.prototype.syncFolsomUnderworksInteraction.call({
+  outdoorInteractions: [lockedUnderworksRuntimeInteraction],
+  gameState: liveGameState,
+});
+assert.equal(lockedUnderworksRuntimeInteraction.functional, false, 'The Underworks transition is unavailable before the unsealed flag.');
 const liveGrowth = new FolsomConnectedGrowthRuntime({
   scene: new THREE.Scene(),
   network: growthNetwork,
@@ -194,6 +246,12 @@ exerciseLiveAnchor('fire', 'torch');
 exerciseLiveAnchor('pond', 'old_work_knife');
 exerciseLiveAnchor('shrine', 'old_work_knife');
 assert.equal(liveGameState.isFolsomUnderworksGrowthUnsealed(), true, 'The live interaction route unseals Underworks after all three anchors.');
+DungeonScene.prototype.syncFolsomUnderworksInteraction.call({
+  outdoorInteractions: [lockedUnderworksRuntimeInteraction],
+  gameState: liveGameState,
+});
+assert.equal(lockedUnderworksRuntimeInteraction.functional, true, 'The Underworks transition becomes functional after the unsealed flag.');
+assert.equal(lockedUnderworksRuntimeInteraction.targetLocationId, 'beneath-folsom', 'Unsealing preserves the authored Beneath Folsom destination.');
 
 const fireResult = connectedGrowth.clearAnchor('folsom_growth_anchor_fire');
 assert.equal(fireResult.cleared, true, 'The fire anchor clears through its physical world interaction.');
@@ -234,5 +292,6 @@ const reloadedGrowth = new FolsomConnectedGrowthRuntime({
 assert.ok(anchors.every((anchor) => reloadedGrowth.root.getObjectByName(anchor.id).visible === false), 'Cleared anchors remain collapsed after reload.');
 assert.equal(reloadedGrowth.root.getObjectByName(growthNetwork.lock.id).visible, false, 'Underworks growth remains cleared after reload.');
 assert.ok(reloadedDoor.position.y > 5, 'The Underworks gate remains visibly open after reload.');
+assert.equal(new GameState(liveStorage).isFolsomUnderworksGrowthUnsealed(), true, 'Beneath Folsom routing does not replace or reset the persisted Folsom gate state.');
 
-console.log('Folsom keeps its starter systems and shed proof loop while all three physical anchors persistently weaken their feeds and unseal Underworks.');
+console.log('Folsom keeps its starter loops, persistently unseals Underworks, and connects safely to the registered Beneath Folsom entry and return route.');
