@@ -9,6 +9,7 @@ import { getLocationDefinition, hasLocationDefinition, loadLocationDefinition } 
 import { GameState } from '../src/game/GameState.js';
 import { SceneSessionHost } from '../src/game/hosts/SceneSessionHost.js';
 import { Interactions } from '../src/game/Interactions.js';
+import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
 import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
@@ -85,12 +86,15 @@ const beneathReturn = beneathFolsomRuntime.exits.find((exit) => exit.id === 'ben
 const drainBarPickup = (beneathFolsom.interactions ?? []).find((interaction) => interaction.itemId === 'iron_drain_bar');
 const drainGrateInteraction = (beneathFolsom.interactions ?? []).find((interaction) => interaction.type === 'beneathFolsomDrainGrate');
 const drainGrateBlocker = beneathFolsomRuntime.blockerRects.find((blocker) => blocker.id === 'beneath_folsom_drain_grate_blocker');
+const keepersLanternPickup = (beneathFolsom.interactions ?? []).find((interaction) => interaction.itemId === 'keepers_lantern');
+const lanternTraceInteraction = (beneathFolsom.interactions ?? []).find((interaction) => interaction.type === 'keepersLanternTrace');
+const lanternRevealProps = (beneathFolsom.props ?? []).filter((prop) => prop.tags?.includes('keepers-lantern-revealed'));
 assert.equal(beneathReturn?.toLocation, 'folsom', 'Beneath Folsom has a return route to Folsom.');
 assert.equal(beneathReturn?.destinationSpawnId, 'folsom_underworks_return', 'The return route targets the Folsom Underworks return spawn.');
 assert.equal((beneathFolsom.spawns ?? []).some((spawn) => ['enemy', 'npc'].includes(spawn.kind)), false, 'Beneath Folsom Entry V1 has no enemies or NPCs.');
 assert.equal((beneathFolsom.encounterZones ?? []).length, 0, 'Beneath Folsom Entry V1 has no encounter zones.');
 const beneathFolsomSource = JSON.stringify(beneathFolsom).toLowerCase();
-['keeper\'s lantern', 'keeper_lantern', 'records ui', 'memory ui', 'pale gate', 'root-taken knight'].forEach((deferredFeature) => {
+['records ui', 'memory ui', 'pale gate', 'root-taken knight', 'white machinery', 'boss'].forEach((deferredFeature) => {
   assert.equal(beneathFolsomSource.includes(deferredFeature), false, `Beneath Folsom does not add deferred feature: ${deferredFeature}.`);
 });
 assert.equal(drainBarPickup?.itemId, 'iron_drain_bar', 'Beneath Folsom authors the Iron Drain Bar pickup.');
@@ -102,6 +106,43 @@ assert.equal(drainGrateBlocker?.userData?.saveKey, 'beneath_folsom_drain_grate_p
 assert.ok(drainGrateBlocker?.tags?.includes('blocks-deeper-access'), 'The intact grate explicitly blocks deeper access.');
 assert.ok((beneathFolsom.rooms ?? []).some((room) => room.id === 'BF03' && room.tags?.includes('opened-threshold')), 'A small drain-throat alcove exists beyond the grate.');
 assert.equal(beneathFolsomRuntime.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 13.5)).some((blocker) => blocker.id === drainGrateBlocker.id), true, 'Closed grate collision prevents crossing the threshold.');
+assert.equal(keepersLanternPickup?.itemId, 'keepers_lantern', "Beneath Folsom authors the Keeper's Lantern pickup.");
+assert.equal(keepersLanternPickup?.type, 'equipmentPickup', "Keeper's Lantern uses the persistent equipment pickup convention.");
+assert.ok(Math.hypot(keepersLanternPickup.target.x - beneathArrival.position.x, keepersLanternPickup.target.z - beneathArrival.position.z) > 20, "Keeper's Lantern is beyond the entry spawn.");
+assert.ok(keepersLanternPickup.target.z > 14 && keepersLanternPickup.tags?.includes('post-drain-grate'), "Keeper's Lantern is placed beyond the pry obstruction.");
+assert.ok(lanternRevealProps.length >= 3 && lanternRevealProps.every((prop) => prop.userData?.hiddenByDefault && prop.userData?.revealItemId === 'keepers_lantern'), 'The bounded route-truth set is hidden under normal light and mapped to the lantern.');
+assert.equal(lanternTraceInteraction?.requiredItemId, 'keepers_lantern', 'The live reveal interaction requires lantern ownership without using the Torch offhand path.');
+assert.equal(lanternTraceInteraction?.saveKey, 'beneath_folsom_keepers_lantern_reveal_seen', 'The reveal interaction maps to its persisted discovery state.');
+assert.equal(equipmentRegistry.items.keepers_lantern?.itemType, 'tool', "Keeper's Lantern remains a utility tool and does not inherit the Torch offhand-light path.");
+const lanternStorageValues = new Map();
+const lanternStorage = {
+  get length() { return lanternStorageValues.size; }, key: (index) => [...lanternStorageValues.keys()][index] ?? null,
+  getItem: (key) => lanternStorageValues.get(key) ?? null, setItem: (key, value) => lanternStorageValues.set(key, String(value)), removeItem: (key) => lanternStorageValues.delete(key),
+};
+const lanternGameState = new GameState(lanternStorage);
+const lanternSceneHarness = Object.assign(Object.create(DungeonScene.prototype), {
+  inspectInteractions: (beneathFolsom.interactions ?? []).map((interaction) => ({ ...interaction, target: new THREE.Vector3(interaction.target.x, interaction.target.y, interaction.target.z) })),
+  gameState: lanternGameState, collision: beneathFolsomRuntime.collisionWorld, beneathFolsomLanternRevealObjects: [],
+});
+lanternSceneHarness.configureBeneathFolsomDrainLoop(beneathFolsomRuntime);
+assert.ok(lanternSceneHarness.beneathFolsomLanternRevealObjects.length >= 3 && lanternSceneHarness.beneathFolsomLanternRevealObjects.every((object) => object.visible === false), 'Lantern route traces are hidden in the normal runtime view.');
+const lanternOwnedItems = new Set();
+const lanternMessages = [];
+const lanternInteractions = new Interactions({
+  player: { position: new THREE.Vector3(lanternTraceInteraction.target.x, lanternTraceInteraction.target.y, lanternTraceInteraction.target.z), getLookDirection: () => new THREE.Vector3(0, 0, 1) },
+  dungeon: Object.assign(lanternSceneHarness, { area: 'beneath-folsom', outdoorInteractions: [] }),
+  equipmentRuntime: { hasItem: (itemId) => lanternOwnedItems.has(itemId) },
+  hud: { showHint: () => {}, showMessage: (message) => lanternMessages.push(message), updateFieldKitStatus: () => {} },
+  feedback: { shake: () => {} },
+});
+assert.notEqual(lanternInteractions.getNearbyInspectInteraction()?.id, lanternTraceInteraction.id, 'The hidden-trace interaction is unavailable before lantern acquisition.');
+lanternOwnedItems.add('keepers_lantern');
+lanternSceneHarness.inspectInteractions.find((interaction) => interaction.id === keepersLanternPickup.id).collected = true;
+assert.equal(lanternInteractions.getNearbyInspectInteraction()?.id, lanternTraceInteraction.id, 'Lantern ownership exposes a broad nearby reveal interaction without camera aim.');
+lanternInteractions.interact();
+assert.ok(lanternMessages.at(-1)?.includes('Cold light catches old marks'), 'The live reveal path gives concise physical feedback.');
+assert.ok(lanternSceneHarness.beneathFolsomLanternRevealObjects.every((object) => object.visible && object.material?.emissiveIntensity >= 0.7), 'Revealed route traces become readable with cold emissive treatment.');
+assert.equal(new GameState(lanternStorage).isBeneathFolsomKeepersLanternRevealSeen(), true, 'Lantern discovery state persists across GameState reload.');
 assert.ok((beneathFolsom.props ?? []).some((prop) => prop.tags?.includes('black-growth') && prop.tags?.includes('atmospheric-only')), 'Underground growth is atmospheric foreshadowing only.');
 
 const returnTransitions = [];

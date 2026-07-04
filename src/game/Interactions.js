@@ -203,6 +203,16 @@ export class Interactions {
       return false;
     }
 
+    if (interaction.type === 'keepersLanternTrace') {
+      if (!this.equipmentRuntime?.hasItem?.('keepers_lantern')) return false;
+      const revealed = this.dungeon.revealBeneathFolsomKeepersLanternTraces?.();
+      const message = revealed ? 'The lantern glass clouds, then clears. Cold light catches old marks.' : interaction.message;
+      this.setTemporaryHint(message, 1700);
+      this.hud.showMessage(message);
+      this.feedback?.shake?.({ durationMs: 130, intensity: 0.035 });
+      return false;
+    }
+
     if (interaction.type === 'equipmentPickup') {
       return this.useEquipmentPickup(interaction);
     }
@@ -348,6 +358,16 @@ export class Interactions {
 
     if (interaction.type === 'equipmentPickup') {
       return this.useEquipmentPickup(interaction);
+    }
+
+    if (interaction.type === 'keepersLanternTrace') {
+      if (!this.equipmentRuntime?.hasItem?.('keepers_lantern')) return false;
+      const revealed = this.dungeon.revealBeneathFolsomKeepersLanternTraces?.();
+      const message = revealed ? 'The lantern glass clouds, then clears. Cold light catches old marks.' : interaction.message;
+      this.setTemporaryHint(message, 1700);
+      this.hud.showMessage(message);
+      this.feedback?.shake?.({ durationMs: 130, intensity: 0.035 });
+      return false;
     }
 
     if (interaction.type === 'beneathFolsomDrainGrate') {
@@ -977,6 +997,7 @@ export class Interactions {
 
     return this.dungeon.inspectInteractions
       .filter((interaction) => !interaction.collected)
+      .filter((interaction) => !interaction.requiredItemId || this.equipmentRuntime?.hasItem?.(interaction.requiredItemId))
       .map((interaction) => ({ interaction, distance: this.horizontalDistanceTo(interaction.target) }))
       .filter(({ interaction, distance }) => distance <= (interaction.range ?? INTERACT_RANGE))
       .sort((a, b) => a.distance - b.distance)[0]?.interaction ?? null;

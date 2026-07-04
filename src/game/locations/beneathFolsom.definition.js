@@ -45,6 +45,7 @@ function prop(id, roomId, position, dimensions, material, options = {}) {
     userData: {
       blockingMode: options.blocking ? 'solid' : 'nonBlockingDecor',
       collisionPurpose: options.collisionPurpose ?? 'production-intentional environmental dressing',
+      ...(options.userData ?? {}),
     },
   };
 }
@@ -76,6 +77,10 @@ const props = [
   prop('beneath_folsom_alcove_mud', 'BF03', { x: 0, y: 0.035, z: 18 }, { width: 5.6, height: 0.07, depth: 6.5 }, 'mud', { tags: ['drain-throat', 'opened-threshold'] }),
   prop('beneath_folsom_alcove_timber_left', 'BF03', { x: -3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
   prop('beneath_folsom_alcove_timber_right', 'BF03', { x: 3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
+  prop('beneath_folsom_keeper_niche_shelf', 'BF03', { x: -2.75, y: 0.72, z: 18.8 }, { width: 1.2, height: 0.14, depth: 0.72 }, 'timber', { tags: ['keeper-niche', 'lantern-pickup-setting'] }),
+  prop('beneath_folsom_lantern_reveal_trace_01', 'BF03', { x: -0.85, y: 0.085, z: 16.2 }, { width: 0.16, height: 0.035, depth: 3.1 }, 'blackGrowth', { rotation: { x: 0, y: -0.42, z: 0 }, tags: ['keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth'], userData: { revealItemId: 'keepers_lantern', hiddenByDefault: true } }),
+  prop('beneath_folsom_lantern_reveal_trace_02', 'BF03', { x: 0.35, y: 0.09, z: 19.1 }, { width: 0.18, height: 0.04, depth: 3.4 }, 'blackGrowth', { rotation: { x: 0, y: 0.28, z: 0 }, tags: ['keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth'], userData: { revealItemId: 'keepers_lantern', hiddenByDefault: true } }),
+  prop('beneath_folsom_hidden_growth_pull', 'BF03', { x: 0.15, y: 1.15, z: 21.58 }, { width: 2.5, height: 0.13, depth: 0.08 }, 'blackGrowth', { rotation: { x: 0, y: 0, z: -0.3 }, tags: ['keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth', 'blocked-future-route'], userData: { revealItemId: 'keepers_lantern', hiddenByDefault: true } }),
 
   // Atmospheric roots only: no interaction, hit count, or clear state.
   prop('beneath_folsom_root_wall_west', 'BF02', { x: -8.78, y: 1.72, z: 4 }, { width: 0.18, height: 0.42, depth: 12 }, 'blackGrowth', { rotation: { x: 0, y: 0, z: -0.18 }, tags: ['black-growth', 'atmospheric-only'] }),
@@ -154,6 +159,15 @@ export const beneathFolsomDefinition = Object.freeze({
     requiredItemId: 'iron_drain_bar',
     saveKey: 'beneath_folsom_drain_grate_pried',
     roomId: 'BF02',
+  }, {
+    id: 'beneath_folsom_keepers_lantern_pickup', type: 'equipmentPickup', itemId: 'keepers_lantern',
+    target: { x: -2.75, y: 1.15, z: 18.8 }, range: 3, hint: "Keeper's Lantern", message: "Keeper's Lantern Acquired.",
+    acquiredMessage: "Keeper's Lantern Acquired.", repeatMessage: '', roomId: 'BF03',
+    tags: ['keeper-niche', 'utility-tool', 'post-drain-grate'],
+  }, {
+    id: 'beneath_folsom_keepers_lantern_trace_inspect', type: 'keepersLanternTrace', target: { x: 0, y: 0.8, z: 19.4 }, range: 4.4,
+    hint: 'Clouded marks in the damp stone', message: 'Black veins show through the damp stone, pulling toward the sealed lower wall.', requiredItemId: 'keepers_lantern',
+    saveKey: 'beneath_folsom_keepers_lantern_reveal_seen', roomId: 'BF03', tags: ['keepers-lantern-revealed', 'chapter-2-route-truth'],
   }],
   navigation: { roomGraph: { roomIds: ['BF01', 'BF02', 'BF03'], links: [{ id: 'beneath_folsom_entry_to_landing', fromRoom: 'BF01', toRoom: 'BF02', navWaypoint: { x: 0, y: 0, z: -10 } }, { id: 'beneath_folsom_landing_to_drain_throat', fromRoom: 'BF02', toRoom: 'BF03', navWaypoint: { x: 0, y: 0, z: 14 } }] }, localAvoidanceHints: [], forbiddenZones: [], preferredPatrolRoutes: [] },
   encounterZones: [],

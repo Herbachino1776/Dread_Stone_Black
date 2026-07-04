@@ -321,6 +321,7 @@ export class DungeonScene {
     this.folsomConnectedGrowthRuntime = null;
     this.folsomShedGrowthRuntime = null;
     this.beneathFolsomDrainGrate = null;
+    this.beneathFolsomLanternRevealObjects = [];
     this.fishingWorldRuntime = createFishingWorldRuntime({
       scene: this.scene,
       dungeon: this,
@@ -493,6 +494,23 @@ export class DungeonScene {
     }
     if (pickupObject) pickupObject.visible = !barOwned;
 
+    const lanternPickup = this.inspectInteractions.find((interaction) => interaction.id === 'beneath_folsom_keepers_lantern_pickup');
+    const lanternOwned = this.gameState?.getEquipmentSnapshot?.()?.acquiredItemIds?.includes('keepers_lantern');
+    const lanternObject = this.createBeneathFolsomKeeperLanternPickup();
+    group.add(lanternObject);
+    if (lanternPickup) {
+      lanternPickup.pickupObject = lanternObject;
+      lanternPickup.collected = Boolean(lanternOwned);
+    }
+    lanternObject.visible = !lanternOwned;
+
+    this.beneathFolsomLanternRevealObjects = [
+      'beneath_folsom_lantern_reveal_trace_01',
+      'beneath_folsom_lantern_reveal_trace_02',
+      'beneath_folsom_hidden_growth_pull',
+    ].map((id) => group.getObjectByName(id)).filter(Boolean);
+    this.setBeneathFolsomLanternRevealVisible(this.gameState?.isBeneathFolsomKeepersLanternRevealSeen?.() === true);
+
     const blocker = runtime.blockerRects.find((candidate) => candidate.id === 'beneath_folsom_drain_grate_blocker');
     const bars = [0, 1, 2, 3, 4]
       .map((index) => group.getObjectByName(`beneath_folsom_deeper_grate_bar_${index}`))
@@ -501,6 +519,55 @@ export class DungeonScene {
     const root = group.getObjectByName('beneath_folsom_root_grate');
     this.beneathFolsomDrainGrate = { blocker, bars, root, opening: false, progress: 0 };
     if (this.gameState?.isBeneathFolsomDrainGratePried?.()) this.applyBeneathFolsomDrainGrateOpenState();
+  }
+
+  createBeneathFolsomKeeperLanternPickup() {
+    const lantern = new THREE.Group();
+    lantern.name = 'beneath_folsom_keepers_lantern_procedural';
+    lantern.position.set(-2.75, 1.08, 18.8);
+    lantern.rotation.y = 0.28;
+    const metal = new THREE.MeshStandardMaterial({ color: 0x292f2d, roughness: 0.88, metalness: 0.48, emissive: 0x050807, emissiveIntensity: 0.16 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0xa8c5b8, roughness: 0.48, metalness: 0.05, emissive: 0x769b8a, emissiveIntensity: 0.62, transparent: true, opacity: 0.58 });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.14, 8), metal);
+    base.position.y = -0.3;
+    lantern.add(base);
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.48, 10), glass);
+    lens.position.y = 0.01;
+    lantern.add(lens);
+    [-0.24, 0.24].forEach((x) => {
+      const cage = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.7, 0.055), metal);
+      cage.position.set(x, 0, 0);
+      lantern.add(cage);
+    });
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.31, 0.22, 8), metal);
+    cap.position.y = 0.38;
+    lantern.add(cap);
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.035, 6, 12, Math.PI), metal);
+    handle.position.y = 0.55;
+    handle.rotation.z = Math.PI;
+    lantern.add(handle);
+    const glow = new THREE.PointLight(0x9fc8b5, 0.34, 3.4, 1.8);
+    glow.position.y = 0.05;
+    lantern.add(glow);
+    return lantern;
+  }
+
+  setBeneathFolsomLanternRevealVisible(visible) {
+    this.beneathFolsomLanternRevealObjects.forEach((object) => {
+      object.visible = visible;
+      if (!visible || !object.material) return;
+      object.material = object.material.clone();
+      object.material.color.setHex(0x82998c);
+      object.material.emissive?.setHex?.(0x557466);
+      object.material.emissiveIntensity = 0.72;
+    });
+  }
+
+  revealBeneathFolsomKeepersLanternTraces() {
+    if (this.gameState?.isBeneathFolsomKeepersLanternRevealSeen?.()) return false;
+    this.gameState?.markBeneathFolsomKeepersLanternRevealSeen?.();
+    this.setBeneathFolsomLanternRevealVisible(true);
+    return true;
   }
 
   applyBeneathFolsomDrainGrateOpenState() {

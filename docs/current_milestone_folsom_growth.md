@@ -1,4 +1,4 @@
-# Current Milestone: Beneath Folsom Iron Drain Bar Loop V1
+# Current Milestone: Beneath Folsom Keeper's Lantern V1
 
 This is the production lock for the next Dread Stone Black tasks. It overrides older strategy, roadmap, audit, and blueprint language where they conflict.
 
@@ -12,7 +12,7 @@ Dread Stone Black is a mobile-first, browser-playable first-person dungeon crawl
 2. Make the fire, pond, and shrine growth anchors physically clearable.
 3. Weaken each connected feed and unseal the above-ground Underworks gate after all three clear.
 
-The direct shed loop, Chapter 2 above-ground anchor clearing, and first transition below Folsom are complete. This pass adds the first grounded tool verb inside the Underworks.
+The direct shed loop, Chapter 2 above-ground anchor clearing, Beneath Folsom entry, and Iron Drain Bar loop are complete. This pass adds the first proof that normal sight is insufficient below Folsom.
 
 ## Shed proof-loop locks
 
@@ -52,12 +52,16 @@ Procedural shed geometry, seam growth, hit zones, and a work-knife placeholder a
 - Use it to pry one jammed lower drain grate; bare hands produce minimal physical failure feedback.
 - Persist the opened route as `beneath_folsom_drain_grate_pried`.
 - Open only a short maintenance alcove/drain throat beyond the grate, ending at a blocked future route.
+- Place the persistent `keepers_lantern` utility pickup in the maintenance niche beyond the pried grate.
+- Keep it independent of the Torch/offhand light path in V1; using the nearby clouded-stone interaction reveals one explicit hidden trace set.
+- Persist discovery as `beneath_folsom_keepers_lantern_reveal_seen` so the route truth remains readable after reload.
+- The traces point toward the sealed lower wall but do not open it.
 - Preserve all existing shed, anchor, gate, survival, equipment, fishing, HUD, mobile-control, and save behavior.
 
 ## Scope boundary
 
 Persist `folsom_growth_anchor_fire_cleared`, `folsom_growth_anchor_pond_cleared`, `folsom_growth_anchor_shrine_cleared`, and `folsom_underworks_growth_unsealed` as world state. Fire uses the existing Torch/offhand capability; pond and shrine use the Old Work Knife cutting path. Cleared feeds remain visibly faded or broken, and the Underworks growth and gate open only after all three clear.
 
-Preserve movement, mobile controls, HUD, inventory/equipment, fishing, campfire/survival behavior, gates, saves, and location loading. Do not build the full Beneath Folsom dungeon, Keeper's Lantern, Iron Drain Bar combat, enemies, Memory or Records UI, Pale Gates, church systems, or bosses.
+Preserve movement, mobile controls, HUD, inventory/equipment, fishing, campfire/survival behavior, gates, saves, and location loading. Do not build the full Beneath Folsom dungeon, Iron Drain Bar combat, enemies, Memory or Records UI, Pale Gates, white machinery, church systems, or bosses.
 
-Success is a small playable continuation: discover the Iron Drain Bar, pry one persistent obstruction, and enter a real but deliberately short next threshold.
+Success is a small playable continuation: recover Keeper's Lantern beyond the grate, use it without fragile camera aim, and reveal one persistent hidden growth pull toward the next blocked route.

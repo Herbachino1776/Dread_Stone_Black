@@ -5,6 +5,7 @@ const OBJECTIVE_STATE_KEY = 'dreadStoneBlack.objectiveState';
 const FIELD_SURVIVAL_STATE_KEY = 'dreadStoneBlack.reliquaryField.survivalState';
 const FOLSOM_TOOL_SHED_OPEN_KEY = 'folsom_tool_shed_open';
 const BENEATH_FOLSOM_DRAIN_GRATE_PRIED_KEY = 'beneath_folsom_drain_grate_pried';
+const BENEATH_FOLSOM_KEEPERS_LANTERN_REVEAL_SEEN_KEY = 'beneath_folsom_keepers_lantern_reveal_seen';
 const FOLSOM_GROWTH_WORLD_KEYS = Object.freeze({
   fire: 'folsom_growth_anchor_fire_cleared',
   pond: 'folsom_growth_anchor_pond_cleared',
@@ -41,6 +42,7 @@ export class GameState {
       keysToRemove.forEach((key) => storage.removeItem(key));
       storage.removeItem(FOLSOM_TOOL_SHED_OPEN_KEY);
       storage.removeItem(BENEATH_FOLSOM_DRAIN_GRATE_PRIED_KEY);
+      storage.removeItem(BENEATH_FOLSOM_KEEPERS_LANTERN_REVEAL_SEEN_KEY);
       Object.values(FOLSOM_GROWTH_WORLD_KEYS).forEach((key) => storage.removeItem(key));
     } catch {
       // Reset should never wipe unrelated storage or crash if localStorage is blocked.
@@ -89,6 +91,16 @@ export class GameState {
   markBeneathFolsomDrainGratePried() {
     if (this.isBeneathFolsomDrainGratePried()) return false;
     this.writeFlag(BENEATH_FOLSOM_DRAIN_GRATE_PRIED_KEY, true);
+    return true;
+  }
+
+  isBeneathFolsomKeepersLanternRevealSeen() {
+    return this.readFlag(BENEATH_FOLSOM_KEEPERS_LANTERN_REVEAL_SEEN_KEY, false);
+  }
+
+  markBeneathFolsomKeepersLanternRevealSeen() {
+    if (this.isBeneathFolsomKeepersLanternRevealSeen()) return false;
+    this.writeFlag(BENEATH_FOLSOM_KEEPERS_LANTERN_REVEAL_SEEN_KEY, true);
     return true;
   }
 

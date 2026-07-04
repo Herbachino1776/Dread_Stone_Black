@@ -1,12 +1,12 @@
 # Current Production Note
 
-The active milestone is Beneath Folsom Iron Drain Bar Loop V1. The direct tool-shed loop, above-ground anchor clearing, and underground entry are complete. The concise production lock is [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md); it overrides older priorities when documents conflict.
+The active milestone is Beneath Folsom Keeper's Lantern V1. The direct tool-shed loop, above-ground anchor clearing, underground entry, and Iron Drain Bar loop are complete. The concise production lock is [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md); it overrides older priorities when documents conflict.
 
 ## Immediate order
 
 1. Preserve the completed shed and anchor-clearing loops.
 2. Preserve the working transition into `beneath-folsom` and return route.
-3. Add one persistent Iron Drain Bar pickup and one pryable grate opening into a short maintenance threshold.
+3. Add one persistent Keeper's Lantern utility pickup and one bounded hidden trace reveal beyond the pried grate.
 
 Do not build the full Beneath Folsom dungeon or later Chapter 2 progression systems in this pass.
 

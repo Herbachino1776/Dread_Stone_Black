@@ -19,7 +19,7 @@ Current locks override older documents when they conflict.
 
 ## Current target
 
-The shed proof loop, Folsom Anchor Clearing V1, and Beneath Folsom Entry V1 are complete. The active target is the Beneath Folsom Iron Drain Bar loop: one persistent tool pickup, one physical pry obstruction, and one small opened maintenance threshold.
+The shed proof loop, Folsom Anchor Clearing V1, Beneath Folsom Entry V1, and Iron Drain Bar loop are complete. The active target is Keeper's Lantern V1: one persistent utility pickup and one bounded hidden route-truth reveal beyond the pried grate.
 
 Do not add tutorial popups, inventory tokens, the full Beneath Folsom dungeon, or later Chapter 2 systems.
 
