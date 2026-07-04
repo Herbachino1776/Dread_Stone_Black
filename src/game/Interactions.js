@@ -263,7 +263,7 @@ export class Interactions {
   }
 
   getDebugAreaEntranceGates() {
-    if (!import.meta.env.DEV) return [];
+    if (!import.meta.env?.DEV) return [];
     return (this.dungeon.outdoorInteractions ?? []).filter((interaction) => interaction.type === 'areaEntrance' && interaction.debugGateId);
   }
 
@@ -287,7 +287,7 @@ export class Interactions {
   }
 
   logAreaEntranceGateInteract(interaction) {
-    if (!import.meta.env.DEV || interaction.type !== 'areaEntrance' || !interaction.debugGateId) return;
+    if (!import.meta.env?.DEV || interaction.type !== 'areaEntrance' || !interaction.debugGateId) return;
     console.debug('[AreaEntranceGate]', {
       gateId: interaction.debugGateId,
       interactFired: true,
@@ -404,11 +404,14 @@ export class Interactions {
   }
 
   useFolsomGrowthAnchor(interaction) {
-    if (interaction.anchorType !== 'fire') return false;
-    const torchEquipped = this.equipmentRuntime?.getEquippedOffhandId?.() === 'torch'
-      || this.dungeon.gameState?.getEquippedFieldOffhand?.() === 'torch';
-    if (!torchEquipped) {
-      const message = 'The fire-blackened knot holds cold.';
+    const hasCapability = interaction.anchorType === 'fire'
+      ? this.equipmentRuntime?.hasItem?.('torch')
+        || this.equipmentRuntime?.getEquippedOffhandId?.() === 'torch'
+        || this.dungeon.gameState?.hasFieldOffhandItem?.('torch')
+        || this.dungeon.gameState?.getEquippedFieldOffhand?.() === 'torch'
+      : this.equipmentRuntime?.hasItem?.('old_work_knife');
+    if (!hasCapability) {
+      const message = interaction.failMessage ?? 'The growth resists bare hands.';
       this.setTemporaryHint(message, 1100);
       this.hud.showMessage(message);
       return false;
@@ -854,6 +857,9 @@ export class Interactions {
       .map((interaction) => ({ interaction: this.decorateOutdoorInteraction(interaction), distance: this.horizontalDistanceTo(interaction.target) }))
       .filter(({ interaction, distance }) => distance <= (interaction.range ?? 4))
       .sort((a, b) => a.distance - b.distance);
+
+    const growthAnchorInteraction = nearbyOutdoorInteractions.find(({ interaction }) => interaction.type === 'folsomGrowthAnchor')?.interaction ?? null;
+    if (growthAnchorInteraction) return growthAnchorInteraction;
 
     const campfireInteraction = nearbyOutdoorInteractions.find(({ interaction }) => interaction.type === 'fieldCampfire')?.interaction ?? null;
     if (campfireInteraction && this.dungeon.gameState?.getEquippedFieldItem?.() === 'raw_fish' && this.dungeon.gameState?.getFieldItemCount?.('raw_fish') > 0) {

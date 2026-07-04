@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
 import { getLocationDefinition } from '../src/game/locations/locationRegistry.js';
 import { GameState } from '../src/game/GameState.js';
+import { Interactions } from '../src/game/Interactions.js';
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
 import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
@@ -116,6 +117,83 @@ assert.equal(knotSkins.length, 0, 'Knot texturing uses wrapped mesh materials ra
 assert.ok(wrappedKnots.length >= 15 && wrappedKnots.every((mesh) => mesh.material?.map && mesh.material.map.wrapS === THREE.RepeatWrapping && mesh.material.map.wrapT === THREE.RepeatWrapping), 'Anchor, route, and Underworks knot geometry is wrapped in repeating healthy-growth textures like field boulders.');
 assert.ok(wrappedKnots.every((mesh) => mesh.userData.growthTextureState === 'intact'), 'Every connected-growth knot uses the healthy undamaged texture state.');
 assert.equal(typeof connectedGrowth.update, 'function', 'Connected growth updates only bounded clear animations and effects.');
+
+const liveStorageValues = new Map();
+const liveStorage = {
+  get length() { return liveStorageValues.size; },
+  key: (index) => [...liveStorageValues.keys()][index] ?? null,
+  getItem: (key) => liveStorageValues.has(key) ? liveStorageValues.get(key) : null,
+  setItem: (key, value) => liveStorageValues.set(key, String(value)),
+  removeItem: (key) => liveStorageValues.delete(key),
+};
+const liveGameState = new GameState(liveStorage);
+const liveGrowth = new FolsomConnectedGrowthRuntime({
+  scene: new THREE.Scene(),
+  network: growthNetwork,
+  textureLoader: { load: () => new THREE.Texture() },
+  sampleSurfaceY: () => 0,
+  gameState: liveGameState,
+  compiledGroup: new THREE.Group(),
+});
+const liveAnchorInteractions = liveGrowth.getAnchorInteractions();
+assert.equal(liveAnchorInteractions.length, 3, 'All three uncleared anchors register live outdoor interactions.');
+assert.deepEqual(liveAnchorInteractions.map((interaction) => interaction.id).sort(), anchors.map((anchor) => anchor.id).sort(), 'Live anchor interactions map one-to-one to authored anchors.');
+assert.ok(liveAnchorInteractions.every((interaction) => interaction.target?.isVector3 && interaction.hint && interaction.failMessage && interaction.message && interaction.type === 'folsomGrowthAnchor' && interaction.anchorType), 'Every live anchor interaction has a target, hint, type, anchor identity, and non-silent success/failure feedback.');
+
+const liveMessages = [];
+const liveHints = [];
+const ownedItems = new Set();
+const livePlayer = { position: new THREE.Vector3() };
+const competingCampfire = { id: 'validation_campfire', target: liveAnchorInteractions.find((interaction) => interaction.anchorType === 'fire').target.clone(), range: 4, hint: 'Campfire', message: 'Campfire', type: 'fieldCampfire' };
+const competingShrineInspect = { id: 'validation_shrine_inspect', target: liveAnchorInteractions.find((interaction) => interaction.anchorType === 'shrine').target.clone(), range: 4, hint: 'Inspect shrine', message: 'Inspect shrine', type: 'outdoorInspect' };
+const liveDungeon = {
+  area: 'field',
+  gameState: liveGameState,
+  folsomConnectedGrowthRuntime: liveGrowth,
+  outdoorInteractions: [...liveAnchorInteractions, competingCampfire, competingShrineInspect],
+  inspectInteractions: [],
+  getNearbyFieldHarvestableRedwood: () => null,
+  getNearbyFishingZone: () => ({ id: 'folsom_starter_pond_fishing_zone' }),
+  isOutdoorSurvivalArea: () => false,
+  clearFolsomGrowthAnchor(anchorId) {
+    const result = liveGrowth.clearAnchor(anchorId);
+    const interaction = this.outdoorInteractions.find((candidate) => candidate.id === anchorId);
+    if (result.cleared && interaction) interaction.collected = true;
+    return result;
+  },
+};
+const liveEquipment = {
+  hasItem: (itemId) => ownedItems.has(itemId),
+  getEquippedOffhandId: () => null,
+  getEquippedWeaponProfile: () => ({ id: 'fishing_rod' }),
+};
+const liveInteractions = new Interactions({
+  player: livePlayer,
+  dungeon: liveDungeon,
+  equipmentRuntime: liveEquipment,
+  hud: { showHint: (message) => liveHints.push(message), showMessage: (message) => liveMessages.push(message), updateFieldKitStatus: () => {} },
+  feedback: { shake: () => {} },
+});
+
+const exerciseLiveAnchor = (anchorType, itemId) => {
+  const interaction = liveAnchorInteractions.find((candidate) => candidate.anchorType === anchorType);
+  livePlayer.position.copy(interaction.target);
+  assert.equal(liveInteractions.getNearbyOutdoorInteraction()?.id, interaction.id, `${anchorType} growth wins live interaction selection over overlapping campfire, fishing, or shrine interactions.`);
+  assert.equal(liveInteractions.getNearbyInteraction()?.hint, interaction.hint, `${anchorType} exposes its minimal hint through the live player-facing interaction path.`);
+  ownedItems.delete(itemId);
+  liveInteractions.interact();
+  assert.equal(liveMessages.at(-1), interaction.failMessage, `${anchorType} interact gives explicit feedback when its capability is missing.`);
+  assert.equal(liveGameState.isFolsomGrowthAnchorCleared(anchorType), false, `${anchorType} remains uncleared after a failed live interaction.`);
+  ownedItems.add(itemId);
+  liveInteractions.interact();
+  assert.equal(liveGameState.isFolsomGrowthAnchorCleared(anchorType), true, `${anchorType} clears through the live nearby-interact route.`);
+  assert.ok(liveMessages.at(-1).includes(interaction.message), `${anchorType} live success feedback is shown.`);
+};
+
+exerciseLiveAnchor('fire', 'torch');
+exerciseLiveAnchor('pond', 'old_work_knife');
+exerciseLiveAnchor('shrine', 'old_work_knife');
+assert.equal(liveGameState.isFolsomUnderworksGrowthUnsealed(), true, 'The live interaction route unseals Underworks after all three anchors.');
 
 const fireResult = connectedGrowth.clearAnchor('folsom_growth_anchor_fire');
 assert.equal(fireResult.cleared, true, 'The fire anchor clears through its physical world interaction.');

@@ -806,8 +806,7 @@ export class DungeonScene {
       gameState: this.gameState,
       compiledGroup: this.compiledLocationRuntime?.group,
     });
-    const fireAnchorInteraction = this.folsomConnectedGrowthRuntime.getFireInteraction();
-    if (fireAnchorInteraction) this.outdoorInteractions.push(fireAnchorInteraction);
+    this.outdoorInteractions.push(...this.folsomConnectedGrowthRuntime.getAnchorInteractions());
     this.syncFolsomUnderworksInteraction();
 
     const knife = (definition.outdoorPickups ?? []).find((pickup) => pickup.itemId === 'old_work_knife');

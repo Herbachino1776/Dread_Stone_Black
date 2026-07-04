@@ -14,9 +14,9 @@ const RIBBON_Y_OFFSET = 0.052;
 const CLEAR_ANIMATION_SECONDS = 0.62;
 
 export const FOLSOM_CONNECTED_GROWTH_RULES = Object.freeze({
-  fire: Object.freeze({ saveKey: 'folsom_growth_anchor_fire_cleared', requiredItemId: 'torch', message: 'The fire-blackened knot recoils.' }),
-  pond: Object.freeze({ saveKey: 'folsom_growth_anchor_pond_cleared', requiredItemId: 'old_work_knife', message: 'Wet black roots split under the blade.' }),
-  shrine: Object.freeze({ saveKey: 'folsom_growth_anchor_shrine_cleared', requiredItemId: 'old_work_knife', message: 'The shrine cords slacken.' }),
+  fire: Object.freeze({ saveKey: 'folsom_growth_anchor_fire_cleared', requiredItemId: 'torch', hint: 'Fire-blackened knot', failMessage: 'The knot holds cold.', message: 'The fire-blackened knot recoils.' }),
+  pond: Object.freeze({ saveKey: 'folsom_growth_anchor_pond_cleared', requiredItemId: 'old_work_knife', hint: 'Wet root knot', failMessage: 'Wet black roots resist bare hands.', message: 'Wet black roots split under the blade.' }),
+  shrine: Object.freeze({ saveKey: 'folsom_growth_anchor_shrine_cleared', requiredItemId: 'old_work_knife', hint: 'Shrine-bound cords', failMessage: 'The shrine cords resist bare hands.', message: 'The shrine cords slacken.' }),
   underworks: Object.freeze({ saveKey: 'folsom_underworks_growth_unsealed', message: 'The Underworks growth loses its pull.' }),
 });
 
@@ -312,19 +312,24 @@ export class FolsomConnectedGrowthRuntime {
     });
   }
 
-  getFireInteraction() {
-    const fire = this.getAnchorTargets().find((anchor) => anchor.type === 'fire');
-    if (!fire || fire.cleared) return null;
-    return {
-      id: fire.id,
-      label: 'Fire-blackened knot',
-      target: fire.target,
-      range: 3.25,
-      hint: 'Fire-blackened knot',
-      message: FOLSOM_CONNECTED_GROWTH_RULES.fire.message,
-      type: 'folsomGrowthAnchor',
-      anchorType: 'fire',
-    };
+  getAnchorInteractions() {
+    return this.getAnchorTargets()
+      .filter((anchor) => !anchor.cleared && anchor.target)
+      .map((anchor) => {
+        const rule = FOLSOM_CONNECTED_GROWTH_RULES[anchor.type];
+        return {
+          id: anchor.id,
+          label: rule.hint,
+          target: anchor.target,
+          range: 3.6,
+          hint: rule.hint,
+          message: rule.message,
+          failMessage: rule.failMessage,
+          requiredItemId: rule.requiredItemId,
+          type: 'folsomGrowthAnchor',
+          anchorType: anchor.type,
+        };
+      });
   }
 
   isAnchorCleared(anchorType) {
