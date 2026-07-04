@@ -8,7 +8,7 @@ import {
 } from './BlackGrowthVisuals.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
-const RIBBON_SAMPLE_LENGTH = 4.2;
+const RIBBON_SAMPLE_LENGTH = 2.1;
 const RIBBON_Y_OFFSET = 0.052;
 
 function toPoint(value) {
@@ -46,13 +46,11 @@ export class FolsomConnectedGrowthRuntime {
   loadMaterials(textureLoader) {
     const intact = BLACK_GROWTH_TEXTURES.intact.map((path) => loadBlackGrowthTexture(textureLoader, path));
     const cord = loadBlackGrowthTexture(textureLoader, BLACK_GROWTH_TEXTURES.cord);
-    const repeatingCord = configureBlackGrowthTexture(cord.clone());
-    repeatingCord.wrapS = THREE.RepeatWrapping;
-    repeatingCord.needsUpdate = true;
+    configureBlackGrowthTexture(cord).wrapS = THREE.RepeatWrapping;
     this.materials = {
       scab: intact.map((texture) => createBlackGrowthPlaneMaterial(texture, { color: 0x625e56 })),
       cord: createBlackGrowthPlaneMaterial(cord, { color: 0x59564f }),
-      repeatingCord: createBlackGrowthPlaneMaterial(repeatingCord, { color: 0x55534d }),
+      repeatingCord: createBlackGrowthPlaneMaterial(cord, { color: 0x55534d }),
       knot: createBlackGrowthKnotMaterial(),
     };
   }
@@ -97,7 +95,7 @@ export class FolsomConnectedGrowthRuntime {
     return mesh;
   }
 
-  addKnot(parent, { name, position = [0, 0.3, 0], scale = [1, 1, 1], data }) {
+  addKnot(parent, { name, position = [0, 0.3, 0], scale = [1, 1, 1], data, facing = 'ground', texture = 0 }) {
     const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.58, 0), this.materials.knot);
     mesh.name = name;
     mesh.position.set(position[0], position[1], position[2]);
@@ -107,6 +105,24 @@ export class FolsomConnectedGrowthRuntime {
     mesh.receiveShadow = true;
     mesh.userData = data;
     parent.add(mesh);
+
+    // Keep the cheap low-poly core for silhouette and shadow, but skin its most
+    // readable face with the same oily scab art used by the shed proof loop.
+    const cap = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.08 * scale[0], 0.86 * (facing === 'vertical' ? scale[1] : scale[2])),
+      this.materials.scab[texture % this.materials.scab.length],
+    );
+    cap.name = `${name}-textured-scab-skin`;
+    if (facing === 'vertical') {
+      cap.position.set(position[0], position[1], position[2] - 0.46 * scale[2]);
+      cap.rotation.z = -0.16;
+    } else {
+      cap.position.set(position[0], position[1] + 0.48 * scale[1], position[2]);
+      cap.rotation.set(-Math.PI / 2, 0, 0.22);
+    }
+    cap.renderOrder = 4;
+    cap.userData = data;
+    parent.add(cap);
     return mesh;
   }
 
@@ -129,7 +145,15 @@ export class FolsomConnectedGrowthRuntime {
       { width: 4.8, position: [0, -0.78, 0.043], rotation: 0.1 },
       { width: 4.35, position: [0, -1.37, 0.047], rotation: -0.04 },
     ].forEach((spec, index) => this.addCordPlane(group, { ...spec, name: `${lock.id}-gripping-cord-${index + 1}`, data }));
-    this.addKnot(group, { name: `${lock.id}-central-knot`, position: [0.12, -0.05, -0.18], scale: [1.55, 1.85, 0.72], data });
+    this.addKnot(group, { name: `${lock.id}-central-knot`, position: [0.12, -0.05, -0.18], scale: [1.55, 1.85, 0.72], facing: 'vertical', texture: 1, data });
+
+    const rootCollar = new THREE.Group();
+    rootCollar.name = `${lock.id}-feed-root-collar`;
+    rootCollar.position.set(lock.position[0], this.surfaceY(lock.position[0], lock.position[2]), lock.position[2] - 0.12);
+    rootCollar.userData = data;
+    this.root.add(rootCollar);
+    this.addGroundScab(rootCollar, { name: `${lock.id}-feed-root-scab-1`, width: 3.4, depth: 2.15, rotation: 0.08, texture: 0, data });
+    this.addGroundScab(rootCollar, { name: `${lock.id}-feed-root-scab-2`, x: -0.72, z: -0.42, y: 0.058, width: 2.15, depth: 1.45, rotation: -0.34, texture: 1, data });
   }
 
   buildAnchor(anchor) {
@@ -148,8 +172,8 @@ export class FolsomConnectedGrowthRuntime {
     const data = group.userData;
     this.addGroundScab(group, { name: `${anchor.id}-ash-scab-1`, width: 2.35, depth: 1.6, rotation: 0.32, texture: 0, data });
     this.addGroundScab(group, { name: `${anchor.id}-ash-scab-2`, x: 0.52, z: 0.35, y: 0.055, width: 1.65, depth: 1.15, rotation: -0.38, texture: 1, data });
-    this.addKnot(group, { name: `${anchor.id}-char-knot`, position: [-0.18, 0.3, 0.03], scale: [1.45, 0.68, 1.2], data });
-    this.addKnot(group, { name: `${anchor.id}-coal-knot`, position: [0.62, 0.2, 0.42], scale: [0.72, 0.42, 0.82], data });
+    this.addKnot(group, { name: `${anchor.id}-char-knot`, position: [-0.18, 0.3, 0.03], scale: [1.45, 0.68, 1.2], texture: 0, data });
+    this.addKnot(group, { name: `${anchor.id}-coal-knot`, position: [0.62, 0.2, 0.42], scale: [0.72, 0.42, 0.82], texture: 1, data });
     this.buildLocalTendrils(group, anchor, [[1.35, 0.85], [-1.65, -0.7], [-0.65, 1.55], [1.15, -1.35]]);
   }
 
@@ -157,8 +181,8 @@ export class FolsomConnectedGrowthRuntime {
     const data = group.userData;
     this.addGroundScab(group, { name: `${anchor.id}-wet-scab-1`, width: 2.65, depth: 1.55, rotation: -0.22, texture: 1, data });
     this.addGroundScab(group, { name: `${anchor.id}-wet-scab-2`, x: -0.65, z: -0.35, y: 0.058, width: 1.8, depth: 1.25, rotation: 0.41, texture: 0, data });
-    this.addKnot(group, { name: `${anchor.id}-wet-root-knot`, position: [0.12, 0.25, 0], scale: [1.65, 0.62, 1.28], data });
-    this.addKnot(group, { name: `${anchor.id}-mud-knot`, position: [-0.72, 0.16, -0.38], scale: [0.72, 0.34, 0.9], data });
+    this.addKnot(group, { name: `${anchor.id}-wet-root-knot`, position: [0.12, 0.25, 0], scale: [1.65, 0.62, 1.28], texture: 1, data });
+    this.addKnot(group, { name: `${anchor.id}-mud-knot`, position: [-0.72, 0.16, -0.38], scale: [0.72, 0.34, 0.9], texture: 0, data });
     this.buildLocalTendrils(group, anchor, [[-1.8, -1.2], [0.2, -2.35], [1.25, -1.85], [1.7, 0.72]]);
   }
 
@@ -168,7 +192,7 @@ export class FolsomConnectedGrowthRuntime {
     this.addVerticalPlane(group, { name: `${anchor.id}-altar-scab`, width: 2.4, height: 1.22, position: [0, 0.72, 0.05], rotation: -0.03, texture: 0, data });
     this.addCordPlane(group, { name: `${anchor.id}-altar-cord-low`, width: 3.05, position: [0, 0.38, 0.075], rotation: 0.13, data });
     this.addCordPlane(group, { name: `${anchor.id}-altar-cord-high`, width: 2.85, position: [0, 0.92, 0.08], rotation: -0.12, data });
-    this.addKnot(group, { name: `${anchor.id}-stone-grip-knot`, position: [0.72, 0.34, -0.18], scale: [0.9, 0.68, 0.78], data });
+    this.addKnot(group, { name: `${anchor.id}-stone-grip-knot`, position: [0.72, 0.34, -0.18], scale: [0.9, 0.68, 0.78], texture: 1, data });
     this.buildLocalTendrils(group, anchor, [[-1.75, -0.75], [1.65, -0.65], [-1.2, 1.1]]);
   }
 
@@ -194,7 +218,7 @@ export class FolsomConnectedGrowthRuntime {
       group.name = `${feed.id}-route-knot-${index + 1}`;
       group.position.set(point.x, this.surfaceY(point.x, point.z), point.z);
       group.userData = ribbon.userData;
-      this.addKnot(group, { name: `${group.name}-mass`, position: [0, 0.13, 0], scale: [0.46, 0.22, 0.62], data: ribbon.userData });
+      this.addKnot(group, { name: `${group.name}-mass`, position: [0, 0.13, 0], scale: [0.46, 0.22, 0.62], texture: index % 2, data: ribbon.userData });
       this.root.add(group);
     });
   }

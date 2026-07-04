@@ -81,9 +81,15 @@ const connectedGrowth = new FolsomConnectedGrowthRuntime({
 const anchorGroups = anchors.map((anchor) => connectedGrowth.root.getObjectByName(anchor.id));
 const feedMeshes = feeds.map((feed) => connectedGrowth.root.getObjectByName(`${feed.id}-cord-ribbon`));
 const growthLock = connectedGrowth.root.getObjectByName(growthNetwork.lock.id);
+const knotSkins = [];
+connectedGrowth.root.traverse((object) => {
+  if (object.name?.endsWith('-textured-scab-skin')) knotSkins.push(object);
+});
 assert.ok(anchorGroups.every((group) => group?.userData?.collectible === false), 'Runtime anchor groups remain explicitly non-collectible.');
-assert.ok(feedMeshes.every((mesh) => mesh?.isMesh && mesh.geometry?.getAttribute('position')?.count > 8), 'Runtime builds three terrain-following feed ribbons with valid geometry.');
+assert.ok(feedMeshes.every((mesh) => mesh?.isMesh && mesh.geometry?.getAttribute('position')?.count > 24), 'Runtime builds three closely sampled terrain-following feed ribbons with valid geometry.');
 assert.ok(growthLock?.children?.length >= 9 && growthLock.userData.blocksUnderworks, 'Runtime builds a substantial scab, cord, and knot mass over the Underworks gate.');
+assert.ok(connectedGrowth.root.getObjectByName(`${growthNetwork.lock.id}-feed-root-collar`), 'Underworks lock has a textured ground collar where the three feeds visibly converge.');
+assert.ok(knotSkins.length >= 15 && knotSkins.every((mesh) => mesh.material?.map), 'Anchor, route, and Underworks knots use locked textured scab skins rather than bare placeholder cores.');
 assert.equal(typeof connectedGrowth.update, 'undefined', 'Connected growth V1 is static and adds no per-frame update cost.');
 
 console.log('Folsom keeps its starter systems, shed proof loop, and static fire/pond/shrine growth network while Underworks remains sealed.');
