@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
 import { getLocationDefinition } from '../src/game/locations/locationRegistry.js';
+import { GameState } from '../src/game/GameState.js';
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
-import { FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
+import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
 
 const folsom = getLocationDefinition('folsom');
@@ -62,7 +63,11 @@ assert.equal((folsom.exits ?? []).some((exit) => /beneath|underworks/i.test(exit
 const anchors = growthNetwork.anchors ?? [];
 assert.deepEqual(anchors.map((anchor) => anchor.id).sort(), ['folsom_growth_anchor_fire', 'folsom_growth_anchor_pond', 'folsom_growth_anchor_shrine'], 'Folsom has exactly the three locked connected-growth anchors.');
 assert.ok(anchors.every((anchor) => anchor.tags.includes('connected-growth-anchor') && anchor.tags.includes('not-collectible')), 'Growth anchors are physical world sources, not collectibles.');
-assert.ok(anchors.every((anchor) => !('itemId' in anchor) && !('saveKey' in anchor) && !('hitsRequired' in anchor)), 'Growth anchors add no inventory, clearing, or save progression state.');
+assert.ok(anchors.every((anchor) => !('itemId' in anchor) && !('hitsRequired' in anchor)), 'Growth anchors add no inventory tokens or collectible hit counters.');
+assert.equal(FOLSOM_CONNECTED_GROWTH_RULES.fire.saveKey, 'folsom_growth_anchor_fire_cleared');
+assert.equal(FOLSOM_CONNECTED_GROWTH_RULES.pond.saveKey, 'folsom_growth_anchor_pond_cleared');
+assert.equal(FOLSOM_CONNECTED_GROWTH_RULES.shrine.saveKey, 'folsom_growth_anchor_shrine_cleared');
+assert.equal(FOLSOM_CONNECTED_GROWTH_RULES.underworks.saveKey, 'folsom_underworks_growth_unsealed');
 const pondAnchor = anchors.find((anchor) => anchor.type === 'pond');
 assert.ok(pondAnchor.position[0] > 6 && pondAnchor.position[1] > -50, 'Pond anchor stays east of the north-bank fishing lane and outside the water center.');
 
@@ -72,11 +77,27 @@ assert.deepEqual(feeds.map((feed) => feed.anchorId).sort(), anchors.map((anchor)
 assert.ok(feeds.every((feed) => feed.points.length >= 6 && feed.tags.includes('connected-growth-feed')), 'Each feed has a readable authored route across Folsom.');
 
 const growthScene = new THREE.Scene();
+const storageValues = new Map();
+const storage = {
+  get length() { return storageValues.size; },
+  key: (index) => [...storageValues.keys()][index] ?? null,
+  getItem: (key) => storageValues.has(key) ? storageValues.get(key) : null,
+  setItem: (key, value) => storageValues.set(key, String(value)),
+  removeItem: (key) => storageValues.delete(key),
+};
+const gameState = new GameState(storage);
+const compiledGroup = new THREE.Group();
+const underworksDoor = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.2), new THREE.MeshBasicMaterial());
+underworksDoor.position.set(42, 1.8, 44);
+underworksDoor.userData = { architecturalPrimitiveId: 'folsom_cellar_gate', doorwayPart: 'door' };
+compiledGroup.add(underworksDoor);
 const connectedGrowth = new FolsomConnectedGrowthRuntime({
   scene: growthScene,
   network: growthNetwork,
   textureLoader: { load: () => new THREE.Texture() },
   sampleSurfaceY: () => 0,
+  gameState,
+  compiledGroup,
 });
 const anchorGroups = anchors.map((anchor) => connectedGrowth.root.getObjectByName(anchor.id));
 const feedMeshes = feeds.map((feed) => connectedGrowth.root.getObjectByName(`${feed.id}-cord-ribbon`));
@@ -94,6 +115,46 @@ assert.ok(connectedGrowth.root.getObjectByName(`${growthNetwork.lock.id}-feed-ro
 assert.equal(knotSkins.length, 0, 'Knot texturing uses wrapped mesh materials rather than planar scab overlays.');
 assert.ok(wrappedKnots.length >= 15 && wrappedKnots.every((mesh) => mesh.material?.map && mesh.material.map.wrapS === THREE.RepeatWrapping && mesh.material.map.wrapT === THREE.RepeatWrapping), 'Anchor, route, and Underworks knot geometry is wrapped in repeating healthy-growth textures like field boulders.');
 assert.ok(wrappedKnots.every((mesh) => mesh.userData.growthTextureState === 'intact'), 'Every connected-growth knot uses the healthy undamaged texture state.');
-assert.equal(typeof connectedGrowth.update, 'undefined', 'Connected growth V1 is static and adds no per-frame update cost.');
+assert.equal(typeof connectedGrowth.update, 'function', 'Connected growth updates only bounded clear animations and effects.');
 
-console.log('Folsom keeps its starter systems, shed proof loop, and static fire/pond/shrine growth network while Underworks remains sealed.');
+const fireResult = connectedGrowth.clearAnchor('folsom_growth_anchor_fire');
+assert.equal(fireResult.cleared, true, 'The fire anchor clears through its physical world interaction.');
+assert.equal(fireResult.unsealed, false, 'One cleared anchor does not unseal Underworks.');
+connectedGrowth.update(1);
+assert.equal(gameState.isFolsomGrowthAnchorCleared('fire'), true, 'Fire anchor progress is stored as world state.');
+assert.equal(connectedGrowth.root.getObjectByName('folsom_growth_anchor_fire').visible, false, 'Cleared fire growth collapses away.');
+assert.ok(connectedGrowth.root.getObjectByName('folsom_growth_feed_fire-cord-ribbon').material.opacity <= 0.12, 'The cleared fire feed remains visibly faded and broken.');
+assert.equal(growthLock.visible, true, 'Underworks remains sealed after one anchor.');
+
+const pondResult = connectedGrowth.clearAnchor('folsom_growth_anchor_pond');
+assert.equal(pondResult.unsealed, false, 'Two cleared anchors still leave Underworks sealed.');
+connectedGrowth.update(1);
+assert.equal(gameState.isFolsomGrowthAnchorCleared('pond'), true, 'Pond anchor progress is stored as world state.');
+
+const shrineResult = connectedGrowth.clearAnchor('folsom_growth_anchor_shrine');
+assert.equal(shrineResult.unsealed, true, 'The third anchor unseals Underworks.');
+connectedGrowth.update(1);
+assert.equal(gameState.isFolsomGrowthAnchorCleared('shrine'), true, 'Shrine anchor progress is stored as world state.');
+assert.equal(gameState.isFolsomUnderworksGrowthUnsealed(), true, 'Underworks unseal is stored as world state.');
+assert.equal(growthLock.visible, false, 'The Underworks growth lock collapses after all three anchors clear.');
+assert.ok(underworksDoor.position.y > 5, 'The above-ground Underworks gate visibly opens without authoring a dungeon exit.');
+
+const reloadedScene = new THREE.Scene();
+const reloadedDoor = underworksDoor.clone();
+reloadedDoor.position.set(42, 1.8, 44);
+reloadedDoor.userData = { architecturalPrimitiveId: 'folsom_cellar_gate', doorwayPart: 'door' };
+const reloadedCompiledGroup = new THREE.Group();
+reloadedCompiledGroup.add(reloadedDoor);
+const reloadedGrowth = new FolsomConnectedGrowthRuntime({
+  scene: reloadedScene,
+  network: growthNetwork,
+  textureLoader: { load: () => new THREE.Texture() },
+  sampleSurfaceY: () => 0,
+  gameState: new GameState(storage),
+  compiledGroup: reloadedCompiledGroup,
+});
+assert.ok(anchors.every((anchor) => reloadedGrowth.root.getObjectByName(anchor.id).visible === false), 'Cleared anchors remain collapsed after reload.');
+assert.equal(reloadedGrowth.root.getObjectByName(growthNetwork.lock.id).visible, false, 'Underworks growth remains cleared after reload.');
+assert.ok(reloadedDoor.position.y > 5, 'The Underworks gate remains visibly open after reload.');
+
+console.log('Folsom keeps its starter systems and shed proof loop while all three physical anchors persistently weaken their feeds and unseal Underworks.');

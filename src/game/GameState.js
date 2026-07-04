@@ -4,6 +4,12 @@ const EQUIPMENT_STATE_KEY = 'dreadStoneBlack.equipmentState';
 const OBJECTIVE_STATE_KEY = 'dreadStoneBlack.objectiveState';
 const FIELD_SURVIVAL_STATE_KEY = 'dreadStoneBlack.reliquaryField.survivalState';
 const FOLSOM_TOOL_SHED_OPEN_KEY = 'folsom_tool_shed_open';
+const FOLSOM_GROWTH_WORLD_KEYS = Object.freeze({
+  fire: 'folsom_growth_anchor_fire_cleared',
+  pond: 'folsom_growth_anchor_pond_cleared',
+  shrine: 'folsom_growth_anchor_shrine_cleared',
+  underworks: 'folsom_underworks_growth_unsealed',
+});
 
 const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
   inventory: { wood_axe: false, fishing_rod: false, wood: 0, raw_fish: 0, cooked_fish: 0, torch: false },
@@ -33,6 +39,7 @@ export class GameState {
       }
       keysToRemove.forEach((key) => storage.removeItem(key));
       storage.removeItem(FOLSOM_TOOL_SHED_OPEN_KEY);
+      Object.values(FOLSOM_GROWTH_WORLD_KEYS).forEach((key) => storage.removeItem(key));
     } catch {
       // Reset should never wipe unrelated storage or crash if localStorage is blocked.
     }
@@ -70,6 +77,28 @@ export class GameState {
   markFolsomToolShedOpen() {
     if (this.isFolsomToolShedOpen()) return false;
     this.writeFlag(FOLSOM_TOOL_SHED_OPEN_KEY, true);
+    return true;
+  }
+
+  isFolsomGrowthAnchorCleared(anchorType) {
+    const key = FOLSOM_GROWTH_WORLD_KEYS[anchorType];
+    return key ? this.readFlag(key, false) : false;
+  }
+
+  markFolsomGrowthAnchorCleared(anchorType) {
+    const key = FOLSOM_GROWTH_WORLD_KEYS[anchorType];
+    if (!key || this.readFlag(key, false)) return false;
+    this.writeFlag(key, true);
+    return true;
+  }
+
+  isFolsomUnderworksGrowthUnsealed() {
+    return this.readFlag(FOLSOM_GROWTH_WORLD_KEYS.underworks, false);
+  }
+
+  markFolsomUnderworksGrowthUnsealed() {
+    if (this.isFolsomUnderworksGrowthUnsealed()) return false;
+    this.writeFlag(FOLSOM_GROWTH_WORLD_KEYS.underworks, true);
     return true;
   }
 

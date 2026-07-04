@@ -1,4 +1,4 @@
-# Current Milestone: Folsom Growth Foundation
+# Current Milestone: Folsom Anchor Clearing V1
 
 This is the production lock for the next Dread Stone Black tasks. It overrides older strategy, roadmap, audit, and blueprint language where they conflict.
 
@@ -8,11 +8,11 @@ Dread Stone Black is a mobile-first, browser-playable first-person dungeon crawl
 
 ## Active implementation order
 
-1. Keep documentation aligned with this production lock.
-2. Rebuild the Folsom tool shed as a strong physical reveal target.
-3. Implement and validate the black-growth proof loop on that shed.
+1. Preserve the completed tool-shed proof loop.
+2. Make the fire, pond, and shrine growth anchors physically clearable.
+3. Weaken each connected feed and unseal the above-ground Underworks gate after all three clear.
 
-The direct shed loop comes first. Do not build the Chapter 2 fire, pond, or shrine anchor network until it works.
+The direct shed loop and connected-growth visuals are complete. This pass adds only the first Chapter 2 above-ground clearing loop.
 
 ## Shed proof-loop locks
 
@@ -44,6 +44,8 @@ Procedural shed geometry, seam growth, hit zones, and a work-knife placeholder a
 
 ## Scope boundary
 
-Preserve movement, mobile controls, HUD, inventory/equipment, fishing, campfire/survival behavior, gates, saves, and location loading. Do not expand this milestone into enemies, Memory UI, Pale Gates, church systems, bosses, a full town rebuild, or the Chapter 2 anchor network.
+Persist `folsom_growth_anchor_fire_cleared`, `folsom_growth_anchor_pond_cleared`, `folsom_growth_anchor_shrine_cleared`, and `folsom_underworks_growth_unsealed` as world state. Fire uses the existing Torch/offhand capability; pond and shrine use the Old Work Knife cutting path. Cleared feeds remain visibly faded or broken, and the Underworks growth and gate open only after all three clear.
 
-Success is a small playable loop: see the sealed seam, explore behind the shed, find the knife, clear the growth in three readable swipes, watch the shed open, collect the axe and torch, and retain the opened state after reload.
+Preserve movement, mobile controls, HUD, inventory/equipment, fishing, campfire/survival behavior, gates, saves, and location loading. Do not build Beneath Folsom, a dungeon interior, Keeper's Lantern, Iron Drain Bar, enemies, Memory or Records UI, Pale Gates, church systems, or bosses.
+
+Success is a small playable loop: physically clear all three visible anchors, see each feed fail, watch the Underworks lock and gate open, and retain every state after reload.

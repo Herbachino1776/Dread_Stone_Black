@@ -1,14 +1,14 @@
 # Current Production Note
 
-The active milestone is the Folsom Chapter 1-2 foundation, beginning with the direct tool-shed proof loop. The concise production lock is [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md); it overrides older priorities when documents conflict.
+The active milestone is Folsom Anchor Clearing V1. The direct tool-shed proof loop and connected-growth visuals are complete. The concise production lock is [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md); it overrides older priorities when documents conflict.
 
 ## Immediate order
 
-1. Keep the documentation and production lock current.
-2. Rebuild the Folsom tool shed into a readable physical reveal target.
-3. Seal its door seam/frame with black growth and prove the three-swipe clearing loop.
+1. Preserve the completed shed proof loop.
+2. Clear the fire, pond, and shrine anchors through existing tools/capabilities.
+3. Persistently weaken their feeds and unseal the above-ground Underworks gate.
 
-Do not begin the Chapter 2 fire, pond, and shrine anchor network until the direct shed loop works.
+Do not build Beneath Folsom or later Chapter 2 systems in this pass.
 
 ## Existing baseline to preserve
 

@@ -66,6 +66,25 @@ export class Interactions {
   }
 
   attack() {
+    const connectedGrowth = this.dungeon.folsomConnectedGrowthRuntime;
+    const knifeAnchor = connectedGrowth?.getAnchorTargets?.()
+      .filter((anchor) => ['pond', 'shrine'].includes(anchor.type) && !anchor.cleared && anchor.target)
+      .map((anchor) => ({ ...anchor, distance: this.horizontalDistanceTo(anchor.target) }))
+      .filter((anchor) => anchor.distance <= 3.35 && this.isMostlyFacing(anchor.target, 0.15))
+      .sort((a, b) => a.distance - b.distance)[0];
+    if (knifeAnchor && this.equipmentRuntime?.hasItem?.('old_work_knife')) {
+      const now = performance.now();
+      if (now - (this.lastFolsomGrowthStrikeAt ?? 0) < 260) return false;
+      this.lastFolsomGrowthStrikeAt = now;
+      const result = this.dungeon.clearFolsomGrowthAnchor(knifeAnchor.id);
+      if (!result.cleared) return false;
+      const message = result.unsealed ? `${result.message} ${result.underworksMessage}` : result.message;
+      this.setTemporaryHint(message, result.unsealed ? 1900 : 1200);
+      this.hud.showMessage(message);
+      this.feedback?.shake?.(result.unsealed ? { durationMs: 360, intensity: 0.15 } : { durationMs: 150, intensity: 0.065 });
+      return true;
+    }
+
     const growth = this.dungeon.folsomShedGrowthRuntime;
     if (!growth || growth.open) return false;
     const target = growth.getTarget();
@@ -155,6 +174,10 @@ export class Interactions {
 
     if (interaction.type === 'centralShrine') {
       return this.useCentralShrine(interaction);
+    }
+
+    if (interaction.type === 'folsomGrowthAnchor') {
+      return this.useFolsomGrowthAnchor(interaction);
     }
 
     if (interaction.type === 'fieldSurvivalChest') {
@@ -377,6 +400,25 @@ export class Interactions {
       }
     }
 
+    return false;
+  }
+
+  useFolsomGrowthAnchor(interaction) {
+    if (interaction.anchorType !== 'fire') return false;
+    const torchEquipped = this.equipmentRuntime?.getEquippedOffhandId?.() === 'torch'
+      || this.dungeon.gameState?.getEquippedFieldOffhand?.() === 'torch';
+    if (!torchEquipped) {
+      const message = 'The fire-blackened knot holds cold.';
+      this.setTemporaryHint(message, 1100);
+      this.hud.showMessage(message);
+      return false;
+    }
+    const result = this.dungeon.clearFolsomGrowthAnchor(interaction.id);
+    if (!result.cleared) return false;
+    const message = result.unsealed ? `${result.message} ${result.underworksMessage}` : result.message;
+    this.setTemporaryHint(message, result.unsealed ? 1900 : 1200);
+    this.hud.showMessage(message);
+    this.feedback?.shake?.(result.unsealed ? { durationMs: 360, intensity: 0.15 } : { durationMs: 180, intensity: 0.075 });
     return false;
   }
 

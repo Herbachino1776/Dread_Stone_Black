@@ -803,7 +803,12 @@ export class DungeonScene {
       network: definition.connectedGrowthNetwork,
       textureLoader: this.textureLoader,
       sampleSurfaceY: (x, z) => this.resolveOutdoorVisibleSurfaceY(x, z, { water: false }).y,
+      gameState: this.gameState,
+      compiledGroup: this.compiledLocationRuntime?.group,
     });
+    const fireAnchorInteraction = this.folsomConnectedGrowthRuntime.getFireInteraction();
+    if (fireAnchorInteraction) this.outdoorInteractions.push(fireAnchorInteraction);
+    this.syncFolsomUnderworksInteraction();
 
     const knife = (definition.outdoorPickups ?? []).find((pickup) => pickup.itemId === 'old_work_knife');
     const knifeOwned = this.gameState?.getEquipmentSnapshot?.()?.acquiredItemIds?.includes('old_work_knife');
@@ -981,6 +986,7 @@ export class DungeonScene {
     this.updateFieldCampfireFlames(deltaSeconds, player);
     this.updateAnimatedDungeonMaterials(deltaSeconds);
     this.folsomShedGrowthRuntime?.update(deltaSeconds);
+    this.folsomConnectedGrowthRuntime?.update(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
     this.updateBalthazanFloorCoverageQa(player);
   }
@@ -3133,6 +3139,23 @@ export class DungeonScene {
 
   strikeFolsomShedGrowth() {
     return this.folsomShedGrowthRuntime?.strike?.() ?? { hit: false, cleared: false, hitCount: 0 };
+  }
+
+  clearFolsomGrowthAnchor(anchorId) {
+    const result = this.folsomConnectedGrowthRuntime?.clearAnchor?.(anchorId) ?? { cleared: false, unsealed: false };
+    if (result.cleared) {
+      const interaction = this.outdoorInteractions.find((candidate) => candidate.id === anchorId);
+      if (interaction) interaction.collected = true;
+      this.syncFolsomUnderworksInteraction();
+    }
+    return result;
+  }
+
+  syncFolsomUnderworksInteraction() {
+    const interaction = this.outdoorInteractions.find((candidate) => candidate.id === 'folsom_underworks_locked');
+    if (!interaction || !this.gameState?.isFolsomUnderworksGrowthUnsealed?.()) return;
+    interaction.hint = 'Folsom Underworks';
+    interaction.message = 'The open stair descends into unfinished dark.';
   }
 
   addLights() {

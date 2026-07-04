@@ -19,9 +19,9 @@ Current locks override older documents when they conflict.
 
 ## Current target
 
-The active target is the Folsom tool-shed proof loop: rebuild the shed, place the Old Work Knife behind it, seal the door seam/frame with physical black growth, clear it in exactly three successful swipes, open the shed, reveal Wood Axe + Torch, and persist `folsom_tool_shed_open`.
+The shed proof loop is complete. The active target is Folsom Anchor Clearing V1: clear the fire, pond, and shrine growth sources, visibly break each feed, and persistently unseal the above-ground Underworks gate after all three clear.
 
-The latch itself is not the growth target. Do not add tutorial popups. Do not build the Chapter 2 fire, pond, and shrine anchors until this direct loop works.
+Do not add tutorial popups, inventory tokens, Beneath Folsom, or later Chapter 2 systems.
 
 ## Technical and workflow grounding
 
