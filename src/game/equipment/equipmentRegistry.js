@@ -29,6 +29,16 @@ export const equipmentRegistry = Object.freeze({
       tags: ['key-item', 'campfire', 'field-survival'],
       source: 'field_survival_flint_stick_chest',
     }),
+    old_work_knife: Object.freeze({
+      id: 'old_work_knife',
+      name: 'Old Work Knife',
+      displayName: 'Old Work Knife',
+      itemType: 'tool',
+      type: 'tool',
+      slot: 'tool',
+      tags: ['tool', 'work-knife', 'folsom'],
+      source: 'folsom_shed_rear_knife_pickup',
+    }),
     torch: Object.freeze({
       id: 'torch',
       name: 'Torch',

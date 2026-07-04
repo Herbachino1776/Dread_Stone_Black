@@ -65,6 +65,23 @@ export class Interactions {
     if (shouldRefreshHint) this.updateHint();
   }
 
+  attack() {
+    const growth = this.dungeon.folsomShedGrowthRuntime;
+    if (!growth || growth.open) return false;
+    const target = growth.getTarget();
+    if (!this.isCloseEnough(target, 3.25) || !this.isMostlyFacing(target, 0.2)) return false;
+    if (!this.equipmentRuntime?.hasItem?.('old_work_knife')) return false;
+    const now = performance.now();
+    if (now - (this.lastFolsomGrowthStrikeAt ?? 0) < 260) return false;
+    this.lastFolsomGrowthStrikeAt = now;
+    const result = this.dungeon.strikeFolsomShedGrowth();
+    if (!result.hit) return false;
+    this.feedback?.shake?.(result.cleared
+      ? { durationMs: 330, intensity: 0.145 }
+      : { durationMs: 105, intensity: result.hitCount === 2 ? 0.045 : 0.03 });
+    return true;
+  }
+
   getNearbyInteraction() {
     const indoorExit = this.getNearbyIndoorExit();
     if (indoorExit) {
@@ -142,6 +159,10 @@ export class Interactions {
 
     if (interaction.type === 'fieldSurvivalChest') {
       return this.useFieldSurvivalChest(interaction);
+    }
+
+    if (interaction.type === 'equipmentPickup') {
+      return this.useEquipmentPickup(interaction);
     }
 
     if (interaction.type === 'fieldHarvestableTree') {
@@ -292,9 +313,12 @@ export class Interactions {
     }
 
     if (this.equipmentRuntime.hasItem(interaction.itemId)) {
+      this.dungeon.markInteractionCollected?.(interaction.id);
       const repeatMessage = interaction.repeatMessage ?? 'The chest lies open and empty.';
-      this.setTemporaryHint(repeatMessage, 1200);
-      this.hud.showMessage(repeatMessage);
+      if (repeatMessage) {
+        this.setTemporaryHint(repeatMessage, 1200);
+        this.hud.showMessage(repeatMessage);
+      }
       return false;
     }
 
@@ -809,6 +833,7 @@ export class Interactions {
   }
 
   isOutdoorInteractionAvailable(interaction) {
+    if (interaction.collected) return false;
     if (interaction.type === 'activeTimedAction') {
       return false;
     }

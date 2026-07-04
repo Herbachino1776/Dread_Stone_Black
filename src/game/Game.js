@@ -200,9 +200,7 @@ export class Game {
       isPlayerDead: this.isPlayerDead,
     });
     this.progressionHost.update(deltaSeconds);
-    // A remains a visible mobile affordance, but Player + Fish gameplay has no
-    // attack runtime. Clear the queued press before timed interactions can read it.
-    this.controls.consumeAttack();
+    if (this.controls.consumeAttack()) this.interactions.attack?.();
     this.interactions.updateHint();
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
     const keyboardInteractPressed = keyboardInteractHeld && !this.wasKeyboardInteractHeld;

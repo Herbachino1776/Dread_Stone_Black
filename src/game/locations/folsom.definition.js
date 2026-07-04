@@ -293,9 +293,12 @@ export const folsomDefinition = Object.freeze({
   ],
   outdoorChests: [
     { id: 'folsom_fishing_rod_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Pond-Side Fishing Chest', position: { x: -12, y: -0.015, z: -43 }, itemId: 'fishing_rod', acquiredMessage: 'Rod A1 Acquired.', tags: ['pond', 'starter-loop'] },
-    { id: 'folsom_wood_axe_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Tool Yard Axe Chest', position: { x: -24.7, y: 0.079, z: -31 }, itemId: 'wood_axe', acquiredMessage: 'Wood Axe Acquired.', tags: ['work-yard', 'starter-loop', 'temporarily-outside-shed'] },
+    { id: 'folsom_wood_axe_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Shed Axe Chest', position: { x: -37.4, y: 0.188, z: -28.2 }, itemId: 'wood_axe', acquiredMessage: 'Wood Axe Acquired.', tags: ['tool-shed', 'shed-reward', 'starter-loop'] },
     { id: 'folsom_flint_stick_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Work Yard Flint Chest', position: { x: -22, y: -0.343, z: -39 }, itemId: 'flint_stick', acquiredMessage: 'Flint Stick Acquired.', tags: ['work-yard', 'starter-loop'] },
-    { id: 'folsom_torch_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'House Torch Chest', position: { x: 46, y: 0.21, z: -7 }, itemId: 'torch', acquiredMessage: 'Torch Acquired.', tags: ['house-interior', 'starter-loop'] },
+    { id: 'folsom_torch_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Shed Torch Chest', position: { x: -32.6, y: 0.188, z: -28.2 }, itemId: 'torch', acquiredMessage: 'Torch Acquired.', tags: ['tool-shed', 'shed-reward', 'starter-loop'] },
+  ],
+  outdoorPickups: [
+    { id: 'folsom_shed_rear_knife_pickup', itemId: 'old_work_knife', label: 'Old Work Knife', position: { x: -35, y: 1.1, z: -23.62 }, range: 3.2, acquiredMessage: 'Old Work Knife Acquired.', tags: ['tool-shed', 'shed-back', 'environmental-discovery'] },
   ],
   outdoorCampfires: [{ id: 'folsom_courtyard_campfire', position: { x: -8, y: 0.16, z: -14 }, tags: ['courtyard', 'pond-path', 'starter-loop'] }],
   // The old folsom_work_yard_tree primitive cylinder/cone fake tree was removed; Folsom harvesting now uses the dark redwood billboard swathes.

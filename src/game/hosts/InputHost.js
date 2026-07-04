@@ -6,6 +6,17 @@ export class InputHost {
     this.controls = new MobileControls(root);
     this.disposers = [];
     this.preventMobilePageGestures();
+    this.bindDesktopAttack();
+  }
+
+  bindDesktopAttack() {
+    const queueAttack = (event) => {
+      if (event.code !== 'Space' || event.repeat) return;
+      event.preventDefault();
+      this.controls.queueAttack();
+    };
+    window.addEventListener('keydown', queueAttack);
+    this.disposers.push(() => window.removeEventListener('keydown', queueAttack));
   }
 
   preventMobilePageGestures() {

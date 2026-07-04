@@ -17,6 +17,7 @@ import { loadDungeonModel } from './ModelLoader.js';
 import { getLocationDefinition } from './locations/locationRegistry.js';
 import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
 import { FISH_TEXTURE_PROFILES, createFishMesh, createFishingWorldRuntime, resolveFishSizeGroup } from './world-scene/FishingWorldRuntime.js';
+import { FolsomShedGrowthRuntime } from './world-scene/FolsomShedGrowthRuntime.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -315,6 +316,7 @@ export class DungeonScene {
     this.compiledSkyDomes = [];
     this.fieldRedwoodHarvestables = [];
     this.fieldSurvivalObjects = new Map();
+    this.folsomShedGrowthRuntime = null;
     this.fishingWorldRuntime = createFishingWorldRuntime({
       scene: this.scene,
       dungeon: this,
@@ -782,7 +784,57 @@ export class DungeonScene {
     this.addAuthoredOutdoorChests(definition);
     this.addAuthoredOutdoorSurvivalObjects(definition);
     this.addAuthoredOutdoorInteractions(definition);
+    if (definition.id === 'folsom') this.addFolsomShedProofLoop(definition);
     this.addCompiledOutdoorExitCues(definition);
+  }
+
+  addFolsomShedProofLoop(definition) {
+    this.folsomShedGrowthRuntime = new FolsomShedGrowthRuntime({
+      scene: this.scene,
+      collision: this.collision,
+      compiledGroup: this.compiledLocationRuntime?.group,
+      gameState: this.gameState,
+      textureLoader: this.textureLoader,
+    });
+
+    const knife = (definition.outdoorPickups ?? []).find((pickup) => pickup.itemId === 'old_work_knife');
+    const knifeOwned = this.gameState?.getEquipmentSnapshot?.()?.acquiredItemIds?.includes('old_work_knife');
+    if (!knife?.position || knifeOwned) return;
+
+    const group = new THREE.Group();
+    group.name = `${knife.id}-procedural-work-knife`;
+    group.position.copy(this.toVector3(knife.position));
+    group.rotation.y = -0.28;
+    group.rotation.z = 0.06;
+    const blade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.075, 0.19),
+      new THREE.MeshStandardMaterial({ color: 0x6f4935, roughness: 0.84, metalness: 0.48, emissive: 0x1b0c05, emissiveIntensity: 0.12 }),
+    );
+    blade.name = 'old-work-knife-short-rusted-blade';
+    blade.position.x = -0.4;
+    const handle = new THREE.Mesh(
+      new THREE.BoxGeometry(0.62, 0.16, 0.26),
+      new THREE.MeshStandardMaterial({ color: 0x5a3823, roughness: 0.98, metalness: 0, emissive: 0x160b05, emissiveIntensity: 0.1 }),
+    );
+    handle.name = 'old-work-knife-worn-wood-handle';
+    handle.position.x = 0.35;
+    const bolster = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.2, 0.3),
+      new THREE.MeshStandardMaterial({ color: 0x3f3028, roughness: 0.9, metalness: 0.35 }),
+    );
+    bolster.position.x = 0.02;
+    group.add(blade, handle, bolster);
+    this.scene.add(group);
+    this.outdoorInteractions.push({
+      ...knife,
+      target: group.position.clone(),
+      hint: knife.label,
+      message: knife.acquiredMessage,
+      acquiredMessage: knife.acquiredMessage,
+      repeatMessage: '',
+      type: 'equipmentPickup',
+      pickupObject: group,
+    });
   }
 
   addCompiledOutdoorSkyDome(definition = {}) {
@@ -920,6 +972,7 @@ export class DungeonScene {
     this.updateCookedFishPickups(deltaSeconds);
     this.updateFieldCampfireFlames(deltaSeconds, player);
     this.updateAnimatedDungeonMaterials(deltaSeconds);
+    this.folsomShedGrowthRuntime?.update(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
     this.updateBalthazanFloorCoverageQa(player);
   }
@@ -3055,9 +3108,10 @@ export class DungeonScene {
   }
 
   markInteractionCollected(interactionId) {
-    const interaction = this.inspectInteractions.find((candidate) => candidate.id === interactionId);
+    const interaction = [...this.inspectInteractions, ...this.outdoorInteractions].find((candidate) => candidate.id === interactionId);
     if (!interaction) return false;
     interaction.collected = true;
+    if (interaction.pickupObject) interaction.pickupObject.visible = false;
     const propId = interaction.userData?.propId;
     const prop = propId ? this.scene.getObjectByName(propId) : null;
     if (prop?.material) {
@@ -3067,6 +3121,10 @@ export class DungeonScene {
       prop.material.emissiveIntensity = 0.08;
     }
     return true;
+  }
+
+  strikeFolsomShedGrowth() {
+    return this.folsomShedGrowthRuntime?.strike?.() ?? { hit: false, cleared: false, hitCount: 0 };
   }
 
   addLights() {

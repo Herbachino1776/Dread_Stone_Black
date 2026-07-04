@@ -3,6 +3,7 @@ const FIELD_SHRINE_REACTION_KEY = 'dreadStoneBlack.fieldShrineReactionSeen';
 const EQUIPMENT_STATE_KEY = 'dreadStoneBlack.equipmentState';
 const OBJECTIVE_STATE_KEY = 'dreadStoneBlack.objectiveState';
 const FIELD_SURVIVAL_STATE_KEY = 'dreadStoneBlack.reliquaryField.survivalState';
+const FOLSOM_TOOL_SHED_OPEN_KEY = 'folsom_tool_shed_open';
 
 const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
   inventory: { wood_axe: false, fishing_rod: false, wood: 0, raw_fish: 0, cooked_fish: 0, torch: false },
@@ -31,6 +32,7 @@ export class GameState {
         if (key?.startsWith(prefix)) keysToRemove.push(key);
       }
       keysToRemove.forEach((key) => storage.removeItem(key));
+      storage.removeItem(FOLSOM_TOOL_SHED_OPEN_KEY);
     } catch {
       // Reset should never wipe unrelated storage or crash if localStorage is blocked.
     }
@@ -58,6 +60,16 @@ export class GameState {
 
     this.fieldShrineReactionSeen = true;
     this.writeFlag(FIELD_SHRINE_REACTION_KEY, true);
+    return true;
+  }
+
+  isFolsomToolShedOpen() {
+    return this.readFlag(FOLSOM_TOOL_SHED_OPEN_KEY, false);
+  }
+
+  markFolsomToolShedOpen() {
+    if (this.isFolsomToolShedOpen()) return false;
+    this.writeFlag(FOLSOM_TOOL_SHED_OPEN_KEY, true);
     return true;
   }
 

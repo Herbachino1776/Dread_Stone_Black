@@ -16,6 +16,7 @@ const ITEM_DETAILS = Object.freeze({
   raw_fish: { type: 'Food', use: 'Cook at campfire', icon: '🐟' },
   cooked_fish: { type: 'Food', restore: '50%', icon: '◒' },
   flint_stick: { type: 'Key Item', use: 'Start campfires', icon: '⚿' },
+  old_work_knife: { type: 'Work Tool', use: 'Cut tough fibers', weight: '0.6', icon: '╱' },
   torch: { type: 'Offhand', light: 'Yes', icon: '♨' },
 });
 
@@ -171,8 +172,10 @@ export class EquipmentPanel {
   }
 
   createKeyItemEntries() {
-    if (!this.survivalInventory.hasKeyItem('flint_stick')) return [];
-    return [{ id: 'flint_stick', name: 'Flint Stick', stats: 'Key Item', meta: 'Campfire', description: 'Reusable campfire starter.', detail: ITEM_DETAILS.flint_stick }];
+    const entries = [];
+    if (this.survivalInventory.hasKeyItem('flint_stick')) entries.push({ id: 'flint_stick', name: 'Flint Stick', stats: 'Key Item', meta: 'Campfire', description: 'Reusable campfire starter.', detail: ITEM_DETAILS.flint_stick });
+    if (this.equipmentRuntime.hasItem('old_work_knife')) entries.push({ id: 'old_work_knife', name: 'Old Work Knife', stats: 'Work Tool', meta: 'Cutting', description: 'A short rusted shed knife with a worn wooden grip.', detail: ITEM_DETAILS.old_work_knife });
+    return entries;
   }
 
   renderDetail(entry) {
