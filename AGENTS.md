@@ -4,163 +4,119 @@ Guidance for AI agents working in this repository.
 
 ## Project Identity
 
-Dread Stone Black is a mobile-first, browser-based first-person dungeon crawler built with Vite, Three.js, and plain JavaScript/TypeScript tooling. It deploys through GitHub Pages and must run well on iPhone portrait browser play.
+Dread Stone Black is a mobile-first, browser-playable first-person dungeon crawler built with Vite, Three.js, and plain JavaScript/TypeScript tooling.
 
-The intended feel is slow, physical, readable, mysterious, and ominous: King's Field-like exploration and mood, with original lore, systems, assets, and locations. Prioritize atmosphere, readable spaces, tactile interaction, mobile performance, and strong foundations over flashy features.
+This is not a tech demo. Treat it as a real game. The target feel is slow, physical, readable, ominous, and tactile. The player should feel like they are forcing a buried world to reveal what it has sealed away.
 
-The project is not a general Three.js demo. Treat every change as part of a real playable game with survival loops, authored locations, mobile controls, first-person presentation, performance limits, and save compatibility.
+Use the strategy guide and project documents as design reference, but do not turn every old note into implementation. Current locks and active milestone notes override older text when they conflict.
 
-## Working Style
+## Current Direction
 
-Inspect the actual code before changing behavior. Do not infer architecture from one file when there are existing runtimes, validators, or location definitions that may already solve the problem.
+The current near-term goal is the Folsom starter loop, not the whole game.
 
-Prefer focused pull requests, but do not under-solve foundation problems out of fear of a large diff. Codex is allowed to make meaningful architectural changes when the task calls for them. Coherent architecture is better than cosmetic micro-refactors. If a large PR is the correct architectural move, do not apologize for its size; explain the scope, preserve gameplay contracts, and make rollback safe.
+Primary active milestone:
 
-When asked for a feature, first identify the relevant runtime path, data definition, and existing helpers. Preserve nearby systems unless the task explicitly asks to replace them. Avoid broad rewrites when a surgical change will work, but avoid fake architecture that only re-exports imports while leaving all logic in the old god file.
+- Rebuild the Folsom tool shed into a strong first proof target.
+- Put the Old Work Knife behind the shed as an environmental discovery.
+- Seal the shed door seam with black growth, not a latch blob.
+- Require three swipes to clear the growth: intact -> damaged -> cleared.
+- On hit, the growth should react physically with a small wiggle/shrink-grow response.
+- On final clear, cords should snap, black oil should erupt/splash, the growth should fade or collapse away, and the shed should open.
+- Save the opened state as `folsom_tool_shed_open`.
+- The shed reward is Wood Axe + Torch.
+- No tutorial text for this loop. The player learns by seeing, exploring, finding the knife, and using it.
 
-Keep the game playable after every PR. If a change is experimental, gate it behind a debug flag, location-specific config, or clear authored definition data instead of making it global by accident.
+Next design layer after that is the Chapter 2 Folsom connected-growth loop: fire, pond, and shrine anchors feeding a larger obstruction. Do not build that until the direct shed loop works.
 
-## Current Gameplay Contracts
+Long-term design direction:
 
-These are current playable contracts, not eternal design handcuffs. Preserve them unless the task explicitly redesigns the starter loop or affected system:
+- Black growth is physical obstruction, not currency, magic smoke, purple corruption, or generic slime.
+- Tools matter because they read and change the world.
+- Records, Memory, map updates, route state, and network progress are separate concepts; do not dump progression into random inventory items.
+- White-system art should feel alien, white-marble, intricate, sacred, and impossible, not generic sci-fi panels.
+- Bosses and late-game systems should prove existing mechanics, not introduce unrelated feature piles.
 
-- Folsom is the current default starter/root location.
-- Folsom is a fortified pine-heavy starter settlement with pond, campfire/cooking, wooden palisade, shrine, house/tool shed, rusty Reliquary gate, and future north road/stream hooks.
-- Rod A1 is the canonical fishing rod. Fishing is physical first-person rod-touch casting, not button casting. Do not add cast-zone UI unless explicitly requested.
-- Preserve movement, look controls, HUD, inventory/equipment, chests, fishing/Rod A1, axe/wood, campfire cooking, hunger, torch/offhand light, gates, and basic combat unless the task says otherwise.
-- Preserve mobile portrait browser play, especially iPhone.
+## How to Work
 
-## Non-Negotiables
+Inspect before editing. Find the real runtime path from authored data to scene build to interaction/update/save behavior before making changes.
 
-- Do not break GitHub Pages deployment or Vite build assumptions.
-- Do not silently remove authored content, assets, routes, or save-compatible item ids.
-- Avoid global tuning when the request is location-specific or encounter-specific.
-- Prefer data-driven location definitions and reusable runtime helpers over hardcoded one-off patches.
-- Fix validation fallout when architecture changes expose stale assumptions. If a validator is stale, explain exactly why and what should be updated.
+Prefer small playable proofs over broad unfinished scaffolds. A narrow real implementation is better than a large fake system that will be thrown away.
 
-## Architecture Orientation
+Do not invent unrelated features. If the task is about the Folsom shed, do not also build enemies, Memory UI, Pale Gates, church systems, boss ladders, or a full Folsom building overhaul unless explicitly requested.
 
-Expect multiple overlapping authoring/runtime systems:
+Use the repo's existing conventions and helpers when they are good. Replace weak placeholder architecture only when the task actually requires it.
 
-- Location definitions under `src/game/locations/` drive authored spaces, spawns, exits, materials, terrain, interactions, and validation.
-- Dungeon/interior authoring and runtime work through DARB-style compiled definitions.
-- Outdoor authored spaces use OARB-style terrain, ponds, paths, foliage, outdoor chests, campfires, and exits.
-- `Game.js` should be a runtime coordinator, not the owner of every system.
-- `DungeonScene.js` should be a world-scene orchestrator, not the file that personally builds every indoor, outdoor, fishing, creature, gore, foliage, and interaction system.
-- Survival inventory should flow through a coherent facade/runtime, not half through `GameState` and half through `EquipmentRuntime`.
-- Creature systems use creature configs, animation sets, model loading, combat profiles, AI profiles, and faction/encounter managers. Treat GLB animation loading and skinned meshes as expensive on mobile.
-- Fishing, survival inventory, equipment, interactions, and field objects have cross-system state. Use existing bridges/facades where present instead of duplicating ownership rules.
+Keep changes understandable for a solo developer. Plain, named modules are better than clever abstractions.
 
-Meaningful refactors are allowed:
+## Gameplay and World Rules
 
-- Move code.
-- Rename modules.
-- Split large classes.
-- Update call sites broadly.
-- Create real modules/classes instead of thin re-export wrappers.
-- Repair validators and call sites after architectural changes.
+Preserve working starter gameplay unless the task explicitly changes it. This includes movement, mobile controls, HUD, inventory/equipment, fishing, campfire/survival behavior, gates, and location loading.
 
-If you do not know which runtime path a feature uses, trace it from location definition to scene build path to update loop before editing.
+Folsom is the current root/starter location. Keep it stable enough for repeated testing.
 
-## Location and Encounter Rules
+Do not add tutorial prose unless explicitly requested. Prefer environmental teaching: visible obstruction, readable tool placement, physical reaction, and clear world-state change.
 
-Authored locations should be readable, grounded, and navigable. Spawn points must be on valid walkable ground. Exits must have clear prompt/return behavior. Decorative geometry should not create invisible blockers unless explicitly intended.
+Route progress should be saved as world state. Do not represent opened paths, cleared seals, map changes, or network access as permanent junk inventory.
 
-For encounters, separate visual scale from gameplay collision/range. A monster can look large without inheriting huge invisible combat bubbles. Avoid AI that fights from visually wrong distances, gets stuck on terrain, floats, sinks, or relies on excessive per-frame path checks.
+## Asset Rules
 
-When adding enemies or NPCs, consider:
+Use exact asset paths and names when provided. Preserve transparent PNG alpha. Avoid white fringes, baked backgrounds, accidental borders, and oversized textures.
 
-- spawn safety and distance from starter loops
-- target priorities and fallback behavior
-- grounding on visible terrain/spline/path surfaces
-- attack range matching the animation and perceived contact distance
-- cleanup/respawn behavior
-- mobile performance cost of skinned meshes, animations, shadows, materials, and particles
+Current locked black-growth assets include:
+
+- `public/assets/textures/growth/black_growth_scab_intact_01.png`
+- `public/assets/textures/growth/black_growth_scab_intact_02.png`
+- `public/assets/textures/growth/black_growth_scab_damaged_01.png`
+- `public/assets/textures/growth/black_growth_scab_damaged_02.png`
+- `public/assets/textures/growth/black_growth_cord_surface_01.png`
+- `public/assets/sprites/effects/growth/black_growth_hit_decal_01.png`
+
+For the Old Work Knife, do not use a sword or fantasy dagger. If no final model exists, create a simple procedural work-knife placeholder: short rusted blade, worn wooden handle, dull shed-tool proportions.
+
+For the first shed pass, procedural/simple geometry is acceptable for the shed, seam growth, hit zones, and knife placeholder. A final GLB can come later after scale and feel are proven.
 
 ## Performance Rules
 
-This game targets mobile browsers. A scene that is small by desktop standards can still be heavy on iPhone.
+This game targets mobile browsers. Keep scenes and effects lightweight.
 
-Be suspicious of:
+Be careful with transparent planes, particles, decals, shadows, skinned meshes, animation mixers, large textures, and unbounded effect accumulation. Pool or clean up short-lived effects.
 
-- many skinned meshes
-- many animation mixers updating every frame
-- repeated GLB decoding, cloning, material preparation, or GPU upload bursts
-- hidden animation roots that still update or cast shadows
-- hundreds of shadow casters
-- large numbers of transparent billboard planes
-- excessive unique materials or textures
-- unbounded gore/particle/decal accumulation
-- per-frame console logs
-- per-frame terrain/path/collision sampling when throttling or caching would work
-- high device pixel ratio fill-rate costs on mobile
+Effects should feel punchy but cheap. A black oil burst and screen shake are fine; permanent particle spam is not.
 
-Prefer shared caches, pooled effects, throttled AI, active-only animation updates, visible-only work, staggered loading, and debug toggles that identify bottlenecks before broad optimization.
+## Testing
 
-If a performance panel or screenshot report identifies a concrete bottleneck, address that bottleneck first instead of guessing.
+Run the narrowest relevant checks first, then the build when code changes.
 
-## Visual and Asset Rules
+Common commands:
 
-Use existing asset naming and folder conventions. Preserve alpha on sprites/textures. Avoid white borders, accidental backgrounds, and oversized assets. For repeated objects, share materials/textures where possible.
-
-For first-person held items or viewmodel objects, do not let world collision/terrain depth rules break the player's view. Viewmodel presentation can have separate render/depth handling from world objects when needed.
-
-## Debugging and Instrumentation
-
-Use debug UI and console diagnostics intentionally. Debug panels should be optional, lightweight, and activated by URL flags or dev gates. They should help answer questions like: is the bottleneck shadows, foliage, skinned meshes, animation mixers, loaded roots, gore, draw calls, materials, textures, pixel ratio, or startup asset loading?
-
-Avoid noisy logs in production. Throttle diagnostic updates. Prefer screenshot-friendly reports for mobile testing.
-
-## Coding Style
-
-Use existing project style:
-
-- ES modules.
-- Prefer clear plain JavaScript unless the task is explicitly TypeScript migration.
-- Keep runtime code understandable for an amateur solo developer.
-- Avoid clever abstractions that make debugging harder.
-- Prefer named domain modules over generic utility dumping grounds.
-
-## Testing Expectations
-
-Run the narrowest relevant validation first, then the build when code changes.
-
-Common checks may include:
-
-- `npm run build`
 - `npm run validate:folsom`
-- `npm run validate:fish`
-- `npm run validate:reliquary-startup`
+- `npm run build`
 
-Validation scripts may lag behind current authored content. If a validator fails, report whether the failure is caused by the PR or an existing expectation mismatch. Do not ignore failures without explaining them.
+If validation fails, report whether the failure is caused by the change or by an existing stale expectation. Do not ignore failures.
 
-Manual testing matters. For gameplay changes, include a short checklist that covers fresh load, mobile controls, the touched feature, adjacent survival/inventory systems, and return/gate flows.
+Manual gameplay checks matter. For the current Folsom shed milestone, verify:
 
-When touching gameplay foundations, verify or reason through:
+- fresh load reaches Folsom
+- the rebuilt shed appears and is navigable
+- the Old Work Knife is behind the shed
+- the shed seam growth blocks opening before clearing
+- three swipes clear the growth
+- hit feedback, black oil burst, cord snap/fade, and screen shake trigger appropriately
+- the shed opens and reveals Wood Axe + Torch
+- `folsom_tool_shed_open` persists after reload
+- existing starter systems still work well enough for testing
 
-- fresh load starts in the intended root location
-- Folsom terrain, pond, palisade, pine density, shrine, campfire area, and gates still appear when relevant
-- inventory opens and shows survival items correctly
-- axe/wood, Rod A1/fishing, torch, raw fish, cooked fish, hunger, and campfire cooking still work when relevant
-- location transitions do not trap the player
-- mobile HUD/controls still fit portrait play
+## Pull Request Expectations
 
-## PR Quality Bar
+Keep PRs scoped to the requested milestone.
 
-A good PR description should include:
+A good PR summary should say:
 
 - what changed
-- why the architecture or behavior is stronger
-- what gameplay was preserved
-- what files/systems are affected
+- why it supports the current milestone
+- what files/systems were touched
 - what was intentionally not changed
-- validation/test results
-- known limitations or follow-up risks
+- what validation was run
+- what limitations or follow-ups remain
 
-Keep changes scoped to the task. When a task reveals a larger architectural problem, either solve the immediate issue safely and document the larger follow-up, or make the meaningful architecture change directly if that is the correct scope.
-
-## Current Development Bias
-
-When in doubt, protect the playable starter experience. Folsom should remain a stable hub for testing movement, HUD, survival, fishing, cooking, inventory, gates, simple combat, and future progression hooks.
-
-Prefer systems that will survive multiple stages of development: authoring validation, reusable runtime boundaries, performance instrumentation, asset-loading discipline, and clear data contracts between definitions and runtime behavior.
+When unsure, protect the playable proof loop. Make the smallest real thing that proves the game better.
