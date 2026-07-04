@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
 import { compileDungeonLocation } from '../src/engine/dungeon-authoring/DungeonCompiler.js';
 import { DungeonScene } from '../src/game/DungeonScene.js';
+import { Game } from '../src/game/Game.js';
 import { getLocationDefinition, hasLocationDefinition, loadLocationDefinition } from '../src/game/locations/locationRegistry.js';
 import { GameState } from '../src/game/GameState.js';
+import { SceneSessionHost } from '../src/game/hosts/SceneSessionHost.js';
 import { Interactions } from '../src/game/Interactions.js';
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
 import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
@@ -106,6 +109,103 @@ assert.deepEqual(returnTransitions[0], {
   locationId: 'folsom',
   options: { areaParam: 'folsom', fromArea: null, destinationSpawnId: 'folsom_underworks_return', delayMs: 160 },
 }, 'The live indoor-exit convention returns to the authored Folsom Underworks spawn.');
+
+const sessionCreates = [];
+const sessionChanges = [];
+const historyEntries = [];
+const previousWindow = globalThis.window;
+globalThis.window = {
+  location: { pathname: '/Dread_Stone_Black/' },
+  history: { pushState: (state, unused, url) => historyEntries.push({ state, url }) },
+  setTimeout,
+};
+try {
+  const transitionHost = Object.create(SceneSessionHost.prototype);
+  Object.assign(transitionHost, {
+    transitionPromise: null,
+    query: new URLSearchParams('area=folsom'),
+    onSessionChanged: (session, summary) => sessionChanges.push({ session, summary }),
+    createSession(options) {
+      sessionCreates.push(options);
+      this.dungeon = { area: options.area, spawnId: options.spawnId };
+      this.locationId = options.area === 'field' ? 'reliquary-field' : options.area;
+      return { area: options.area, locationId: this.locationId, spawnId: options.spawnId };
+    },
+  });
+
+  const beneathSummary = await transitionHost.transitionToLocation('beneath-folsom', {
+    destinationSpawnId: 'beneath_folsom_underworks_arrival',
+  });
+  assert.equal(beneathSummary.locationId, 'beneath-folsom', 'An in-game transition directly creates the active Beneath Folsom session.');
+  assert.equal(transitionHost.dungeon.spawnId, 'beneath_folsom_underworks_arrival', 'The direct Beneath Folsom session honors its authored arrival spawn.');
+
+  const folsomSummary = await transitionHost.transitionToLocation('folsom', {
+    destinationSpawnId: 'folsom_underworks_return',
+  });
+  assert.equal(folsomSummary.locationId, 'folsom', 'An in-game return directly creates the active Folsom session.');
+  assert.equal(transitionHost.dungeon.spawnId, 'folsom_underworks_return', 'The direct Folsom session honors its authored Underworks return spawn.');
+
+  await transitionHost.transitionToLocation('reliquary-field', {
+    areaParam: 'field',
+    fromArea: 'field-keeper-house',
+    destinationSpawnId: 'field_keeper_house_return',
+  });
+  assert.deepEqual(sessionCreates.map(({ area, spawnId }) => ({ area, spawnId })), [
+    { area: 'beneath-folsom', spawnId: 'beneath_folsom_underworks_arrival' },
+    { area: 'folsom', spawnId: 'folsom_underworks_return' },
+    { area: 'field', spawnId: null },
+  ], 'Direct transitions replace the session in memory and retain the legacy field area convention.');
+  assert.equal(sessionCreates[2].fieldSpawn, 'fieldKeeperHouseExit', 'Legacy indoor returns still resolve the authored Reliquary Field runtime spawn.');
+  assert.equal(sessionChanges.length, 3, 'Each direct transition notifies the running Game to rebind session-dependent systems.');
+  assert.deepEqual(historyEntries.map(({ url }) => url), [
+    '/Dread_Stone_Black/?area=beneath-folsom&spawn=beneath_folsom_underworks_arrival',
+    '/Dread_Stone_Black/?area=folsom&spawn=folsom_underworks_return',
+    '/Dread_Stone_Black/?area=field&from=field-keeper-house',
+  ], 'Direct transitions update browser history without reloading the app.');
+
+  const startupCreates = [];
+  const startupHost = Object.create(SceneSessionHost.prototype);
+  Object.assign(startupHost, {
+    query: new URLSearchParams('area=beneath-folsom&spawn=beneath_folsom_underworks_arrival'),
+    async preloadLocationForArea() {},
+    createSession(options) { startupCreates.push(options); },
+    getSessionSummary() { return { startup: true }; },
+  });
+  await startupHost.startInitialSession();
+  assert.deepEqual(startupCreates[0], {
+    area: 'beneath-folsom',
+    fieldSpawn: 'start',
+    spawnId: 'beneath_folsom_underworks_arrival',
+  }, 'Fresh-page startup still honors area and spawn query parameters.');
+} finally {
+  if (previousWindow === undefined) delete globalThis.window;
+  else globalThis.window = previousWindow;
+}
+
+const reboundSystems = [];
+const reboundSession = { player: { id: 'new-player' }, dungeon: { area: 'beneath-folsom' } };
+Game.prototype.handleSceneSessionChanged.call({
+  interactions: { initializeForSession: (session) => reboundSystems.push(['interactions', session]) },
+  viewmodelHost: { rebindSession: (session) => reboundSystems.push(['viewmodel', session]) },
+  survivalHost: { initializeForSession: (session) => reboundSystems.push(['survival', session]) },
+  progressionHost: { handleLocationChanged: (session) => reboundSystems.push(['progression', session]) },
+  hud: { showHint: () => reboundSystems.push(['hud']) },
+  wasKeyboardInteractHeld: true,
+}, reboundSession);
+assert.equal(reboundSystems[0][0], 'interactions');
+assert.equal(reboundSystems[0][1].player, reboundSession.player, 'Interactions rebind to the replacement player.');
+assert.equal(reboundSystems[0][1].dungeon, reboundSession.dungeon, 'Interactions rebind to the replacement dungeon.');
+assert.deepEqual(reboundSystems.slice(1, 4).map(([system, session]) => [system, session === reboundSession]), [
+  ['viewmodel', true],
+  ['survival', true],
+  ['progression', true],
+], 'The running Game rebinds viewmodel/fishing, survival, and progression to the replacement session.');
+
+const sceneSessionSource = readFileSync(new URL('../src/game/hosts/SceneSessionHost.js', import.meta.url), 'utf8');
+const mainSource = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+assert.equal(sceneSessionSource.includes('window.location.assign'), false, 'Normal SceneSessionHost transitions never call window.location.assign.');
+assert.ok(sceneSessionSource.includes('history?.pushState') && sceneSessionSource.includes('createSession'), 'Normal transitions replace the active session and only update browser history.');
+assert.ok(mainSource.includes('new TitleScreen()') && mainSource.includes('waitForSelection()'), 'Fresh app boot still owns the title-screen New Game / Continue flow.');
 
 const anchors = growthNetwork.anchors ?? [];
 assert.deepEqual(anchors.map((anchor) => anchor.id).sort(), ['folsom_growth_anchor_fire', 'folsom_growth_anchor_pond', 'folsom_growth_anchor_shrine'], 'Folsom has exactly the three locked connected-growth anchors.');

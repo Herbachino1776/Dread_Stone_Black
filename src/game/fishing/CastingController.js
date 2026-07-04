@@ -30,6 +30,15 @@ export class CastingController {
     this.dungeon.setFishingFeedback?.(this.feedback);
     this.bind();
   }
+  rebindSession({ player, dungeon } = {}) {
+    this.projectile?.cleanup?.();
+    this.player = player ?? this.player;
+    this.dungeon = dungeon ?? this.dungeon;
+    this.projectile = new LureProjectile({ scene: this.dungeon.scene, dungeon: this.dungeon, waterResolver: new FishingWaterResolver({ dungeon: this.dungeon }), maxCastRange: CAST_MAX_RANGE, onLanded: (result) => this.handleLanded(result) });
+    this.state = this.createIdleState();
+    this.reelState = this.createIdleReelState();
+    this.dungeon.setFishingFeedback?.(this.feedback);
+  }
   createIdleState() { return { dragging: false, loadAmount: 0, gestureHistory: [], rodYaw: 0, rodPitch: 0, rodYawVelocity: 0, rodPitchVelocity: 0, targetYaw: 0, targetPitch: 0, rootOffsetX: 0, rootOffsetY: 0, rootOffsetZ: 0, rootVelocityX: 0, rootVelocityY: 0, rootVelocityZ: 0, targetRootOffsetX: 0, targetRootOffsetY: 0, targetRootOffsetZ: 0, releaseSnap: 0, motionSmoothness: 0, grabT: 0, angularVelocity: 0, tipSpeed: 0 }; }
   createIdleReelState() { return { active: false, pointerId: null, centerX: 0, centerY: 0, lastAngle: 0, lastTimeMs: 0, lastClockwiseTimeMs: -Infinity, lastHapticTimeMs: -Infinity, targetRate: 0, actualRate: 0, rate: 0, accumulatedClockwise: 0, frameClockwiseRadians: 0 }; }
   isEquipped() { return this.rodView?.isEquipped?.() === true; }

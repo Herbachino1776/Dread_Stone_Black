@@ -5,7 +5,7 @@ import { resolveLocationIdForArea, resolveLocationReturnSpawn, resolveStartupAre
 import { getLoadedLocationDefinitionIds, getLocationDefinition, getLocationRegistryDebugSummary, loadLocationDefinition } from '../locations/locationRegistry.js';
 
 export class SceneSessionHost {
-  constructor({ rendererHost, gameState, query = new URLSearchParams(window.location.search) } = {}) {
+  constructor({ rendererHost, gameState, query = new URLSearchParams(window.location.search), onSessionChanged = null } = {}) {
     this.rendererHost = rendererHost;
     this.gameState = gameState;
     this.query = query;
@@ -13,6 +13,8 @@ export class SceneSessionHost {
     this.scene = null;
     this.player = null;
     this.locationId = null;
+    this.onSessionChanged = onSessionChanged;
+    this.transitionPromise = null;
 
     const { width, height } = this.rendererHost.getViewportSize();
     this.camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 260);
@@ -59,14 +61,41 @@ export class SceneSessionHost {
   }
 
   async transitionToLocation(locationId, { areaParam = locationId, fromArea = null, destinationSpawnId = null, delayMs = 0 } = {}) {
+    if (this.transitionPromise) return this.transitionPromise;
+    this.transitionPromise = this.performInGameTransition(locationId, {
+      areaParam,
+      fromArea,
+      destinationSpawnId,
+      delayMs,
+    });
+    try {
+      return await this.transitionPromise;
+    } finally {
+      this.transitionPromise = null;
+    }
+  }
+
+  async performInGameTransition(locationId, { areaParam = locationId, fromArea = null, destinationSpawnId = null, delayMs = 0 } = {}) {
     await loadLocationDefinition(locationId);
-    window.setTimeout(() => {
-      const params = new URLSearchParams({ area: areaParam });
-      if (fromArea) params.set('from', fromArea);
-      if (destinationSpawnId) params.set('spawn', destinationSpawnId);
-      window.location.assign(`${window.location.pathname}?${params.toString()}`);
-    }, delayMs);
-    return false;
+    if (delayMs > 0) await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+
+    const destinationArea = areaParam === 'reliquary-field' ? 'field' : areaParam;
+    const fieldSpawn = destinationArea === 'field'
+      ? await resolveLocationReturnSpawn(fromArea)
+      : 'start';
+    const summary = this.createSession({
+      area: destinationArea,
+      fieldSpawn,
+      spawnId: destinationArea === 'field' ? null : destinationSpawnId,
+    });
+
+    const params = new URLSearchParams({ area: destinationArea });
+    if (fromArea) params.set('from', fromArea);
+    if (destinationArea !== 'field' && destinationSpawnId) params.set('spawn', destinationSpawnId);
+    this.query = params;
+    window.history?.pushState?.({ area: destinationArea, spawnId: destinationSpawnId }, '', `${window.location.pathname}?${params.toString()}`);
+    this.onSessionChanged?.(this, summary);
+    return summary;
   }
 
   update(deltaSeconds, { controls = null, isPaused = false, isPlayerDead = false } = {}) {
@@ -157,6 +186,7 @@ export class SceneSessionHost {
 
   disposeCurrentSession() {
     if (!this.scene) return;
+    this.player?.dispose?.();
     this.scene.remove(this.camera);
     this.scene.traverse((child) => {
       child.geometry?.dispose?.();

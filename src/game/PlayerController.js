@@ -57,8 +57,16 @@ export class PlayerController {
   }
 
   bindKeyboard() {
-    window.addEventListener('keydown', (event) => this.keyboard.add(event.code));
-    window.addEventListener('keyup', (event) => this.keyboard.delete(event.code));
+    this.onKeyDown = (event) => this.keyboard.add(event.code);
+    this.onKeyUp = (event) => this.keyboard.delete(event.code);
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+  }
+
+  dispose() {
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    this.keyboard.clear();
   }
 
   update(deltaSeconds, controls) {

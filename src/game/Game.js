@@ -62,7 +62,12 @@ export class Game {
     this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, () => this.saveEquipmentState()));
     this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.saveEquipmentState()));
     this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
-    this.sceneSessionHost = new SceneSessionHost({ rendererHost: this.rendererHost, gameState: this.gameState, query });
+    this.sceneSessionHost = new SceneSessionHost({
+      rendererHost: this.rendererHost,
+      gameState: this.gameState,
+      query,
+      onSessionChanged: (session) => this.handleSceneSessionChanged(session),
+    });
     await this.sceneSessionHost.startInitialSession();
     this.progressionHost = new ProgressionHost({
       root: this.app,
@@ -154,6 +159,15 @@ export class Game {
         this.feedback.shake({ durationMs: 380, intensity: 0.13 });
       }
     }, 260);
+  }
+
+  handleSceneSessionChanged(session = this.sceneSessionHost) {
+    this.interactions?.initializeForSession?.({ player: session.player, dungeon: session.dungeon });
+    this.viewmodelHost?.rebindSession?.(session);
+    this.survivalHost?.initializeForSession?.(session);
+    this.progressionHost?.handleLocationChanged?.(session);
+    this.wasKeyboardInteractHeld = false;
+    this.hud?.showHint?.('');
   }
 
 

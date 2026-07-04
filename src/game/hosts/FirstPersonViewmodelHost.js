@@ -60,6 +60,17 @@ export class FirstPersonViewmodelHost {
     return this.getDebugSummary();
   }
 
+  rebindSession(session = this.sceneSessionHost) {
+    this.session = session;
+    this.camera = session?.camera;
+    this.player = session?.player;
+    this.dungeon = session?.dungeon;
+    if (this.fishingRodView) this.fishingRodView.dungeon = this.dungeon;
+    this.castingController?.rebindSession?.({ player: this.player, dungeon: this.dungeon });
+    this.syncEquipmentVisuals();
+    return this.getDebugSummary();
+  }
+
   syncEquipmentVisuals() {
     this.setPlayerTorchEnabled(this.equipmentRuntime?.getEquippedOffhandId?.() === 'torch');
   }

@@ -33,6 +33,16 @@ export class Interactions {
     this.debugAreaGateStates = new Map();
   }
 
+  initializeForSession({ player, dungeon } = {}) {
+    this.cancelTimedAction({ silent: true });
+    this.player = player ?? this.player;
+    this.dungeon = dungeon ?? this.dungeon;
+    this.currentHint = '';
+    this.feedbackHint = '';
+    this.feedbackUntil = 0;
+    this.debugAreaGateStates.clear();
+  }
+
   updateHint() {
     this.hud.updateFieldKitStatus?.(this.dungeon.gameState?.getFieldSurvivalSnapshot?.(), { visible: false });
     const nearbyInteraction = this.getNearbyInteraction();
