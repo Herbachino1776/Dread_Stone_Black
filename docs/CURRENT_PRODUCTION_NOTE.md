@@ -1,12 +1,12 @@
 # Current Production Note
 
-The active milestone is Beneath Folsom Entry V1. The direct tool-shed loop and above-ground anchor clearing are complete. The concise production lock is [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md); it overrides older priorities when documents conflict.
+The active milestone is Beneath Folsom Iron Drain Bar Loop V1. The direct tool-shed loop, above-ground anchor clearing, and underground entry are complete. The concise production lock is [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md); it overrides older priorities when documents conflict.
 
 ## Immediate order
 
 1. Preserve the completed shed and anchor-clearing loops.
-2. Make the opened Underworks gate transition into `beneath-folsom`.
-3. Deliver one readable underground landing/chamber with a reliable return to Folsom.
+2. Preserve the working transition into `beneath-folsom` and return route.
+3. Add one persistent Iron Drain Bar pickup and one pryable grate opening into a short maintenance threshold.
 
 Do not build the full Beneath Folsom dungeon or later Chapter 2 progression systems in this pass.
 

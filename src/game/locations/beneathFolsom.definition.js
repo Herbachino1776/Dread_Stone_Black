@@ -68,10 +68,14 @@ const props = [
   prop('beneath_folsom_mud_patch_west', 'BF02', { x: -3.2, y: 0.035, z: -4.2 }, { width: 4.4, height: 0.07, depth: 5.8 }, 'mud', { tags: ['mud', 'damp-floor'] }),
   prop('beneath_folsom_mud_patch_east', 'BF02', { x: 4.3, y: 0.035, z: 6.4 }, { width: 5.2, height: 0.07, depth: 4.2 }, 'mud', { tags: ['mud', 'damp-floor'] }),
 
-  // The lower route is visible but physically remains part of the sealed north wall.
-  prop('beneath_folsom_deeper_dark_recess', 'BF02', { x: 0, y: 1.48, z: 13.72 }, { width: 6.6, height: 2.75, depth: 0.12 }, 'blackScab', { tags: ['future-passage', 'inaccessible', 'growth-boundary'] }),
+  // The lower drain throat becomes reachable after the old service grate is pried aside.
+  prop('beneath_folsom_deeper_dark_recess', 'BF03', { x: 0, y: 1.48, z: 21.72 }, { width: 6.6, height: 2.75, depth: 0.12 }, 'blackScab', { tags: ['future-passage', 'inaccessible', 'growth-boundary'] }),
   ...[-2.5, -1.25, 0, 1.25, 2.5].map((x, index) => prop(`beneath_folsom_deeper_grate_bar_${index}`, 'BF02', { x, y: 1.55, z: 13.48 }, { width: 0.18, height: 2.85, depth: 0.18 }, 'rustedIron', { tags: ['future-passage', 'old-drain-grate'] })),
   prop('beneath_folsom_deeper_grate_header', 'BF02', { x: 0, y: 2.92, z: 13.48 }, { width: 6.2, height: 0.22, depth: 0.25 }, 'rustedIron', { tags: ['future-passage', 'old-drain-grate'] }),
+  prop('beneath_folsom_drain_bar_visual', 'BF02', { x: -7.55, y: 0.62, z: -1.8 }, { width: 0.16, height: 1.9, depth: 0.16 }, 'rustedIron', { rotation: { x: 0, y: 0, z: -0.19 }, tags: ['iron-drain-bar', 'maintenance-tool', 'pickup-visual'] }),
+  prop('beneath_folsom_alcove_mud', 'BF03', { x: 0, y: 0.035, z: 18 }, { width: 5.6, height: 0.07, depth: 6.5 }, 'mud', { tags: ['drain-throat', 'opened-threshold'] }),
+  prop('beneath_folsom_alcove_timber_left', 'BF03', { x: -3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
+  prop('beneath_folsom_alcove_timber_right', 'BF03', { x: 3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
 
   // Atmospheric roots only: no interaction, hit count, or clear state.
   prop('beneath_folsom_root_wall_west', 'BF02', { x: -8.78, y: 1.72, z: 4 }, { width: 0.18, height: 0.42, depth: 12 }, 'blackGrowth', { rotation: { x: 0, y: 0, z: -0.18 }, tags: ['black-growth', 'atmospheric-only'] }),
@@ -84,7 +88,7 @@ export const beneathFolsomDefinition = Object.freeze({
   displayName: 'Beneath Folsom',
   type: 'underworks',
   tags: ['interior', 'underworks', 'compiled-runtime', 'folsom-chapter-2', 'entry-slice'],
-  notes: 'First playable under-town landing only. The deeper north drain remains intentionally inaccessible.',
+  notes: 'First under-town tool loop: recover the Iron Drain Bar and pry open one service grate into a short drain throat.',
   fog: { color: 0x18201e, near: 5, far: 34 },
   lighting: { background: 0x090c0b },
   textures,
@@ -94,6 +98,7 @@ export const beneathFolsomDefinition = Object.freeze({
   rooms: [
     room('BF01', 'Underworks Entry Stair', -5, 5, -24, -10, { safeForSpawn: true, ceilingY: 3.25, tags: ['entry', 'return-route', 'descending-threshold'] }),
     room('BF02', 'First Drain Landing', -9, 9, -10, 14, { tags: ['main-chamber', 'damp-stone', 'no-encounters'] }),
+    room('BF03', 'Lower Drain Throat', -3.6, 3.6, 14, 22, { tags: ['maintenance-alcove', 'opened-threshold', 'no-encounters'] }),
   ],
   doors: [{
     id: 'beneath_folsom_entry_to_landing',
@@ -104,8 +109,17 @@ export const beneathFolsomDefinition = Object.freeze({
     width: 5.2,
     wallGaps: [wallGap('BF01', 0, -10, 5.2), wallGap('BF02', 0, -10, 5.2)],
     tags: ['open-threshold'],
+  }, {
+    id: 'beneath_folsom_landing_to_drain_throat',
+    fromRoom: 'BF02',
+    toRoom: 'BF03',
+    position: { x: 0, y: FLOOR_Y, z: 14 },
+    navWaypoint: { x: 0, y: FLOOR_Y, z: 14 },
+    width: 6.2,
+    wallGaps: [wallGap('BF02', 0, 14, 6.2), wallGap('BF03', 0, 14, 6.2)],
+    tags: ['jammed-threshold', 'opens-after-pry'],
   }],
-  blockers: [],
+  blockers: [{ id: 'beneath_folsom_drain_grate_blocker', type: 'gate', minX: -3.1, maxX: 3.1, minZ: 13.15, maxZ: 13.85, height: 3.1, blocksPlayer: true, blocksActors: true, tags: ['jammed-drain-grate', 'pryable', 'blocks-deeper-access'], userData: { requiredItemId: 'iron_drain_bar', saveKey: 'beneath_folsom_drain_grate_pried' } }],
   props,
   spawns: [
     { id: 'beneath_folsom_underworks_arrival', kind: 'player', position: { x: 0, y: 1.55, z: -19.2 }, yaw: 0, roomId: 'BF01', tags: ['entry', 'safe-spawn', 'from-folsom'] },
@@ -129,15 +143,18 @@ export const beneathFolsomDefinition = Object.freeze({
     { id: 'beneath_folsom_landing_wet_fill', kind: 'point', color: 0x718f83, intensity: 0.8, distance: 15, decay: 1.6, position: { x: -4.5, y: 1.25, z: 1 }, roomId: 'BF02' },
     { id: 'beneath_folsom_deeper_boundary_fill', kind: 'point', color: 0x544f3b, intensity: 0.42, distance: 10, decay: 1.7, position: { x: 1.5, y: 1.8, z: 10 }, roomId: 'BF02' },
   ],
-  interactions: [{
-    id: 'beneath_folsom_deeper_passage_inspect',
-    type: 'inspect',
+  interactions: [{ id: 'beneath_folsom_iron_drain_bar_pickup', type: 'equipmentPickup', itemId: 'iron_drain_bar', target: { x: -7.55, y: 0.9, z: -1.8 }, range: 3.1, hint: 'Iron Drain Bar', message: 'Iron Drain Bar Acquired.', acquiredMessage: 'Iron Drain Bar Acquired.', repeatMessage: '', roomId: 'BF02', tags: ['maintenance-tool', 'environmental-discovery'] }, {
+    id: 'beneath_folsom_drain_grate_pry',
+    type: 'beneathFolsomDrainGrate',
     target: { x: 0, y: 1.3, z: 11.2 },
     range: 3.2,
-    hint: 'Inspect the lower drain',
-    message: 'Black roots have packed the lower drain shut.',
+    hint: 'Jammed drain grate',
+    message: 'The old drain bars shriek open.',
+    failMessage: 'The grate will not move by hand.',
+    requiredItemId: 'iron_drain_bar',
+    saveKey: 'beneath_folsom_drain_grate_pried',
     roomId: 'BF02',
   }],
-  navigation: { roomGraph: { roomIds: ['BF01', 'BF02'], links: [{ id: 'beneath_folsom_entry_to_landing', fromRoom: 'BF01', toRoom: 'BF02', navWaypoint: { x: 0, y: 0, z: -10 } }] }, localAvoidanceHints: [], forbiddenZones: [], preferredPatrolRoutes: [] },
+  navigation: { roomGraph: { roomIds: ['BF01', 'BF02', 'BF03'], links: [{ id: 'beneath_folsom_entry_to_landing', fromRoom: 'BF01', toRoom: 'BF02', navWaypoint: { x: 0, y: 0, z: -10 } }, { id: 'beneath_folsom_landing_to_drain_throat', fromRoom: 'BF02', toRoom: 'BF03', navWaypoint: { x: 0, y: 0, z: 14 } }] }, localAvoidanceHints: [], forbiddenZones: [], preferredPatrolRoutes: [] },
   encounterZones: [],
 });

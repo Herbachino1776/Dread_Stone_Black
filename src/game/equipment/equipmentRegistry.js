@@ -39,6 +39,16 @@ export const equipmentRegistry = Object.freeze({
       tags: ['tool', 'work-knife', 'folsom'],
       source: 'folsom_shed_rear_knife_pickup',
     }),
+    iron_drain_bar: Object.freeze({
+      id: 'iron_drain_bar',
+      name: 'Iron Drain Bar',
+      displayName: 'Iron Drain Bar',
+      itemType: 'tool',
+      type: 'tool',
+      slot: 'tool',
+      tags: ['tool', 'pry-bar', 'beneath-folsom'],
+      source: 'beneath_folsom_iron_drain_bar_pickup',
+    }),
     torch: Object.freeze({
       id: 'torch',
       name: 'Torch',

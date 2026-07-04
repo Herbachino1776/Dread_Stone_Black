@@ -194,6 +194,15 @@ export class Interactions {
       return this.useFieldSurvivalChest(interaction);
     }
 
+    if (interaction.type === 'beneathFolsomDrainGrate') {
+      const result = this.dungeon.pryBeneathFolsomDrainGrate?.(this.equipmentRuntime?.hasItem?.('iron_drain_bar'));
+      const message = result?.message ?? interaction.failMessage ?? interaction.message;
+      this.setTemporaryHint(message, result?.pried ? 1800 : 1300);
+      this.hud.showMessage(message);
+      this.feedback?.shake?.(result?.pried ? { durationMs: 300, intensity: 0.12 } : { durationMs: 110, intensity: 0.035 });
+      return false;
+    }
+
     if (interaction.type === 'equipmentPickup') {
       return this.useEquipmentPickup(interaction);
     }
@@ -339,6 +348,15 @@ export class Interactions {
 
     if (interaction.type === 'equipmentPickup') {
       return this.useEquipmentPickup(interaction);
+    }
+
+    if (interaction.type === 'beneathFolsomDrainGrate') {
+      const result = this.dungeon.pryBeneathFolsomDrainGrate?.(this.equipmentRuntime?.hasItem?.('iron_drain_bar'));
+      const message = result?.message ?? interaction.failMessage ?? interaction.message;
+      this.setTemporaryHint(message, result?.pried ? 1800 : 1300);
+      this.hud.showMessage(message);
+      this.feedback?.shake?.(result?.pried ? { durationMs: 300, intensity: 0.12 } : { durationMs: 110, intensity: 0.035 });
+      return false;
     }
 
     if (interaction.type === 'fieldSurvivalChest') {
@@ -958,6 +976,7 @@ export class Interactions {
     if (!this.dungeon.inspectInteractions?.length) return null;
 
     return this.dungeon.inspectInteractions
+      .filter((interaction) => !interaction.collected)
       .map((interaction) => ({ interaction, distance: this.horizontalDistanceTo(interaction.target) }))
       .filter(({ interaction, distance }) => distance <= (interaction.range ?? INTERACT_RANGE))
       .sort((a, b) => a.distance - b.distance)[0]?.interaction ?? null;

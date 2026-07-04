@@ -320,6 +320,7 @@ export class DungeonScene {
     this.fieldSurvivalObjects = new Map();
     this.folsomConnectedGrowthRuntime = null;
     this.folsomShedGrowthRuntime = null;
+    this.beneathFolsomDrainGrate = null;
     this.fishingWorldRuntime = createFishingWorldRuntime({
       scene: this.scene,
       dungeon: this,
@@ -467,6 +468,7 @@ export class DungeonScene {
       ...interaction,
       target: this.toVector3(interaction.target, 1.2),
     }));
+    if (locationId === 'beneath-folsom') this.configureBeneathFolsomDrainLoop(runtime);
 
     const playerStart = (this.spawnId ? runtime.spawnAnchors.find((spawn) => spawn.id === this.spawnId) : null)
       ?? runtime.spawnAnchors.find((spawn) => spawn.kind === 'player');
@@ -478,6 +480,59 @@ export class DungeonScene {
     }
 
     return runtime;
+  }
+
+  configureBeneathFolsomDrainLoop(runtime) {
+    const group = runtime.group;
+    const pickup = this.inspectInteractions.find((interaction) => interaction.id === 'beneath_folsom_iron_drain_bar_pickup');
+    const pickupObject = group.getObjectByName('beneath_folsom_drain_bar_visual');
+    const barOwned = this.gameState?.getEquipmentSnapshot?.()?.acquiredItemIds?.includes('iron_drain_bar');
+    if (pickup) {
+      pickup.pickupObject = pickupObject;
+      pickup.collected = Boolean(barOwned);
+    }
+    if (pickupObject) pickupObject.visible = !barOwned;
+
+    const blocker = runtime.blockerRects.find((candidate) => candidate.id === 'beneath_folsom_drain_grate_blocker');
+    const bars = [0, 1, 2, 3, 4]
+      .map((index) => group.getObjectByName(`beneath_folsom_deeper_grate_bar_${index}`))
+      .filter(Boolean)
+      .map((object) => ({ object, startPosition: object.position.clone() }));
+    const root = group.getObjectByName('beneath_folsom_root_grate');
+    this.beneathFolsomDrainGrate = { blocker, bars, root, opening: false, progress: 0 };
+    if (this.gameState?.isBeneathFolsomDrainGratePried?.()) this.applyBeneathFolsomDrainGrateOpenState();
+  }
+
+  applyBeneathFolsomDrainGrateOpenState() {
+    const grate = this.beneathFolsomDrainGrate;
+    if (!grate) return;
+    if (grate.blocker) this.collision.removeBlocker(grate.blocker);
+    grate.progress = 1;
+    grate.opening = false;
+    grate.bars.forEach(({ object, startPosition }, index) => {
+      object.rotation.x = -1.18;
+      object.position.y = startPosition.y - 2.2 - index * 0.025;
+      object.position.z = startPosition.z + 1.15;
+    });
+    if (grate.root) {
+      grate.root.rotation.z = 0.62;
+      grate.root.scale.set(0.72, 0.5, 0.72);
+      grate.root.material.transparent = true;
+      grate.root.material.opacity = 0.28;
+    }
+    const interaction = this.inspectInteractions.find((candidate) => candidate.id === 'beneath_folsom_drain_grate_pry');
+    if (interaction) interaction.collected = true;
+  }
+
+  pryBeneathFolsomDrainGrate(hasDrainBar = false) {
+    if (this.gameState?.isBeneathFolsomDrainGratePried?.()) return { pried: false, message: 'The drain throat stands open.' };
+    if (!hasDrainBar) return { pried: false, message: 'The grate will not move by hand.' };
+    this.gameState?.markBeneathFolsomDrainGratePried?.();
+    if (this.beneathFolsomDrainGrate?.blocker) this.collision.removeBlocker(this.beneathFolsomDrainGrate.blocker);
+    if (this.beneathFolsomDrainGrate) this.beneathFolsomDrainGrate.opening = true;
+    const interaction = this.inspectInteractions.find((candidate) => candidate.id === 'beneath_folsom_drain_grate_pry');
+    if (interaction) interaction.collected = true;
+    return { pried: true, message: 'The old drain bars shriek open.' };
   }
 
   configureCompiledOutdoorFieldRuntime(locationId = this.area) {
@@ -992,6 +1047,7 @@ export class DungeonScene {
     this.updateAnimatedDungeonMaterials(deltaSeconds);
     this.folsomShedGrowthRuntime?.update(deltaSeconds);
     this.folsomConnectedGrowthRuntime?.update(deltaSeconds);
+    this.updateBeneathFolsomDrainGrate(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
     this.updateBalthazanFloorCoverageQa(player);
   }
@@ -3140,6 +3196,25 @@ export class DungeonScene {
       prop.material.emissiveIntensity = 0.08;
     }
     return true;
+  }
+
+  updateBeneathFolsomDrainGrate(deltaSeconds) {
+    const grate = this.beneathFolsomDrainGrate;
+    if (!grate?.opening) return;
+    grate.progress = Math.min(1, grate.progress + deltaSeconds * 1.65);
+    const eased = 1 - ((1 - grate.progress) ** 3);
+    grate.bars.forEach(({ object, startPosition }, index) => {
+      object.rotation.x = -1.18 * eased;
+      object.position.y = startPosition.y - (2.2 + index * 0.025) * eased;
+      object.position.z = startPosition.z + 1.15 * eased;
+    });
+    if (grate.root) {
+      grate.root.rotation.z = 0.12 + 0.5 * eased;
+      grate.root.scale.setScalar(1 - eased * 0.32);
+      grate.root.material.transparent = true;
+      grate.root.material.opacity = 1 - eased * 0.72;
+    }
+    if (grate.progress >= 1) grate.opening = false;
   }
 
   strikeFolsomShedGrowth() {

@@ -82,14 +82,26 @@ assert.ok(beneathArrival, 'Beneath Folsom has a valid player arrival spawn.');
 assert.equal(beneathFolsomRuntime.collisionWorld.canStandAt(beneathArrival.position), true, 'The Beneath Folsom arrival spawn is on navigable collision.');
 assert.deepEqual(beneathFolsomRuntime.collisionWorld.getIntersectingBlockers(beneathArrival.position), [], 'The Beneath Folsom arrival spawn does not intersect a blocker.');
 const beneathReturn = beneathFolsomRuntime.exits.find((exit) => exit.id === 'beneath_folsom_return_to_folsom');
+const drainBarPickup = (beneathFolsom.interactions ?? []).find((interaction) => interaction.itemId === 'iron_drain_bar');
+const drainGrateInteraction = (beneathFolsom.interactions ?? []).find((interaction) => interaction.type === 'beneathFolsomDrainGrate');
+const drainGrateBlocker = beneathFolsomRuntime.blockerRects.find((blocker) => blocker.id === 'beneath_folsom_drain_grate_blocker');
 assert.equal(beneathReturn?.toLocation, 'folsom', 'Beneath Folsom has a return route to Folsom.');
 assert.equal(beneathReturn?.destinationSpawnId, 'folsom_underworks_return', 'The return route targets the Folsom Underworks return spawn.');
 assert.equal((beneathFolsom.spawns ?? []).some((spawn) => ['enemy', 'npc'].includes(spawn.kind)), false, 'Beneath Folsom Entry V1 has no enemies or NPCs.');
 assert.equal((beneathFolsom.encounterZones ?? []).length, 0, 'Beneath Folsom Entry V1 has no encounter zones.');
 const beneathFolsomSource = JSON.stringify(beneathFolsom).toLowerCase();
-['keeper\'s lantern', 'keeper_lantern', 'iron drain bar', 'iron_drain_bar', 'records ui', 'memory ui'].forEach((deferredFeature) => {
+['keeper\'s lantern', 'keeper_lantern', 'records ui', 'memory ui', 'pale gate', 'root-taken knight'].forEach((deferredFeature) => {
   assert.equal(beneathFolsomSource.includes(deferredFeature), false, `Beneath Folsom does not add deferred feature: ${deferredFeature}.`);
 });
+assert.equal(drainBarPickup?.itemId, 'iron_drain_bar', 'Beneath Folsom authors the Iron Drain Bar pickup.');
+assert.equal(drainBarPickup?.type, 'equipmentPickup', 'Iron Drain Bar uses the persistent equipment pickup path.');
+assert.ok(Math.hypot(drainBarPickup.target.x - beneathArrival.position.x, drainBarPickup.target.z - beneathArrival.position.z) > 8, 'Iron Drain Bar is not placed on the player spawn.');
+assert.equal(drainGrateInteraction?.requiredItemId, 'iron_drain_bar', 'The jammed grate requires the Iron Drain Bar.');
+assert.equal(drainGrateInteraction?.saveKey, 'beneath_folsom_drain_grate_pried', 'The grate maps to the locked world-state key.');
+assert.equal(drainGrateBlocker?.userData?.saveKey, 'beneath_folsom_drain_grate_pried', 'The closed grate collision maps to persisted state.');
+assert.ok(drainGrateBlocker?.tags?.includes('blocks-deeper-access'), 'The intact grate explicitly blocks deeper access.');
+assert.ok((beneathFolsom.rooms ?? []).some((room) => room.id === 'BF03' && room.tags?.includes('opened-threshold')), 'A small drain-throat alcove exists beyond the grate.');
+assert.equal(beneathFolsomRuntime.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 13.5)).some((blocker) => blocker.id === drainGrateBlocker.id), true, 'Closed grate collision prevents crossing the threshold.');
 assert.ok((beneathFolsom.props ?? []).some((prop) => prop.tags?.includes('black-growth') && prop.tags?.includes('atmospheric-only')), 'Underground growth is atmospheric foreshadowing only.');
 
 const returnTransitions = [];
