@@ -1,294 +1,38 @@
-# Codex Grounding Guide - Dread Stone Black
+# Codex Grounding Guide
 
 ## Repository identity
 
-Repo: Herbachino1776/Dread_Stone_Black
+Dread Stone Black is a mobile-first, browser-playable first-person dungeon crawler built with Vite, Three.js, and plain JavaScript/TypeScript tooling. Its target feel is slow, physical, readable, ominous, and tactile. The player forces a buried world to reveal what it has sealed away.
 
-Dread Stone Black is a mobile-first first-person dungeon crawler vertical slice built with Vite and Three.js.
+This is an original game, not a generic Three.js demo or a fantasy prototype. Older first-PR and test-dungeon plans describe project history, not the current target.
 
-The target is a King's Field-like feel: slow, dark, lonely, hostile, cryptic, and exploration-heavy.
+## Source of current direction
 
-This project must use original content. Do not copy King's Field names, UI, maps, enemy designs, music, items, or lore.
+Read these before implementation work:
 
-## Primary platform
+1. `AGENTS.md`
+2. `docs/current_milestone_folsom_growth.md`
+3. the relevant runtime definitions and systems
+4. longer strategy, architecture, and blueprint documents only as supporting reference
 
-The primary target is iPhone browser play, especially Chrome/Safari.
+Current locks override older documents when they conflict.
 
-Desktop support is useful for development and testing, but it is secondary. Do not build desktop-first and patch mobile later.
+## Current target
 
-Every major system should be designed with phone play in mind from the start.
+The active target is the Folsom tool-shed proof loop: rebuild the shed, place the Old Work Knife behind it, seal the door seam/frame with physical black growth, clear it in exactly three successful swipes, open the shed, reveal Wood Axe + Torch, and persist `folsom_tool_shed_open`.
 
-## Current development approach
+The latch itself is not the growth target. Do not add tutorial popups. Do not build the Chapter 2 fire, pond, and shrine anchors until this direct loop works.
 
-Work through small pull requests.
+## Technical and workflow grounding
 
-Each PR should:
+- Design for phone play first; desktop is a development path.
+- Inspect authored data, scene construction, interaction/update behavior, and persistence before editing.
+- Preserve GitHub Pages behavior and the Vite base path.
+- Prefer small named modules and existing good helpers over speculative frameworks.
+- Preserve working starter systems outside the requested scope.
+- Use world state for routes, opened structures, and cleared seals.
+- Run the narrowest relevant validation, then `npm run build` for code changes or when explicitly requested.
 
-- have a clear single purpose
-- build successfully
-- preserve mobile browser playability
-- preserve automatic GitHub Pages deployment
-- avoid unnecessary systems
-- keep code readable
-- include useful comments where the logic may confuse a beginner
+## Scope discipline
 
-## Technical direction
-
-Use:
-
-- Vite
-- Three.js
-- plain JavaScript or TypeScript
-- modular source files under `src/`
-- mobile-first HTML/CSS overlay for HUD and controls
-- static assets under `public/` or `src/assets/`, whichever best fits Vite conventions
-
-Preferred starting structure:
-
-```text
-src/
-  main.js
-  game/
-    Game.js
-    PlayerController.js
-    MobileControls.js
-    DungeonScene.js
-    Collision.js
-    Interactions.js
-    Hud.js
-  styles/
-    hud.css
-    controls.css
-public/
-  assets/
-    weapons/
-    textures/
-    sprites/
-    ui/
-docs/
-  GAME_PLAN.md
-  CODEX_GROUNDING.md
-.github/
-  workflows/
-    deploy-pages.yml
-```
-
-This structure can be adjusted if there is a better clean Vite/Three.js pattern.
-
-## First PR scope
-
-The first PR must only build the mobile foundation and automatic Pages deployment.
-
-Required:
-
-- Vite + Three.js project setup
-- `npm run dev`
-- `npm run build`
-- first-person camera
-- mobile-first canvas sizing
-- touch movement controls
-- touch turn/look controls
-- optional keyboard controls for desktop testing
-- slow movement
-- slow turning
-- wall collision
-- one stone room and one corridor
-- fog/darkness
-- basic sword overlay placeholder
-- bottom/mobile HUD with HP, MP, POWER, MAGIC
-- large touch interact button
-- locked gate placeholder
-- interact message: "The gate is locked."
-- CSS/JS protections against page scrolling, text selection, long-press callouts, and accidental browser gestures during gameplay where practical
-- automatic GitHub Pages deployment workflow for Vite
-
-Do not add:
-
-- enemies
-- combat
-- inventory
-- magic projectile
-- leveling
-- complex RPG stats
-- procedural generation
-- large dungeon
-- 3D weapon models
-
-## Mobile control requirements
-
-The first playable build must not require a keyboard.
-
-Recommended first-pass controls:
-
-- left thumb zone or virtual stick: move forward/back and strafe
-- right thumb zone or left/right buttons: turn/look
-- large Interact button
-- Attack and Spell buttons can be visible but disabled/reserved, or omitted until later PRs
-
-Controls must be large enough for a phone screen.
-
-Avoid tiny UI targets.
-
-Avoid placing important controls under the iPhone home indicator or notch/safe area.
-
-Use CSS safe-area variables where appropriate:
-
-- `env(safe-area-inset-top)`
-- `env(safe-area-inset-bottom)`
-- `env(safe-area-inset-left)`
-- `env(safe-area-inset-right)`
-
-## Gameplay feel
-
-Movement should be deliberate and slow.
-
-The player should not move like a modern shooter. Keep the turn speed and walk speed restrained.
-
-Touch controls should feel heavy, readable, and simple.
-
-Avoid twitchy camera movement.
-
-## Visual style
-
-The first builds can be rough.
-
-Final direction:
-
-- dark stone dungeon
-- low-poly geometry
-- simple PS1-style texture feel
-- limited draw distance
-- fog doing major atmosphere work
-- simple first-person sword overlay
-- billboard enemies later
-- practical mobile HUD
-
-Do not chase cinematic polish before the game loop works.
-
-## Collision rules
-
-Start simple.
-
-Use either:
-
-- bounding boxes for walls/gates, or
-- grid-based collision
-
-The player must not pass through walls or the locked gate.
-
-Do not add a physics engine unless it is truly necessary.
-
-## Interaction rules
-
-Interaction can start with a simple forward ray/check.
-
-For PR 1:
-
-- the locked gate should detect the player looking/standing near it
-- tapping the Interact button should show: "The gate is locked."
-
-No inventory needed yet.
-
-## HUD rules
-
-For PR 1, the HUD can be HTML/CSS over the canvas.
-
-Must show:
-
-- HP
-- MP
-- POWER
-- MAGIC
-- message area
-- large touch Interact button
-
-Do not overdesign the HUD yet.
-
-The HUD must be readable on a phone screen.
-
-## Asset rules
-
-Use placeholder assets if needed.
-
-A sword overlay can start as:
-
-- simple CSS shape
-- inline SVG
-- basic transparent PNG placeholder
-
-Do not block PR 1 on custom art.
-
-## Mobile browser rules
-
-The game should prevent common mobile browser problems during play:
-
-- page scroll while dragging controls
-- text selection
-- long-press callout menu
-- unwanted double-tap zoom where practical
-- canvas or HUD layout breaking on viewport changes
-
-Use CSS such as `touch-action: none`, `user-select: none`, and related mobile-safe rules where appropriate.
-
-## GitHub Pages
-
-This repo must use automatic GitHub Pages deployment from GitHub Actions.
-
-Required deployment behavior:
-
-- pull requests run `npm run build` as a check
-- commits/merges to `main` build the Vite app
-- the Vite `dist/` output is uploaded as a Pages artifact
-- GitHub Pages publishes from that artifact
-- no manual copying of built files into the repo
-
-Recommended workflow file:
-
-```text
-.github/workflows/deploy-pages.yml
-```
-
-Recommended Actions pattern:
-
-- `actions/checkout`
-- `actions/setup-node`
-- `npm ci`
-- `npm run build`
-- `actions/configure-pages`
-- `actions/upload-pages-artifact` with `path: dist`
-- `actions/deploy-pages`
-
-Build output should be `dist/`.
-
-## PR communication
-
-Every PR description should include:
-
-- what was added
-- what was intentionally not added
-- how to test locally
-- how to test on phone/browser
-- whether `npm run build` passes
-- whether Pages deployment was preserved or added
-
-## Project danger zones
-
-Avoid these early:
-
-- building the whole game in one PR
-- adding many systems before collision/movement feel good on phone
-- relying on large external engines/libraries without need
-- making a modern fast FPS
-- copying copyrighted game assets or layouts
-- creating a complex inventory too early
-- using 3D character animation before billboard enemies are tested
-- hiding important controls behind tiny desktop-style UI
-- breaking automatic Pages deployment
-
-## North star
-
-First success:
-
-A player opens the game on an iPhone browser, moves with touch controls, turns/looks with touch controls, sees a sword and HUD, reaches a locked gate, taps interact, and receives the message: "The gate is locked."
-
-That is the foundation for the whole vertical slice.
+Do not turn the shed milestone into a broad combat, enemy, town, Memory, Pale Gate, church, boss, or Chapter 2 systems pass. A narrow playable proof that survives reload and remains usable on mobile is the near-term standard.

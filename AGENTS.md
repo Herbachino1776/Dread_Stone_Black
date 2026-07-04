@@ -12,14 +12,20 @@ Use the strategy guide and project documents as design reference, but do not tur
 
 ## Current Direction
 
-The current near-term goal is the Folsom starter loop, not the whole game.
+The active milestone is the Folsom Chapter 1-2 foundation, beginning with the tool-shed proof loop. `docs/current_milestone_folsom_growth.md` is the short production lock and overrides older documents when they conflict.
+
+Immediate implementation order:
+
+1. Keep docs aligned with the current production lock.
+2. Rebuild the Folsom tool shed into a strong physical reveal target.
+3. Implement the black-growth proof loop on the rebuilt shed.
 
 Primary active milestone:
 
 - Rebuild the Folsom tool shed into a strong first proof target.
 - Put the Old Work Knife behind the shed as an environmental discovery.
-- Seal the shed door seam with black growth, not a latch blob.
-- Require three swipes to clear the growth: intact -> damaged -> cleared.
+- Seal the shed door seam/frame with black growth. The latch is not the target; do not build a tiny latch blob.
+- Require exactly three successful swipes to clear the growth: intact -> damaged -> cleared.
 - On hit, the growth should react physically with a small wiggle/shrink-grow response.
 - On final clear, cords should snap, black oil should erupt/splash, the growth should fade or collapse away, and the shed should open.
 - Save the opened state as `folsom_tool_shed_open`.
@@ -30,7 +36,7 @@ Next design layer after that is the Chapter 2 Folsom connected-growth loop: fire
 
 Long-term design direction:
 
-- Black growth is physical obstruction, not currency, magic smoke, purple corruption, or generic slime.
+- Black growth is physical obstruction: wet black plant fiber, oily scab, tarred root, and burnt mycelium. It is not currency, purple corruption, red gore, cartoon slime, magic smoke, or a generic black blob.
 - Tools matter because they read and change the world.
 - Records, Memory, map updates, route state, and network progress are separate concepts; do not dump progression into random inventory items.
 - White-system art should feel alien, white-marble, intricate, sacred, and impossible, not generic sci-fi panels.

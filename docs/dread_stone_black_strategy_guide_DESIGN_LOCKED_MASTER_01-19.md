@@ -9,6 +9,9 @@ Assembly date:
 Purpose:
 This is the design-locked strategy guide master assembled from Stage 4A–4D. It applies the Stage 3 locks directly into all 19 chapters.
 
+Current production precedence:
+This guide is long-term design reference. `docs/current_milestone_folsom_growth.md` overrides it where current implementation locks conflict. In particular, the Chapter 1 proof target is black growth sealing the tool-shed door seam/frame, not a tiny latch growth target; the Old Work Knife is behind the shed; the direct shed loop precedes the Chapter 2 fire, pond, and shrine anchors.
+
 Core identity:
 Dread Stone Black is a first-person dark fantasy RPG where the player physically clears black growth from a dying world with tools, weapons, fire, and later white-system instruments. Clearing growth reveals latches, routes, bodies, records, shrine panels, white machinery, network states, and final root connections.
 
@@ -106,7 +109,7 @@ Folsom Outskirts, Folsom West Gate, Folsom Common Fire, Tool Shed, Pond Path, Ol
 
 Main Objective
 
-Enter Folsom, recover the first practical tools, clear black growth from the tool shed latch, restore the common fire, inspect the pond route clue, and learn that black growth is a physical covering over real things.
+Enter Folsom, recover the first practical tools, clear black growth from the tool-shed door seam/frame, and learn that black growth is a physical covering over real things. Common-fire, pond, and shrine anchor work follows only after this direct proof works.
 
 Tools Found
 
@@ -117,17 +120,17 @@ Torch
 Map / Records / Route States
 
 Folsom local map update  
-Tool Shed Latch Revealed  
+Tool Shed Opened
 Common Fire Restored  
 Pond Clue Recorded  
 Old Shrine Exterior Marked  
 
 Design note:
-This chapter must teach the whole game’s basic promise. The player sees black growth, physically clears it, and reveals a usable thing underneath. Do not turn this into a named cut mechanic. Do not reward the player with a “growth shard” or route token. The reward is the opened shed, restored fire, visible latch, updated route, and changed town state.
+This chapter must teach the whole game’s basic promise. The player sees black growth, physically clears it, and reveals a usable space underneath. Do not turn this into a named cut mechanic. Do not reward the player with a “growth shard” or route token. The immediate reward is the opened shed and its Wood Axe + Torch; later route changes remain world state.
 
 Required Event
 
-Wake outside Folsom, enter through the west gate, speak with the gate guard, inspect the common fire, find the tool shed, clear the black growth from the shed latch, recover the Old Work Knife, Wood Axe, and Torch, restore the common fire, inspect the pond clue, and mark the old shrine as the next route.
+Find the tool shed, discover the Old Work Knife behind it, clear the black growth from the shed door seam/frame in exactly three successful swipes, and recover the Wood Axe and Torch. The broader fire, pond, and shrine route follows after this proof loop works.
 
 ------------------------------------------------------------------------------
 1. Wake Outside Folsom
@@ -177,30 +180,24 @@ Do not try to make the fire ring a puzzle yet. It is a delayed payoff. The playe
 
 Follow the path toward the pond. The tool shed is a small wooden structure near the edge of the village. It is locked, but the problem is not a normal key.
 
-Inspect the latch.
+Inspect the door seam and frame.
 
-Black growth has wrapped around the latch and hardened into a small knot. The latch is visible underneath, but it cannot move.
+Black growth bridges the door to its frame as a wet, fibrous physical seal. It blocks the door itself; do not reduce it to a small blob around the latch.
 
 This is the first true black-growth clearing lesson.
 
-The player starts with enough hand/knife interaction to cut very thin growth, or the Old Work Knife can be found wedged in the shed step, depending implementation. The cleaner route is:
+The Old Work Knife is hidden behind the shed. It is a short, rusted work tool with a worn wooden handle, not a sword or fantasy dagger. Its placement teaches the solution through exploration; do not add tutorial popups or instruction text.
 
-Inspect the shed step.  
-Take the Old Work Knife.  
-Use it to cut the thin black cords around the latch.  
-
-Equip the Old Work Knife and strike the thin cords around the latch. The growth should react in damage stages: nicked, frayed, loosened, broken.
-
-After the cords break, scrape the black film from the latch plate and interact with the latch.
+Equip the Old Work Knife and land exactly three successful swipes on the seam growth. The runtime sequence is `intact -> damaged -> cleared`. Each hit should wiggle, pulse, or shrink-grow. On the final clear, cords snap, black oil erupts, the screen shakes, and the remaining growth fades or collapses.
 
 The shed opens.
 
 Route state updated:
 
-Tool Shed Latch Revealed.
+Tool Shed Opened (`folsom_tool_shed_open`).
 
 The player should understand the rule immediately:
-black growth was not the reward. The latch under it was the reward.
+black growth was not the reward. The opened structure and useful tools were the reward.
 
 ------------------------------------------------------------------------------
 4. Recover the First Tools
@@ -217,7 +214,7 @@ Do not add unnecessary tool-shed loot. This is not a junk drawer. The chapter ne
 Tool roles:
 
 Old Work Knife:
-thin cords, small latches, soft body-growth.
+thin cords, seam growth, and other precise work-tool cuts.
 
 Wood Axe:
 hard knots, wooden barriers, tree chopping, thicker growth.
@@ -315,7 +312,7 @@ This is a Records entry.
 Chapter 1 Completion Checklist
 ------------------------------------------------------------------------------
 
-By the end of Chapter 1, you should have entered Folsom, updated the local map, inspected the common fire, found the tool shed, taken the Old Work Knife, cleared the black growth from the tool shed latch, opened the shed, recovered the Wood Axe and Torch, restored the common fire, inspected the pond marker, recorded the pond clue, and marked the old shrine exterior as the next route.
+The current Chapter 1 proof is complete when the player finds the tool shed, discovers the Old Work Knife behind it, clears the seam/frame growth in three successful swipes, opens the shed, recovers the Wood Axe and Torch, and retains `folsom_tool_shed_open` after reload. Common-fire restoration, pond clues, and shrine work are the next layer, not part of the first proof.
 
 The main skill learned in this chapter is physical black-growth clearing. You are not learning a spell or formal cut pattern. You are using tools to remove growth from real objects so the world can move again.
 
@@ -330,11 +327,11 @@ Chapter 1 should be the implementation testbed for the whole game.
 Required spaces:
 Folsom west gate, common fire, tool shed, pond path, old shrine exterior.
 
-Required interactables:
-Gate guard, common fire ring growth, tool shed latch growth, Old Work Knife, Wood Axe, Torch, pond marker scab, shrine exterior wall mark.
+Required interactables for the current proof:
+Tool-shed seam/frame growth, Old Work Knife, Wood Axe, and Torch.
 
-Required route states:
-Folsom map updated, Tool Shed Latch Revealed, Common Fire Restored, Pond Clue Recorded, Old Shrine Exterior Marked.
+Required world state for the current proof:
+`folsom_tool_shed_open`.
 
 Required enemy:
 Wrong Dog optional only.
@@ -346,7 +343,7 @@ Very high. This chapter should be built before broad content expansion.
 Chapter 1 Core Route
 ------------------------------------------------------------------------------
 
-Enter Folsom through the west gate. Inspect the common fire and learn that black growth is choking it. Follow the pond path to the tool shed. Take the Old Work Knife from the shed step, cut the growth from the latch, and open the shed. Recover the Wood Axe and Torch. Return to the common fire, clear the black residue from the fire ring, and restore the flame. Walk the pond path, clear the old marker stone, record the pond clue, and inspect the old shrine exterior.
+Reach the Folsom tool shed, explore behind it for the Old Work Knife, clear the door seam/frame growth in exactly three successful swipes, and open the shed. Recover the Wood Axe and Torch. Build the common-fire, pond, and shrine route only after this direct loop works.
 
 Chapter 1 ends with the first tools recovered and the old shrine marked as the next objective.
 
@@ -5314,7 +5311,7 @@ APPENDIX C — MAJOR ROUTE / NETWORK STATES
 ==============================================================================
 
 Early route states:
-- Tool Shed Latch Revealed
+- `folsom_tool_shed_open`
 - Common Fire Restored
 - Shrine Side Room Open
 - Folsom Anchor I Cleared
@@ -5448,20 +5445,16 @@ Quiet Folsom Return:
 Best epilogue variant layered over Containment Restored. Folsom survives quietly. No parade, no bright kingdom, no clean victory.
 
 ==============================================================================
-APPENDIX F — IMPLEMENTATION PRIORITY LOCK
+APPENDIX F — LONG-TERM IMPLEMENTATION SEQUENCE
 ==============================================================================
 
-First implementation chain:
-1. Physical destructible black growth in Folsom.
-2. Wood Axe / Old Work Knife hit quality.
-3. Growth reveal state.
-4. Map / Records / route-state foundation.
-5. Keeper’s Lantern reveal.
-6. Folsom anchor blocker.
-7. Threaded Corpse prototype.
-8. Simple humanoid enemy.
-9. White scab panel.
-10. Root-Taken Knight boss prototype.
+Current implementation chain:
+1. Keep the current milestone documentation aligned.
+2. Rebuild the Folsom tool shed as a strong physical reveal target.
+3. Prove the direct seam/frame growth loop: Old Work Knife behind the shed, exactly three successful swipes, physical hit response, final cord/oil/collapse effects, Wood Axe + Torch reward, and persistent `folsom_tool_shed_open`.
+4. Only then consider the Folsom fire, pond, and shrine anchor layer.
+
+Later systems such as Records, map/route-state UI, the Keeper’s Lantern, body-growth enemies, white panels, and bosses remain reference direction rather than active scope.
 
 Do not implement first:
 - full 19-chapter content

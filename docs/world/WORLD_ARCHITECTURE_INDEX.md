@@ -4,6 +4,8 @@ Version: v0.5
 Lane: Game World Architect  
 Purpose: Repo-facing index for buildable location blueprints and construction standards.
 
+Current priority: this index supports future world construction, but it does not set implementation order. `docs/current_milestone_folsom_growth.md` is the controlling production lock. The immediate architecture task is the Folsom tool-shed rebuild; broader location work waits until the direct shed growth loop works.
+
 ---
 
 ## 1. Purpose of This System
@@ -312,7 +314,7 @@ Black Grass Temple remains the major dungeon architecture target:
 - run `npm run build`, `npm run validate:bgt`, `npm run validate:integrity`, and `npm run validate:dungeons`
 - fix validation errors before claiming completion
 
-Field Keeper House is the current small-structure test target:
+Field Keeper House is a deferred small-structure test target:
 
 - use `docs/world/houses/field_keeper_house_v01.md`
 - create `src/game/locations/fieldKeeperHouse.definition.js`
@@ -322,13 +324,12 @@ Field Keeper House is the current small-structure test target:
 
 ## 12. Next Useful Work
 
-Near-term Architect/Codex tasks should focus on:
+Near-term architecture work should support the current Folsom proof only:
 
-- implementing Field Keeper House as the first reusable house/interior pattern
-- using the construction standard for all future locations
-- auditing Black Grass Temple against the v02 construction blueprint
-- resolving validation warnings/errors honestly
-- preserving Reliquary Field, South Reliquary Crypt, and Black Grass Temple while adding smaller structures
-- using addendums after playtest for house polish, field approach integration, cellar expansion, or future ruined-house variants
+- rebuild the tool shed into a readable, navigable physical target
+- provide a clear back-of-shed discovery space for the Old Work Knife
+- make the door seam/frame readable as the obstruction surface
+- preserve Folsom navigation and existing starter systems
+- defer Field Keeper House, Black Grass Temple, and broader location construction until the direct shed loop works
 
-Keep these tasks mobile-readable, buildable, and grounded in the existing field-to-crypt loop.
+Keep the proof mobile-readable, buildable, and scoped to the current milestone lock.

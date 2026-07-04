@@ -41,4 +41,4 @@ The current god-object refactor phase is considered complete: renderer, input, s
 
 ## Next recommended non-refactor priority
 
-Shift from foundation refactoring to playable-content validation and mobile performance hardening for Folsom and the Reliquary path. Recommended next work: run a device-focused smoke/performance pass around Folsom startup, Rod A1 physical fishing, campfire cooking, torch/offhand lighting, gates/return spawns, and combat/gore, then address the highest measured mobile bottleneck or the most obvious starter-loop usability issue before starting another architecture split.
+The god-object refactor is not the active workstream. Follow `docs/current_milestone_folsom_growth.md`: rebuild the Folsom tool shed, then prove the direct three-swipe seam-growth loop while preserving the starter systems listed above. Do not begin another architecture split or the Chapter 2 connected-anchor system before that playable proof works.
