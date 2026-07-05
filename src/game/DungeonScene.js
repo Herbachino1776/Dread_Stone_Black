@@ -3301,7 +3301,10 @@ export class DungeonScene {
   syncFolsomUnderworksInteraction() {
     const interaction = this.outdoorInteractions.find((candidate) => candidate.id === 'folsom_underworks_locked');
     if (!interaction) return;
-    const unsealed = this.gameState?.isFolsomUnderworksGrowthUnsealed?.() === true;
+    const runtimeUnsealed = this.folsomConnectedGrowthRuntime?.unsealed === true;
+    const persistedUnsealed = this.gameState?.isFolsomUnderworksGrowthUnsealed?.() === true;
+    const unsealed = runtimeUnsealed || persistedUnsealed;
+    if (runtimeUnsealed && !persistedUnsealed) this.gameState?.markFolsomUnderworksGrowthUnsealed?.();
     interaction.functional = unsealed;
     if (!unsealed) return;
     interaction.hint = 'Descend into the Underworks';

@@ -405,6 +405,14 @@ DungeonScene.prototype.syncFolsomUnderworksInteraction.call({
 });
 assert.equal(lockedUnderworksRuntimeInteraction.functional, true, 'The Underworks transition becomes functional after the unsealed flag.');
 assert.equal(lockedUnderworksRuntimeInteraction.targetLocationId, 'beneath-folsom', 'Unsealing preserves the authored Beneath Folsom destination.');
+const splitStateUnderworksInteraction = { ...underworksInteraction, functional: false };
+DungeonScene.prototype.syncFolsomUnderworksInteraction.call({
+  outdoorInteractions: [splitStateUnderworksInteraction],
+  folsomConnectedGrowthRuntime: { unsealed: true },
+  gameState: { isFolsomUnderworksGrowthUnsealed: () => false, markFolsomUnderworksGrowthUnsealed: () => false },
+});
+assert.equal(splitStateUnderworksInteraction.functional, true, 'A visibly raised runtime gate remains enterable even if persistence is temporarily unavailable.');
+assert.equal(splitStateUnderworksInteraction.hint, 'Descend into the Underworks', 'The raised gate cannot retain the stale sealed prompt.');
 
 const fireResult = connectedGrowth.clearAnchor('folsom_growth_anchor_fire');
 assert.equal(fireResult.cleared, true, 'The fire anchor clears through its physical world interaction.');
