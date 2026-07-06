@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { EQUIPMENT_EVENTS } from '../../engine/equipment/EquipmentEvents.js';
 import { CastingController } from '../fishing/CastingController.js';
 import { FishingRodView, HELD_ROD_VIEWMODEL_LAYER } from '../fishing/FishingRodView.js';
-import { KeepersLanternViewmodel } from '../viewmodels/KeepersLanternViewmodel.js';
+import { KEEPERS_LANTERN_EMITTER, KeepersLanternViewmodel } from '../viewmodels/KeepersLanternViewmodel.js';
 
 const ROD_VIEWMODEL_LIGHTING = Object.freeze({
   skyColor: 0xffe2b8,
@@ -102,8 +102,8 @@ export class FirstPersonViewmodelHost {
       itemId: 'keepers_lantern',
       worldPosition: new THREE.Vector3(),
       worldDirection: new THREE.Vector3(0, 0, -1),
-      coneAngleDegrees: 34,
-      range: 11,
+      coneAngleDegrees: KEEPERS_LANTERN_EMITTER.coneAngleDegrees,
+      range: KEEPERS_LANTERN_EMITTER.range,
       source: 'unavailable',
     };
   }

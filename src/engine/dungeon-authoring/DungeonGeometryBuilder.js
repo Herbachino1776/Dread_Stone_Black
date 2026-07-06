@@ -1052,20 +1052,32 @@ function addProps({ definition, group, materialFactory }) {
     const material = makeMaterial(definition, prop.material ?? prop.textureProfile, materialFactory, definition.textures?.wall);
     const position = toVector3(prop.position);
     const size = new THREE.Vector3(prop.dimensions.width, prop.dimensions.height, prop.dimensions.depth);
-    const mesh = addBox({
-      group,
-      size,
-      position,
-      material,
-      name: prop.id,
-      userData: {
-        locationId: definition.id,
-        roomId: prop.roomId,
-        propId: prop.id,
-        blockerId: prop.collisionRef,
-        generatedBy: 'DungeonGeometryBuilder',
-      },
-    });
+    const userData = {
+      locationId: definition.id,
+      roomId: prop.roomId,
+      propId: prop.id,
+      blockerId: prop.collisionRef,
+      tags: [...(prop.tags ?? [])],
+      generatedBy: 'DungeonGeometryBuilder',
+      ...(prop.userData ?? {}),
+    };
+    const isDecal = prop.kind === 'decal' || prop.tags?.includes('lantern-reveal-decal');
+    let mesh;
+    if (isDecal) {
+      material.transparent = true;
+      material.depthWrite = false;
+      material.alphaTest = prop.userData?.alphaTest ?? 0.01;
+      material.side = THREE.DoubleSide;
+      mesh = new THREE.Mesh(new THREE.PlaneGeometry(size.x, size.y), material);
+      mesh.name = prop.id;
+      mesh.position.copy(position);
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.userData = userData;
+      group.add(mesh);
+    } else {
+      mesh = addBox({ group, size, position, material, name: prop.id, userData });
+    }
     const rotation = toVector3(prop.rotation);
     mesh.rotation.set(rotation.x, rotation.y, rotation.z);
     if (prop.scale) {

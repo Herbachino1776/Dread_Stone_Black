@@ -4,8 +4,8 @@ export const KEEPERS_LANTERN_ITEM_ID = 'keepers_lantern';
 export const KEEPERS_LANTERN_VIEWMODEL_LAYER = 1;
 
 export const KEEPERS_LANTERN_EMITTER = Object.freeze({
-  coneAngleDegrees: 34,
-  range: 11,
+  coneAngleDegrees: 24,
+  range: 1.7,
 });
 
 const REST_POSITION = Object.freeze({ x: -0.48, y: -0.38, z: -1.08 });
@@ -75,6 +75,7 @@ export class KeepersLanternViewmodel {
     // This light deliberately remains on the world layer while the mesh is an
     // overlay. It is one short-range, shadowless light and does not replace Torch.
     this.coldLight.layers.set(0);
+    this.coldRevealSpotLight.layers.set(0);
     this.camera?.add?.(this.root);
   }
 
@@ -112,10 +113,23 @@ export class KeepersLanternViewmodel {
     this.emitterTransform.rotation.y = Math.PI;
     this.hangingBody.add(this.emitterTransform);
 
-    this.coldLight = new THREE.PointLight(0xb7e0dc, 0.72, 5.5, 1.8);
+    this.coldLight = new THREE.PointLight(0xcbd2ca, 1.15, 1.7, 1.8);
     this.coldLight.name = 'keepers-lantern-cold-pale-light';
     this.coldLight.castShadow = false;
     this.emitterTransform.add(this.coldLight);
+
+    this.coldRevealSpotLight = new THREE.SpotLight(
+      0xd9ddd5,
+      5.2,
+      KEEPERS_LANTERN_EMITTER.range,
+      THREE.MathUtils.degToRad(KEEPERS_LANTERN_EMITTER.coneAngleDegrees),
+      0.18,
+      1.55,
+    );
+    this.coldRevealSpotLight.name = 'keepers-lantern-focused-reveal-light';
+    this.coldRevealSpotLight.castShadow = false;
+    this.coldRevealSpotLight.target.position.set(0, 0, 2);
+    this.emitterTransform.add(this.coldRevealSpotLight, this.coldRevealSpotLight.target);
   }
 
   rebind({ camera = this.camera, player = this.player } = {}) {

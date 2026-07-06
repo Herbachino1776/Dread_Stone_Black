@@ -55,6 +55,7 @@ Procedural shed geometry, seam growth, hit zones, and a work-knife placeholder a
 - Place the persistent `keepers_lantern` utility pickup in the maintenance niche beyond the pried grate.
 - Equip it through the shared offhand selection alongside Torch while keeping its cold reveal emitter and light behavior independent; using the nearby clouded-stone interaction reveals one explicit hidden trace set.
 - Persist discovery as `beneath_folsom_keepers_lantern_reveal_seen` so the route truth remains readable after reload.
+- Keep hidden glyph art dynamically tied to the post-sway lantern emitter cone: it fades in only under the focused cold light and fades back out when the cone moves away. The discovery flag records read state, not permanent visual opacity.
 - The traces point toward the sealed lower wall but do not open it.
 - Preserve all existing shed, anchor, gate, survival, equipment, fishing, HUD, mobile-control, and save behavior.
 

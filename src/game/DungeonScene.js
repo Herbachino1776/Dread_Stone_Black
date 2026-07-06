@@ -19,6 +19,7 @@ import { resolveFieldPlayerSpawn } from './fieldSpawnResolution.js';
 import { FISH_TEXTURE_PROFILES, createFishMesh, createFishingWorldRuntime, resolveFishSizeGroup } from './world-scene/FishingWorldRuntime.js';
 import { FolsomConnectedGrowthRuntime } from './world-scene/FolsomConnectedGrowthRuntime.js';
 import { FolsomShedGrowthRuntime } from './world-scene/FolsomShedGrowthRuntime.js';
+import { LanternConeRevealRuntime } from './world-scene/LanternConeRevealRuntime.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -509,7 +510,16 @@ export class DungeonScene {
       'beneath_folsom_lantern_reveal_trace_02',
       'beneath_folsom_hidden_growth_pull',
     ].map((id) => group.getObjectByName(id)).filter(Boolean);
-    this.setBeneathFolsomLanternRevealVisible(this.gameState?.isBeneathFolsomKeepersLanternRevealSeen?.() === true);
+    this.setBeneathFolsomLanternRevealVisible(false);
+
+    const lanternRevealDecals = [];
+    group.traverse((object) => {
+      if (object.userData?.revealMode === 'lanternCone' && object.userData?.tags?.includes('lantern-reveal-decal')) lanternRevealDecals.push(object);
+    });
+    this.lanternConeRevealRuntime = new LanternConeRevealRuntime({
+      objects: lanternRevealDecals,
+      getEmitterState: () => this.lanternRevealEmitterProvider?.() ?? null,
+    });
 
     const blocker = runtime.blockerRects.find((candidate) => candidate.id === 'beneath_folsom_drain_grate_blocker');
     const bars = [0, 1, 2, 3, 4]
@@ -566,8 +576,11 @@ export class DungeonScene {
   revealBeneathFolsomKeepersLanternTraces() {
     if (this.gameState?.isBeneathFolsomKeepersLanternRevealSeen?.()) return false;
     this.gameState?.markBeneathFolsomKeepersLanternRevealSeen?.();
-    this.setBeneathFolsomLanternRevealVisible(true);
     return true;
+  }
+
+  setLanternRevealEmitterProvider(provider) {
+    this.lanternRevealEmitterProvider = typeof provider === 'function' ? provider : null;
   }
 
   applyBeneathFolsomDrainGrateOpenState() {
@@ -1115,6 +1128,7 @@ export class DungeonScene {
     this.folsomShedGrowthRuntime?.update(deltaSeconds);
     this.folsomConnectedGrowthRuntime?.update(deltaSeconds);
     this.updateBeneathFolsomDrainGrate(deltaSeconds);
+    this.lanternConeRevealRuntime?.update(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
     this.updateBalthazanFloorCoverageQa(player);
   }

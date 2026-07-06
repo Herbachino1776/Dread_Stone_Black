@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { EquipmentRuntime } from '../src/engine/equipment/EquipmentRuntime.js';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
@@ -16,6 +18,22 @@ import { SurvivalInventoryBridge } from '../src/game/equipment/SurvivalInventory
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
 import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
+import { LanternConeRevealRuntime } from '../src/game/world-scene/LanternConeRevealRuntime.js';
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const revealedGlyphAssetRoot = path.join(repoRoot, 'public', 'assets', 'revealed_glyphs');
+const revealedGlyphManifestPath = path.join(revealedGlyphAssetRoot, 'revealed_glyphs_manifest.json');
+assert.equal(existsSync(revealedGlyphAssetRoot), true, 'Revealed glyph asset root exists.');
+assert.equal(existsSync(revealedGlyphManifestPath), true, 'Revealed glyph manifest exists.');
+const revealedGlyphManifest = JSON.parse(readFileSync(revealedGlyphManifestPath, 'utf8'));
+assert.equal(revealedGlyphManifest.asset_root, 'public/assets/revealed_glyphs');
+const collectAssetFiles = (directory) => readdirSync(directory).flatMap((entry) => {
+  const entryPath = path.join(directory, entry);
+  return statSync(entryPath).isDirectory() ? collectAssetFiles(entryPath) : [entryPath];
+});
+const revealedGlyphFiles = collectAssetFiles(revealedGlyphAssetRoot);
+assert.equal(revealedGlyphFiles.some((assetPath) => assetPath.endsWith(`${path.sep}letters${path.sep}letter_001.png`)), true, 'The selected test glyph PNG exists.');
+assert.equal(revealedGlyphFiles.some((assetPath) => /keeper|ghiselian/i.test(path.basename(assetPath))), false, 'Revealed glyph filenames remain generic and lore-neutral.');
 
 const folsom = getLocationDefinition('folsom');
 assert.equal(hasLocationDefinition('beneath-folsom'), true, 'Beneath Folsom is registered.');
@@ -92,6 +110,7 @@ const drainGrateBlocker = beneathFolsomRuntime.blockerRects.find((blocker) => bl
 const keepersLanternPickup = (beneathFolsom.interactions ?? []).find((interaction) => interaction.itemId === 'keepers_lantern');
 const lanternTraceInteraction = (beneathFolsom.interactions ?? []).find((interaction) => interaction.type === 'keepersLanternTrace');
 const lanternRevealProps = (beneathFolsom.props ?? []).filter((prop) => prop.tags?.includes('keepers-lantern-revealed'));
+const lanternGlyphDecals = (beneathFolsom.props ?? []).filter((prop) => prop.tags?.includes('lantern-reveal-decal'));
 assert.equal(beneathReturn?.toLocation, 'folsom', 'Beneath Folsom has a return route to Folsom.');
 assert.equal(beneathReturn?.destinationSpawnId, 'folsom_underworks_return', 'The return route targets the Folsom Underworks return spawn.');
 assert.equal((beneathFolsom.spawns ?? []).some((spawn) => ['enemy', 'npc'].includes(spawn.kind)), false, 'Beneath Folsom Entry V1 has no enemies or NPCs.');
@@ -114,6 +133,13 @@ assert.equal(keepersLanternPickup?.type, 'equipmentPickup', "Keeper's Lantern us
 assert.ok(Math.hypot(keepersLanternPickup.target.x - beneathArrival.position.x, keepersLanternPickup.target.z - beneathArrival.position.z) > 20, "Keeper's Lantern is beyond the entry spawn.");
 assert.ok(keepersLanternPickup.target.z > 14 && keepersLanternPickup.tags?.includes('post-drain-grate'), "Keeper's Lantern is placed beyond the pry obstruction.");
 assert.ok(lanternRevealProps.length >= 3 && lanternRevealProps.every((prop) => prop.userData?.hiddenByDefault && prop.userData?.revealItemId === 'keepers_lantern'), 'The bounded route-truth set is hidden under normal light and mapped to the lantern.');
+assert.equal(lanternGlyphDecals.length, 1, 'Beneath Folsom authors one bounded lantern-cone test decal.');
+assert.equal(lanternGlyphDecals[0].material, 'lanternGlyphTest');
+assert.equal(beneathFolsom.textures[lanternGlyphDecals[0].material].path, './assets/revealed_glyphs/letters/letter_001.png', 'The test decal uses the committed transparent glyph PNG.');
+assert.equal(lanternGlyphDecals[0].userData.revealMode, 'lanternCone');
+assert.ok(lanternGlyphDecals[0].userData.hiddenOpacity <= 0.02 && lanternGlyphDecals[0].userData.revealedOpacity >= 0.8, 'Glyph decal is faint by default and readable only at reveal opacity.');
+assert.ok(lanternGlyphDecals[0].position.z > 21 && lanternGlyphDecals[0].tags.includes('blocked-future-route'), 'The cone-reveal test decal sits at the sealed lower wall.');
+assert.equal(beneathFolsomRuntime.collisionWorld.canStandAt(new THREE.Vector3(0, 1.55, 22.4)), false, 'The sealed lower wall remains outside navigable space.');
 assert.equal(lanternTraceInteraction?.requiredItemId, 'keepers_lantern', 'The live reveal interaction remains mapped to the existing lantern item id.');
 assert.equal(lanternTraceInteraction?.saveKey, 'beneath_folsom_keepers_lantern_reveal_seen', 'The reveal interaction maps to its persisted discovery state.');
 assert.equal(equipmentRegistry.items.keepers_lantern?.itemType, 'offhand', "Keeper's Lantern is registered as offhand equipment.");
@@ -143,6 +169,8 @@ assert.ok(lanternEmitterState.worldDirection.lengthSq() > 0.99 && lanternEmitter
 assert.ok(lanternEmitterState.worldPosition.distanceTo(lanternCamera.position) > 0.4, 'Lantern emitter is physically offset from camera center.');
 assert.ok(lanternCamera.worldToLocal(lanternEmitterState.worldPosition.clone()).x < 0, 'Lantern occupies the left/offhand side of the camera view.');
 assert.equal(lanternViewmodel.coldLight.castShadow, false, 'Lantern light stays mobile-friendly and shadowless.');
+assert.equal(lanternViewmodel.coldRevealSpotLight.castShadow, false, 'Focused reveal light is short-range and shadowless.');
+assert.ok(lanternViewmodel.coldRevealSpotLight.distance <= 1.7 && lanternViewmodel.coldRevealSpotLight.intensity >= 5, 'Focused reveal light is bright but limited to roughly five feet.');
 assert.equal(lanternCamera.children.includes(lanternViewmodel.root), true, 'Lantern is a camera-attached held viewmodel.');
 const emitterPositionBeforeMotion = lanternEmitterState.worldPosition.clone();
 lanternCamera.position.x += 0.2;
@@ -177,6 +205,23 @@ const lanternSceneHarness = Object.assign(Object.create(DungeonScene.prototype),
 });
 lanternSceneHarness.configureBeneathFolsomDrainLoop(beneathFolsomRuntime);
 assert.ok(lanternSceneHarness.beneathFolsomLanternRevealObjects.length >= 3 && lanternSceneHarness.beneathFolsomLanternRevealObjects.every((object) => object.visible === false), 'Lantern route traces are hidden in the normal runtime view.');
+assert.ok(lanternSceneHarness.lanternConeRevealRuntime instanceof LanternConeRevealRuntime, 'Beneath Folsom uses the explicit lantern cone reveal runtime.');
+assert.equal(lanternSceneHarness.lanternConeRevealRuntime.entries.length, 1, 'Active scene tracks only the authored lantern-reveal decal list.');
+const liveGlyphEntry = lanternSceneHarness.lanternConeRevealRuntime.entries[0];
+assert.equal(liveGlyphEntry.object.geometry.type, 'PlaneGeometry', 'Lantern reveal decal compiles as a transparent plane instead of a box.');
+assert.equal(liveGlyphEntry.object.material.userData.definitionProfile.path, './assets/revealed_glyphs/letters/letter_001.png');
+assert.ok(liveGlyphEntry.material.opacity <= 0.02 && liveGlyphEntry.material.transparent && liveGlyphEntry.material.depthWrite === false, 'Compiled glyph plane starts faint with mobile-friendly transparency settings.');
+const liveGlyphPoint = liveGlyphEntry.object.getWorldPosition(new THREE.Vector3());
+let liveEmitterState = { active: false, itemId: 'keepers_lantern', worldPosition: liveGlyphPoint.clone().add(new THREE.Vector3(0, 0, -1)), worldDirection: new THREE.Vector3(0, 0, 1), coneAngleDegrees: 24, range: 1.7 };
+lanternSceneHarness.setLanternRevealEmitterProvider(() => liveEmitterState);
+lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+assert.ok(liveGlyphEntry.material.opacity <= 0.02, 'Owned but inactive lantern emitter cannot reveal the glyph.');
+liveEmitterState = { ...liveEmitterState, active: true };
+for (let index = 0; index < 12; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+assert.ok(liveGlyphEntry.insideCone && liveGlyphEntry.material.opacity > 0.8, 'Active lantern emitter aimed at the decal fades the glyph into readability.');
+liveEmitterState = { ...liveEmitterState, worldDirection: new THREE.Vector3(0, 0, -1) };
+for (let index = 0; index < 12; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+assert.ok(!liveGlyphEntry.insideCone && liveGlyphEntry.material.opacity < 0.03, 'Moving the physical emitter cone away fades the glyph back out.');
 const lanternOwnedItems = new Set();
 let interactionEquippedOffhand = null;
 const lanternMessages = [];
@@ -195,7 +240,9 @@ interactionEquippedOffhand = 'keepers_lantern';
 assert.equal(lanternInteractions.getNearbyInspectInteraction()?.id, lanternTraceInteraction.id, 'Equipped lantern exposes a broad nearby reveal interaction without camera aim.');
 lanternInteractions.interact();
 assert.ok(lanternMessages.at(-1)?.includes('Cold light catches old marks'), 'The live reveal path gives concise physical feedback.');
-assert.ok(lanternSceneHarness.beneathFolsomLanternRevealObjects.every((object) => object.visible && object.material?.emissiveIntensity >= 0.7), 'Revealed route traces become readable with cold emissive treatment.');
+assert.ok(lanternSceneHarness.beneathFolsomLanternRevealObjects.every((object) => object.visible === false), 'Discovery state does not permanently expose the old hidden strip art.');
+lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+assert.ok(liveGlyphEntry.material.opacity < 0.03, 'Persisted discovery does not override dynamic cone-controlled glyph visibility.');
 assert.equal(new GameState(lanternStorage).isBeneathFolsomKeepersLanternRevealSeen(), true, 'Lantern discovery state persists across GameState reload.');
 assert.ok((beneathFolsom.props ?? []).some((prop) => prop.tags?.includes('black-growth') && prop.tags?.includes('atmospheric-only')), 'Underground growth is atmospheric foreshadowing only.');
 

@@ -43,6 +43,7 @@ export class SceneSessionHost {
     this.disposeCurrentSession();
     this.dungeon = new DungeonScene({ area, fieldSpawn, spawnId, gameState: this.gameState });
     this.scene = this.dungeon.build();
+    this.dungeon.setLanternRevealEmitterProvider?.(this.lanternRevealEmitterProvider);
     this.scene.add(this.camera);
     this.locationId = this.resolveLocationId(this.dungeon.area);
     this.player = new PlayerController(this.camera, this.dungeon.collision, {
@@ -187,6 +188,7 @@ export class SceneSessionHost {
 
   setLanternRevealEmitterProvider(provider) {
     this.lanternRevealEmitterProvider = typeof provider === 'function' ? provider : null;
+    this.dungeon?.setLanternRevealEmitterProvider?.(this.lanternRevealEmitterProvider);
   }
 
   getLanternRevealEmitter(targets) {
@@ -196,6 +198,7 @@ export class SceneSessionHost {
   disposeCurrentSession() {
     if (!this.scene) return;
     this.player?.dispose?.();
+    this.dungeon?.lanternConeRevealRuntime?.dispose?.();
     this.scene.remove(this.camera);
     this.scene.traverse((child) => {
       child.geometry?.dispose?.();

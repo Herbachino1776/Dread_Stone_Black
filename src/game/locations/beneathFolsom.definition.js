@@ -11,6 +11,7 @@ const textures = Object.freeze({
   rustedIron: { path: './assets/textures/metal_gate_rusted_01.png', repeat: [1.2, 1.4], color: 0x51443b, roughness: 0.9, metalness: 0.36 },
   blackGrowth: { path: './assets/textures/growth/black_growth_cord_surface_01.png', repeat: [2.8, 1.1], color: 0x1d211d, roughness: 0.84, emissive: 0x020302, emissiveIntensity: 0.12 },
   blackScab: { path: './assets/textures/growth/black_growth_scab_intact_02.png', repeat: [1.2, 1.2], color: 0x242824, roughness: 0.82, emissive: 0x020302, emissiveIntensity: 0.1 },
+  lanternGlyphTest: { path: './assets/revealed_glyphs/letters/letter_001.png', repeat: [1, 1], color: 0xb9bab0, roughness: 0.96, metalness: 0, emissive: 0x555852, emissiveIntensity: 0.26, transparent: true, opacity: 0.01 },
 });
 
 function room(id, label, minX, maxX, minZ, maxZ, options = {}) {
@@ -81,6 +82,15 @@ const props = [
   prop('beneath_folsom_lantern_reveal_trace_01', 'BF03', { x: -0.85, y: 0.085, z: 16.2 }, { width: 0.16, height: 0.035, depth: 3.1 }, 'blackGrowth', { rotation: { x: 0, y: -0.42, z: 0 }, tags: ['keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth'], userData: { revealItemId: 'keepers_lantern', hiddenByDefault: true } }),
   prop('beneath_folsom_lantern_reveal_trace_02', 'BF03', { x: 0.35, y: 0.09, z: 19.1 }, { width: 0.18, height: 0.04, depth: 3.4 }, 'blackGrowth', { rotation: { x: 0, y: 0.28, z: 0 }, tags: ['keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth'], userData: { revealItemId: 'keepers_lantern', hiddenByDefault: true } }),
   prop('beneath_folsom_hidden_growth_pull', 'BF03', { x: 0.15, y: 1.15, z: 21.58 }, { width: 2.5, height: 0.13, depth: 0.08 }, 'blackGrowth', { rotation: { x: 0, y: 0, z: -0.3 }, tags: ['keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth', 'blocked-future-route'], userData: { revealItemId: 'keepers_lantern', hiddenByDefault: true } }),
+  prop('beneath_folsom_lantern_glyph_test_01', 'BF03', { x: 0.48, y: 1.02, z: 21.49 }, { width: 1.05, height: 1.22, depth: 0.01 }, 'lanternGlyphTest', {
+    kind: 'decal',
+    tags: ['lantern-reveal-decal', 'keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth', 'blocked-future-route'],
+    userData: {
+      revealItemId: 'keepers_lantern', hiddenByDefault: true, revealMode: 'lanternCone', revealDistance: 1.7, revealConeDegrees: 24,
+      hiddenOpacity: 0.01, revealedOpacity: 0.86, fadeSpeed: 9, fadeOutSpeed: 12,
+      revealStateKey: 'beneath_folsom_keepers_lantern_reveal_seen', alphaTest: 0.01,
+    },
+  }),
 
   // Atmospheric roots only: no interaction, hit count, or clear state.
   prop('beneath_folsom_root_wall_west', 'BF02', { x: -8.78, y: 1.72, z: 4 }, { width: 0.18, height: 0.42, depth: 12 }, 'blackGrowth', { rotation: { x: 0, y: 0, z: -0.18 }, tags: ['black-growth', 'atmospheric-only'] }),
