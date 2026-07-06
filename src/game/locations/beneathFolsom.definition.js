@@ -110,15 +110,19 @@ const props = [
   prop('beneath_folsom_alcove_timber_left', 'BF03', { x: -3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
   prop('beneath_folsom_alcove_timber_right', 'BF03', { x: 3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
   prop('beneath_folsom_keeper_niche_shelf', 'BF03', { x: -2.75, y: 0.72, z: 18.8 }, { width: 1.2, height: 0.14, depth: 0.72 }, 'timber', { tags: ['keeper-niche', 'lantern-pickup-setting'] }),
-  // A broken warning cluster on the sealed lower wall. Small independent planes
-  // let the physical lantern cone discover fragments instead of switching on a sign.
-  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_symbol', { x: -0.82, y: 1.73, z: 21.49 }, { width: 0.82, height: 0.9 }, 'glyphSymbol01', { rotation: { x: 0, y: 0, z: -0.08 }, revealedOpacity: 0.72 }),
-  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_script', { x: 0.05, y: 0.48, z: 21.485 }, { width: 2.25, height: 0.45 }, 'glyphScript01', { rotation: { x: 0, y: 0, z: 0.025 }, revealedOpacity: 0.68 }),
-  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_letter_01', { x: 0.35, y: 1.65, z: 21.48 }, { width: 0.38, height: 0.48 }, 'glyphLetter01', { rotation: { x: 0, y: 0, z: 0.13 }, revealedOpacity: 0.8 }),
-  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_letter_02', { x: 0.86, y: 1.42, z: 21.475 }, { width: 0.34, height: 0.43 }, 'glyphLetter02', { rotation: { x: 0, y: 0, z: -0.16 }, revealedOpacity: 0.74 }),
-  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_face', { x: -1.52, y: 0.79, z: 21.47 }, { width: 0.42, height: 0.48 }, 'glyphFace01', { rotation: { x: 0, y: 0, z: -0.1 }, revealedOpacity: 0.6 }),
-  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_cord_left', { x: -0.72, y: 1.08, z: 21.465 }, { width: 0.92, height: 0.18 }, 'glyphBlackCord', { rotation: { x: 0, y: 0, z: -0.52 }, revealedOpacity: 0.7 }),
-  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_cord_right', { x: 1.18, y: 0.91, z: 21.46 }, { width: 0.78, height: 0.16 }, 'glyphBlackCord', { rotation: { x: 0, y: 0, z: 0.44 }, revealedOpacity: 0.66 }),
+  // A fractured threshold composition on the sealed lower wall. The large central
+  // seal, lintel/base script, and leaning side marks read as one buried gate language,
+  // while independent planes still let the moving lantern wash uncover it in pieces.
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_symbol', { x: -0.08, y: 1.62, z: 21.49 }, { width: 1.72, height: 1.92 }, 'glyphSymbol01', { rotation: { x: 0, y: 0, z: -0.045 }, revealedOpacity: 0.76 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_lintel_script', { x: 0, y: 2.72, z: 21.485 }, { width: 4.45, height: 0.68 }, 'glyphScript01', { rotation: { x: 0, y: 0, z: -0.018 }, revealedOpacity: 0.66 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_base_script', { x: -0.08, y: 0.4, z: 21.48 }, { width: 4.1, height: 0.62 }, 'glyphScript01', { rotation: { x: 0, y: 0, z: 0.026 }, revealedOpacity: 0.62 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_letter_left_upper', { x: -1.75, y: 2.05, z: 21.475 }, { width: 0.72, height: 0.92 }, 'glyphLetter01', { rotation: { x: 0, y: 0, z: -0.16 }, revealedOpacity: 0.78 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_letter_left_lower', { x: -1.86, y: 1.12, z: 21.47 }, { width: 0.62, height: 0.82 }, 'glyphLetter02', { rotation: { x: 0, y: 0, z: 0.11 }, revealedOpacity: 0.7 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_letter_right_upper', { x: 1.68, y: 2.03, z: 21.465 }, { width: 0.68, height: 0.88 }, 'glyphLetter02', { rotation: { x: 0, y: 0, z: 0.18 }, revealedOpacity: 0.74 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_letter_right_lower', { x: 1.82, y: 1.08, z: 21.46 }, { width: 0.66, height: 0.86 }, 'glyphLetter01', { rotation: { x: 0, y: 0, z: -0.12 }, revealedOpacity: 0.72 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_face', { x: 0.04, y: 2.45, z: 21.455 }, { width: 0.72, height: 0.82 }, 'glyphFace01', { rotation: { x: 0, y: 0, z: 0.035 }, revealedOpacity: 0.56 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_cord_left', { x: -1.2, y: 1.62, z: 21.45 }, { width: 2.42, height: 0.22 }, 'glyphBlackCord', { rotation: { x: 0, y: 0, z: -0.9 }, revealedOpacity: 0.58 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_cord_right', { x: 1.18, y: 1.56, z: 21.445 }, { width: 2.34, height: 0.2 }, 'glyphBlackCord', { rotation: { x: 0, y: 0, z: 0.88 }, revealedOpacity: 0.56 }),
 
   // Atmospheric roots only: no interaction, hit count, or clear state.
   prop('beneath_folsom_root_wall_west', 'BF02', { x: -8.78, y: 1.72, z: 4 }, { width: 0.18, height: 0.42, depth: 12 }, 'blackGrowth', { rotation: { x: 0, y: 0, z: -0.18 }, tags: ['black-growth', 'atmospheric-only'] }),

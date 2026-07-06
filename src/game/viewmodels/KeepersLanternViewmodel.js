@@ -17,6 +17,7 @@ const REST_POSITION = Object.freeze({ x: -0.48, y: -0.38, z: -1.08 });
 const MAX_SWAY_X = THREE.MathUtils.degToRad(7);
 const MAX_SWAY_Y = THREE.MathUtils.degToRad(5);
 const MAX_SWAY_Z = THREE.MathUtils.degToRad(8);
+const screenPoint = new THREE.Vector3();
 
 function material(color, roughness, metalness = 0, emissive = 0x000000, emissiveIntensity = 0) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness, emissive, emissiveIntensity });
@@ -59,15 +60,20 @@ export class KeepersLanternViewmodel {
     this.hasPreviousPose = false;
     this.emitterWorldPosition = new THREE.Vector3();
     this.emitterWorldDirection = new THREE.Vector3(0, 0, -1);
+    this.aim = { x: 0, y: 0 };
 
     this.root = new THREE.Group();
     this.root.name = 'keepers-lantern-first-person-viewmodel';
     this.root.position.set(REST_POSITION.x, REST_POSITION.y, REST_POSITION.z);
     this.root.visible = false;
 
+    this.aimPivot = new THREE.Group();
+    this.aimPivot.name = 'keepers-lantern-aim-pivot';
+    this.root.add(this.aimPivot);
+
     this.handlePivot = new THREE.Group();
     this.handlePivot.name = 'keepers-lantern-handle-pivot';
-    this.root.add(this.handlePivot);
+    this.aimPivot.add(this.handlePivot);
 
     this.hangingBody = new THREE.Group();
     this.hangingBody.name = 'keepers-lantern-hanging-body';
@@ -156,6 +162,11 @@ export class KeepersLanternViewmodel {
     return this.equipmentRuntime?.getEquippedOffhandId?.() === KEEPERS_LANTERN_ITEM_ID;
   }
 
+  setAimState(state = {}) {
+    this.aim.x = Number(state.x) || 0;
+    this.aim.y = Number(state.y) || 0;
+  }
+
   update(deltaSeconds) {
     const active = this.isActive();
     this.root.visible = active;
@@ -197,7 +208,8 @@ export class KeepersLanternViewmodel {
     this.sway.z = THREE.MathUtils.lerp(this.sway.z, targetZ, follow);
 
     const bob = Math.sin(this.elapsed * 7.2) * 0.012 * this.walkAmount;
-    this.root.position.set(REST_POSITION.x, REST_POSITION.y + bob, REST_POSITION.z);
+    this.root.position.set(REST_POSITION.x + this.aim.x * 0.13, REST_POSITION.y + bob + this.aim.y * 0.1, REST_POSITION.z);
+    this.aimPivot.rotation.set(-this.aim.y * 0.23, -this.aim.x * 0.3, 0, 'YXZ');
     this.hangingBody.rotation.set(this.sway.x, this.sway.y, this.sway.z, 'YXZ');
 
     this.previousCameraPosition.copy(this.emitterWorldPosition);
@@ -224,6 +236,18 @@ export class KeepersLanternViewmodel {
       range: KEEPERS_LANTERN_EMITTER.range,
       source: 'keepers-lantern-emitter-transform',
     };
+  }
+
+  projectAimHit(clientX, clientY, viewport) {
+    if (!this.isActive() || !this.root.visible || !viewport) return false;
+    this.camera.updateMatrixWorld(true);
+    this.root.updateMatrixWorld(true);
+    const rect = viewport.getBoundingClientRect();
+    this.emitterTransform.getWorldPosition(screenPoint).project(this.camera);
+    const x = (screenPoint.x * 0.5 + 0.5) * rect.width + rect.left;
+    const y = (-screenPoint.y * 0.5 + 0.5) * rect.height + rect.top;
+    const radius = Math.max(70, Math.min(115, Math.min(rect.width, rect.height) * 0.18));
+    return screenPoint.z >= -1 && screenPoint.z <= 1 && Math.hypot(clientX - x, clientY - y) <= radius;
   }
 
   dispose() {
