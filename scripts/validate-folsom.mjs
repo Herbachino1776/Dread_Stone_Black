@@ -11,14 +11,14 @@ import { Game } from '../src/game/Game.js';
 import { getLocationDefinition, hasLocationDefinition, loadLocationDefinition } from '../src/game/locations/locationRegistry.js';
 import { GameState } from '../src/game/GameState.js';
 import { SceneSessionHost } from '../src/game/hosts/SceneSessionHost.js';
-import { KeepersLanternViewmodel, KEEPERS_LANTERN_EMITTER, KEEPERS_LANTERN_ITEM_ID } from '../src/game/viewmodels/KeepersLanternViewmodel.js';
+import { KeepersLanternViewmodel, KEEPERS_LANTERN_EMITTER, KEEPERS_LANTERN_ITEM_ID, KEEPERS_LANTERN_LIGHTING } from '../src/game/viewmodels/KeepersLanternViewmodel.js';
 import { Interactions } from '../src/game/Interactions.js';
 import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { SurvivalInventoryBridge } from '../src/game/equipment/SurvivalInventoryBridge.js';
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
 import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
-import { LanternConeRevealRuntime } from '../src/game/world-scene/LanternConeRevealRuntime.js';
+import { LanternConeRevealRuntime, LANTERN_REVEAL_DEFAULTS, isPointInsideLanternCone } from '../src/game/world-scene/LanternConeRevealRuntime.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const revealedGlyphAssetRoot = path.join(repoRoot, 'public', 'assets', 'revealed_glyphs');
@@ -136,6 +136,10 @@ assert.ok(lanternRevealProps.length >= 6 && lanternRevealProps.every((prop) => p
 assert.ok(lanternGlyphDecals.length >= 6, 'Beneath Folsom authors a multi-piece lantern-cone glyph cluster.');
 assert.ok(lanternGlyphDecals.every((prop) => prop.id.startsWith('beneath_folsom_lower_wall_glyph_cluster_')), 'Reveal pieces belong to the authored lower-wall cluster.');
 assert.ok(lanternGlyphDecals.every((prop) => prop.userData.revealMode === 'lanternCone' && prop.userData.hiddenOpacity === 0), 'Every glyph cluster decal defaults to true zero opacity and uses the lantern cone runtime.');
+assert.ok(lanternGlyphDecals.every((prop) => prop.userData.revealDistance === 4 && prop.userData.revealConeDegrees === 40
+  && prop.userData.nearFieldRevealRadius >= 1.25 && prop.userData.nearFieldConeDegrees >= 70
+  && prop.userData.exitConePaddingDegrees > 0 && prop.userData.exitDistancePadding > 0
+  && prop.userData.revealLingerSeconds >= 0.15), 'The cluster authors a forgiving but bounded reveal wash with near-field grace, hysteresis, and short linger.');
 assert.ok(lanternGlyphDecals.every((prop) => prop.position.z > 21 && prop.tags.includes('blocked-future-route')), 'The cone-reveal cluster is surface-bound at the sealed lower wall.');
 const clusterGlyphAssetPaths = [...new Set(lanternGlyphDecals
   .map((prop) => beneathFolsom.textures[prop.material]?.path)
@@ -151,7 +155,13 @@ assert.equal(lanternTraceInteraction?.saveKey, 'beneath_folsom_keepers_lantern_r
 assert.equal(equipmentRegistry.items.keepers_lantern?.itemType, 'offhand', "Keeper's Lantern is registered as offhand equipment.");
 assert.equal(equipmentRegistry.items.keepers_lantern?.slot, 'offhand', "Keeper's Lantern uses the shared offhand slot without changing its item id.");
 assert.equal(KEEPERS_LANTERN_ITEM_ID, 'keepers_lantern', "Keeper's Lantern viewmodel keeps the existing persistent item id.");
-assert.ok(KEEPERS_LANTERN_EMITTER.coneAngleDegrees > 0 && KEEPERS_LANTERN_EMITTER.range > 0, 'Lantern emitter authors a bounded future reveal cone.');
+assert.deepEqual(KEEPERS_LANTERN_EMITTER, { coneAngleDegrees: 40, range: 4 }, 'Lantern emitter authors a forgiving close/medium reveal wash.');
+assert.equal(LANTERN_REVEAL_DEFAULTS.revealDistance, KEEPERS_LANTERN_EMITTER.range, 'Reveal runtime range matches the physical offhand emitter.');
+assert.equal(LANTERN_REVEAL_DEFAULTS.revealConeDegrees, KEEPERS_LANTERN_EMITTER.coneAngleDegrees, 'Reveal runtime cone matches the physical offhand emitter.');
+assert.ok(KEEPERS_LANTERN_LIGHTING.point.distance >= 18 && KEEPERS_LANTERN_LIGHTING.point.intensity >= 4.5, 'Keeper lantern has useful shadowless local fill beyond its glyph reveal range.');
+assert.ok(KEEPERS_LANTERN_LIGHTING.wash.distance >= 28 && KEEPERS_LANTERN_LIGHTING.wash.angle >= 0.75 && KEEPERS_LANTERN_LIGHTING.wash.penumbra >= 0.8, 'Keeper lantern has a broad soft navigation wash rather than a tiny reveal beam.');
+const lanternLightColor = new THREE.Color(KEEPERS_LANTERN_LIGHTING.wash.color);
+assert.ok(lanternLightColor.g >= lanternLightColor.r && Math.abs(lanternLightColor.r - lanternLightColor.b) < 0.05, 'Keeper lantern illumination remains balanced pale green-white rather than Torch-warm.');
 const lanternCamera = new THREE.PerspectiveCamera();
 lanternCamera.position.set(4, 2, -3);
 lanternCamera.rotation.set(0.08, 0.45, 0, 'YXZ');
@@ -175,8 +185,11 @@ assert.ok(lanternEmitterState.worldDirection.lengthSq() > 0.99 && lanternEmitter
 assert.ok(lanternEmitterState.worldPosition.distanceTo(lanternCamera.position) > 0.4, 'Lantern emitter is physically offset from camera center.');
 assert.ok(lanternCamera.worldToLocal(lanternEmitterState.worldPosition.clone()).x < 0, 'Lantern occupies the left/offhand side of the camera view.');
 assert.equal(lanternViewmodel.coldLight.castShadow, false, 'Lantern light stays mobile-friendly and shadowless.');
-assert.equal(lanternViewmodel.coldRevealSpotLight.castShadow, false, 'Focused reveal light is short-range and shadowless.');
-assert.ok(lanternViewmodel.coldRevealSpotLight.distance <= 1.7 && lanternViewmodel.coldRevealSpotLight.intensity >= 5, 'Focused reveal light is bright but limited to roughly five feet.');
+assert.equal(lanternViewmodel.coldRevealSpotLight.castShadow, false, 'Broad lantern wash stays mobile-friendly and shadowless.');
+assert.equal(lanternViewmodel.coldLight.distance, KEEPERS_LANTERN_LIGHTING.point.distance, 'Physical lantern body carries the authored local fill.');
+assert.equal(lanternViewmodel.coldRevealSpotLight.distance, KEEPERS_LANTERN_LIGHTING.wash.distance, 'General illumination range is independent from the shorter glyph reveal range.');
+assert.ok(lanternViewmodel.coldRevealSpotLight.distance > KEEPERS_LANTERN_EMITTER.range * 6, 'Lantern lights normal geometry well beyond its bounded hidden-glyph reveal distance.');
+assert.ok(lanternViewmodel.coldRevealSpotLight.penumbra >= 0.8, 'Lantern navigation wash has a soft edge instead of a laser profile.');
 assert.equal(lanternCamera.children.includes(lanternViewmodel.root), true, 'Lantern is a camera-attached held viewmodel.');
 const emitterPositionBeforeMotion = lanternEmitterState.worldPosition.clone();
 lanternCamera.position.x += 0.2;
@@ -221,7 +234,14 @@ assert.ok(lanternSceneHarness.lanternConeRevealRuntime.entries.every((entry) => 
   && entry.material.opacity === 0 && entry.material.transparent && entry.material.depthWrite === false
   && entry.material.alphaTest === 0 && entry.object.visible === false), 'Compiled glyph planes start fully non-rendered with zero-opacity transparency settings.');
 const liveGlyphPoint = liveGlyphEntry.object.getWorldPosition(new THREE.Vector3());
-let liveEmitterState = { active: false, itemId: 'keepers_lantern', worldPosition: liveGlyphPoint.clone().add(new THREE.Vector3(0, 0, -1)), worldDirection: new THREE.Vector3(0, 0, 1), coneAngleDegrees: 24, range: 1.7 };
+let liveEmitterState = {
+  active: false,
+  itemId: 'keepers_lantern',
+  worldPosition: liveGlyphPoint.clone().add(new THREE.Vector3(0, 0, -1)),
+  worldDirection: new THREE.Vector3(0, 0, 1),
+  coneAngleDegrees: KEEPERS_LANTERN_EMITTER.coneAngleDegrees,
+  range: KEEPERS_LANTERN_EMITTER.range,
+};
 lanternSceneHarness.setLanternRevealEmitterProvider(() => liveEmitterState);
 lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
 assert.equal(liveGlyphEntry.material.opacity, 0, 'Owned but inactive lantern emitter cannot reveal the glyph.');
@@ -234,9 +254,27 @@ liveEmitterState = { ...liveEmitterState, active: true };
 liveEmitterState.itemId = 'keepers_lantern';
 for (let index = 0; index < 12; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
 assert.ok(liveGlyphEntry.insideCone && liveGlyphEntry.object.visible && liveGlyphEntry.material.opacity > liveGlyphEntry.config.revealedOpacity * 0.9, 'Active lantern emitter aimed at the decal makes it visible and fades it into readability.');
+const paddedEdgeAngle = THREE.MathUtils.degToRad(44);
+liveEmitterState = { ...liveEmitterState, worldDirection: new THREE.Vector3(Math.sin(paddedEdgeAngle), 0, Math.cos(paddedEdgeAngle)) };
+lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+assert.ok(liveGlyphEntry.directHit && liveGlyphEntry.insideCone, 'Exit-cone hysteresis keeps a revealed glyph stable during small emitter sway at the wash edge.');
 liveEmitterState = { ...liveEmitterState, worldDirection: new THREE.Vector3(0, 0, -1) };
-for (let index = 0; index < 12; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+assert.ok(!liveGlyphEntry.directHit && liveGlyphEntry.insideCone && liveGlyphEntry.lingerRemaining > 0, 'Short active-lantern linger prevents a one-frame dropout when the wash leaves a glyph.');
+for (let index = 0; index < 16; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
 assert.ok(!liveGlyphEntry.insideCone && liveGlyphEntry.material.opacity === 0 && liveGlyphEntry.object.visible === false, 'Moving the physical emitter cone away fades the glyph to true invisibility and disables rendering.');
+const nearFieldDirection = new THREE.Vector3(Math.sin(THREE.MathUtils.degToRad(70)), 0, Math.cos(THREE.MathUtils.degToRad(70)));
+const nearFieldEmitter = { ...liveEmitterState, worldPosition: liveGlyphPoint.clone().sub(nearFieldDirection.clone().multiplyScalar(0.8)), worldDirection: new THREE.Vector3(0, 0, 1) };
+assert.equal(isPointInsideLanternCone(nearFieldEmitter, liveGlyphPoint, liveGlyphEntry.config), true, 'Close-range lantern wash remains valid at a broad angle instead of losing the glyph beside the wall.');
+const scriptGlyphEntry = lanternSceneHarness.lanternConeRevealRuntime.entries.find((entry) => entry.object.name.endsWith('_script'));
+const scriptGlyphCenter = scriptGlyphEntry.object.getWorldPosition(new THREE.Vector3());
+liveEmitterState = { ...liveEmitterState, worldPosition: scriptGlyphCenter.clone().add(new THREE.Vector3(1, 0, -1)), worldDirection: new THREE.Vector3(0, 0, 1) };
+assert.equal(isPointInsideLanternCone(liveEmitterState, scriptGlyphCenter, scriptGlyphEntry.config), false, 'A wide decal center can sit outside the normal reveal cone near an edge.');
+lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+assert.ok(scriptGlyphEntry.directHit && scriptGlyphEntry.object.visible, 'Nearest decal-surface sampling reveals the covered edge even when object-center math would fail.');
+liveEmitterState = { ...liveEmitterState, worldPosition: scriptGlyphCenter.clone().add(new THREE.Vector3(0, 0, -5)), worldDirection: new THREE.Vector3(0, 0, 1) };
+for (let index = 0; index < 16; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+assert.ok(!scriptGlyphEntry.insideCone, 'Glyph reveal remains off beyond the bounded four-unit wash even when aimed directly at the decal.');
 const lanternOwnedItems = new Set();
 let interactionEquippedOffhand = null;
 const lanternMessages = [];

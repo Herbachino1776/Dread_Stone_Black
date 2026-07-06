@@ -54,8 +54,9 @@ Procedural shed geometry, seam growth, hit zones, and a work-knife placeholder a
 - Open only a short maintenance alcove/drain throat beyond the grate, ending at a blocked future route.
 - Place the persistent `keepers_lantern` utility pickup in the maintenance niche beyond the pried grate.
 - Equip it through the shared offhand selection alongside Torch while keeping its cold reveal emitter and light behavior independent; the sealed lower wall carries one modest cluster of broken warning glyphs and black contamination.
+- Treat the Keeper's Lantern as a useful cold offhand light: a soft local fill and broad pale wash illuminate normal geometry, while a separate bounded reveal test controls hidden glyphs.
 - Persist discovery as `beneath_folsom_keepers_lantern_reveal_seen` so the route truth remains readable after reload.
-- Keep hidden glyph art dynamically tied to the post-sway lantern emitter cone: it is not rendered under ambient light or Torch, fades in only under the focused cold light, and fades back to complete invisibility when the cone moves away. The discovery flag records read state, not permanent visual opacity.
+- Keep hidden glyph art dynamically tied to the post-sway lantern emitter wash: use a four-unit, forty-degree reveal bound with decal-surface sampling, near-field grace, edge hysteresis, and a short linger. It is not rendered under ambient light or Torch, fades in only under the active lantern, and fades back to complete invisibility when the wash moves away. The discovery flag records read state, not permanent visual opacity.
 - The traces point toward the sealed lower wall but do not open it.
 - Preserve all existing shed, anchor, gate, survival, equipment, fishing, HUD, mobile-control, and save behavior.
 
