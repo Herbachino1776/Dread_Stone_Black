@@ -1062,11 +1062,18 @@ function addProps({ definition, group, materialFactory }) {
       ...(prop.userData ?? {}),
     };
     const isDecal = prop.kind === 'decal' || prop.tags?.includes('lantern-reveal-decal');
+    const isLanternOnlyReveal = prop.userData?.revealMode === 'lanternCone'
+      && prop.userData?.revealItemId === 'keepers_lantern';
     let mesh;
     if (isDecal) {
       material.transparent = true;
       material.depthWrite = false;
-      material.alphaTest = prop.userData?.alphaTest ?? 0.01;
+      material.alphaTest = isLanternOnlyReveal ? 0 : (prop.userData?.alphaTest ?? 0.01);
+      if (isLanternOnlyReveal) {
+        material.opacity = 0;
+        if (material.emissive) material.emissive.setHex(0x000000);
+        material.emissiveIntensity = 0;
+      }
       material.side = THREE.DoubleSide;
       mesh = new THREE.Mesh(new THREE.PlaneGeometry(size.x, size.y), material);
       mesh.name = prop.id;
@@ -1074,6 +1081,7 @@ function addProps({ definition, group, materialFactory }) {
       mesh.castShadow = false;
       mesh.receiveShadow = false;
       mesh.userData = userData;
+      mesh.visible = !isLanternOnlyReveal;
       group.add(mesh);
     } else {
       mesh = addBox({ group, size, position, material, name: prop.id, userData });

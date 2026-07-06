@@ -53,9 +53,9 @@ Procedural shed geometry, seam growth, hit zones, and a work-knife placeholder a
 - Persist the opened route as `beneath_folsom_drain_grate_pried`.
 - Open only a short maintenance alcove/drain throat beyond the grate, ending at a blocked future route.
 - Place the persistent `keepers_lantern` utility pickup in the maintenance niche beyond the pried grate.
-- Equip it through the shared offhand selection alongside Torch while keeping its cold reveal emitter and light behavior independent; using the nearby clouded-stone interaction reveals one explicit hidden trace set.
+- Equip it through the shared offhand selection alongside Torch while keeping its cold reveal emitter and light behavior independent; the sealed lower wall carries one modest cluster of broken warning glyphs and black contamination.
 - Persist discovery as `beneath_folsom_keepers_lantern_reveal_seen` so the route truth remains readable after reload.
-- Keep hidden glyph art dynamically tied to the post-sway lantern emitter cone: it fades in only under the focused cold light and fades back out when the cone moves away. The discovery flag records read state, not permanent visual opacity.
+- Keep hidden glyph art dynamically tied to the post-sway lantern emitter cone: it is not rendered under ambient light or Torch, fades in only under the focused cold light, and fades back to complete invisibility when the cone moves away. The discovery flag records read state, not permanent visual opacity.
 - The traces point toward the sealed lower wall but do not open it.
 - Preserve all existing shed, anchor, gate, survival, equipment, fishing, HUD, mobile-control, and save behavior.
 
@@ -65,4 +65,4 @@ Persist `folsom_growth_anchor_fire_cleared`, `folsom_growth_anchor_pond_cleared`
 
 Preserve movement, mobile controls, HUD, inventory/equipment, fishing, campfire/survival behavior, gates, saves, and location loading. Do not build the full Beneath Folsom dungeon, Iron Drain Bar combat, enemies, Memory or Records UI, Pale Gates, white machinery, church systems, or bosses.
 
-Success is a small playable continuation: recover Keeper's Lantern beyond the grate, use it without fragile camera aim, and reveal one persistent hidden growth pull toward the next blocked route.
+Success is a small playable continuation: recover Keeper's Lantern beyond the grate and sweep its physical cone across a hidden warning cluster that points toward the next blocked route without opening it.

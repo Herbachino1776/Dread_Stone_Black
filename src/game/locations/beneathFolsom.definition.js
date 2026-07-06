@@ -11,7 +11,12 @@ const textures = Object.freeze({
   rustedIron: { path: './assets/textures/metal_gate_rusted_01.png', repeat: [1.2, 1.4], color: 0x51443b, roughness: 0.9, metalness: 0.36 },
   blackGrowth: { path: './assets/textures/growth/black_growth_cord_surface_01.png', repeat: [2.8, 1.1], color: 0x1d211d, roughness: 0.84, emissive: 0x020302, emissiveIntensity: 0.12 },
   blackScab: { path: './assets/textures/growth/black_growth_scab_intact_02.png', repeat: [1.2, 1.2], color: 0x242824, roughness: 0.82, emissive: 0x020302, emissiveIntensity: 0.1 },
-  lanternGlyphTest: { path: './assets/revealed_glyphs/letters/letter_001.png', repeat: [1, 1], color: 0xb9bab0, roughness: 0.96, metalness: 0, emissive: 0x555852, emissiveIntensity: 0.26, transparent: true, opacity: 0.01 },
+  glyphSymbol01: { path: './assets/revealed_glyphs/symbols/symbol_001.png', repeat: [1, 1], color: 0xb8bbb2, roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
+  glyphScript01: { path: './assets/revealed_glyphs/scripts/script_001.png', repeat: [1, 1], color: 0xaeb3aa, roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
+  glyphLetter01: { path: './assets/revealed_glyphs/letters/letter_001.png', repeat: [1, 1], color: 0xc1c0b7, roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
+  glyphLetter02: { path: './assets/revealed_glyphs/letters/letter_002.png', repeat: [1, 1], color: 0xaaa9a1, roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
+  glyphFace01: { path: './assets/revealed_glyphs/faces/face_001.png', repeat: [1, 1], color: 0x858982, roughness: 1, metalness: 0, transparent: true, opacity: 0 },
+  glyphBlackCord: { path: './assets/textures/growth/black_growth_cord_surface_01.png', repeat: [1, 1], color: 0x393c37, roughness: 1, metalness: 0, transparent: true, opacity: 0 },
 });
 
 function room(id, label, minX, maxX, minZ, maxZ, options = {}) {
@@ -51,6 +56,27 @@ function prop(id, roomId, position, dimensions, material, options = {}) {
   };
 }
 
+function lanternRevealDecal(id, position, dimensions, material, options = {}) {
+  return prop(id, 'BF03', position, { ...dimensions, depth: 0.01 }, material, {
+    kind: 'decal',
+    rotation: options.rotation ?? { x: 0, y: 0, z: 0 },
+    tags: ['lantern-reveal-decal', 'keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth', 'blocked-future-route', ...(options.tags ?? [])],
+    userData: {
+      revealItemId: 'keepers_lantern',
+      hiddenByDefault: true,
+      revealMode: 'lanternCone',
+      revealDistance: options.revealDistance ?? 1.7,
+      revealConeDegrees: options.revealConeDegrees ?? 24,
+      hiddenOpacity: 0,
+      revealedOpacity: options.revealedOpacity ?? 0.78,
+      fadeSpeed: options.fadeSpeed ?? 8,
+      fadeOutSpeed: options.fadeOutSpeed ?? 12,
+      revealStateKey: 'beneath_folsom_keepers_lantern_reveal_seen',
+      alphaTest: 0,
+    },
+  });
+}
+
 const props = [
   // A broad, readable descent silhouette without adding risky step collision.
   prop('beneath_folsom_step_upper', 'BF01', { x: 0, y: 0.06, z: -20.4 }, { width: 6.2, height: 0.12, depth: 2.1 }, 'wetStone', { tags: ['entry-stair', 'non-blocking-step'] }),
@@ -79,18 +105,15 @@ const props = [
   prop('beneath_folsom_alcove_timber_left', 'BF03', { x: -3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
   prop('beneath_folsom_alcove_timber_right', 'BF03', { x: 3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
   prop('beneath_folsom_keeper_niche_shelf', 'BF03', { x: -2.75, y: 0.72, z: 18.8 }, { width: 1.2, height: 0.14, depth: 0.72 }, 'timber', { tags: ['keeper-niche', 'lantern-pickup-setting'] }),
-  prop('beneath_folsom_lantern_reveal_trace_01', 'BF03', { x: -0.85, y: 0.085, z: 16.2 }, { width: 0.16, height: 0.035, depth: 3.1 }, 'blackGrowth', { rotation: { x: 0, y: -0.42, z: 0 }, tags: ['keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth'], userData: { revealItemId: 'keepers_lantern', hiddenByDefault: true } }),
-  prop('beneath_folsom_lantern_reveal_trace_02', 'BF03', { x: 0.35, y: 0.09, z: 19.1 }, { width: 0.18, height: 0.04, depth: 3.4 }, 'blackGrowth', { rotation: { x: 0, y: 0.28, z: 0 }, tags: ['keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth'], userData: { revealItemId: 'keepers_lantern', hiddenByDefault: true } }),
-  prop('beneath_folsom_hidden_growth_pull', 'BF03', { x: 0.15, y: 1.15, z: 21.58 }, { width: 2.5, height: 0.13, depth: 0.08 }, 'blackGrowth', { rotation: { x: 0, y: 0, z: -0.3 }, tags: ['keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth', 'blocked-future-route'], userData: { revealItemId: 'keepers_lantern', hiddenByDefault: true } }),
-  prop('beneath_folsom_lantern_glyph_test_01', 'BF03', { x: 0.48, y: 1.02, z: 21.49 }, { width: 1.05, height: 1.22, depth: 0.01 }, 'lanternGlyphTest', {
-    kind: 'decal',
-    tags: ['lantern-reveal-decal', 'keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth', 'blocked-future-route'],
-    userData: {
-      revealItemId: 'keepers_lantern', hiddenByDefault: true, revealMode: 'lanternCone', revealDistance: 1.7, revealConeDegrees: 24,
-      hiddenOpacity: 0.01, revealedOpacity: 0.86, fadeSpeed: 9, fadeOutSpeed: 12,
-      revealStateKey: 'beneath_folsom_keepers_lantern_reveal_seen', alphaTest: 0.01,
-    },
-  }),
+  // A broken warning cluster on the sealed lower wall. Small independent planes
+  // let the physical lantern cone discover fragments instead of switching on a sign.
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_symbol', { x: -0.82, y: 1.73, z: 21.49 }, { width: 0.82, height: 0.9 }, 'glyphSymbol01', { rotation: { x: 0, y: 0, z: -0.08 }, revealedOpacity: 0.72 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_script', { x: 0.05, y: 0.48, z: 21.485 }, { width: 2.25, height: 0.45 }, 'glyphScript01', { rotation: { x: 0, y: 0, z: 0.025 }, revealedOpacity: 0.68 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_letter_01', { x: 0.35, y: 1.65, z: 21.48 }, { width: 0.38, height: 0.48 }, 'glyphLetter01', { rotation: { x: 0, y: 0, z: 0.13 }, revealedOpacity: 0.8 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_letter_02', { x: 0.86, y: 1.42, z: 21.475 }, { width: 0.34, height: 0.43 }, 'glyphLetter02', { rotation: { x: 0, y: 0, z: -0.16 }, revealedOpacity: 0.74 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_face', { x: -1.52, y: 0.79, z: 21.47 }, { width: 0.42, height: 0.48 }, 'glyphFace01', { rotation: { x: 0, y: 0, z: -0.1 }, revealedOpacity: 0.6 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_cord_left', { x: -0.72, y: 1.08, z: 21.465 }, { width: 0.92, height: 0.18 }, 'glyphBlackCord', { rotation: { x: 0, y: 0, z: -0.52 }, revealedOpacity: 0.7 }),
+  lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_cord_right', { x: 1.18, y: 0.91, z: 21.46 }, { width: 0.78, height: 0.16 }, 'glyphBlackCord', { rotation: { x: 0, y: 0, z: 0.44 }, revealedOpacity: 0.66 }),
 
   // Atmospheric roots only: no interaction, hit count, or clear state.
   prop('beneath_folsom_root_wall_west', 'BF02', { x: -8.78, y: 1.72, z: 4 }, { width: 0.18, height: 0.42, depth: 12 }, 'blackGrowth', { rotation: { x: 0, y: 0, z: -0.18 }, tags: ['black-growth', 'atmospheric-only'] }),

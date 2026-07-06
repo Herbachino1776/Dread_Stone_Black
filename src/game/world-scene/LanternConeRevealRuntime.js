@@ -6,11 +6,13 @@ export const LANTERN_REVEAL_MODE = 'lanternCone';
 const DEFAULTS = Object.freeze({
   revealDistance: 1.7,
   revealConeDegrees: 24,
-  hiddenOpacity: 0.01,
+  hiddenOpacity: 0,
   revealedOpacity: 0.86,
   fadeSpeed: 9,
   fadeOutSpeed: 12,
 });
+
+const HIDDEN_VISIBILITY_THRESHOLD = 0.001;
 
 const toRevealPoint = new THREE.Vector3();
 
@@ -35,11 +37,15 @@ export class LanternConeRevealRuntime {
     if (!object?.isMesh || !object.material) return null;
     const config = { ...DEFAULTS, ...(object.userData ?? {}) };
     if (config.revealMode !== LANTERN_REVEAL_MODE || config.revealItemId !== LANTERN_REVEAL_ITEM_ID) return null;
+    // Lantern-cone decals are secret art. Authored opacity must never make their
+    // hidden state visible under ambient light or an ordinary Torch.
+    config.hiddenOpacity = 0;
     object.material.transparent = true;
     object.material.depthWrite = false;
-    object.material.opacity = config.hiddenOpacity;
+    object.material.alphaTest = 0;
+    object.material.opacity = 0;
     object.material.needsUpdate = true;
-    object.visible = true;
+    object.visible = false;
     return { object, material: object.material, config, revealPoint: new THREE.Vector3(), insideCone: false };
   }
 
@@ -52,7 +58,12 @@ export class LanternConeRevealRuntime {
       entry.insideCone = isPointInsideLanternCone(emitter, entry.revealPoint, entry.config);
       const targetOpacity = entry.insideCone ? entry.config.revealedOpacity : entry.config.hiddenOpacity;
       const speed = entry.insideCone ? entry.config.fadeSpeed : entry.config.fadeOutSpeed;
+      if (entry.insideCone) entry.object.visible = true;
       entry.material.opacity = THREE.MathUtils.lerp(entry.material.opacity, targetOpacity, 1 - Math.exp(-speed * dt));
+      if (!entry.insideCone && entry.material.opacity <= HIDDEN_VISIBILITY_THRESHOLD) {
+        entry.material.opacity = 0;
+        entry.object.visible = false;
+      }
     });
   }
 

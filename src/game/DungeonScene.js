@@ -505,17 +505,11 @@ export class DungeonScene {
     }
     lanternObject.visible = !lanternOwned;
 
-    this.beneathFolsomLanternRevealObjects = [
-      'beneath_folsom_lantern_reveal_trace_01',
-      'beneath_folsom_lantern_reveal_trace_02',
-      'beneath_folsom_hidden_growth_pull',
-    ].map((id) => group.getObjectByName(id)).filter(Boolean);
-    this.setBeneathFolsomLanternRevealVisible(false);
-
     const lanternRevealDecals = [];
     group.traverse((object) => {
       if (object.userData?.revealMode === 'lanternCone' && object.userData?.tags?.includes('lantern-reveal-decal')) lanternRevealDecals.push(object);
     });
+    this.beneathFolsomLanternRevealObjects = lanternRevealDecals;
     this.lanternConeRevealRuntime = new LanternConeRevealRuntime({
       objects: lanternRevealDecals,
       getEmitterState: () => this.lanternRevealEmitterProvider?.() ?? null,
@@ -560,17 +554,6 @@ export class DungeonScene {
     glow.position.y = 0.05;
     lantern.add(glow);
     return lantern;
-  }
-
-  setBeneathFolsomLanternRevealVisible(visible) {
-    this.beneathFolsomLanternRevealObjects.forEach((object) => {
-      object.visible = visible;
-      if (!visible || !object.material) return;
-      object.material = object.material.clone();
-      object.material.color.setHex(0x82998c);
-      object.material.emissive?.setHex?.(0x557466);
-      object.material.emissiveIntensity = 0.72;
-    });
   }
 
   revealBeneathFolsomKeepersLanternTraces() {
