@@ -8,6 +8,7 @@ import { Game } from '../src/game/Game.js';
 import { getLocationDefinition, hasLocationDefinition, loadLocationDefinition } from '../src/game/locations/locationRegistry.js';
 import { GameState } from '../src/game/GameState.js';
 import { SceneSessionHost } from '../src/game/hosts/SceneSessionHost.js';
+import { KeepersLanternViewmodel, KEEPERS_LANTERN_EMITTER, KEEPERS_LANTERN_ITEM_ID } from '../src/game/viewmodels/KeepersLanternViewmodel.js';
 import { Interactions } from '../src/game/Interactions.js';
 import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
@@ -114,6 +115,33 @@ assert.ok(lanternRevealProps.length >= 3 && lanternRevealProps.every((prop) => p
 assert.equal(lanternTraceInteraction?.requiredItemId, 'keepers_lantern', 'The live reveal interaction requires lantern ownership without using the Torch offhand path.');
 assert.equal(lanternTraceInteraction?.saveKey, 'beneath_folsom_keepers_lantern_reveal_seen', 'The reveal interaction maps to its persisted discovery state.');
 assert.equal(equipmentRegistry.items.keepers_lantern?.itemType, 'tool', "Keeper's Lantern remains a utility tool and does not inherit the Torch offhand-light path.");
+assert.equal(KEEPERS_LANTERN_ITEM_ID, 'keepers_lantern', "Keeper's Lantern viewmodel keeps the existing persistent item id.");
+assert.ok(KEEPERS_LANTERN_EMITTER.coneAngleDegrees > 0 && KEEPERS_LANTERN_EMITTER.range > 0, 'Lantern emitter authors a bounded future reveal cone.');
+const lanternCamera = new THREE.PerspectiveCamera();
+lanternCamera.position.set(4, 2, -3);
+lanternCamera.rotation.set(0.08, 0.45, 0, 'YXZ');
+const lanternViewmodel = new KeepersLanternViewmodel({
+  camera: lanternCamera,
+  equipmentRuntime: { hasItem: (itemId) => itemId === 'keepers_lantern' },
+});
+lanternViewmodel.update(1 / 60);
+const lanternEmitterState = lanternViewmodel.getEmitterState();
+assert.equal(lanternEmitterState.active, true, 'Owned Keeper\'s Lantern activates its V1 viewmodel emitter.');
+assert.equal(lanternEmitterState.itemId, 'keepers_lantern');
+assert.ok(lanternEmitterState.worldPosition.isVector3 && lanternEmitterState.worldDirection.isVector3, 'Lantern emitter exposes world position and world direction vectors.');
+assert.ok(lanternEmitterState.worldDirection.lengthSq() > 0.99 && lanternEmitterState.source === 'keepers-lantern-emitter-transform', 'Lantern direction comes from its hanging body emitter transform.');
+assert.ok(lanternEmitterState.worldPosition.distanceTo(lanternCamera.position) > 0.4, 'Lantern emitter is physically offset from camera center.');
+assert.equal(lanternViewmodel.coldLight.castShadow, false, 'Lantern light stays mobile-friendly and shadowless.');
+assert.equal(lanternCamera.children.includes(lanternViewmodel.root), true, 'Lantern is a camera-attached held viewmodel.');
+const emitterPositionBeforeMotion = lanternEmitterState.worldPosition.clone();
+lanternCamera.position.add(new THREE.Vector3(0.08, 0, -0.14));
+lanternCamera.rotation.y += 0.12;
+lanternViewmodel.update(1 / 30);
+assert.ok(Math.abs(lanternViewmodel.hangingBody.rotation.x) <= THREE.MathUtils.degToRad(7.01)
+  && Math.abs(lanternViewmodel.hangingBody.rotation.y) <= THREE.MathUtils.degToRad(5.01)
+  && Math.abs(lanternViewmodel.hangingBody.rotation.z) <= THREE.MathUtils.degToRad(8.01), 'Lantern sway reacts to movement and turning but remains bounded.');
+assert.ok(lanternViewmodel.getEmitterState().worldPosition.distanceTo(emitterPositionBeforeMotion) > 0.05, 'Emitter world transform follows the moving lantern viewmodel.');
+lanternViewmodel.dispose();
 const lanternStorageValues = new Map();
 const lanternStorage = {
   get length() { return lanternStorageValues.size; }, key: (index) => [...lanternStorageValues.keys()][index] ?? null,

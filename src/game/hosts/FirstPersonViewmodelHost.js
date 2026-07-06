@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { EQUIPMENT_EVENTS } from '../../engine/equipment/EquipmentEvents.js';
 import { CastingController } from '../fishing/CastingController.js';
 import { FishingRodView, HELD_ROD_VIEWMODEL_LAYER } from '../fishing/FishingRodView.js';
+import { KeepersLanternViewmodel } from '../viewmodels/KeepersLanternViewmodel.js';
 
 const ROD_VIEWMODEL_LIGHTING = Object.freeze({
   skyColor: 0xffe2b8,
@@ -53,6 +54,8 @@ export class FirstPersonViewmodelHost {
     this.createRodViewmodelLights();
     this.createPlayerTorchLight();
     this.fishingRodView = new FishingRodView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState, dungeon: this.dungeon });
+    this.keepersLanternViewmodel = new KeepersLanternViewmodel({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, player: this.player });
+    this.sceneSessionHost?.setLanternRevealEmitterProvider?.(() => this.getKeeperLanternEmitter());
     this.castingController = new CastingController({ app: this.app, camera: this.camera, player: this.player, dungeon: this.dungeon, hud: this.hud, rodView: this.fishingRodView, equipmentRuntime: this.equipmentRuntime, feedback: this.feedback });
 
     this.disposers.push(this.equipmentRuntime?.on?.(EQUIPMENT_EVENTS.equippedChanged, (equipmentState) => this.handleEquipmentChanged(equipmentState)));
@@ -66,6 +69,7 @@ export class FirstPersonViewmodelHost {
     this.player = session?.player;
     this.dungeon = session?.dungeon;
     if (this.fishingRodView) this.fishingRodView.dungeon = this.dungeon;
+    this.keepersLanternViewmodel?.rebind?.({ camera: this.camera, player: this.player });
     this.castingController?.rebindSession?.({ player: this.player, dungeon: this.dungeon });
     this.syncEquipmentVisuals();
     return this.getDebugSummary();
@@ -81,6 +85,7 @@ export class FirstPersonViewmodelHost {
 
   update(deltaSeconds, context = {}) {
     this.fishingRodView?.update(deltaSeconds, this.castingController?.state);
+    this.keepersLanternViewmodel?.update(deltaSeconds);
     this.castingController?.update(deltaSeconds);
     this.updatePlayerTorchLight(deltaSeconds);
     return this.getDebugSummary(context);
@@ -88,6 +93,19 @@ export class FirstPersonViewmodelHost {
 
   updateDebugHud(player = this.player) {
     this.hudHost?.hud?.updateDebug(player, this.castingController?.debug);
+  }
+
+  getKeeperLanternEmitter(targets) {
+    return this.keepersLanternViewmodel?.getEmitterState?.(targets) ?? {
+      active: false,
+      available: false,
+      itemId: 'keepers_lantern',
+      worldPosition: new THREE.Vector3(),
+      worldDirection: new THREE.Vector3(0, 0, -1),
+      coneAngleDegrees: 34,
+      range: 11,
+      source: 'unavailable',
+    };
   }
 
   createRodViewmodelLights() {
@@ -159,6 +177,7 @@ export class FirstPersonViewmodelHost {
       hasFishingRodView: Boolean(this.fishingRodView),
       hasCastingController: Boolean(this.castingController),
       torchVisible: this.playerTorch?.visible === true,
+      keepersLanternActive: this.keepersLanternViewmodel?.isActive?.() === true,
       fishing: this.castingController?.debug ?? null,
     };
   }
@@ -168,12 +187,15 @@ export class FirstPersonViewmodelHost {
     this.disposers = [];
     this.camera?.remove?.(this.rodViewmodelLights);
     this.camera?.remove?.(this.playerTorch);
+    this.keepersLanternViewmodel?.dispose?.();
+    this.sceneSessionHost?.setLanternRevealEmitterProvider?.(null);
     this.rodViewmodelLights = null;
     this.rodViewmodelHemisphereLight = null;
     this.rodViewmodelKeyLight = null;
     this.playerTorch = null;
     this.playerTorchPointLight = null;
     this.playerTorchSpotLight = null;
+    this.keepersLanternViewmodel = null;
     this.session = null;
   }
 }

@@ -15,6 +15,7 @@ export class SceneSessionHost {
     this.locationId = null;
     this.onSessionChanged = onSessionChanged;
     this.transitionPromise = null;
+    this.lanternRevealEmitterProvider = null;
 
     const { width, height } = this.rendererHost.getViewportSize();
     this.camera = new THREE.PerspectiveCamera(68, width / height, 0.1, 260);
@@ -184,6 +185,14 @@ export class SceneSessionHost {
     };
   }
 
+  setLanternRevealEmitterProvider(provider) {
+    this.lanternRevealEmitterProvider = typeof provider === 'function' ? provider : null;
+  }
+
+  getLanternRevealEmitter(targets) {
+    return this.lanternRevealEmitterProvider?.(targets) ?? null;
+  }
+
   disposeCurrentSession() {
     if (!this.scene) return;
     this.player?.dispose?.();
@@ -201,6 +210,7 @@ export class SceneSessionHost {
   }
 
   dispose() {
+    this.lanternRevealEmitterProvider = null;
     this.resizeDisposer?.();
     this.disposeCurrentSession();
   }
