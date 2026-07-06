@@ -18,7 +18,7 @@ const ITEM_DETAILS = Object.freeze({
   flint_stick: { type: 'Key Item', use: 'Start campfires', icon: '⚿' },
   old_work_knife: { type: 'Work Tool', use: 'Cut tough fibers', weight: '0.6', icon: '╱' },
   iron_drain_bar: { type: 'Work Tool', use: 'Pry old ironwork', weight: '3.8', icon: '━' },
-  keepers_lantern: { type: 'Utility Tool', use: 'Reveal buried traces', weight: '1.8', light: 'Cold', icon: '◈' },
+  keepers_lantern: { type: 'Offhand Utility', use: 'Reveal buried traces', weight: '1.8', light: 'Cold', icon: '◈' },
   torch: { type: 'Offhand', light: 'Yes', icon: '♨' },
 });
 
@@ -159,18 +159,21 @@ export class EquipmentPanel {
   }
 
   createOffhandEntries() {
-    if (!this.survivalInventory.hasItem('torch')) return [];
     const equippedOffhand = this.survivalInventory.getEquippedOffhand();
-    return [{
-      id: 'torch', name: 'Torch', stats: equippedOffhand === 'torch' ? 'Equipped' : 'Offhand', meta: 'Light',
-      description: 'A wooden torch wrapped in cloth. Provides light in dark places.', equipped: equippedOffhand === 'torch', detail: ITEM_DETAILS.torch,
+    const offhands = [
+      { id: 'torch', name: 'Torch', meta: 'Warm Light', description: 'A wooden torch wrapped in cloth. Provides light in dark places.' },
+      { id: 'keepers_lantern', name: "Keeper's Lantern", meta: 'Cold Reveal', description: 'A hanging keeper lantern with clouded glass and a weak cold lens.' },
+    ];
+    return offhands.filter(({ id }) => this.survivalInventory.hasItem(id)).map(({ id, name, meta, description }) => ({
+      id, name, stats: equippedOffhand === id ? 'Equipped' : 'Offhand', meta,
+      description, equipped: equippedOffhand === id, detail: ITEM_DETAILS[id],
       onActivate: () => {
-        const isEquipped = this.survivalInventory.getEquippedOffhand() === 'torch';
-        if (this.survivalInventory.equipOffhand(isEquipped ? null : 'torch')) {
+        const isEquipped = this.survivalInventory.getEquippedOffhand() === id;
+        if (this.survivalInventory.equipOffhand(isEquipped ? null : id)) {
           window.dispatchEvent(new CustomEvent('field-offhand-equipped-changed'));
         }
       },
-    }];
+    }));
   }
 
   createKeyItemEntries() {
@@ -178,7 +181,6 @@ export class EquipmentPanel {
     if (this.survivalInventory.hasKeyItem('flint_stick')) entries.push({ id: 'flint_stick', name: 'Flint Stick', stats: 'Key Item', meta: 'Campfire', description: 'Reusable campfire starter.', detail: ITEM_DETAILS.flint_stick });
     if (this.equipmentRuntime.hasItem('old_work_knife')) entries.push({ id: 'old_work_knife', name: 'Old Work Knife', stats: 'Work Tool', meta: 'Cutting', description: 'A short rusted shed knife with a worn wooden grip.', detail: ITEM_DETAILS.old_work_knife });
     if (this.equipmentRuntime.hasItem('iron_drain_bar')) entries.push({ id: 'iron_drain_bar', name: 'Iron Drain Bar', stats: 'Work Tool', meta: 'Prying', description: 'A heavy rusted maintenance bar from the old drains.', detail: ITEM_DETAILS.iron_drain_bar });
-    if (this.equipmentRuntime.hasItem('keepers_lantern')) entries.push({ id: 'keepers_lantern', name: "Keeper's Lantern", stats: 'Utility Tool', meta: 'Reveal', description: 'A dead keeper lantern with clouded glass and a weak cold lens.', detail: ITEM_DETAILS.keepers_lantern });
     return entries;
   }
 

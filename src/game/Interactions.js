@@ -204,7 +204,7 @@ export class Interactions {
     }
 
     if (interaction.type === 'keepersLanternTrace') {
-      if (!this.equipmentRuntime?.hasItem?.('keepers_lantern')) return false;
+      if (this.equipmentRuntime?.getEquippedOffhandId?.() !== 'keepers_lantern') return false;
       const revealed = this.dungeon.revealBeneathFolsomKeepersLanternTraces?.();
       const message = revealed ? 'The lantern glass clouds, then clears. Cold light catches old marks.' : interaction.message;
       this.setTemporaryHint(message, 1700);
@@ -361,7 +361,7 @@ export class Interactions {
     }
 
     if (interaction.type === 'keepersLanternTrace') {
-      if (!this.equipmentRuntime?.hasItem?.('keepers_lantern')) return false;
+      if (this.equipmentRuntime?.getEquippedOffhandId?.() !== 'keepers_lantern') return false;
       const revealed = this.dungeon.revealBeneathFolsomKeepersLanternTraces?.();
       const message = revealed ? 'The lantern glass clouds, then clears. Cold light catches old marks.' : interaction.message;
       this.setTemporaryHint(message, 1700);
@@ -997,7 +997,11 @@ export class Interactions {
 
     return this.dungeon.inspectInteractions
       .filter((interaction) => !interaction.collected)
-      .filter((interaction) => !interaction.requiredItemId || this.equipmentRuntime?.hasItem?.(interaction.requiredItemId))
+      .filter((interaction) => {
+        if (!interaction.requiredItemId) return true;
+        if (interaction.type === 'keepersLanternTrace') return this.equipmentRuntime?.getEquippedOffhandId?.() === interaction.requiredItemId;
+        return this.equipmentRuntime?.hasItem?.(interaction.requiredItemId);
+      })
       .map((interaction) => ({ interaction, distance: this.horizontalDistanceTo(interaction.target) }))
       .filter(({ interaction, distance }) => distance <= (interaction.range ?? INTERACT_RANGE))
       .sort((a, b) => a.distance - b.distance)[0]?.interaction ?? null;

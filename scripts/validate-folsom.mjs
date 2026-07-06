@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
+import { EquipmentRuntime } from '../src/engine/equipment/EquipmentRuntime.js';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
 import { compileDungeonLocation } from '../src/engine/dungeon-authoring/DungeonCompiler.js';
 import { DungeonScene } from '../src/game/DungeonScene.js';
@@ -11,6 +12,7 @@ import { SceneSessionHost } from '../src/game/hosts/SceneSessionHost.js';
 import { KeepersLanternViewmodel, KEEPERS_LANTERN_EMITTER, KEEPERS_LANTERN_ITEM_ID } from '../src/game/viewmodels/KeepersLanternViewmodel.js';
 import { Interactions } from '../src/game/Interactions.js';
 import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
+import { SurvivalInventoryBridge } from '../src/game/equipment/SurvivalInventoryBridge.js';
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
 import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
@@ -112,35 +114,45 @@ assert.equal(keepersLanternPickup?.type, 'equipmentPickup', "Keeper's Lantern us
 assert.ok(Math.hypot(keepersLanternPickup.target.x - beneathArrival.position.x, keepersLanternPickup.target.z - beneathArrival.position.z) > 20, "Keeper's Lantern is beyond the entry spawn.");
 assert.ok(keepersLanternPickup.target.z > 14 && keepersLanternPickup.tags?.includes('post-drain-grate'), "Keeper's Lantern is placed beyond the pry obstruction.");
 assert.ok(lanternRevealProps.length >= 3 && lanternRevealProps.every((prop) => prop.userData?.hiddenByDefault && prop.userData?.revealItemId === 'keepers_lantern'), 'The bounded route-truth set is hidden under normal light and mapped to the lantern.');
-assert.equal(lanternTraceInteraction?.requiredItemId, 'keepers_lantern', 'The live reveal interaction requires lantern ownership without using the Torch offhand path.');
+assert.equal(lanternTraceInteraction?.requiredItemId, 'keepers_lantern', 'The live reveal interaction remains mapped to the existing lantern item id.');
 assert.equal(lanternTraceInteraction?.saveKey, 'beneath_folsom_keepers_lantern_reveal_seen', 'The reveal interaction maps to its persisted discovery state.');
-assert.equal(equipmentRegistry.items.keepers_lantern?.itemType, 'tool', "Keeper's Lantern remains a utility tool and does not inherit the Torch offhand-light path.");
+assert.equal(equipmentRegistry.items.keepers_lantern?.itemType, 'offhand', "Keeper's Lantern is registered as offhand equipment.");
+assert.equal(equipmentRegistry.items.keepers_lantern?.slot, 'offhand', "Keeper's Lantern uses the shared offhand slot without changing its item id.");
 assert.equal(KEEPERS_LANTERN_ITEM_ID, 'keepers_lantern', "Keeper's Lantern viewmodel keeps the existing persistent item id.");
 assert.ok(KEEPERS_LANTERN_EMITTER.coneAngleDegrees > 0 && KEEPERS_LANTERN_EMITTER.range > 0, 'Lantern emitter authors a bounded future reveal cone.');
 const lanternCamera = new THREE.PerspectiveCamera();
 lanternCamera.position.set(4, 2, -3);
 lanternCamera.rotation.set(0.08, 0.45, 0, 'YXZ');
+let lanternEquippedOffhand = null;
 const lanternViewmodel = new KeepersLanternViewmodel({
   camera: lanternCamera,
-  equipmentRuntime: { hasItem: (itemId) => itemId === 'keepers_lantern' },
+  equipmentRuntime: {
+    hasItem: (itemId) => itemId === 'keepers_lantern',
+    getEquippedOffhandId: () => lanternEquippedOffhand,
+  },
 });
 lanternViewmodel.update(1 / 60);
+assert.equal(lanternViewmodel.getEmitterState().active, false, 'Owning the lantern alone does not display the offhand viewmodel.');
+lanternEquippedOffhand = 'keepers_lantern';
+lanternViewmodel.update(1 / 60);
 const lanternEmitterState = lanternViewmodel.getEmitterState();
-assert.equal(lanternEmitterState.active, true, 'Owned Keeper\'s Lantern activates its V1 viewmodel emitter.');
+assert.equal(lanternEmitterState.active, true, 'Equipped Keeper\'s Lantern activates its offhand viewmodel emitter.');
 assert.equal(lanternEmitterState.itemId, 'keepers_lantern');
 assert.ok(lanternEmitterState.worldPosition.isVector3 && lanternEmitterState.worldDirection.isVector3, 'Lantern emitter exposes world position and world direction vectors.');
 assert.ok(lanternEmitterState.worldDirection.lengthSq() > 0.99 && lanternEmitterState.source === 'keepers-lantern-emitter-transform', 'Lantern direction comes from its hanging body emitter transform.');
 assert.ok(lanternEmitterState.worldPosition.distanceTo(lanternCamera.position) > 0.4, 'Lantern emitter is physically offset from camera center.');
+assert.ok(lanternCamera.worldToLocal(lanternEmitterState.worldPosition.clone()).x < 0, 'Lantern occupies the left/offhand side of the camera view.');
 assert.equal(lanternViewmodel.coldLight.castShadow, false, 'Lantern light stays mobile-friendly and shadowless.');
 assert.equal(lanternCamera.children.includes(lanternViewmodel.root), true, 'Lantern is a camera-attached held viewmodel.');
 const emitterPositionBeforeMotion = lanternEmitterState.worldPosition.clone();
-lanternCamera.position.add(new THREE.Vector3(0.08, 0, -0.14));
+lanternCamera.position.x += 0.2;
+lanternViewmodel.update(1 / 30);
+assert.ok(lanternViewmodel.getEmitterState().worldPosition.distanceTo(emitterPositionBeforeMotion) > 0.1, 'Emitter world transform follows translation of the lantern viewmodel.');
 lanternCamera.rotation.y += 0.12;
 lanternViewmodel.update(1 / 30);
 assert.ok(Math.abs(lanternViewmodel.hangingBody.rotation.x) <= THREE.MathUtils.degToRad(7.01)
   && Math.abs(lanternViewmodel.hangingBody.rotation.y) <= THREE.MathUtils.degToRad(5.01)
   && Math.abs(lanternViewmodel.hangingBody.rotation.z) <= THREE.MathUtils.degToRad(8.01), 'Lantern sway reacts to movement and turning but remains bounded.');
-assert.ok(lanternViewmodel.getEmitterState().worldPosition.distanceTo(emitterPositionBeforeMotion) > 0.05, 'Emitter world transform follows the moving lantern viewmodel.');
 lanternViewmodel.dispose();
 const lanternStorageValues = new Map();
 const lanternStorage = {
@@ -148,6 +160,17 @@ const lanternStorage = {
   getItem: (key) => lanternStorageValues.get(key) ?? null, setItem: (key, value) => lanternStorageValues.set(key, String(value)), removeItem: (key) => lanternStorageValues.delete(key),
 };
 const lanternGameState = new GameState(lanternStorage);
+const offhandRuntime = new EquipmentRuntime({
+  weaponProfiles: equipmentRegistry.weapons,
+  startingEquipment: { acquiredItemIds: ['unarmed', 'torch', 'keepers_lantern'], equipped: { weapon: 'unarmed', offhand: 'torch' } },
+});
+const offhandBridge = new SurvivalInventoryBridge({ equipmentRuntime: offhandRuntime, gameState: lanternGameState });
+assert.equal(offhandBridge.equipOffhand('keepers_lantern'), true, 'Owned Keeper\'s Lantern can be equipped through the existing offhand bridge.');
+assert.equal(offhandRuntime.getEquippedOffhandId(), 'keepers_lantern', 'Equipping the lantern replaces Torch in the shared offhand slot.');
+lanternGameState.saveEquipmentSnapshot(offhandRuntime.getSnapshot());
+assert.equal(new GameState(lanternStorage).getEquipmentSnapshot().equipped.offhand, 'keepers_lantern', 'Keeper\'s Lantern offhand selection persists through equipment save repair.');
+assert.equal(offhandBridge.equipOffhand('torch'), true, 'Torch can be re-equipped after the lantern.');
+assert.equal(offhandRuntime.getEquippedOffhandId(), 'torch', 'Re-equipping Torch cleanly deactivates the lantern slot state.');
 const lanternSceneHarness = Object.assign(Object.create(DungeonScene.prototype), {
   inspectInteractions: (beneathFolsom.interactions ?? []).map((interaction) => ({ ...interaction, target: new THREE.Vector3(interaction.target.x, interaction.target.y, interaction.target.z) })),
   gameState: lanternGameState, collision: beneathFolsomRuntime.collisionWorld, beneathFolsomLanternRevealObjects: [],
@@ -155,18 +178,21 @@ const lanternSceneHarness = Object.assign(Object.create(DungeonScene.prototype),
 lanternSceneHarness.configureBeneathFolsomDrainLoop(beneathFolsomRuntime);
 assert.ok(lanternSceneHarness.beneathFolsomLanternRevealObjects.length >= 3 && lanternSceneHarness.beneathFolsomLanternRevealObjects.every((object) => object.visible === false), 'Lantern route traces are hidden in the normal runtime view.');
 const lanternOwnedItems = new Set();
+let interactionEquippedOffhand = null;
 const lanternMessages = [];
 const lanternInteractions = new Interactions({
   player: { position: new THREE.Vector3(lanternTraceInteraction.target.x, lanternTraceInteraction.target.y, lanternTraceInteraction.target.z), getLookDirection: () => new THREE.Vector3(0, 0, 1) },
   dungeon: Object.assign(lanternSceneHarness, { area: 'beneath-folsom', outdoorInteractions: [] }),
-  equipmentRuntime: { hasItem: (itemId) => lanternOwnedItems.has(itemId) },
+  equipmentRuntime: { hasItem: (itemId) => lanternOwnedItems.has(itemId), getEquippedOffhandId: () => interactionEquippedOffhand },
   hud: { showHint: () => {}, showMessage: (message) => lanternMessages.push(message), updateFieldKitStatus: () => {} },
   feedback: { shake: () => {} },
 });
 assert.notEqual(lanternInteractions.getNearbyInspectInteraction()?.id, lanternTraceInteraction.id, 'The hidden-trace interaction is unavailable before lantern acquisition.');
 lanternOwnedItems.add('keepers_lantern');
 lanternSceneHarness.inspectInteractions.find((interaction) => interaction.id === keepersLanternPickup.id).collected = true;
-assert.equal(lanternInteractions.getNearbyInspectInteraction()?.id, lanternTraceInteraction.id, 'Lantern ownership exposes a broad nearby reveal interaction without camera aim.');
+assert.notEqual(lanternInteractions.getNearbyInspectInteraction()?.id, lanternTraceInteraction.id, 'Owned but unequipped lantern does not expose the reveal interaction.');
+interactionEquippedOffhand = 'keepers_lantern';
+assert.equal(lanternInteractions.getNearbyInspectInteraction()?.id, lanternTraceInteraction.id, 'Equipped lantern exposes a broad nearby reveal interaction without camera aim.');
 lanternInteractions.interact();
 assert.ok(lanternMessages.at(-1)?.includes('Cold light catches old marks'), 'The live reveal path gives concise physical feedback.');
 assert.ok(lanternSceneHarness.beneathFolsomLanternRevealObjects.every((object) => object.visible && object.material?.emissiveIntensity >= 0.7), 'Revealed route traces become readable with cold emissive treatment.');

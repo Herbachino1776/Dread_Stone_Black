@@ -180,7 +180,7 @@ export class GameState {
     }
     if (normalizedItemId === 'wood_axe') this.acquireFieldTool('wood_axe');
     if (normalizedItemId === 'fishing_rod') this.acquireFieldTool('fishing_rod');
-    if (normalizedItemId === 'torch') this.acquireFieldOffhand('torch');
+    if (['torch', 'keepers_lantern'].includes(normalizedItemId)) this.acquireFieldOffhand(normalizedItemId);
     this.saveFieldSurvivalState();
     return true;
   }
@@ -198,6 +198,7 @@ export class GameState {
 
   acquireFieldOffhand(itemId) {
     if (!itemId) return false;
+    this.fieldSurvivalState.inventory[itemId] = true;
     this.fieldSurvivalState.equipment.owned[itemId] = true;
     this.saveFieldSurvivalState();
     return true;
@@ -375,6 +376,7 @@ export class GameState {
         raw_fish: Math.max(0, Number(source.inventory?.raw_fish) || 0),
         cooked_fish: Math.max(0, Number(source.inventory?.cooked_fish) || 0),
         torch: Boolean(source.inventory?.torch || source.equipment?.owned?.torch),
+        keepers_lantern: Boolean(source.inventory?.keepers_lantern || source.equipment?.owned?.keepers_lantern),
       },
       keyItems: {
         flint_stick: Boolean(source.keyItems?.flint_stick || source.inventory?.flint_stick),
@@ -386,10 +388,14 @@ export class GameState {
           ...(source.inventory?.field_axe || source.inventory?.wood_axe ? { wood_axe: true } : {}),
           ...(source.inventory?.fishing_rod || source.equipment?.owned?.fishing_rod ? { fishing_rod: true } : {}),
           ...(source.inventory?.torch || source.equipment?.owned?.torch ? { torch: true } : {}),
+          ...(source.inventory?.keepers_lantern || source.equipment?.owned?.keepers_lantern ? { keepers_lantern: true } : {}),
         },
         equippedTool: source.equipment?.equippedTool === 'field_axe' ? 'wood_axe' : (['wood_axe', 'fishing_rod'].includes(source.equipment?.equippedTool) ? source.equipment.equippedTool : null),
         equippedItem: ['wood', 'raw_fish', 'cooked_fish'].includes(source.equipment?.equippedItem) && Math.max(0, Number(source.inventory?.[source.equipment.equippedItem]) || 0) > 0 ? source.equipment.equippedItem : null,
-        equippedOffhand: source.equipment?.equippedOffhand === 'torch' && Boolean(source.inventory?.torch || source.equipment?.owned?.torch) ? 'torch' : null,
+        equippedOffhand: ['torch', 'keepers_lantern'].includes(source.equipment?.equippedOffhand)
+          && Boolean(source.inventory?.[source.equipment.equippedOffhand] || source.equipment?.owned?.[source.equipment.equippedOffhand])
+          ? source.equipment.equippedOffhand
+          : null,
       },
       campfires: this.repairFieldCampfires(source),
       fishStacks: {

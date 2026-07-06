@@ -4,6 +4,7 @@ export const SURVIVAL_ITEM_IDS = Object.freeze([
   'wood_axe',
   'fishing_rod',
   'torch',
+  'keepers_lantern',
   'wood',
   'raw_fish',
   'cooked_fish',
@@ -11,7 +12,7 @@ export const SURVIVAL_ITEM_IDS = Object.freeze([
 ]);
 
 const WEAPON_IDS = new Set(['wood_axe', 'fishing_rod']);
-const OFFHAND_IDS = new Set(['torch']);
+const OFFHAND_IDS = new Set(['torch', 'keepers_lantern']);
 const CONSUMABLE_IDS = new Set(['wood', 'raw_fish', 'cooked_fish']);
 const KEY_ITEM_IDS = new Set(['flint_stick']);
 
@@ -74,6 +75,7 @@ export class SurvivalInventoryBridge {
     if (normalizedItemId && (!OFFHAND_IDS.has(normalizedItemId) || !this.hasItem(normalizedItemId))) return false;
     const equipped = this.equipmentRuntime?.equip?.(EQUIPMENT_SLOTS.offhand, normalizedItemId ?? null) ?? true;
     if (!equipped) return false;
+    if (normalizedItemId) this.gameState?.acquireFieldOffhand?.(normalizedItemId);
     this.gameState?.equipFieldOffhand?.(normalizedItemId ?? null);
     return true;
   }
@@ -97,7 +99,7 @@ export class SurvivalInventoryBridge {
   }
 
   syncRuntimeFromFieldState() {
-    for (const itemId of ['wood_axe', 'fishing_rod', 'torch']) {
+    for (const itemId of ['wood_axe', 'fishing_rod', 'torch', 'keepers_lantern']) {
       if (this.gameState?.hasFieldItem?.(itemId) && !this.equipmentRuntime?.hasItem?.(itemId)) {
         this.equipmentRuntime?.acquireItem?.(itemId, { source: 'field_survival_state_sync', tags: ['field-survival', 'save-compat'] });
       }
@@ -105,6 +107,6 @@ export class SurvivalInventoryBridge {
     const equippedTool = this.gameState?.getEquippedFieldTool?.();
     if (WEAPON_IDS.has(equippedTool) && this.equipmentRuntime?.hasItem?.(equippedTool)) this.equipmentRuntime?.equip?.(EQUIPMENT_SLOTS.weapon, equippedTool);
     const equippedOffhand = this.gameState?.getEquippedFieldOffhand?.();
-    if (equippedOffhand === 'torch' && this.equipmentRuntime?.hasItem?.('torch')) this.equipmentRuntime?.equip?.(EQUIPMENT_SLOTS.offhand, 'torch');
+    if (OFFHAND_IDS.has(equippedOffhand) && this.equipmentRuntime?.hasItem?.(equippedOffhand)) this.equipmentRuntime?.equip?.(EQUIPMENT_SLOTS.offhand, equippedOffhand);
   }
 }

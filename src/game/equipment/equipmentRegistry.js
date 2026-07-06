@@ -50,7 +50,7 @@ export const equipmentRegistry = Object.freeze({
       source: 'beneath_folsom_iron_drain_bar_pickup',
     }),
     keepers_lantern: Object.freeze({
-      id: 'keepers_lantern', name: "Keeper's Lantern", displayName: "Keeper's Lantern", itemType: 'tool', type: 'tool', slot: 'tool',
+      id: 'keepers_lantern', name: "Keeper's Lantern", displayName: "Keeper's Lantern", itemType: 'offhand', type: 'offhand', slot: 'offhand',
       tags: ['utility', 'lantern', 'reveal', 'beneath-folsom'], source: 'beneath_folsom_keepers_lantern_pickup',
     }),
     torch: Object.freeze({

@@ -8,7 +8,7 @@ export const KEEPERS_LANTERN_EMITTER = Object.freeze({
   range: 11,
 });
 
-const REST_POSITION = Object.freeze({ x: 0.48, y: -0.38, z: -1.08 });
+const REST_POSITION = Object.freeze({ x: -0.48, y: -0.38, z: -1.08 });
 const MAX_SWAY_X = THREE.MathUtils.degToRad(7);
 const MAX_SWAY_Y = THREE.MathUtils.degToRad(5);
 const MAX_SWAY_Z = THREE.MathUtils.degToRad(8);
@@ -129,10 +129,7 @@ export class KeepersLanternViewmodel {
   }
 
   isActive() {
-    // V1 has no selectable tool slot UI. Ownership is the same condition used
-    // by the existing Keeper's Lantern reveal interaction; future tool selection
-    // can narrow this without changing the emitter contract.
-    return this.equipmentRuntime?.hasItem?.(KEEPERS_LANTERN_ITEM_ID) === true;
+    return this.equipmentRuntime?.getEquippedOffhandId?.() === KEEPERS_LANTERN_ITEM_ID;
   }
 
   update(deltaSeconds) {
