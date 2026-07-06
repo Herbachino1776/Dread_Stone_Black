@@ -98,6 +98,7 @@ assert.equal(underworksReturnSpawn?.userData?.returnFromLocation, 'beneath-folso
 
 assert.equal(beneathFolsom.id, 'beneath-folsom');
 assert.equal(beneathFolsom.displayName, 'Beneath Folsom');
+assert.equal(beneathFolsom.fog?.color, beneathFolsom.lighting?.background, 'Beneath Folsom distance fog falls into the same dark murk as the scene background.');
 assert.equal(beneathFolsomRuntime.validation.ok, true, `Beneath Folsom compiles cleanly: ${beneathFolsomRuntime.validation.errors.join('; ')}`);
 const beneathArrival = beneathFolsomRuntime.spawnAnchors.find((spawn) => spawn.id === 'beneath_folsom_underworks_arrival' && spawn.kind === 'player');
 assert.ok(beneathArrival, 'Beneath Folsom has a valid player arrival spawn.');

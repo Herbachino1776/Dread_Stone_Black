@@ -132,7 +132,7 @@ export const beneathFolsomDefinition = Object.freeze({
   type: 'underworks',
   tags: ['interior', 'underworks', 'compiled-runtime', 'folsom-chapter-2', 'entry-slice'],
   notes: 'First under-town tool loop: recover the Iron Drain Bar and pry open one service grate into a short drain throat.',
-  fog: { color: 0x18201e, near: 5, far: 34 },
+  fog: { color: 0x090c0b, near: 5, far: 34 },
   lighting: { background: 0x090c0b },
   textures,
   defaultFloorY: FLOOR_Y,
