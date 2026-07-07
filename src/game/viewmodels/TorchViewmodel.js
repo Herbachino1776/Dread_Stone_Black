@@ -4,8 +4,9 @@ import { KEEPERS_LANTERN_VIEWMODEL_LAYER } from './KeepersLanternViewmodel.js';
 export const TORCH_ITEM_ID = 'torch';
 
 export const TORCH_LIGHTING = Object.freeze({
-  point: Object.freeze({ color: 0xffb066, intensity: 6.8, distance: 36, decay: 1.3 }),
-  wash: Object.freeze({ color: 0xffc078, intensity: 7.2, distance: 56, angle: 0.78, penumbra: 0.82, decay: 1.25 }),
+  point: Object.freeze({ color: 0xffb066, intensity: 5.4, distance: 32, decay: 1.45 }),
+  nearFill: Object.freeze({ color: 0xffa85c, intensity: 2.2, distance: 9, decay: 1.65, projectionOffset: 1.08 }),
+  wash: Object.freeze({ color: 0xffc078, intensity: 3.8, distance: 44, angle: 1.02, penumbra: 0.94, decay: 1.45, projectionOffset: 1.08 }),
 });
 
 const TORCH_FLAME_FRAME_PATHS = Object.freeze([
@@ -56,6 +57,7 @@ export class TorchViewmodel {
     this.buildProceduralTorch();
     markViewmodel(this.root);
     this.pointLight.layers.set(0);
+    this.nearFillLight.layers.set(0);
     this.warmSpotLight.layers.set(0);
     this.camera?.add?.(this.root);
   }
@@ -150,11 +152,19 @@ export class TorchViewmodel {
     this.pointLight = new THREE.PointLight(TORCH_LIGHTING.point.color, TORCH_LIGHTING.point.intensity, TORCH_LIGHTING.point.distance, TORCH_LIGHTING.point.decay);
     this.pointLight.name = 'torch-head-warm-point-light';
     this.pointLight.castShadow = false;
+    // Viewmodel geometry can extend through a wall before the player collider reaches it.
+    // Keep the physical light on the flame, but project a low, broad fill from a point
+    // closer to the camera so nearby surfaces cannot fall behind every light source.
+    this.nearFillLight = new THREE.PointLight(TORCH_LIGHTING.nearFill.color, TORCH_LIGHTING.nearFill.intensity, TORCH_LIGHTING.nearFill.distance, TORCH_LIGHTING.nearFill.decay);
+    this.nearFillLight.name = 'torch-head-near-surface-fill';
+    this.nearFillLight.position.z = TORCH_LIGHTING.nearFill.projectionOffset;
+    this.nearFillLight.castShadow = false;
     this.warmSpotLight = new THREE.SpotLight(TORCH_LIGHTING.wash.color, TORCH_LIGHTING.wash.intensity, TORCH_LIGHTING.wash.distance, TORCH_LIGHTING.wash.angle, TORCH_LIGHTING.wash.penumbra, TORCH_LIGHTING.wash.decay);
     this.warmSpotLight.name = 'torch-head-forward-wash';
+    this.warmSpotLight.position.z = TORCH_LIGHTING.wash.projectionOffset;
     this.warmSpotLight.castShadow = false;
     this.warmSpotLight.target.position.set(0, 0.2, -6);
-    this.emitterTransform.add(this.pointLight, this.warmSpotLight, this.warmSpotLight.target);
+    this.emitterTransform.add(this.pointLight, this.nearFillLight, this.warmSpotLight, this.warmSpotLight.target);
     this.aimHitAnchor = this.emitterTransform;
   }
 
@@ -185,6 +195,7 @@ export class TorchViewmodel {
     });
     const flicker = 0.97 + Math.sin(this.elapsed * 6.7) * 0.02 + Math.sin(this.elapsed * 11.3) * 0.012;
     this.pointLight.intensity = TORCH_LIGHTING.point.intensity * flicker;
+    this.nearFillLight.intensity = TORCH_LIGHTING.nearFill.intensity * (0.99 + (flicker - 0.97) * 0.3);
     this.warmSpotLight.intensity = TORCH_LIGHTING.wash.intensity * (0.985 + (flicker - 0.97) * 0.55);
   }
 
