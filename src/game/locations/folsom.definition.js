@@ -49,11 +49,6 @@ const FOLSOM_BORDER_WALL_PERIMETER = Object.freeze([
   [-92, -86], [-58, -96], [8, -94], [68, -88], [94, -54], [94, -12], [88, -2], [88, 10],
   [90, 20], [78, 72], [34, 96], [9, 96], [-9, 96], [-18, 96], [-76, 76], [-96, 28], [-96, -38], [-92, -86],
 ]);
-const FOLSOM_BORDER_WALL_GATES = Object.freeze([
-  { id: 'folsom_reliquary_palisade_gate', center: [88, 4], width: 12, tolerance: 8, routeId: 'folsom_rusted_reliquary_door' },
-  { id: 'folsom_north_future_road_gate', center: [0, 96], width: 18, tolerance: 10, routeId: 'folsom_north_future_road' },
-]);
-
 const FOLSOM_NATURAL_BOULDER_MATERIAL = 'pondBoulderRock02';
 const FOLSOM_NATURAL_BOULDER_MATERIAL_POOL = Object.freeze(['pondBoulderRock01', 'pondBoulderRock02', 'pondBoulderRock03', 'pondBoulderRock04']);
 
@@ -163,7 +158,6 @@ const folsomCityBorderWoodenWall = createCityBorderWoodenWall({
   thickness: FOLSOM_BORDER_WALL_THICKNESS,
   panelLength: FOLSOM_BORDER_WALL_PANEL_LENGTH,
   materialKeys: FOLSOM_BORDER_WALL_MATERIALS,
-  gateOpenings: FOLSOM_BORDER_WALL_GATES,
   terrainSampler: folsomTerrainSampler,
   terrainSamplerAware: false,
   continuousMembrane: true,

@@ -46,11 +46,18 @@ assert.ok((folsom.waterBodies ?? []).some((water) => water.fishable), 'Folsom ke
 
 const borderWalls = (folsom.wallSegments ?? []).filter((wall) => wall.tags?.includes('city-border-wall'));
 const borderSeamPosts = (folsom.architecturalPrimitives ?? []).filter((primitive) => primitive.tags?.includes('city-border-wall-post'));
+const borderValidation = folsom.validation?.cityBorderWoodenWall;
 assert.equal(folsom.validation?.cityBorderWoodenWall?.continuousMembrane, true, 'Folsom border uses continuous membrane authoring.');
-assert.equal(borderWalls.length, 15, 'Folsom border compiles to one wall run per perimeter edge outside the two gates.');
+assert.equal(borderWalls.length, 17, 'Folsom border compiles to one wall run for every perimeter edge.');
 assert.equal(borderSeamPosts.length, 0, 'Continuous Folsom wall does not stack decorative posts at every former panel seam.');
 assert.ok(borderWalls.every((wall) => wall.y === 0 && wall.tags.includes('fixed-elevation') && wall.tags.includes('continuous-wall-membrane')), 'Every Folsom border run shares one flush elevation.');
 assert.ok(borderWalls.every((wall) => wall.textureRepeat?.[0] >= 1 && wall.textureRepeat?.[1] === 1), 'Long wall runs preserve readable tiled wood texture scale.');
+assert.equal(borderValidation.gateOpenings.length, 0, 'Folsom perimeter does not leave empty spans for inset or future gate props.');
+assert.equal(borderValidation.generatedRuns.length, borderValidation.perimeter.length - 1, 'Every authored perimeter edge generates wall coverage.');
+assert.ok(borderValidation.generatedRuns.every((run) => run.startT === 0 && run.endT === 1), 'Every perimeter edge is covered end to end without a cut interval.');
+const folsomCollision = buildDungeonCollision(folsom);
+assert.ok(folsomCollision.collisionWorld.getIntersectingBlockers(new THREE.Vector3(88, 1.55, 4)).some((blocker) => blocker.tags?.includes('city-border-wall')), 'The former east gate gap now has wooden wall collision.');
+assert.ok(folsomCollision.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 96)).some((blocker) => blocker.tags?.includes('city-border-wall')), 'The former north road gap now has wooden wall collision.');
 
 const shedWalls = (folsom.wallSegments ?? []).filter((wall) => wall.tags?.includes('tool-shed'));
 const shedDoorPanels = (folsom.architecturalPrimitives ?? []).filter((primitive) => primitive.tags?.includes('shed-door') && primitive.tags?.includes('closed-door'));
