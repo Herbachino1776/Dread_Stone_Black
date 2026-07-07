@@ -54,8 +54,8 @@ export class HudHost {
 
   addPointerHandler(element, handler) {
     if (!element) return;
-    element.addEventListener('pointerdown', handler);
-    this.disposers.push(() => element.removeEventListener('pointerdown', handler));
+    element.addEventListener('click', handler);
+    this.disposers.push(() => element.removeEventListener('click', handler));
   }
 
   setPaused(isPaused) {
@@ -104,7 +104,7 @@ export class HudHost {
       : '';
 
     return `
-      <main class="reliquary-shell" aria-label="Dread Stone Black handheld reliquary interface">
+      <main class="reliquary-shell" aria-label="Dread Stone Black game interface">
         <header class="hud-top" aria-label="Player status and game toolbar">
           <section class="top-stat-row" aria-label="Player status">
             <div class="stat stat-hp"><span>HP</span><strong data-stat="hp">100</strong></div>
@@ -115,13 +115,13 @@ export class HudHost {
           </section>
 
           <nav class="top-toolbar" aria-label="Game toolbar">
-            <button class="toolbar-button toolbar-button--equipment" data-action="equipment" type="button" aria-label="Open equipment">EQ</button>
-            <button class="toolbar-button toolbar-button--reset" data-action="reset" type="button" aria-label="Reset progress">RESET</button>
-            <button class="toolbar-button toolbar-button--pause" data-action="pause" type="button" aria-label="Pause game">PAUSE</button>
+            <button class="ui-button toolbar-button toolbar-button--equipment" data-action="equipment" type="button" aria-label="Open equipment">Equipment</button>
+            <button class="ui-button toolbar-button toolbar-button--reset" data-action="reset" type="button" aria-label="Reset progress">Reset</button>
+            <button class="ui-button toolbar-button toolbar-button--pause" data-action="pause" type="button" aria-label="Pause game">Pause</button>
           </nav>
         </header>
 
-        <section class="viewport-frame" aria-label="Framed game viewport">
+        <section class="viewport-frame" aria-label="Game viewport">
           <div class="viewport-ornament viewport-ornament-top" aria-hidden="true">✦</div>
           <div class="viewport-stage" data-game="viewport">
             <canvas id="game-canvas" aria-label="Dread Stone Black game view"></canvas>
@@ -133,22 +133,28 @@ export class HudHost {
               <div class="pause-card">
                 <p class="pause-title">PAUSED</p>
                 <div class="pause-actions">
-                  <button class="pause-action-button" data-action="resume" type="button">RESUME</button>
-                  <button class="pause-action-button pause-action-button--reset" data-action="reset" type="button">RESET</button>
+                  <button class="ui-button pause-action-button" data-action="resume" type="button">Resume</button>
+                  <button class="ui-button pause-action-button pause-action-button--reset" data-action="reset" type="button">Reset</button>
                 </div>
               </div>
             </section>
-            <section class="equipment-panel" data-equipment-panel aria-label="Inventory" aria-hidden="true">
+            <section class="ui-surface equipment-panel" data-equipment-panel aria-label="Inventory and equipment" aria-hidden="true">
               <div class="equipment-panel__header">
-                <h2>Inventory</h2>
-                <button class="equipment-close" data-equipment="close" type="button" aria-label="Close inventory">X</button>
+                <div>
+                  <p class="equipment-panel__eyebrow">Carried gear</p>
+                  <h2>Inventory</h2>
+                </div>
+                <button class="equipment-close" data-equipment="close" type="button" aria-label="Close inventory">&times;</button>
               </div>
-              <p class="equipment-current">Weapon: <strong data-equipment="current-weapon">Unarmed</strong></p>
+              <div class="equipment-current" aria-label="Currently equipped gear">
+                <span>Weapon <strong data-equipment="current-weapon">Unarmed</strong></span>
+                <span>Offhand <strong data-equipment="current-offhand">None</strong></span>
+              </div>
               <div class="inventory-shell">
                 <div class="inventory-tabs" data-inventory="pocket-tabs" role="tablist" aria-label="Inventory pockets"></div>
                 <div class="inventory-content">
                   <article class="inventory-detail" data-inventory="detail" aria-live="polite"></article>
-                  <div class="equipment-list" data-inventory="list"></div>
+                  <div class="ui-scroll equipment-list" data-inventory="list"></div>
                 </div>
               </div>
             </section>

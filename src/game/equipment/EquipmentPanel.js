@@ -31,6 +31,7 @@ export class EquipmentPanel {
     this.panel = root.querySelector('[data-equipment-panel]');
     this.stopPanelEvent = (event) => event.stopPropagation();
     this.currentWeapon = root.querySelector('[data-equipment="current-weapon"]');
+    this.currentOffhand = root.querySelector('[data-equipment="current-offhand"]');
     this.pocketTabs = root.querySelector('[data-inventory="pocket-tabs"]');
     this.inventoryList = root.querySelector('[data-inventory="list"]');
     this.detailCard = root.querySelector('[data-inventory="detail"]');
@@ -45,8 +46,8 @@ export class EquipmentPanel {
   }
 
   bindEvents() {
-    this.toggleButton?.addEventListener('pointerdown', (event) => { event.preventDefault(); this.toggle(); });
-    this.closeButton?.addEventListener('pointerdown', (event) => { event.preventDefault(); this.close(); });
+    this.toggleButton?.addEventListener('click', (event) => { event.preventDefault(); this.toggle(); });
+    this.closeButton?.addEventListener('click', (event) => { event.preventDefault(); this.close(); });
     window.addEventListener('keydown', (event) => {
       if (event.code !== 'KeyE' && event.code !== 'Tab') return;
       event.preventDefault();
@@ -67,6 +68,12 @@ export class EquipmentPanel {
   render() {
     const equippedWeapon = this.equipmentRuntime.getEquippedWeaponProfile();
     if (this.currentWeapon) this.currentWeapon.textContent = equippedWeapon.displayName;
+    if (this.currentOffhand) {
+      const offhandId = this.survivalInventory.getEquippedOffhand();
+      this.currentOffhand.textContent = offhandId === 'keepers_lantern'
+        ? "Keeper's Lantern"
+        : offhandId === 'torch' ? 'Torch' : 'None';
+    }
     this.renderTabs();
     this.renderPocket(equippedWeapon);
   }
@@ -80,7 +87,7 @@ export class EquipmentPanel {
       tab.className = 'inventory-tab';
       tab.setAttribute('aria-pressed', String(this.activePocket === pocket.id));
       tab.innerHTML = `<span class="inventory-tab__icon" aria-hidden="true">${pocket.icon}</span><span>${pocket.label}</span>`;
-      tab.addEventListener('pointerdown', (event) => {
+      tab.addEventListener('click', (event) => {
         event.preventDefault();
         this.activePocket = pocket.id;
         this.render();
@@ -194,13 +201,20 @@ export class EquipmentPanel {
     const rows = [
       ['TYPE', detail.type], ['DAMAGE', detail.damage], ['WEIGHT', detail.weight], ['LIGHT', detail.light], ['RESTORE', detail.restore], ['USE', detail.use],
     ].filter(([, value]) => value);
+    const actionLabel = entry.onActivate ? (entry.equipped ? 'Unequip' : 'Equip') : '';
     this.detailCard.innerHTML = `
       <div class="inventory-detail__icon" aria-hidden="true">${detail.icon ?? '◆'}</div>
       <div class="inventory-detail__body">
         <div class="inventory-detail__top"><h3>${entry.name}</h3>${entry.equipped ? '<span>Equipped</span>' : ''}</div>
         <p>${entry.description}</p>
         <dl>${rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>
+        ${actionLabel ? `<button class="inventory-detail__action" type="button">${actionLabel}</button>` : ''}
       </div>`;
+    this.detailCard.querySelector('.inventory-detail__action')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      entry.onActivate();
+      this.render();
+    });
   }
 
   createRow(entry) {
@@ -209,13 +223,13 @@ export class EquipmentPanel {
     row.className = 'equipment-row';
     row.dataset.itemId = entry.id;
     const selected = this.selectedByPocket[this.activePocket] === entry.id;
-    row.setAttribute('aria-pressed', String(selected || entry.equipped));
+    row.setAttribute('aria-pressed', String(selected));
+    row.classList.toggle('is-equipped', Boolean(entry.equipped));
     row.innerHTML = `<span class="equipment-row__icon" aria-hidden="true">${entry.detail?.icon ?? '◆'}</span><span class="equipment-row__name">${entry.name}</span><span class="equipment-row__stats">${entry.stats}</span><span class="equipment-row__description">${entry.description}</span><span class="equipment-row__meta">${entry.meta ?? ''}</span>`;
     if (entry.onActivate) row.addEventListener('click', (event) => {
       event.preventDefault();
-      const wasSelected = this.selectedByPocket[this.activePocket] === entry.id;
       this.selectedByPocket[this.activePocket] = entry.id;
-      if (wasSelected) entry.onActivate(); else this.render();
+      this.render();
     });
     return row;
   }
