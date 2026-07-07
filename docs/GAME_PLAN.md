@@ -18,9 +18,9 @@ Preserve the configured Vite base path and automated Pages workflow.
 
 ## Current playable target
 
-The active implementation milestone is the Folsom Chapter 1-2 foundation, starting with the tool-shed proof loop. See [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md) for the controlling production lock.
+The active milestone is the Chapter 1-2 strategy reconciliation. The working adapted spine is playable, but Chapter 2 needs a Lantern-first shrine/crawlspace backfill and an explicit lower shrine hatch before Chapter 3 mechanics. See [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md) and [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md).
 
-The first proof is intentionally small:
+The completed first proof remains locked:
 
 1. Find a rebuilt, physically readable shed sealed along its door seam/frame.
 2. Discover the Old Work Knife behind the shed without tutorial text.
@@ -28,7 +28,7 @@ The first proof is intentionally small:
 4. Open the shed and recover Wood Axe + Torch.
 5. Preserve the opened state after reload.
 
-Only after that direct loop works should Chapter 2 connect fire, pond, and shrine anchors to a larger obstruction.
+The surface fire, pond, and shrine anchors now form a successful adapted loop and should be preserved. Reconciliation work must integrate them into the guide's Lantern-led connected-growth lesson rather than replace or silently declare them guide-complete.
 
 ## Stable design rules
 

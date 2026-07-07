@@ -20,9 +20,9 @@ Current locks override older documents when they conflict.
 
 ## Current target
 
-The Folsom tool loop, connected anchors, Underworks transition, Beneath Folsom tool and lantern loops, hidden five-hit growth gate, and blue-flame future threshold are functionally complete. Chapter 2 may pause.
+The Folsom tool loop, connected surface anchors, Underworks transition, drain loop, hidden five-hit growth gate, and blue-flame threshold form a functional adapted spine. Chapter 2 is not strategy-complete; see [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md).
 
-The next target is Chapter 3 readiness: first lock the handoff from the existing blue-flame hallway to the Lower Shrine Stair, then prove one focused Keeper's Lantern reveal and white-scab clearing sequence. Do not treat the older strategy guide's shrine side-room/crawlspace layout as already implemented.
+The next target is Chapter 2 backfill: restore a Lantern-first Shrine Side Room/crawlspace investigation, then resolve the missing lower shrine hatch at the blue-hall/Lower Shrine Stair seam. Preserve the Chapter 3 room skeleton, but keep White-Scab Hall mechanics paused. Do not treat the strategy guide's side-room/crawlspace layout as already implemented.
 
 Do not add tutorial popups, progression tokens, enemies, Records UI, Memory UI, Pale Gates, a broad white-machinery framework, bosses, or unrelated route expansion.
 

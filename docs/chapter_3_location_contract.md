@@ -20,6 +20,8 @@ The route is a single ordered chain:
 
 There are no branches, shortcuts, combat arenas, or chapter exits in this skeleton. Existing return travel through Beneath Folsom to Folsom remains intact.
 
+The physical room chain remains valid, but the Chapter 2 handoff is under reconciliation. The strategy guide says Chapter 2 ends by prying open a lower shrine hatch and Chapter 3 begins by descending through it. The current BF04-to-BF05 seam has no hatch or matching state. [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md) recommends adding that hatch at the existing seam, without moving or rebuilding BF05-BF09, unless production explicitly rewrites the guide handoff.
+
 ## Implementation location choice
 
 Chapter 3 extends the existing compiled `beneath-folsom` location.
@@ -82,4 +84,6 @@ Existing `beneath_folsom_hidden_growth_gate_cleared` remains the persisted prere
 
 ## Divergence from the strategy guide
 
-There is no route-order, room-name, topology, lock-sequence, or endpoint divergence. The only production interpretation is that Pale Panel is represented as an area within Shrine Mechanism Room rather than an independent room, as specified by the guide's detailed room description and required-spaces list.
+Within Chapter 3, there is no room-order, room-name, topology, lock-sequence, or endpoint divergence. Pale Panel remains an area within Shrine Mechanism Room, as specified by the guide's detailed topology.
+
+The Chapter 2-to-3 seam is not yet guide-complete: BF04 flows directly into the Lower Shrine Stair without the lower hatch opened at the end of Chapter 2. This is a handoff debt, not a reason to discard the Chapter 3 skeleton.

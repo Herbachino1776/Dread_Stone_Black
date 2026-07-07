@@ -1,5 +1,7 @@
 # Chapter 2 Closure and Chapter 3 Readiness Audit
 
+> **Reconciliation status (2026-07-07):** This audit's functional-completeness verdict is qualified and its Chapter 3 mechanics recommendation is superseded by [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md). The playable spine remains valid, but Chapter 2 is structurally incomplete against the guide. White-Scab Hall mechanics should remain paused pending the Lantern-first shrine/crawlspace and lower-hatch decisions.
+
 Audit date: 2026-07-07  
 Audited baseline: `e091e8e` (`Overhaul HUD and equipment UI`)
 
@@ -40,13 +42,15 @@ The route uses world-state flags rather than permanent junk inventory:
 - `beneath_folsom_keepers_lantern_reveal_seen`
 - `beneath_folsom_hidden_growth_gate_cleared`
 
+Reconciliation correction: `beneath_folsom_keepers_lantern_reveal_seen` is declared in state/authored data, but the inspected runtime does not call the method that writes it. Treat it as intended state, not verified persistence.
+
 The Old Work Knife, Wood Axe, Torch, Iron Drain Bar, and Keeper's Lantern remain equipment/inventory capabilities. That separation is consistent with the locked design direction.
 
 ## Blocking versus polish issues
 
 ### Blocking issues for Chapter 2 closure
 
-None found in the inspected static runtime path.
+The original audit found no blockers against the adapted playable spine. The reconciliation later identified strategy-structure blockers: the missing Shrine Side Room/crawlspace, Keeper's Lantern acquisition after the drain grate and all three surface anchors, absent underground anchor pockets, and absent lower shrine hatch. See the reconciliation for the controlling classification.
 
 Manual verification is still required before treating the closure as release-tested. A fresh-save run should verify the entire sequence, and a reload after the hidden gate clear should verify that the blocker stays removed and the hallway remains visible.
 
@@ -98,7 +102,7 @@ The locked Chapter 3 route calls for: Lower Shrine Stair, White-Scab Hall, Shrin
 
 The former three-pass recommendation below was superseded on 2026-07-07 by the Chapter 3 location-truth pass. The production decision is now locked: Chapter 3 extends `beneath-folsom`, and the complete guide-authoritative room skeleton is authored through the bounded Crypt Access Stair. See [`chapter_3_location_flow_map.md`](chapter_3_location_flow_map.md) and [`chapter_3_location_contract.md`](chapter_3_location_contract.md).
 
-The next active mechanics pass is the focused White-Scab Hall reveal/clear proof. Pale Panel activation, Records ownership, crypt-root clearing, and stair-door pry remain deferred.
+This audit formerly recommended the focused White-Scab Hall reveal/clear proof next. The reconciliation supersedes that recommendation; Chapter 2 structural backfill now comes first. Pale Panel activation, Records ownership, crypt-root clearing, and stair-door pry remain deferred.
 
 ## Risks and dependencies
 
@@ -112,4 +116,4 @@ The next active mechanics pass is the focused White-Scab Hall reveal/clear proof
 
 ## Historical validation note
 
-The validation recommendation in the original audit applied before Chapter 3 production began. Chapter 2 is now validated and locked; Chapter 3 passes should not reopen that validation scope unless a regression is observed.
+The validation recommendation in the original audit applied before the strategy reconciliation. Existing functional validation remains evidence for the adapted spine, but it does not establish guide completeness or settle the required backfill.

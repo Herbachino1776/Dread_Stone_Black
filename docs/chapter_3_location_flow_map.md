@@ -6,6 +6,8 @@ The location authority is Chapter 3, “The Shrine That Was Not a Shrine,” in 
 
 Chapter 2 ends when `beneath_folsom_hidden_growth_gate_cleared` removes the hidden five-hit growth gate and admits the player to the existing Blue Flame Threshold. Chapter 3 begins at the far end of that preserved hallway, where the route enters the Lower Shrine Stair.
 
+Reconciliation qualification: this describes the current physical skeleton, but not the guide-complete handoff. The guide requires a lower shrine hatch, pried at the end of Chapter 2, before the Chapter 3 descent. [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md) recommends inserting that hatch at the existing BF04/BF05 seam without moving the Chapter 3 rooms. White-Scab Hall mechanics remain paused until that handoff is resolved.
+
 ## Production flow
 
 ```text
@@ -17,7 +19,8 @@ Lower Drain Throat
   v
 Blue Flame Threshold (preserved Chapter 2 -> 3 seam)
   |
-  | open authored threshold
+  | HANDOFF DEBT: lower shrine hatch is not authored
+  | RECOMMENDED: Iron Drain Bar pry + persistent hatch-open state
   v
 CHAPTER 3
 Lower Shrine Stair
