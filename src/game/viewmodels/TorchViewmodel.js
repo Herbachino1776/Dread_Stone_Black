@@ -37,8 +37,7 @@ export class TorchViewmodel {
     this.camera = camera;
     this.equipmentRuntime = equipmentRuntime;
     this.elapsed = 0;
-    this.flameElapsedMs = 0;
-    this.flameFrameIndex = 0;
+    this.flameLayers = [];
     this.aim = { x: 0, y: 0 };
 
     this.root = new THREE.Group();
@@ -94,35 +93,53 @@ export class TorchViewmodel {
       texture.magFilter = THREE.LinearFilter;
       return texture;
     });
-    this.flameMaterial = new THREE.MeshBasicMaterial({
-      map: this.flameTextures[0],
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.88,
-      alphaTest: 0.04,
-      depthTest: true,
-      depthWrite: false,
-      toneMapped: false,
-      side: THREE.DoubleSide,
-    });
-
     this.headSocket = new THREE.Group();
     this.headSocket.name = 'torch-head-flame-socket';
     this.headSocket.position.set(0, 0.76, 0);
     this.torchBody.add(this.headSocket);
 
-    this.flamePlane = new THREE.Mesh(new THREE.PlaneGeometry(0.29, 0.4), this.flameMaterial);
-    this.flamePlane.name = 'torch-head-six-frame-fire-sprite-plane';
-    this.flamePlane.position.set(0, 0.14, 0.012);
-    this.flamePlane.renderOrder = 10011;
-    this.flamePlane.userData = {
-      torchViewmodel: true,
-      animatedFireSprite: true,
-      orientation: 'inherits-torch-head-socket',
-      framePaths: TORCH_FLAME_FRAME_PATHS,
-      frameDurationMs: TORCH_FLAME_FRAME_DURATION_MS,
-    };
-    this.headSocket.add(this.flamePlane);
+    const flameLayerSpecs = [
+      { id: 'main', x: 0, y: 0.14, z: 0.012, width: 0.29, height: 0.4, opacity: 0.88, lean: 0, startFrame: 0, frameDurationMs: TORCH_FLAME_FRAME_DURATION_MS },
+      { id: 'left', x: -0.045, y: 0.135, z: 0.018, width: 0.27, height: 0.38, opacity: 0.25, lean: 0.08, startFrame: 2, frameDurationMs: TORCH_FLAME_FRAME_DURATION_MS - 7 },
+      { id: 'right', x: 0.045, y: 0.13, z: 0.024, width: 0.27, height: 0.38, opacity: 0.25, lean: -0.075, startFrame: 4, frameDurationMs: TORCH_FLAME_FRAME_DURATION_MS + 17 },
+    ];
+    this.flameLayers = flameLayerSpecs.map((spec, index) => {
+      const material = new THREE.MeshBasicMaterial({
+        map: this.flameTextures[spec.startFrame],
+        color: 0xffffff,
+        transparent: true,
+        opacity: spec.opacity,
+        alphaTest: 0.04,
+        depthTest: true,
+        depthWrite: false,
+        toneMapped: false,
+        side: THREE.DoubleSide,
+      });
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(spec.width, spec.height), material);
+      plane.name = `torch-head-six-frame-fire-${spec.id}-plane`;
+      plane.position.set(spec.x, spec.y, spec.z);
+      plane.rotation.z = spec.lean;
+      plane.renderOrder = 10011 + index;
+      plane.userData = {
+        torchViewmodel: true,
+        animatedFireSprite: true,
+        flameLayer: spec.id,
+        orientation: 'inherits-torch-head-socket',
+        framePaths: TORCH_FLAME_FRAME_PATHS,
+        frameDurationMs: spec.frameDurationMs,
+        opacity: spec.opacity,
+      };
+      this.headSocket.add(plane);
+      return {
+        material,
+        plane,
+        elapsedMs: spec.startFrame * spec.frameDurationMs,
+        frameIndex: spec.startFrame,
+        frameDurationMs: spec.frameDurationMs,
+      };
+    });
+    this.flameMaterial = this.flameLayers[0].material;
+    this.flamePlane = this.flameLayers[0].plane;
 
     this.emitterTransform = new THREE.Object3D();
     this.emitterTransform.name = 'torch-head-emitter-transform';
@@ -155,15 +172,16 @@ export class TorchViewmodel {
     if (!active) return;
     const dt = THREE.MathUtils.clamp(deltaSeconds, 0.001, 0.05);
     this.elapsed += dt;
-    this.flameElapsedMs += dt * 1000;
     this.root.position.set(REST_POSITION.x + this.aim.x * 0.13, REST_POSITION.y + this.aim.y * 0.1, REST_POSITION.z);
     this.aimPivot.rotation.set(-this.aim.y * 0.23, -this.aim.x * 0.3, 0, 'YXZ');
-    const nextFlameFrameIndex = Math.floor(this.flameElapsedMs / TORCH_FLAME_FRAME_DURATION_MS) % this.flameTextures.length;
-    if (nextFlameFrameIndex !== this.flameFrameIndex) {
-      this.flameFrameIndex = nextFlameFrameIndex;
-      this.flameMaterial.map = this.flameTextures[nextFlameFrameIndex];
-      this.flameMaterial.needsUpdate = true;
-    }
+    this.flameLayers.forEach((layer) => {
+      layer.elapsedMs += dt * 1000;
+      const nextFrameIndex = Math.floor(layer.elapsedMs / layer.frameDurationMs) % this.flameTextures.length;
+      if (nextFrameIndex === layer.frameIndex) return;
+      layer.frameIndex = nextFrameIndex;
+      layer.material.map = this.flameTextures[nextFrameIndex];
+      layer.material.needsUpdate = true;
+    });
     const flicker = 0.97 + Math.sin(this.elapsed * 6.7) * 0.02 + Math.sin(this.elapsed * 11.3) * 0.012;
     this.pointLight.intensity = TORCH_LIGHTING.point.intensity * flicker;
     this.warmSpotLight.intensity = TORCH_LIGHTING.wash.intensity * (0.985 + (flicker - 0.97) * 0.55);
