@@ -447,6 +447,12 @@ function addV2WallSegments({ definition, group, materialFactory }) {
   const walls = [];
   asArray(definition.wallSegments).forEach((segment) => {
     const material = makeMaterial(definition, segment.material ?? segment.textureProfile, materialFactory, definition.textures?.wall);
+    if (material.map && Array.isArray(segment.textureRepeat)) {
+      material.map.wrapS = THREE.RepeatWrapping;
+      material.map.wrapT = THREE.RepeatWrapping;
+      material.map.repeat.set(segment.textureRepeat[0] ?? 1, segment.textureRepeat[1] ?? 1);
+      material.map.needsUpdate = true;
+    }
     const height = segment.height ?? definition.geometry?.wallHeight ?? 3.5;
     const thickness = segment.thickness ?? definition.geometry?.wallThickness ?? 0.32;
     segmentParts(segment, definition.doorGaps).forEach((part, index) => {

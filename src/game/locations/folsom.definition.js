@@ -165,7 +165,8 @@ const folsomCityBorderWoodenWall = createCityBorderWoodenWall({
   materialKeys: FOLSOM_BORDER_WALL_MATERIALS,
   gateOpenings: FOLSOM_BORDER_WALL_GATES,
   terrainSampler: folsomTerrainSampler,
-  terrainSamplerAware: true,
+  terrainSamplerAware: false,
+  continuousMembrane: true,
   tags: ['folsom', 'protective-perimeter'],
 });
 

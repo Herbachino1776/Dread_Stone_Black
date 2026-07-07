@@ -44,6 +44,14 @@ assert.equal(folsom.id, 'folsom');
 assert.equal((folsom.spawns ?? []).some((spawn) => ['enemy', 'npc'].includes(spawn.kind)), false, 'Folsom has no enemy or NPC spawns.');
 assert.ok((folsom.waterBodies ?? []).some((water) => water.fishable), 'Folsom keeps fishable pond.');
 
+const borderWalls = (folsom.wallSegments ?? []).filter((wall) => wall.tags?.includes('city-border-wall'));
+const borderSeamPosts = (folsom.architecturalPrimitives ?? []).filter((primitive) => primitive.tags?.includes('city-border-wall-post'));
+assert.equal(folsom.validation?.cityBorderWoodenWall?.continuousMembrane, true, 'Folsom border uses continuous membrane authoring.');
+assert.equal(borderWalls.length, 15, 'Folsom border compiles to one wall run per perimeter edge outside the two gates.');
+assert.equal(borderSeamPosts.length, 0, 'Continuous Folsom wall does not stack decorative posts at every former panel seam.');
+assert.ok(borderWalls.every((wall) => wall.y === 0 && wall.tags.includes('fixed-elevation') && wall.tags.includes('continuous-wall-membrane')), 'Every Folsom border run shares one flush elevation.');
+assert.ok(borderWalls.every((wall) => wall.textureRepeat?.[0] >= 1 && wall.textureRepeat?.[1] === 1), 'Long wall runs preserve readable tiled wood texture scale.');
+
 const shedWalls = (folsom.wallSegments ?? []).filter((wall) => wall.tags?.includes('tool-shed'));
 const shedDoorPanels = (folsom.architecturalPrimitives ?? []).filter((primitive) => primitive.tags?.includes('shed-door') && primitive.tags?.includes('closed-door'));
 const shedDoorFrame = (folsom.architecturalPrimitives ?? []).find((primitive) => primitive.id === 'folsom_shed_door_frame');

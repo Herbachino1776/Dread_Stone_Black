@@ -53,6 +53,24 @@ function intervalsForSegment(a, b, gateOpenings = []) {
   return intervals.filter(([start, end]) => end - start > 0.01);
 }
 
+function assignGateOpeningsToRuns(points, gateOpenings) {
+  const byRun = new Map();
+  gateOpenings.forEach((gate) => {
+    const center = point2(gate.center);
+    const width = Number(gate.width);
+    if (!center || !Number.isFinite(width) || width <= 0) return;
+    let nearest = null;
+    for (let runIndex = 0; runIndex < points.length - 1; runIndex += 1) {
+      const projected = projectPointToSegment(center, points[runIndex], points[runIndex + 1]);
+      if (!nearest || projected.distance < nearest.distance) nearest = { runIndex, distance: projected.distance };
+    }
+    const tolerance = Number.isFinite(gate.tolerance) ? gate.tolerance : Math.max(3, width * 0.65);
+    if (!nearest || nearest.distance > tolerance) return;
+    byRun.set(nearest.runIndex, [...(byRun.get(nearest.runIndex) ?? []), gate]);
+  });
+  return byRun;
+}
+
 function sampleY(terrainSampler, point) {
   const y = terrainSampler?.sampleOutdoorY?.(point[0], point[1]);
   return Number.isFinite(y) ? y : 0;
@@ -75,6 +93,7 @@ export function createCityBorderWoodenWall({
   gateOpenings = [],
   terrainSampler = null,
   terrainSamplerAware = true,
+  continuousMembrane = false,
   tags = [],
 } = {}) {
   const safePrefix = typeof idPrefix === 'string' && idPrefix.trim() ? idPrefix.trim() : 'city_border_wooden_wall';
@@ -89,6 +108,7 @@ export function createCityBorderWoodenWall({
   const generatedRuns = [];
   let panelIndex = 0;
   let postIndex = 0;
+  const gatesByRun = assignGateOpeningsToRuns(safePoints, gateOpenings);
 
   for (let runIndex = 0; runIndex < safePoints.length - 1; runIndex += 1) {
     const runStart = safePoints[runIndex];
@@ -96,15 +116,29 @@ export function createCityBorderWoodenWall({
     const runLength = distance2(runStart, runEnd);
     if (runLength <= 0.001) continue;
     const yaw = segmentYaw(runStart, runEnd);
-    intervalsForSegment(runStart, runEnd, gateOpenings).forEach(([intervalStart, intervalEnd], intervalIndex) => {
+    intervalsForSegment(runStart, runEnd, gatesByRun.get(runIndex) ?? []).forEach(([intervalStart, intervalEnd], intervalIndex) => {
       const intervalLength = runLength * (intervalEnd - intervalStart);
-      const pieces = Math.max(1, Math.ceil(intervalLength / panelLength));
+      const pieces = continuousMembrane ? 1 : Math.max(1, Math.ceil(intervalLength / panelLength));
       const runPanelIds = [];
       for (let piece = 0; piece < pieces; piece += 1) {
         const startT = intervalStart + ((intervalEnd - intervalStart) * piece) / pieces;
         const endT = intervalStart + ((intervalEnd - intervalStart) * (piece + 1)) / pieces;
-        const from = lerpPoint(runStart, runEnd, startT);
-        const to = lerpPoint(runStart, runEnd, endT);
+        const coverageFrom = lerpPoint(runStart, runEnd, startT);
+        const coverageTo = lerpPoint(runStart, runEnd, endT);
+        const from = [...coverageFrom];
+        const to = [...coverageTo];
+        if (continuousMembrane) {
+          const overlap = thickness * 0.55;
+          const direction = [(runEnd[0] - runStart[0]) / runLength, (runEnd[1] - runStart[1]) / runLength];
+          if (startT <= 0.001) {
+            from[0] -= direction[0] * overlap;
+            from[1] -= direction[1] * overlap;
+          }
+          if (endT >= 0.999) {
+            to[0] += direction[0] * overlap;
+            to[1] += direction[1] * overlap;
+          }
+        }
         const midpoint = lerpPoint(from, to, 0.5);
         const baseY = terrainSamplerAware ? sampleY(terrainSampler, midpoint) : 0;
         const material = safeMaterials[panelIndex % safeMaterials.length];
@@ -117,8 +151,9 @@ export function createCityBorderWoodenWall({
           height,
           thickness,
           material,
+          textureRepeat: continuousMembrane ? [Math.max(1, intervalLength / panelLength), 1] : null,
           roomId,
-          tags: ['city-border-wall', 'wooden-city-wall', 'terrain-following', ...tags],
+          tags: ['city-border-wall', 'wooden-city-wall', terrainSamplerAware ? 'terrain-following' : 'fixed-elevation', ...(continuousMembrane ? ['continuous-wall-membrane'] : []), ...tags],
           userData: {
             kit: 'CityBorderWoodenWallKit',
             panelIndex,
@@ -133,7 +168,7 @@ export function createCityBorderWoodenWall({
           },
         });
         runPanelIds.push(panelId);
-        [from, to].forEach((point, endpointIndex) => {
+        if (!continuousMembrane) [from, to].forEach((point, endpointIndex) => {
           if (endpointIndex === 0 && piece > 0) return;
           const postY = terrainSamplerAware ? sampleY(terrainSampler, point) : baseY;
           architecturalPrimitives.push({
@@ -172,6 +207,6 @@ export function createCityBorderWoodenWall({
   return {
     wallSegments,
     architecturalPrimitives,
-    validation: { idPrefix: safePrefix, height, thickness, panelLength, postHeight, postThickness, materialKeys: safeMaterials, gateOpenings, perimeter: safePoints, generatedRuns },
+    validation: { idPrefix: safePrefix, height, thickness, panelLength, postHeight, postThickness, materialKeys: safeMaterials, gateOpenings, perimeter: safePoints, generatedRuns, continuousMembrane },
   };
 }
