@@ -8,7 +8,16 @@ export const TORCH_LIGHTING = Object.freeze({
   wash: Object.freeze({ color: 0xffc078, intensity: 7.2, distance: 56, angle: 0.78, penumbra: 0.82, decay: 1.25 }),
 });
 
-const REST_POSITION = Object.freeze({ x: -0.62, y: -0.62, z: -1.08 });
+const TORCH_FLAME_FRAME_PATHS = Object.freeze([
+  './assets/sprites/fire/campfire_flame_billboard_01.png',
+  './assets/sprites/fire/campfire_flame_billboard_02.png',
+  './assets/sprites/fire/campfire_flame_billboard_03.png',
+  './assets/sprites/fire/campfire_flame_billboard_04.png',
+  './assets/sprites/fire/campfire_flame_billboard_05.png',
+  './assets/sprites/fire/campfire_flame_billboard_06.png',
+]);
+const TORCH_FLAME_FRAME_DURATION_MS = 110;
+const REST_POSITION = Object.freeze({ x: -0.78, y: -0.7, z: -1.22 });
 const REST_ROLL = -0.72;
 const screenPoint = new THREE.Vector3();
 
@@ -28,6 +37,8 @@ export class TorchViewmodel {
     this.camera = camera;
     this.equipmentRuntime = equipmentRuntime;
     this.elapsed = 0;
+    this.flameElapsedMs = 0;
+    this.flameFrameIndex = 0;
     this.aim = { x: 0, y: 0 };
 
     this.root = new THREE.Group();
@@ -58,7 +69,6 @@ export class TorchViewmodel {
     this.woodTexture.repeat.set(1, 2.8);
     const wood = new THREE.MeshStandardMaterial({ map: this.woodTexture, color: 0xb58a57, roughness: 0.92 });
     const cloth = new THREE.MeshStandardMaterial({ color: 0x33231b, roughness: 1 });
-    const ember = new THREE.MeshStandardMaterial({ color: 0x5a2915, roughness: 0.88, emissive: 0xff6b22, emissiveIntensity: 2.2 });
 
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.96, 8), wood);
     shaft.name = 'torch-skinny-oak-shaft';
@@ -73,11 +83,39 @@ export class TorchViewmodel {
       this.torchBody.add(wrap);
     }
 
-    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 7), ember);
-    flame.name = 'torch-head-ember';
-    flame.scale.set(0.78, 1.55, 0.78);
-    flame.position.y = 1.17;
-    this.torchBody.add(flame);
+    this.flameTextures = TORCH_FLAME_FRAME_PATHS.map((path) => {
+      const texture = new THREE.TextureLoader().load(path);
+      texture.name = path;
+      texture.userData = { path, sprite: true, torchViewmodel: true };
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      return texture;
+    });
+    this.flameMaterial = new THREE.SpriteMaterial({
+      map: this.flameTextures[0],
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.88,
+      alphaTest: 0.04,
+      depthTest: true,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    this.flameSprite = new THREE.Sprite(this.flameMaterial);
+    this.flameSprite.name = 'torch-head-six-frame-fire-sprite';
+    this.flameSprite.position.set(0, 1.27, 0.012);
+    this.flameSprite.scale.set(0.25, 0.34, 1);
+    this.flameSprite.renderOrder = 10011;
+    this.flameSprite.userData = {
+      torchViewmodel: true,
+      animatedFireSprite: true,
+      framePaths: TORCH_FLAME_FRAME_PATHS,
+      frameDurationMs: TORCH_FLAME_FRAME_DURATION_MS,
+    };
+    this.torchBody.add(this.flameSprite);
 
     this.emitterTransform = new THREE.Object3D();
     this.emitterTransform.name = 'torch-head-emitter-transform';
@@ -110,8 +148,15 @@ export class TorchViewmodel {
     if (!active) return;
     const dt = THREE.MathUtils.clamp(deltaSeconds, 0.001, 0.05);
     this.elapsed += dt;
+    this.flameElapsedMs += dt * 1000;
     this.root.position.set(REST_POSITION.x + this.aim.x * 0.13, REST_POSITION.y + this.aim.y * 0.1, REST_POSITION.z);
     this.aimPivot.rotation.set(-this.aim.y * 0.23, -this.aim.x * 0.3, 0, 'YXZ');
+    const nextFlameFrameIndex = Math.floor(this.flameElapsedMs / TORCH_FLAME_FRAME_DURATION_MS) % this.flameTextures.length;
+    if (nextFlameFrameIndex !== this.flameFrameIndex) {
+      this.flameFrameIndex = nextFlameFrameIndex;
+      this.flameMaterial.map = this.flameTextures[nextFlameFrameIndex];
+      this.flameMaterial.needsUpdate = true;
+    }
     const flicker = 0.97 + Math.sin(this.elapsed * 6.7) * 0.02 + Math.sin(this.elapsed * 11.3) * 0.012;
     this.pointLight.intensity = TORCH_LIGHTING.point.intensity * flicker;
     this.warmSpotLight.intensity = TORCH_LIGHTING.wash.intensity * (0.985 + (flicker - 0.97) * 0.55);
@@ -144,6 +189,7 @@ export class TorchViewmodel {
       else child.material?.dispose?.();
     });
     this.woodTexture?.dispose?.();
+    this.flameTextures?.forEach((texture) => texture?.dispose?.());
     this.root.clear();
     this.camera = null;
   }
