@@ -76,6 +76,25 @@ export class Interactions {
   }
 
   attack() {
+    const hiddenGate = this.dungeon.beneathFolsomHiddenGrowthGateRuntime;
+    if (hiddenGate && !hiddenGate.cleared) {
+      const target = hiddenGate.getTarget();
+      const lanternEquipped = this.equipmentRuntime?.getEquippedOffhandId?.() === 'keepers_lantern';
+      const knifeOwned = this.equipmentRuntime?.hasItem?.('old_work_knife');
+      if (lanternEquipped && knifeOwned && hiddenGate.isRevealed()
+        && this.isCloseEnough(target, 3.45) && this.isMostlyFacing(target, 0.18)) {
+        const now = performance.now();
+        if (now - (this.lastBeneathFolsomGrowthStrikeAt ?? 0) < 280) return false;
+        this.lastBeneathFolsomGrowthStrikeAt = now;
+        const result = this.dungeon.strikeBeneathFolsomHiddenGrowthGate();
+        if (!result.hit) return false;
+        this.feedback?.shake?.(result.cleared
+          ? { durationMs: 680, intensity: 0.21 }
+          : { durationMs: 125, intensity: 0.038 + result.hitCount * 0.006 });
+        return true;
+      }
+    }
+
     const connectedGrowth = this.dungeon.folsomConnectedGrowthRuntime;
     const knifeAnchor = connectedGrowth?.getAnchorTargets?.()
       .filter((anchor) => ['pond', 'shrine'].includes(anchor.type) && !anchor.cleared && anchor.target)
@@ -200,16 +219,6 @@ export class Interactions {
       this.setTemporaryHint(message, result?.pried ? 1800 : 1300);
       this.hud.showMessage(message);
       this.feedback?.shake?.(result?.pried ? { durationMs: 300, intensity: 0.12 } : { durationMs: 110, intensity: 0.035 });
-      return false;
-    }
-
-    if (interaction.type === 'keepersLanternTrace') {
-      if (this.equipmentRuntime?.getEquippedOffhandId?.() !== 'keepers_lantern') return false;
-      const revealed = this.dungeon.revealBeneathFolsomKeepersLanternTraces?.();
-      const message = revealed ? 'The lantern glass clouds, then clears. Cold light catches old marks.' : interaction.message;
-      this.setTemporaryHint(message, 1700);
-      this.hud.showMessage(message);
-      this.feedback?.shake?.({ durationMs: 130, intensity: 0.035 });
       return false;
     }
 
@@ -358,16 +367,6 @@ export class Interactions {
 
     if (interaction.type === 'equipmentPickup') {
       return this.useEquipmentPickup(interaction);
-    }
-
-    if (interaction.type === 'keepersLanternTrace') {
-      if (this.equipmentRuntime?.getEquippedOffhandId?.() !== 'keepers_lantern') return false;
-      const revealed = this.dungeon.revealBeneathFolsomKeepersLanternTraces?.();
-      const message = revealed ? 'The lantern glass clouds, then clears. Cold light catches old marks.' : interaction.message;
-      this.setTemporaryHint(message, 1700);
-      this.hud.showMessage(message);
-      this.feedback?.shake?.({ durationMs: 130, intensity: 0.035 });
-      return false;
     }
 
     if (interaction.type === 'beneathFolsomDrainGrate') {
@@ -999,7 +998,6 @@ export class Interactions {
       .filter((interaction) => !interaction.collected)
       .filter((interaction) => {
         if (!interaction.requiredItemId) return true;
-        if (interaction.type === 'keepersLanternTrace') return this.equipmentRuntime?.getEquippedOffhandId?.() === interaction.requiredItemId;
         return this.equipmentRuntime?.hasItem?.(interaction.requiredItemId);
       })
       .map((interaction) => ({ interaction, distance: this.horizontalDistanceTo(interaction.target) }))

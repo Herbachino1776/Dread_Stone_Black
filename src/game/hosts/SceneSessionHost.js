@@ -199,6 +199,7 @@ export class SceneSessionHost {
     if (!this.scene) return;
     this.player?.dispose?.();
     this.dungeon?.lanternConeRevealRuntime?.dispose?.();
+    this.dungeon?.beneathFolsomHiddenGrowthGateRuntime?.dispose?.();
     this.scene.remove(this.camera);
     this.scene.traverse((child) => {
       child.geometry?.dispose?.();

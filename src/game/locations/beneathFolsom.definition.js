@@ -17,6 +17,7 @@ const textures = Object.freeze({
   glyphLetter02: { path: './assets/revealed_glyphs/letters/letter_002.png', repeat: [1, 1], roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
   glyphFace01: { path: './assets/revealed_glyphs/faces/face_001.png', repeat: [1, 1], roughness: 1, metalness: 0, transparent: true, opacity: 0 },
   glyphBlackCord: { path: './assets/textures/growth/black_growth_cord_surface_01.png', repeat: [1, 1], roughness: 1, metalness: 0, transparent: true, opacity: 0 },
+  coldThresholdStone: { path: './assets/textures/wall_black_stone_01.png', repeat: [2.4, 1.2], color: 0x7186a0, roughness: 0.94, emissive: 0x102d52, emissiveIntensity: 0.32 },
 });
 
 function room(id, label, minX, maxX, minZ, maxZ, options = {}) {
@@ -102,7 +103,7 @@ const props = [
   prop('beneath_folsom_mud_patch_east', 'BF02', { x: 4.3, y: 0.035, z: 6.4 }, { width: 5.2, height: 0.07, depth: 4.2 }, 'mud', { tags: ['mud', 'damp-floor'] }),
 
   // The lower drain throat becomes reachable after the old service grate is pried aside.
-  prop('beneath_folsom_deeper_dark_recess', 'BF03', { x: 0, y: 1.48, z: 21.72 }, { width: 6.6, height: 2.75, depth: 0.12 }, 'blackScab', { tags: ['future-passage', 'inaccessible', 'growth-boundary'] }),
+  prop('beneath_folsom_hidden_gate_wall', 'BF03', { x: 0, y: 1.48, z: 21.72 }, { width: 6.55, height: 2.96, depth: 0.36 }, 'wall', { tags: ['sealed-lower-wall', 'hidden-growth-gate-wall', 'chapter-2-capstone'] }),
   ...[-2.5, -1.25, 0, 1.25, 2.5].map((x, index) => prop(`beneath_folsom_deeper_grate_bar_${index}`, 'BF02', { x, y: 1.55, z: 13.48 }, { width: 0.18, height: 2.85, depth: 0.18 }, 'rustedIron', { tags: ['future-passage', 'old-drain-grate'] })),
   prop('beneath_folsom_deeper_grate_header', 'BF02', { x: 0, y: 2.92, z: 13.48 }, { width: 6.2, height: 0.22, depth: 0.25 }, 'rustedIron', { tags: ['future-passage', 'old-drain-grate'] }),
   prop('beneath_folsom_drain_bar_visual', 'BF02', { x: -7.55, y: 0.62, z: -1.8 }, { width: 0.16, height: 1.9, depth: 0.16 }, 'rustedIron', { rotation: { x: 0, y: 0, z: -0.19 }, tags: ['iron-drain-bar', 'maintenance-tool', 'pickup-visual'] }),
@@ -123,6 +124,15 @@ const props = [
   lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_face', { x: 0.04, y: 2.45, z: 21.455 }, { width: 0.72, height: 0.82 }, 'glyphFace01', { rotation: { x: 0, y: 0, z: 0.035 }, revealedOpacity: 0.56 }),
   lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_cord_left', { x: -1.2, y: 1.62, z: 21.45 }, { width: 2.42, height: 0.22 }, 'glyphBlackCord', { rotation: { x: 0, y: 0, z: -0.9 }, revealedOpacity: 0.58 }),
   lanternRevealDecal('beneath_folsom_lower_wall_glyph_cluster_gate_cord_right', { x: 1.18, y: 1.56, z: 21.445 }, { width: 2.34, height: 0.2 }, 'glyphBlackCord', { rotation: { x: 0, y: 0, z: 0.88 }, revealedOpacity: 0.56 }),
+
+  // A long but deliberately bounded Chapter 2 threshold. The hidden wall occludes
+  // it until the growth gate runtime finishes its collapse and slow wall fade.
+  ...[26, 33, 40, 47, 54].flatMap((z, index) => [
+    prop(`beneath_folsom_blue_hall_rib_${index}_left`, 'BF04', { x: -3.05, y: 1.72, z }, { width: 0.42, height: 3.44, depth: 0.55 }, 'coldThresholdStone', { tags: ['blue-flame-hallway', 'threshold-rib'] }),
+    prop(`beneath_folsom_blue_hall_rib_${index}_right`, 'BF04', { x: 3.05, y: 1.72, z }, { width: 0.42, height: 3.44, depth: 0.55 }, 'coldThresholdStone', { tags: ['blue-flame-hallway', 'threshold-rib'] }),
+    prop(`beneath_folsom_blue_hall_rib_${index}_lintel`, 'BF04', { x: 0, y: 3.2, z }, { width: 6.5, height: 0.3, depth: 0.58 }, 'coldThresholdStone', { tags: ['blue-flame-hallway', 'threshold-rib'] }),
+  ]),
+  prop('beneath_folsom_chapter_end_stop', 'BF04', { x: 0, y: 1.58, z: 61.55 }, { width: 6.5, height: 3.16, depth: 0.32 }, 'coldThresholdStone', { tags: ['chapter-end-stop', 'future-boundary', 'no-chapter-3'] }),
 
   // Atmospheric roots only: no interaction, hit count, or clear state.
   prop('beneath_folsom_root_wall_west', 'BF02', { x: -8.78, y: 1.72, z: 4 }, { width: 0.18, height: 0.42, depth: 12 }, 'blackGrowth', { rotation: { x: 0, y: 0, z: -0.18 }, tags: ['black-growth', 'atmospheric-only'] }),
@@ -146,6 +156,7 @@ export const beneathFolsomDefinition = Object.freeze({
     room('BF01', 'Underworks Entry Stair', -5, 5, -24, -10, { safeForSpawn: true, ceilingY: 3.25, tags: ['entry', 'return-route', 'descending-threshold'] }),
     room('BF02', 'First Drain Landing', -9, 9, -10, 14, { tags: ['main-chamber', 'damp-stone', 'no-encounters'] }),
     room('BF03', 'Lower Drain Throat', -3.6, 3.6, 14, 22, { tags: ['maintenance-alcove', 'opened-threshold', 'no-encounters'] }),
+    room('BF04', 'Blue Flame Threshold', -3.6, 3.6, 22, 62, { tags: ['chapter-2-capstone', 'blue-flame-hallway', 'future-boundary', 'no-encounters'] }),
   ],
   doors: [{
     id: 'beneath_folsom_entry_to_landing',
@@ -165,8 +176,19 @@ export const beneathFolsomDefinition = Object.freeze({
     width: 6.2,
     wallGaps: [wallGap('BF02', 0, 14, 6.2), wallGap('BF03', 0, 14, 6.2)],
     tags: ['jammed-threshold', 'opens-after-pry'],
+  }, {
+    id: 'beneath_folsom_hidden_gate_to_blue_hall',
+    fromRoom: 'BF03',
+    toRoom: 'BF04',
+    position: { x: 0, y: FLOOR_Y, z: 22 },
+    navWaypoint: { x: 0, y: FLOOR_Y, z: 22 },
+    width: 6.2,
+    wallGaps: [wallGap('BF03', 0, 22, 6.2), wallGap('BF04', 0, 22, 6.2)],
+    tags: ['hidden-growth-gate', 'opens-after-five-hits', 'chapter-2-capstone'],
   }],
-  blockers: [{ id: 'beneath_folsom_drain_grate_blocker', type: 'gate', minX: -3.1, maxX: 3.1, minZ: 13.15, maxZ: 13.85, height: 3.1, blocksPlayer: true, blocksActors: true, tags: ['jammed-drain-grate', 'pryable', 'blocks-deeper-access'], userData: { requiredItemId: 'iron_drain_bar', saveKey: 'beneath_folsom_drain_grate_pried' } }],
+  blockers: [{ id: 'beneath_folsom_drain_grate_blocker', type: 'gate', minX: -3.1, maxX: 3.1, minZ: 13.15, maxZ: 13.85, height: 3.1, blocksPlayer: true, blocksActors: true, tags: ['jammed-drain-grate', 'pryable', 'blocks-deeper-access'], userData: { requiredItemId: 'iron_drain_bar', saveKey: 'beneath_folsom_drain_grate_pried' } },
+    { id: 'beneath_folsom_hidden_growth_gate_blocker', type: 'gate', minX: -3.25, maxX: 3.25, minZ: 21.48, maxZ: 22.02, height: 3.3, blocksPlayer: true, blocksActors: true, tags: ['hidden-growth-gate', 'chapter-2-capstone'], userData: { requiredItemId: 'old_work_knife', revealItemId: 'keepers_lantern', hitsRequired: 5, saveKey: 'beneath_folsom_hidden_growth_gate_cleared' } },
+  ],
   props,
   spawns: [
     { id: 'beneath_folsom_underworks_arrival', kind: 'player', position: { x: 0, y: 1.55, z: -19.2 }, yaw: 0, roomId: 'BF01', tags: ['entry', 'safe-spawn', 'from-folsom'] },
@@ -206,11 +228,7 @@ export const beneathFolsomDefinition = Object.freeze({
     target: { x: -2.75, y: 1.15, z: 18.8 }, range: 3, hint: "Keeper's Lantern", message: "Keeper's Lantern Acquired.",
     acquiredMessage: "Keeper's Lantern Acquired.", repeatMessage: '', roomId: 'BF03',
     tags: ['keeper-niche', 'utility-tool', 'post-drain-grate'],
-  }, {
-    id: 'beneath_folsom_keepers_lantern_trace_inspect', type: 'keepersLanternTrace', target: { x: 0, y: 0.8, z: 19.4 }, range: 4.4,
-    hint: 'Clouded marks in the damp stone', message: 'Black veins show through the damp stone, pulling toward the sealed lower wall.', requiredItemId: 'keepers_lantern',
-    saveKey: 'beneath_folsom_keepers_lantern_reveal_seen', roomId: 'BF03', tags: ['keepers-lantern-revealed', 'chapter-2-route-truth'],
   }],
-  navigation: { roomGraph: { roomIds: ['BF01', 'BF02', 'BF03'], links: [{ id: 'beneath_folsom_entry_to_landing', fromRoom: 'BF01', toRoom: 'BF02', navWaypoint: { x: 0, y: 0, z: -10 } }, { id: 'beneath_folsom_landing_to_drain_throat', fromRoom: 'BF02', toRoom: 'BF03', navWaypoint: { x: 0, y: 0, z: 14 } }] }, localAvoidanceHints: [], forbiddenZones: [], preferredPatrolRoutes: [] },
+  navigation: { roomGraph: { roomIds: ['BF01', 'BF02', 'BF03', 'BF04'], links: [{ id: 'beneath_folsom_entry_to_landing', fromRoom: 'BF01', toRoom: 'BF02', navWaypoint: { x: 0, y: 0, z: -10 } }, { id: 'beneath_folsom_landing_to_drain_throat', fromRoom: 'BF02', toRoom: 'BF03', navWaypoint: { x: 0, y: 0, z: 14 } }, { id: 'beneath_folsom_hidden_gate_to_blue_hall', fromRoom: 'BF03', toRoom: 'BF04', navWaypoint: { x: 0, y: 0, z: 22 } }] }, localAvoidanceHints: [], forbiddenZones: [], preferredPatrolRoutes: [] },
   encounterZones: [],
 });

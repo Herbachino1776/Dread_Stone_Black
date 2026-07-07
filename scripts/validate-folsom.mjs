@@ -19,6 +19,7 @@ import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisual
 import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
 import { LanternConeRevealRuntime, LANTERN_REVEAL_DEFAULTS, isPointInsideLanternCone } from '../src/game/world-scene/LanternConeRevealRuntime.js';
+import { BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES } from '../src/game/world-scene/BeneathFolsomHiddenGrowthGateRuntime.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const revealedGlyphAssetRoot = path.join(repoRoot, 'public', 'assets', 'revealed_glyphs');
@@ -124,9 +125,10 @@ const drainBarPickup = (beneathFolsom.interactions ?? []).find((interaction) => 
 const drainGrateInteraction = (beneathFolsom.interactions ?? []).find((interaction) => interaction.type === 'beneathFolsomDrainGrate');
 const drainGrateBlocker = beneathFolsomRuntime.blockerRects.find((blocker) => blocker.id === 'beneath_folsom_drain_grate_blocker');
 const keepersLanternPickup = (beneathFolsom.interactions ?? []).find((interaction) => interaction.itemId === 'keepers_lantern');
-const lanternTraceInteraction = (beneathFolsom.interactions ?? []).find((interaction) => interaction.type === 'keepersLanternTrace');
 const lanternRevealProps = (beneathFolsom.props ?? []).filter((prop) => prop.tags?.includes('keepers-lantern-revealed'));
 const lanternGlyphDecals = (beneathFolsom.props ?? []).filter((prop) => prop.tags?.includes('lantern-reveal-decal'));
+const hiddenGrowthGateBlocker = beneathFolsomRuntime.blockerRects.find((blocker) => blocker.id === 'beneath_folsom_hidden_growth_gate_blocker');
+const blueHall = (beneathFolsom.rooms ?? []).find((room) => room.id === 'BF04');
 assert.equal(beneathReturn?.toLocation, 'folsom', 'Beneath Folsom has a return route to Folsom.');
 assert.equal(beneathReturn?.destinationSpawnId, 'folsom_underworks_return', 'The return route targets the Folsom Underworks return spawn.');
 assert.equal((beneathFolsom.spawns ?? []).some((spawn) => ['enemy', 'npc'].includes(spawn.kind)), false, 'Beneath Folsom Entry V1 has no enemies or NPCs.');
@@ -165,9 +167,15 @@ clusterGlyphAssetPaths.forEach((assetPath) => assert.equal(existsSync(path.join(
 ['beneath_folsom_lantern_reveal_trace_01', 'beneath_folsom_lantern_reveal_trace_02', 'beneath_folsom_hidden_growth_pull', 'beneath_folsom_lantern_glyph_test_01'].forEach((oldPropId) => {
   assert.equal((beneathFolsom.props ?? []).some((prop) => prop.id === oldPropId), false, `Old strip/test prop is removed: ${oldPropId}.`);
 });
-assert.equal(beneathFolsomRuntime.collisionWorld.canStandAt(new THREE.Vector3(0, 1.55, 22.4)), false, 'The sealed lower wall remains outside navigable space.');
-assert.equal(lanternTraceInteraction?.requiredItemId, 'keepers_lantern', 'The live reveal interaction remains mapped to the existing lantern item id.');
-assert.equal(lanternTraceInteraction?.saveKey, 'beneath_folsom_keepers_lantern_reveal_seen', 'The reveal interaction maps to its persisted discovery state.');
+assert.equal((beneathFolsom.interactions ?? []).some((interaction) => interaction.type === 'keepersLanternTrace'), false, 'The capstone has no inspect-based clue interaction or explanatory prompt.');
+assert.equal(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES.hitsRequired, 5, 'Hidden growth requires exactly five successful hits.');
+assert.equal(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES.revealItemId, 'keepers_lantern', 'Only the Keeper\'s Lantern reveals the hidden gate.');
+assert.equal(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES.saveKey, 'beneath_folsom_hidden_growth_gate_cleared');
+assert.equal(hiddenGrowthGateBlocker?.userData?.hitsRequired, 5, 'The authored gate blocker matches the five-hit runtime rule.');
+assert.equal(beneathFolsomRuntime.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 21.7)).some((blocker) => blocker.id === hiddenGrowthGateBlocker.id), true, 'The intact hidden-growth wall physically blocks the blue hallway.');
+assert.ok(blueHall && blueHall.maxZ - blueHall.minZ >= 36 && blueHall.tags.includes('future-boundary'), 'A long bounded blue-flame threshold hallway exists beyond the gate.');
+assert.ok((beneathFolsom.props ?? []).filter((prop) => prop.tags?.includes('blue-flame-hallway')).length >= 15, 'The hallway has repeated architectural ribs guiding the eye forward.');
+assert.ok((beneathFolsom.props ?? []).some((prop) => prop.tags?.includes('chapter-end-stop') && prop.tags?.includes('no-chapter-3')), 'The hallway ends at an explicit future boundary.');
 assert.equal(equipmentRegistry.items.keepers_lantern?.itemType, 'offhand', "Keeper's Lantern is registered as offhand equipment.");
 assert.equal(equipmentRegistry.items.keepers_lantern?.slot, 'offhand', "Keeper's Lantern uses the shared offhand slot without changing its item id.");
 assert.equal(KEEPERS_LANTERN_ITEM_ID, 'keepers_lantern', "Keeper's Lantern viewmodel keeps the existing persistent item id.");
@@ -237,13 +245,17 @@ assert.equal(offhandRuntime.getEquippedOffhandId(), 'torch', 'Re-equipping Torch
 const lanternSceneHarness = Object.assign(Object.create(DungeonScene.prototype), {
   inspectInteractions: (beneathFolsom.interactions ?? []).map((interaction) => ({ ...interaction, target: new THREE.Vector3(interaction.target.x, interaction.target.y, interaction.target.z) })),
   gameState: lanternGameState, collision: beneathFolsomRuntime.collisionWorld, beneathFolsomLanternRevealObjects: [],
+  scene: new THREE.Scene(), textureLoader: { load: () => new THREE.Texture() },
 });
 lanternSceneHarness.configureBeneathFolsomDrainLoop(beneathFolsomRuntime);
-assert.equal(lanternSceneHarness.beneathFolsomLanternRevealObjects.length, lanternGlyphDecals.length, 'The scene tracks every authored cluster decal.');
-assert.ok(lanternSceneHarness.beneathFolsomLanternRevealObjects.every((object) => object.visible === false), 'Lantern glyphs do not render in the normal runtime view.');
+const hiddenGateRuntime = lanternSceneHarness.beneathFolsomHiddenGrowthGateRuntime;
+const hiddenGateRevealObjects = hiddenGateRuntime.getRevealObjects();
+assert.ok(hiddenGateRevealObjects.length >= 14 && hiddenGateRuntime.cords.length >= 10, 'The hidden gate is a dense field of thick vertical growth cords and scabs.');
+assert.equal(lanternSceneHarness.beneathFolsomLanternRevealObjects.length, lanternGlyphDecals.length + hiddenGateRevealObjects.length, 'The scene tracks both the glyph cluster and physical hidden-growth seal.');
+assert.ok(lanternSceneHarness.beneathFolsomLanternRevealObjects.every((object) => object.visible === false), 'Lantern-only gate art does not render in the normal runtime view.');
 assert.ok(lanternSceneHarness.lanternConeRevealRuntime instanceof LanternConeRevealRuntime, 'Beneath Folsom uses the explicit lantern cone reveal runtime.');
-assert.equal(lanternSceneHarness.lanternConeRevealRuntime.entries.length, lanternGlyphDecals.length, 'Active scene tracks the complete authored lantern-reveal decal list.');
-const liveGlyphEntry = lanternSceneHarness.lanternConeRevealRuntime.entries[0];
+assert.equal(lanternSceneHarness.lanternConeRevealRuntime.entries.length, lanternGlyphDecals.length + hiddenGateRevealObjects.length, 'Active scene tracks the complete lantern-reveal target list.');
+const liveGlyphEntry = lanternSceneHarness.lanternConeRevealRuntime.entries.find((entry) => entry.object.name === lanternGlyphDecals[0].id);
 assert.equal(liveGlyphEntry.object.geometry.type, 'PlaneGeometry', 'Lantern reveal decal compiles as a transparent plane instead of a box.');
 assert.ok(clusterGlyphAssetPaths.includes(liveGlyphEntry.object.material.userData.definitionProfile.path));
 assert.ok(lanternSceneHarness.lanternConeRevealRuntime.entries.every((entry) => entry.config.hiddenOpacity === 0
@@ -291,29 +303,38 @@ assert.ok(scriptGlyphEntry.directHit && scriptGlyphEntry.object.visible, 'Neares
 liveEmitterState = { ...liveEmitterState, worldPosition: scriptGlyphCenter.clone().add(new THREE.Vector3(0, 0, -5)), worldDirection: new THREE.Vector3(0, 0, 1) };
 for (let index = 0; index < 16; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
 assert.ok(!scriptGlyphEntry.insideCone, 'Glyph reveal remains off beyond the bounded four-unit wash even when aimed directly at the decal.');
-const lanternOwnedItems = new Set();
-let interactionEquippedOffhand = null;
-const lanternMessages = [];
-const lanternInteractions = new Interactions({
-  player: { position: new THREE.Vector3(lanternTraceInteraction.target.x, lanternTraceInteraction.target.y, lanternTraceInteraction.target.z), getLookDirection: () => new THREE.Vector3(0, 0, 1) },
-  dungeon: Object.assign(lanternSceneHarness, { area: 'beneath-folsom', outdoorInteractions: [] }),
-  equipmentRuntime: { hasItem: (itemId) => lanternOwnedItems.has(itemId), getEquippedOffhandId: () => interactionEquippedOffhand },
-  hud: { showHint: () => {}, showMessage: (message) => lanternMessages.push(message), updateFieldKitStatus: () => {} },
-  feedback: { shake: () => {} },
-});
-assert.notEqual(lanternInteractions.getNearbyInspectInteraction()?.id, lanternTraceInteraction.id, 'The hidden-trace interaction is unavailable before lantern acquisition.');
-lanternOwnedItems.add('keepers_lantern');
-lanternSceneHarness.inspectInteractions.find((interaction) => interaction.id === keepersLanternPickup.id).collected = true;
-assert.notEqual(lanternInteractions.getNearbyInspectInteraction()?.id, lanternTraceInteraction.id, 'Owned but unequipped lantern does not expose the reveal interaction.');
-interactionEquippedOffhand = 'keepers_lantern';
-assert.equal(lanternInteractions.getNearbyInspectInteraction()?.id, lanternTraceInteraction.id, 'Equipped lantern exposes a broad nearby reveal interaction without camera aim.');
-lanternInteractions.interact();
-assert.ok(lanternMessages.at(-1)?.includes('Cold light catches old marks'), 'The live reveal path gives concise physical feedback.');
-assert.ok(lanternSceneHarness.beneathFolsomLanternRevealObjects.every((object) => object.visible === false), 'Discovery state does not permanently expose the glyph cluster.');
-lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
-assert.ok(liveGlyphEntry.material.opacity === 0 && liveGlyphEntry.object.visible === false, 'Persisted discovery does not override dynamic cone-controlled glyph visibility.');
-assert.equal(new GameState(lanternStorage).isBeneathFolsomKeepersLanternRevealSeen(), true, 'Lantern discovery state persists across GameState reload.');
-assert.ok((beneathFolsom.props ?? []).some((prop) => prop.tags?.includes('black-growth') && prop.tags?.includes('atmospheric-only')), 'Underground growth is atmospheric foreshadowing only.');
+const gateEntry = lanternSceneHarness.lanternConeRevealRuntime.entries.find((entry) => entry.object.name === 'beneath-folsom-hidden-growth-cord-5');
+const gatePoint = gateEntry.object.getWorldPosition(new THREE.Vector3());
+liveEmitterState = { ...liveEmitterState, active: true, itemId: 'torch', worldPosition: gatePoint.clone().add(new THREE.Vector3(0, 0, -1)), worldDirection: new THREE.Vector3(0, 0, 1) };
+for (let index = 0; index < 10; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+assert.equal(gateEntry.object.visible, false, 'Ordinary Torch cannot reveal the hidden growth gate.');
+assert.equal(hiddenGateRuntime.strike().hit, false, 'Growth cannot be damaged while it remains hidden.');
+liveEmitterState = { ...liveEmitterState, itemId: 'keepers_lantern' };
+for (let index = 0; index < 12; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
+assert.ok(gateEntry.object.visible && hiddenGateRuntime.isRevealed(), 'Keeper\'s Lantern wash reveals the dense physical seal.');
+const initialCordScale = hiddenGateRuntime.cords[0].scale.y;
+for (let hit = 1; hit <= 4; hit += 1) {
+  const result = hiddenGateRuntime.strike();
+  assert.deepEqual({ hit: result.hit, cleared: result.cleared, hitCount: result.hitCount }, { hit: true, cleared: false, hitCount: hit }, `Hidden growth hit ${hit} damages without clearing early.`);
+  hiddenGateRuntime.update(0.05);
+}
+assert.ok(hiddenGateRuntime.cords[0].scale.y < initialCordScale && hiddenGateRuntime.scabs.every((mesh) => hiddenGateRuntime.damagedTextures.includes(mesh.material.map)), 'Hits progressively weaken cords and switch scabs to damaged textures.');
+const finalResult = hiddenGateRuntime.strike();
+assert.deepEqual({ hit: finalResult.hit, cleared: finalResult.cleared, hitCount: finalResult.hitCount }, { hit: true, cleared: true, hitCount: 5 }, 'Exactly the fifth hit clears the hidden growth gate.');
+assert.ok(hiddenGateRuntime.effects.length >= 20, 'Final hit produces a substantially stronger bounded black-oil burst.');
+assert.equal(hiddenGateRuntime.hallwayGroup.visible, false, 'Blue-flame fixtures remain concealed during the post-collapse beat.');
+assert.equal(hiddenGateRuntime.blueFlames.length, 10, 'Five paired cold-blue torch rows lead through the hallway.');
+assert.equal(lanternGameState.isBeneathFolsomHiddenGrowthGateCleared(), true, 'Gate clear writes the dedicated world-state flag.');
+const wallOpacityBeforeBeat = hiddenGateRuntime.wall.material.opacity;
+for (let index = 0; index < 10; index += 1) hiddenGateRuntime.update(0.05);
+assert.equal(hiddenGateRuntime.wall.material.opacity, wallOpacityBeforeBeat, 'Sealed wall remains for a deliberate beat after the growth collapses.');
+for (let index = 0; index < 70; index += 1) hiddenGateRuntime.update(0.05);
+assert.equal(hiddenGateRuntime.growthGroup.visible, false, 'Cords snap, retract, and collapse away after the final hit.');
+assert.equal(hiddenGateRuntime.wall.visible, false, 'The sealed wall slowly fades and withdraws after the beat.');
+assert.equal(hiddenGateRuntime.hallwayGroup.visible, true, 'Cold-blue fixtures reveal as the wall begins fading away.');
+assert.equal(lanternSceneHarness.collision.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 21.7)).some((blocker) => blocker.id === hiddenGrowthGateBlocker.id), false, 'Cleared wall collision opens the bounded hallway threshold.');
+assert.equal(new GameState(lanternStorage).isBeneathFolsomHiddenGrowthGateCleared(), true, 'Hidden growth gate remains cleared after GameState reload.');
+assert.ok((beneathFolsom.props ?? []).some((prop) => prop.tags?.includes('black-growth') && prop.tags?.includes('atmospheric-only')), 'Other underground growth remains atmospheric dressing.');
 
 const returnTransitions = [];
 const returnRouteInteractions = new Interactions({

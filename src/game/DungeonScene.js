@@ -20,6 +20,7 @@ import { FISH_TEXTURE_PROFILES, createFishMesh, createFishingWorldRuntime, resol
 import { FolsomConnectedGrowthRuntime } from './world-scene/FolsomConnectedGrowthRuntime.js';
 import { FolsomShedGrowthRuntime } from './world-scene/FolsomShedGrowthRuntime.js';
 import { LanternConeRevealRuntime } from './world-scene/LanternConeRevealRuntime.js';
+import { BeneathFolsomHiddenGrowthGateRuntime } from './world-scene/BeneathFolsomHiddenGrowthGateRuntime.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -323,6 +324,7 @@ export class DungeonScene {
     this.folsomShedGrowthRuntime = null;
     this.beneathFolsomDrainGrate = null;
     this.beneathFolsomLanternRevealObjects = [];
+    this.beneathFolsomHiddenGrowthGateRuntime = null;
     this.fishingWorldRuntime = createFishingWorldRuntime({
       scene: this.scene,
       dungeon: this,
@@ -505,7 +507,15 @@ export class DungeonScene {
     }
     lanternObject.visible = !lanternOwned;
 
-    const lanternRevealDecals = [];
+    this.beneathFolsomHiddenGrowthGateRuntime = new BeneathFolsomHiddenGrowthGateRuntime({
+      scene: this.scene,
+      collision: this.collision,
+      compiledGroup: group,
+      gameState: this.gameState,
+      textureLoader: this.textureLoader,
+    });
+
+    const lanternRevealDecals = this.beneathFolsomHiddenGrowthGateRuntime.getRevealObjects();
     group.traverse((object) => {
       if (object.userData?.revealMode === 'lanternCone' && object.userData?.tags?.includes('lantern-reveal-decal')) lanternRevealDecals.push(object);
     });
@@ -1112,6 +1122,7 @@ export class DungeonScene {
     this.folsomConnectedGrowthRuntime?.update(deltaSeconds);
     this.updateBeneathFolsomDrainGrate(deltaSeconds);
     this.lanternConeRevealRuntime?.update(deltaSeconds);
+    this.beneathFolsomHiddenGrowthGateRuntime?.update(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
     this.updateBalthazanFloorCoverageQa(player);
   }
@@ -3283,6 +3294,10 @@ export class DungeonScene {
 
   strikeFolsomShedGrowth() {
     return this.folsomShedGrowthRuntime?.strike?.() ?? { hit: false, cleared: false, hitCount: 0 };
+  }
+
+  strikeBeneathFolsomHiddenGrowthGate() {
+    return this.beneathFolsomHiddenGrowthGateRuntime?.strike?.() ?? { hit: false, cleared: false, hitCount: 0 };
   }
 
   clearFolsomGrowthAnchor(anchorId) {
