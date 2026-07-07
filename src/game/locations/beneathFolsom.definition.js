@@ -2,21 +2,21 @@ const FLOOR_Y = 0;
 const CEILING_Y = 3.45;
 
 const textures = Object.freeze({
-  wall: { path: './assets/textures/wall_black_stone_01.png', repeat: [3.4, 1.4], color: 0x4d5049, roughness: 0.99, emissive: 0x080b09, emissiveIntensity: 0.12 },
-  floor: { path: './assets/textures/floor_worn_stone_01.png', repeat: [3.2, 4.2], color: 0x53564e, roughness: 1, emissive: 0x090b09, emissiveIntensity: 0.12 },
-  ceiling: { path: './assets/textures/ceiling_dark_stone_01.png', repeat: [3.2, 3.2], color: 0x353833, roughness: 1, emissive: 0x050706, emissiveIntensity: 0.08 },
-  wetStone: { path: './assets/textures/floor_worn_stone_01.png', repeat: [2.2, 3.4], color: 0x293635, roughness: 0.72, metalness: 0.08, emissive: 0x06100f, emissiveIntensity: 0.14 },
-  mud: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [2.2, 2.2], color: 0x242118, roughness: 1, emissive: 0x080704, emissiveIntensity: 0.08 },
-  timber: { path: './assets/textures/pack1/wood_dark_aged_01.png', repeat: [1.6, 1.2], color: 0x4a3528, roughness: 1, emissive: 0x090503, emissiveIntensity: 0.08 },
-  rustedIron: { path: './assets/textures/metal_gate_rusted_01.png', repeat: [1.2, 1.4], color: 0x51443b, roughness: 0.9, metalness: 0.36 },
-  blackGrowth: { path: './assets/textures/growth/black_growth_cord_surface_01.png', repeat: [2.8, 1.1], color: 0x1d211d, roughness: 0.84, emissive: 0x020302, emissiveIntensity: 0.12 },
-  blackScab: { path: './assets/textures/growth/black_growth_scab_intact_02.png', repeat: [1.2, 1.2], color: 0x242824, roughness: 0.82, emissive: 0x020302, emissiveIntensity: 0.1 },
-  glyphSymbol01: { path: './assets/revealed_glyphs/symbols/symbol_001.png', repeat: [1, 1], color: 0xb8bbb2, roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
-  glyphScript01: { path: './assets/revealed_glyphs/scripts/script_001.png', repeat: [1, 1], color: 0xaeb3aa, roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
-  glyphLetter01: { path: './assets/revealed_glyphs/letters/letter_001.png', repeat: [1, 1], color: 0xc1c0b7, roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
-  glyphLetter02: { path: './assets/revealed_glyphs/letters/letter_002.png', repeat: [1, 1], color: 0xaaa9a1, roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
-  glyphFace01: { path: './assets/revealed_glyphs/faces/face_001.png', repeat: [1, 1], color: 0x858982, roughness: 1, metalness: 0, transparent: true, opacity: 0 },
-  glyphBlackCord: { path: './assets/textures/growth/black_growth_cord_surface_01.png', repeat: [1, 1], color: 0x393c37, roughness: 1, metalness: 0, transparent: true, opacity: 0 },
+  wall: { path: './assets/textures/wall_black_stone_01.png', repeat: [3.4, 1.4], roughness: 0.99 },
+  floor: { path: './assets/textures/floor_worn_stone_01.png', repeat: [3.2, 4.2], roughness: 1 },
+  ceiling: { path: './assets/textures/ceiling_dark_stone_01.png', repeat: [3.2, 3.2], roughness: 1 },
+  wetStone: { path: './assets/textures/floor_worn_stone_01.png', repeat: [2.2, 3.4], roughness: 0.72, metalness: 0.08 },
+  mud: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [2.2, 2.2], roughness: 1 },
+  timber: { path: './assets/textures/pack1/wood_dark_aged_01.png', repeat: [1.6, 1.2], roughness: 1 },
+  rustedIron: { path: './assets/textures/metal_gate_rusted_01.png', repeat: [1.2, 1.4], roughness: 0.9, metalness: 0.36 },
+  blackGrowth: { path: './assets/textures/growth/black_growth_cord_surface_01.png', repeat: [2.8, 1.1], roughness: 0.84 },
+  blackScab: { path: './assets/textures/growth/black_growth_scab_intact_02.png', repeat: [1.2, 1.2], roughness: 0.82 },
+  glyphSymbol01: { path: './assets/revealed_glyphs/symbols/symbol_001.png', repeat: [1, 1], roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
+  glyphScript01: { path: './assets/revealed_glyphs/scripts/script_001.png', repeat: [1, 1], roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
+  glyphLetter01: { path: './assets/revealed_glyphs/letters/letter_001.png', repeat: [1, 1], roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
+  glyphLetter02: { path: './assets/revealed_glyphs/letters/letter_002.png', repeat: [1, 1], roughness: 0.98, metalness: 0, transparent: true, opacity: 0 },
+  glyphFace01: { path: './assets/revealed_glyphs/faces/face_001.png', repeat: [1, 1], roughness: 1, metalness: 0, transparent: true, opacity: 0 },
+  glyphBlackCord: { path: './assets/textures/growth/black_growth_cord_surface_01.png', repeat: [1, 1], roughness: 1, metalness: 0, transparent: true, opacity: 0 },
 });
 
 function room(id, label, minX, maxX, minZ, maxZ, options = {}) {
