@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 
-const AIM_LIMIT_X = 1;
-const AIM_LIMIT_Y = 1;
-const DRAG_RANGE_X = 150;
-const DRAG_RANGE_Y = 130;
-const AIM_SPRING = 72;
-const AIM_DAMPING = 15;
+const AIM_LIMIT_X = 1.45;
+const AIM_LIMIT_Y = 1.35;
+const DRAG_RANGE_X = 110;
+const DRAG_RANGE_Y = 100;
+const AIM_SPRING = 48;
+const AIM_DAMPING = 9.5;
 
 export class OffhandAimController {
   constructor({ app, viewmodels = [] } = {}) {

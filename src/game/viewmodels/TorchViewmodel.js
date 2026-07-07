@@ -17,7 +17,7 @@ const TORCH_FLAME_FRAME_PATHS = Object.freeze([
   './assets/sprites/fire/campfire_flame_billboard_06.png',
 ]);
 const TORCH_FLAME_FRAME_DURATION_MS = 110;
-const REST_POSITION = Object.freeze({ x: -0.78, y: -0.7, z: -1.22 });
+const REST_POSITION = Object.freeze({ x: -1.02, y: -0.86, z: -1.34 });
 const REST_ROLL = -0.72;
 const screenPoint = new THREE.Vector3();
 
@@ -25,7 +25,7 @@ function markViewmodel(object) {
   object.traverse((child) => {
     child.layers?.set?.(KEEPERS_LANTERN_VIEWMODEL_LAYER);
     if (!child.isMesh) return;
-    child.renderOrder = 10010;
+    child.renderOrder = Math.max(child.renderOrder, 10010);
     child.castShadow = false;
     child.receiveShadow = false;
     child.userData = { ...child.userData, torchViewmodel: true };
@@ -70,16 +70,16 @@ export class TorchViewmodel {
     const wood = new THREE.MeshStandardMaterial({ map: this.woodTexture, color: 0xb58a57, roughness: 0.92 });
     const cloth = new THREE.MeshStandardMaterial({ color: 0x33231b, roughness: 1 });
 
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.96, 8), wood);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.042, 0.64, 8), wood);
     shaft.name = 'torch-skinny-oak-shaft';
-    shaft.position.y = 0.42;
+    shaft.position.y = 0.27;
     this.torchBody.add(shaft);
 
-    for (let index = 0; index < 4; index += 1) {
-      const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.072 - index * 0.004, 0.068 - index * 0.003, 0.105, 9), cloth);
+    for (let index = 0; index < 3; index += 1) {
+      const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.058 - index * 0.003, 0.062 - index * 0.003, 0.09, 8), cloth);
       wrap.name = `torch-head-cloth-wrap-${index}`;
-      wrap.position.y = 0.88 + index * 0.07;
-      wrap.rotation.z = index % 2 ? 0.035 : -0.035;
+      wrap.position.y = 0.61 + index * 0.065;
+      wrap.rotation.z = index % 2 ? 0.04 : -0.035;
       this.torchBody.add(wrap);
     }
 
@@ -94,7 +94,7 @@ export class TorchViewmodel {
       texture.magFilter = THREE.LinearFilter;
       return texture;
     });
-    this.flameMaterial = new THREE.SpriteMaterial({
+    this.flameMaterial = new THREE.MeshBasicMaterial({
       map: this.flameTextures[0],
       color: 0xffffff,
       transparent: true,
@@ -103,24 +103,31 @@ export class TorchViewmodel {
       depthTest: true,
       depthWrite: false,
       toneMapped: false,
+      side: THREE.DoubleSide,
     });
-    this.flameSprite = new THREE.Sprite(this.flameMaterial);
-    this.flameSprite.name = 'torch-head-six-frame-fire-sprite';
-    this.flameSprite.position.set(0, 1.27, 0.012);
-    this.flameSprite.scale.set(0.25, 0.34, 1);
-    this.flameSprite.renderOrder = 10011;
-    this.flameSprite.userData = {
+
+    this.headSocket = new THREE.Group();
+    this.headSocket.name = 'torch-head-flame-socket';
+    this.headSocket.position.set(0, 0.76, 0);
+    this.torchBody.add(this.headSocket);
+
+    this.flamePlane = new THREE.Mesh(new THREE.PlaneGeometry(0.29, 0.4), this.flameMaterial);
+    this.flamePlane.name = 'torch-head-six-frame-fire-sprite-plane';
+    this.flamePlane.position.set(0, 0.14, 0.012);
+    this.flamePlane.renderOrder = 10011;
+    this.flamePlane.userData = {
       torchViewmodel: true,
       animatedFireSprite: true,
+      orientation: 'inherits-torch-head-socket',
       framePaths: TORCH_FLAME_FRAME_PATHS,
       frameDurationMs: TORCH_FLAME_FRAME_DURATION_MS,
     };
-    this.torchBody.add(this.flameSprite);
+    this.headSocket.add(this.flamePlane);
 
     this.emitterTransform = new THREE.Object3D();
     this.emitterTransform.name = 'torch-head-emitter-transform';
-    this.emitterTransform.position.set(0, 1.16, -0.02);
-    this.torchBody.add(this.emitterTransform);
+    this.emitterTransform.position.set(0, 0.1, -0.02);
+    this.headSocket.add(this.emitterTransform);
 
     this.pointLight = new THREE.PointLight(TORCH_LIGHTING.point.color, TORCH_LIGHTING.point.intensity, TORCH_LIGHTING.point.distance, TORCH_LIGHTING.point.decay);
     this.pointLight.name = 'torch-head-warm-point-light';
