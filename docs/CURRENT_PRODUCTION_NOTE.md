@@ -1,14 +1,14 @@
 # Current Production Note
 
-The active milestone is Beneath Folsom Keeper's Lantern V1. The direct tool-shed loop, above-ground anchor clearing, underground entry, and Iron Drain Bar loop are complete. The concise production lock is [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md); it overrides older priorities when documents conflict.
+Chapter 2 is functionally complete through the hidden five-hit growth gate and blue-flame future threshold. The active work is Chapter 3 readiness, beginning with a route contract from that threshold to the Lower Shrine Stair. The concise production lock is [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md); it overrides older priorities when documents conflict.
 
 ## Immediate order
 
-1. Preserve the completed shed and anchor-clearing loops.
-2. Preserve the working transition into `beneath-folsom` and return route.
-3. Add one persistent Keeper's Lantern utility pickup and one bounded hidden trace reveal beyond the pried grate.
+1. Preserve the complete Chapter 1-2 playable spine and persisted route states.
+2. Lock how the blue-flame hallway hands off to the Chapter 3 Lower Shrine Stair.
+3. Build one narrow Keeper's Lantern white-scab reveal/clear proof before broader Chapter 3 content.
 
-Do not build the full Beneath Folsom dungeon or later Chapter 2 progression systems in this pass.
+Do not begin with enemies, Records or Memory UI, Pale Gates, a general white-machinery framework, bosses, or unrelated route expansion.
 
 ## Existing baseline to preserve
 

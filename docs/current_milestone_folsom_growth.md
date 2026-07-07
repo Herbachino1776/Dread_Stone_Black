@@ -1,69 +1,46 @@
-# Current Milestone: Beneath Folsom Keeper's Lantern V1
+# Current Milestone: Chapter 2 Closure and Chapter 3 Readiness
 
-This is the production lock for the next Dread Stone Black tasks. It overrides older strategy, roadmap, audit, and blueprint language where they conflict.
+This is the current Dread Stone Black production lock. It overrides older strategy, roadmap, audit, and blueprint language where they conflict.
 
-## Project identity
+## Current status
 
-Dread Stone Black is a mobile-first, browser-playable first-person dungeon crawler. It should feel slow, physical, readable, ominous, and tactile: the player forces a buried world to reveal what it has sealed away. Treat it as a real game, not a generic Three.js demo or fantasy prototype.
+The Folsom Chapter 1-2 playable foundation is functionally complete and may pause. The implemented spine is:
 
-## Active implementation order
+1. Find the Old Work Knife behind the Folsom tool shed.
+2. Clear the shed seam growth in exactly three successful swipes and recover the Wood Axe and Torch.
+3. Clear the fire, pond, and shrine anchors, weakening their feeds and unsealing the Underworks gate.
+4. Enter `beneath-folsom`, recover the Iron Drain Bar, and pry open the drain grate.
+5. Recover and equip the Keeper's Lantern, then use its bounded reveal wash to expose the hidden glyph/growth gate.
+6. Clear that hidden growth in exactly five successful knife hits while it is revealed.
+7. Enter the blue-flame hallway and reach the explicit future Chapter 3 threshold.
 
-1. Preserve the completed tool-shed proof loop.
-2. Make the fire, pond, and shrine growth anchors physically clearable.
-3. Weaken each connected feed and unseal the above-ground Underworks gate after all three clear.
+Persistent route state includes `folsom_tool_shed_open`, the three Folsom anchor keys, `folsom_underworks_growth_unsealed`, `beneath_folsom_drain_grate_pried`, `beneath_folsom_keepers_lantern_reveal_seen`, and `beneath_folsom_hidden_growth_gate_cleared`.
 
-The direct shed loop, Chapter 2 above-ground anchor clearing, Beneath Folsom entry, and Iron Drain Bar loop are complete. This pass adds the first proof that normal sight is insufficient below Folsom.
+The detailed closure verdict and Chapter 3 gap analysis are in [`chapter_2_closure_chapter_3_readiness.md`](chapter_2_closure_chapter_3_readiness.md).
 
-## Shed proof-loop locks
+## Completed-loop locks
 
-- Seal the tool-shed door seam and frame with black growth. The latch is not the target; do not build a tiny latch blob.
-- Hide the Old Work Knife behind the shed so exploration teaches the solution.
-- The knife is a short, worn work tool with a rusted blade and wooden handle, never a sword, fantasy dagger, or broadsword.
-- Use environmental teaching only. Do not add tutorial popups or "strike the growth" instruction text.
-- Require exactly three successful swipes.
-- Present the runtime states as `intact -> damaged -> cleared`.
-- Each successful hit should produce a small physical wiggle, pulse, or shrink-grow response.
-- On the final clear, snap the cords, erupt or splash black oil, shake the screen, and fade or collapse the remaining growth.
-- Open the shed only after the growth clears and persist that world state as `folsom_tool_shed_open`.
-- Reveal only the locked reward: Wood Axe + Torch.
+- Black growth remains a physical obstruction: wet black plant fiber, oily scab, tarred root, and burnt mycelium. It is not currency, purple corruption, red gore, cartoon slime, magic smoke, or a generic black blob.
+- The shed target is growth sealing the door seam/frame, not a tiny latch blob.
+- The Old Work Knife is a short, worn work tool behind the shed, never a sword or fantasy dagger.
+- The shed clear remains exactly three successful swipes with physical hit reaction, cord snap, black-oil feedback, collapse, screen shake, and persisted opening.
+- The shed reward remains Wood Axe + Torch.
+- Fire uses the Torch capability; pond and shrine use the Old Work Knife. Cleared anchors and their feeds remain world state, not inventory tokens.
+- The Underworks transition remains gated by `folsom_underworks_growth_unsealed`, with a reliable return route to Folsom.
+- The Iron Drain Bar remains a persistent local pry tool for the drain grate.
+- The Keeper's Lantern remains an offhand light with a separate bounded reveal test. Torch and ambient light do not reveal hidden glyph art.
+- The discovery flag records that the reveal was seen; it does not make hidden glyphs permanently visible.
+- The hidden lower growth gate requires the Keeper's Lantern reveal, the Old Work Knife, and exactly five successful hits. Its final clear persists and opens the blue-flame threshold.
+- Use environmental teaching. Do not add tutorial prose to these loops.
 
-## Black-growth art lock
+## Chapter 3 readiness boundary
 
-Black growth is a physical obstruction: wet black plant fiber, oily scab, tarred root, and burnt mycelium. It is not purple corruption, red gore, cartoon slime, magic smoke, or a generic black blob.
+Chapter 3 is not implemented. Before code work, lock the route contract between the existing blue-flame hallway/future stop and the strategy guide's Lower Shrine Stair. Then build the smallest white-scab reveal proof before expanding the chapter.
 
-Use the current locked assets:
+Do not begin with enemies, Records UI, Memory UI, Pale Gates, a general white-machinery framework, bosses, route expansion, or a broad Folsom rebuild. Preserve movement, mobile controls, HUD, equipment, survival, fishing, saves, location loading, and all completed Chapter 1-2 states.
 
-- `public/assets/textures/growth/black_growth_scab_intact_01.png`
-- `public/assets/textures/growth/black_growth_scab_intact_02.png`
-- `public/assets/textures/growth/black_growth_scab_damaged_01.png`
-- `public/assets/textures/growth/black_growth_scab_damaged_02.png`
-- `public/assets/textures/growth/black_growth_cord_surface_01.png`
-- `public/assets/sprites/effects/growth/black_growth_hit_decal_01.png`
+The first Chapter 3 implementation should prove one readable sequence: enter the lower-shrine space, use the Keeper's Lantern to reveal a pale floor line beneath black scab, clear the focused obstruction with existing tools, and persist the exposed route state. Panel activation and the crypt threshold follow only after that proof is stable.
 
-Procedural shed geometry, seam growth, hit zones, and a work-knife placeholder are acceptable for this proof. Preserve transparent PNG alpha and keep short-lived effects bounded for mobile browsers.
+## Validation posture
 
-## Beneath Folsom tool-loop lock
-
-- The opened Underworks gate becomes a functional transition only after `folsom_underworks_growth_unsealed`.
-- Register the location as `beneath-folsom`, displayed as Beneath Folsom.
-- Build one short descent/landing and one readable damp underworks chamber with timber bracing, drainage, mud, and atmospheric black roots.
-- Provide a clear return route to the opened Underworks gate in Folsom.
-- Place the persistent `iron_drain_bar` pickup near the first landing, away from the arrival spawn.
-- Use it to pry one jammed lower drain grate; bare hands produce minimal physical failure feedback.
-- Persist the opened route as `beneath_folsom_drain_grate_pried`.
-- Open only a short maintenance alcove/drain throat beyond the grate, ending at a blocked future route.
-- Place the persistent `keepers_lantern` utility pickup in the maintenance niche beyond the pried grate.
-- Equip it through the shared offhand selection alongside Torch while keeping its cold reveal emitter and light behavior independent; the sealed lower wall carries one modest cluster of broken warning glyphs and black contamination.
-- Treat the Keeper's Lantern as a useful cold offhand light: a soft local fill and broad pale wash illuminate normal geometry, while a separate bounded reveal test controls hidden glyphs.
-- Persist discovery as `beneath_folsom_keepers_lantern_reveal_seen` so the route truth remains readable after reload.
-- Keep hidden glyph art dynamically tied to the post-sway lantern emitter wash: use a four-unit, forty-degree reveal bound with decal-surface sampling, near-field grace, edge hysteresis, and a short linger. It is not rendered under ambient light or Torch, fades in only under the active lantern, and fades back to complete invisibility when the wash moves away. The discovery flag records read state, not permanent visual opacity.
-- The traces point toward the sealed lower wall but do not open it.
-- Preserve all existing shed, anchor, gate, survival, equipment, fishing, HUD, mobile-control, and save behavior.
-
-## Scope boundary
-
-Persist `folsom_growth_anchor_fire_cleared`, `folsom_growth_anchor_pond_cleared`, `folsom_growth_anchor_shrine_cleared`, and `folsom_underworks_growth_unsealed` as world state. Fire uses the existing Torch/offhand capability; pond and shrine use the Old Work Knife cutting path. Cleared feeds remain visibly faded or broken, and the Underworks growth and gate open only after all three clear.
-
-Preserve movement, mobile controls, HUD, inventory/equipment, fishing, campfire/survival behavior, gates, saves, and location loading. Do not build the full Beneath Folsom dungeon, Iron Drain Bar combat, enemies, Memory or Records UI, Pale Gates, white machinery, church systems, or bosses.
-
-Success is a small playable continuation: recover Keeper's Lantern beyond the grate and sweep its physical cone across a hidden warning cluster that points toward the next blocked route without opening it.
+Chapter 2 is closed from static code inspection, not a new end-to-end manual playthrough. Before Chapter 3 implementation begins, perform one fresh-save and one reload smoke test of the full Chapter 1-2 spine, with special attention to mobile readability, interaction reach, and persistence at the hidden gate.

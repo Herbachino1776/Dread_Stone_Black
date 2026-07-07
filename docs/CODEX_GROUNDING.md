@@ -12,16 +12,19 @@ Read these before implementation work:
 
 1. `AGENTS.md`
 2. `docs/current_milestone_folsom_growth.md`
-3. the relevant runtime definitions and systems
-4. longer strategy, architecture, and blueprint documents only as supporting reference
+3. `docs/chapter_2_closure_chapter_3_readiness.md`
+4. the relevant runtime definitions and systems
+5. longer strategy, architecture, and blueprint documents only as supporting reference
 
 Current locks override older documents when they conflict.
 
 ## Current target
 
-The shed proof loop, Folsom Anchor Clearing V1, Beneath Folsom Entry V1, and Iron Drain Bar loop are complete. The active target is Keeper's Lantern V1: one persistent utility pickup and one bounded hidden route-truth reveal beyond the pried grate.
+The Folsom tool loop, connected anchors, Underworks transition, Beneath Folsom tool and lantern loops, hidden five-hit growth gate, and blue-flame future threshold are functionally complete. Chapter 2 may pause.
 
-Do not add tutorial popups, inventory tokens, the full Beneath Folsom dungeon, or later Chapter 2 systems.
+The next target is Chapter 3 readiness: first lock the handoff from the existing blue-flame hallway to the Lower Shrine Stair, then prove one focused Keeper's Lantern reveal and white-scab clearing sequence. Do not treat the older strategy guide's shrine side-room/crawlspace layout as already implemented.
+
+Do not add tutorial popups, progression tokens, enemies, Records UI, Memory UI, Pale Gates, a broad white-machinery framework, bosses, or unrelated route expansion.
 
 ## Technical and workflow grounding
 
@@ -35,4 +38,4 @@ Do not add tutorial popups, inventory tokens, the full Beneath Folsom dungeon, o
 
 ## Scope discipline
 
-Do not turn the shed milestone into a broad combat, enemy, town, Memory, Pale Gate, church, boss, or Chapter 2 systems pass. A narrow playable proof that survives reload and remains usable on mobile is the near-term standard.
+Do not turn Chapter 3 readiness into a broad combat, enemy, town, Records, Memory, Pale Gate, church, boss, or route-expansion pass. The near-term standard is a narrow playable proof that survives reload and remains readable on mobile.
