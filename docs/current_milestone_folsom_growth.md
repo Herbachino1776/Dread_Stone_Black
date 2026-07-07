@@ -1,10 +1,10 @@
-# Current Milestone: Chapter 2 Closure and Chapter 3 Readiness
+# Current Milestone: Chapter 3 Location Foundation
 
 This is the current Dread Stone Black production lock. It overrides older strategy, roadmap, audit, and blueprint language where they conflict.
 
 ## Current status
 
-The Folsom Chapter 1-2 playable foundation is functionally complete and may pause. The implemented spine is:
+The Folsom Chapter 1-2 playable foundation is validated, locked, and out of scope for Chapter 3 production work. Its implemented spine remains:
 
 1. Find the Old Work Knife behind the Folsom tool shed.
 2. Clear the shed seam growth in exactly three successful swipes and recover the Wood Axe and Torch.
@@ -12,11 +12,11 @@ The Folsom Chapter 1-2 playable foundation is functionally complete and may paus
 4. Enter `beneath-folsom`, recover the Iron Drain Bar, and pry open the drain grate.
 5. Recover and equip the Keeper's Lantern, then use its bounded reveal wash to expose the hidden glyph/growth gate.
 6. Clear that hidden growth in exactly five successful knife hits while it is revealed.
-7. Enter the blue-flame hallway and reach the explicit future Chapter 3 threshold.
+7. Enter the blue-flame hallway and reach the Chapter 3 Lower Shrine Stair seam.
 
 Persistent route state includes `folsom_tool_shed_open`, the three Folsom anchor keys, `folsom_underworks_growth_unsealed`, `beneath_folsom_drain_grate_pried`, `beneath_folsom_keepers_lantern_reveal_seen`, and `beneath_folsom_hidden_growth_gate_cleared`.
 
-The detailed closure verdict and Chapter 3 gap analysis are in [`chapter_2_closure_chapter_3_readiness.md`](chapter_2_closure_chapter_3_readiness.md).
+The Chapter 3 production route is locked in [`chapter_3_location_flow_map.md`](chapter_3_location_flow_map.md) and [`chapter_3_location_contract.md`](chapter_3_location_contract.md). The earlier closure/readiness audit remains historical context.
 
 ## Completed-loop locks
 
@@ -33,14 +33,14 @@ The detailed closure verdict and Chapter 3 gap analysis are in [`chapter_2_closu
 - The hidden lower growth gate requires the Keeper's Lantern reveal, the Old Work Knife, and exactly five successful hits. Its final clear persists and opens the blue-flame threshold.
 - Use environmental teaching. Do not add tutorial prose to these loops.
 
-## Chapter 3 readiness boundary
+## Chapter 3 location foundation
 
-Chapter 3 is not implemented. Before code work, lock the route contract between the existing blue-flame hallway/future stop and the strategy guide's Lower Shrine Stair. Then build the smallest white-scab reveal proof before expanding the chapter.
+Chapter 3 extends `beneath-folsom` after the preserved blue-flame hallway. The full guide-authoritative physical room chain is now authored: Lower Shrine Stair, White-Scab Hall, Shrine Mechanism Room with its Pale Panel area, Buried White Chamber, and Crypt Access Stair.
 
-Do not begin with enemies, Records UI, Memory UI, Pale Gates, a general white-machinery framework, bosses, route expansion, or a broad Folsom rebuild. Preserve movement, mobile controls, HUD, equipment, survival, fishing, saves, location loading, and all completed Chapter 1-2 states.
+This pass is a room skeleton, not a mechanics claim. Explicit future blockers hold the guide order at the White-Scab Hall, Pale Panel, and crypt root mat. The route then ends at a hard First Crypt boundary.
 
-The first Chapter 3 implementation should prove one readable sequence: enter the lower-shrine space, use the Keeper's Lantern to reveal a pale floor line beneath black scab, clear the focused obstruction with existing tools, and persist the exposed route state. Panel activation and the crypt threshold follow only after that proof is stable.
+The next implementation target is the narrow White-Scab Hall proof: Keeper's Lantern reveal, Wood Axe hard-crust break, Old Work Knife film scrape, physical feedback, and persistence through `beneath_folsom_white_mechanism_exposed`. Do not begin panel activation until that proof is stable.
 
 ## Validation posture
 
-Chapter 2 is closed from static code inspection, not a new end-to-end manual playthrough. Before Chapter 3 implementation begins, perform one fresh-save and one reload smoke test of the full Chapter 1-2 spine, with special attention to mobile readability, interaction reach, and persistence at the hidden gate.
+Do not revalidate or polish Chapter 2 as part of the Chapter 3 location-foundation milestone. Validate Chapter 3 changes narrowly: compiled geometry, collision, navigation links, blocker ordering, mobile performance, and the hard stop before First Crypt. Preserve movement, mobile controls, HUD, equipment, survival, fishing, saves, location loading, and all completed Chapter 1-2 states.

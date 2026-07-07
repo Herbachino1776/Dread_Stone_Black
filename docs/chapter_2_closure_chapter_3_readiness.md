@@ -94,29 +94,15 @@ The locked Chapter 3 route calls for: Lower Shrine Stair, White-Scab Hall, Shrin
 - A broad Folsom, Underworks, HUD, inventory, or equipment rewrite.
 - The First Crypt itself. Chapter 3 should end at a readable Crypt Access Stair threshold.
 
-## Recommended next three implementation passes
+## Superseded next-pass plan
 
-### 1. Lock and build the Chapter 3 threshold foundation
+The former three-pass recommendation below was superseded on 2026-07-07 by the Chapter 3 location-truth pass. The production decision is now locked: Chapter 3 extends `beneath-folsom`, and the complete guide-authoritative room skeleton is authored through the bounded Crypt Access Stair. See [`chapter_3_location_flow_map.md`](chapter_3_location_flow_map.md) and [`chapter_3_location_contract.md`](chapter_3_location_contract.md).
 
-Decide whether Chapter 3 extends `beneath-folsom` or uses a new location, then replace the far future stop with a controlled transition into only the Lower Shrine Stair and White-Scab Hall. Add safe spawn/return behavior, collision, lighting, and explicit future blockers. Do not add panel activation or crypt content in this pass.
-
-Acceptance: the existing Chapter 2 capstone remains intact; a cleared save can enter and leave the new space; an uncleared save cannot bypass the hidden gate; the route ends safely at the White-Scab Hall.
-
-### 2. Prove white-scab reveal and clearing
-
-Author one focused pale floor line covered by black scab. Require the Keeper's Lantern to identify the target, then use the Wood Axe for hard crust and the Old Work Knife for thin film. Reuse bounded growth feedback and persist one route state such as `beneath_folsom_white_mechanism_exposed` after naming is locked.
-
-Acceptance: normal light and Torch do not expose the target; only the intended scab responds; the sequence is readable without tutorial prose; cleared state survives reload; the faint line points toward a still-blocked mechanism-room threshold.
-
-### 3. Add the narrow Chapter 3 mechanism capstone
-
-Build the Shrine Mechanism Room and one pale panel interaction, then reveal a small Buried White Chamber and a blocked Crypt Access Stair. Persist panel activation and crypt-stair opening separately. Reuse the root-growth/tool vocabulary and Iron Drain Bar for the final stair door. Record the First White Record as a domain event or minimal saved datum only if its ownership is settled; do not build Records UI.
-
-Acceptance: panel activation causes a clear physical world change, the crypt route opens and persists, and the chapter ends at a bounded threshold without implementing the First Crypt.
+The next active mechanics pass is the focused White-Scab Hall reveal/clear proof. Pale Panel activation, Records ownership, crypt-root clearing, and stair-door pry remain deferred.
 
 ## Risks and dependencies
 
-- **Route ownership is the first blocker.** Extending `beneath-folsom` is simpler and preserves a continuous space; a new location gives cleaner chapter boundaries and lazy loading. The choice affects state names, exits, spawn points, fog/lighting, and future authoring.
+- **Route ownership is resolved.** Chapter 3 extends `beneath-folsom`; future work must preserve the continuous blue-hall handoff and existing return route.
 - **Tool sequencing needs an explicit interaction contract.** Current growth attacks mostly test capability ownership, while Chapter 3 describes Axe-then-Knife stages. Implement this narrowly on the white-scab target before considering a generic multi-tool framework.
 - **Reveal and attack input compete for offhand/tool readability.** The Keeper's Lantern must stay equipped while axe/knife actions occur. Mobile HUD and equipment switching need direct testing.
 - **White-system visual language is not established.** Start with simple white-marble/pale inlay geometry and one panel. Avoid generic sci-fi controls and avoid commissioning a broad kit before the proof reads correctly.
@@ -124,14 +110,6 @@ Acceptance: panel activation causes a clear physical world change, the crypt rou
 - **Performance needs measurement.** Reuse bounded decals/effects, limit transparent layers and dynamic lights, and measure the combined lantern plus blue-hall cost on a mobile target.
 - **Legacy-guide terminology can cause scope drift.** Prompts should reference the current blue-hall handoff and explicitly state which guide beats are being adapted.
 
-## Validation recommendation
+## Historical validation note
 
-Before the first Chapter 3 code pass:
-
-1. Run a fresh-save Chapter 1-2 playthrough.
-2. Confirm exactly three shed swipes and exactly five revealed hidden-gate hits.
-3. Reload after each persisted route milestone, especially the Underworks gate, drain grate, and hidden growth clear.
-4. Verify the blue hallway is reachable only after clear and ends at the future stop.
-5. Exercise Torch/Keeper's Lantern switching and attack controls on a phone-sized viewport.
-
-This audit changed documentation only, so no build is required.
+The validation recommendation in the original audit applied before Chapter 3 production began. Chapter 2 is now validated and locked; Chapter 3 passes should not reopen that validation scope unless a regression is observed.
