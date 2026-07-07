@@ -102,6 +102,7 @@ export class TorchViewmodel {
       { id: 'main', x: 0, y: 0.14, z: 0.012, width: 0.29, height: 0.4, opacity: 0.88, lean: 0, startFrame: 0, frameDurationMs: TORCH_FLAME_FRAME_DURATION_MS },
       { id: 'left', x: -0.045, y: 0.135, z: 0.018, width: 0.27, height: 0.38, opacity: 0.25, lean: 0.08, startFrame: 2, frameDurationMs: TORCH_FLAME_FRAME_DURATION_MS - 7 },
       { id: 'right', x: 0.045, y: 0.13, z: 0.024, width: 0.27, height: 0.38, opacity: 0.25, lean: -0.075, startFrame: 4, frameDurationMs: TORCH_FLAME_FRAME_DURATION_MS + 17 },
+      { id: 'foreground', x: 0, y: 0.075, z: 0.07, width: 0.33, height: 0.35, opacity: 0.28, lean: 0.02, startFrame: 1, frameDurationMs: TORCH_FLAME_FRAME_DURATION_MS + 9 },
     ];
     this.flameLayers = flameLayerSpecs.map((spec, index) => {
       const material = new THREE.MeshBasicMaterial({
