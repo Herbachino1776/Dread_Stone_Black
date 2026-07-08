@@ -23,6 +23,7 @@ export const FOLSOM_SHRINE_INVESTIGATION_RULES = Object.freeze({
   sideRoomSaveKey: 'folsom_shrine_side_room_open',
   networkRevealSaveKey: 'folsom_under_shrine_network_revealed',
   crawlspaceSaveKey: 'folsom_shrine_crawlspace_open',
+  terminalSaveKey: 'folsom_shrine_crawlspace_terminal_open',
   sideSealSequence: Object.freeze(['knife-cords', 'axe-knot', 'open']),
 });
 
@@ -44,9 +45,11 @@ export class FolsomShrineInvestigationRuntime {
     this.sideRoomOpen = Boolean(gameState?.isFolsomShrineSideRoomOpen?.());
     this.networkRevealed = Boolean(gameState?.isFolsomUnderShrineNetworkRevealed?.());
     this.crawlspaceOpen = Boolean(gameState?.isFolsomShrineCrawlspaceOpen?.());
+    this.terminalOpen = Boolean(gameState?.isFolsomShrineCrawlspaceTerminalOpen?.());
     this.sideSealStage = this.sideRoomOpen ? 2 : 0;
     this.doorProgress = this.sideRoomOpen ? 1 : 0;
     this.crawlspaceProgress = this.crawlspaceOpen ? 1 : 0;
+    this.terminalProgress = this.terminalOpen ? 1 : 0;
     this.pulseRemaining = 0;
     this.revealHold = 0;
     this.revealSurgeRemaining = 0;
@@ -57,6 +60,7 @@ export class FolsomShrineInvestigationRuntime {
     this.buildSideSeal();
     this.buildRevealMarks();
     this.buildLanternPickup();
+    this.buildTerminalDarkness();
     this.applyPersistedState();
   }
 
@@ -82,10 +86,14 @@ export class FolsomShrineInvestigationRuntime {
   findAuthoredParts() {
     this.sideDoor = null;
     this.crawlspacePanel = null;
+    this.terminalSlab = null;
+    this.terminalBars = [];
     this.compiledGroup?.traverse((object) => {
       const id = object.userData?.architecturalPrimitiveId;
       if (id === 'folsom_shrine_side_room_door') this.sideDoor = object;
       if (id === 'folsom_shrine_crawlspace_panel') this.crawlspacePanel = object;
+      if (id === 'folsom_shrine_crawlspace_terminal_slab') this.terminalSlab = object;
+      if (id?.startsWith('folsom_shrine_crawlspace_terminal_bar_')) this.terminalBars.push(object);
     });
     [this.sideDoor, this.crawlspacePanel].forEach((object) => {
       if (!object) return;
@@ -97,6 +105,14 @@ export class FolsomShrineInvestigationRuntime {
       .filter((blocker) => blocker.id?.includes('folsom_shrine_side_room_door') && !blocker.id?.includes('frame'));
     this.crawlspaceBlockers = (this.collision?.blockerRects ?? [])
       .filter((blocker) => blocker.id?.includes('folsom_shrine_crawlspace_panel'));
+    this.terminalBlockers = (this.collision?.blockerRects ?? [])
+      .filter((blocker) => blocker.id?.includes('folsom_shrine_crawlspace_terminal_slab'));
+    [this.terminalSlab, ...this.terminalBars].forEach((object) => {
+      if (!object) return;
+      object.userData.terminalClosedPosition = object.position.clone();
+      object.userData.terminalClosedRotation = object.rotation.clone();
+      cloneObjectMaterials(object);
+    });
   }
 
   buildSideSeal() {
@@ -217,6 +233,16 @@ export class FolsomShrineInvestigationRuntime {
     this.lanternPickup = lantern;
   }
 
+  buildTerminalDarkness() {
+    const material = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: this.terminalOpen ? 0.96 : 0, depthWrite: false, side: THREE.DoubleSide });
+    this.terminalDarkness = new THREE.Mesh(new THREE.PlaneGeometry(2.35, 1.28), material);
+    this.terminalDarkness.name = 'folsom-shrine-terminal-breathing-darkness';
+    this.terminalDarkness.position.set(-68.62, 1.32, 39);
+    this.terminalDarkness.rotation.y = Math.PI / 2;
+    this.terminalDarkness.visible = this.terminalOpen;
+    this.scene.add(this.terminalDarkness);
+  }
+
   getLanternPickupObject() { return this.lanternPickup; }
   getSideSealTarget() { return SIDE_SEAL_TARGET; }
   getCrawlspaceTarget() { return CRAWLSPACE_TARGET; }
@@ -308,6 +334,7 @@ export class FolsomShrineInvestigationRuntime {
     this.updatePulse(dt);
     this.updateDoor(dt);
     this.updateCrawlspacePanel(dt);
+    this.updateTerminal(dt);
     this.updateEffects(dt);
   }
 
@@ -383,6 +410,34 @@ export class FolsomShrineInvestigationRuntime {
     this.crawlspacePanel.position.y -= progress * 1.55;
   }
 
+  updateTerminal(dt) {
+    if (!this.terminalOpen) return;
+    if (this.terminalProgress < 1) this.terminalProgress = Math.min(1, this.terminalProgress + dt * 0.85);
+    this.applyTerminalProgress(1 - ((1 - this.terminalProgress) ** 3));
+    if (this.terminalDarkness) {
+      this.terminalDarkness.visible = true;
+      this.terminalDarkness.material.opacity = 0.9 + Math.sin(performance.now() * 0.0024) * 0.06;
+      this.terminalDarkness.scale.setScalar(0.98 + Math.sin(performance.now() * 0.0017) * 0.025);
+    }
+  }
+
+  applyTerminalProgress(progress) {
+    if (this.terminalSlab?.userData.terminalClosedPosition) {
+      this.terminalSlab.position.copy(this.terminalSlab.userData.terminalClosedPosition);
+      this.terminalSlab.rotation.copy(this.terminalSlab.userData.terminalClosedRotation);
+      this.terminalSlab.position.y -= progress * 1.32;
+      this.terminalSlab.position.x -= progress * 0.44;
+      this.terminalSlab.rotation.z += progress * 0.28;
+    }
+    this.terminalBars.forEach((bar, index) => {
+      bar.position.copy(bar.userData.terminalClosedPosition);
+      bar.rotation.copy(bar.userData.terminalClosedRotation);
+      bar.position.y -= progress * (0.74 + index * 0.08);
+      bar.position.x -= progress * 0.3;
+      bar.rotation.z += progress * ((index - 2) * 0.12);
+    });
+  }
+
   applyPersistedState() {
     const lanternOwned = this.gameState?.getEquipmentSnapshot?.()?.acquiredItemIds?.includes('keepers_lantern');
     if (this.lanternPickup) this.lanternPickup.visible = !lanternOwned;
@@ -394,6 +449,11 @@ export class FolsomShrineInvestigationRuntime {
     if (this.crawlspaceOpen) {
       this.crawlspaceBlockers.forEach((blocker) => this.collision?.removeBlocker?.(blocker));
       this.applyCrawlspaceProgress(1);
+    }
+    if (this.terminalOpen) {
+      this.terminalBlockers.forEach((blocker) => this.collision?.removeBlocker?.(blocker));
+      this.applyTerminalProgress(1);
+      if (this.terminalDarkness) this.terminalDarkness.visible = true;
     }
     if (this.networkRevealed) this.onNetworkRevealed?.();
   }

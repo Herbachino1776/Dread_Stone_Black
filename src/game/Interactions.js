@@ -397,6 +397,30 @@ export class Interactions {
       tags: [interaction.type ?? 'inspect'],
     });
 
+    if (interaction.type === 'beneathFolsomWhiteScabLowerKnot') {
+      const result = this.dungeon.strikeBeneathFolsomWhiteScabLowerKnot?.({
+        hasKnife: this.equipmentRuntime?.hasItem?.('old_work_knife'),
+      });
+      const message = result?.message ?? interaction.message;
+      this.setTemporaryHint(message, result?.destroyed ? 2100 : 1150);
+      this.hud.showMessage(message);
+      if (result?.changed) this.feedback?.shake?.(result.destroyed ? { durationMs: 620, intensity: 0.19 } : { durationMs: 145, intensity: 0.055 });
+      return false;
+    }
+
+    if (interaction.type === 'underShrineLabyrinthEndHatch') {
+      const result = this.dungeon.openUnderShrineLabyrinthEndHatch?.();
+      const message = result?.message ?? interaction.message;
+      this.setTemporaryHint(message, 1200);
+      this.hud.showMessage(message);
+      this.feedback?.shake?.(result?.changed ? { durationMs: 720, intensity: 0.21 } : { durationMs: 160, intensity: 0.05 });
+      if (result?.opened) this.transitionToLocation(interaction.destinationLocationId, {
+        destinationSpawnId: interaction.destinationSpawnId,
+        delayMs: result.changed ? 900 : 180,
+      });
+      return false;
+    }
+
     if (interaction.type === 'equipmentPickup') {
       return this.useEquipmentPickup(interaction);
     }
@@ -1024,11 +1048,11 @@ export class Interactions {
 
   getNearbyIndoorExit() {
     if (this.dungeon.area === 'field') return null;
-    if (!this.dungeon.indoorExitTarget) return null;
-    if (!this.isCloseEnough(this.dungeon.indoorExitTarget, INDOOR_EXIT_RANGE)) return null;
-    return this.dungeon.compiledLocationRuntime?.exits?.find((exit) => exit.position?.equals?.(this.dungeon.indoorExitTarget))
-      ?? this.dungeon.compiledLocationRuntime?.exits?.[0]
-      ?? true;
+    return (this.dungeon.compiledLocationRuntime?.exits ?? [])
+      .filter((exit) => !exit.tags?.includes('interaction-controlled'))
+      .map((exit) => ({ exit, distance: this.horizontalDistanceTo(exit.position) }))
+      .filter(({ distance }) => distance <= INDOOR_EXIT_RANGE)
+      .sort((a, b) => a.distance - b.distance)[0]?.exit ?? null;
   }
 
   isNearKey() {

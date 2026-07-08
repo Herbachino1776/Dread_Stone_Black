@@ -75,6 +75,7 @@ const eagerLocationDefinitions = Object.freeze({
 const lazyLocationLoaders = Object.freeze({
   'black-grass-temple': () => import('./blackGrassTemple.definition.js').then((module) => module.blackGrassTempleDefinition),
   'beneath-folsom': () => import('./beneathFolsom.definition.js').then((module) => module.beneathFolsomDefinition),
+  'under-shrine-labyrinth': () => import('./underShrineLabyrinth.definition.js').then((module) => module.underShrineLabyrinthDefinition),
   'field-keeper-house': () => import('./fieldKeeperHouse.definition.js').then((module) => module.fieldKeeperHouseDefinition),
   'level-1': () => import('./generated/level1.definition.js').then((module) => module.level1Definition),
   balthazan: () => import('./generated/balthazan.definition.js').then((module) => module.balthazanDefinition),

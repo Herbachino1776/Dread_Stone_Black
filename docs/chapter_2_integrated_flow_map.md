@@ -4,7 +4,7 @@
 
 The Lantern-first Folsom network backfill is implemented and setpiece-hardened. The Shrine Side Room is a dressed keeper maintenance chamber, the bounded crawlspace has a physically reinforced no-bypass throat, the Keeper's Lantern is canonical in the side room, and the retained surface anchors are readable endpoints of a revealed under-shrine network.
 
-The explicit lower shrine hatch is implemented at the BF04/BF05 seam. The blue-flame hallway is threshold atmosphere, not a hatch replacement. Chapter 2 structural reconciliation is complete; White-Scab Hall remains the next paused Chapter 3 mechanic.
+The explicit lower shrine hatch is implemented at the BF04/BF05 seam. The blue-flame hallway is threshold atmosphere, not a hatch replacement. Chapter 2 structural reconciliation is complete. The active Chapter 3 handoff now uses an impossible front seal and the separate Under-Shrine Labyrinth bypass; White-Scab Hall mechanics remain deferred.
 
 ## Integrated route
 
@@ -64,7 +64,11 @@ EXPLICIT LOWER SHRINE HATCH
   | tool: Iron Drain Bar
   | save: beneath_folsom_lower_shrine_hatch_open
   v
-BF05 LOWER SHRINE STAIR / CHAPTER 3 SKELETON
+BF05 LOWER SHRINE STAIR
+  -> impossible front seal (never opens locally)
+  -> lower knot death opens Folsom shrine crawlspace terminal
+  -> under-shrine-labyrinth
+  -> beneath-folsom threshold backside
 ```
 
 ## Authored space ids
@@ -80,7 +84,7 @@ BF05 LOWER SHRINE STAIR / CHAPTER 3 SKELETON
 - `folsom_shrine_crawlspace_floor`: short maintenance passage
 - `folsom_shrine_crawlspace_frame_*`: repeated low maintenance frames
 - `folsom_shrine_crawlspace_buried_slab_left` / `folsom_shrine_crawlspace_buried_slab_right`: pressed-in stone dressing
-- `folsom_shrine_crawlspace_terminal_slab`: solid no-bypass endpoint
+- `folsom_shrine_crawlspace_terminal_slab`: solid Chapter 2 endpoint; cracks open only after the Chapter 3 lower-knot state
 - `folsom_shrine_crawlspace_terminal_stone_collar`: heavy throat framing around the terminal grate
 - `beneath_folsom_keeper_niche_backplate`, `beneath_folsom_keeper_niche_empty_hook`, and related bracket/ring/dust-shadow props: retired BF03 pickup dressing
 - `beneath_folsom_lower_shrine_hatch`: heavy shrine-stone hatch visual at the BF04/BF05 seam
@@ -94,6 +98,9 @@ New additive state:
 - `folsom_under_shrine_network_revealed`
 - `folsom_shrine_crawlspace_open`
 - `beneath_folsom_lower_shrine_hatch_open`
+- `beneath_folsom_white_scab_lower_knot_destroyed`
+- `folsom_shrine_crawlspace_terminal_open`
+- `under_shrine_labyrinth_end_hatch_open`
 
 Preserved state:
 
@@ -117,4 +124,4 @@ Keeper's Lantern ownership remains equipment state under the unchanged `keepers_
 
 ## Scope boundary
 
-This backfill implements only the Chapter 2 hatch handoff and crawlspace view clearance. It does not implement White-Scab Hall, Pale Panel, Records/Memory UI, enemies, bosses, physical weapon swings, or any Chapter 3 mechanic. BF05-BF09 remain the preserved room skeleton.
+Chapter 2 remains preserved. Chapter 3 now bypasses the impossible front seal through the old shrine terminal and the standalone `under-shrine-labyrinth` location, exiting behind the denied threshold. White-Scab Hall clear, Pale Panel, Shrine Mechanism Room mechanics, Records/Memory UI, enemies, bosses, and physical weapon swings remain deferred.

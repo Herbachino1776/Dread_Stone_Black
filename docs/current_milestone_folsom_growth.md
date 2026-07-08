@@ -1,10 +1,10 @@
-# Current Milestone: Chapter 2 Integrated Backfill
+# Current Milestone: Chapter 3 Under-Shrine Labyrinth Lead-In
 
 This is the current Dread Stone Black production lock. It overrides older strategy, roadmap, audit, and blueprint language where they conflict.
 
 ## Current status
 
-The Chapter 2 structural reconciliation is implemented. The Shrine Side Room and low-view maintenance crawlspace establish the Lantern-first investigation, the retained surface anchors read as under-shrine endpoints, and the Beneath Folsom route now ends at an explicit lower shrine hatch. The blue-flame hallway remains threshold atmosphere; it does not replace the hatch. The existing Iron Drain Bar forces the hatch open and persists the route into the Lower Shrine Stair. Chapter 2 structural reconciliation is complete. Chapter 3 mechanics stay on hold.
+Chapter 2 remains complete through the blue-flame hallway, Iron Drain Bar lower-hatch pry, and BF05 Lower Shrine Stair. The active Chapter 3 lead-in now ends that approach at an impossible White-Scab front seal. Cutting its exposed lower knot does not open the seal; it opens the old Folsom shrine crawlspace terminal elsewhere. That throat enters the separate compiled `under-shrine-labyrinth` location, whose twisting dark descent exits behind the denied threshold in `beneath-folsom`.
 
 The implemented spine remains valuable production truth:
 
@@ -19,7 +19,7 @@ The implemented spine remains valuable production truth:
 9. Clear that hidden growth in exactly five successful knife hits while it is revealed.
 10. Cross the blue-flame threshold hallway, pry open the explicit lower shrine hatch with the Iron Drain Bar, and expose the Lower Shrine Stair.
 
-Reliably written route state includes `folsom_tool_shed_open`, `folsom_shrine_side_room_open`, `folsom_under_shrine_network_revealed`, `folsom_shrine_crawlspace_open`, the three Folsom anchor keys, `folsom_underworks_growth_unsealed`, `beneath_folsom_drain_grate_pried`, `beneath_folsom_hidden_growth_gate_cleared`, and `beneath_folsom_lower_shrine_hatch_open`.
+Reliably written route state also includes `beneath_folsom_white_scab_lower_knot_destroyed`, `folsom_shrine_crawlspace_terminal_open`, and `under_shrine_labyrinth_end_hatch_open`.
 
 This spine is an explicit adaptation, not the guide's complete Chapter 2 room list. The surface anchors serve as revealed endpoints of the under-shrine network instead of three underground pockets. The guide-correct lower shrine hatch now closes the BF04/BF05 seam and resolves the remaining structural debt. The Chapter 3 room skeleton remains preserved in [`chapter_3_location_flow_map.md`](chapter_3_location_flow_map.md) and [`chapter_3_location_contract.md`](chapter_3_location_contract.md).
 
@@ -34,7 +34,7 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - The Keeper's Lantern canonical pickup remains inside the Shrine Side Room. BF03 retains only an empty bracketed hook/niche with a removed-object dust shadow; existing Lantern ownership is never duplicated.
 - Fresh saves reveal the network with the Keeper's Lantern before surface endpoint interactions become available. Existing anchor/Underworks progress migrates to revealed state without replay.
 - The reveal reads as an under-shrine convergence: three rough pale branch marks and black cords lead from room seams into the crawlspace and connect to the retained surface feeds. Only the Keeper's Lantern reveal emitter can expose the hidden state; Torch and ambient light cannot.
-- The maintenance crawlspace remains bounded by a solid terminal throat and cannot bypass the Underworks gate. Low timber frames, buried slabs, revealed floor/wall cords, root pressure, iron bars, and a stone collar reinforce the endpoint.
+- The maintenance crawlspace terminal remains solid through Chapter 2 and cannot bypass the Underworks gate. Only destruction of the Chapter 3 lower knot cracks it open as the entrance to `under-shrine-labyrinth`.
 - The crawlspace lowers the first-person eye height on entry and restores it on exit so the player view remains below its authored roof.
 - Fire uses the Torch capability; pond and shrine use the Old Work Knife. Cleared anchors and their feeds remain world state, not inventory tokens.
 - The Underworks transition remains gated by `folsom_underworks_growth_unsealed`, with a reliable return route to Folsom.
@@ -46,13 +46,13 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - The explicit BF04/BF05 hatch requires the hidden gate clear and Iron Drain Bar, rejects bare-hand attempts, opens with slow stone/metal strain and strong physical feedback, and persists `beneath_folsom_lower_shrine_hatch_open`.
 - Use environmental teaching. Do not add tutorial prose to these loops.
 
-## Preserved Chapter 3 location foundation
+## Active Chapter 3 lead-in lock
 
-Chapter 3 extends `beneath-folsom` after the preserved blue-flame hallway. The full guide-authoritative physical room chain is now authored: Lower Shrine Stair, White-Scab Hall, Shrine Mechanism Room with its Pale Panel area, Buried White Chamber, and Crypt Access Stair.
+The front seal `beneath_folsom_white_scab_front_seal` remains impossible from the Lower Shrine Stair side. The lower knot `beneath_folsom_white_scab_lower_knot` is a physical knife target whose death recoils cords away from the seal and enables the Folsom terminal; it never clears the seal locally.
 
-This pass is a room skeleton, not a mechanics claim. Explicit future blockers hold the guide order at the White-Scab Hall, Pale Panel, and crypt root mat. The route then ends at a hard First Crypt boundary.
+The Folsom terminal physically cracks open into `under-shrine-labyrinth`. That separate authored location provides a pitch-black, ten-segment twisting descent, two squeeze sections, a breathing pocket, an impossible pressure moment, and a persistent end hatch. It exits at `beneath_folsom_white_scab_threshold_backside`, where a hard production boundary prevents entry into deferred content.
 
-The next paused Chapter 3 mechanic is the focused White-Scab Hall reveal/clear proof. Do not implement the Pale Panel or broader Chapter 3 systems before that narrow mechanic is explicitly resumed.
+White-Scab Hall reveal/clear and all Pale Panel/Shrine Mechanism Room mechanics remain deferred.
 
 ## Validation posture
 

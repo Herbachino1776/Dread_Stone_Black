@@ -63,7 +63,7 @@ function prop(id, roomId, position, dimensions, material, options = {}) {
 }
 
 function lanternRevealDecal(id, position, dimensions, material, options = {}) {
-  return prop(id, 'BF03', position, { ...dimensions, depth: 0.01 }, material, {
+  return prop(id, options.roomId ?? 'BF03', position, { ...dimensions, depth: 0.01 }, material, {
     kind: 'decal',
     rotation: options.rotation ?? { x: 0, y: 0, z: 0 },
     tags: ['lantern-reveal-decal', 'keepers-lantern-revealed', 'hidden-under-normal-light', 'chapter-2-route-truth', 'blocked-future-route', ...(options.tags ?? [])],
@@ -170,15 +170,22 @@ const props = [
     prop(`beneath_folsom_lower_shrine_rib_${index}_lintel`, 'BF05', { x: 0, y: 3.48, z }, { width: 7.35, height: 0.32, depth: 0.64 }, 'paleMechanism', { tags: ['chapter-3', 'lower-shrine-stair', 'impossible-lintel'] }),
   ]),
 
-  // A single pale floor line leads through the hall. Black scab is concentrated on
-  // the route target instead of being spread across every wall.
-  prop('beneath_folsom_white_scab_hall_floor_line', 'BF06', { x: 0, y: 0.035, z: 95 }, { width: 0.34, height: 0.07, depth: 24.5 }, 'paleMechanism', { tags: ['chapter-3', 'white-scab-hall', 'pale-floor-line', 'future-reveal-target'] }),
-  ...[87.5, 94.5, 101.5].map((z, index) => prop(`beneath_folsom_white_scab_patch_${index}`, 'BF06', { x: index % 2 ? 0.15 : -0.12, y: 0.11, z }, { width: 2.6 + index * 0.3, height: 0.18, depth: 2.8 }, 'blackScab', { tags: ['chapter-3', 'white-scab-hall', 'black-scab', 'future-white-scab-clear'] })),
+  // The Lower Shrine Stair terminates at an impossible pressure seal. The small
+  // lower knot can be cut, but the broad stone/scab/root mass never opens locally.
+  prop('beneath_folsom_white_scab_threshold_floor_line', 'BF06', { x: 0, y: 0.035, z: 94 }, { width: 0.34, height: 0.07, depth: 22.5 }, 'paleMechanism', { tags: ['chapter-3', 'white-scab-threshold', 'pale-route-line'] }),
+  ...[87.5, 94.5, 101.2].map((z, index) => prop(`beneath_folsom_white_scab_threshold_patch_${index}`, 'BF06', { x: index % 2 ? 0.15 : -0.12, y: 0.11, z }, { width: 2.6 + index * 0.3, height: 0.18, depth: 2.8 }, 'blackScab', { tags: ['chapter-3', 'white-scab-threshold', 'black-scab-pressure'] })),
   ...[86, 96, 105].flatMap((z, index) => [
     prop(`beneath_folsom_white_hall_buttress_${index}_left`, 'BF06', { x: -5.35, y: 1.35, z }, { width: 0.62, height: 2.7, depth: 1.2 }, 'paleWall', { tags: ['chapter-3', 'white-scab-hall', 'buried-buttress'] }),
     prop(`beneath_folsom_white_hall_buttress_${index}_right`, 'BF06', { x: 5.35, y: 1.35, z }, { width: 0.62, height: 2.7, depth: 1.2 }, 'paleWall', { tags: ['chapter-3', 'white-scab-hall', 'buried-buttress'] }),
   ]),
-  prop('beneath_folsom_white_scab_hall_future_seal', 'BF06', { x: 0, y: 0.23, z: 107.45 }, { width: 7.4, height: 0.46, depth: 1.05 }, 'blackScab', { collisionRef: 'beneath_folsom_ch3_white_scab_hall_blocker', tags: ['chapter-3', 'future-blocker-visual', 'white-scab-clear-required'] }),
+  prop('beneath_folsom_white_scab_front_seal', 'BF06', { x: 0, y: 1.9, z: 107.5 }, { width: 7.4, height: 3.8, depth: 1.15 }, 'blackScab', { blocking: true, collisionRef: 'beneath_folsom_white_scab_front_seal_blocker', tags: ['chapter-3', 'impossible-front-seal', 'never-opens-locally'] }),
+  ...[-2.75, -1.35, 0, 1.45, 2.8].map((x, index) => prop(`beneath_folsom_white_scab_root_plate_${index}`, 'BF06', { x, y: 2.05 + (index % 2) * 0.26, z: 106.84 }, { width: 1.18, height: 3.15 - (index % 3) * 0.28, depth: 0.24 }, index % 2 ? 'paleWall' : 'blackGrowth', { rotation: { x: 0, y: 0, z: (index - 2) * 0.09 }, tags: ['impossible-front-seal', 'root-plate', 'white-stone-pressure'] })),
+  ...[-2.4, -0.8, 0.8, 2.4].map((x, index) => prop(`beneath_folsom_white_scab_pale_seam_${index}`, 'BF06', { x, y: 1.88, z: 106.66 }, { width: 0.13, height: 3.2, depth: 0.08 }, 'paleMechanism', { rotation: { x: 0, y: 0, z: index % 2 ? -0.16 : 0.14 }, tags: ['impossible-front-seal', 'pale-pressure-seam'] })),
+  prop('beneath_folsom_white_scab_lower_knot', 'BF06', { x: -1.55, y: 0.72, z: 105.92 }, { width: 1.5, height: 1.25, depth: 0.42 }, 'blackScab', { tags: ['lower-knot', 'knife-cut-growth', 'lantern-readable'], userData: { saveKey: 'beneath_folsom_white_scab_lower_knot_destroyed', revealItemId: 'keepers_lantern', requiredItemId: 'old_work_knife' } }),
+  ...[-2.7, -0.4, 1.7].map((x, index) => prop(`beneath_folsom_white_scab_lower_knot_cord_${index}`, 'BF06', { x, y: 0.64 + index * 0.16, z: 105.86 }, { width: 2.7, height: 0.24, depth: 0.08 }, 'blackGrowth', { rotation: { x: 0, y: 0, z: index % 2 ? -0.18 : 0.13 }, tags: ['lower-knot-cord', 'recoils-toward-shrine'] })),
+  lanternRevealDecal('beneath_folsom_white_scab_lower_knot_lantern_trace', { x: -1.48, y: 1.02, z: 105.68 }, { width: 2.6, height: 0.48 }, 'glyphBlackCord', { roomId: 'BF06', revealDistance: 5, revealedOpacity: 0.9, tags: ['white-scab-lower-knot-trace', 'cord-direction-back-to-shrine'] }),
+  prop('beneath_folsom_white_scab_backside_marker', 'BF07', { x: 0, y: 0.12, z: 110.35 }, { width: 5.8, height: 0.24, depth: 2.8 }, 'paleMechanism', { tags: ['threshold-backside', 'labyrinth-arrival', 'bypass-readability'] }),
+  prop('beneath_folsom_white_scab_backside_deferred_wall', 'BF07', { x: 0, y: 1.9, z: 112.68 }, { width: 11.6, height: 3.8, depth: 0.85 }, 'paleWall', { blocking: true, collisionRef: 'beneath_folsom_white_scab_backside_chapter_boundary', tags: ['chapter-3-lead-in-end', 'white-scab-hall-deferred', 'visible-production-boundary'] }),
 
   // Human shrine masonry surrounds an older central block and rear pale panel.
   prop('beneath_folsom_shrine_mechanism_central_block', 'BF07', { x: 0, y: 1.05, z: 118.6 }, { width: 4.4, height: 2.1, depth: 4.6 }, 'paleWall', { blocking: true, collisionRef: 'beneath_folsom_ch3_mechanism_central_block_collision', collisionPurpose: 'central mechanism block with explicit authored collision', tags: ['chapter-3', 'shrine-mechanism-room', 'central-block', 'noninteractive-foreshadowing'] }),
@@ -285,7 +292,8 @@ export const beneathFolsomDefinition = Object.freeze({
   blockers: [{ id: 'beneath_folsom_drain_grate_blocker', type: 'gate', minX: -3.1, maxX: 3.1, minZ: 13.15, maxZ: 13.85, height: 3.1, blocksPlayer: true, blocksActors: true, tags: ['jammed-drain-grate', 'pryable', 'blocks-deeper-access'], userData: { requiredItemId: 'iron_drain_bar', saveKey: 'beneath_folsom_drain_grate_pried' } },
     { id: 'beneath_folsom_hidden_growth_gate_blocker', type: 'gate', minX: -3.25, maxX: 3.25, minZ: 21.48, maxZ: 22.02, height: 3.3, blocksPlayer: true, blocksActors: true, tags: ['hidden-growth-gate', 'chapter-2-capstone'], userData: { requiredItemId: 'old_work_knife', revealItemId: 'keepers_lantern', hitsRequired: 5, saveKey: 'beneath_folsom_hidden_growth_gate_cleared' } },
     { id: 'beneath_folsom_lower_shrine_hatch_blocker', type: 'gate', minX: -3.05, maxX: 3.05, minZ: 61.28, maxZ: 62.02, height: 3.3, blocksPlayer: true, blocksActors: true, tags: ['lower-shrine-hatch', 'chapter-2-endpoint', 'pryable'], userData: { requiredItemId: 'iron_drain_bar', prerequisiteStateKey: 'beneath_folsom_hidden_growth_gate_cleared', saveKey: 'beneath_folsom_lower_shrine_hatch_open' } },
-    { id: 'beneath_folsom_ch3_white_scab_hall_blocker', type: 'futureGate', minX: -3.7, maxX: 3.7, minZ: 107.25, maxZ: 108.15, height: 1, blocksPlayer: true, blocksActors: true, tags: ['chapter-3', 'future-blocker', 'white-scab-clear-deferred'], userData: { plannedSaveKey: 'beneath_folsom_white_mechanism_exposed', requiredItems: ['keepers_lantern', 'wood_axe', 'old_work_knife'], implementationState: 'deferred' } },
+    { id: 'beneath_folsom_white_scab_front_seal_blocker', type: 'impossibleGate', minX: -3.72, maxX: 3.72, minZ: 106.95, maxZ: 108.12, height: 3.8, blocksPlayer: true, blocksActors: true, tags: ['chapter-3', 'impossible-front-seal', 'never-opens-locally'], userData: { sealId: 'beneath_folsom_white_scab_front_seal', lowerKnotSaveKey: 'beneath_folsom_white_scab_lower_knot_destroyed', bypassLocationId: 'under-shrine-labyrinth' } },
+    { id: 'beneath_folsom_white_scab_backside_chapter_boundary', type: 'chapterBoundary', minX: -5.8, maxX: 5.8, minZ: 112.25, maxZ: 113.1, height: 3.8, blocksPlayer: true, blocksActors: true, tags: ['chapter-3-lead-in-end', 'white-scab-hall-deferred'], userData: { implementationState: 'hard-boundary', deferredMechanic: 'White-Scab Hall' } },
     { id: 'beneath_folsom_ch3_pale_panel_chamber_blocker', type: 'futureGate', minX: -4, maxX: 4, minZ: 133.35, maxZ: 134.2, height: 3.3, blocksPlayer: true, blocksActors: true, tags: ['chapter-3', 'future-blocker', 'pale-panel-activation-deferred'], userData: { plannedSaveKey: 'beneath_folsom_pale_panel_activated', requiredItem: 'keepers_lantern', implementationState: 'deferred' } },
     { id: 'beneath_folsom_ch3_crypt_root_mat_blocker', type: 'futureGate', minX: -3.1, maxX: 3.1, minZ: 157.25, maxZ: 158.2, height: 3.3, blocksPlayer: true, blocksActors: true, tags: ['chapter-3', 'future-blocker', 'crypt-root-mat-deferred'], userData: { plannedSaveKey: 'beneath_folsom_crypt_access_stair_open', requiredItems: ['wood_axe', 'old_work_knife', 'iron_drain_bar'], implementationState: 'deferred' } },
     { id: 'beneath_folsom_ch3_first_crypt_boundary_blocker', type: 'chapterBoundary', minX: -3.8, maxX: 3.8, minZ: 175.35, maxZ: 176, height: 3.6, blocksPlayer: true, blocksActors: true, tags: ['chapter-3-endpoint', 'future-blocker', 'first-crypt-deferred', 'no-chapter-4'], userData: { implementationState: 'hard-boundary', nextChapter: 4, nextLocation: 'First Crypt' } },
@@ -296,6 +304,7 @@ export const beneathFolsomDefinition = Object.freeze({
   props,
   spawns: [
     { id: 'beneath_folsom_underworks_arrival', kind: 'player', position: { x: 0, y: 1.55, z: -19.2 }, yaw: 0, roomId: 'BF01', tags: ['entry', 'safe-spawn', 'from-folsom'] },
+    { id: 'beneath_folsom_white_scab_threshold_backside', kind: 'return', position: { x: 0, y: 1.55, z: 110.25 }, yaw: 0, roomId: 'BF07', tags: ['under-shrine-labyrinth-exit', 'threshold-backside', 'safe-spawn'] },
   ],
   exits: [{
     id: 'beneath_folsom_return_to_folsom',
@@ -343,6 +352,17 @@ export const beneathFolsomDefinition = Object.freeze({
     prerequisiteStateKey: 'beneath_folsom_hidden_growth_gate_cleared',
     saveKey: 'beneath_folsom_lower_shrine_hatch_open',
     roomId: 'BF04',
+  }, {
+    id: 'beneath_folsom_white_scab_lower_knot',
+    type: 'beneathFolsomWhiteScabLowerKnot',
+    target: { x: -1.45, y: 0.9, z: 103.8 },
+    range: 3.35,
+    hint: 'Exposed lower knot',
+    message: 'The lower cords tear free. The impossible seal does not move.',
+    requiredItemId: 'old_work_knife',
+    revealItemId: 'keepers_lantern',
+    saveKey: 'beneath_folsom_white_scab_lower_knot_destroyed',
+    roomId: 'BF06',
   }],
   navigation: { roomGraph: { roomIds: ['BF01', 'BF02', 'BF03', 'BF04', 'BF05', 'BF06', 'BF07', 'BF08', 'BF09'], links: [
     { id: 'beneath_folsom_entry_to_landing', fromRoom: 'BF01', toRoom: 'BF02', navWaypoint: { x: 0, y: 0, z: -10 } },

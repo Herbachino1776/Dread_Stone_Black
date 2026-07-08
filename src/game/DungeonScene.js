@@ -23,6 +23,7 @@ import { FolsomShrineInvestigationRuntime } from './world-scene/FolsomShrineInve
 import { LanternConeRevealRuntime } from './world-scene/LanternConeRevealRuntime.js';
 import { BeneathFolsomHiddenGrowthGateRuntime } from './world-scene/BeneathFolsomHiddenGrowthGateRuntime.js';
 import { BeneathFolsomLowerShrineHatchRuntime } from './world-scene/BeneathFolsomLowerShrineHatchRuntime.js';
+import { BeneathFolsomWhiteScabRuntime, UnderShrineLabyrinthEndHatchRuntime } from './world-scene/Chapter3LeadInRuntime.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -329,6 +330,8 @@ export class DungeonScene {
     this.beneathFolsomLanternRevealObjects = [];
     this.beneathFolsomHiddenGrowthGateRuntime = null;
     this.beneathFolsomLowerShrineHatchRuntime = null;
+    this.beneathFolsomWhiteScabRuntime = null;
+    this.underShrineLabyrinthEndHatchRuntime = null;
     this.fishingWorldRuntime = createFishingWorldRuntime({
       scene: this.scene,
       dungeon: this,
@@ -477,6 +480,7 @@ export class DungeonScene {
       target: this.toVector3(interaction.target, 1.2),
     }));
     if (locationId === 'beneath-folsom') this.configureBeneathFolsomDrainLoop(runtime);
+    if (locationId === 'under-shrine-labyrinth') this.configureUnderShrineLabyrinth(runtime);
 
     const playerStart = (this.spawnId ? runtime.spawnAnchors.find((spawn) => spawn.id === this.spawnId) : null)
       ?? runtime.spawnAnchors.find((spawn) => spawn.kind === 'player');
@@ -514,6 +518,13 @@ export class DungeonScene {
       gameState: this.gameState,
       interactions: this.inspectInteractions,
     });
+    this.beneathFolsomWhiteScabRuntime = new BeneathFolsomWhiteScabRuntime({
+      scene: this.scene,
+      collision: this.collision,
+      compiledGroup: group,
+      gameState: this.gameState,
+      interactions: this.inspectInteractions,
+    });
 
     const lanternRevealDecals = this.beneathFolsomHiddenGrowthGateRuntime.getRevealObjects();
     group.traverse((object) => {
@@ -533,6 +544,17 @@ export class DungeonScene {
     const root = group.getObjectByName('beneath_folsom_root_grate');
     this.beneathFolsomDrainGrate = { blocker, bars, root, opening: false, progress: 0 };
     if (this.gameState?.isBeneathFolsomDrainGratePried?.()) this.applyBeneathFolsomDrainGrateOpenState();
+  }
+
+  configureUnderShrineLabyrinth(runtime) {
+    this.underShrineLabyrinthEndHatchRuntime = new UnderShrineLabyrinthEndHatchRuntime({
+      collision: this.collision,
+      compiledGroup: runtime.group,
+      gameState: this.gameState,
+      interactions: this.inspectInteractions,
+    });
+    this.scene.background = new THREE.Color(0x000000);
+    this.scene.fog = new THREE.Fog(0x000000, 0.9, 7.5);
   }
 
   revealBeneathFolsomKeepersLanternTraces() {
@@ -951,6 +973,7 @@ export class DungeonScene {
       tags: ['shrine-side-room', 'canonical-lantern-pickup', 'chapter-2'],
     });
     this.syncFolsomUnderworksInteraction();
+    this.syncFolsomShrineTerminalInteraction();
 
     const knife = (definition.outdoorPickups ?? []).find((pickup) => pickup.itemId === 'old_work_knife');
     const knifeOwned = this.gameState?.getEquipmentSnapshot?.()?.acquiredItemIds?.includes('old_work_knife');
@@ -1130,6 +1153,8 @@ export class DungeonScene {
     this.folsomShedGrowthRuntime?.update(deltaSeconds);
     this.folsomConnectedGrowthRuntime?.update(deltaSeconds);
     this.folsomShrineInvestigationRuntime?.update(deltaSeconds);
+    this.beneathFolsomWhiteScabRuntime?.update(deltaSeconds);
+    this.underShrineLabyrinthEndHatchRuntime?.update(deltaSeconds);
     this.updateBeneathFolsomDrainGrate(deltaSeconds);
     this.beneathFolsomLowerShrineHatchRuntime?.update(deltaSeconds);
     this.lanternConeRevealRuntime?.update(deltaSeconds);
@@ -3311,6 +3336,16 @@ export class DungeonScene {
     return this.beneathFolsomHiddenGrowthGateRuntime?.strike?.() ?? { hit: false, cleared: false, hitCount: 0 };
   }
 
+  strikeBeneathFolsomWhiteScabLowerKnot(toolState) {
+    return this.beneathFolsomWhiteScabRuntime?.strike?.(toolState)
+      ?? { changed: false, destroyed: false, message: 'The lower knot does not answer.' };
+  }
+
+  openUnderShrineLabyrinthEndHatch() {
+    return this.underShrineLabyrinthEndHatchRuntime?.openHatch?.()
+      ?? { changed: false, opened: false, message: 'The buried hatch does not move.' };
+  }
+
   clearFolsomGrowthAnchor(anchorId) {
     const result = this.folsomConnectedGrowthRuntime?.clearAnchor?.(anchorId) ?? { cleared: false, unsealed: false };
     if (result.cleared) {
@@ -3352,6 +3387,20 @@ export class DungeonScene {
     if (!unsealed) return;
     interaction.hint = 'Descend into the Underworks';
     interaction.message = 'Cold air moves below Folsom.';
+  }
+
+  syncFolsomShrineTerminalInteraction() {
+    const interaction = this.outdoorInteractions.find((candidate) => candidate.id === 'folsom_shrine_crawlspace_terminal_entrance');
+    if (!interaction) return;
+    const open = this.gameState?.isFolsomShrineCrawlspaceTerminalOpen?.() === true;
+    interaction.functional = open;
+    if (!open) {
+      interaction.hint = 'The terminal throat is crushed shut';
+      interaction.message = 'Black pressure holds the old terminal grate in stone.';
+      return;
+    }
+    interaction.hint = 'Enter the opened terminal throat';
+    interaction.message = 'Darkness breathes below the cracked grate.';
   }
 
   addLights() {

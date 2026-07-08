@@ -11,6 +11,9 @@ const BENEATH_FOLSOM_DRAIN_GRATE_PRIED_KEY = 'beneath_folsom_drain_grate_pried';
 const BENEATH_FOLSOM_KEEPERS_LANTERN_REVEAL_SEEN_KEY = 'beneath_folsom_keepers_lantern_reveal_seen';
 const BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_CLEARED_KEY = 'beneath_folsom_hidden_growth_gate_cleared';
 const BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY = 'beneath_folsom_lower_shrine_hatch_open';
+const BENEATH_FOLSOM_WHITE_SCAB_LOWER_KNOT_DESTROYED_KEY = 'beneath_folsom_white_scab_lower_knot_destroyed';
+const FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY = 'folsom_shrine_crawlspace_terminal_open';
+const UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY = 'under_shrine_labyrinth_end_hatch_open';
 const BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY = 'dreadStoneBlack.lowerShrineHatchMigrationV1';
 const BENEATH_FOLSOM_CHAPTER_3_PLANNED_KEYS = Object.freeze([
   'beneath_folsom_white_mechanism_exposed',
@@ -59,6 +62,9 @@ export class GameState {
       storage.removeItem(BENEATH_FOLSOM_KEEPERS_LANTERN_REVEAL_SEEN_KEY);
       storage.removeItem(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_CLEARED_KEY);
       storage.removeItem(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY);
+      storage.removeItem(BENEATH_FOLSOM_WHITE_SCAB_LOWER_KNOT_DESTROYED_KEY);
+      storage.removeItem(FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY);
+      storage.removeItem(UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY);
       storage.removeItem(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY);
       Object.values(FOLSOM_GROWTH_WORLD_KEYS).forEach((key) => storage.removeItem(key));
     } catch {
@@ -184,6 +190,38 @@ export class GameState {
     return true;
   }
 
+  isBeneathFolsomWhiteScabLowerKnotDestroyed() {
+    return this.readFlag(BENEATH_FOLSOM_WHITE_SCAB_LOWER_KNOT_DESTROYED_KEY, false);
+  }
+
+  markBeneathFolsomWhiteScabLowerKnotDestroyed() {
+    if (this.isBeneathFolsomWhiteScabLowerKnotDestroyed()) return false;
+    this.writeFlag(BENEATH_FOLSOM_WHITE_SCAB_LOWER_KNOT_DESTROYED_KEY, true);
+    this.writeFlag(FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY, true);
+    return true;
+  }
+
+  isFolsomShrineCrawlspaceTerminalOpen() {
+    return this.readFlag(FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY, false)
+      || this.isBeneathFolsomWhiteScabLowerKnotDestroyed();
+  }
+
+  markFolsomShrineCrawlspaceTerminalOpen() {
+    if (this.isFolsomShrineCrawlspaceTerminalOpen()) return false;
+    this.writeFlag(FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY, true);
+    return true;
+  }
+
+  isUnderShrineLabyrinthEndHatchOpen() {
+    return this.readFlag(UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY, false);
+  }
+
+  markUnderShrineLabyrinthEndHatchOpen() {
+    if (this.isUnderShrineLabyrinthEndHatchOpen()) return false;
+    this.writeFlag(UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY, true);
+    return true;
+  }
+
   migrateBeneathFolsomLowerShrineHatch() {
     const hasChapter3Progress = BENEATH_FOLSOM_CHAPTER_3_PLANNED_KEYS
       .some((key) => this.readFlag(key, false));
@@ -192,6 +230,13 @@ export class GameState {
       && this.readFlag(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_CLEARED_KEY, false);
     if ((hasChapter3Progress || crossedLegacyOpenSeam) && !this.isBeneathFolsomLowerShrineHatchOpen()) {
       this.writeFlag(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY, true);
+    }
+    if (hasChapter3Progress) {
+      this.writeFlag(FOLSOM_UNDER_SHRINE_NETWORK_REVEALED_KEY, true);
+      this.writeFlag(FOLSOM_SHRINE_CRAWLSPACE_OPEN_KEY, true);
+      this.writeFlag(BENEATH_FOLSOM_WHITE_SCAB_LOWER_KNOT_DESTROYED_KEY, true);
+      this.writeFlag(FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY, true);
+      this.writeFlag(UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY, true);
     }
     if (!migrationAlreadyRun) this.writeFlag(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY, true);
     return hasChapter3Progress || crossedLegacyOpenSeam;

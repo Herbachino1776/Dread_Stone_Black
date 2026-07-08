@@ -1,72 +1,36 @@
 # Chapter 3 Location Flow Map
 
-## Authority and chapter seam
+## Production lock
 
-The location authority is Chapter 3, “The Shrine That Was Not a Shrine,” in `dread_stone_black_strategy_guide_DESIGN_LOCKED_MASTER_01-19.md`. The guide's developer notes define five required physical spaces. Its “Pale Panel” route beat is an interaction area on the rear wall of the Shrine Mechanism Room, not a sixth standalone room.
-
-Chapter 2 ends when `beneath_folsom_hidden_growth_gate_cleared` removes the hidden five-hit growth gate and admits the player to the existing Blue Flame Threshold. Chapter 3 begins at the far end of that preserved hallway, where the route enters the Lower Shrine Stair.
-
-Reconciliation qualification: this describes the current physical skeleton, but not the guide-complete handoff. The guide requires a lower shrine hatch, pried at the end of Chapter 2, before the Chapter 3 descent. [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md) recommends inserting that hatch at the existing BF04/BF05 seam without moving the Chapter 3 rooms. White-Scab Hall mechanics remain paused until that handoff is resolved.
-
-## Production flow
+The implemented Chapter 3 lead-in is an impossible front threshold plus an under-shrine bypass. The White-Scab front seal never opens locally. White-Scab Hall reveal/clear, Pale Panel, Shrine Mechanism Room mechanics, and later Chapter 3 systems remain deferred.
 
 ```text
-CHAPTER 2
-Lower Drain Throat
-  |
-  | hidden growth gate (existing; 5 revealed knife hits)
-  | save: beneath_folsom_hidden_growth_gate_cleared
-  v
-Blue Flame Threshold (preserved Chapter 2 -> 3 seam)
-  |
-  | HANDOFF DEBT: lower shrine hatch is not authored
-  | RECOMMENDED: Iron Drain Bar pry + persistent hatch-open state
-  v
-CHAPTER 3
-Lower Shrine Stair
-  |
-  v
-White-Scab Hall
-  |
-  | FUTURE: Keeper's Lantern reveal -> Wood Axe hard crust -> Old Work Knife film
-  | blocker: beneath_folsom_ch3_white_scab_hall_blocker
-  | planned state: beneath_folsom_white_mechanism_exposed
-  v
-Shrine Mechanism Room
-  |
-  | Pale Panel area on rear wall
-  | FUTURE: lantern reveal -> crust/cord/film clear -> panel activation
-  | blocker: beneath_folsom_ch3_pale_panel_chamber_blocker
-  | planned state: beneath_folsom_pale_panel_activated
-  v
-Buried White Chamber
-  |
-  | FUTURE: Wood Axe root knot -> Old Work Knife edge cords -> Iron Drain Bar pry
-  | blocker: beneath_folsom_ch3_crypt_root_mat_blocker
-  | planned state: beneath_folsom_crypt_access_stair_open
-  v
-Crypt Access Stair
-  |
-  | HARD STOP: beneath_folsom_ch3_first_crypt_boundary_blocker
-  v
-FIRST CRYPT / CHAPTER 4 (not implemented)
+BF04 BLUE-FLAME HALLWAY
+  -> Iron Drain Bar pries the preserved lower shrine hatch
+BF05 LOWER SHRINE STAIR
+  -> WHITE-SCAB FRONT THRESHOLD
+     seal: beneath_folsom_white_scab_front_seal (remains shut)
+     lower knot: beneath_folsom_white_scab_lower_knot
+     save: beneath_folsom_white_scab_lower_knot_destroyed
+  -> cords recoil toward the old shrine route
+     save: folsom_shrine_crawlspace_terminal_open
+  -> return to FOLSOM SHRINE CRAWLSPACE
+  -> cracked terminal throat opens
+  -> location transition: under-shrine-labyrinth
+  -> ten-segment, twisting, descending crawlspace route
+     two tight squeezes + breathing pocket + impossible pressure moment
+  -> physical end hatch
+     save: under_shrine_labyrinth_end_hatch_open
+  -> location transition: beneath-folsom
+     spawn: beneath_folsom_white_scab_threshold_backside
+  -> BACKSIDE OF DENIED THRESHOLD
+  -> hard production boundary before deferred White-Scab Hall mechanics
 ```
 
-## Implemented in this pass
-
-- The complete five-room Chapter 3 physical chain extends `beneath-folsom` after the blue-flame hallway.
-- Every room has compiled floor, wall, ceiling, collision bounds, an authored door gap, and a navigation link.
-- Pale limestone, cold light, buried white ribs, a pale floor line, black-scab concentrations, a central mechanism block, a rear panel silhouette, collapsed chamber stone, a root-mat seal, and a crypt-stair silhouette establish the route language.
-- Three deferred-mechanic blockers prevent sequence bypass. A fourth hard boundary stops the route before Chapter 4.
-- The old `beneath_folsom_chapter_end_stop` has been removed. The existing Chapter 2 hidden-growth gate remains the only admission gate to the blue-flame seam and Chapter 3 route.
+The bypass proves that the player cannot solve the front seal by attacking it. Cutting the exposed lower knot changes the route elsewhere: it releases pressure at the old Folsom shrine terminal. `under-shrine-labyrinth` is a separate compiled authored location, not a Folsom tunnel extension or test room.
 
 ## Deferred
 
-- Keeper's Lantern reveal behavior for Chapter 3 scab and pale machinery.
-- Axe-then-knife staged scab clearing and all hit feedback.
-- Pale Panel interaction, silent image, central-block movement, and First White Record.
-- Map and Records UI or domain-event ownership.
-- Root-mat clearing, stair-door pry animation, and persistence for the new route states.
-- Enemies, bosses, Pale Gates, broad white-machinery systems, physical weapon swings, and all First Crypt content.
-
-The current skeleton deliberately makes later rooms exist in authored data while blockers keep them unreachable until their guide-ordered mechanics are implemented.
+- White-Scab Hall reveal/clear mechanic.
+- Pale Panel activation and Shrine Mechanism Room mechanics.
+- Records, Memory, Pale Gates, enemies, bosses, First Crypt, and Chapter 4.
