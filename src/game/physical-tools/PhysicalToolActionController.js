@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { evaluatePhysicalToolGesture, getPhysicalToolProfile } from './PhysicalToolProfiles.js';
+import { evaluatePhysicalToolGesture, getPhysicalToolAngleError, getPhysicalToolProfile } from './PhysicalToolProfiles.js';
 import { PhysicalToolTargetRegistry } from './PhysicalToolTargetRegistry.js';
 
 const GESTURE_HISTORY_MS = 140;
@@ -76,8 +76,7 @@ export class PhysicalToolActionController {
       : null;
     if (contact) {
       const segmentAngle = Math.atan2(event.clientY - previous.y, event.clientX - previous.x);
-      const preferred = profile?.preferredAngleRadians ?? segmentAngle;
-      const angleError = Math.abs(Math.atan2(Math.sin(segmentAngle - preferred), Math.cos(segmentAngle - preferred)));
+      const angleError = getPhysicalToolAngleError(profile, segmentAngle);
       const contactScore = contact.distance + angleError * 22;
       if (!this.state.contact || contactScore <= (this.state.contact.score ?? Infinity)) {
         this.state.contact = { ...contact, score: contactScore };

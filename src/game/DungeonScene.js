@@ -24,6 +24,7 @@ import { LanternConeRevealRuntime } from './world-scene/LanternConeRevealRuntime
 import { BeneathFolsomHiddenGrowthGateRuntime } from './world-scene/BeneathFolsomHiddenGrowthGateRuntime.js';
 import { BeneathFolsomLowerShrineHatchRuntime } from './world-scene/BeneathFolsomLowerShrineHatchRuntime.js';
 import { BeneathFolsomWhiteScabRuntime, UnderShrineLabyrinthEndHatchRuntime } from './world-scene/Chapter3LeadInRuntime.js';
+import { PHYSICAL_TOOL_PROFILES } from './physical-tools/PhysicalToolProfiles.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -3312,9 +3313,9 @@ export class DungeonScene {
 
   getPhysicalToolTargets() {
     const targets = [];
-    const cutGesture = { minTravelPx: 42, minVelocityPxPerSecond: 120, maxVelocityPxPerSecond: 1900, minSmoothness: 0.28 };
-    const chopGesture = { minTravelPx: 86, minVelocityPxPerSecond: 115, maxVelocityPxPerSecond: 720, minSmoothness: 0.7 };
-    const pryGesture = { minTravelPx: 92, minLeverTravelPx: 72, minVelocityPxPerSecond: 42, maxVelocityPxPerSecond: 480, minSmoothness: 0.74 };
+    const cutGesture = PHYSICAL_TOOL_PROFILES.old_work_knife;
+    const chopGesture = PHYSICAL_TOOL_PROFILES.wood_axe;
+    const pryGesture = { ...PHYSICAL_TOOL_PROFILES.iron_drain_bar, minLeverTravelPx: 72 };
     const receiver = (callback) => (event) => {
       if (event?.type !== 'physical-tool-contact') return { accepted: false, changed: false, reason: 'non-physical-contact' };
       return callback(event);

@@ -11,10 +11,11 @@ export const PHYSICAL_TOOL_PROFILES = Object.freeze({
     equipmentSlot: 'tool',
     minTravelPx: 42,
     minVelocityPxPerSecond: 120,
-    maxVelocityPxPerSecond: 1900,
+    maxVelocityPxPerSecond: 4200,
     minSmoothness: 0.28,
     preferredAngleRadians: Math.PI * 0.25,
-    angleToleranceRadians: Math.PI * 0.95,
+    angleMode: 'axis',
+    angleToleranceRadians: 1,
     cooldownSeconds: 0.28,
     contactRadiusPx: 54,
     recoilSeconds: 0.18,
@@ -63,13 +64,20 @@ function angleDelta(a, b) {
   return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 }
 
+export function getPhysicalToolAngleError(profile, angleRadians = 0) {
+  const preferred = profile?.preferredAngleRadians ?? angleRadians;
+  const directError = angleDelta(angleRadians, preferred);
+  if (profile?.angleMode !== 'axis') return directError;
+  return Math.min(directError, angleDelta(angleRadians, preferred + Math.PI));
+}
+
 export function evaluatePhysicalToolGesture(profile, gesture = {}) {
   if (!profile) return { effective: false, reason: 'no-profile', quality: 0 };
   if ((gesture.travelPx ?? 0) < profile.minTravelPx) return { effective: false, reason: 'short', quality: 0 };
   if ((gesture.velocityPxPerSecond ?? 0) < profile.minVelocityPxPerSecond) return { effective: false, reason: 'too-slow', quality: 0.1 };
   if ((gesture.velocityPxPerSecond ?? 0) > profile.maxVelocityPxPerSecond) return { effective: false, reason: 'too-fast', quality: 0.2 };
   if ((gesture.smoothness ?? 0) < profile.minSmoothness) return { effective: false, reason: 'erratic', quality: gesture.smoothness ?? 0 };
-  const angleError = angleDelta(gesture.angleRadians ?? 0, profile.preferredAngleRadians);
+  const angleError = getPhysicalToolAngleError(profile, gesture.angleRadians ?? 0);
   if (angleError > profile.angleToleranceRadians) return { effective: false, reason: 'wrong-angle', quality: 0.25 };
   const speedCenter = (profile.minVelocityPxPerSecond + profile.maxVelocityPxPerSecond) * 0.5;
   const speedSpan = Math.max(1, (profile.maxVelocityPxPerSecond - profile.minVelocityPxPerSecond) * 0.5);

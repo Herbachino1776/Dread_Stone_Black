@@ -24,6 +24,7 @@ import { BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES } from '../src/game/world-scene
 import { evaluatePhysicalToolGesture, PHYSICAL_TOOL_PROFILES } from '../src/game/physical-tools/PhysicalToolProfiles.js';
 import { PhysicalToolTargetRegistry } from '../src/game/physical-tools/PhysicalToolTargetRegistry.js';
 import { PhysicalToolViewmodel } from '../src/game/physical-tools/PhysicalToolViewmodel.js';
+import { PhysicalToolActionController } from '../src/game/physical-tools/PhysicalToolActionController.js';
 import { EquipmentPanel } from '../src/game/equipment/EquipmentPanel.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -42,11 +43,15 @@ assert.equal(revealedGlyphFiles.some((assetPath) => assetPath.endsWith(`${path.s
 assert.equal(revealedGlyphFiles.some((assetPath) => /keeper|ghiselian/i.test(path.basename(assetPath))), false, 'Revealed glyph filenames remain generic and lore-neutral.');
 
 const knifeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.old_work_knife, { travelPx: 96, velocityPxPerSecond: 1180, smoothness: 0.72, angleRadians: Math.PI * 0.3 });
+const reverseKnifeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.old_work_knife, { travelPx: 96, velocityPxPerSecond: 760, smoothness: 0.9, angleRadians: -Math.PI * 0.75 });
+const crosswiseKnifeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.old_work_knife, { travelPx: 96, velocityPxPerSecond: 760, smoothness: 0.9, angleRadians: -Math.PI * 0.25 });
 const axeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.wood_axe, { travelPx: 132, velocityPxPerSecond: 330, smoothness: 0.93, angleRadians: Math.PI * 0.5 });
 const rushedAxeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.wood_axe, { travelPx: 150, velocityPxPerSecond: 1120, smoothness: 0.9, angleRadians: Math.PI * 0.5 });
 const erraticAxeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.wood_axe, { travelPx: 170, velocityPxPerSecond: 350, smoothness: 0.28, angleRadians: Math.PI * 0.5 });
 const pryGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.iron_drain_bar, { travelPx: 145, velocityPxPerSecond: 170, smoothness: 0.91, angleRadians: -Math.PI * 0.5 });
 assert.equal(knifeGesture.effective, true, 'The light Work Knife accepts a clean fast swipe.');
+assert.equal(reverseKnifeGesture.effective, true, 'The Work Knife accepts the natural lower-right to upper-left cutting stroke as the reverse direction on its slash axis.');
+assert.equal(crosswiseKnifeGesture.effective, false, 'The Work Knife still rejects a crosswise stroke outside its learned cutting axis.');
 assert.equal(axeGesture.effective, true, 'The Wood Axe rewards a slower smooth committed chop.');
 assert.equal(rushedAxeGesture.effective, false, 'An over-fast Axe swing remains visible input but is ineffective.');
 assert.equal(erraticAxeGesture.effective, false, 'A squiggly Axe follow-through remains visible input but is ineffective.');
@@ -81,6 +86,44 @@ for (const [aspect, viewportLabel] of [[16 / 9, 'desktop'], [390 / 702, 'portrai
   assertPhysicalToolPlacement('wood_axe', aspect, `${viewportLabel} Wood Axe`);
   assertPhysicalToolPlacement('iron_drain_bar', aspect, `${viewportLabel} Drain Bar`);
 }
+const controllerViewportRect = { left: 0, top: 0, width: 390, height: 702 };
+const controllerViewport = {
+  addEventListener() {}, removeEventListener() {}, setPointerCapture() {},
+  getBoundingClientRect: () => controllerViewportRect,
+  querySelector: () => null,
+};
+toolCamera.aspect = controllerViewportRect.width / controllerViewportRect.height;
+toolCamera.updateProjectionMatrix();
+toolEquipment.equip('weapon', 'unarmed');
+toolEquipment.equip('tool', 'old_work_knife');
+toolViewmodel.update(1 / 60);
+const knifeGrab = toolViewmodel.getProjectedGrabPoint(controllerViewport);
+assert.ok(knifeGrab, 'The portrait Work Knife exposes a visible physical grab/contact point.');
+let controllerShedHits = 0;
+const controllerTarget = {
+  id: 'folsom_tool_shed_seam_growth', target: new THREE.Vector3(0, 0, -3), range: 3.25, contactRadiusPx: 62,
+  acceptedToolId: 'old_work_knife', acceptedActionType: 'cut',
+  requiredGesture: PHYSICAL_TOOL_PROFILES.old_work_knife,
+  receivePhysicalToolEvent: () => { controllerShedHits += 1; return { accepted: true, changed: true, hit: true }; },
+};
+const toolController = new PhysicalToolActionController({
+  app: controllerViewport, camera: toolCamera, player: { position: new THREE.Vector3(0, 0, 0) },
+  dungeon: { getPhysicalToolTargets: () => [controllerTarget] }, equipmentRuntime: toolEquipment, viewmodel: toolViewmodel,
+});
+let simulatedToolTime = performance.now();
+toolController.makeSample = (event) => ({ x: event.clientX, y: event.clientY, timeMs: (simulatedToolTime += 40) });
+const toolPointerEvent = (x, y) => ({ clientX: x, clientY: y, pointerId: 7, preventDefault() {}, stopPropagation() {}, target: { closest: () => null } });
+toolController.pointerDown(toolPointerEvent(knifeGrab.x, knifeGrab.y));
+for (let step = 1; step <= 5; step += 1) {
+  const progress = step / 5;
+  toolController.pointerMove(toolPointerEvent(
+    THREE.MathUtils.lerp(knifeGrab.x, controllerViewportRect.width * 0.5, progress),
+    THREE.MathUtils.lerp(knifeGrab.y, controllerViewportRect.height * 0.5, progress),
+  ));
+}
+toolController.pointerEnd(toolPointerEvent(controllerViewportRect.width * 0.5, controllerViewportRect.height * 0.5));
+assert.equal(controllerShedHits, 1, 'A touch beginning on the visible portrait Knife and sweeping into centered shed growth produces a physical damage event.');
+toolController.dispose();
 toolEquipment.equip('tool', 'iron_drain_bar'); toolViewmodel.update(1 / 60);
 assert.ok(toolViewmodel.toolGroups.get('iron_drain_bar').visible, 'Equipped Iron Drain Bar has a visible camera-local ready pose.');
 toolEquipment.equip('weapon', 'wood_axe'); toolViewmodel.update(1 / 60);

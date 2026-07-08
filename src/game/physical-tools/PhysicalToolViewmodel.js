@@ -7,7 +7,6 @@ const READY_POSES = Object.freeze({
   iron_drain_bar: Object.freeze({ screen: [0.02, -0.54], depth: 1.48, rotation: [-0.18, -0.12, -0.62], motion: [0.34, 0.27] }),
 });
 
-const screenPoint = new THREE.Vector3();
 const readyPosition = new THREE.Vector3();
 const projectedBox = new THREE.Box3();
 const projectedCorner = new THREE.Vector3();
@@ -201,9 +200,15 @@ export class PhysicalToolViewmodel {
   }
 
   projectGrabHit(clientX, clientY, viewport) {
+    const point = this.getProjectedGrabPoint(viewport);
+    if (!point) return false;
+    return Math.hypot(clientX - point.x, clientY - point.y) <= point.radius;
+  }
+
+  getProjectedGrabPoint(viewport) {
     const toolId = this.getActiveToolId();
     const group = this.toolGroups.get(toolId);
-    if (!toolId || !group?.visible || !viewport || !this.camera) return false;
+    if (!toolId || !group?.visible || !viewport || !this.camera) return null;
     this.camera.updateMatrixWorld(true);
     this.root.updateMatrixWorld(true);
     const point = group.userData.contactPoint.clone();
@@ -213,8 +218,7 @@ export class PhysicalToolViewmodel {
     const x = rect.left + (point.x * 0.5 + 0.5) * rect.width;
     const y = rect.top + (-point.y * 0.5 + 0.5) * rect.height;
     const radius = Math.max(76, Math.min(125, Math.min(rect.width, rect.height) * 0.2));
-    screenPoint.set(x, y, point.z);
-    return point.z >= -1 && point.z <= 1 && Math.hypot(clientX - x, clientY - y) <= radius;
+    return point.z >= -1 && point.z <= 1 ? { x, y, depth: point.z, radius } : null;
   }
 
   getProjectedBounds(toolId = this.getActiveToolId()) {
