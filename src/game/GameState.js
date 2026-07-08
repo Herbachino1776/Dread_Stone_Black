@@ -10,6 +10,13 @@ const FOLSOM_SHRINE_CRAWLSPACE_OPEN_KEY = 'folsom_shrine_crawlspace_open';
 const BENEATH_FOLSOM_DRAIN_GRATE_PRIED_KEY = 'beneath_folsom_drain_grate_pried';
 const BENEATH_FOLSOM_KEEPERS_LANTERN_REVEAL_SEEN_KEY = 'beneath_folsom_keepers_lantern_reveal_seen';
 const BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_CLEARED_KEY = 'beneath_folsom_hidden_growth_gate_cleared';
+const BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY = 'beneath_folsom_lower_shrine_hatch_open';
+const BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY = 'dreadStoneBlack.lowerShrineHatchMigrationV1';
+const BENEATH_FOLSOM_CHAPTER_3_PLANNED_KEYS = Object.freeze([
+  'beneath_folsom_white_mechanism_exposed',
+  'beneath_folsom_pale_panel_activated',
+  'beneath_folsom_crypt_access_stair_open',
+]);
 const FOLSOM_GROWTH_WORLD_KEYS = Object.freeze({
   fire: 'folsom_growth_anchor_fire_cleared',
   pond: 'folsom_growth_anchor_pond_cleared',
@@ -51,6 +58,8 @@ export class GameState {
       storage.removeItem(BENEATH_FOLSOM_DRAIN_GRATE_PRIED_KEY);
       storage.removeItem(BENEATH_FOLSOM_KEEPERS_LANTERN_REVEAL_SEEN_KEY);
       storage.removeItem(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_CLEARED_KEY);
+      storage.removeItem(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY);
+      storage.removeItem(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY);
       Object.values(FOLSOM_GROWTH_WORLD_KEYS).forEach((key) => storage.removeItem(key));
     } catch {
       // Reset should never wipe unrelated storage or crash if localStorage is blocked.
@@ -65,6 +74,7 @@ export class GameState {
     this.fieldShrineReactionSeen = this.readFlag(FIELD_SHRINE_REACTION_KEY, false);
     this.fieldSurvivalState = this.repairFieldSurvivalState(this.readJson(FIELD_SURVIVAL_STATE_KEY, null));
     this.migrateFolsomChapter2Backfill();
+    this.migrateBeneathFolsomLowerShrineHatch();
   }
 
   collectSouthReliquaryFragment() {
@@ -162,6 +172,29 @@ export class GameState {
     if (this.isBeneathFolsomHiddenGrowthGateCleared()) return false;
     this.writeFlag(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_CLEARED_KEY, true);
     return true;
+  }
+
+  isBeneathFolsomLowerShrineHatchOpen() {
+    return this.readFlag(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY, false);
+  }
+
+  markBeneathFolsomLowerShrineHatchOpen() {
+    if (this.isBeneathFolsomLowerShrineHatchOpen()) return false;
+    this.writeFlag(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY, true);
+    return true;
+  }
+
+  migrateBeneathFolsomLowerShrineHatch() {
+    const hasChapter3Progress = BENEATH_FOLSOM_CHAPTER_3_PLANNED_KEYS
+      .some((key) => this.readFlag(key, false));
+    const migrationAlreadyRun = this.readFlag(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY, false);
+    const crossedLegacyOpenSeam = !migrationAlreadyRun
+      && this.readFlag(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_CLEARED_KEY, false);
+    if ((hasChapter3Progress || crossedLegacyOpenSeam) && !this.isBeneathFolsomLowerShrineHatchOpen()) {
+      this.writeFlag(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY, true);
+    }
+    if (!migrationAlreadyRun) this.writeFlag(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY, true);
+    return hasChapter3Progress || crossedLegacyOpenSeam;
   }
 
   isFolsomGrowthAnchorCleared(anchorType) {

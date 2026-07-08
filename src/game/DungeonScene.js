@@ -22,6 +22,7 @@ import { FolsomShedGrowthRuntime } from './world-scene/FolsomShedGrowthRuntime.j
 import { FolsomShrineInvestigationRuntime } from './world-scene/FolsomShrineInvestigationRuntime.js';
 import { LanternConeRevealRuntime } from './world-scene/LanternConeRevealRuntime.js';
 import { BeneathFolsomHiddenGrowthGateRuntime } from './world-scene/BeneathFolsomHiddenGrowthGateRuntime.js';
+import { BeneathFolsomLowerShrineHatchRuntime } from './world-scene/BeneathFolsomLowerShrineHatchRuntime.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -327,6 +328,7 @@ export class DungeonScene {
     this.beneathFolsomDrainGrate = null;
     this.beneathFolsomLanternRevealObjects = [];
     this.beneathFolsomHiddenGrowthGateRuntime = null;
+    this.beneathFolsomLowerShrineHatchRuntime = null;
     this.fishingWorldRuntime = createFishingWorldRuntime({
       scene: this.scene,
       dungeon: this,
@@ -506,6 +508,12 @@ export class DungeonScene {
       gameState: this.gameState,
       textureLoader: this.textureLoader,
     });
+    this.beneathFolsomLowerShrineHatchRuntime = new BeneathFolsomLowerShrineHatchRuntime({
+      collision: this.collision,
+      compiledGroup: group,
+      gameState: this.gameState,
+      interactions: this.inspectInteractions,
+    });
 
     const lanternRevealDecals = this.beneathFolsomHiddenGrowthGateRuntime.getRevealObjects();
     group.traverse((object) => {
@@ -567,6 +575,19 @@ export class DungeonScene {
     const interaction = this.inspectInteractions.find((candidate) => candidate.id === 'beneath_folsom_drain_grate_pry');
     if (interaction) interaction.collected = true;
     return { pried: true, message: 'The old drain bars shriek open.' };
+  }
+
+  pryBeneathFolsomLowerShrineHatch(hasDrainBar = false) {
+    return this.beneathFolsomLowerShrineHatchRuntime?.pry({ hasDrainBar })
+      ?? { opened: false, message: 'The buried hatch does not answer.' };
+  }
+
+  resolvePlayerEyeHeight(position, defaultEyeHeight = 1.55) {
+    const zones = this.compiledLocationRuntime?.definition?.playerViewHeightZones ?? [];
+    const zone = zones.find((candidate) => position
+      && position.x >= candidate.minX && position.x <= candidate.maxX
+      && position.z >= candidate.minZ && position.z <= candidate.maxZ);
+    return zone?.eyeHeight ?? defaultEyeHeight;
   }
 
   configureCompiledOutdoorFieldRuntime(locationId = this.area) {
@@ -1110,6 +1131,7 @@ export class DungeonScene {
     this.folsomConnectedGrowthRuntime?.update(deltaSeconds);
     this.folsomShrineInvestigationRuntime?.update(deltaSeconds);
     this.updateBeneathFolsomDrainGrate(deltaSeconds);
+    this.beneathFolsomLowerShrineHatchRuntime?.update(deltaSeconds);
     this.lanternConeRevealRuntime?.update(deltaSeconds);
     this.beneathFolsomHiddenGrowthGateRuntime?.update(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);

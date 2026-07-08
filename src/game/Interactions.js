@@ -245,6 +245,15 @@ export class Interactions {
       return false;
     }
 
+    if (interaction.type === 'beneathFolsomLowerShrineHatch') {
+      const result = this.dungeon.pryBeneathFolsomLowerShrineHatch?.(this.equipmentRuntime?.hasItem?.('iron_drain_bar'));
+      const message = result?.message ?? interaction.failMessage ?? interaction.message;
+      this.setTemporaryHint(message, result?.opened ? 2300 : 1400);
+      this.hud.showMessage(message);
+      this.feedback?.shake?.(result?.opened ? { durationMs: 1050, intensity: 0.235 } : { durationMs: 180, intensity: 0.055 });
+      return false;
+    }
+
     if (interaction.type === 'equipmentPickup') {
       return this.useEquipmentPickup(interaction);
     }
@@ -398,6 +407,15 @@ export class Interactions {
       this.setTemporaryHint(message, result?.pried ? 1800 : 1300);
       this.hud.showMessage(message);
       this.feedback?.shake?.(result?.pried ? { durationMs: 300, intensity: 0.12 } : { durationMs: 110, intensity: 0.035 });
+      return false;
+    }
+
+    if (interaction.type === 'beneathFolsomLowerShrineHatch') {
+      const result = this.dungeon.pryBeneathFolsomLowerShrineHatch?.(this.equipmentRuntime?.hasItem?.('iron_drain_bar'));
+      const message = result?.message ?? interaction.failMessage ?? interaction.message;
+      this.setTemporaryHint(message, result?.opened ? 2300 : 1400);
+      this.hud.showMessage(message);
+      this.feedback?.shake?.(result?.opened ? { durationMs: 1050, intensity: 0.235 } : { durationMs: 180, intensity: 0.055 });
       return false;
     }
 

@@ -25,6 +25,8 @@ export class PlayerController {
     this.spawnYaw = spawnYaw;
     this.position = this.spawnPosition.clone();
     this.eyeHeight = Math.max(0.1, this.spawnPosition.y - (this.collisionWorld?.sampleWalkableY?.(this.spawnPosition.x, this.spawnPosition.z, 0)?.y ?? 0));
+    this.baseEyeHeight = this.eyeHeight;
+    this.targetEyeHeight = this.eyeHeight;
     if (this.collisionWorld) this.collisionWorld.eyeHeight = this.eyeHeight;
     this.yaw = this.spawnYaw;
     this.walkSpeed = moveSpeed;
@@ -70,6 +72,15 @@ export class PlayerController {
   }
 
   update(deltaSeconds, controls) {
+    const previousEyeHeight = this.eyeHeight;
+    this.eyeHeight = THREE.MathUtils.lerp(
+      this.eyeHeight,
+      this.targetEyeHeight,
+      THREE.MathUtils.clamp(deltaSeconds * (this.targetEyeHeight < this.eyeHeight ? 7.5 : 5.5), 0, 1),
+    );
+    if (Math.abs(this.eyeHeight - this.targetEyeHeight) < 0.002) this.eyeHeight = this.targetEyeHeight;
+    this.position.y += this.eyeHeight - previousEyeHeight;
+    if (this.collisionWorld) this.collisionWorld.eyeHeight = this.eyeHeight;
     const keyboardMove = this.getKeyboardMove();
     const moveX = controls.move.x || keyboardMove.x;
     const moveY = controls.move.y || keyboardMove.y;
@@ -159,6 +170,10 @@ export class PlayerController {
 
   getLookDirection() {
     return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).normalize();
+  }
+
+  setTargetEyeHeight(eyeHeight = this.baseEyeHeight) {
+    this.targetEyeHeight = THREE.MathUtils.clamp(eyeHeight, 0.65, this.baseEyeHeight);
   }
 
   reset() {

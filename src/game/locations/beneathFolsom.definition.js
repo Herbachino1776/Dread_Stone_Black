@@ -144,6 +144,16 @@ const props = [
     prop(`beneath_folsom_blue_hall_rib_${index}_lintel`, 'BF04', { x: 0, y: 3.2, z }, { width: 6.5, height: 0.3, depth: 0.58 }, 'coldThresholdStone', { tags: ['blue-flame-hallway', 'threshold-rib'] }),
   ]),
 
+  // A buried shrine maintenance hatch closes the Chapter 2/3 seam. Its broad
+  // stone face and iron restraints read from the far end of the blue-flame hall.
+  prop('beneath_folsom_lower_shrine_hatch', 'BF04', { x: 0, y: 1.55, z: 61.62 }, { width: 5.75, height: 3.1, depth: 0.44 }, 'wall', { tags: ['lower-shrine-hatch', 'chapter-2-endpoint', 'pryable-shrine-stone'], userData: { saveKey: 'beneath_folsom_lower_shrine_hatch_open', requiredItemId: 'iron_drain_bar' } }),
+  prop('beneath_folsom_lower_shrine_hatch_band_left', 'BF04', { x: -1.72, y: 1.55, z: 61.36 }, { width: 0.28, height: 2.8, depth: 0.14 }, 'rustedIron', { tags: ['lower-shrine-hatch', 'iron-restraint', 'moving-hatch-part'] }),
+  prop('beneath_folsom_lower_shrine_hatch_band_right', 'BF04', { x: 1.72, y: 1.55, z: 61.36 }, { width: 0.28, height: 2.8, depth: 0.14 }, 'rustedIron', { tags: ['lower-shrine-hatch', 'iron-restraint', 'moving-hatch-part'] }),
+  prop('beneath_folsom_lower_shrine_hatch_crossbar', 'BF04', { x: 0, y: 1.2, z: 61.25 }, { width: 4.65, height: 0.3, depth: 0.22 }, 'rustedIron', { tags: ['lower-shrine-hatch', 'maintenance-pry-bar', 'moving-hatch-part'] }),
+  prop('beneath_folsom_lower_shrine_hatch_frame_left', 'BF04', { x: -3.02, y: 1.62, z: 61.78 }, { width: 0.58, height: 3.24, depth: 0.78 }, 'coldThresholdStone', { tags: ['lower-shrine-hatch', 'buried-frame'] }),
+  prop('beneath_folsom_lower_shrine_hatch_frame_right', 'BF04', { x: 3.02, y: 1.62, z: 61.78 }, { width: 0.58, height: 3.24, depth: 0.78 }, 'coldThresholdStone', { tags: ['lower-shrine-hatch', 'buried-frame'] }),
+  prop('beneath_folsom_lower_shrine_hatch_frame_lintel', 'BF04', { x: 0, y: 3.22, z: 61.78 }, { width: 6.62, height: 0.42, depth: 0.82 }, 'coldThresholdStone', { tags: ['lower-shrine-hatch', 'buried-frame', 'shrine-lintel'] }),
+
   // Chapter 3 begins where the blue-flame hall gives way to older, colder stone.
   // Shallow visual treads preserve a readable descent without adding step collision.
   ...[64.2, 67.4, 70.6, 73.8, 77, 80.2].map((z, index) => prop(
@@ -274,6 +284,7 @@ export const beneathFolsomDefinition = Object.freeze({
   }],
   blockers: [{ id: 'beneath_folsom_drain_grate_blocker', type: 'gate', minX: -3.1, maxX: 3.1, minZ: 13.15, maxZ: 13.85, height: 3.1, blocksPlayer: true, blocksActors: true, tags: ['jammed-drain-grate', 'pryable', 'blocks-deeper-access'], userData: { requiredItemId: 'iron_drain_bar', saveKey: 'beneath_folsom_drain_grate_pried' } },
     { id: 'beneath_folsom_hidden_growth_gate_blocker', type: 'gate', minX: -3.25, maxX: 3.25, minZ: 21.48, maxZ: 22.02, height: 3.3, blocksPlayer: true, blocksActors: true, tags: ['hidden-growth-gate', 'chapter-2-capstone'], userData: { requiredItemId: 'old_work_knife', revealItemId: 'keepers_lantern', hitsRequired: 5, saveKey: 'beneath_folsom_hidden_growth_gate_cleared' } },
+    { id: 'beneath_folsom_lower_shrine_hatch_blocker', type: 'gate', minX: -3.05, maxX: 3.05, minZ: 61.28, maxZ: 62.02, height: 3.3, blocksPlayer: true, blocksActors: true, tags: ['lower-shrine-hatch', 'chapter-2-endpoint', 'pryable'], userData: { requiredItemId: 'iron_drain_bar', prerequisiteStateKey: 'beneath_folsom_hidden_growth_gate_cleared', saveKey: 'beneath_folsom_lower_shrine_hatch_open' } },
     { id: 'beneath_folsom_ch3_white_scab_hall_blocker', type: 'futureGate', minX: -3.7, maxX: 3.7, minZ: 107.25, maxZ: 108.15, height: 1, blocksPlayer: true, blocksActors: true, tags: ['chapter-3', 'future-blocker', 'white-scab-clear-deferred'], userData: { plannedSaveKey: 'beneath_folsom_white_mechanism_exposed', requiredItems: ['keepers_lantern', 'wood_axe', 'old_work_knife'], implementationState: 'deferred' } },
     { id: 'beneath_folsom_ch3_pale_panel_chamber_blocker', type: 'futureGate', minX: -4, maxX: 4, minZ: 133.35, maxZ: 134.2, height: 3.3, blocksPlayer: true, blocksActors: true, tags: ['chapter-3', 'future-blocker', 'pale-panel-activation-deferred'], userData: { plannedSaveKey: 'beneath_folsom_pale_panel_activated', requiredItem: 'keepers_lantern', implementationState: 'deferred' } },
     { id: 'beneath_folsom_ch3_crypt_root_mat_blocker', type: 'futureGate', minX: -3.1, maxX: 3.1, minZ: 157.25, maxZ: 158.2, height: 3.3, blocksPlayer: true, blocksActors: true, tags: ['chapter-3', 'future-blocker', 'crypt-root-mat-deferred'], userData: { plannedSaveKey: 'beneath_folsom_crypt_access_stair_open', requiredItems: ['wood_axe', 'old_work_knife', 'iron_drain_bar'], implementationState: 'deferred' } },
@@ -321,6 +332,17 @@ export const beneathFolsomDefinition = Object.freeze({
     requiredItemId: 'iron_drain_bar',
     saveKey: 'beneath_folsom_drain_grate_pried',
     roomId: 'BF02',
+  }, {
+    id: 'beneath_folsom_lower_shrine_hatch_pry',
+    type: 'beneathFolsomLowerShrineHatch',
+    target: { x: 0, y: 1.3, z: 59.65 },
+    range: 3.25,
+    hint: 'Buried lower shrine hatch',
+    message: 'Iron bites stone. The lower shrine hatch tears open.',
+    failMessage: 'The stone-bound hatch will not move by hand.',
+    prerequisiteStateKey: 'beneath_folsom_hidden_growth_gate_cleared',
+    saveKey: 'beneath_folsom_lower_shrine_hatch_open',
+    roomId: 'BF04',
   }],
   navigation: { roomGraph: { roomIds: ['BF01', 'BF02', 'BF03', 'BF04', 'BF05', 'BF06', 'BF07', 'BF08', 'BF09'], links: [
     { id: 'beneath_folsom_entry_to_landing', fromRoom: 'BF01', toRoom: 'BF02', navWaypoint: { x: 0, y: 0, z: -10 } },

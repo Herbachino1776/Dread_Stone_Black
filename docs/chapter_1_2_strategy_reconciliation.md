@@ -3,7 +3,7 @@
 Audit date: 2026-07-07
 Audited baseline: `2c35afd` (`Add Chapter 3 location truth and room skeleton`)
 
-## Implementation update: Shrine Side Room backfill
+## Implementation update: Chapter 2 structural reconciliation
 
 The first recommended backfill is implemented after the audited baseline:
 
@@ -13,16 +13,19 @@ The first recommended backfill is implemented after the audited baseline:
 - A bounded Lantern wash reveals the convergence marks and previously hidden surface feeds, persisting `folsom_under_shrine_network_revealed`.
 - The retained fire, pond, and shrine anchors are unavailable to fresh saves until that reveal. Existing anchor and Underworks progress migrates automatically and is never reset.
 - `folsom_shrine_crawlspace_floor` is a short physical maintenance passage. Its panel persists `folsom_shrine_crawlspace_open`, and its solid terminal throat prevents an Underworks bypass.
+- The crawlspace now lowers the player view beneath its roof while occupied.
+- `beneath_folsom_lower_shrine_hatch` explicitly closes the BF04/BF05 seam. It requires the hidden five-hit gate clear and the existing Iron Drain Bar, removes `beneath_folsom_lower_shrine_hatch_blocker`, and persists `beneath_folsom_lower_shrine_hatch_open`.
+- The blue-flame hallway remains threshold atmosphere rather than substituting for the hatch.
 
 See [`chapter_2_integrated_flow_map.md`](chapter_2_integrated_flow_map.md) for the current route contract.
 
 ## Verdict
 
-Chapter 1's shed proof matches the current production lock and the strategy guide. The broader Chapter 1 framing is only partial. Chapter 2 now has the intended Lantern-first investigation and is a coherent integrated adaptation, but it remains structurally incomplete until the lower shrine hatch handoff is implemented or explicitly rewritten.
+Chapter 1's shed proof matches the current production lock and the strategy guide. The broader Chapter 1 framing is only partial. Chapter 2 now has the intended Lantern-first investigation, a coherent surface-endpoint adaptation, and the explicit bar-pried lower shrine hatch handoff. Chapter 2 structural reconciliation is complete.
 
-The surface anchors are now explicitly revealed endpoints of a deeper under-shrine network. This keeps the successful surface loop while restoring the guide's investigation-tool order and causal lesson. The remaining major divergence is that the adapted surface endpoints replace three underground pockets, and the remaining blocking omission is the lower shrine hatch.
+The surface anchors are explicitly revealed endpoints of a deeper under-shrine network. This keeps the successful surface loop while restoring the guide's investigation-tool order and causal lesson. The remaining major divergence is the approved replacement of three underground pockets with adapted surface endpoints; it is not a structural blocker.
 
-White-Scab Hall mechanics should remain paused until the lower-hatch handoff is implemented. This is an integration/backfill recommendation, not a recommendation to demolish the completed loops.
+White-Scab Hall remains the next paused Chapter 3 mechanic. This verdict does not authorize White-Scab Hall, Pale Panel, or other Chapter 3 implementation in the hatch pass.
 
 ## Sources and authority
 
@@ -147,7 +150,7 @@ The guide does not define a hidden five-hit growth wall or blue-flame hallway at
 - The hidden wall requires Lantern reveal, Old Work Knife ownership, and exactly five successful hits. Its final clear persists, collapses the growth, fades the wall, and reveals the blue-flame hallway.
 - BF04 is the Blue Flame Threshold. It is now an open physical seam into BF05, the Chapter 3 Lower Shrine Stair.
 - BF05-BF09 contain the preserved Chapter 3 room skeleton through the Crypt Access Stair, with deferred-mechanic blockers.
-- There are no three underground anchor pockets, worker body, lower shrine hatch, shrine/drain Records, or map-state implementation.
+- There are no three underground anchor pockets, worker body, shrine/drain Records, or map-state implementation. The explicit lower shrine hatch is now implemented at BF04/BF05.
 
 ### Current route order
 
@@ -238,13 +241,13 @@ Status terms are applied to guide beats, not to general playability.
 | Anchor states are persistent world state, not inventory | MATCHES | All three clears persist as world flags. |
 | Anchors open the lower shrine hatch | IMPLEMENTED DIFFERENTLY | They unseal the separate above-ground Underworks gate instead. |
 | Underworks gate opened from surface anchors | INTENTIONAL DIVERGENCE ALREADY DOCUMENTED | This is current production truth and a successful route gate, but it is an added/substituted beat rather than guide truth. |
-| Iron Drain Bar pries the lower shrine hatch | MISSING | The bar only opens the earlier drain grate. |
-| Lower Shrine Hatch Open route state | MISSING | No hatch, interaction, or persisted state exists. |
+| Iron Drain Bar pries the lower shrine hatch | MATCHES | The existing bar forces the BF04/BF05 hatch with a slower, heavier strain response than the drain grate. |
+| Lower Shrine Hatch Open route state | MATCHES | The explicit hatch removes its blocker and persists `beneath_folsom_lower_shrine_hatch_open`; legacy and Chapter 3-progress saves migrate open. |
 | Beneath Folsom hidden five-hit growth gate | INTENTIONAL DIVERGENCE ALREADY DOCUMENTED | This is a successful Lantern/Knife capstone added by the current lock. It should be preserved, but it does not mechanically stand in for a bar-pried lower hatch. |
 | Hidden gate partial damage persistence | PARTIAL | Final clear persists; hit counts one through four reset on reload. This is polish unless mid-encounter persistence becomes a project-wide rule. |
 | Keeper's Lantern reveal-seen state | PARTIAL | The key and methods exist, but no inspected call writes the flag when reveal occurs. |
-| Blue-flame hallway as Chapter 2 endpoint/seam | IMPLEMENTED DIFFERENTLY | The hall is a strong authored threshold and now flows directly into BF05. It is an added seam, not the guide's lower-hatch endpoint. |
-| Chapter 3 begins by descending through the opened lower hatch | NEEDS DECISION | BF05 provides the Lower Shrine Stair, but no hatch communicates the Chapter 2 action or state. Decide whether to add a hatch at the BF04/BF05 seam or formally rewrite the guide handoff. |
+| Blue-flame hallway as Chapter 2 endpoint/seam | APPROVED ADDITION | The hall is threshold atmosphere leading to the explicit hatch; it does not replace the guide endpoint. |
+| Chapter 3 begins by descending through the opened lower hatch | MATCHES | The bar-pried hatch now exposes BF05 Lower Shrine Stair. |
 | Chapter 3 Lower Shrine Stair and guide room order | MATCHES | The preserved BF05-BF09 skeleton follows the guide's Chapter 3 space order. Mechanics remain deferred. |
 
 ## 4. Design decision recommendations
@@ -259,11 +262,11 @@ Status terms are applied to guide beats, not to general playability.
 - Preserve the hidden five-hit growth gate and its blue-flame reveal as an added Chapter 2 capstone.
 - Preserve the blue-flame hallway and the complete Chapter 3 room skeleton.
 
-These approvals do not mean the current route is complete. They define the useful implementation that backfill should integrate.
+These approvals define the completed Chapter 2 structural adaptation.
 
-### B. Backfill before Chapter 3 mechanics
+### B. Structural backfill status
 
-1. **Resolve the lower-hatch handoff.** Add a readable lower shrine hatch at the BF04/BF05 seam, pried with the existing Iron Drain Bar after the hidden gate clear, with a persistent `beneath_folsom_lower_shrine_hatch_open`-style state; or make an explicit design decision to rewrite the guide. Adding the hatch is the recommended option because it preserves the Chapter 3 skeleton and restores the promised Chapter 2 endpoint cheaply.
+1. **Lower-hatch handoff complete.** The readable BF04/BF05 hatch uses the existing Iron Drain Bar after the hidden gate clear and persists `beneath_folsom_lower_shrine_hatch_open` without changing the Chapter 3 skeleton.
 
 The Lantern-first shrine investigation, physical maintenance crawlspace, canonical pickup migration, and reveal-gated surface network are complete.
 
@@ -307,7 +310,7 @@ Do not rewrite the guide first merely to declare the current implementation corr
 
 Implemented with additive save keys and migration for existing Chapter 2 progress.
 
-### Pass 2: Lower shrine hatch and Chapter 2 endpoint backfill
+### Pass 2: Lower shrine hatch and Chapter 2 endpoint backfill — complete
 
 - Add an explicit hatch at the Blue Flame Threshold-to-Lower Shrine Stair seam.
 - Require the existing hidden gate clear and Iron Drain Bar pry.
@@ -321,4 +324,4 @@ Implemented with additive save keys and migration for existing Chapter 2 progres
 - Wire map/Records events only through proper domain ownership; do not create inventory tokens or broad UI systems.
 - Refresh the strategy guide and production lock to describe the accepted surface-anchor adaptation and final handoff.
 
-Only after Pass 2 is stable should White-Scab Hall mechanics resume. Chapter 3's existing room skeleton should remain in place throughout.
+White-Scab Hall is the next paused Chapter 3 mechanic and requires an explicit resume decision. Chapter 3's existing room skeleton remains in place.

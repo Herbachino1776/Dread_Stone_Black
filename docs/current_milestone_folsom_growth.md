@@ -4,7 +4,7 @@ This is the current Dread Stone Black production lock. It overrides older strate
 
 ## Current status
 
-The first reconciliation backfill is implemented and hardened. The Shrine Side Room reads as an old keeper maintenance chamber with broken work surfaces, shelves, low slabs, timber pressure framing, floor ironwork, and cords entering the structure. Its maintenance crawlspace is low, framed, root-pressed, and visibly terminates at a barred stone throat. The Keeper's Lantern is acquired canonically in the side room, and fresh saves must reveal the under-shrine network before seeing usable surface-endpoint prompts or clearing those endpoints. Chapter 2 is still not strategy-complete because the lower shrine hatch handoff remains absent. Chapter 3 mechanics stay on hold.
+The Chapter 2 structural reconciliation is implemented. The Shrine Side Room and low-view maintenance crawlspace establish the Lantern-first investigation, the retained surface anchors read as under-shrine endpoints, and the Beneath Folsom route now ends at an explicit lower shrine hatch. The blue-flame hallway remains threshold atmosphere; it does not replace the hatch. The existing Iron Drain Bar forces the hatch open and persists the route into the Lower Shrine Stair. Chapter 2 structural reconciliation is complete. Chapter 3 mechanics stay on hold.
 
 The implemented spine remains valuable production truth:
 
@@ -17,11 +17,11 @@ The implemented spine remains valuable production truth:
 7. Enter `beneath-folsom`, recover the Iron Drain Bar, and pry open the drain grate.
 8. Use the Lantern's bounded reveal wash to expose the hidden glyph/growth gate.
 9. Clear that hidden growth in exactly five successful knife hits while it is revealed.
-10. Enter the blue-flame hallway and reach the Chapter 3 Lower Shrine Stair seam.
+10. Cross the blue-flame threshold hallway, pry open the explicit lower shrine hatch with the Iron Drain Bar, and expose the Lower Shrine Stair.
 
-Reliably written route state includes `folsom_tool_shed_open`, `folsom_shrine_side_room_open`, `folsom_under_shrine_network_revealed`, `folsom_shrine_crawlspace_open`, the three Folsom anchor keys, `folsom_underworks_growth_unsealed`, `beneath_folsom_drain_grate_pried`, and `beneath_folsom_hidden_growth_gate_cleared`.
+Reliably written route state includes `folsom_tool_shed_open`, `folsom_shrine_side_room_open`, `folsom_under_shrine_network_revealed`, `folsom_shrine_crawlspace_open`, the three Folsom anchor keys, `folsom_underworks_growth_unsealed`, `beneath_folsom_drain_grate_pried`, `beneath_folsom_hidden_growth_gate_cleared`, and `beneath_folsom_lower_shrine_hatch_open`.
 
-This spine is an explicit adaptation, not the guide's complete Chapter 2 room list. The surface anchors now serve as revealed endpoints of the under-shrine network instead of three underground pockets. The unresolved blocking debt is the lower shrine hatch at the BF04/BF05 seam. The Chapter 3 room skeleton remains preserved in [`chapter_3_location_flow_map.md`](chapter_3_location_flow_map.md) and [`chapter_3_location_contract.md`](chapter_3_location_contract.md).
+This spine is an explicit adaptation, not the guide's complete Chapter 2 room list. The surface anchors serve as revealed endpoints of the under-shrine network instead of three underground pockets. The guide-correct lower shrine hatch now closes the BF04/BF05 seam and resolves the remaining structural debt. The Chapter 3 room skeleton remains preserved in [`chapter_3_location_flow_map.md`](chapter_3_location_flow_map.md) and [`chapter_3_location_contract.md`](chapter_3_location_contract.md).
 
 ## Completed-loop locks
 
@@ -35,12 +35,15 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - Fresh saves reveal the network with the Keeper's Lantern before surface endpoint interactions become available. Existing anchor/Underworks progress migrates to revealed state without replay.
 - The reveal reads as an under-shrine convergence: three rough pale branch marks and black cords lead from room seams into the crawlspace and connect to the retained surface feeds. Only the Keeper's Lantern reveal emitter can expose the hidden state; Torch and ambient light cannot.
 - The maintenance crawlspace remains bounded by a solid terminal throat and cannot bypass the Underworks gate. Low timber frames, buried slabs, revealed floor/wall cords, root pressure, iron bars, and a stone collar reinforce the endpoint.
+- The crawlspace lowers the first-person eye height on entry and restores it on exit so the player view remains below its authored roof.
 - Fire uses the Torch capability; pond and shrine use the Old Work Knife. Cleared anchors and their feeds remain world state, not inventory tokens.
 - The Underworks transition remains gated by `folsom_underworks_growth_unsealed`, with a reliable return route to Folsom.
 - The Iron Drain Bar remains a persistent local pry tool for the drain grate.
 - The Keeper's Lantern remains an offhand light with a separate bounded reveal test. Torch and ambient light do not reveal hidden glyph art.
 - `beneath_folsom_keepers_lantern_reveal_seen` is intended to record discovery without making glyphs permanently visible, but the current inspected runtime does not reliably write it. Do not claim this state as complete until it is wired or removed.
 - The hidden lower growth gate requires the Keeper's Lantern reveal, the Old Work Knife, and exactly five successful hits. Its final clear persists and opens the blue-flame threshold.
+- The blue-flame hallway is threshold atmosphere, not a replacement for the lower shrine hatch.
+- The explicit BF04/BF05 hatch requires the hidden gate clear and Iron Drain Bar, rejects bare-hand attempts, opens with slow stone/metal strain and strong physical feedback, and persists `beneath_folsom_lower_shrine_hatch_open`.
 - Use environmental teaching. Do not add tutorial prose to these loops.
 
 ## Preserved Chapter 3 location foundation
@@ -49,7 +52,7 @@ Chapter 3 extends `beneath-folsom` after the preserved blue-flame hallway. The f
 
 This pass is a room skeleton, not a mechanics claim. Explicit future blockers hold the guide order at the White-Scab Hall, Pale Panel, and crypt root mat. The route then ends at a hard First Crypt boundary.
 
-The next implementation target is an explicit lower shrine hatch at the blue-hall/BF05 seam, pried with the existing Iron Drain Bar and persisted as route state, unless the guide handoff is formally rewritten. Do not begin White-Scab Hall or panel mechanics until that handoff is implemented and stable.
+The next paused Chapter 3 mechanic is the focused White-Scab Hall reveal/clear proof. Do not implement the Pale Panel or broader Chapter 3 systems before that narrow mechanic is explicitly resumed.
 
 ## Validation posture
 

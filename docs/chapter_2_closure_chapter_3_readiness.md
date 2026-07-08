@@ -1,17 +1,17 @@
 # Chapter 2 Closure and Chapter 3 Readiness Audit
 
-> **Reconciliation status (2026-07-07):** This audit's functional-completeness verdict is qualified by [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md). The Lantern-first Shrine Side Room/crawlspace backfill is now implemented; the lower shrine hatch remains unresolved. White-Scab Hall mechanics stay paused.
+> **Superseded verdict (2026-07-07):** The later reconciliation is now implemented. The Lantern-first Shrine Side Room/crawlspace, explicit lower shrine hatch, and persisted Iron Drain Bar handoff are complete. The blue-flame hallway is threshold atmosphere, not hatch replacement. Chapter 2 structural reconciliation is complete; White-Scab Hall remains the next paused Chapter 3 mechanic. See [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md).
 
 Audit date: 2026-07-07  
 Audited baseline: `e091e8e` (`Overhaul HUD and equipment UI`)
 
 ## Verdict
 
-Chapter 2 is functionally complete enough to pause against the current production lock and the requested playable spine. The runtime contains a continuous, persisted route from the Folsom tool proof through the Beneath Folsom hidden-growth capstone to a bounded blue-flame future threshold.
+This audit's original qualified verdict is superseded. The runtime now contains a continuous, persisted Chapter 2 route from the Folsom tool proof through the hidden-growth capstone, blue-flame threshold atmosphere, explicit lower shrine hatch, and into the Lower Shrine Stair.
 
 This is a static code and authored-data verdict, not a claim that a fresh-save end-to-end manual test was performed during this docs-only pass.
 
-The implementation is an adaptation of the design-locked strategy guide, not a literal build of its Chapter 2 room list. The guide describes an Old Shrine side room, crawlspace, underground anchor split, and lower shrine hatch. The current production lock instead places the three connected anchors above ground, uses the Underworks gate as the major route unlock, and ends Beneath Folsom at a hidden five-hit growth gate and blue-flame hallway. Current milestone locks override the older layout. The guide's connected-growth lesson, tool roles, persistent route change, Keeper's Lantern investigation role, and descent toward older buried construction are preserved.
+The implementation is an adaptation of the design-locked strategy guide, not a literal build of its Chapter 2 room list. The three connected anchors remain above ground and the Underworks gate remains the major route unlock. The later reconciliation adds the guide-correct Shrine Side Room, crawlspace investigation, and lower shrine hatch around that adaptation. Beneath Folsom now ends Chapter 2 with the hidden five-hit growth gate, blue-flame threshold atmosphere, and explicit hatch pry into the Lower Shrine Stair.
 
 ## Chapter 2 implemented spine
 
@@ -27,7 +27,8 @@ The implementation is an adaptation of the design-locked strategy guide, not a l
 | Five-hit clear | Both authored blocker data and `BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES` require five hits. Successful hits require active reveal; the final clear persists `beneath_folsom_hidden_growth_gate_cleared`. | Implemented |
 | Clear feedback and opening | Hits damage and weaken the growth, pulse it, emit bounded oil flecks, play wet feedback, and shake the view. Final clear snaps/collapses cords, fades the wall, and removes the blocker. | Implemented |
 | Blue-flame hallway | A 40-unit Chapter 2 capstone hall, cold blue fixtures, and animated flames become visible after the hidden gate clears. | Implemented |
-| Placeholder/future threshold | `beneath_folsom_chapter_end_stop` closes the far end and is tagged `future-boundary` and `no-chapter-3`. | Implemented |
+| Lower shrine hatch | `beneath_folsom_lower_shrine_hatch` and its blocker close BF04/BF05 until the hidden gate is clear and the Iron Drain Bar forces it open. The open state persists and legacy/Chapter 3-progress saves migrate safely. | Implemented |
+| Chapter 3 room boundary | BF05-BF09 provide the preserved room skeleton through the bounded First Crypt stop; Chapter 3 mechanics remain deferred. | Implemented |
 
 ## Persistence and state separation
 
@@ -41,6 +42,7 @@ The route uses world-state flags rather than permanent junk inventory:
 - `beneath_folsom_drain_grate_pried`
 - `beneath_folsom_keepers_lantern_reveal_seen`
 - `beneath_folsom_hidden_growth_gate_cleared`
+- `beneath_folsom_lower_shrine_hatch_open`
 
 Reconciliation correction: `beneath_folsom_keepers_lantern_reveal_seen` is declared in state/authored data, but the inspected runtime does not call the method that writes it. Treat it as intended state, not verified persistence.
 
@@ -50,7 +52,7 @@ The Old Work Knife, Wood Axe, Torch, Iron Drain Bar, and Keeper's Lantern remain
 
 ### Blocking issues for Chapter 2 closure
 
-The original audit found no blockers against the adapted playable spine. The reconciliation later identified strategy-structure debt. The Shrine Side Room/crawlspace and Lantern-first network order are now backfilled; the explicit lower shrine hatch remains the blocker before Chapter 3 mechanics. The underground anchor pockets are now an approved surface-endpoint adaptation.
+The original audit found no blockers against the adapted playable spine. The reconciliation later identified and resolved strategy-structure debt: the Shrine Side Room/crawlspace, Lantern-first network order, and explicit lower shrine hatch are now backfilled. The underground anchor pockets remain an approved surface-endpoint adaptation. No Chapter 2 structural blocker remains.
 
 Manual verification is still required before treating the closure as release-tested. A fresh-save run should verify the entire sequence, and a reload after the hidden gate clear should verify that the blocker stays removed and the hallway remains visible.
 
@@ -66,12 +68,12 @@ Manual verification is still required before treating the closure as release-tes
 
 The locked Chapter 3 route calls for: Lower Shrine Stair, White-Scab Hall, Shrine Mechanism Room, Pale Panel, Buried White Chamber, and Crypt Access Stair. Its core interaction is `black scab -> exposed pale mechanism -> panel activation -> route opening`.
 
-### Missing spaces and route contracts
+### Resolved spaces and route contracts
 
-- No Lower Shrine Stair or Chapter 3 rooms are authored beyond the `beneath_folsom_chapter_end_stop`.
-- The runtime has no locked decision for whether Chapter 3 extends `beneath-folsom` or transitions to a new compiled location.
-- The current blue hallway must be mapped explicitly to the guide's lower-shrine descent. Without that contract, room coordinates, spawn/return behavior, persistence ownership, and collision boundaries are unstable.
-- No Crypt Access Stair or bounded end-of-chapter threshold exists.
+- Chapter 3 extends `beneath-folsom` through the preserved BF05-BF09 skeleton.
+- The blue hallway is explicitly threshold atmosphere leading to the persisted lower shrine hatch.
+- BF05 is the Lower Shrine Stair, and the authored chain continues through the Crypt Access Stair to a bounded First Crypt stop.
+- White-Scab Hall remains the next paused mechanic; these spaces do not claim Chapter 3 interaction completion.
 
 ### Missing interaction/state features
 

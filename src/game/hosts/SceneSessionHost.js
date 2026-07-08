@@ -101,6 +101,9 @@ export class SceneSessionHost {
   }
 
   update(deltaSeconds, { controls = null, isPaused = false, isPlayerDead = false } = {}) {
+    if (this.player && this.dungeon) {
+      this.player.setTargetEyeHeight?.(this.dungeon.resolvePlayerEyeHeight?.(this.player.position, this.player.baseEyeHeight) ?? this.player.baseEyeHeight);
+    }
     if (!isPaused && !isPlayerDead) this.player?.update(deltaSeconds, controls);
     if (!isPaused) this.dungeon?.update(deltaSeconds, this.player);
   }
@@ -200,6 +203,7 @@ export class SceneSessionHost {
     this.player?.dispose?.();
     this.dungeon?.lanternConeRevealRuntime?.dispose?.();
     this.dungeon?.beneathFolsomHiddenGrowthGateRuntime?.dispose?.();
+    this.dungeon?.beneathFolsomLowerShrineHatchRuntime?.dispose?.();
     this.scene.remove(this.camera);
     this.scene.traverse((child) => {
       child.geometry?.dispose?.();

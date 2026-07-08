@@ -230,6 +230,12 @@ export const folsomDefinition = Object.freeze({
   },
   textures,
   defaultFloorY: 0,
+  playerViewHeightZones: [{
+    id: 'folsom_shrine_crawlspace_low_view',
+    minX: -69.15, maxX: -60.55, minZ: 37.25, maxZ: 40.75,
+    eyeHeight: 1.08,
+    tags: ['shrine-crawlspace', 'duck-under-roof', 'camera-clearance'],
+  }],
   geometry: { wallHeight: 3.8, wallThickness: 0.38, floorThickness: 0.18, ceilingThickness: 0.18 },
   terrain: folsomTerrain,
   connectedGrowthNetwork: FOLSOM_CONNECTED_GROWTH_NETWORK,
