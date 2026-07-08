@@ -24,6 +24,7 @@ import { BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES } from '../src/game/world-scene
 import { evaluatePhysicalToolGesture, PHYSICAL_TOOL_PROFILES } from '../src/game/physical-tools/PhysicalToolProfiles.js';
 import { PhysicalToolTargetRegistry } from '../src/game/physical-tools/PhysicalToolTargetRegistry.js';
 import { PhysicalToolViewmodel } from '../src/game/physical-tools/PhysicalToolViewmodel.js';
+import { EquipmentPanel } from '../src/game/equipment/EquipmentPanel.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const revealedGlyphAssetRoot = path.join(repoRoot, 'public', 'assets', 'revealed_glyphs');
@@ -68,6 +69,24 @@ assert.ok(Math.abs(toolViewmodel.motionPivot.rotation.z) > 0.02, 'Visible held-t
 toolViewmodel.impact({ strength: 1 }); toolViewmodel.update(1 / 60);
 assert.ok(toolViewmodel.recoilRemaining > 0, 'Physical tools enter impact recoil before returning to ready.');
 toolViewmodel.dispose();
+const rightHandEquipment = new EquipmentRuntime({
+  weaponProfiles: equipmentRegistry.weapons,
+  startingEquipment: { acquiredItemIds: ['unarmed', 'old_work_knife', 'wood_axe', 'iron_drain_bar'], equipped: { weapon: 'wood_axe', tool: 'old_work_knife' } },
+});
+const rightHandPanel = Object.assign(Object.create(EquipmentPanel.prototype), {
+  equipmentRuntime: rightHandEquipment,
+  survivalInventory: new SurvivalInventoryBridge({ equipmentRuntime: rightHandEquipment }),
+  activePocket: 'weapons',
+});
+assert.equal(rightHandPanel.getRightHandDisplayName(), 'Wood Axe', 'Right-hand header reports the actually visible Axe when repairing an old conflicting save.');
+const rightHandEntries = rightHandPanel.getPocketEntries(rightHandEquipment.getEquippedWeaponProfile());
+assert.ok(rightHandEntries.some((entry) => entry.id === 'old_work_knife') && rightHandEntries.some((entry) => entry.id === 'iron_drain_bar'), 'Knife and Drain Bar are selectable in the Right Hand pocket.');
+rightHandEntries.find((entry) => entry.id === 'old_work_knife').onActivate();
+assert.equal(rightHandEquipment.getEquippedWeaponProfile().id, 'unarmed', 'Equipping the Knife clears an Axe/Rod from the same right hand.');
+assert.equal(rightHandEquipment.getEquippedToolId(), 'old_work_knife', 'Right Hand selection equips the Knife into the physical tool slot.');
+assert.equal(rightHandPanel.getRightHandDisplayName(), 'Old Work Knife', 'Right-hand header visibly confirms the equipped Work Knife.');
+rightHandPanel.activePocket = 'keyItems';
+assert.equal(rightHandPanel.getPocketEntries(rightHandEquipment.getEquippedWeaponProfile()).some((entry) => entry.id === 'old_work_knife'), false, 'The Work Knife is no longer mislabeled as a Key Item.');
 
 const interactionsSource = readFileSync(new URL('../src/game/Interactions.js', import.meta.url), 'utf8');
 ['strikeFolsomShedGrowth', 'strikeBeneathFolsomHiddenGrowthGate', 'clearFolsomGrowthAnchor', 'advanceFolsomShrineSideRoom', 'openFolsomShrineCrawlspace', 'pryBeneathFolsomDrainGrate', 'pryBeneathFolsomLowerShrineHatch', 'strikeBeneathFolsomWhiteScabLowerKnot', 'openUnderShrineLabyrinthEndHatch']

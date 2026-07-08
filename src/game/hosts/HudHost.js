@@ -147,7 +147,7 @@ export class HudHost {
                 <button class="equipment-close" data-equipment="close" type="button" aria-label="Close inventory">&times;</button>
               </div>
               <div class="equipment-current" aria-label="Currently equipped gear">
-                <span>Weapon <strong data-equipment="current-weapon">Unarmed</strong></span>
+                <span>Right Hand <strong data-equipment="current-weapon">Unarmed</strong></span>
                 <span>Offhand <strong data-equipment="current-offhand">None</strong></span>
               </div>
               <div class="inventory-shell">

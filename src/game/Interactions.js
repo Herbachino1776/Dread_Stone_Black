@@ -350,6 +350,7 @@ export class Interactions {
       tags: ['pickup', this.dungeon.area],
     });
     if (['old_work_knife', 'iron_drain_bar'].includes(interaction.itemId)) {
+      this.survivalInventory.equipWeapon(null);
       this.equipmentRuntime.equip(EQUIPMENT_SLOTS.tool, interaction.itemId);
     } else if (interaction.autoEquip === true) {
       this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, interaction.itemId);

@@ -3,7 +3,7 @@ import { EQUIPMENT_EVENTS } from '../../engine/equipment/EquipmentEvents.js';
 import { SurvivalInventoryBridge } from './SurvivalInventoryBridge.js';
 
 const POCKETS = Object.freeze([
-  { id: 'weapons', label: 'Weapons', icon: '⚔' },
+  { id: 'weapons', label: 'Right Hand', icon: '⚔' },
   { id: 'items', label: 'Items', icon: '♟' },
   { id: 'keyItems', label: 'Key Items', icon: '⚿' },
   { id: 'offhand', label: 'Offhand', icon: '◈' },
@@ -16,8 +16,8 @@ const ITEM_DETAILS = Object.freeze({
   raw_fish: { type: 'Food', use: 'Cook at campfire', icon: '🐟' },
   cooked_fish: { type: 'Food', restore: '50%', icon: '◒' },
   flint_stick: { type: 'Key Item', use: 'Start campfires', icon: '⚿' },
-  old_work_knife: { type: 'Work Tool', use: 'Cut tough fibers', weight: '0.6', icon: '╱' },
-  iron_drain_bar: { type: 'Work Tool', use: 'Pry old ironwork', weight: '3.8', icon: '━' },
+  old_work_knife: { type: 'Knife · Right Hand', use: 'Physical cut/slash', weight: '0.6', icon: '╱' },
+  iron_drain_bar: { type: 'Pry Bar · Right Hand', use: 'Physical pry/lever', weight: '3.8', icon: '━' },
   keepers_lantern: { type: 'Offhand Utility', use: 'Reveal buried traces', weight: '1.8', light: 'Cold', icon: '◈' },
   torch: { type: 'Offhand', light: 'Yes', icon: '♨' },
 });
@@ -67,7 +67,7 @@ export class EquipmentPanel {
 
   render() {
     const equippedWeapon = this.equipmentRuntime.getEquippedWeaponProfile();
-    if (this.currentWeapon) this.currentWeapon.textContent = equippedWeapon.displayName;
+    if (this.currentWeapon) this.currentWeapon.textContent = this.getRightHandDisplayName(equippedWeapon);
     if (this.currentOffhand) {
       const offhandId = this.survivalInventory.getEquippedOffhand();
       this.currentOffhand.textContent = offhandId === 'keepers_lantern'
@@ -109,9 +109,12 @@ export class EquipmentPanel {
   }
 
   getPocketEntries(equippedWeapon) {
-    if (this.activePocket === 'weapons') return this.equipmentRuntime.getAvailableWeapons()
-      .filter((weapon) => weapon.id !== 'unarmed')
-      .map((weapon) => this.createWeaponEntry(weapon, equippedWeapon));
+    if (this.activePocket === 'weapons') return [
+      ...this.equipmentRuntime.getAvailableWeapons()
+        .filter((weapon) => weapon.id !== 'unarmed')
+        .map((weapon) => this.createWeaponEntry(weapon, equippedWeapon)),
+      ...this.createPhysicalToolEntries(equippedWeapon),
+    ];
     if (this.activePocket === 'items') return this.createItemEntries();
     if (this.activePocket === 'keyItems') return this.createKeyItemEntries();
     return this.createOffhandEntries();
@@ -131,6 +134,7 @@ export class EquipmentPanel {
       onActivate: () => {
         const isEquipped = this.equipmentRuntime.getEquippedWeaponProfile().id === weapon.id;
         const nextWeaponId = isEquipped ? 'unarmed' : weapon.id;
+        this.equipmentRuntime.equip(EQUIPMENT_SLOTS.tool, null);
         if (['wood_axe', 'fishing_rod'].includes(weapon.id)) {
           this.survivalInventory.equipWeapon(isEquipped ? null : weapon.id);
         } else {
@@ -138,6 +142,34 @@ export class EquipmentPanel {
         }
       },
     };
+  }
+
+  createPhysicalToolEntries(equippedWeapon = this.equipmentRuntime.getEquippedWeaponProfile()) {
+    const equippedToolId = this.equipmentRuntime.getEquippedToolId?.();
+    const tools = [
+      { id: 'old_work_knife', name: 'Old Work Knife', meta: 'Cut / Slash', description: 'A short rusted shed knife. Grab and swipe it to cut black growth.' },
+      { id: 'iron_drain_bar', name: 'Iron Drain Bar', meta: 'Pry / Lever', description: 'A heavy maintenance bar. Plant its tip and pull through a lever arc.' },
+    ];
+    return tools.filter(({ id }) => this.equipmentRuntime.hasItem(id)).map(({ id, name, meta, description }) => {
+      const equipped = equippedWeapon.id === 'unarmed' && equippedToolId === id;
+      return {
+        id, name, stats: equipped ? 'Equipped' : 'Right Hand', meta, description, equipped, detail: ITEM_DETAILS[id],
+        actionLabel: equipped ? 'Unequip Right Hand' : 'Equip Right Hand',
+        onActivate: () => {
+          if (equipped) return this.equipmentRuntime.equip(EQUIPMENT_SLOTS.tool, null);
+          this.survivalInventory.equipWeapon(null);
+          return this.equipmentRuntime.equip(EQUIPMENT_SLOTS.tool, id);
+        },
+      };
+    });
+  }
+
+  getRightHandDisplayName(equippedWeapon = this.equipmentRuntime.getEquippedWeaponProfile()) {
+    if (equippedWeapon.id !== 'unarmed') return equippedWeapon.displayName;
+    const toolId = this.equipmentRuntime.getEquippedToolId?.();
+    if (toolId === 'old_work_knife') return 'Old Work Knife';
+    if (toolId === 'iron_drain_bar') return 'Iron Drain Bar';
+    return equippedWeapon.displayName;
   }
 
   createItemEntries() {
@@ -186,17 +218,6 @@ export class EquipmentPanel {
   createKeyItemEntries() {
     const entries = [];
     if (this.survivalInventory.hasKeyItem('flint_stick')) entries.push({ id: 'flint_stick', name: 'Flint Stick', stats: 'Key Item', meta: 'Campfire', description: 'Reusable campfire starter.', detail: ITEM_DETAILS.flint_stick });
-    const equippedTool = this.equipmentRuntime.getEquippedToolId?.();
-    const addTool = (id, name, meta, description) => {
-      if (!this.equipmentRuntime.hasItem(id)) return;
-      const equipped = equippedTool === id;
-      entries.push({
-        id, name, stats: equipped ? 'Equipped' : 'Work Tool', meta, description, equipped, detail: ITEM_DETAILS[id],
-        onActivate: () => this.equipmentRuntime.equip(EQUIPMENT_SLOTS.tool, equipped ? null : id),
-      });
-    };
-    addTool('old_work_knife', 'Old Work Knife', 'Cutting', 'A short rusted shed knife with a worn wooden grip.');
-    addTool('iron_drain_bar', 'Iron Drain Bar', 'Prying', 'A heavy rusted maintenance bar from the old drains.');
     return entries;
   }
 
@@ -210,7 +231,7 @@ export class EquipmentPanel {
     const rows = [
       ['TYPE', detail.type], ['DAMAGE', detail.damage], ['WEIGHT', detail.weight], ['LIGHT', detail.light], ['RESTORE', detail.restore], ['USE', detail.use],
     ].filter(([, value]) => value);
-    const actionLabel = entry.onActivate ? (entry.equipped ? 'Unequip' : 'Equip') : '';
+    const actionLabel = entry.onActivate ? (entry.actionLabel ?? (entry.equipped ? 'Unequip' : 'Equip')) : '';
     this.detailCard.innerHTML = `
       <div class="inventory-detail__icon" aria-hidden="true">${detail.icon ?? '◆'}</div>
       <div class="inventory-detail__body">
@@ -244,7 +265,7 @@ export class EquipmentPanel {
   }
 
   getEmptyMessage() {
-    return { weapons: 'No weapons.', items: 'No items.', keyItems: 'No key items.', offhand: 'No offhand gear.' }[this.activePocket];
+    return { weapons: 'No right-hand gear.', items: 'No items.', keyItems: 'No key items.', offhand: 'No offhand gear.' }[this.activePocket];
   }
 
   renderEmpty(message) {
