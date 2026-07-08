@@ -6,16 +6,18 @@ import './styles/controls.css';
 const app = document.querySelector('#app');
 
 try {
-  const [{ Game }, { SaveHost }, { TitleScreen }] = await Promise.all([
+  const [{ Game }, { SaveHost }, { TitleScreen }, { replaceWithNewGameStartupRoute }] = await Promise.all([
     import('./game/Game.js'),
     import('./game/hosts/SaveHost.js'),
     import('./game/title/TitleScreen.js'),
+    import('./game/startupRoute.js'),
   ]);
   const titleScreen = new TitleScreen();
   const selection = await titleScreen.waitForSelection();
 
   if (selection.action === 'new') {
     new SaveHost().resetAllProgress();
+    replaceWithNewGameStartupRoute();
   }
 
   const game = new Game(app);

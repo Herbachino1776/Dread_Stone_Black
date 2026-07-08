@@ -26,6 +26,7 @@ import { PhysicalToolTargetRegistry } from '../src/game/physical-tools/PhysicalT
 import { PhysicalToolViewmodel } from '../src/game/physical-tools/PhysicalToolViewmodel.js';
 import { PhysicalToolActionController } from '../src/game/physical-tools/PhysicalToolActionController.js';
 import { EquipmentPanel } from '../src/game/equipment/EquipmentPanel.js';
+import { getNewGameStartupUrl, reloadToNewGameStartupRoute, replaceWithNewGameStartupRoute } from '../src/game/startupRoute.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const revealedGlyphAssetRoot = path.join(repoRoot, 'public', 'assets', 'revealed_glyphs');
@@ -789,9 +790,53 @@ try {
     fieldSpawn: 'start',
     spawnId: 'beneath_folsom_underworks_arrival',
   }, 'Fresh-page startup still honors area and spawn query parameters.');
+
+  const deepLinkLocation = {
+    pathname: '/Dread_Stone_Black/',
+    search: '?area=beneath-folsom&spawn=beneath_folsom_white_scab_threshold_backside',
+    href: '/Dread_Stone_Black/?area=beneath-folsom&spawn=beneath_folsom_white_scab_threshold_backside',
+  };
+  assert.equal(getNewGameStartupUrl(deepLinkLocation), '/Dread_Stone_Black/', 'New Game startup route strips deep area/spawn query state.');
+  const replacedRoutes = [];
+  const replacementUrl = replaceWithNewGameStartupRoute({
+    location: deepLinkLocation,
+    history: { replaceState: (state, unused, url) => replacedRoutes.push({ state, url }) },
+  });
+  assert.equal(replacementUrl, '/Dread_Stone_Black/', 'New Game returns the canonical app URL before creating the first session.');
+  assert.deepEqual(replacedRoutes, [
+    { state: { area: 'folsom', spawnId: null, newGame: true }, url: '/Dread_Stone_Black/' },
+  ], 'New Game replaces the current deep-link history entry with a Folsom-start entry.');
+  const reloads = [];
+  const reloadUrl = reloadToNewGameStartupRoute({
+    location: { ...deepLinkLocation, replace: (url) => reloads.push(url) },
+  });
+  assert.equal(reloadUrl, '/Dread_Stone_Black/', 'Reset computes the canonical app URL instead of reusing a deep spawn URL.');
+  assert.deepEqual(reloads, ['/Dread_Stone_Black/'], 'Reset reloads to the canonical Folsom startup route.');
 } finally {
   if (previousWindow === undefined) delete globalThis.window;
   else globalThis.window = previousWindow;
+}
+
+const resetReloads = [];
+const resetPreviousWindow = globalThis.window;
+globalThis.window = {
+  location: {
+    pathname: '/Dread_Stone_Black/',
+    search: '?area=beneath-folsom&spawn=beneath_folsom_white_scab_threshold_backside',
+    replace: (url) => resetReloads.push(url),
+  },
+  performance: { now: () => 0 },
+  clearTimeout,
+};
+try {
+  Game.prototype.performProgressReset.call({
+    clearResetConfirmation() {},
+    saveHost: { resetAllProgress: () => resetReloads.push('cleared') },
+  });
+  assert.deepEqual(resetReloads, ['cleared', '/Dread_Stone_Black/'], 'In-game Reset clears progress and reloads to the Folsom startup route, not the current chamber URL.');
+} finally {
+  if (resetPreviousWindow === undefined) delete globalThis.window;
+  else globalThis.window = resetPreviousWindow;
 }
 
 const reboundSystems = [];

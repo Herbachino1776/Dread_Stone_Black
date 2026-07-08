@@ -16,6 +16,7 @@ import { SurvivalHost } from './hosts/SurvivalHost.js';
 import { FirstPersonViewmodelHost } from './hosts/FirstPersonViewmodelHost.js';
 import { Interactions } from './Interactions.js';
 import { PerfDebugPanel } from './PerfDebugPanel.js';
+import { reloadToNewGameStartupRoute } from './startupRoute.js';
 
 export class Game {
   constructor(app) {
@@ -325,7 +326,7 @@ export class Game {
   performProgressReset() {
     this.clearResetConfirmation();
     this.saveHost.resetAllProgress();
-    window.location.reload();
+    reloadToNewGameStartupRoute();
   }
 
   getViewportSize() {
