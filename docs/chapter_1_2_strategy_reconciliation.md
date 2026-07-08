@@ -3,13 +3,26 @@
 Audit date: 2026-07-07
 Audited baseline: `2c35afd` (`Add Chapter 3 location truth and room skeleton`)
 
+## Implementation update: Shrine Side Room backfill
+
+The first recommended backfill is implemented after the audited baseline:
+
+- `folsom_shrine_side_room_floor` and its enclosing maintenance-space geometry make the Shrine Side Room physical.
+- The side seal uses a staged Old Work Knife cord cut followed by a Wood Axe knot break and persists `folsom_shrine_side_room_open`.
+- The Keeper's Lantern canonical pickup is `folsom_shrine_side_room_keepers_lantern_pickup`. BF03 now contains an empty hook rather than a duplicate pickup.
+- A bounded Lantern wash reveals the convergence marks and previously hidden surface feeds, persisting `folsom_under_shrine_network_revealed`.
+- The retained fire, pond, and shrine anchors are unavailable to fresh saves until that reveal. Existing anchor and Underworks progress migrates automatically and is never reset.
+- `folsom_shrine_crawlspace_floor` is a short physical maintenance passage. Its panel persists `folsom_shrine_crawlspace_open`, and its solid terminal throat prevents an Underworks bypass.
+
+See [`chapter_2_integrated_flow_map.md`](chapter_2_integrated_flow_map.md) for the current route contract.
+
 ## Verdict
 
-Chapter 1's shed proof matches the current production lock and the strategy guide. The broader Chapter 1 framing is only partial. Chapter 2 is playable and persistently connected, but it is structurally incomplete against the guide.
+Chapter 1's shed proof matches the current production lock and the strategy guide. The broader Chapter 1 framing is only partial. Chapter 2 now has the intended Lantern-first investigation and is a coherent integrated adaptation, but it remains structurally incomplete until the lower shrine hatch handoff is implemented or explicitly rewritten.
 
-The current route preserves useful work: the surface anchors, Underworks gate, drain-bar grate, Keeper's Lantern reveal, hidden five-hit growth gate, blue-flame seam, and Chapter 3 room skeleton all function as coherent proofs. They do not, however, collectively deliver the guide's intended Chapter 2 structure. The missing shrine side room and crawlspace, the Lantern's late acquisition, the lack of three underground anchor pockets, and the absence of a lower shrine hatch change both the route and the lesson.
+The surface anchors are now explicitly revealed endpoints of a deeper under-shrine network. This keeps the successful surface loop while restoring the guide's investigation-tool order and causal lesson. The remaining major divergence is that the adapted surface endpoints replace three underground pockets, and the remaining blocking omission is the lower shrine hatch.
 
-White-Scab Hall mechanics should remain paused until the Lantern-first Chapter 2 investigation and the lower-hatch handoff are explicitly reconciled. This is an integration/backfill recommendation, not a recommendation to demolish the completed loops.
+White-Scab Hall mechanics should remain paused until the lower-hatch handoff is implemented. This is an integration/backfill recommendation, not a recommendation to demolish the completed loops.
 
 ## Sources and authority
 
@@ -117,17 +130,19 @@ The guide does not define a hidden five-hit growth wall or blue-flame hallway at
 - Folsom loads as the root field with the player starting inside the central courtyard, not outside the west gate.
 - The rebuilt tool shed has a full seam/frame growth target. The Old Work Knife is behind it; exactly three hits open it and persist `folsom_tool_shed_open`; Wood Axe and Torch chests are inside.
 - A fishable pond, pond path, open ruined shrine exterior, central campfire, border wall, Underworks gate, and return spawn exist.
-- Three connected-growth anchors and their visible feeds are authored above ground at the common fire, pond, and shrine.
-- Fire requires Torch ownership. Pond and shrine require Old Work Knife ownership. The anchors do not require the Keeper's Lantern and can be cleared before it is acquired.
+- A physical Shrine Side Room extends the existing shrine, with a Knife-then-Axe seal, keeper workbench, canonical Lantern pickup, and persisted opening.
+- A physical low maintenance crawlspace extends from the side room and ends at blocked roots/grating without bypassing the Underworks gate.
+- Three connected-growth anchors are retained above ground at the common fire, pond, and shrine. Their feeds are hidden from fresh saves until the Lantern reveals the under-shrine network.
+- Fire requires Torch ownership. Pond and shrine require Old Work Knife ownership. All three endpoint interactions require the persisted network reveal for fresh saves.
 - Clearing all three surface anchors persists their states, unseals the separate Underworks gate, raises its door, and enables the `beneath-folsom` transition.
-- There is no Shrine Side Room, shrine side latch, crawlspace, shrine note, pond clue record, Old Shrine Exterior map state, west-gate arrival sequence, or Wrong Dog route.
+- There is still no shrine note, pond clue record, Old Shrine Exterior map state, west-gate arrival sequence, or Wrong Dog route.
 
 ### Current Beneath Folsom implementation
 
 - BF01 is an Underworks Entry Stair with a return route to Folsom.
 - BF02 is a broad First Drain Landing. The Iron Drain Bar is an equipment pickup on the landing before the drain grate.
 - The drain grate requires the bar, animates open, removes collision, and persists `beneath_folsom_drain_grate_pried`.
-- BF03 is a Lower Drain Throat. The Keeper's Lantern is acquired from a niche after the grate.
+- BF03 is a Lower Drain Throat. Its former Lantern pickup is now an empty niche; the Lantern arrives from the Folsom shrine route.
 - The Lantern reveal cone exposes glyph decals and a hidden growth wall. Torch and ambient light do not reveal them.
 - The hidden wall requires Lantern reveal, Old Work Knife ownership, and exactly five successful hits. Its final clear persists, collapses the growth, fades the wall, and reveals the blue-flame hallway.
 - BF04 is the Blue Flame Threshold. It is now an open physical seam into BF05, the Chapter 3 Lower Shrine Stair.
@@ -136,15 +151,18 @@ The guide does not define a hidden five-hit growth wall or blue-flame hallway at
 
 ### Current route order
 
-`courtyard start -> Old Work Knife -> three-hit shed -> Wood Axe + Torch -> surface fire/pond/shrine anchors -> Underworks gate -> BF01 entry -> Iron Drain Bar -> drain grate -> Keeper's Lantern -> revealed five-hit growth gate -> Blue Flame Threshold -> Lower Shrine Stair -> White-Scab Hall future blocker`
+`courtyard start -> Old Work Knife -> three-hit shed -> Wood Axe + Torch -> Shrine Side Room Knife/Axe seal -> Keeper's Lantern -> under-shrine network reveal -> crawlspace panel -> surface fire/pond/shrine endpoints -> Underworks gate -> BF01 entry -> Iron Drain Bar -> drain grate -> revealed five-hit growth gate -> Blue Flame Threshold -> Lower Shrine Stair -> White-Scab Hall future blocker`
 
-Pond and shrine anchors may be cleared immediately after taking the Knife. The fire anchor forces shed completion because it requires the Torch. Anchor order is otherwise free.
+The Lantern reveal gates all three endpoints for fresh saves. After reveal, anchor order is free. Existing saves with any anchor or Underworks progress migrate to revealed state and retain every completed clear.
 
 ### Current save and world-state keys
 
 Written route flags:
 
 - `folsom_tool_shed_open`
+- `folsom_shrine_side_room_open`
+- `folsom_under_shrine_network_revealed`
+- `folsom_shrine_crawlspace_open`
 - `folsom_growth_anchor_fire_cleared`
 - `folsom_growth_anchor_pond_cleared`
 - `folsom_growth_anchor_shrine_cleared`
@@ -165,6 +183,9 @@ Planned Chapter 3 keys are metadata only and are not yet written:
 ### Current blockers and gates
 
 - Shed door collision until the three-hit seam growth clears.
+- Shrine side-room door collision until the Knife-cord/Axe-knot sequence completes.
+- Shrine crawlspace panel collision until the Lantern-revealed cords are cut.
+- Fresh-save surface endpoint interactions until `folsom_under_shrine_network_revealed` is written.
 - Surface Underworks growth lock and transition requirement until all three anchors clear.
 - BF02 drain-grate collision until the Iron Drain Bar pry.
 - BF03 hidden growth wall until five revealed Knife hits clear it.
@@ -175,10 +196,10 @@ Planned Chapter 3 keys are metadata only and are not yet written:
 
 1. Old Work Knife
 2. Wood Axe and Torch
-3. Iron Drain Bar
-4. Keeper's Lantern
+3. Keeper's Lantern
+4. Iron Drain Bar
 
-The guide requires the Keeper's Lantern before the crawlspace/network investigation and the Iron Drain Bar after that descent. The current implementation reverses those two Chapter 2 acquisitions.
+The backfill now matches the guide's important tool order: the Keeper's Lantern leads the crawlspace/network investigation, and the Iron Drain Bar is recovered later in Beneath Folsom.
 
 ## 3. Difference table
 
@@ -200,17 +221,17 @@ Status terms are applied to guide beats, not to general playability.
 | Old Shrine Exterior as marked Chapter 1 endpoint | PARTIAL | The shrine exterior and altar inspection exist; no map mark, side-wall clue, keeper warning, or explicit Chapter 1 endpoint state exists. |
 | Optional First Night Road/Wrong Dog | MISSING | Optional content; not a structural blocker. |
 | Chapter 1 ends with tools recovered and shrine marked next | PARTIAL | Tools are recovered. Shrine marking and route framing are missing. |
-| Return to Old Shrine for Chapter 2 | IMPLEMENTED DIFFERENTLY | The player may clear the surface shrine anchor, but there is no route transition centered on entering the shrine. |
-| Clear shrine side latch with Knife/Axe | MISSING | No side latch or equivalent staged entry interaction exists. |
-| Shrine Side Room Open | MISSING | No side room or state exists. |
-| Keeper's Lantern acquired in Shrine Side Room | IMPLEMENTED DIFFERENTLY | It is acquired in BF03 after the Iron Drain Bar and drain grate. |
+| Return to Old Shrine for Chapter 2 | MATCHES | The physical side-room seal now centers the Chapter 2 investigation on the existing shrine exterior. |
+| Clear shrine side latch with Knife/Axe | MATCHES | Knife cuts the cords, Axe breaks the exposed hard knot, and the physical door opens. |
+| Shrine Side Room Open | MATCHES | The authored keeper maintenance room persists `folsom_shrine_side_room_open`. |
+| Keeper's Lantern acquired in Shrine Side Room | MATCHES | The side-room workbench is canonical; BF03 is an empty niche and existing ownership is deduplicated. |
 | Shrine note and side-room map update | MISSING | No Records or map implementation exists. |
-| Lantern reveals cords under shrine before network traversal | MISSING | Lantern reveal works later on the BF03 hidden gate, but it does not introduce or reveal the three-anchor network. |
-| Shrine crawlspace panel and crawlspace | MISSING | No crawlspace space, blocker, or state exists. |
+| Lantern reveals cords under shrine before network traversal | MATCHES | The bounded Lantern wash reveals convergence marks and all three surface feeds before fresh-save endpoint interactions become available. |
+| Shrine crawlspace panel and crawlspace | MATCHES | A Knife-opened, persisted low maintenance passage ends at a blocked throat and points back into the Underworks network. |
 | Threaded worker and Iron Drain Bar after crawlspace | PARTIAL | The bar exists as a persistent local tool, but it sits openly on BF02's landing with no worker/body discovery. |
 | Drain channel and grate opened with growth break + bar pry | PARTIAL | The drain channel and bar-pried grate exist and persist. The Axe growth-break stage is absent. |
-| Underground drain split into three visible cord routes | MISSING | There is no underground split or three underground feed routes. |
-| Three underground anchor chambers/pockets/knots | INTENTIONAL DIVERGENCE ALREADY DOCUMENTED | Three named anchors exist above ground. The current lock explicitly accepts the surface arrangement, but it removes the guide's spatial network-reading exercise. Whether that remains the final design still needs a lock update after backfill. |
+| Underground drain split into three visible cord routes | IMPLEMENTED DIFFERENTLY | The Lantern reveals an under-shrine convergence and three long surface feed routes rather than an underground three-way tunnel split. |
+| Three underground anchor chambers/pockets/knots | INTENTIONAL DIVERGENCE ALREADY DOCUMENTED | The three retained surface endpoints now belong visibly and mechanically to the revealed under-shrine network and are the approved adaptation. |
 | Fire Anchor tool sequence and prior-fire consequence | PARTIAL | A surface Fire Anchor requires Torch, but no Axe/Knife sequence or weakened-by-restored-fire dependency exists. |
 | Pond Anchor Lantern/Axe/Knife sequence around pale stone | PARTIAL | A surface pond knot exists and Knife clears it; Lantern and Axe stages and pale-stone reveal are absent. |
 | Shrine Anchor Lantern reveal around pale panel | PARTIAL | A surface shrine knot exists and Knife clears it; Lantern reveal, panel edges, and pale pulse are absent. |
@@ -242,10 +263,9 @@ These approvals do not mean the current route is complete. They define the usefu
 
 ### B. Backfill before Chapter 3 mechanics
 
-1. **Restore a Lantern-first shrine investigation.** Add a compact Shrine Side Room at the existing shrine, move or duplicate-then-retire the Keeper's Lantern pickup so its canonical acquisition occurs there, and use the Lantern to reveal the connected feeds before the anchor network can be meaningfully completed. This restores the guide's investigation-tool order and the causal lesson without removing the surface anchors.
-2. **Represent the shrine-to-drain descent.** Add a short crawlspace/maintenance passage or an equally explicit shrine access space that physically connects the side-room reveal to Beneath Folsom's drain route. It need not become a new location. The route must read as following growth below the shrine, not entering an unrelated cellar across town.
-3. **Resolve the lower-hatch handoff.** Add a readable lower shrine hatch at the BF04/BF05 seam, pried with the existing Iron Drain Bar after the hidden gate clear, with a persistent `beneath_folsom_lower_shrine_hatch_open`-style state; or make an explicit design decision to rewrite the guide. Adding the hatch is the recommended option because it preserves the Chapter 3 skeleton and restores the promised Chapter 2 endpoint cheaply.
-4. **Make network discovery dependent on the Lantern.** The surface anchors may remain, but their feeds/critical edges should be Lantern-readable and the route should teach following them. The exact interaction gate needs a narrow design contract before implementation.
+1. **Resolve the lower-hatch handoff.** Add a readable lower shrine hatch at the BF04/BF05 seam, pried with the existing Iron Drain Bar after the hidden gate clear, with a persistent `beneath_folsom_lower_shrine_hatch_open`-style state; or make an explicit design decision to rewrite the guide. Adding the hatch is the recommended option because it preserves the Chapter 3 skeleton and restores the promised Chapter 2 endpoint cheaply.
+
+The Lantern-first shrine investigation, physical maintenance crawlspace, canonical pickup migration, and reveal-gated surface network are complete.
 
 ### C. Backfill later as polish
 
@@ -276,7 +296,7 @@ Do not rewrite the guide first merely to declare the current implementation corr
 
 ## 5. Recommended next implementation plan
 
-### Pass 1: Shrine side-room and Lantern-first network backfill
+### Pass 1: Shrine side-room and Lantern-first network backfill — complete
 
 - Build one compact side room/access niche into the existing Folsom shrine footprint.
 - Make it the canonical Keeper's Lantern acquisition point.
@@ -285,7 +305,7 @@ Do not rewrite the guide first merely to declare the current implementation corr
 - Preserve the shed, three surface anchor visuals/flags, Underworks gate, and all existing equipment ownership.
 - Define migration behavior for saves that already own the Lantern or have cleared anchors.
 
-This is the most important pass because it restores Chapter 2's intended tool order and connected-growth lesson.
+Implemented with additive save keys and migration for existing Chapter 2 progress.
 
 ### Pass 2: Lower shrine hatch and Chapter 2 endpoint backfill
 
@@ -301,4 +321,4 @@ This is the most important pass because it restores Chapter 2's intended tool or
 - Wire map/Records events only through proper domain ownership; do not create inventory tokens or broad UI systems.
 - Refresh the strategy guide and production lock to describe the accepted surface-anchor adaptation and final handoff.
 
-Only after Passes 1 and 2 are stable should White-Scab Hall mechanics resume. Chapter 3's existing room skeleton should remain in place throughout.
+Only after Pass 2 is stable should White-Scab Hall mechanics resume. Chapter 3's existing room skeleton should remain in place throughout.

@@ -18,7 +18,7 @@ Preserve the configured Vite base path and automated Pages workflow.
 
 ## Current playable target
 
-The active milestone is the Chapter 1-2 strategy reconciliation. The working adapted spine is playable, but Chapter 2 needs a Lantern-first shrine/crawlspace backfill and an explicit lower shrine hatch before Chapter 3 mechanics. See [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md) and [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md).
+The active milestone is the Chapter 1-2 strategy reconciliation. The Lantern-first Shrine Side Room/crawlspace backfill is implemented; the explicit lower shrine hatch remains required before Chapter 3 mechanics. See [`chapter_2_integrated_flow_map.md`](chapter_2_integrated_flow_map.md) and [`current_milestone_folsom_growth.md`](current_milestone_folsom_growth.md).
 
 The completed first proof remains locked:
 
@@ -28,7 +28,7 @@ The completed first proof remains locked:
 4. Open the shed and recover Wood Axe + Torch.
 5. Preserve the opened state after reload.
 
-The surface fire, pond, and shrine anchors now form a successful adapted loop and should be preserved. Reconciliation work must integrate them into the guide's Lantern-led connected-growth lesson rather than replace or silently declare them guide-complete.
+The surface fire, pond, and shrine anchors are preserved as endpoints of the Lantern-revealed under-shrine network. Existing saves retain their clears; fresh saves reveal the network before endpoint interactions become available.
 
 ## Stable design rules
 

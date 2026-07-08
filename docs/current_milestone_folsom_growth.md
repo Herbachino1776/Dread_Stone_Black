@@ -1,24 +1,27 @@
-# Current Milestone: Chapter 1-2 Reconciliation Hold
+# Current Milestone: Chapter 2 Integrated Backfill
 
 This is the current Dread Stone Black production lock. It overrides older strategy, roadmap, audit, and blueprint language where they conflict.
 
 ## Current status
 
-The Folsom Chapter 1-2 foundation is playable, but it is not strategy-complete. The reconciliation in [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md) supersedes the earlier assumption that Chapter 2 was fully settled and places Chapter 3 mechanics on hold.
+The first reconciliation backfill is implemented. The Shrine Side Room and maintenance crawlspace are physical Folsom spaces, the Keeper's Lantern is acquired canonically in the side room, and fresh saves must reveal the under-shrine network before clearing its retained surface endpoints. Chapter 2 is still not strategy-complete because the lower shrine hatch handoff remains absent. Chapter 3 mechanics stay on hold.
 
 The implemented spine remains valuable production truth:
 
 1. Find the Old Work Knife behind the Folsom tool shed.
 2. Clear the shed seam growth in exactly three successful swipes and recover the Wood Axe and Torch.
-3. Clear the fire, pond, and shrine anchors, weakening their feeds and unsealing the Underworks gate.
-4. Enter `beneath-folsom`, recover the Iron Drain Bar, and pry open the drain grate.
-5. Recover and equip the Keeper's Lantern, then use its bounded reveal wash to expose the hidden glyph/growth gate.
-6. Clear that hidden growth in exactly five successful knife hits while it is revealed.
-7. Enter the blue-flame hallway and reach the Chapter 3 Lower Shrine Stair seam.
+3. Cut the Shrine Side Room cords with the Knife, break the exposed knot with the Axe, and persist the opened room.
+4. Recover the Keeper's Lantern in the side room and reveal the under-shrine convergence marks and three surface feeds.
+5. Cut open the low maintenance panel and inspect the bounded crawlspace ending at the blocked maintenance throat.
+6. Clear the retained fire, pond, and shrine surface endpoints, weakening their revealed feeds and unsealing the Underworks gate.
+7. Enter `beneath-folsom`, recover the Iron Drain Bar, and pry open the drain grate.
+8. Use the Lantern's bounded reveal wash to expose the hidden glyph/growth gate.
+9. Clear that hidden growth in exactly five successful knife hits while it is revealed.
+10. Enter the blue-flame hallway and reach the Chapter 3 Lower Shrine Stair seam.
 
-Reliably written route state includes `folsom_tool_shed_open`, the three Folsom anchor keys, `folsom_underworks_growth_unsealed`, `beneath_folsom_drain_grate_pried`, and `beneath_folsom_hidden_growth_gate_cleared`.
+Reliably written route state includes `folsom_tool_shed_open`, `folsom_shrine_side_room_open`, `folsom_under_shrine_network_revealed`, `folsom_shrine_crawlspace_open`, the three Folsom anchor keys, `folsom_underworks_growth_unsealed`, `beneath_folsom_drain_grate_pried`, and `beneath_folsom_hidden_growth_gate_cleared`.
 
-This spine is an adaptation, not the guide's complete Chapter 2 structure. It lacks the Shrine Side Room, Lantern-first shrine/crawlspace investigation, three underground anchor pockets, and lower shrine hatch. The Chapter 3 room skeleton remains preserved in [`chapter_3_location_flow_map.md`](chapter_3_location_flow_map.md) and [`chapter_3_location_contract.md`](chapter_3_location_contract.md), but White-Scab Hall mechanics must wait for the reconciliation backfill decision. The earlier closure/readiness audit is historical functional context only.
+This spine is an explicit adaptation, not the guide's complete Chapter 2 room list. The surface anchors now serve as revealed endpoints of the under-shrine network instead of three underground pockets. The unresolved blocking debt is the lower shrine hatch at the BF04/BF05 seam. The Chapter 3 room skeleton remains preserved in [`chapter_3_location_flow_map.md`](chapter_3_location_flow_map.md) and [`chapter_3_location_contract.md`](chapter_3_location_contract.md).
 
 ## Completed-loop locks
 
@@ -27,6 +30,10 @@ This spine is an adaptation, not the guide's complete Chapter 2 structure. It la
 - The Old Work Knife is a short, worn work tool behind the shed, never a sword or fantasy dagger.
 - The shed clear remains exactly three successful swipes with physical hit reaction, cord snap, black-oil feedback, collapse, screen shake, and persisted opening.
 - The shed reward remains Wood Axe + Torch.
+- The Shrine Side Room seal remains a Knife-cords then Axe-knot sequence and persists `folsom_shrine_side_room_open`.
+- The Keeper's Lantern canonical pickup remains inside the Shrine Side Room. BF03 retains only an empty niche; existing Lantern ownership is never duplicated.
+- Fresh saves reveal the network with the Keeper's Lantern before surface endpoint interactions become available. Existing anchor/Underworks progress migrates to revealed state without replay.
+- The maintenance crawlspace remains bounded by a solid terminal throat and cannot bypass the Underworks gate.
 - Fire uses the Torch capability; pond and shrine use the Old Work Knife. Cleared anchors and their feeds remain world state, not inventory tokens.
 - The Underworks transition remains gated by `folsom_underworks_growth_unsealed`, with a reliable return route to Folsom.
 - The Iron Drain Bar remains a persistent local pry tool for the drain grate.
@@ -41,8 +48,8 @@ Chapter 3 extends `beneath-folsom` after the preserved blue-flame hallway. The f
 
 This pass is a room skeleton, not a mechanics claim. Explicit future blockers hold the guide order at the White-Scab Hall, Pale Panel, and crypt root mat. The route then ends at a hard First Crypt boundary.
 
-The next implementation target is the Chapter 2 Shrine Side Room/Lantern-first network backfill defined in the reconciliation. The following pass should restore an explicit lower shrine hatch at the blue-hall/BF05 seam unless the guide handoff is formally rewritten. Do not begin White-Scab Hall or panel mechanics until those decisions are implemented and stable.
+The next implementation target is an explicit lower shrine hatch at the blue-hall/BF05 seam, pried with the existing Iron Drain Bar and persisted as route state, unless the guide handoff is formally rewritten. Do not begin White-Scab Hall or panel mechanics until that handoff is implemented and stable.
 
 ## Validation posture
 
-This reconciliation is docs-only. Future backfill should validate only the changed Chapter 1-2 route slices and save migration. Preserve movement, mobile controls, HUD, equipment, survival, fishing, saves, location loading, the completed shed loop, surface-anchor work, hidden five-hit gate, and Chapter 3 skeleton.
+Validate the integrated Folsom route, fresh-save reveal gate, legacy anchor migration, Lantern ownership deduplication, return route, and production build. Preserve movement, mobile controls, HUD, equipment, survival, fishing, saves, location loading, the completed shed loop, hidden five-hit gate, blue hall, and Chapter 3 skeleton.

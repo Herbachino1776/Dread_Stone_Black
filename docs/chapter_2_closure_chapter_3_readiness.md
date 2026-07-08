@@ -1,6 +1,6 @@
 # Chapter 2 Closure and Chapter 3 Readiness Audit
 
-> **Reconciliation status (2026-07-07):** This audit's functional-completeness verdict is qualified and its Chapter 3 mechanics recommendation is superseded by [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md). The playable spine remains valid, but Chapter 2 is structurally incomplete against the guide. White-Scab Hall mechanics should remain paused pending the Lantern-first shrine/crawlspace and lower-hatch decisions.
+> **Reconciliation status (2026-07-07):** This audit's functional-completeness verdict is qualified by [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md). The Lantern-first Shrine Side Room/crawlspace backfill is now implemented; the lower shrine hatch remains unresolved. White-Scab Hall mechanics stay paused.
 
 Audit date: 2026-07-07  
 Audited baseline: `e091e8e` (`Overhaul HUD and equipment UI`)
@@ -50,7 +50,7 @@ The Old Work Knife, Wood Axe, Torch, Iron Drain Bar, and Keeper's Lantern remain
 
 ### Blocking issues for Chapter 2 closure
 
-The original audit found no blockers against the adapted playable spine. The reconciliation later identified strategy-structure blockers: the missing Shrine Side Room/crawlspace, Keeper's Lantern acquisition after the drain grate and all three surface anchors, absent underground anchor pockets, and absent lower shrine hatch. See the reconciliation for the controlling classification.
+The original audit found no blockers against the adapted playable spine. The reconciliation later identified strategy-structure debt. The Shrine Side Room/crawlspace and Lantern-first network order are now backfilled; the explicit lower shrine hatch remains the blocker before Chapter 3 mechanics. The underground anchor pockets are now an approved surface-endpoint adaptation.
 
 Manual verification is still required before treating the closure as release-tested. A fresh-save run should verify the entire sequence, and a reload after the hidden gate clear should verify that the blocker stays removed and the hallway remains visible.
 

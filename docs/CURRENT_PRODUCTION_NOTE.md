@@ -1,11 +1,11 @@
 # Current Production Note
 
-Chapter 2 has a functional adapted spine through the hidden five-hit growth gate and blue-flame threshold, but it is structurally incomplete against the strategy guide. The controlling audit is [`chapter_1_2_strategy_reconciliation.md`](chapter_1_2_strategy_reconciliation.md). Chapter 3 mechanics are paused while the Lantern-first shrine/crawlspace and lower-hatch handoff are reconciled.
+Chapter 2 now has the Lantern-first Shrine Side Room and crawlspace backfill. The retained surface anchors are revealed endpoints of the under-shrine network, and the Underworks gate remains their visible payoff. The integrated route is documented in [`chapter_2_integrated_flow_map.md`](chapter_2_integrated_flow_map.md). Chapter 3 mechanics remain paused until the lower shrine hatch handoff is implemented.
 
 ## Immediate order
 
 1. Preserve the working shed, surface-anchor, Underworks, drain, hidden-gate, and blue-hall loops.
-2. Backfill a Shrine Side Room and Lantern-first connected-growth investigation.
+2. Preserve the completed Shrine Side Room, canonical Lantern pickup, reveal-gated surface network, and bounded crawlspace.
 3. Restore an explicit lower shrine hatch at the existing Chapter 2-to-3 seam unless the guide is formally rewritten.
 
 Do not begin White-Scab Hall mechanics, enemies, Records or Memory UI, Pale Gates, a general white-machinery framework, bosses, or unrelated route expansion.

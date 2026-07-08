@@ -4,6 +4,9 @@ const EQUIPMENT_STATE_KEY = 'dreadStoneBlack.equipmentState';
 const OBJECTIVE_STATE_KEY = 'dreadStoneBlack.objectiveState';
 const FIELD_SURVIVAL_STATE_KEY = 'dreadStoneBlack.reliquaryField.survivalState';
 const FOLSOM_TOOL_SHED_OPEN_KEY = 'folsom_tool_shed_open';
+const FOLSOM_SHRINE_SIDE_ROOM_OPEN_KEY = 'folsom_shrine_side_room_open';
+const FOLSOM_UNDER_SHRINE_NETWORK_REVEALED_KEY = 'folsom_under_shrine_network_revealed';
+const FOLSOM_SHRINE_CRAWLSPACE_OPEN_KEY = 'folsom_shrine_crawlspace_open';
 const BENEATH_FOLSOM_DRAIN_GRATE_PRIED_KEY = 'beneath_folsom_drain_grate_pried';
 const BENEATH_FOLSOM_KEEPERS_LANTERN_REVEAL_SEEN_KEY = 'beneath_folsom_keepers_lantern_reveal_seen';
 const BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_CLEARED_KEY = 'beneath_folsom_hidden_growth_gate_cleared';
@@ -42,6 +45,9 @@ export class GameState {
       }
       keysToRemove.forEach((key) => storage.removeItem(key));
       storage.removeItem(FOLSOM_TOOL_SHED_OPEN_KEY);
+      storage.removeItem(FOLSOM_SHRINE_SIDE_ROOM_OPEN_KEY);
+      storage.removeItem(FOLSOM_UNDER_SHRINE_NETWORK_REVEALED_KEY);
+      storage.removeItem(FOLSOM_SHRINE_CRAWLSPACE_OPEN_KEY);
       storage.removeItem(BENEATH_FOLSOM_DRAIN_GRATE_PRIED_KEY);
       storage.removeItem(BENEATH_FOLSOM_KEEPERS_LANTERN_REVEAL_SEEN_KEY);
       storage.removeItem(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_CLEARED_KEY);
@@ -58,6 +64,7 @@ export class GameState {
     this.hasSouthReliquaryFragment = this.readFlag(SOUTH_RELIQUARY_FRAGMENT_KEY, false);
     this.fieldShrineReactionSeen = this.readFlag(FIELD_SHRINE_REACTION_KEY, false);
     this.fieldSurvivalState = this.repairFieldSurvivalState(this.readJson(FIELD_SURVIVAL_STATE_KEY, null));
+    this.migrateFolsomChapter2Backfill();
   }
 
   collectSouthReliquaryFragment() {
@@ -83,6 +90,47 @@ export class GameState {
   markFolsomToolShedOpen() {
     if (this.isFolsomToolShedOpen()) return false;
     this.writeFlag(FOLSOM_TOOL_SHED_OPEN_KEY, true);
+    return true;
+  }
+
+  isFolsomShrineSideRoomOpen() {
+    return this.readFlag(FOLSOM_SHRINE_SIDE_ROOM_OPEN_KEY, false);
+  }
+
+  markFolsomShrineSideRoomOpen() {
+    if (this.isFolsomShrineSideRoomOpen()) return false;
+    this.writeFlag(FOLSOM_SHRINE_SIDE_ROOM_OPEN_KEY, true);
+    return true;
+  }
+
+  isFolsomUnderShrineNetworkRevealed() {
+    return this.readFlag(FOLSOM_UNDER_SHRINE_NETWORK_REVEALED_KEY, false);
+  }
+
+  markFolsomUnderShrineNetworkRevealed() {
+    if (this.isFolsomUnderShrineNetworkRevealed()) return false;
+    this.writeFlag(FOLSOM_UNDER_SHRINE_NETWORK_REVEALED_KEY, true);
+    return true;
+  }
+
+  isFolsomShrineCrawlspaceOpen() {
+    return this.readFlag(FOLSOM_SHRINE_CRAWLSPACE_OPEN_KEY, false);
+  }
+
+  markFolsomShrineCrawlspaceOpen() {
+    if (this.isFolsomShrineCrawlspaceOpen()) return false;
+    this.writeFlag(FOLSOM_SHRINE_CRAWLSPACE_OPEN_KEY, true);
+    return true;
+  }
+
+  migrateFolsomChapter2Backfill() {
+    if (this.isFolsomUnderShrineNetworkRevealed()) return false;
+    const hasExistingChapter2Progress = Object.keys(FOLSOM_GROWTH_WORLD_KEYS)
+      .some((key) => this.readFlag(FOLSOM_GROWTH_WORLD_KEYS[key], false))
+      || this.readFlag(BENEATH_FOLSOM_DRAIN_GRATE_PRIED_KEY, false)
+      || this.readFlag(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_CLEARED_KEY, false);
+    if (!hasExistingChapter2Progress) return false;
+    this.writeFlag(FOLSOM_UNDER_SHRINE_NETWORK_REVEALED_KEY, true);
     return true;
   }
 

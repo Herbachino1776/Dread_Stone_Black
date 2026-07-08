@@ -116,6 +116,7 @@ const props = [
   prop('beneath_folsom_alcove_timber_left', 'BF03', { x: -3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
   prop('beneath_folsom_alcove_timber_right', 'BF03', { x: 3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
   prop('beneath_folsom_keeper_niche_shelf', 'BF03', { x: -2.75, y: 0.72, z: 18.8 }, { width: 1.2, height: 0.14, depth: 0.72 }, 'timber', { tags: ['keeper-niche', 'lantern-pickup-setting'] }),
+  prop('beneath_folsom_keeper_niche_empty_hook', 'BF03', { x: -2.75, y: 1.55, z: 19.08 }, { width: 0.08, height: 0.62, depth: 0.08 }, 'rustedIron', { rotation: { x: 0, y: 0, z: 0.18 }, tags: ['keeper-niche', 'empty-lantern-hook', 'post-backfill-dressing'] }),
   // A fractured threshold composition on the sealed lower wall. The large central
   // seal, lintel/base script, and leaning side marks read as one buried gate language,
   // while independent planes still let the moving lantern wash uncover it in pieces.
@@ -315,11 +316,6 @@ export const beneathFolsomDefinition = Object.freeze({
     requiredItemId: 'iron_drain_bar',
     saveKey: 'beneath_folsom_drain_grate_pried',
     roomId: 'BF02',
-  }, {
-    id: 'beneath_folsom_keepers_lantern_pickup', type: 'equipmentPickup', itemId: 'keepers_lantern',
-    target: { x: -2.75, y: 1.15, z: 18.8 }, range: 3, hint: "Keeper's Lantern", message: "Keeper's Lantern Acquired.",
-    acquiredMessage: "Keeper's Lantern Acquired.", repeatMessage: '', roomId: 'BF03',
-    tags: ['keeper-niche', 'utility-tool', 'post-drain-grate'],
   }],
   navigation: { roomGraph: { roomIds: ['BF01', 'BF02', 'BF03', 'BF04', 'BF05', 'BF06', 'BF07', 'BF08', 'BF09'], links: [
     { id: 'beneath_folsom_entry_to_landing', fromRoom: 'BF01', toRoom: 'BF02', navWaypoint: { x: 0, y: 0, z: -10 } },

@@ -53,6 +53,7 @@ export class FolsomConnectedGrowthRuntime {
     this.clearAnimations = [];
     this.effects = [];
     this.unsealed = Boolean(gameState?.isFolsomUnderworksGrowthUnsealed?.());
+    this.networkRevealed = Boolean(gameState?.isFolsomUnderShrineNetworkRevealed?.());
     this.root = new THREE.Group();
     this.root.name = 'folsom-connected-growth-network';
     this.root.userData = tagData(network, { persistentWorldNetwork: true, animatedOnlyDuringClear: true });
@@ -231,6 +232,7 @@ export class FolsomConnectedGrowthRuntime {
     const points = feed.points.map(toPoint);
     const ribbon = this.createGroundRibbon(points, feed.width ?? 0.42, `${feed.id}-cord-ribbon`);
     ribbon.userData = tagData(feed, { futureAnchorId: feed.anchorId, feedRoute: feed.anchorId });
+    ribbon.visible = this.networkRevealed;
     this.root.add(ribbon);
     const visuals = [ribbon];
     this.feedVisuals.set(feed.anchorId, visuals);
@@ -243,6 +245,7 @@ export class FolsomConnectedGrowthRuntime {
       group.userData = ribbon.userData;
       this.addKnot(group, { name: `${group.name}-mass`, position: [0, 0.13, 0], scale: [0.46, 0.22, 0.62], texture: index % 2, data: ribbon.userData });
       this.root.add(group);
+      group.visible = this.networkRevealed;
       this.cloneMaterials(group);
       visuals.push(group);
     });
@@ -308,6 +311,7 @@ export class FolsomConnectedGrowthRuntime {
         type: anchor.type,
         target: group?.position.clone().add(new THREE.Vector3(0, anchor.type === 'shrine' ? 0.75 : 0.35, 0)),
         cleared: this.isAnchorCleared(anchor.type),
+        available: this.networkRevealed,
       };
     });
   }
@@ -328,6 +332,7 @@ export class FolsomConnectedGrowthRuntime {
           requiredItemId: rule.requiredItemId,
           type: 'folsomGrowthAnchor',
           anchorType: anchor.type,
+          requiresFolsomNetworkReveal: true,
         };
       });
   }
@@ -338,6 +343,7 @@ export class FolsomConnectedGrowthRuntime {
 
   clearAnchor(anchorId) {
     const anchor = this.network.anchors.find((candidate) => candidate.id === anchorId);
+    if (!this.networkRevealed) return { cleared: false, unsealed: this.unsealed, networkHidden: true };
     if (!anchor || this.isAnchorCleared(anchor.type)) return { cleared: false, unsealed: this.unsealed };
     this.clearedAnchorTypes.add(anchor.type);
     this.gameState?.markFolsomGrowthAnchorCleared?.(anchor.type);
@@ -372,6 +378,17 @@ export class FolsomConnectedGrowthRuntime {
       this.setObjectOpacity(object, 0.12);
       object.userData.clearState = 'broken';
     });
+  }
+
+  revealNetwork() {
+    if (!this.networkRevealed) {
+      this.networkRevealed = true;
+      this.gameState?.markFolsomUnderShrineNetworkRevealed?.();
+    }
+    this.network.feeds.forEach((feed) => {
+      (this.feedVisuals.get(feed.anchorId) ?? []).forEach((object) => { object.visible = true; });
+    });
+    return true;
   }
 
   applyLockProgress(clearedCount) {

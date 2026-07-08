@@ -97,7 +97,7 @@ export class Interactions {
 
     const connectedGrowth = this.dungeon.folsomConnectedGrowthRuntime;
     const knifeAnchor = connectedGrowth?.getAnchorTargets?.()
-      .filter((anchor) => ['pond', 'shrine'].includes(anchor.type) && !anchor.cleared && anchor.target)
+      .filter((anchor) => anchor.available && ['pond', 'shrine'].includes(anchor.type) && !anchor.cleared && anchor.target)
       .map((anchor) => ({ ...anchor, distance: this.horizontalDistanceTo(anchor.target) }))
       .filter((anchor) => anchor.distance <= 3.35 && this.isMostlyFacing(anchor.target, 0.15))
       .sort((a, b) => a.distance - b.distance)[0];
@@ -207,6 +207,29 @@ export class Interactions {
 
     if (interaction.type === 'folsomGrowthAnchor') {
       return this.useFolsomGrowthAnchor(interaction);
+    }
+
+    if (interaction.type === 'folsomShrineSideRoomSeal') {
+      const result = this.dungeon.advanceFolsomShrineSideRoom?.({
+        hasKnife: this.equipmentRuntime?.hasItem?.('old_work_knife'),
+        hasAxe: this.equipmentRuntime?.hasItem?.('wood_axe'),
+      });
+      const message = result?.message ?? interaction.message;
+      this.setTemporaryHint(message, result?.opened ? 1800 : 1300);
+      this.hud.showMessage(message);
+      if (result?.changed) this.feedback?.shake?.(result.opened ? { durationMs: 320, intensity: 0.13 } : { durationMs: 130, intensity: 0.045 });
+      return false;
+    }
+
+    if (interaction.type === 'folsomShrineCrawlspacePanel') {
+      const result = this.dungeon.openFolsomShrineCrawlspace?.({
+        hasKnife: this.equipmentRuntime?.hasItem?.('old_work_knife'),
+      });
+      const message = result?.message ?? interaction.message;
+      this.setTemporaryHint(message, result?.opened ? 1600 : 1200);
+      this.hud.showMessage(message);
+      if (result?.changed) this.feedback?.shake?.({ durationMs: 220, intensity: 0.075 });
+      return false;
     }
 
     if (interaction.type === 'fieldSurvivalChest') {
@@ -944,6 +967,9 @@ export class Interactions {
 
   isOutdoorInteractionAvailable(interaction) {
     if (interaction.collected) return false;
+    if (interaction.requiresFolsomNetworkReveal && !this.dungeon.folsomConnectedGrowthRuntime?.networkRevealed) return false;
+    if (interaction.type === 'folsomShrineSideRoomSeal' && this.dungeon.folsomShrineInvestigationRuntime?.sideRoomOpen) return false;
+    if (interaction.type === 'folsomShrineCrawlspacePanel' && this.dungeon.folsomShrineInvestigationRuntime?.crawlspaceOpen) return false;
     if (interaction.type === 'activeTimedAction') {
       return false;
     }

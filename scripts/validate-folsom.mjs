@@ -18,6 +18,7 @@ import { SurvivalInventoryBridge } from '../src/game/equipment/SurvivalInventory
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
 import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
+import { FOLSOM_SHRINE_INVESTIGATION_RULES } from '../src/game/world-scene/FolsomShrineInvestigationRuntime.js';
 import { LanternConeRevealRuntime, LANTERN_REVEAL_DEFAULTS, isPointInsideLanternCone } from '../src/game/world-scene/LanternConeRevealRuntime.js';
 import { BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES } from '../src/game/world-scene/BeneathFolsomHiddenGrowthGateRuntime.js';
 
@@ -74,6 +75,13 @@ const underworksGate = (folsom.architecturalPrimitives ?? []).find((primitive) =
 const underworksInteraction = (folsom.outdoorInteractions ?? []).find((interaction) => interaction.id === 'folsom_underworks_locked');
 const underworksReturnSpawn = (folsom.spawns ?? []).find((spawn) => spawn.id === 'folsom_underworks_return');
 const growthNetwork = folsom.connectedGrowthNetwork;
+const shrineSideRoomFloor = (folsom.polygonFloors ?? []).find((floor) => floor.id === 'folsom_shrine_side_room_floor');
+const shrineCrawlspaceFloor = (folsom.polygonFloors ?? []).find((floor) => floor.id === 'folsom_shrine_crawlspace_floor');
+const shrineSideDoor = (folsom.architecturalPrimitives ?? []).find((primitive) => primitive.id === 'folsom_shrine_side_room_door');
+const shrineCrawlspacePanel = (folsom.architecturalPrimitives ?? []).find((primitive) => primitive.id === 'folsom_shrine_crawlspace_panel');
+const shrineCrawlspaceStop = (folsom.architecturalPrimitives ?? []).find((primitive) => primitive.id === 'folsom_shrine_crawlspace_terminal_slab');
+const shrineSideSealInteraction = (folsom.outdoorInteractions ?? []).find((interaction) => interaction.type === 'folsomShrineSideRoomSeal');
+const shrineCrawlspaceInteraction = (folsom.outdoorInteractions ?? []).find((interaction) => interaction.type === 'folsomShrineCrawlspacePanel');
 const shedCollision = buildDungeonCollision(folsom).blockerRects.filter((blocker) => blocker.id.includes('folsom_shed'));
 const pointIsBlocked = ([x, z]) => shedCollision.some((blocker) => x >= blocker.minX && x <= blocker.maxX && z >= blocker.minZ && z <= blocker.maxZ);
 
@@ -111,6 +119,19 @@ assert.equal(underworksInteraction?.targetLocationId, 'beneath-folsom', 'The Und
 assert.equal(underworksInteraction?.destinationSpawnId, 'beneath_folsom_underworks_arrival', 'The Underworks interaction targets the safe underground arrival spawn.');
 assert.equal(underworksInteraction?.requiredWorldState, 'folsom_underworks_growth_unsealed', 'The Underworks transition is gated by the existing unsealed world-state flag.');
 assert.equal(underworksReturnSpawn?.userData?.returnFromLocation, 'beneath-folsom', 'Folsom authors a return spawn beside the opened Underworks gate.');
+assert.ok(shrineSideRoomFloor?.tags?.includes('keeper-maintenance-space'), 'Folsom authors a physical shrine-keeper side-room floor.');
+assert.ok(shrineCrawlspaceFloor?.tags?.includes('under-shrine-maintenance'), 'Folsom authors a physical under-shrine crawlspace floor.');
+assert.ok(shrineSideDoor?.blocksPlayer && shrineSideDoor.tags?.includes('growth-sealed'), 'The shrine side room begins behind a physical growth-sealed door.');
+assert.ok(shrineCrawlspacePanel?.blocksPlayer && shrineCrawlspacePanel.tags?.includes('lantern-readable-edge'), 'The crawlspace begins behind a physical Lantern-readable panel.');
+assert.ok(shrineCrawlspaceStop?.blocksPlayer && shrineCrawlspaceStop.tags?.includes('no-route-bypass'), 'The crawlspace ends at a solid maintenance throat and cannot bypass Underworks.');
+assert.equal(shrineSideSealInteraction?.type, 'folsomShrineSideRoomSeal', 'The side-room seal has a dedicated staged interaction.');
+assert.equal(shrineCrawlspaceInteraction?.type, 'folsomShrineCrawlspacePanel', 'The crawlspace panel has a dedicated interaction.');
+assert.equal(FOLSOM_SHRINE_INVESTIGATION_RULES.sideRoomSaveKey, 'folsom_shrine_side_room_open');
+assert.equal(FOLSOM_SHRINE_INVESTIGATION_RULES.networkRevealSaveKey, 'folsom_under_shrine_network_revealed');
+assert.equal(FOLSOM_SHRINE_INVESTIGATION_RULES.crawlspaceSaveKey, 'folsom_shrine_crawlspace_open');
+assert.deepEqual(FOLSOM_SHRINE_INVESTIGATION_RULES.sideSealSequence, ['knife-cords', 'axe-knot', 'open']);
+assert.equal(growthNetwork.revealStateKey, 'folsom_under_shrine_network_revealed', 'The connected network is explicitly owned by the Lantern reveal state.');
+assert.equal(equipmentRegistry.items.keepers_lantern.source, 'folsom_shrine_side_room_keepers_lantern_pickup', 'The Shrine Side Room is the canonical Keeper\'s Lantern source.');
 
 assert.equal(beneathFolsom.id, 'beneath-folsom');
 assert.equal(beneathFolsom.displayName, 'Beneath Folsom');
@@ -146,10 +167,8 @@ assert.equal(drainGrateBlocker?.userData?.saveKey, 'beneath_folsom_drain_grate_p
 assert.ok(drainGrateBlocker?.tags?.includes('blocks-deeper-access'), 'The intact grate explicitly blocks deeper access.');
 assert.ok((beneathFolsom.rooms ?? []).some((room) => room.id === 'BF03' && room.tags?.includes('opened-threshold')), 'A small drain-throat alcove exists beyond the grate.');
 assert.equal(beneathFolsomRuntime.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 13.5)).some((blocker) => blocker.id === drainGrateBlocker.id), true, 'Closed grate collision prevents crossing the threshold.');
-assert.equal(keepersLanternPickup?.itemId, 'keepers_lantern', "Beneath Folsom authors the Keeper's Lantern pickup.");
-assert.equal(keepersLanternPickup?.type, 'equipmentPickup', "Keeper's Lantern uses the persistent equipment pickup convention.");
-assert.ok(Math.hypot(keepersLanternPickup.target.x - beneathArrival.position.x, keepersLanternPickup.target.z - beneathArrival.position.z) > 20, "Keeper's Lantern is beyond the entry spawn.");
-assert.ok(keepersLanternPickup.target.z > 14 && keepersLanternPickup.tags?.includes('post-drain-grate'), "Keeper's Lantern is placed beyond the pry obstruction.");
+assert.equal(keepersLanternPickup, undefined, "Beneath Folsom no longer duplicates the Keeper's Lantern pickup.");
+assert.ok((beneathFolsom.props ?? []).some((prop) => prop.id === 'beneath_folsom_keeper_niche_empty_hook'), 'The retired BF03 Lantern niche remains as an empty environmental trace.');
 assert.ok(lanternRevealProps.length >= 6 && lanternRevealProps.every((prop) => prop.userData?.hiddenByDefault && prop.userData?.revealItemId === 'keepers_lantern'), 'The bounded route-truth cluster is hidden under normal light and mapped only to the lantern.');
 assert.ok(lanternGlyphDecals.length >= 6, 'Beneath Folsom authors a multi-piece lantern-cone glyph cluster.');
 assert.ok(lanternGlyphDecals.every((prop) => prop.id.startsWith('beneath_folsom_lower_wall_glyph_cluster_')), 'Reveal pieces belong to the authored lower-wall cluster.');
@@ -173,9 +192,9 @@ assert.equal(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES.revealItemId, 'keepers_lant
 assert.equal(BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES.saveKey, 'beneath_folsom_hidden_growth_gate_cleared');
 assert.equal(hiddenGrowthGateBlocker?.userData?.hitsRequired, 5, 'The authored gate blocker matches the five-hit runtime rule.');
 assert.equal(beneathFolsomRuntime.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 21.7)).some((blocker) => blocker.id === hiddenGrowthGateBlocker.id), true, 'The intact hidden-growth wall physically blocks the blue hallway.');
-assert.ok(blueHall && blueHall.maxZ - blueHall.minZ >= 36 && blueHall.tags.includes('future-boundary'), 'A long bounded blue-flame threshold hallway exists beyond the gate.');
+assert.ok(blueHall && blueHall.maxZ - blueHall.minZ >= 36 && blueHall.tags.includes('chapter-3-seam'), 'The long blue-flame threshold hallway remains the Chapter 2-to-3 seam.');
 assert.ok((beneathFolsom.props ?? []).filter((prop) => prop.tags?.includes('blue-flame-hallway')).length >= 15, 'The hallway has repeated architectural ribs guiding the eye forward.');
-assert.ok((beneathFolsom.props ?? []).some((prop) => prop.tags?.includes('chapter-end-stop') && prop.tags?.includes('no-chapter-3')), 'The hallway ends at an explicit future boundary.');
+assert.deepEqual((beneathFolsom.rooms ?? []).filter((room) => /^BF0[5-9]$/.test(room.id)).map((room) => room.id), ['BF05', 'BF06', 'BF07', 'BF08', 'BF09'], 'The preserved Chapter 3 room skeleton remains authored after the blue hall.');
 assert.equal(equipmentRegistry.items.keepers_lantern?.itemType, 'offhand', "Keeper's Lantern is registered as offhand equipment.");
 assert.equal(equipmentRegistry.items.keepers_lantern?.slot, 'offhand', "Keeper's Lantern uses the shared offhand slot without changing its item id.");
 assert.equal(KEEPERS_LANTERN_ITEM_ID, 'keepers_lantern', "Keeper's Lantern viewmodel keeps the existing persistent item id.");
@@ -463,7 +482,7 @@ const pondAnchor = anchors.find((anchor) => anchor.type === 'pond');
 assert.ok(pondAnchor.position[0] > 6 && pondAnchor.position[1] > -50, 'Pond anchor stays east of the north-bank fishing lane and outside the water center.');
 
 const feeds = growthNetwork.feeds ?? [];
-assert.equal(feeds.length, 3, 'Folsom authors one visible growth feed for each anchor.');
+assert.equal(feeds.length, 3, 'Folsom authors one growth feed for each surface endpoint.');
 assert.deepEqual(feeds.map((feed) => feed.anchorId).sort(), anchors.map((anchor) => anchor.id).sort(), 'Fire, pond, and shrine anchors each connect back to the Underworks root.');
 assert.ok(feeds.every((feed) => feed.points.length >= 6 && feed.tags.includes('connected-growth-feed')), 'Each feed has a readable authored route across Folsom.');
 
@@ -507,6 +526,13 @@ assert.equal(knotSkins.length, 0, 'Knot texturing uses wrapped mesh materials ra
 assert.ok(wrappedKnots.length >= 15 && wrappedKnots.every((mesh) => mesh.material?.map && mesh.material.map.wrapS === THREE.RepeatWrapping && mesh.material.map.wrapT === THREE.RepeatWrapping), 'Anchor, route, and Underworks knot geometry is wrapped in repeating healthy-growth textures like field boulders.');
 assert.ok(wrappedKnots.every((mesh) => mesh.userData.growthTextureState === 'intact'), 'Every connected-growth knot uses the healthy undamaged texture state.');
 assert.equal(typeof connectedGrowth.update, 'function', 'Connected growth updates only bounded clear animations and effects.');
+assert.ok(feedMeshes.every((mesh) => mesh.visible === false), 'Fresh-save network feeds remain hidden before the Keeper\'s Lantern reveal.');
+const blockedBeforeReveal = connectedGrowth.clearAnchor('folsom_growth_anchor_fire');
+assert.equal(blockedBeforeReveal.networkHidden, true, 'Fresh saves cannot clear surface endpoints before revealing the under-shrine network.');
+assert.equal(gameState.isFolsomGrowthAnchorCleared('fire'), false, 'A pre-reveal anchor attempt writes no progress.');
+connectedGrowth.revealNetwork();
+assert.equal(gameState.isFolsomUnderShrineNetworkRevealed(), true, 'Revealing the network persists additive world state.');
+assert.ok(feedMeshes.every((mesh) => mesh.visible === true), 'Lantern discovery reveals all three surface feed routes.');
 
 const liveStorageValues = new Map();
 const liveStorage = {
@@ -535,6 +561,7 @@ const liveAnchorInteractions = liveGrowth.getAnchorInteractions();
 assert.equal(liveAnchorInteractions.length, 3, 'All three uncleared anchors register live outdoor interactions.');
 assert.deepEqual(liveAnchorInteractions.map((interaction) => interaction.id).sort(), anchors.map((anchor) => anchor.id).sort(), 'Live anchor interactions map one-to-one to authored anchors.');
 assert.ok(liveAnchorInteractions.every((interaction) => interaction.target?.isVector3 && interaction.hint && interaction.failMessage && interaction.message && interaction.type === 'folsomGrowthAnchor' && interaction.anchorType), 'Every live anchor interaction has a target, hint, type, anchor identity, and non-silent success/failure feedback.');
+assert.ok(liveAnchorInteractions.every((interaction) => interaction.requiresFolsomNetworkReveal), 'Every surface endpoint interaction is gated by the Lantern-first network reveal.');
 
 const liveMessages = [];
 const liveHints = [];
@@ -570,6 +597,9 @@ const liveInteractions = new Interactions({
   hud: { showHint: (message) => liveHints.push(message), showMessage: (message) => liveMessages.push(message), updateFieldKitStatus: () => {} },
   feedback: { shake: () => {} },
 });
+assert.equal(liveInteractions.isOutdoorInteractionAvailable(liveAnchorInteractions[0]), false, 'Fresh-save surface endpoint interactions stay unavailable before the reveal.');
+liveGrowth.revealNetwork();
+assert.equal(liveInteractions.isOutdoorInteractionAvailable(liveAnchorInteractions[0]), true, 'Surface endpoint interactions become available after the reveal.');
 
 const exerciseLiveAnchor = (anchorType, itemId) => {
   const interaction = liveAnchorInteractions.find((candidate) => candidate.anchorType === anchorType);
@@ -646,4 +676,16 @@ assert.equal(reloadedGrowth.root.getObjectByName(growthNetwork.lock.id).visible,
 assert.ok(reloadedDoor.position.y > 5, 'The Underworks gate remains visibly open after reload.');
 assert.equal(new GameState(liveStorage).isFolsomUnderworksGrowthUnsealed(), true, 'Beneath Folsom routing does not replace or reset the persisted Folsom gate state.');
 
-console.log('Folsom keeps its starter loops, persistently unseals Underworks, and connects safely to the registered Beneath Folsom entry and return route.');
+const legacyStorageValues = new Map([['folsom_growth_anchor_pond_cleared', 'true']]);
+const legacyStorage = {
+  get length() { return legacyStorageValues.size; },
+  key: (index) => [...legacyStorageValues.keys()][index] ?? null,
+  getItem: (key) => legacyStorageValues.get(key) ?? null,
+  setItem: (key, value) => legacyStorageValues.set(key, String(value)),
+  removeItem: (key) => legacyStorageValues.delete(key),
+};
+const migratedLegacyState = new GameState(legacyStorage);
+assert.equal(migratedLegacyState.isFolsomGrowthAnchorCleared('pond'), true, 'Migration preserves existing surface-anchor clears.');
+assert.equal(migratedLegacyState.isFolsomUnderShrineNetworkRevealed(), true, 'Existing Chapter 2 progress migrates to the revealed network state without replay.');
+
+console.log('Folsom keeps its starter loops, adds the Lantern-first shrine investigation, persistently unseals Underworks, and connects safely to Beneath Folsom.');
