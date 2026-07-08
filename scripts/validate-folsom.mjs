@@ -159,23 +159,33 @@ const controllerPryTarget = {
   id: 'beneath_folsom_drain_grate', target: new THREE.Vector3(0, 0, -3), range: 3.25, contactRadiusPx: 70,
   acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry',
   requiredGesture: { ...PHYSICAL_TOOL_PROFILES.iron_drain_bar, minLeverTravelPx: 78 },
+  socket: { position: new THREE.Vector3(0, 0, -3), seatingRadiusPx: 70, minSeatMotionPx: 2 },
+  lever: { directionScreen: [0, -1], arcPx: 78 },
   receivePhysicalToolEvent: (event) => { controllerPryHits += 1; controllerPryEvent = event; return { accepted: true, changed: true, pried: true }; },
 };
+const constrainedControls = { move: { x: 0.4, y: 0.5 }, look: { x: 0.3, y: 0.2 }, physicalToolSeated: false };
 const barController = new PhysicalToolActionController({
   app: controllerViewport, camera: toolCamera, player: { position: new THREE.Vector3(0, 0, 0) },
-  dungeon: { getPhysicalToolTargets: () => [controllerPryTarget] }, equipmentRuntime: toolEquipment, viewmodel: toolViewmodel,
+  dungeon: { getPhysicalToolTargets: () => [controllerPryTarget] }, equipmentRuntime: toolEquipment, viewmodel: toolViewmodel, controls: constrainedControls,
 });
 let simulatedPryTime = performance.now();
 barController.makeSample = (event) => ({ x: event.clientX, y: event.clientY, timeMs: (simulatedPryTime += 10) });
 const barPointerEvent = (x, y) => ({ clientX: x, clientY: y, pointerId: 8, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, target: { closest: () => null } });
 barController.pointerDown(barPointerEvent(barGrip.x, barGrip.y));
-for (let step = 1; step <= 100; step += 1) barController.pointerMove(barPointerEvent(barGrip.x, barGrip.y - step * 2));
-assert.equal(barController.state.planted, true, 'The Drain Bar tip plants on the authored pry point before lever travel is evaluated.');
+assert.equal(constrainedControls.physicalToolSeated, false, 'Grabbing the bar does not freeze movement/look before the tip seats.');
+assert.equal(barController.registry.getSocketContact({ x: 4, y: 4 }, PHYSICAL_TOOL_PROFILES.iron_drain_bar), null, 'The bar cannot seat when its tip is far from the authored socket.');
+for (let step = 1; step <= 55 && !barController.state.planted; step += 1) barController.pointerMove(barPointerEvent(barGrip.x, barGrip.y - step * 2));
+assert.equal(barController.state.planted, true, 'The Drain Bar tip seats only after it reaches the authored socket.');
+assert.equal(barController.state.socketState, 'seated', 'Valid tip proximity enters the seated settle state before tension can build.');
+assert.equal(constrainedControls.physicalToolSeated, true, 'Movement/look constraint begins only after the pry tip seats.');
+barController.update(0.15);
+for (let step = 1; step <= 45 && controllerPryHits === 0; step += 1) barController.pointerMove(barPointerEvent(barController.state.plantX, barController.state.plantY - step * 2));
 barController.pointerEnd(barPointerEvent(barGrip.x, barGrip.y - 200));
 assert.equal(controllerPryHits, 1, 'A slow grip-driven Drain Bar pull advances a physical pry receiver once.');
 assert.equal(controllerPryEvent?.contact?.activePart, 'pry-tip', 'Drain Bar progression records the tip, not its grip, as the contact surface.');
 assert.equal(controllerPryEvent?.contact?.kind, 'planted-pry-tip-contact', 'Drain Bar progression records a planted pry contact rather than a sword sweep.');
-assert.ok(controllerPryEvent?.contact?.worldSweep?.radius > 0, 'Drain Bar contact carries its tip sweep volume into target-depth world space.');
+assert.ok(controllerPryEvent?.contact?.world?.isVector3, 'Drain Bar completion records the authored socket world point.');
+assert.equal(constrainedControls.physicalToolSeated, false, 'Movement/look constraint clears when the seated pry ends.');
 barController.dispose();
 toolEquipment.equip('weapon', 'wood_axe'); toolViewmodel.update(1 / 60);
 assert.ok(toolViewmodel.toolGroups.get('wood_axe').visible, 'Selected Wood Axe has a visible camera-local ready pose.');
@@ -248,6 +258,7 @@ const interactionsSource = readFileSync(new URL('../src/game/Interactions.js', i
 const physicalRegistry = new PhysicalToolTargetRegistry();
 const physicalGesture = { travelPx: 120, leverTravelPx: 110, velocityPxPerSecond: 280, smoothness: 0.94 };
 const heavyPryGesture = { travelPx: 165, leverTravelPx: 148, velocityPxPerSecond: 185, smoothness: 0.92 };
+const completedPryGesture = { ...heavyPryGesture, socketState: 'tension_pry', strain: 1 };
 const physicalContact = { screen: { x: 100, y: 100 } };
 
 const folsom = getLocationDefinition('folsom');
@@ -400,7 +411,8 @@ const labyrinthProofHarness = Object.assign(Object.create(DungeonScene.prototype
 labyrinthProofHarness.configureUnderShrineLabyrinth(underShrineLabyrinthRuntime);
 const endHatchTarget = labyrinthProofHarness.getPhysicalToolTargets().find((target) => target.id === 'under_shrine_labyrinth_end_hatch');
 assert.equal(physicalRegistry.evaluate(endHatchTarget, { toolId: 'old_work_knife', actionType: 'cut', gesture: physicalGesture, contact: physicalContact }).accepted, false, 'Labyrinth hatch rejects a knife swing.');
-assert.equal(physicalRegistry.evaluate(endHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: heavyPryGesture, contact: physicalContact }).accepted, true, 'Labyrinth end hatch now requires a physical Drain Bar lever action.');
+assert.equal(physicalRegistry.evaluate(endHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: heavyPryGesture, contact: physicalContact }).accepted, false, 'A freehand Drain Bar gesture cannot open the labyrinth hatch without seating.');
+assert.equal(physicalRegistry.evaluate(endHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: completedPryGesture, contact: physicalContact }).accepted, true, 'Labyrinth end hatch accepts a completed seated Drain Bar lever action.');
 assert.equal(proofState.isUnderShrineLabyrinthEndHatchOpen(), true, 'Physical end-hatch pry preserves under_shrine_labyrinth_end_hatch_open.');
 const reloadedLabyrinthRuntime = compileDungeonLocation(underShrineLabyrinth, { logValidation: false });
 const reloadedLabyrinthHarness = Object.assign(Object.create(DungeonScene.prototype), { gameState: new GameState(proofStorage), scene: new THREE.Scene(), collision: reloadedLabyrinthRuntime.collisionWorld });
@@ -447,7 +459,24 @@ assert.deepEqual(beneathPhysicalTargets.map((target) => target.id).sort(), [
 ].sort(), 'Beneath Folsom authors every current growth/pry blocker as a physical target.');
 assert.equal(beneathPhysicalTargets.find((target) => target.id === 'beneath_folsom_hidden_growth_gate')?.requiredHits, 5, 'Hidden gate preserves exactly five physical knife contacts.');
 assert.deepEqual(beneathPhysicalTargets.find((target) => target.id === 'beneath_folsom_lower_shrine_hatch')?.prerequisites, ['beneath_folsom_hidden_growth_gate_cleared'], 'Lower hatch preserves the hidden-gate prerequisite.');
+for (const targetId of ['beneath_folsom_drain_grate', 'beneath_folsom_lower_shrine_hatch']) {
+  const target = beneathPhysicalTargets.find((candidate) => candidate.id === targetId);
+  assert.ok(target.socket?.geometryIds?.length && target.socket?.position && target.socket?.volume, `${targetId} declares visible socket geometry and a socket volume.`);
+  assert.equal(target.acceptedToolId, 'iron_drain_bar', `${targetId} accepts only the Iron Drain Bar.`);
+  assert.equal(target.acceptedActionType, 'pry', `${targetId} requires pry action.`);
+  assert.ok(target.lever?.directionScreen && target.lever?.arcPx > 0 && target.tensionThreshold === 1, `${targetId} declares its lever direction, arc, and tension threshold.`);
+  assert.ok(target.completionSaveKey && target.blockerId && target.visualStrainStages?.at(-1) === 1, `${targetId} declares save, blocker, and visual strain stages.`);
+}
+assert.ok(beneathPhysicalTargets.find((target) => target.id === 'beneath_folsom_lower_shrine_hatch').lever.arcPx
+  > beneathPhysicalTargets.find((target) => target.id === 'beneath_folsom_drain_grate').lever.arcPx, 'Lower shrine hatch requires a longer lever arc than the forgiving drain grate.');
 assert.equal(underShrineLabyrinth.physicalToolTargets?.[0]?.acceptedToolId, 'iron_drain_bar', 'The labyrinth end hatch no longer has an interaction-only opening path.');
+assert.ok(underShrineLabyrinth.physicalToolTargets?.[0]?.socket?.geometryIds?.length, 'Existing labyrinth pry target uses the same authored socket contract.');
+const noTapPryInteractions = new Interactions({
+  player: { position: new THREE.Vector3(0, 1.3, 11.2), getLookDirection: () => new THREE.Vector3(0, 0, 1) },
+  dungeon: { area: 'beneath-folsom', inspectInteractions: beneathFolsom.interactions.map((interaction) => ({ ...interaction, target: new THREE.Vector3(interaction.target.x, interaction.target.y, interaction.target.z) })) },
+  equipmentRuntime: { hasItem: () => true }, hud: { showHint() {}, showMessage() {} },
+});
+assert.equal(noTapPryInteractions.getNearbyInspectInteraction(), null, 'Drain grate and lower shrine hatch have no Interact/A completion path.');
 assert.ok(drainGrateBlocker?.tags?.includes('blocks-deeper-access'), 'The intact grate explicitly blocks deeper access.');
 assert.ok((beneathFolsom.rooms ?? []).some((room) => room.id === 'BF03' && room.tags?.includes('opened-threshold')), 'A small drain-throat alcove exists beyond the grate.');
 assert.equal(beneathFolsomRuntime.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 13.5)).some((blocker) => blocker.id === drainGrateBlocker.id), true, 'Closed grate collision prevents crossing the threshold.');
@@ -556,9 +585,10 @@ const physicalDrainTarget = initialBeneathPhysicalTargets.find((target) => targe
 const lockedLowerHatchTarget = initialBeneathPhysicalTargets.find((target) => target.id === 'beneath_folsom_lower_shrine_hatch');
 assert.equal(physicalRegistry.evaluate(physicalDrainTarget, { toolId: 'old_work_knife', actionType: 'cut', gesture: physicalGesture, contact: physicalContact }).accepted, false, 'Knife contact cannot pry the drain grate.');
 assert.equal(lanternGameState.isBeneathFolsomDrainGratePried(), false, 'Wrong drain-grate contact writes no state.');
-assert.equal(physicalRegistry.evaluate(lockedLowerHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: heavyPryGesture, contact: physicalContact }).accepted, false, 'Lower shrine hatch rejects the bar before hidden-gate clear.');
+assert.equal(physicalRegistry.evaluate(lockedLowerHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: completedPryGesture, contact: physicalContact }).accepted, false, 'Lower shrine hatch rejects the bar before hidden-gate clear.');
 assert.equal(lanternGameState.isBeneathFolsomLowerShrineHatchOpen(), false, 'Premature lower-hatch pry writes no state.');
-assert.equal(physicalRegistry.evaluate(physicalDrainTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: physicalGesture, contact: physicalContact }).accepted, true, 'A planted Drain Bar lever action pries the drain grate.');
+assert.equal(physicalRegistry.evaluate(physicalDrainTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: heavyPryGesture, contact: physicalContact }).accepted, false, 'Drain grate cannot open from an unseated freehand pry gesture.');
+assert.equal(physicalRegistry.evaluate(physicalDrainTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: completedPryGesture, contact: physicalContact }).accepted, true, 'A completed seated Drain Bar lever action pries the drain grate.');
 assert.equal(lanternGameState.isBeneathFolsomDrainGratePried(), true, 'Physical grate pry preserves the existing save key.');
 const hiddenGateRevealObjects = hiddenGateRuntime.getRevealObjects();
 assert.ok(hiddenGateRevealObjects.length >= 14 && hiddenGateRuntime.cords.length >= 10, 'The hidden gate is a dense field of thick vertical growth cords and scabs.');
@@ -652,8 +682,17 @@ assert.equal(hiddenGateRuntime.hallwayGroup.visible, true, 'Cold-blue fixtures r
 assert.equal(lanternSceneHarness.collision.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 21.7)).some((blocker) => blocker.id === hiddenGrowthGateBlocker.id), false, 'Cleared wall collision opens the bounded hallway threshold.');
 assert.equal(new GameState(lanternStorage).isBeneathFolsomHiddenGrowthGateCleared(), true, 'Hidden growth gate remains cleared after GameState reload.');
 const unlockedLowerHatchTarget = lanternSceneHarness.getPhysicalToolTargets().find((target) => target.id === 'beneath_folsom_lower_shrine_hatch');
-assert.equal(physicalRegistry.evaluate(unlockedLowerHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: heavyPryGesture, contact: physicalContact }).accepted, true, 'After hidden-gate clear, a heavier smooth bar lever opens the lower shrine hatch.');
+assert.equal(physicalRegistry.evaluate(unlockedLowerHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: heavyPryGesture, contact: physicalContact }).accepted, false, 'After hidden-gate clear, freehand motion still cannot open the lower shrine hatch.');
+assert.equal(physicalRegistry.evaluate(unlockedLowerHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: completedPryGesture, contact: physicalContact }).accepted, true, 'After hidden-gate clear, a completed seated lever opens the lower shrine hatch.');
 assert.equal(lanternGameState.isBeneathFolsomLowerShrineHatchOpen(), true, 'Physical lower-hatch pry preserves the existing save key.');
+const reloadedBeneathRuntime = compileDungeonLocation(beneathFolsom, { logValidation: false });
+const reloadedBeneathHarness = Object.assign(Object.create(DungeonScene.prototype), {
+  inspectInteractions: (beneathFolsom.interactions ?? []).map((interaction) => ({ ...interaction, target: new THREE.Vector3(interaction.target.x, interaction.target.y, interaction.target.z) })),
+  gameState: new GameState(lanternStorage), collision: reloadedBeneathRuntime.collisionWorld, beneathFolsomLanternRevealObjects: [], scene: new THREE.Scene(), textureLoader: { load: () => new THREE.Texture() },
+});
+reloadedBeneathHarness.configureBeneathFolsomDrainLoop(reloadedBeneathRuntime);
+assert.equal(reloadedBeneathRuntime.collisionWorld.blockerRects.some((blocker) => blocker.id === 'beneath_folsom_drain_grate_blocker'), false, 'Completed drain-grate save restores without its blocker.');
+assert.equal(reloadedBeneathRuntime.collisionWorld.blockerRects.some((blocker) => blocker.id === 'beneath_folsom_lower_shrine_hatch_blocker'), false, 'Completed lower-hatch save restores without its blocker.');
 const whiteKnotTarget = lanternSceneHarness.getPhysicalToolTargets().find((target) => target.id === 'beneath_folsom_white_scab_lower_knot');
 assert.equal(physicalRegistry.evaluate(whiteKnotTarget, { toolId: 'wood_axe', actionType: 'chop', gesture: physicalGesture, contact: physicalContact }).accepted, false, 'The exposed White-Scab lower knot rejects the wrong tool.');
 for (let hit = 1; hit <= 3; hit += 1) {

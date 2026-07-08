@@ -13,6 +13,8 @@ export class BeneathFolsomLowerShrineHatchRuntime {
       'beneath_folsom_lower_shrine_hatch_band_left',
       'beneath_folsom_lower_shrine_hatch_band_right',
       'beneath_folsom_lower_shrine_hatch_crossbar',
+      'beneath_folsom_lower_shrine_hatch_pry_socket',
+      'beneath_folsom_lower_shrine_hatch_socket_stone',
     ].map((id) => compiledGroup?.getObjectByName(id)).filter(Boolean).map((object) => ({
       object,
       closedPosition: object.position.clone(),
@@ -21,6 +23,7 @@ export class BeneathFolsomLowerShrineHatchRuntime {
     this.open = Boolean(gameState?.isBeneathFolsomLowerShrineHatchOpen?.());
     this.opening = false;
     this.progress = this.open ? 1 : 0;
+    this.pryStrain = 0;
     this.audioContext = null;
     if (this.open) this.applyOpenState();
   }
@@ -34,13 +37,30 @@ export class BeneathFolsomLowerShrineHatchRuntime {
 
     this.open = true;
     this.opening = true;
-    this.progress = 0;
+    this.progress = Math.max(this.progress, this.pryStrain * 0.38);
     this.gameState?.markBeneathFolsomLowerShrineHatchOpen?.();
     if (this.blocker) this.collision?.removeBlocker?.(this.blocker);
     const interaction = this.interactions.find((candidate) => candidate.id === HATCH_INTERACTION_ID);
     if (interaction) interaction.collected = true;
     this.playStrain();
     return { opened: true, message: 'Iron bites stone. The lower shrine hatch tears open.' };
+  }
+
+  setPryStrain(strain = 0) {
+    if (this.open) return;
+    this.pryStrain = Math.max(this.pryStrain * 0.25, Math.min(1, Math.max(0, strain)));
+    this.progress = this.pryStrain * 0.38;
+    const finalStrain = this.pryStrain >= 0.8
+      ? Math.sin(this.pryStrain * Math.PI * 34) * (this.pryStrain - 0.8) * 0.18
+      : 0;
+    this.applyProgress(this.progress, finalStrain);
+  }
+
+  releasePry(retainFactor = 0.18) {
+    if (this.open) return;
+    this.pryStrain *= Math.max(0, Math.min(1, retainFactor));
+    this.progress = this.pryStrain * 0.38;
+    this.applyProgress(this.progress);
   }
 
   applyOpenState() {

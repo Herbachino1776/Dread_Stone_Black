@@ -54,6 +54,7 @@ export class FirstPersonViewmodelHost {
       equipmentRuntime: this.equipmentRuntime,
       viewmodel: this.physicalToolViewmodel,
       feedback: this.feedback,
+      controls: this.controls,
     });
 
     this.disposers.push(this.equipmentRuntime?.on?.(EQUIPMENT_EVENTS.equippedChanged, (equipmentState) => this.handleEquipmentChanged(equipmentState)));

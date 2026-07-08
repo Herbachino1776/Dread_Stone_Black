@@ -5,7 +5,7 @@ import { PhysicalToolTargetRegistry } from './PhysicalToolTargetRegistry.js';
 const GESTURE_HISTORY_MS = 140;
 
 export class PhysicalToolActionController {
-  constructor({ app, camera, player, dungeon, equipmentRuntime, viewmodel, feedback = null } = {}) {
+  constructor({ app, camera, player, dungeon, equipmentRuntime, viewmodel, feedback = null, controls = null } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.camera = camera;
@@ -14,6 +14,7 @@ export class PhysicalToolActionController {
     this.equipmentRuntime = equipmentRuntime;
     this.viewmodel = viewmodel;
     this.feedback = feedback;
+    this.controls = controls;
     this.registry = new PhysicalToolTargetRegistry({ dungeon, camera, player, viewport: this.viewport });
     this.state = this.createIdleState();
     this.cooldownRemaining = 0;
@@ -23,7 +24,7 @@ export class PhysicalToolActionController {
   }
 
   createIdleState() {
-    return { active: false, pointerId: null, samples: [], startX: 0, startY: 0, x: 0, y: 0, deltaX: 0, deltaY: 0, travelPx: 0, planted: false, plantX: 0, plantY: 0, plantSampleIndex: 0, leverTravelPx: 0, contact: null, contactSampleIndex: 0, contactAngleRadians: null, activePartPoint: null };
+    return { active: false, pointerId: null, samples: [], startX: 0, startY: 0, x: 0, y: 0, deltaX: 0, deltaY: 0, travelPx: 0, planted: false, plantX: 0, plantY: 0, plantSampleIndex: 0, leverTravelPx: 0, contact: null, contactSampleIndex: 0, contactAngleRadians: null, activePartPoint: null, socketState: 'free_bar', seatedTarget: null, socketScreen: null, settle: 0, strain: 0, completed: false, feedbackCooldown: 0, feedbackStage: 'none' };
   }
 
   bind() {
@@ -52,7 +53,7 @@ export class PhysicalToolActionController {
     event.stopPropagation();
     this.viewport?.setPointerCapture?.(event.pointerId);
     const sample = this.makeSample(event);
-    this.state = { ...this.createIdleState(), active: true, pointerId: event.pointerId, toolId, actionType: profile.actionType, startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, samples: [sample] };
+    this.state = { ...this.createIdleState(), active: true, pointerId: event.pointerId, toolId, actionType: profile.actionType, socketState: profile.actionType === 'pry' ? 'socket_seeking' : 'free_bar', startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, samples: [sample] };
     this.state.activePartPoint = this.viewmodel?.getProjectedActivePoint?.(this.viewport, this.state) ?? null;
     this.viewmodel?.setGestureState?.(this.state);
   }
@@ -74,6 +75,11 @@ export class PhysicalToolActionController {
     const previousActivePart = this.state.activePartPoint;
     const activePart = this.viewmodel?.getProjectedActivePoint?.(this.viewport, this.state) ?? null;
     this.state.activePartPoint = activePart;
+    if (profile?.actionType === 'pry') {
+      this.updateSocketedPry(event, previousInput, previousActivePart, activePart, profile);
+      this.viewmodel?.setGestureState?.(this.state);
+      return;
+    }
     const segmentLength = previousActivePart && activePart
       ? Math.hypot(activePart.x - previousActivePart.x, activePart.y - previousActivePart.y)
       : 0;
@@ -90,17 +96,95 @@ export class PhysicalToolActionController {
         this.state.contactAngleRadians = segmentAngle;
       }
     }
-    if (profile?.actionType === 'pry' && contact && !this.state.planted) {
-      this.state.planted = true;
-      this.state.plantX = event.clientX;
-      this.state.plantY = event.clientY;
-      this.state.plantSampleIndex = Math.max(0, this.state.samples.length - 1);
-      this.state.contact = contact;
-      navigator.vibrate?.(10);
-      this.playContactSound('plant');
-    }
-    if (this.state.planted) this.state.leverTravelPx = Math.hypot(event.clientX - this.state.plantX, event.clientY - this.state.plantY);
     this.viewmodel?.setGestureState?.(this.state);
+  }
+
+  updateSocketedPry(event, previousInput, previousActivePart, activePart, profile) {
+    const stepMotion = Math.hypot(event.clientX - previousInput.x, event.clientY - previousInput.y);
+    if (this.state.socketState === 'socket_seeking') {
+      const candidate = this.registry.getSocketContact(activePart, profile);
+      const seating = candidate ? this.registry.canSeat(candidate.target, {
+        toolId: this.state.toolId, actionType: this.state.actionType, tipPoint: activePart, motionPx: stepMotion,
+      }) : null;
+      if (seating?.accepted) {
+        const seatedContact = seating.contact;
+        this.state.socketState = 'seated';
+        this.state.seatedTarget = seatedContact.target;
+        this.state.contact = seatedContact;
+        this.state.socketScreen = { ...seatedContact.screen };
+        const viewportRect = this.viewport?.getBoundingClientRect?.();
+        this.state.viewportSize = viewportRect ? { width: viewportRect.width, height: viewportRect.height } : null;
+        this.state.planted = true;
+        this.state.plantX = event.clientX;
+        this.state.plantY = event.clientY;
+        this.state.settle = 0;
+        this.setControlsConstrained(true);
+        navigator.vibrate?.([8, 18, 12]);
+        this.playContactSound('plant');
+        this.viewmodel?.impact?.({ strength: 0.42 });
+        return;
+      }
+      if (previousActivePart && activePart && stepMotion > 3) {
+        const wrongContact = this.registry.findActivePartSweepContact(previousActivePart, activePart, profile);
+        if (wrongContact && (!candidate || wrongContact.target.id !== candidate.target.id) && this.state.feedbackCooldown <= 0) {
+          this.state.feedbackCooldown = 0.18;
+          navigator.vibrate?.(6);
+          this.playContactSound('skid');
+        }
+      }
+      return;
+    }
+    if (!this.state.seatedTarget || this.state.completed) return;
+    const lever = this.state.seatedTarget.lever ?? {};
+    const [rawX = 0, rawY = 1] = lever.directionScreen ?? [0, 1];
+    const length = Math.max(0.001, Math.hypot(rawX, rawY));
+    const directionX = rawX / length;
+    const directionY = rawY / length;
+    const pullX = event.clientX - this.state.plantX;
+    const pullY = event.clientY - this.state.plantY;
+    const leverTravel = Math.max(0, pullX * directionX + pullY * directionY);
+    const arcPx = Math.max(24, lever.arcPx ?? 110);
+    this.state.leverTravelPx = Math.min(arcPx, leverTravel);
+    this.state.strain = THREE.MathUtils.clamp(this.state.leverTravelPx / arcPx, 0, 1);
+    this.state.constrainedDeltaX = directionX * this.state.leverTravelPx;
+    this.state.constrainedDeltaY = directionY * this.state.leverTravelPx;
+    if (this.state.settle >= 1 && this.state.strain > 0.015) this.state.socketState = 'tension_pry';
+    this.state.seatedTarget.receivePryStrain?.({ strain: this.state.strain, stage: this.state.strain >= 0.8 ? 'final' : this.state.strain >= 0.42 ? 'mid' : 'early' });
+    const feedbackStage = this.state.strain >= 0.8 ? 'final' : this.state.strain >= 0.42 ? 'mid' : this.state.strain > 0.04 ? 'early' : 'none';
+    if (feedbackStage !== this.state.feedbackStage) {
+      this.state.feedbackStage = feedbackStage;
+      if (feedbackStage === 'early') this.playContactSound('pry');
+      if (feedbackStage === 'mid') {
+        navigator.vibrate?.(14);
+        this.playContactSound('pry');
+      }
+      if (feedbackStage === 'final') {
+        navigator.vibrate?.([18, 22, 28]);
+        this.playContactSound('final-strain');
+        this.feedback?.shake?.({ durationMs: 420, intensity: 0.09 });
+      }
+    }
+    if (this.state.socketState === 'tension_pry' && this.state.strain >= 1) this.completeSocketedPry(profile);
+  }
+
+  completeSocketedPry(profile) {
+    const target = this.state.seatedTarget;
+    if (!target || this.state.completed) return;
+    const gesture = {
+      socketState: 'tension_pry', strain: 1, travelPx: this.state.leverTravelPx,
+      leverTravelPx: this.state.leverTravelPx, velocityPxPerSecond: 120,
+      smoothness: 1, angleRadians: Math.atan2(this.state.constrainedDeltaY ?? 1, this.state.constrainedDeltaX ?? 0),
+    };
+    const result = this.registry.evaluate(target, {
+      toolId: this.state.toolId, actionType: this.state.actionType, gesture, contact: this.state.contact,
+    });
+    this.state.completed = result.accepted;
+    this.state.socketState = result.accepted ? 'released/open' : 'seated';
+    this.resolveFeedback(result, profile);
+    if (result.accepted) {
+      this.cooldownRemaining = profile.cooldownSeconds;
+      this.setControlsConstrained(false);
+    }
   }
 
   pointerEnd(event) {
@@ -111,6 +195,18 @@ export class PhysicalToolActionController {
     this.pointerMove(event);
     if (!this.state.active) return;
     const profile = getPhysicalToolProfile(this.state.toolId);
+    if (profile?.actionType === 'pry') {
+      const target = this.state.seatedTarget;
+      if (!this.state.completed) {
+        target?.receivePryRelease?.({ strain: this.state.strain, retainFactor: target?.release?.retainFactor ?? 0 });
+        if (this.state.socketState === 'socket_seeking' && this.state.travelPx > 12) this.playContactSound('skid');
+      }
+      this.viewport?.releasePointerCapture?.(event.pointerId);
+      this.setControlsConstrained(false);
+      this.state = this.createIdleState();
+      this.viewmodel?.setGestureState?.(this.state);
+      return;
+    }
     const actionStartIndex = profile?.actionType === 'pry'
       ? this.state.plantSampleIndex
       : Math.max(0, this.state.contactSampleIndex - 5);
@@ -157,6 +253,7 @@ export class PhysicalToolActionController {
   cancelGesture() {
     if (this.state.pointerId != null) this.viewport?.releasePointerCapture?.(this.state.pointerId);
     this.state = this.createIdleState();
+    this.setControlsConstrained(false);
     this.viewmodel?.setGestureState?.(this.state);
   }
 
@@ -183,12 +280,12 @@ export class PhysicalToolActionController {
       this.audioContext ??= new AudioContextClass();
       const context = this.audioContext;
       if (context.state === 'suspended') context.resume?.();
-      const duration = kind === 'final' ? 0.36 : kind === 'pry' ? 0.28 : 0.13;
+      const duration = kind === 'final' ? 0.36 : kind === 'final-strain' ? 0.48 : kind === 'pry' ? 0.28 : 0.13;
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const filter = context.createBiquadFilter();
-      oscillator.type = kind === 'skid' || kind === 'plant' ? 'sawtooth' : 'triangle';
-      oscillator.frequency.setValueAtTime(kind === 'skid' ? 260 : kind === 'pry' || kind === 'plant' ? 92 : kind === 'chop' ? 74 : 128, context.currentTime);
+      oscillator.type = kind === 'skid' || kind === 'plant' || kind === 'final-strain' ? 'sawtooth' : 'triangle';
+      oscillator.frequency.setValueAtTime(kind === 'skid' ? 260 : kind === 'final-strain' ? 68 : kind === 'pry' || kind === 'plant' ? 92 : kind === 'chop' ? 74 : 128, context.currentTime);
       oscillator.frequency.exponentialRampToValueAtTime(kind === 'final' ? 38 : 54, context.currentTime + duration);
       filter.type = 'lowpass';
       filter.frequency.value = kind === 'skid' ? 920 : 520;
@@ -258,6 +355,20 @@ export class PhysicalToolActionController {
 
   update(deltaSeconds) {
     this.cooldownRemaining = Math.max(0, this.cooldownRemaining - Math.min(0.05, deltaSeconds));
+    if (this.state.active) this.state.feedbackCooldown = Math.max(0, this.state.feedbackCooldown - deltaSeconds);
+    if (this.state.socketState === 'seated') {
+      this.state.settle = Math.min(1, this.state.settle + deltaSeconds / 0.14);
+      this.viewmodel?.setGestureState?.(this.state);
+    }
+  }
+
+  setControlsConstrained(active) {
+    if (!this.controls) return;
+    this.controls.physicalToolSeated = active === true;
+    if (active) {
+      this.controls.move = { x: 0, y: 0 };
+      this.controls.look = { x: 0, y: 0 };
+    }
   }
 
   rebindSession({ camera, player, dungeon } = {}) {
@@ -266,6 +377,7 @@ export class PhysicalToolActionController {
     this.dungeon = dungeon ?? this.dungeon;
     this.registry.rebind({ dungeon: this.dungeon, camera: this.camera, player: this.player, viewport: this.viewport });
     this.state = this.createIdleState();
+    this.setControlsConstrained(false);
     this.viewmodel?.setGestureState?.(this.state);
   }
 

@@ -14,7 +14,7 @@ Every gesture remains visible. Effectiveness is separate and tool-specific:
 
 - Old Work Knife: a fast cut/slash. Its handle starts lower-right and its short blade angles up toward center; the blade passes through the target only during the slash.
 - Wood Axe: a heavy chop. Its handle starts lower-right and the head rests above/right of the grip; longer travel, slower maximum useful speed, and high smoothness distinguish it from the Knife.
-- Iron Drain Bar: plant-and-pry. Its lower bar is the grip, its tip aims toward the authored pry point, and the action plants, leans, and pulls through a slow smooth lever arc rather than swinging like a sword.
+- Iron Drain Bar: socketed lever pry. Its lower-right bar is the grip and touch-control point. The pry tip must be guided into an authored visible socket volume, settles without teleporting, then remains anchored while the grip drives a constrained target-authored lever arc. It never behaves as a sword or tap action.
 
 Over-fast, short, wrong-angle, or squiggly motion still moves the held tool but does not advance a receiver. This gives each tool a learnable motion envelope without adding tutorial text or UI timing indicators.
 
@@ -25,13 +25,15 @@ The authoritative route is:
 ```text
 grip-zone touch capture and gesture
   -> visible held-tool motion
-  -> swept knife blade / axe head volume or planted pry-tip contact
+  -> swept knife blade / axe head volume or seated pry-tip socket contact
   -> PhysicalToolTargetRegistry validation
   -> authored runtime receiver
   -> visual stage change and existing persisted world state
 ```
 
-Touch zones and hit zones are intentionally unrelated. Targets declare accepted tool id, physical action type, gesture requirements, world contact zone/pry point, stage order, visual state, prerequisites, completion save key, and wrong-contact feedback. Only a swept active part can reach those zones. Interact/A has no growth or pry completion dispatch or fallback. Interact remains responsible for pickups, inspection, and normal transitions after a tool blocker is already open.
+Touch zones and hit zones are intentionally unrelated. Cut/chop targets declare accepted tool id, action, swept contact zone, stages, prerequisites, save key, and wrong-contact feedback. Pry targets additionally declare visible socket geometry, socket world position/volume, lever direction/arc, tension threshold, blocker id, release relaxation, and visual strain stages. No pry progress is evaluated until the tip is seated. Interact/A has no growth or pry completion dispatch or fallback. Interact remains responsible for pickups, inspection, and normal transitions after a tool blocker is already open.
+
+The pry controller exposes `free_bar`, `socket_seeking`, `seated`, `tension_pry`, and `released/open`. Ordinary movement and right-look remain available while free/seeking because only touches beginning in the projected grip zone are captured. Once seated, movement/look input is temporarily constrained until release or completion. The last 20% of target strain is the feedback spike; earlier travel moves the target without screen shake.
 
 Wrong contact produces recoil, a skid/thud/scrape sound, and short haptics without progression. Valid contact uses tool-weighted recoil, shake, haptics, existing oil/cord/knot effects, staged material/geometry changes, and final blocker collapse/opening.
 

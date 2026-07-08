@@ -144,19 +144,29 @@ export class PhysicalToolViewmodel {
     const config = getPhysicalToolProfile(toolId)?.viewmodel;
     const pose = config?.ready;
     if (!pose) return { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0 };
-    const nx = THREE.MathUtils.clamp((gesture?.deltaX ?? 0) / 170, -1, 1);
-    const ny = THREE.MathUtils.clamp((gesture?.deltaY ?? 0) / 170, -1, 1);
-    const pry = toolId === 'iron_drain_bar' && gesture?.planted;
+    const socketed = toolId === 'iron_drain_bar' && gesture?.planted;
+    const inputX = socketed ? (gesture?.constrainedDeltaX ?? 0) : (gesture?.deltaX ?? 0);
+    const inputY = socketed ? (gesture?.constrainedDeltaY ?? 0) : (gesture?.deltaY ?? 0);
+    const nx = THREE.MathUtils.clamp(inputX / 170, -1, 1);
+    const ny = THREE.MathUtils.clamp(inputY / 170, -1, 1);
     const verticalHalfExtent = Math.tan(THREE.MathUtils.degToRad((this.camera?.fov ?? 68) * 0.5)) * pose.depth;
     const horizontalHalfExtent = verticalHalfExtent * (this.camera?.aspect ?? 1);
-    return {
+    const motion = {
       x: nx * horizontalHalfExtent * pose.motion[0],
       y: -ny * verticalHalfExtent * pose.motion[1],
-      z: gesture ? (pry ? -0.34 : -0.08 * Math.min(1, (gesture.travelPx ?? 0) / 90)) : 0,
-      pitch: ny * (pry ? 0.78 : 0.34),
-      yaw: -nx * (pry ? 0.38 : 0.24),
-      roll: -nx * (pry ? 0.72 : toolId === 'wood_axe' ? 0.92 : 0.66),
+      z: gesture ? (socketed ? -0.12 - 0.22 * (gesture.settle ?? 0) : -0.08 * Math.min(1, (gesture.travelPx ?? 0) / 90)) : 0,
+      pitch: ny * (socketed ? 0.78 : 0.34),
+      yaw: -nx * (socketed ? 0.38 : 0.24),
+      roll: -nx * (socketed ? 0.72 : toolId === 'wood_axe' ? 0.92 : 0.66),
     };
+    if (socketed && gesture.socketScreen && gesture.activePartPoint && gesture.viewportSize) {
+      const settle = THREE.MathUtils.clamp(gesture.settle ?? 0, 0, 1);
+      const correctionX = gesture.socketScreen.x - gesture.activePartPoint.x;
+      const correctionY = gesture.socketScreen.y - gesture.activePartPoint.y;
+      motion.x += (correctionX / Math.max(1, gesture.viewportSize.width)) * horizontalHalfExtent * 2 * settle;
+      motion.y -= (correctionY / Math.max(1, gesture.viewportSize.height)) * verticalHalfExtent * 2 * settle;
+    }
+    return motion;
   }
 
   update(deltaSeconds) {
@@ -207,7 +217,7 @@ export class PhysicalToolViewmodel {
     }
     const motionMagnitude = Object.values(this.smoothedMotion).reduce((sum, value) => sum + Math.abs(value), 0);
     this.motionPhase = gesture
-      ? ((gesture.travelPx ?? 0) < profile.minTravelPx * 0.3 ? 'windup' : (gesture.planted ? 'plant-and-pry' : 'action'))
+      ? (gesture.socketState ?? ((gesture.travelPx ?? 0) < profile.minTravelPx * 0.3 ? 'windup' : (gesture.planted ? 'plant-and-pry' : 'action')))
       : (this.recoilRemaining > 0 ? 'recoil' : (motionMagnitude > 0.025 ? 'return' : 'ready'));
   }
 

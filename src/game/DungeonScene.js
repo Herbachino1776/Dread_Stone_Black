@@ -333,6 +333,8 @@ export class DungeonScene {
     this.beneathFolsomLowerShrineHatchRuntime = null;
     this.beneathFolsomWhiteScabRuntime = null;
     this.underShrineLabyrinthEndHatchRuntime = null;
+    this.pryDustEffects = [];
+    this.pryDustStages = new Map();
     this.fishingWorldRuntime = createFishingWorldRuntime({
       scene: this.scene,
       dungeon: this,
@@ -543,7 +545,10 @@ export class DungeonScene {
       .filter(Boolean)
       .map((object) => ({ object, startPosition: object.position.clone() }));
     const root = group.getObjectByName('beneath_folsom_root_grate');
-    this.beneathFolsomDrainGrate = { blocker, bars, root, opening: false, progress: 0 };
+    const socketParts = ['beneath_folsom_drain_grate_pry_socket_back', 'beneath_folsom_drain_grate_pry_socket_lip']
+      .map((id) => group.getObjectByName(id)).filter(Boolean)
+      .map((object) => ({ object, startPosition: object.position.clone(), startRotation: object.rotation.clone() }));
+    this.beneathFolsomDrainGrate = { blocker, bars, socketParts, root, opening: false, progress: 0, pryStrain: 0 };
     if (this.gameState?.isBeneathFolsomDrainGratePried?.()) this.applyBeneathFolsomDrainGrateOpenState();
   }
 
@@ -573,17 +578,7 @@ export class DungeonScene {
     if (grate.blocker) this.collision.removeBlocker(grate.blocker);
     grate.progress = 1;
     grate.opening = false;
-    grate.bars.forEach(({ object, startPosition }, index) => {
-      object.rotation.x = -1.18;
-      object.position.y = startPosition.y - 2.2 - index * 0.025;
-      object.position.z = startPosition.z + 1.15;
-    });
-    if (grate.root) {
-      grate.root.rotation.z = 0.62;
-      grate.root.scale.set(0.72, 0.5, 0.72);
-      grate.root.material.transparent = true;
-      grate.root.material.opacity = 0.28;
-    }
+    this.applyBeneathFolsomDrainGrateProgress(1);
     const interaction = this.inspectInteractions.find((candidate) => candidate.id === 'beneath_folsom_drain_grate_pry');
     if (interaction) interaction.collected = true;
   }
@@ -593,10 +588,29 @@ export class DungeonScene {
     if (!hasDrainBar) return { pried: false, message: 'The grate will not move by hand.' };
     this.gameState?.markBeneathFolsomDrainGratePried?.();
     if (this.beneathFolsomDrainGrate?.blocker) this.collision.removeBlocker(this.beneathFolsomDrainGrate.blocker);
-    if (this.beneathFolsomDrainGrate) this.beneathFolsomDrainGrate.opening = true;
+    if (this.beneathFolsomDrainGrate) {
+      this.beneathFolsomDrainGrate.progress = Math.max(this.beneathFolsomDrainGrate.progress, this.beneathFolsomDrainGrate.pryStrain * 0.34);
+      this.beneathFolsomDrainGrate.opening = true;
+    }
     const interaction = this.inspectInteractions.find((candidate) => candidate.id === 'beneath_folsom_drain_grate_pry');
     if (interaction) interaction.collected = true;
     return { pried: true, message: 'The old drain bars shriek open.' };
+  }
+
+  setBeneathFolsomDrainGratePryStrain(strain = 0) {
+    const grate = this.beneathFolsomDrainGrate;
+    if (!grate || this.gameState?.isBeneathFolsomDrainGratePried?.()) return;
+    grate.pryStrain = THREE.MathUtils.clamp(strain, 0, 1);
+    this.applyBeneathFolsomDrainGrateProgress(grate.pryStrain * 0.34);
+    this.emitPryDust('beneath_folsom_drain_grate', new THREE.Vector3(-2.1, 0.72, 13.02), grate.pryStrain, 0x6f5948);
+  }
+
+  releaseBeneathFolsomDrainGratePry() {
+    const grate = this.beneathFolsomDrainGrate;
+    if (!grate || grate.opening) return;
+    grate.pryStrain = 0;
+    this.applyBeneathFolsomDrainGrateProgress(0);
+    this.pryDustStages?.delete('beneath_folsom_drain_grate');
   }
 
   pryBeneathFolsomLowerShrineHatch(hasDrainBar = false) {
@@ -1159,6 +1173,7 @@ export class DungeonScene {
     this.beneathFolsomLowerShrineHatchRuntime?.update(deltaSeconds);
     this.lanternConeRevealRuntime?.update(deltaSeconds);
     this.beneathFolsomHiddenGrowthGateRuntime?.update(deltaSeconds);
+    this.updatePryDustEffects(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
     this.updateBalthazanFloorCoverageQa(player);
   }
@@ -3381,10 +3396,14 @@ export class DungeonScene {
 
     const drainGrate = this.beneathFolsomDrainGrate;
     if (drainGrate && !this.gameState?.isBeneathFolsomDrainGratePried?.()) targets.push({
-      id: 'beneath_folsom_drain_grate', target: new THREE.Vector3(0, 1.3, 11.2), range: 3.25, contactRadiusPx: 70,
-      acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', requiredGesture: { ...pryGesture, minLeverTravelPx: 78 },
-      stage: 0, stageOrder: ['jammed', 'pried'], stageVisualState: 'jammed-bars', completionSaveKey: 'beneath_folsom_drain_grate_pried',
+      id: 'beneath_folsom_drain_grate', target: new THREE.Vector3(-2.1, 0.72, 13.02), range: 3.65, contactRadiusPx: 82,
+      acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', requiredGesture: { ...pryGesture, minLeverTravelPx: 82 },
+      socket: { position: new THREE.Vector3(-2.1, 0.72, 13.02), volume: { radius: 0.52 }, seatingRadiusPx: 82, minSeatMotionPx: 4 },
+      lever: { directionScreen: [0.18, -1], arcPx: 86 }, release: { retainFactor: 0 }, tensionThreshold: 1,
+      stage: 0, stageOrder: ['jammed', 'strained', 'pried'], stageVisualState: 'jammed-bars', visualStrainStages: [0, 0.45, 0.8, 1], completionSaveKey: 'beneath_folsom_drain_grate_pried', blockerId: 'beneath_folsom_drain_grate_blocker',
       failFeedback: { wrongTool: 'metal-skid', wrongAction: 'metal-refuse' },
+      receivePryStrain: ({ strain }) => this.setBeneathFolsomDrainGratePryStrain(strain),
+      receivePryRelease: () => this.releaseBeneathFolsomDrainGratePry(),
       receivePhysicalToolEvent: receiver((event) => {
         const result = this.pryBeneathFolsomDrainGrate(event.toolId === 'iron_drain_bar');
         return { accepted: result.pried, changed: result.pried, completed: result.pried, ...result };
@@ -3406,12 +3425,23 @@ export class DungeonScene {
 
     const lowerHatch = this.beneathFolsomLowerShrineHatchRuntime;
     if (lowerHatch && !lowerHatch.open) targets.push({
-      id: 'beneath_folsom_lower_shrine_hatch', target: new THREE.Vector3(0, 1.3, 59.65), range: 3.3, contactRadiusPx: 72,
-      acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', requiredGesture: { ...pryGesture, minTravelPx: 138, minLeverTravelPx: 125, minSmoothness: 0.82, maxVelocityPxPerSecond: 380 },
+      id: 'beneath_folsom_lower_shrine_hatch', target: new THREE.Vector3(-2.18, 0.78, 60.98), range: 3.8, contactRadiusPx: 64,
+      acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', requiredGesture: { ...pryGesture, minLeverTravelPx: 138 },
+      socket: { position: new THREE.Vector3(-2.18, 0.78, 60.98), volume: { radius: 0.38 }, seatingRadiusPx: 64, minSeatMotionPx: 6 },
+      lever: { directionScreen: [0.08, -1], arcPx: 142 }, release: { retainFactor: 0.18 }, tensionThreshold: 1,
       stage: 0, stageOrder: ['stone-bound', 'strained', 'open'], stageVisualState: 'stone-bound',
+      visualStrainStages: [0, 0.32, 0.8, 1], blockerId: 'beneath_folsom_lower_shrine_hatch_blocker',
       prerequisitesMet: () => this.gameState?.isBeneathFolsomHiddenGrowthGateCleared?.() === true,
       prerequisites: ['beneath_folsom_hidden_growth_gate_cleared'], completionSaveKey: 'beneath_folsom_lower_shrine_hatch_open',
       failFeedback: { prerequisite: 'no-edge', wrongTool: 'stone-skid' },
+      receivePryStrain: ({ strain }) => {
+        lowerHatch.setPryStrain?.(strain);
+        this.emitPryDust('beneath_folsom_lower_shrine_hatch', new THREE.Vector3(-2.18, 0.78, 60.98), strain, 0x81796b);
+      },
+      receivePryRelease: ({ retainFactor }) => {
+        lowerHatch.releasePry?.(retainFactor);
+        this.pryDustStages?.delete('beneath_folsom_lower_shrine_hatch');
+      },
       receivePhysicalToolEvent: receiver((event) => {
         const result = this.pryBeneathFolsomLowerShrineHatch(event.toolId === 'iron_drain_bar');
         return { accepted: result.opened, changed: result.opened, completed: result.opened, ...result };
@@ -3432,10 +3462,20 @@ export class DungeonScene {
 
     const endHatch = this.underShrineLabyrinthEndHatchRuntime;
     if (endHatch && !endHatch.open) targets.push({
-      id: 'under_shrine_labyrinth_end_hatch', target: new THREE.Vector3(62.4, -0.95, 10), range: 3.3, contactRadiusPx: 70,
-      acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', requiredGesture: { ...pryGesture, minLeverTravelPx: 104, minSmoothness: 0.8 },
-      stage: 0, stageOrder: ['buried', 'open'], stageVisualState: 'buried', completionSaveKey: 'under_shrine_labyrinth_end_hatch_open',
+      id: 'under_shrine_labyrinth_end_hatch', target: new THREE.Vector3(64.18, -1.35, 8.72), range: 3.6, contactRadiusPx: 62,
+      acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', requiredGesture: { ...pryGesture, minLeverTravelPx: 122 },
+      socket: { position: new THREE.Vector3(64.18, -1.35, 8.72), volume: { radius: 0.42 }, seatingRadiusPx: 62, minSeatMotionPx: 6 },
+      lever: { directionScreen: [0.12, -1], arcPx: 126 }, release: { retainFactor: 0.1 }, tensionThreshold: 1,
+      stage: 0, stageOrder: ['buried', 'strained', 'open'], stageVisualState: 'buried', visualStrainStages: [0, 0.4, 0.8, 1], completionSaveKey: 'under_shrine_labyrinth_end_hatch_open', blockerId: 'under_shrine_labyrinth_end_hatch_blocker',
       failFeedback: { wrongTool: 'metal-skid' },
+      receivePryStrain: ({ strain }) => {
+        endHatch.setPryStrain?.(strain);
+        this.emitPryDust('under_shrine_labyrinth_end_hatch', new THREE.Vector3(64.18, -1.35, 8.72), strain, 0x6f665b);
+      },
+      receivePryRelease: ({ retainFactor }) => {
+        endHatch.releasePry?.(retainFactor);
+        this.pryDustStages?.delete('under_shrine_labyrinth_end_hatch');
+      },
       receivePhysicalToolEvent: receiver(() => {
         const result = this.openUnderShrineLabyrinthEndHatch();
         return { accepted: result.changed, completed: result.opened, ...result };
@@ -3448,7 +3488,14 @@ export class DungeonScene {
     const grate = this.beneathFolsomDrainGrate;
     if (!grate?.opening) return;
     grate.progress = Math.min(1, grate.progress + deltaSeconds * 1.65);
-    const eased = 1 - ((1 - grate.progress) ** 3);
+    this.applyBeneathFolsomDrainGrateProgress(grate.progress);
+    if (grate.progress >= 1) grate.opening = false;
+  }
+
+  applyBeneathFolsomDrainGrateProgress(progress = 0) {
+    const grate = this.beneathFolsomDrainGrate;
+    if (!grate) return;
+    const eased = 1 - ((1 - THREE.MathUtils.clamp(progress, 0, 1)) ** 3);
     grate.bars.forEach(({ object, startPosition }, index) => {
       object.rotation.x = -1.18 * eased;
       object.position.y = startPosition.y - (2.2 + index * 0.025) * eased;
@@ -3460,7 +3507,60 @@ export class DungeonScene {
       grate.root.material.transparent = true;
       grate.root.material.opacity = 1 - eased * 0.72;
     }
-    if (grate.progress >= 1) grate.opening = false;
+    grate.socketParts?.forEach(({ object, startPosition, startRotation }) => {
+      object.position.copy(startPosition);
+      object.rotation.copy(startRotation);
+      object.position.y -= eased * 2.2;
+      object.position.z += eased * 1.15;
+      object.rotation.x -= eased * 1.18;
+    });
+  }
+
+  emitPryDust(targetId, position, strain, color = 0x786a5b) {
+    this.pryDustStages ??= new Map();
+    this.pryDustEffects ??= [];
+    const stage = strain >= 0.8 ? 2 : strain >= 0.42 ? 1 : 0;
+    if (stage <= (this.pryDustStages.get(targetId) ?? 0)) return;
+    this.pryDustStages.set(targetId, stage);
+    const count = stage === 2 ? 9 : 6;
+    const positions = new Float32Array(count * 3);
+    const velocities = [];
+    for (let index = 0; index < count; index += 1) {
+      positions[index * 3] = position.x + (Math.random() - 0.5) * 0.55;
+      positions[index * 3 + 1] = position.y + Math.random() * 0.22;
+      positions[index * 3 + 2] = position.z - Math.random() * 0.28;
+      velocities.push(new THREE.Vector3((Math.random() - 0.5) * 0.28, 0.12 + Math.random() * 0.35, -0.08 - Math.random() * 0.22));
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({ color, size: stage === 2 ? 0.07 : 0.055, transparent: true, opacity: 0.72, depthWrite: false });
+    const points = new THREE.Points(geometry, material);
+    points.name = `${targetId}-bounded-pry-dust`;
+    this.scene.add(points);
+    this.pryDustEffects.push({ points, velocities, life: stage === 2 ? 0.68 : 0.5, maxLife: stage === 2 ? 0.68 : 0.5 });
+  }
+
+  updatePryDustEffects(deltaSeconds) {
+    this.pryDustEffects ??= [];
+    const dt = Math.min(deltaSeconds, 0.05);
+    this.pryDustEffects = this.pryDustEffects.filter((effect) => {
+      effect.life -= dt;
+      const attribute = effect.points.geometry.getAttribute('position');
+      for (let index = 0; index < effect.velocities.length; index += 1) {
+        effect.velocities[index].y -= dt * 0.7;
+        attribute.setXYZ(index,
+          attribute.getX(index) + effect.velocities[index].x * dt,
+          attribute.getY(index) + effect.velocities[index].y * dt,
+          attribute.getZ(index) + effect.velocities[index].z * dt);
+      }
+      attribute.needsUpdate = true;
+      effect.points.material.opacity = Math.max(0, 0.72 * effect.life / effect.maxLife);
+      if (effect.life > 0) return true;
+      this.scene.remove(effect.points);
+      effect.points.geometry.dispose();
+      effect.points.material.dispose();
+      return false;
+    });
   }
 
   strikeFolsomShedGrowth() {

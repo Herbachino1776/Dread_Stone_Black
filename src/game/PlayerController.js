@@ -81,9 +81,10 @@ export class PlayerController {
     if (Math.abs(this.eyeHeight - this.targetEyeHeight) < 0.002) this.eyeHeight = this.targetEyeHeight;
     this.position.y += this.eyeHeight - previousEyeHeight;
     if (this.collisionWorld) this.collisionWorld.eyeHeight = this.eyeHeight;
-    const keyboardMove = this.getKeyboardMove();
-    const moveX = controls.move.x || keyboardMove.x;
-    const moveY = controls.move.y || keyboardMove.y;
+    const inputConstrained = controls.physicalToolSeated === true;
+    const keyboardMove = inputConstrained ? { x: 0, y: 0 } : this.getKeyboardMove();
+    const moveX = inputConstrained ? 0 : (controls.move.x || keyboardMove.x);
+    const moveY = inputConstrained ? 0 : (controls.move.y || keyboardMove.y);
 
     const forward = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     // Keep positive X input as camera-relative right for both the touch stick and keyboard strafing.
@@ -115,7 +116,7 @@ export class PlayerController {
       }
     }
 
-    const look = controls.consumeLookDelta();
+    const look = inputConstrained ? { x: 0, y: 0 } : controls.consumeLookDelta();
     if (typeof look === 'number') {
       this.yaw -= look * this.turnSpeed;
     } else {
@@ -127,10 +128,10 @@ export class PlayerController {
       );
     }
 
-    if (this.keyboard.has('ArrowLeft')) this.yaw += 1.25 * deltaSeconds;
-    if (this.keyboard.has('ArrowRight')) this.yaw -= 1.25 * deltaSeconds;
-    if (this.keyboard.has('PageUp')) this.pitch = THREE.MathUtils.clamp(this.pitch - 1.1 * deltaSeconds, -this.maxPitch, this.maxPitch);
-    if (this.keyboard.has('PageDown')) this.pitch = THREE.MathUtils.clamp(this.pitch + 1.1 * deltaSeconds, -this.maxPitch, this.maxPitch);
+    if (!inputConstrained && this.keyboard.has('ArrowLeft')) this.yaw += 1.25 * deltaSeconds;
+    if (!inputConstrained && this.keyboard.has('ArrowRight')) this.yaw -= 1.25 * deltaSeconds;
+    if (!inputConstrained && this.keyboard.has('PageUp')) this.pitch = THREE.MathUtils.clamp(this.pitch - 1.1 * deltaSeconds, -this.maxPitch, this.maxPitch);
+    if (!inputConstrained && this.keyboard.has('PageDown')) this.pitch = THREE.MathUtils.clamp(this.pitch + 1.1 * deltaSeconds, -this.maxPitch, this.maxPitch);
 
     this.syncCamera();
   }

@@ -119,6 +119,49 @@ export class PhysicalToolTargetRegistry {
     return this.findActivePartSweepContact(start, end, profile);
   }
 
+  getSocketContact(point, profile) {
+    if (!point || !this.camera || !this.viewport) return null;
+    const candidates = [];
+    for (const target of this.getTargets()) {
+      if (target.acceptedActionType !== 'pry' || !target.socket || !this.isInWorldRange(target)) continue;
+      const socketTarget = { ...target, target: target.socket.position ?? target.target };
+      const screen = this.projectTarget(socketTarget);
+      if (!screen) continue;
+      const radius = target.socket.seatingRadiusPx ?? target.contactRadiusPx ?? profile?.contactRadiusPx ?? 58;
+      const distance = Math.hypot(point.x - screen.x, point.y - screen.y);
+      if (distance > radius) continue;
+      const socketWorld = resolveVector(target.socket.position ?? target.target).clone();
+      const rect = this.viewport.getBoundingClientRect();
+      unprojectScreenPoint(point, screen.depth, this.camera, rect, worldSweepEnd);
+      const worldDistance = socketWorld.distanceTo(worldSweepEnd);
+      const worldRadius = target.socket.volume?.radius ?? 0.5;
+      if (worldDistance > worldRadius) continue;
+      candidates.push({
+        target,
+        screen,
+        distance,
+        radius,
+        activePartKind: 'pry-tip',
+        world: socketWorld,
+        worldDistance,
+        worldRadius,
+      });
+    }
+    return candidates.sort((a, b) => a.distance - b.distance)[0] ?? null;
+  }
+
+  canSeat(target, { toolId, actionType, tipPoint, motionPx = 0 } = {}) {
+    if (!target || target.complete === true || target.available === false) return { accepted: false, reason: 'unavailable' };
+    const prerequisitesMet = typeof target.prerequisitesMet === 'function' ? target.prerequisitesMet() : target.prerequisitesMet !== false;
+    if (!prerequisitesMet) return { accepted: false, reason: 'prerequisite' };
+    if (target.acceptedToolId !== toolId) return { accepted: false, reason: 'wrong-tool' };
+    if (target.acceptedActionType !== actionType) return { accepted: false, reason: 'wrong-action' };
+    const contact = this.getSocketContact(tipPoint, getPhysicalProfileFallback(target));
+    if (!contact || contact.target.id !== target.id) return { accepted: false, reason: 'socket-far' };
+    if (motionPx < (target.socket?.minSeatMotionPx ?? 5)) return { accepted: false, reason: 'socket-motion' };
+    return { accepted: true, contact };
+  }
+
   evaluate(target, { toolId, actionType, gesture, contact } = {}) {
     if (!target || target.complete === true || target.available === false) return { accepted: false, reason: 'unavailable' };
     const prerequisitesMet = typeof target.prerequisitesMet === 'function' ? target.prerequisitesMet() : target.prerequisitesMet !== false;
@@ -127,11 +170,15 @@ export class PhysicalToolTargetRegistry {
     if (target.acceptedActionType !== actionType) return { accepted: false, reason: 'wrong-action', feedback: target.failFeedback?.wrongAction };
     if (!contact) return { accepted: false, reason: 'miss' };
 
+    if (actionType === 'pry' && (gesture?.socketState !== 'tension_pry' || (gesture?.strain ?? 0) < 1)) {
+      return { accepted: false, reason: 'not-seated' };
+    }
+
     const requirements = target.requiredGesture ?? {};
-    if ((gesture?.travelPx ?? 0) < (requirements.minTravelPx ?? 0)) return { accepted: false, reason: 'weak-gesture' };
-    if ((gesture?.velocityPxPerSecond ?? 0) < (requirements.minVelocityPxPerSecond ?? 0)) return { accepted: false, reason: 'slow-gesture' };
-    if ((gesture?.velocityPxPerSecond ?? 0) > (requirements.maxVelocityPxPerSecond ?? Infinity)) return { accepted: false, reason: 'fast-gesture' };
-    if ((gesture?.smoothness ?? 0) < (requirements.minSmoothness ?? 0)) return { accepted: false, reason: 'erratic-gesture' };
+    if (actionType !== 'pry' && (gesture?.travelPx ?? 0) < (requirements.minTravelPx ?? 0)) return { accepted: false, reason: 'weak-gesture' };
+    if (actionType !== 'pry' && (gesture?.velocityPxPerSecond ?? 0) < (requirements.minVelocityPxPerSecond ?? 0)) return { accepted: false, reason: 'slow-gesture' };
+    if (actionType !== 'pry' && (gesture?.velocityPxPerSecond ?? 0) > (requirements.maxVelocityPxPerSecond ?? Infinity)) return { accepted: false, reason: 'fast-gesture' };
+    if (actionType !== 'pry' && (gesture?.smoothness ?? 0) < (requirements.minSmoothness ?? 0)) return { accepted: false, reason: 'erratic-gesture' };
     if (actionType === 'pry' && (gesture?.leverTravelPx ?? 0) < (requirements.minLeverTravelPx ?? requirements.minTravelPx ?? 0)) {
       return { accepted: false, reason: 'short-pry' };
     }
@@ -162,4 +209,8 @@ export class PhysicalToolTargetRegistry {
     const result = target.receivePhysicalToolEvent?.(event) ?? { accepted: false, reason: 'no-receiver' };
     return { accepted: result?.accepted !== false && result?.changed !== false, ...result, event };
   }
+}
+
+function getPhysicalProfileFallback(target) {
+  return { contactRadiusPx: target?.socket?.seatingRadiusPx ?? target?.contactRadiusPx ?? 58 };
 }

@@ -14,7 +14,7 @@ The implemented spine remains valuable production truth:
 4. Recover the Keeper's Lantern in the side room and reveal the under-shrine convergence marks and three surface feeds.
 5. Cut open the low maintenance panel and inspect the bounded crawlspace ending at the blocked maintenance throat.
 6. Physically chop the fire-hardened endpoint with the Axe and cut the pond/shrine endpoints with the Knife, weakening their revealed feeds and unsealing the Underworks gate.
-7. Enter `beneath-folsom`, recover the visible Iron Drain Bar, plant it at the grate pry point, and pull a steady lever arc.
+7. Enter `beneath-folsom`, recover the visible Iron Drain Bar, guide its tip into the grate's bent rusted socket, feel it seat, and pull the grip through the short constrained lever arc.
 8. Use the Lantern's bounded reveal wash to expose the hidden glyph/growth gate.
 9. Clear that hidden growth in exactly five successful knife hits while it is revealed.
 10. Cross the blue-flame threshold hallway, pry open the explicit lower shrine hatch with the Iron Drain Bar, and expose the Lower Shrine Stair.
@@ -37,7 +37,9 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - Left-side movement remains untouched. Right-side look and offhand aim remain normal unless a touch begins inside the held-tool grip zone. Torch/Lantern coexistence and Lantern reveal behavior remain unchanged.
 - Knife uses a fast cut/slash. Its handle starts lower-right, its blade angles upward, and only the moving blade owns thin cord, film, seam, and exposed-knot contact.
 - Axe uses a heavy chop. Its handle starts lower-right, its head rests above/right, and only the head crosses the target during a slower, smooth committed stroke; over-fast or squiggly follow-through does not advance heavy targets.
-- Iron Drain Bar uses plant-and-pry only. Its lower bar is the grip; its tip must contact an authored pry point, plant, lean, and pull through a steady lever arc. It is not a sword or chop tool.
+- Iron Drain Bar uses socketed lever prying only. Its lower-right grip remains the touch point while the tip must already be near an authored visible socket/fulcrum before a short physical settle can seat it. Once seated, the tip stays anchored and the handle follows the target's constrained lever arc. It is not a sword or chop tool.
+- Pry targets author socket geometry and volume, accepted tool/action, lever direction and arc, tension threshold, blocker id, completion save key, and visual strain stages. The drain grate has the shortest and most forgiving seat; the lower shrine hatch has a smaller notch, longer arc, and heavier strain.
+- Early and mid lever travel visibly widen or lift the blocker. The final 20% adds escalating shake, creak, and metal/stone strain before completion. Releasing early unseats or partially relaxes according to the target; no progress occurs from unseated motion.
 - Interact/A has no growth or pry victory fallback. Misses and wrong-tool contacts may animate and refuse physically, but they never advance target state.
 - The shed clear remains exactly three successful physical Knife contacts with hit reaction, cord snap, black-oil feedback, collapse, screen shake, and persisted opening.
 - The shed reward remains Wood Axe + Torch.
@@ -49,12 +51,12 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - The crawlspace lowers the first-person eye height on entry and restores it on exit so the player view remains below its authored roof.
 - The fire-hardened endpoint uses a physical Wood Axe chop; pond and shrine use physical Old Work Knife cuts. Cleared anchors and their feeds remain world state, not inventory tokens.
 - The Underworks transition remains gated by `folsom_underworks_growth_unsealed`, with a reliable return route to Folsom.
-- The Iron Drain Bar remains a persistent local pry tool for the drain grate.
+- The Iron Drain Bar remains a persistent local pry tool for the drain grate. Its tip seats in the obvious bent/rusted socket; the grip drives a short forgiving arc, and completion persists `beneath_folsom_drain_grate_pried`.
 - The Keeper's Lantern remains an offhand light with a separate bounded reveal test. Torch and ambient light do not reveal hidden glyph art.
 - `beneath_folsom_keepers_lantern_reveal_seen` is intended to record discovery without making glyphs permanently visible, but the current inspected runtime does not reliably write it. Do not claim this state as complete until it is wired or removed.
 - The hidden lower growth gate requires the Keeper's Lantern reveal, the Old Work Knife, and exactly five successful hits. Its final clear persists and opens the blue-flame threshold.
 - The blue-flame hallway is threshold atmosphere, not a replacement for the lower shrine hatch.
-- The explicit BF04/BF05 hatch requires the hidden gate clear and Iron Drain Bar, rejects bare-hand attempts, opens with slow stone/metal strain and strong physical feedback, and persists `beneath_folsom_lower_shrine_hatch_open`.
+- The explicit BF04/BF05 hatch requires the hidden gate clear and Iron Drain Bar, rejects bare-hand and unseated attempts, and uses a heavy stone/iron notch with a longer arc and stronger final tension than the drain grate. It persists `beneath_folsom_lower_shrine_hatch_open`.
 - Use environmental teaching. Do not add tutorial prose to these loops.
 - Enemy combat remains intentionally deferred. The reusable physical target receiver can accept future hit receivers, but this milestone adds no enemies, AI, character damage, bosses, or arenas.
 

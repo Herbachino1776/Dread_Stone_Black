@@ -116,12 +116,18 @@ export class UnderShrineLabyrinthEndHatchRuntime {
     this.gameState = gameState;
     this.interactions = interactions;
     this.hatch = compiledGroup?.getObjectByName('under_shrine_labyrinth_end_hatch') ?? null;
+    this.socket = compiledGroup?.getObjectByName('under_shrine_labyrinth_end_hatch_pry_socket') ?? null;
     this.blocker = (collision?.blockerRects ?? []).find((candidate) => candidate.id === 'under_shrine_labyrinth_end_hatch_blocker') ?? null;
     this.open = Boolean(gameState?.isUnderShrineLabyrinthEndHatchOpen?.());
     this.progress = this.open ? 1 : 0;
+    this.pryStrain = 0;
     if (this.hatch) {
       this.hatch.userData.closedPosition = this.hatch.position.clone();
       this.hatch.userData.closedRotation = this.hatch.rotation.clone();
+    }
+    if (this.socket) {
+      this.socket.userData.closedPosition = this.socket.position.clone();
+      this.socket.userData.closedRotation = this.socket.rotation.clone();
     }
     if (this.open) this.applyOpenState();
   }
@@ -132,6 +138,20 @@ export class UnderShrineLabyrinthEndHatchRuntime {
     this.gameState?.markUnderShrineLabyrinthEndHatchOpen?.();
     if (this.blocker) this.collision?.removeBlocker?.(this.blocker);
     return { changed, opened: true, message: changed ? 'The buried end hatch tears inward.' : 'The end hatch stands open behind the White-Scab threshold.' };
+  }
+
+  setPryStrain(strain = 0) {
+    if (this.open) return;
+    this.pryStrain = Math.max(this.pryStrain * 0.25, Math.min(1, Math.max(0, strain)));
+    this.progress = this.pryStrain * 0.32;
+    this.applyProgress(this.progress);
+  }
+
+  releasePry(retainFactor = 0.1) {
+    if (this.open) return;
+    this.pryStrain *= Math.max(0, Math.min(1, retainFactor));
+    this.progress = this.pryStrain * 0.32;
+    this.applyProgress(this.progress);
   }
 
   update(deltaSeconds) {
@@ -146,6 +166,12 @@ export class UnderShrineLabyrinthEndHatchRuntime {
     this.hatch.rotation.copy(this.hatch.userData.closedRotation);
     this.hatch.position.x += progress * 1.1;
     this.hatch.rotation.z -= progress * 1.18;
+    if (this.socket?.userData.closedPosition) {
+      this.socket.position.copy(this.socket.userData.closedPosition);
+      this.socket.rotation.copy(this.socket.userData.closedRotation);
+      this.socket.position.x += progress * 1.1;
+      this.socket.rotation.z -= progress * 1.18;
+    }
   }
 
   applyOpenState() {
