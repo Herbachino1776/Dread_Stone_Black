@@ -2,12 +2,15 @@ import * as THREE from 'three';
 import { KEEPERS_LANTERN_VIEWMODEL_LAYER } from '../viewmodels/KeepersLanternViewmodel.js';
 
 const READY_POSES = Object.freeze({
-  old_work_knife: Object.freeze({ position: [0.72, -0.64, -1.12], rotation: [-0.18, -0.18, -0.56] }),
-  wood_axe: Object.freeze({ position: [0.78, -0.82, -1.45], rotation: [-0.1, -0.2, -0.5] }),
-  iron_drain_bar: Object.freeze({ position: [0.72, -0.74, -1.34], rotation: [-0.18, -0.12, -0.62] }),
+  old_work_knife: Object.freeze({ screen: [0.25, -0.5], depth: 1.18, rotation: [-0.18, -0.18, -0.56], motion: [0.38, 0.3] }),
+  wood_axe: Object.freeze({ screen: [0.05, -0.56], depth: 1.58, rotation: [-0.1, -0.2, -0.5], motion: [0.34, 0.26] }),
+  iron_drain_bar: Object.freeze({ screen: [0.02, -0.54], depth: 1.48, rotation: [-0.18, -0.12, -0.62], motion: [0.34, 0.27] }),
 });
 
 const screenPoint = new THREE.Vector3();
+const readyPosition = new THREE.Vector3();
+const projectedBox = new THREE.Box3();
+const projectedCorner = new THREE.Vector3();
 
 function makeMaterial(color, roughness = 0.82, metalness = 0) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
@@ -128,11 +131,30 @@ export class PhysicalToolViewmodel {
     this.recoilStrength = THREE.MathUtils.clamp(strength, 0.35, 1.6);
   }
 
+  getReadyPosition(pose, target = readyPosition) {
+    const depth = pose.depth;
+    const verticalHalfExtent = Math.tan(THREE.MathUtils.degToRad((this.camera?.fov ?? 68) * 0.5)) * depth;
+    const horizontalHalfExtent = verticalHalfExtent * (this.camera?.aspect ?? 1);
+    return target.set(
+      pose.screen[0] * horizontalHalfExtent,
+      pose.screen[1] * verticalHalfExtent,
+      -depth,
+    );
+  }
+
   update(deltaSeconds) {
     const toolId = this.getActiveToolId();
     this.root.visible = Boolean(toolId);
     this.toolGroups.forEach((group, id) => { group.visible = id === toolId; });
-    if (!toolId) return;
+    if (!toolId) {
+      this.lastToolId = null;
+      return;
+    }
+    if (toolId !== this.lastToolId) {
+      Object.keys(this.smoothedMotion).forEach((key) => { this.smoothedMotion[key] = 0; });
+      this.gesture = null;
+      this.lastToolId = toolId;
+    }
     const pose = READY_POSES[toolId];
     const dt = THREE.MathUtils.clamp(deltaSeconds, 0.001, 0.05);
     this.elapsed += dt;
@@ -140,12 +162,14 @@ export class PhysicalToolViewmodel {
     const nx = THREE.MathUtils.clamp((gesture?.deltaX ?? 0) / 170, -1, 1);
     const ny = THREE.MathUtils.clamp((gesture?.deltaY ?? 0) / 170, -1, 1);
     const pry = toolId === 'iron_drain_bar' && gesture?.planted;
-    const activeScale = toolId === 'wood_axe' ? 0.62 : 0.82;
     const follow = toolId === 'old_work_knife' ? 22 : toolId === 'wood_axe' ? 10.5 : 8.5;
     const alpha = 1 - Math.exp(-follow * dt);
+    const readyPosition = this.getReadyPosition(pose);
+    const verticalHalfExtent = Math.tan(THREE.MathUtils.degToRad((this.camera?.fov ?? 68) * 0.5)) * pose.depth;
+    const horizontalHalfExtent = verticalHalfExtent * (this.camera?.aspect ?? 1);
     const desired = {
-      x: nx * 0.34 * activeScale,
-      y: -ny * 0.26 * activeScale,
+      x: nx * horizontalHalfExtent * pose.motion[0],
+      y: -ny * verticalHalfExtent * pose.motion[1],
       z: gesture ? (pry ? -0.34 : -0.08 * Math.min(1, (gesture.travelPx ?? 0) / 90)) : 0,
       pitch: ny * (pry ? 0.78 : 0.34),
       yaw: -nx * (pry ? 0.38 : 0.24),
@@ -155,9 +179,9 @@ export class PhysicalToolViewmodel {
       this.smoothedMotion[key] = THREE.MathUtils.lerp(this.smoothedMotion[key], desired[key], alpha);
     });
     this.root.position.set(
-      pose.position[0] + this.smoothedMotion.x,
-      pose.position[1] + this.smoothedMotion.y,
-      pose.position[2],
+      readyPosition.x + this.smoothedMotion.x,
+      readyPosition.y + this.smoothedMotion.y,
+      readyPosition.z,
     );
     this.root.rotation.set(pose.rotation[0], pose.rotation[1], pose.rotation[2], 'YXZ');
     this.motionPivot.rotation.set(
@@ -191,6 +215,30 @@ export class PhysicalToolViewmodel {
     const radius = Math.max(76, Math.min(125, Math.min(rect.width, rect.height) * 0.2));
     screenPoint.set(x, y, point.z);
     return point.z >= -1 && point.z <= 1 && Math.hypot(clientX - x, clientY - y) <= radius;
+  }
+
+  getProjectedBounds(toolId = this.getActiveToolId()) {
+    const group = this.toolGroups.get(toolId);
+    if (!group || !this.camera) return null;
+    this.camera.updateMatrixWorld(true);
+    this.root.updateMatrixWorld(true);
+    projectedBox.setFromObject(group);
+    if (projectedBox.isEmpty()) return null;
+    const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minDepth: Infinity, maxDepth: -Infinity };
+    for (const x of [projectedBox.min.x, projectedBox.max.x]) {
+      for (const y of [projectedBox.min.y, projectedBox.max.y]) {
+        for (const z of [projectedBox.min.z, projectedBox.max.z]) {
+          projectedCorner.set(x, y, z).project(this.camera);
+          bounds.minX = Math.min(bounds.minX, projectedCorner.x);
+          bounds.maxX = Math.max(bounds.maxX, projectedCorner.x);
+          bounds.minY = Math.min(bounds.minY, projectedCorner.y);
+          bounds.maxY = Math.max(bounds.maxY, projectedCorner.y);
+          bounds.minDepth = Math.min(bounds.minDepth, projectedCorner.z);
+          bounds.maxDepth = Math.max(bounds.maxDepth, projectedCorner.z);
+        }
+      }
+    }
+    return bounds;
   }
 
   rebind({ camera = this.camera } = {}) {

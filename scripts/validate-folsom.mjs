@@ -59,6 +59,28 @@ const toolCamera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 100);
 const toolViewmodel = new PhysicalToolViewmodel({ camera: toolCamera, equipmentRuntime: toolEquipment });
 toolViewmodel.update(1 / 60);
 assert.ok(toolViewmodel.root.visible && toolViewmodel.toolGroups.get('old_work_knife').visible, 'Equipped Old Work Knife has a visible camera-local ready pose.');
+const projectedVisibleFraction = (minimum, maximum) => Math.max(0, Math.min(1, maximum) - Math.max(-1, minimum)) / Math.max(0.001, maximum - minimum);
+const assertPhysicalToolPlacement = (toolId, aspect, label) => {
+  toolCamera.aspect = aspect;
+  toolCamera.updateProjectionMatrix();
+  if (toolId === 'wood_axe') {
+    toolEquipment.equip('tool', null);
+    toolEquipment.equip('weapon', 'wood_axe');
+  } else {
+    toolEquipment.equip('weapon', 'unarmed');
+    toolEquipment.equip('tool', toolId);
+  }
+  toolViewmodel.update(1 / 60);
+  const bounds = toolViewmodel.getProjectedBounds(toolId);
+  assert.ok(bounds && bounds.minDepth < 1 && bounds.maxDepth > -1, `${label} placement is in front of the viewmodel camera.`);
+  assert.ok(projectedVisibleFraction(bounds.minX, bounds.maxX) >= 0.9, `${label} keeps at least 90% of its width inside the camera frustum.`);
+  assert.ok(projectedVisibleFraction(bounds.minY, bounds.maxY) >= 0.9, `${label} keeps at least 90% of its height inside the camera frustum.`);
+};
+for (const [aspect, viewportLabel] of [[16 / 9, 'desktop'], [390 / 702, 'portrait mobile']]) {
+  assertPhysicalToolPlacement('old_work_knife', aspect, `${viewportLabel} Work Knife`);
+  assertPhysicalToolPlacement('wood_axe', aspect, `${viewportLabel} Wood Axe`);
+  assertPhysicalToolPlacement('iron_drain_bar', aspect, `${viewportLabel} Drain Bar`);
+}
 toolEquipment.equip('tool', 'iron_drain_bar'); toolViewmodel.update(1 / 60);
 assert.ok(toolViewmodel.toolGroups.get('iron_drain_bar').visible, 'Equipped Iron Drain Bar has a visible camera-local ready pose.');
 toolEquipment.equip('weapon', 'wood_axe'); toolViewmodel.update(1 / 60);
@@ -87,6 +109,20 @@ assert.equal(rightHandEquipment.getEquippedToolId(), 'old_work_knife', 'Right Ha
 assert.equal(rightHandPanel.getRightHandDisplayName(), 'Old Work Knife', 'Right-hand header visibly confirms the equipped Work Knife.');
 rightHandPanel.activePocket = 'keyItems';
 assert.equal(rightHandPanel.getPocketEntries(rightHandEquipment.getEquippedWeaponProfile()).some((entry) => entry.id === 'old_work_knife'), false, 'The Work Knife is no longer mislabeled as a Key Item.');
+const pickupEquipment = new EquipmentRuntime({
+  weaponProfiles: equipmentRegistry.weapons,
+  startingEquipment: { acquiredItemIds: ['unarmed', 'wood_axe'], equipped: { weapon: 'wood_axe', tool: null } },
+});
+const pickupInteractionRuntime = new Interactions({
+  player: { position: new THREE.Vector3() },
+  dungeon: { area: 'field', gameState: null, markInteractionCollected: () => true },
+  equipmentRuntime: pickupEquipment,
+  hud: { showHint: () => {}, showMessage: () => {}, updateFieldKitStatus: () => {} },
+});
+pickupInteractionRuntime.useEquipmentPickup({ id: 'knife-pickup-test', itemId: 'old_work_knife', acquiredMessage: 'Old Work Knife Acquired.' });
+assert.equal(pickupEquipment.hasItem('old_work_knife'), true, 'Knife pickup still acquires the item.');
+assert.equal(pickupEquipment.getEquippedWeaponProfile().id, 'wood_axe', 'Knife pickup does not replace the current right-hand weapon.');
+assert.equal(pickupEquipment.getEquippedToolId(), null, 'Knife pickup does not auto-equip the physical tool slot.');
 
 const interactionsSource = readFileSync(new URL('../src/game/Interactions.js', import.meta.url), 'utf8');
 ['strikeFolsomShedGrowth', 'strikeBeneathFolsomHiddenGrowthGate', 'clearFolsomGrowthAnchor', 'advanceFolsomShrineSideRoom', 'openFolsomShrineCrawlspace', 'pryBeneathFolsomDrainGrate', 'pryBeneathFolsomLowerShrineHatch', 'strikeBeneathFolsomWhiteScabLowerKnot', 'openUnderShrineLabyrinthEndHatch']
