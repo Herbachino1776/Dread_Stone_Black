@@ -49,6 +49,8 @@ export class FolsomShrineInvestigationRuntime {
     this.crawlspaceProgress = this.crawlspaceOpen ? 1 : 0;
     this.pulseRemaining = 0;
     this.revealHold = 0;
+    this.revealSurgeRemaining = 0;
+    this.knifeCutProgress = this.sideSealStage > 0 ? 1 : 0;
     this.effects = [];
     this.loadMaterials();
     this.findAuthoredParts();
@@ -116,14 +118,19 @@ export class FolsomShrineInvestigationRuntime {
       this.sideSeal.add(mesh);
       return mesh;
     });
-    this.cords = [-0.58, 0.06, 0.68].map((y, index) => {
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2.25 - index * 0.1, 0.24), createBlackGrowthPlaneMaterial(this.cordTexture));
-      mesh.name = `folsom-shrine-side-seal-cord-${index + 1}`;
-      mesh.position.set(0, y, 0.016 + index * 0.003);
+    this.cords = [-0.58, 0.06, 0.68].flatMap((y, index) => [-1, 1].map((side) => {
+      const width = (2.25 - index * 0.1) * 0.52;
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, 0.24), createBlackGrowthPlaneMaterial(this.cordTexture));
+      mesh.name = `folsom-shrine-side-seal-cord-${index + 1}-${side < 0 ? 'left' : 'right'}`;
+      mesh.position.set(side * width * 0.48, y, 0.016 + index * 0.003);
       mesh.rotation.z = index === 1 ? -0.16 : 0.12;
+      mesh.userData.intactPosition = mesh.position.clone();
+      mesh.userData.intactRotationZ = mesh.rotation.z;
+      mesh.userData.cutSide = side;
+      mesh.userData.cordIndex = index;
       this.sideSeal.add(mesh);
       return mesh;
-    });
+    }));
     this.knot = new THREE.Mesh(new THREE.DodecahedronGeometry(0.36, 0), createBlackGrowthKnotMaterial(this.knotTexture));
     this.knot.name = 'folsom-shrine-side-seal-hard-knot';
     this.knot.position.set(0.42, -0.28, -0.12);
@@ -134,7 +141,10 @@ export class FolsomShrineInvestigationRuntime {
   buildRevealMarks() {
     this.revealMarks = [];
     const specs = [
-      { name: 'folsom-under-shrine-convergence-mark', position: [-60.78, 1.55, 39], rotationY: Math.PI / 2, width: 1.9, height: 1.45, primary: true },
+      { name: 'folsom-under-shrine-convergence-mark', position: [-60.78, 1.55, 39], rotationY: Math.PI / 2, width: 2.15, height: 1.68, primary: true },
+      { name: 'folsom-under-shrine-fire-feed-mark', position: [-60.75, 1.82, 38.28], rotationY: Math.PI / 2, rotationZ: -0.58, width: 1.45, height: 0.34 },
+      { name: 'folsom-under-shrine-pond-feed-mark', position: [-60.74, 1.38, 39.02], rotationY: Math.PI / 2, rotationZ: 0.02, width: 1.62, height: 0.32 },
+      { name: 'folsom-under-shrine-shrine-feed-mark', position: [-60.73, 1.82, 39.72], rotationY: Math.PI / 2, rotationZ: 0.58, width: 1.45, height: 0.34 },
       { name: 'folsom-under-shrine-crawlspace-mark', position: [-64.6, 1.52, 40.42], rotationY: 0, width: 2.2, height: 0.58 },
       { name: 'folsom-under-shrine-terminal-mark', position: [-68.28, 1.48, 39], rotationY: Math.PI / 2, width: 1.85, height: 1.25 },
     ];
@@ -145,12 +155,36 @@ export class FolsomShrineInvestigationRuntime {
       mesh.name = spec.name;
       mesh.position.set(...spec.position);
       mesh.rotation.y = spec.rotationY;
-      mesh.rotation.z = index === 1 ? Math.PI / 2 : index * 0.08 - 0.04;
+      mesh.rotation.z = spec.rotationZ ?? (index === specs.length - 2 ? Math.PI / 2 : 0);
       mesh.visible = this.networkRevealed;
       mesh.renderOrder = 7;
       mesh.userData.primaryNetworkReveal = Boolean(spec.primary);
+      mesh.userData.restScale = mesh.scale.clone();
       this.scene.add(mesh);
       this.revealMarks.push(mesh);
+    });
+
+    this.revealCords = [
+      { name: 'folsom-under-shrine-cord-floor-entry', position: [-56.25, 0.825, 40.55], rotationX: -Math.PI / 2, rotationZ: -0.08, width: 3.25, height: 0.28 },
+      { name: 'folsom-under-shrine-cord-wall-fire', position: [-60.69, 1.42, 38.35], rotationY: Math.PI / 2, rotationZ: -0.58, width: 2.05, height: 0.22 },
+      { name: 'folsom-under-shrine-cord-wall-pond', position: [-60.68, 1.24, 39], rotationY: Math.PI / 2, width: 2.25, height: 0.23 },
+      { name: 'folsom-under-shrine-cord-wall-shrine', position: [-60.67, 1.42, 39.65], rotationY: Math.PI / 2, rotationZ: 0.58, width: 2.05, height: 0.22 },
+      { name: 'folsom-under-shrine-cord-crawlspace-north', position: [-64.75, 1.03, 40.43], rotationZ: 0.04, width: 6.6, height: 0.24 },
+      { name: 'folsom-under-shrine-cord-crawlspace-floor', position: [-65.1, 0.825, 38.25], rotationX: -Math.PI / 2, rotationZ: 0.08, width: 6.5, height: 0.3 },
+      { name: 'folsom-under-shrine-cord-terminal-root', position: [-68.34, 1.18, 39], rotationY: Math.PI / 2, rotationZ: -0.32, width: 2.45, height: 0.34 },
+    ].map((spec) => {
+      const material = createBlackGrowthPlaneMaterial(this.cordTexture, { opacity: 0 });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(spec.width, spec.height), material);
+      mesh.name = spec.name;
+      mesh.position.set(...spec.position);
+      mesh.rotation.set(spec.rotationX ?? 0, spec.rotationY ?? 0, spec.rotationZ ?? 0);
+      mesh.visible = this.networkRevealed;
+      mesh.renderOrder = 6;
+      mesh.userData.networkCord = true;
+      mesh.userData.restScale = mesh.scale.clone();
+      this.scene.add(mesh);
+      this.revealMarks.push(mesh);
+      return mesh;
     });
   }
 
@@ -194,8 +228,7 @@ export class FolsomShrineInvestigationRuntime {
       if (!hasKnife) return { changed: false, opened: false, message: 'Thin black cords bind the side latch.' };
       this.sideSealStage = 1;
       this.pulseRemaining = 0.32;
-      this.cords[0].visible = false;
-      this.cords[2].rotation.z -= 0.3;
+      this.knifeCutProgress = 0.001;
       this.scabs.forEach((mesh) => {
         mesh.material.map = this.damagedTextures[mesh.userData.textureIndex];
         mesh.material.needsUpdate = true;
@@ -207,9 +240,12 @@ export class FolsomShrineInvestigationRuntime {
     this.sideSealStage = 2;
     this.sideRoomOpen = true;
     this.pulseRemaining = 0.45;
+    this.knot.material.map = this.damagedTextures[1];
+    this.knot.material.needsUpdate = true;
     this.gameState?.markFolsomShrineSideRoomOpen?.();
     this.sideDoorBlockers.forEach((blocker) => this.collision?.removeBlocker?.(blocker));
-    this.spawnOilImpact(10);
+    this.spawnOilImpact(14);
+    this.spawnKnotFragments();
     return { changed: true, opened: true, message: 'The axe cracks the knot. The old side door gives.' };
   }
 
@@ -227,6 +263,7 @@ export class FolsomShrineInvestigationRuntime {
   markNetworkRevealed() {
     if (this.networkRevealed) return false;
     this.networkRevealed = true;
+    this.revealSurgeRemaining = 1.1;
     this.gameState?.markFolsomUnderShrineNetworkRevealed?.();
     this.onNetworkRevealed?.();
     this.revealMarks.forEach((mesh) => { mesh.visible = true; });
@@ -246,9 +283,28 @@ export class FolsomShrineInvestigationRuntime {
     }
   }
 
+  spawnKnotFragments() {
+    for (let index = 0; index < 6; index += 1) {
+      const fragment = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.08 + Math.random() * 0.07, 0),
+        createBlackGrowthKnotMaterial(this.knotTexture),
+      );
+      fragment.name = 'folsom-shrine-short-lived-knot-fragment';
+      fragment.position.copy(SIDE_SEAL_TARGET).add(new THREE.Vector3((Math.random() - 0.5) * 0.45, -0.18 + Math.random() * 0.45, (Math.random() - 0.5) * 0.3));
+      this.scene.add(fragment);
+      this.effects.push({
+        object: fragment,
+        life: 0.55 + Math.random() * 0.24,
+        velocity: new THREE.Vector3((Math.random() - 0.5) * 1.8, 0.6 + Math.random() * 1.2, (Math.random() - 0.5) * 1.1),
+        angularVelocity: new THREE.Vector3(Math.random() * 7, Math.random() * 6, Math.random() * 8),
+      });
+    }
+  }
+
   update(deltaSeconds) {
     const dt = Math.min(deltaSeconds, 0.05);
     this.updateReveal(dt);
+    this.updateKnifeCut(dt);
     this.updatePulse(dt);
     this.updateDoor(dt);
     this.updateCrawlspacePanel(dt);
@@ -263,12 +319,32 @@ export class FolsomShrineInvestigationRuntime {
       const inside = emitterActive && isObjectInsideLanternWash(emitter, mesh, REVEAL_CONFIG, { wasRevealed: mesh.userData.insideLanternWash });
       mesh.userData.insideLanternWash = inside;
       if (inside && mesh.userData.primaryNetworkReveal) primaryHit = true;
-      const targetOpacity = inside ? 0.9 : this.networkRevealed ? 0.2 : 0;
+      const persistentOpacity = mesh.userData.networkCord ? 0.34 : 0.2;
+      const targetOpacity = inside ? (mesh.userData.networkCord ? 0.82 : 0.9) : this.networkRevealed ? persistentOpacity : 0;
       mesh.material.opacity = THREE.MathUtils.lerp(mesh.material.opacity, targetOpacity, 1 - Math.exp(-(inside ? 10 : 8) * dt));
       mesh.visible = mesh.material.opacity > 0.002 || this.networkRevealed;
+      const surge = this.revealSurgeRemaining > 0 ? Math.sin(this.revealSurgeRemaining * Math.PI * 5) * 0.055 : 0;
+      mesh.scale.setScalar(1 + Math.max(0, surge));
     });
     this.revealHold = primaryHit ? this.revealHold + dt : Math.max(0, this.revealHold - dt * 2);
     if (this.revealHold >= 0.12) this.markNetworkRevealed();
+    this.revealSurgeRemaining = Math.max(0, this.revealSurgeRemaining - dt);
+  }
+
+  updateKnifeCut(dt) {
+    if (this.sideSealStage < 1 || this.knifeCutProgress >= 1) return;
+    this.knifeCutProgress = Math.min(1, this.knifeCutProgress + dt * 3.4);
+    const eased = 1 - ((1 - this.knifeCutProgress) ** 3);
+    this.cords.forEach((cord) => {
+      const base = cord.userData.intactPosition;
+      const side = cord.userData.cutSide;
+      const index = cord.userData.cordIndex;
+      cord.position.copy(base);
+      cord.position.x += side * eased * (0.22 + index * 0.035);
+      cord.position.y -= eased * (0.18 + index * 0.07);
+      cord.rotation.z = cord.userData.intactRotationZ + side * eased * (0.42 + index * 0.08);
+      cord.scale.y = 1 - eased * 0.28;
+    });
   }
 
   updatePulse(dt) {
@@ -333,6 +409,11 @@ export class FolsomShrineInvestigationRuntime {
       }
       effect.object.position.addScaledVector(effect.velocity, dt);
       effect.velocity.y -= dt * 2.4;
+      if (effect.angularVelocity) {
+        effect.object.rotation.x += effect.angularVelocity.x * dt;
+        effect.object.rotation.y += effect.angularVelocity.y * dt;
+        effect.object.rotation.z += effect.angularVelocity.z * dt;
+      }
       effect.object.material.opacity = Math.min(0.86, effect.life / 0.18);
       return true;
     });

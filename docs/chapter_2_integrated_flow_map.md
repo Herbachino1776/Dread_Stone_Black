@@ -2,7 +2,7 @@
 
 ## Production status
 
-The Lantern-first Folsom network backfill is implemented. The Shrine Side Room and maintenance crawlspace are real authored spaces, the Keeper's Lantern is canonical in the side room, and the retained surface anchors are endpoints of a revealed under-shrine network.
+The Lantern-first Folsom network backfill is implemented and setpiece-hardened. The Shrine Side Room is a dressed keeper maintenance chamber, the bounded crawlspace has a physically reinforced no-bypass throat, the Keeper's Lantern is canonical in the side room, and the retained surface anchors are readable endpoints of a revealed under-shrine network.
 
 The lower shrine hatch remains the final blocking reconciliation item. White-Scab Hall mechanics remain paused.
 
@@ -26,7 +26,7 @@ Growth-bound side door
 SHRINE SIDE ROOM
 Keeper's Lantern canonical pickup
   |
-  | bounded Lantern wash reveals convergence marks
+  | bounded Lantern wash reveals three-way marks and buried cords
   | save: folsom_under_shrine_network_revealed
   v
 LOW MAINTENANCE PANEL
@@ -35,7 +35,7 @@ LOW MAINTENANCE PANEL
   | save: folsom_shrine_crawlspace_open
   v
 SHRINE CRAWLSPACE
-Blocked maintenance throat; no route bypass
+Low frames + buried slabs + cords -> barred stone throat; no route bypass
   |
   | revealed feeds point back to the surface network
   v
@@ -67,10 +67,17 @@ BF05 LOWER SHRINE STAIR / CHAPTER 3 SKELETON
 - `folsom_shrine_side_room_floor`: keeper maintenance room
 - `folsom_shrine_side_room_door`: physical staged side seal
 - `folsom_shrine_keeper_workbench`: canonical Lantern setting
+- `folsom_shrine_keeper_broken_work_surface`: failed keeper work station
+- `folsom_shrine_keeper_wall_shelf_low` / `folsom_shrine_keeper_wall_shelf_high`: maintenance storage dressing
+- `folsom_shrine_keeper_floor_slab` / `folsom_shrine_keeper_floor_grate`: low work slab and cord-entry ironwork
+- `folsom_shrine_keeper_frame_*`: old timber pressure framing
 - `folsom_shrine_crawlspace_panel`: Lantern-readable low panel
 - `folsom_shrine_crawlspace_floor`: short maintenance passage
+- `folsom_shrine_crawlspace_frame_*`: repeated low maintenance frames
+- `folsom_shrine_crawlspace_buried_slab_left` / `folsom_shrine_crawlspace_buried_slab_right`: pressed-in stone dressing
 - `folsom_shrine_crawlspace_terminal_slab`: solid no-bypass endpoint
-- `beneath_folsom_keeper_niche_empty_hook`: retired BF03 pickup dressing
+- `folsom_shrine_crawlspace_terminal_stone_collar`: heavy throat framing around the terminal grate
+- `beneath_folsom_keeper_niche_backplate`, `beneath_folsom_keeper_niche_empty_hook`, and related bracket/ring/dust-shadow props: retired BF03 pickup dressing
 
 ## State contract
 
@@ -95,6 +102,7 @@ Keeper's Lantern ownership remains equipment state under the unchanged `keepers_
 - Existing `keepers_lantern` ownership hides the side-room pickup; acquisition cannot duplicate the item.
 - Any existing anchor clear, Underworks unseal, drain-grate clear, or hidden-gate clear migrates `folsom_under_shrine_network_revealed` to true.
 - Existing anchor clears are never reset and completed endpoints are not replayed.
+- Fresh saves require both persisted and active runtime reveal state before surface-endpoint prompts are eligible.
 - Existing Underworks access and the Beneath Folsom return route remain valid.
 - The BF03 niche is environmental dressing only. Saves without the Lantern acquire it through the side room and can always return from Beneath Folsom.
 

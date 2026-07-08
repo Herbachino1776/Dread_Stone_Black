@@ -4,7 +4,7 @@ This is the current Dread Stone Black production lock. It overrides older strate
 
 ## Current status
 
-The first reconciliation backfill is implemented. The Shrine Side Room and maintenance crawlspace are physical Folsom spaces, the Keeper's Lantern is acquired canonically in the side room, and fresh saves must reveal the under-shrine network before clearing its retained surface endpoints. Chapter 2 is still not strategy-complete because the lower shrine hatch handoff remains absent. Chapter 3 mechanics stay on hold.
+The first reconciliation backfill is implemented and hardened. The Shrine Side Room reads as an old keeper maintenance chamber with broken work surfaces, shelves, low slabs, timber pressure framing, floor ironwork, and cords entering the structure. Its maintenance crawlspace is low, framed, root-pressed, and visibly terminates at a barred stone throat. The Keeper's Lantern is acquired canonically in the side room, and fresh saves must reveal the under-shrine network before seeing usable surface-endpoint prompts or clearing those endpoints. Chapter 2 is still not strategy-complete because the lower shrine hatch handoff remains absent. Chapter 3 mechanics stay on hold.
 
 The implemented spine remains valuable production truth:
 
@@ -30,10 +30,11 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - The Old Work Knife is a short, worn work tool behind the shed, never a sword or fantasy dagger.
 - The shed clear remains exactly three successful swipes with physical hit reaction, cord snap, black-oil feedback, collapse, screen shake, and persisted opening.
 - The shed reward remains Wood Axe + Torch.
-- The Shrine Side Room seal remains a Knife-cords then Axe-knot sequence and persists `folsom_shrine_side_room_open`.
-- The Keeper's Lantern canonical pickup remains inside the Shrine Side Room. BF03 retains only an empty niche; existing Lantern ownership is never duplicated.
+- The Shrine Side Room seal remains a Knife-cords then Axe-knot sequence and persists `folsom_shrine_side_room_open`. The Knife visibly severs and drops the cord halves; the Axe fractures the damaged hard knot with the stronger door-opening response.
+- The Keeper's Lantern canonical pickup remains inside the Shrine Side Room. BF03 retains only an empty bracketed hook/niche with a removed-object dust shadow; existing Lantern ownership is never duplicated.
 - Fresh saves reveal the network with the Keeper's Lantern before surface endpoint interactions become available. Existing anchor/Underworks progress migrates to revealed state without replay.
-- The maintenance crawlspace remains bounded by a solid terminal throat and cannot bypass the Underworks gate.
+- The reveal reads as an under-shrine convergence: three rough pale branch marks and black cords lead from room seams into the crawlspace and connect to the retained surface feeds. Only the Keeper's Lantern reveal emitter can expose the hidden state; Torch and ambient light cannot.
+- The maintenance crawlspace remains bounded by a solid terminal throat and cannot bypass the Underworks gate. Low timber frames, buried slabs, revealed floor/wall cords, root pressure, iron bars, and a stone collar reinforce the endpoint.
 - Fire uses the Torch capability; pond and shrine use the Old Work Knife. Cleared anchors and their feeds remain world state, not inventory tokens.
 - The Underworks transition remains gated by `folsom_underworks_growth_unsealed`, with a reliable return route to Folsom.
 - The Iron Drain Bar remains a persistent local pry tool for the drain grate.

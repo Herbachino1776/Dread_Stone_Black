@@ -217,7 +217,7 @@ export class Interactions {
       const message = result?.message ?? interaction.message;
       this.setTemporaryHint(message, result?.opened ? 1800 : 1300);
       this.hud.showMessage(message);
-      if (result?.changed) this.feedback?.shake?.(result.opened ? { durationMs: 320, intensity: 0.13 } : { durationMs: 130, intensity: 0.045 });
+      if (result?.changed) this.feedback?.shake?.(result.opened ? { durationMs: 520, intensity: 0.19 } : { durationMs: 180, intensity: 0.065 });
       return false;
     }
 
@@ -967,7 +967,11 @@ export class Interactions {
 
   isOutdoorInteractionAvailable(interaction) {
     if (interaction.collected) return false;
-    if (interaction.requiresFolsomNetworkReveal && !this.dungeon.folsomConnectedGrowthRuntime?.networkRevealed) return false;
+    if (interaction.requiresFolsomNetworkReveal) {
+      const revealPersisted = this.dungeon.gameState?.isFolsomUnderShrineNetworkRevealed?.() === true;
+      const revealActive = this.dungeon.folsomConnectedGrowthRuntime?.networkRevealed === true;
+      if (!revealPersisted || !revealActive) return false;
+    }
     if (interaction.type === 'folsomShrineSideRoomSeal' && this.dungeon.folsomShrineInvestigationRuntime?.sideRoomOpen) return false;
     if (interaction.type === 'folsomShrineCrawlspacePanel' && this.dungeon.folsomShrineInvestigationRuntime?.crawlspaceOpen) return false;
     if (interaction.type === 'activeTimedAction') {

@@ -116,7 +116,12 @@ const props = [
   prop('beneath_folsom_alcove_timber_left', 'BF03', { x: -3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
   prop('beneath_folsom_alcove_timber_right', 'BF03', { x: 3.1, y: 1.55, z: 18.2 }, { width: 0.48, height: 3.1, depth: 0.58 }, 'timber', { tags: ['timber-support', 'opened-threshold'] }),
   prop('beneath_folsom_keeper_niche_shelf', 'BF03', { x: -2.75, y: 0.72, z: 18.8 }, { width: 1.2, height: 0.14, depth: 0.72 }, 'timber', { tags: ['keeper-niche', 'lantern-pickup-setting'] }),
+  prop('beneath_folsom_keeper_niche_backplate', 'BF03', { x: -2.75, y: 1.42, z: 19.17 }, { width: 1.35, height: 1.62, depth: 0.12 }, 'wetStone', { tags: ['keeper-niche', 'empty-lantern-outline', 'retired-pickup-setting'] }),
+  prop('beneath_folsom_keeper_niche_bracket_left', 'BF03', { x: -3.22, y: 1.02, z: 19.02 }, { width: 0.09, height: 0.62, depth: 0.09 }, 'rustedIron', { rotation: { x: 0, y: 0, z: -0.42 }, tags: ['keeper-niche', 'empty-shelf-bracket'] }),
+  prop('beneath_folsom_keeper_niche_bracket_right', 'BF03', { x: -2.28, y: 1.02, z: 19.02 }, { width: 0.09, height: 0.62, depth: 0.09 }, 'rustedIron', { rotation: { x: 0, y: 0, z: 0.42 }, tags: ['keeper-niche', 'empty-shelf-bracket'] }),
   prop('beneath_folsom_keeper_niche_empty_hook', 'BF03', { x: -2.75, y: 1.55, z: 19.08 }, { width: 0.08, height: 0.62, depth: 0.08 }, 'rustedIron', { rotation: { x: 0, y: 0, z: 0.18 }, tags: ['keeper-niche', 'empty-lantern-hook', 'post-backfill-dressing'] }),
+  prop('beneath_folsom_keeper_niche_empty_ring', 'BF03', { x: -2.68, y: 1.25, z: 19.02 }, { width: 0.28, height: 0.07, depth: 0.28 }, 'rustedIron', { tags: ['keeper-niche', 'empty-lantern-ring', 'no-pickup'] }),
+  prop('beneath_folsom_keeper_niche_dust_shadow', 'BF03', { x: -2.75, y: 0.805, z: 18.78 }, { width: 0.62, height: 0.025, depth: 0.42 }, 'mud', { tags: ['keeper-niche', 'lantern-removed-dust-shadow', 'no-pickup'] }),
   // A fractured threshold composition on the sealed lower wall. The large central
   // seal, lintel/base script, and leaning side marks read as one buried gate language,
   // while independent planes still let the moving lantern wash uncover it in pieces.
