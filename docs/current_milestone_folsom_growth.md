@@ -9,17 +9,19 @@ Chapter 2 remains complete through the blue-flame hallway, Iron Drain Bar lower-
 The implemented spine remains valuable production truth:
 
 1. Find the Old Work Knife behind the Folsom tool shed.
-2. Clear the shed seam growth in exactly three successful swipes and recover the Wood Axe and Torch.
-3. Cut the Shrine Side Room cords with the Knife, break the exposed knot with the Axe, and persist the opened room.
+2. Equip the visible Old Work Knife, grab it on the right-side touch surface, and clear the shed seam growth with exactly three physically contacting swipes before recovering the Wood Axe and Torch.
+3. Physically cut the Shrine Side Room cords with the Knife, then use a slower smooth Axe chop to break the exposed knot and persist the opened room.
 4. Recover the Keeper's Lantern in the side room and reveal the under-shrine convergence marks and three surface feeds.
 5. Cut open the low maintenance panel and inspect the bounded crawlspace ending at the blocked maintenance throat.
-6. Clear the retained fire, pond, and shrine surface endpoints, weakening their revealed feeds and unsealing the Underworks gate.
-7. Enter `beneath-folsom`, recover the Iron Drain Bar, and pry open the drain grate.
+6. Physically chop the fire-hardened endpoint with the Axe and cut the pond/shrine endpoints with the Knife, weakening their revealed feeds and unsealing the Underworks gate.
+7. Enter `beneath-folsom`, recover the visible Iron Drain Bar, plant it at the grate pry point, and pull a steady lever arc.
 8. Use the Lantern's bounded reveal wash to expose the hidden glyph/growth gate.
 9. Clear that hidden growth in exactly five successful knife hits while it is revealed.
 10. Cross the blue-flame threshold hallway, pry open the explicit lower shrine hatch with the Iron Drain Bar, and expose the Lower Shrine Stair.
 
 Reliably written route state also includes `beneath_folsom_white_scab_lower_knot_destroyed`, `folsom_shrine_crawlspace_terminal_open`, and `under_shrine_labyrinth_end_hatch_open`.
+
+The physical-tool migration is additive: completed blockers remain complete, and saves that had already reached the Chapter 3 terminal/lower-knot state migrate the newly physicalized labyrinth end hatch open to prevent a route softlock.
 
 This spine is an explicit adaptation, not the guide's complete Chapter 2 room list. The surface anchors serve as revealed endpoints of the under-shrine network instead of three underground pockets. The guide-correct lower shrine hatch now closes the BF04/BF05 seam and resolves the remaining structural debt. The Chapter 3 room skeleton remains preserved in [`chapter_3_location_flow_map.md`](chapter_3_location_flow_map.md) and [`chapter_3_location_contract.md`](chapter_3_location_contract.md).
 
@@ -28,7 +30,12 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - Black growth remains a physical obstruction: wet black plant fiber, oily scab, tarred root, and burnt mycelium. It is not currency, purple corruption, red gore, cartoon slime, magic smoke, or a generic black blob.
 - The shed target is growth sealing the door seam/frame, not a tiny latch blob.
 - The Old Work Knife is a short, worn work tool behind the shed, never a sword or fantasy dagger.
-- The shed clear remains exactly three successful swipes with physical hit reaction, cord snap, black-oil feedback, collapse, screen shake, and persisted opening.
+- Growth and pry blockers never advance from Interact/A. Interact remains for pickups, inspections, and non-tool transitions. Every tool-authored blocker advances only from the correct held tool, gesture quality, swept/pry contact, stage, and prerequisite state.
+- Old Work Knife, Wood Axe, and Iron Drain Bar are camera-local visible held tools with ready, active, impact-recoil, cooldown, and return poses. Their motion follows the touch path; bad motion is shown but is not effective contact.
+- Knife uses cut/slash. It is light, quick, tolerant of faster direction changes, and owns thin cord, film, seam, and exposed-knot targets.
+- Axe uses heavy chop. It rewards a slower, smooth, correctly angled committed stroke; over-fast or squiggly follow-through does not advance heavy targets.
+- Iron Drain Bar uses pry/lever only. It must plant at an authored pry contact and move through a steady lever arc; it is not a sword or chop tool.
+- The shed clear remains exactly three successful physical Knife contacts with hit reaction, cord snap, black-oil feedback, collapse, screen shake, and persisted opening.
 - The shed reward remains Wood Axe + Torch.
 - The Shrine Side Room seal remains a Knife-cords then Axe-knot sequence and persists `folsom_shrine_side_room_open`. The Knife visibly severs and drops the cord halves; the Axe fractures the damaged hard knot with the stronger door-opening response.
 - The Keeper's Lantern canonical pickup remains inside the Shrine Side Room. BF03 retains only an empty bracketed hook/niche with a removed-object dust shadow; existing Lantern ownership is never duplicated.
@@ -36,7 +43,7 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - The reveal reads as an under-shrine convergence: three rough pale branch marks and black cords lead from room seams into the crawlspace and connect to the retained surface feeds. Only the Keeper's Lantern reveal emitter can expose the hidden state; Torch and ambient light cannot.
 - The maintenance crawlspace terminal remains solid through Chapter 2 and cannot bypass the Underworks gate. Only destruction of the Chapter 3 lower knot cracks it open as the entrance to `under-shrine-labyrinth`.
 - The crawlspace lowers the first-person eye height on entry and restores it on exit so the player view remains below its authored roof.
-- Fire uses the Torch capability; pond and shrine use the Old Work Knife. Cleared anchors and their feeds remain world state, not inventory tokens.
+- The fire-hardened endpoint uses a physical Wood Axe chop; pond and shrine use physical Old Work Knife cuts. Cleared anchors and their feeds remain world state, not inventory tokens.
 - The Underworks transition remains gated by `folsom_underworks_growth_unsealed`, with a reliable return route to Folsom.
 - The Iron Drain Bar remains a persistent local pry tool for the drain grate.
 - The Keeper's Lantern remains an offhand light with a separate bounded reveal test. Torch and ambient light do not reveal hidden glyph art.
@@ -45,6 +52,7 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - The blue-flame hallway is threshold atmosphere, not a replacement for the lower shrine hatch.
 - The explicit BF04/BF05 hatch requires the hidden gate clear and Iron Drain Bar, rejects bare-hand attempts, opens with slow stone/metal strain and strong physical feedback, and persists `beneath_folsom_lower_shrine_hatch_open`.
 - Use environmental teaching. Do not add tutorial prose to these loops.
+- Enemy combat remains intentionally deferred. The reusable physical target receiver can accept future hit receivers, but this milestone adds no enemies, AI, character damage, bosses, or arenas.
 
 ## Active Chapter 3 lead-in lock
 

@@ -413,20 +413,11 @@ Recommended first implementation placement:
 
 Placement should be readable from nearby paths. Do not hide required survival-loop items in obscure corners during the first pass.
 
-## 10. Future 3D Held Item Direction
+## 10. Held Item Direction
 
-The starter town should not wait for first-person arms or held-item presentation. It can be built using current interaction systems.
+Rod A1, Torch, Keeper's Lantern, Old Work Knife, Wood Axe, and Iron Drain Bar now use separate camera-local first-person systems. The three work tools are directly grabbed and moved by touch. Correct tool motion and physical contact—not Interact/A—advance growth and pry blockers. Player arms remain optional future art and are not required for readable physical tools.
 
-Future held-item goals:
-
-- 3D arms;
-- 3D weapon presentation;
-- 3D fishing rod presentation;
-- believable first-person held poses;
-- touch, drag, or flick casting for rod use;
-- clearer tool feedback for axe, torch, and weapon states.
-
-These goals should influence future polish but should not block the starter town implementation.
+Future held-item work should refine authored models and animation tuning without replacing the touch gesture/contact receiver path or coupling it to enemy combat.
 
 ## 11. Technical Implementation Guidance for Future Work
 
@@ -562,7 +553,7 @@ This document does not authorize the current PR to:
 - modify Vite base path `/Dread_Stone_Black/`;
 - delete old locations;
 - add the first dungeon;
-- add first-person arms or 3D held items.
+- optionally add first-person arms and replace procedural work-tool geometry with authored models while preserving physical gesture tuning.
 
 ## 15. Build Standard for the Future Town
 

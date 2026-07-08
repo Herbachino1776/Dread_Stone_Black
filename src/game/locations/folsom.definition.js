@@ -292,6 +292,14 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_shrine_side_room_door_gap', wallSegmentId: 'folsom_shrine_west', centerT: 0.61, width: 2.7, tags: ['shrine-side-room', 'hidden-side-door'] },
     { id: 'folsom_house_entry_gap', wallSegmentId: 'folsom_house_south', centerT: 0.5, width: 3.2 },
   ],
+  physicalToolTargets: Object.freeze([
+    { id: 'folsom_tool_shed_seam_growth', acceptedToolId: 'old_work_knife', acceptedActionType: 'cut', targetZone: { center: [-35, 1.85, -35.82], radius: 0.95 }, requiredGesture: 'knife-swipe', stageOrder: ['intact', 'damaged', 'cleared'], completionSaveKey: 'folsom_tool_shed_open', failFeedback: 'wet-catch' },
+    { id: 'folsom_shrine_side_room_seal', acceptedToolIdByStage: ['old_work_knife', 'wood_axe'], acceptedActionTypeByStage: ['cut', 'chop'], targetZone: { center: [-51.72, 1.72, 38.32], radius: 0.82 }, requiredGestureByStage: ['knife-swipe', 'heavy-smooth-chop'], stageOrder: ['knife-cords', 'axe-knot', 'open'], completionSaveKey: 'folsom_shrine_side_room_open', failFeedback: 'tool-specific-refusal' },
+    { id: 'folsom_shrine_crawlspace_panel', acceptedToolId: 'old_work_knife', acceptedActionType: 'cut', targetZone: { center: [-60.55, 1.35, 39], radius: 0.7 }, requiredGesture: 'knife-swipe', stageOrder: ['revealed-cords', 'open'], prerequisites: ['folsom_under_shrine_network_revealed'], completionSaveKey: 'folsom_shrine_crawlspace_open', failFeedback: 'hidden-or-thud' },
+    { id: 'folsom_growth_anchor_fire', acceptedToolId: 'wood_axe', acceptedActionType: 'chop', requiredGesture: 'heavy-smooth-chop', prerequisites: ['folsom_under_shrine_network_revealed'], completionSaveKey: 'folsom_growth_anchor_fire_cleared', failFeedback: 'hard-knot-skid' },
+    { id: 'folsom_growth_anchor_pond', acceptedToolId: 'old_work_knife', acceptedActionType: 'cut', requiredGesture: 'knife-swipe', prerequisites: ['folsom_under_shrine_network_revealed'], completionSaveKey: 'folsom_growth_anchor_pond_cleared', failFeedback: 'wet-root-catch' },
+    { id: 'folsom_growth_anchor_shrine', acceptedToolId: 'old_work_knife', acceptedActionType: 'cut', requiredGesture: 'knife-swipe', prerequisites: ['folsom_under_shrine_network_revealed'], completionSaveKey: 'folsom_growth_anchor_shrine_cleared', failFeedback: 'cord-catch' },
+  ]),
   horizontalSurfaces: [
     { id: 'folsom_shed_ceiling', kind: 'ceiling', shape: 'rect', center: [-35, 4.36, -30], width: 14, depth: 10, y: 4.36, thickness: 0.18, material: 'shedRoofWood', roomId: 'folsom_bounds', walkable: false, tags: ['tool-shed', 'shed-ceiling'] },
     { id: 'folsom_shed_rear_canopy', kind: 'roof', shape: 'rect', center: [-35, 3.08, -23.95], width: 7.2, depth: 2.4, y: 3.08, thickness: 0.24, material: 'shedRoofWood', roomId: 'folsom_bounds', walkable: false, tags: ['tool-shed', 'shed-back', 'future-knife-hiding-area'] },

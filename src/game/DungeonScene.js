@@ -3310,6 +3310,139 @@ export class DungeonScene {
     return true;
   }
 
+  getPhysicalToolTargets() {
+    const targets = [];
+    const cutGesture = { minTravelPx: 42, minVelocityPxPerSecond: 120, maxVelocityPxPerSecond: 1900, minSmoothness: 0.28 };
+    const chopGesture = { minTravelPx: 86, minVelocityPxPerSecond: 115, maxVelocityPxPerSecond: 720, minSmoothness: 0.7 };
+    const pryGesture = { minTravelPx: 92, minLeverTravelPx: 72, minVelocityPxPerSecond: 42, maxVelocityPxPerSecond: 480, minSmoothness: 0.74 };
+    const receiver = (callback) => (event) => {
+      if (event?.type !== 'physical-tool-contact') return { accepted: false, changed: false, reason: 'non-physical-contact' };
+      return callback(event);
+    };
+
+    const shed = this.folsomShedGrowthRuntime;
+    if (shed && !shed.open) targets.push({
+      id: 'folsom_tool_shed_seam_growth', target: shed.getTarget(), range: 3.25, contactRadiusPx: 62,
+      acceptedToolId: 'old_work_knife', acceptedActionType: 'cut', requiredGesture: cutGesture,
+      stage: shed.hitCount, stageOrder: ['intact', 'damaged', 'cleared'], stageVisualState: shed.hitCount === 2 ? 'damaged' : 'intact',
+      completionSaveKey: 'folsom_tool_shed_open', failFeedback: { wrongTool: 'skid', wrongAction: 'catch' },
+      receivePhysicalToolEvent: receiver(() => {
+        const result = this.strikeFolsomShedGrowth();
+        return { accepted: result.hit, changed: result.hit, completed: result.cleared, ...result };
+      }),
+    });
+
+    const shrine = this.folsomShrineInvestigationRuntime;
+    if (shrine && !shrine.sideRoomOpen) {
+      const cordStage = shrine.sideSealStage === 0;
+      targets.push({
+        id: 'folsom_shrine_side_room_seal', target: shrine.getSideSealTarget(), range: 3.2, contactRadiusPx: 62,
+        acceptedToolId: cordStage ? 'old_work_knife' : 'wood_axe', acceptedActionType: cordStage ? 'cut' : 'chop',
+        requiredGesture: cordStage ? cutGesture : chopGesture, stage: shrine.sideSealStage,
+        stageOrder: ['knife-cords', 'axe-knot', 'open'], stageVisualState: cordStage ? 'taut-cords' : 'exposed-hard-knot',
+        completionSaveKey: 'folsom_shrine_side_room_open', failFeedback: { wrongTool: cordStage ? 'thud' : 'skid', wrongAction: 'refuse' },
+        receivePhysicalToolEvent: receiver((event) => {
+          const result = this.advanceFolsomShrineSideRoom({ hasKnife: event.toolId === 'old_work_knife', hasAxe: event.toolId === 'wood_axe' });
+          return { accepted: result.changed, completed: result.opened, ...result };
+        }),
+      });
+    }
+    if (shrine && !shrine.crawlspaceOpen) targets.push({
+      id: 'folsom_shrine_crawlspace_panel', target: shrine.getCrawlspaceTarget(), range: 2.9, contactRadiusPx: 58,
+      acceptedToolId: 'old_work_knife', acceptedActionType: 'cut', requiredGesture: cutGesture,
+      stage: 0, stageOrder: ['revealed-cords', 'open'], stageVisualState: 'revealed-cords',
+      available: shrine.networkRevealed === true, prerequisitesMet: () => shrine.networkRevealed === true,
+      prerequisites: ['folsom_under_shrine_network_revealed'], completionSaveKey: 'folsom_shrine_crawlspace_open',
+      failFeedback: { prerequisite: 'hidden', wrongTool: 'thud' },
+      receivePhysicalToolEvent: receiver((event) => {
+        const result = this.openFolsomShrineCrawlspace({ hasKnife: event.toolId === 'old_work_knife' });
+        return { accepted: result.changed, completed: result.opened, ...result };
+      }),
+    });
+
+    const connected = this.folsomConnectedGrowthRuntime;
+    connected?.getAnchorTargets?.().forEach((anchor) => {
+      if (anchor.cleared) return;
+      const usesAxe = anchor.type === 'fire';
+      targets.push({
+        id: anchor.id, target: anchor.target, range: 3.6, contactRadiusPx: anchor.type === 'shrine' ? 68 : 62,
+        acceptedToolId: usesAxe ? 'wood_axe' : 'old_work_knife', acceptedActionType: usesAxe ? 'chop' : 'cut',
+        requiredGesture: usesAxe ? chopGesture : cutGesture, stage: 0, stageOrder: ['revealed', 'cleared'], stageVisualState: 'revealed-endpoint',
+        available: connected.networkRevealed === true, prerequisitesMet: () => connected.networkRevealed === true,
+        prerequisites: ['folsom_under_shrine_network_revealed'], completionSaveKey: `folsom_growth_anchor_${anchor.type}_cleared`,
+        failFeedback: { prerequisite: 'hidden', wrongTool: usesAxe ? 'skid' : 'thud' },
+        receivePhysicalToolEvent: receiver(() => {
+          const result = this.clearFolsomGrowthAnchor(anchor.id);
+          return { accepted: result.cleared, changed: result.cleared, completed: result.cleared, ...result };
+        }),
+      });
+    });
+
+    const drainGrate = this.beneathFolsomDrainGrate;
+    if (drainGrate && !this.gameState?.isBeneathFolsomDrainGratePried?.()) targets.push({
+      id: 'beneath_folsom_drain_grate', target: new THREE.Vector3(0, 1.3, 11.2), range: 3.25, contactRadiusPx: 70,
+      acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', requiredGesture: { ...pryGesture, minLeverTravelPx: 78 },
+      stage: 0, stageOrder: ['jammed', 'pried'], stageVisualState: 'jammed-bars', completionSaveKey: 'beneath_folsom_drain_grate_pried',
+      failFeedback: { wrongTool: 'metal-skid', wrongAction: 'metal-refuse' },
+      receivePhysicalToolEvent: receiver((event) => {
+        const result = this.pryBeneathFolsomDrainGrate(event.toolId === 'iron_drain_bar');
+        return { accepted: result.pried, changed: result.pried, completed: result.pried, ...result };
+      }),
+    });
+
+    const hiddenGate = this.beneathFolsomHiddenGrowthGateRuntime;
+    if (hiddenGate && !hiddenGate.cleared) targets.push({
+      id: 'beneath_folsom_hidden_growth_gate', target: hiddenGate.getTarget(), range: 3.45, contactRadiusPx: 66,
+      acceptedToolId: 'old_work_knife', acceptedActionType: 'cut', requiredGesture: cutGesture,
+      stage: hiddenGate.hitCount, stageOrder: ['intact', 'cut-1', 'cut-2', 'cut-3', 'cut-4', 'cleared'], stageVisualState: `cut-${hiddenGate.hitCount}`,
+      available: hiddenGate.isRevealed(), prerequisitesMet: () => hiddenGate.isRevealed(), prerequisites: ['keepers_lantern_reveal'],
+      completionSaveKey: 'beneath_folsom_hidden_growth_gate_cleared', failFeedback: { prerequisite: 'hidden', wrongTool: 'catch' },
+      receivePhysicalToolEvent: receiver(() => {
+        const result = this.strikeBeneathFolsomHiddenGrowthGate();
+        return { accepted: result.hit, changed: result.hit, completed: result.cleared, ...result };
+      }),
+    });
+
+    const lowerHatch = this.beneathFolsomLowerShrineHatchRuntime;
+    if (lowerHatch && !lowerHatch.open) targets.push({
+      id: 'beneath_folsom_lower_shrine_hatch', target: new THREE.Vector3(0, 1.3, 59.65), range: 3.3, contactRadiusPx: 72,
+      acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', requiredGesture: { ...pryGesture, minTravelPx: 138, minLeverTravelPx: 125, minSmoothness: 0.82, maxVelocityPxPerSecond: 380 },
+      stage: 0, stageOrder: ['stone-bound', 'strained', 'open'], stageVisualState: 'stone-bound',
+      prerequisitesMet: () => this.gameState?.isBeneathFolsomHiddenGrowthGateCleared?.() === true,
+      prerequisites: ['beneath_folsom_hidden_growth_gate_cleared'], completionSaveKey: 'beneath_folsom_lower_shrine_hatch_open',
+      failFeedback: { prerequisite: 'no-edge', wrongTool: 'stone-skid' },
+      receivePhysicalToolEvent: receiver((event) => {
+        const result = this.pryBeneathFolsomLowerShrineHatch(event.toolId === 'iron_drain_bar');
+        return { accepted: result.opened, changed: result.opened, completed: result.opened, ...result };
+      }),
+    });
+
+    const whiteScab = this.beneathFolsomWhiteScabRuntime;
+    if (whiteScab && !whiteScab.destroyed) targets.push({
+      id: 'beneath_folsom_white_scab_lower_knot', target: new THREE.Vector3(-1.45, 0.9, 103.8), range: 3.4, contactRadiusPx: 58,
+      acceptedToolId: 'old_work_knife', acceptedActionType: 'cut', requiredGesture: cutGesture,
+      stage: whiteScab.hitCount, stageOrder: ['intact', 'twisted', 'split', 'destroyed'], stageVisualState: `cut-${whiteScab.hitCount}`,
+      completionSaveKey: 'beneath_folsom_white_scab_lower_knot_destroyed', failFeedback: { wrongTool: 'hard-catch' },
+      receivePhysicalToolEvent: receiver((event) => {
+        const result = this.strikeBeneathFolsomWhiteScabLowerKnot({ hasKnife: event.toolId === 'old_work_knife' });
+        return { accepted: result.changed, completed: result.destroyed, ...result };
+      }),
+    });
+
+    const endHatch = this.underShrineLabyrinthEndHatchRuntime;
+    if (endHatch && !endHatch.open) targets.push({
+      id: 'under_shrine_labyrinth_end_hatch', target: new THREE.Vector3(62.4, -0.95, 10), range: 3.3, contactRadiusPx: 70,
+      acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', requiredGesture: { ...pryGesture, minLeverTravelPx: 104, minSmoothness: 0.8 },
+      stage: 0, stageOrder: ['buried', 'open'], stageVisualState: 'buried', completionSaveKey: 'under_shrine_labyrinth_end_hatch_open',
+      failFeedback: { wrongTool: 'metal-skid' },
+      receivePhysicalToolEvent: receiver(() => {
+        const result = this.openUnderShrineLabyrinthEndHatch();
+        return { accepted: result.changed, completed: result.opened, ...result };
+      }),
+    });
+    return targets;
+  }
+
   updateBeneathFolsomDrainGrate(deltaSeconds) {
     const grate = this.beneathFolsomDrainGrate;
     if (!grate?.opening) return;

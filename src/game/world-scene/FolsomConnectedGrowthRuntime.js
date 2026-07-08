@@ -14,7 +14,7 @@ const RIBBON_Y_OFFSET = 0.052;
 const CLEAR_ANIMATION_SECONDS = 0.62;
 
 export const FOLSOM_CONNECTED_GROWTH_RULES = Object.freeze({
-  fire: Object.freeze({ saveKey: 'folsom_growth_anchor_fire_cleared', requiredItemId: 'torch', hint: 'Fire-blackened knot', failMessage: 'The knot holds cold.', message: 'The fire-blackened knot recoils.' }),
+  fire: Object.freeze({ saveKey: 'folsom_growth_anchor_fire_cleared', requiredItemId: 'wood_axe', physicalActionType: 'chop', hint: 'Fire-blackened knot', failMessage: 'The hard knot turns a light edge.', message: 'The fire-blackened knot splits.' }),
   pond: Object.freeze({ saveKey: 'folsom_growth_anchor_pond_cleared', requiredItemId: 'old_work_knife', hint: 'Wet root knot', failMessage: 'Wet black roots resist bare hands.', message: 'Wet black roots split under the blade.' }),
   shrine: Object.freeze({ saveKey: 'folsom_growth_anchor_shrine_cleared', requiredItemId: 'old_work_knife', hint: 'Shrine-bound cords', failMessage: 'The shrine cords resist bare hands.', message: 'The shrine cords slacken.' }),
   underworks: Object.freeze({ saveKey: 'folsom_underworks_growth_unsealed', message: 'The Underworks growth loses its pull.' }),

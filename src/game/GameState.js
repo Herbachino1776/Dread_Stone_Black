@@ -15,6 +15,7 @@ const BENEATH_FOLSOM_WHITE_SCAB_LOWER_KNOT_DESTROYED_KEY = 'beneath_folsom_white
 const FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY = 'folsom_shrine_crawlspace_terminal_open';
 const UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY = 'under_shrine_labyrinth_end_hatch_open';
 const BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY = 'dreadStoneBlack.lowerShrineHatchMigrationV1';
+const PHYSICAL_TOOL_ACTION_MIGRATION_KEY = 'dreadStoneBlack.physicalToolActionMigrationV1';
 const BENEATH_FOLSOM_CHAPTER_3_PLANNED_KEYS = Object.freeze([
   'beneath_folsom_white_mechanism_exposed',
   'beneath_folsom_pale_panel_activated',
@@ -66,6 +67,7 @@ export class GameState {
       storage.removeItem(FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY);
       storage.removeItem(UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY);
       storage.removeItem(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY);
+      storage.removeItem(PHYSICAL_TOOL_ACTION_MIGRATION_KEY);
       Object.values(FOLSOM_GROWTH_WORLD_KEYS).forEach((key) => storage.removeItem(key));
     } catch {
       // Reset should never wipe unrelated storage or crash if localStorage is blocked.
@@ -81,6 +83,7 @@ export class GameState {
     this.fieldSurvivalState = this.repairFieldSurvivalState(this.readJson(FIELD_SURVIVAL_STATE_KEY, null));
     this.migrateFolsomChapter2Backfill();
     this.migrateBeneathFolsomLowerShrineHatch();
+    this.migratePhysicalToolActions();
   }
 
   collectSouthReliquaryFragment() {
@@ -240,6 +243,17 @@ export class GameState {
     }
     if (!migrationAlreadyRun) this.writeFlag(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY, true);
     return hasChapter3Progress || crossedLegacyOpenSeam;
+  }
+
+  migratePhysicalToolActions() {
+    if (this.readFlag(PHYSICAL_TOOL_ACTION_MIGRATION_KEY, false)) return false;
+    const hadLegacyChapter3LeadIn = this.readFlag(BENEATH_FOLSOM_WHITE_SCAB_LOWER_KNOT_DESTROYED_KEY, false)
+      || this.readFlag(FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY, false);
+    if (hadLegacyChapter3LeadIn && !this.isUnderShrineLabyrinthEndHatchOpen()) {
+      this.writeFlag(UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY, true);
+    }
+    this.writeFlag(PHYSICAL_TOOL_ACTION_MIGRATION_KEY, true);
+    return hadLegacyChapter3LeadIn;
   }
 
   isFolsomGrowthAnchorCleared(anchorType) {

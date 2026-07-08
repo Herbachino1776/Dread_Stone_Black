@@ -5,6 +5,8 @@ import { FishingRodView, HELD_ROD_VIEWMODEL_LAYER } from '../fishing/FishingRodV
 import { KEEPERS_LANTERN_EMITTER, KeepersLanternViewmodel } from '../viewmodels/KeepersLanternViewmodel.js';
 import { OffhandAimController } from '../viewmodels/OffhandAimController.js';
 import { TorchViewmodel } from '../viewmodels/TorchViewmodel.js';
+import { PhysicalToolActionController } from '../physical-tools/PhysicalToolActionController.js';
+import { PhysicalToolViewmodel } from '../physical-tools/PhysicalToolViewmodel.js';
 
 const ROD_VIEWMODEL_LIGHTING = Object.freeze({
   skyColor: 0xffe2b8,
@@ -40,9 +42,19 @@ export class FirstPersonViewmodelHost {
     this.fishingRodView = new FishingRodView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState, dungeon: this.dungeon });
     this.keepersLanternViewmodel = new KeepersLanternViewmodel({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, player: this.player });
     this.torchViewmodel = new TorchViewmodel({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
+    this.physicalToolViewmodel = new PhysicalToolViewmodel({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
     this.offhandAimController = new OffhandAimController({ app: this.app, viewmodels: [this.torchViewmodel, this.keepersLanternViewmodel] });
     this.sceneSessionHost?.setLanternRevealEmitterProvider?.(() => this.getKeeperLanternEmitter());
     this.castingController = new CastingController({ app: this.app, camera: this.camera, player: this.player, dungeon: this.dungeon, hud: this.hud, rodView: this.fishingRodView, equipmentRuntime: this.equipmentRuntime, feedback: this.feedback });
+    this.physicalToolActionController = new PhysicalToolActionController({
+      app: this.app,
+      camera: this.camera,
+      player: this.player,
+      dungeon: this.dungeon,
+      equipmentRuntime: this.equipmentRuntime,
+      viewmodel: this.physicalToolViewmodel,
+      feedback: this.feedback,
+    });
 
     this.disposers.push(this.equipmentRuntime?.on?.(EQUIPMENT_EVENTS.equippedChanged, (equipmentState) => this.handleEquipmentChanged(equipmentState)));
     this.syncEquipmentVisuals();
@@ -57,6 +69,8 @@ export class FirstPersonViewmodelHost {
     if (this.fishingRodView) this.fishingRodView.dungeon = this.dungeon;
     this.keepersLanternViewmodel?.rebind?.({ camera: this.camera, player: this.player });
     this.torchViewmodel?.rebind?.({ camera: this.camera });
+    this.physicalToolViewmodel?.rebind?.({ camera: this.camera });
+    this.physicalToolActionController?.rebindSession?.({ camera: this.camera, player: this.player, dungeon: this.dungeon });
     this.castingController?.rebindSession?.({ player: this.player, dungeon: this.dungeon });
     this.syncEquipmentVisuals();
     return this.getDebugSummary();
@@ -76,6 +90,8 @@ export class FirstPersonViewmodelHost {
     this.offhandAimController?.update(deltaSeconds);
     this.keepersLanternViewmodel?.update(deltaSeconds);
     this.torchViewmodel?.update(deltaSeconds);
+    this.physicalToolViewmodel?.update(deltaSeconds);
+    this.physicalToolActionController?.update(deltaSeconds);
     this.castingController?.update(deltaSeconds);
     return this.getDebugSummary(context);
   }
@@ -128,6 +144,7 @@ export class FirstPersonViewmodelHost {
       torchVisible: this.torchViewmodel?.root?.visible === true,
       keepersLanternActive: this.keepersLanternViewmodel?.isActive?.() === true,
       fishing: this.castingController?.debug ?? null,
+      physicalToolId: this.physicalToolViewmodel?.getActiveToolId?.() ?? null,
     };
   }
 
@@ -137,6 +154,8 @@ export class FirstPersonViewmodelHost {
     this.camera?.remove?.(this.rodViewmodelLights);
     this.offhandAimController?.dispose?.();
     this.torchViewmodel?.dispose?.();
+    this.physicalToolActionController?.dispose?.();
+    this.physicalToolViewmodel?.dispose?.();
     this.keepersLanternViewmodel?.dispose?.();
     this.sceneSessionHost?.setLanternRevealEmitterProvider?.(null);
     this.rodViewmodelLights = null;
@@ -144,6 +163,8 @@ export class FirstPersonViewmodelHost {
     this.rodViewmodelKeyLight = null;
     this.offhandAimController = null;
     this.torchViewmodel = null;
+    this.physicalToolActionController = null;
+    this.physicalToolViewmodel = null;
     this.keepersLanternViewmodel = null;
     this.session = null;
   }

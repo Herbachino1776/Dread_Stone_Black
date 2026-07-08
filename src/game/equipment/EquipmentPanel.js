@@ -186,8 +186,17 @@ export class EquipmentPanel {
   createKeyItemEntries() {
     const entries = [];
     if (this.survivalInventory.hasKeyItem('flint_stick')) entries.push({ id: 'flint_stick', name: 'Flint Stick', stats: 'Key Item', meta: 'Campfire', description: 'Reusable campfire starter.', detail: ITEM_DETAILS.flint_stick });
-    if (this.equipmentRuntime.hasItem('old_work_knife')) entries.push({ id: 'old_work_knife', name: 'Old Work Knife', stats: 'Work Tool', meta: 'Cutting', description: 'A short rusted shed knife with a worn wooden grip.', detail: ITEM_DETAILS.old_work_knife });
-    if (this.equipmentRuntime.hasItem('iron_drain_bar')) entries.push({ id: 'iron_drain_bar', name: 'Iron Drain Bar', stats: 'Work Tool', meta: 'Prying', description: 'A heavy rusted maintenance bar from the old drains.', detail: ITEM_DETAILS.iron_drain_bar });
+    const equippedTool = this.equipmentRuntime.getEquippedToolId?.();
+    const addTool = (id, name, meta, description) => {
+      if (!this.equipmentRuntime.hasItem(id)) return;
+      const equipped = equippedTool === id;
+      entries.push({
+        id, name, stats: equipped ? 'Equipped' : 'Work Tool', meta, description, equipped, detail: ITEM_DETAILS[id],
+        onActivate: () => this.equipmentRuntime.equip(EQUIPMENT_SLOTS.tool, equipped ? null : id),
+      });
+    };
+    addTool('old_work_knife', 'Old Work Knife', 'Cutting', 'A short rusted shed knife with a worn wooden grip.');
+    addTool('iron_drain_bar', 'Iron Drain Bar', 'Prying', 'A heavy rusted maintenance bar from the old drains.');
     return entries;
   }
 

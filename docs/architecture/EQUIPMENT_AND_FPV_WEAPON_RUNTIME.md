@@ -1,22 +1,42 @@
-# Equipment Runtime Notes
+# Equipment And First-Person Tool Runtime
 
-First-person viewport arm, hand, and weapon overlays have been removed from the game. Equipment still drives combat, harvesting, fishing, inventory, objectives, and offhand torch lighting through the shared equipment runtime, but it no longer owns any FPV sprite or DOM overlay renderer.
+Equipment continues to drive inventory, harvesting, fishing, survival, and offhand light state. Camera-local first-person presentation is now split by responsibility: Rod A1 owns physical fishing, Torch and Keeper's Lantern own offhand light/reveal, and the Physical Tool Action System owns the Old Work Knife, Wood Axe, and Iron Drain Bar.
 
-## Current responsibilities
+No player-arm sprites, hand strips, DOM weapon overlays, or hidden fallback assets are used. Visible tools are lightweight procedural camera-local geometry on the established viewmodel layer, independent from Torch/Lantern visibility.
 
-- `EquipmentSlot.js` defines equipment slot ids used by gameplay systems.
-- Weapon profiles still provide combat and interaction metadata such as damage, range, stamina cost, cooldown, gore profile, and hit reaction type.
-- Offhand torch equip state still controls the player torch light in `Game.js`.
-- UI equipment buttons and inventory flows remain independent from first-person viewport art.
+## Physical tool standard
 
-## Removed viewport overlay rule
+`PhysicalToolViewmodel` supplies a ready pose, touch-following active pose, impact recoil, cooldown recovery, and return-to-ready pose for each tool. `PhysicalToolActionController` captures pointer/touch only when the player grabs the projected held tool, leaving left-thumb movement and unrelated viewport look input intact.
 
-Do not reintroduce player arm or hand sprites, idle hand strips, attack hand strips, fishing hand overlays, or hidden fallback assets. Future visible held-item work should be designed as a separate item model system with its own authoring rules and validation, not as player-arm sprites.
+Every gesture remains visible. Effectiveness is separate and tool-specific:
 
-## Broadsword A1 first-person weapon note
+- Old Work Knife: cut/slash; narrow and quick, with the widest useful speed and angle envelope.
+- Wood Axe: heavy chop; longer travel, slower maximum useful speed, a clean downward contact angle, and a high smoothness requirement.
+- Iron Drain Bar: pry/lever; the bar must sweep onto an authored pry point, plant, then move through a slow smooth lever arc.
 
-Broadsword A1 replaces the old rusted sword presentation while preserving the compatibility item id `rusted_sword` for saves, objectives, chest pickups, and combat balance. The first-person model is loaded from `/assets/models/weapons/weapon_broadsword_ritual_01.glb` through the Vite base-aware runtime URL.
+Over-fast, short, wrong-angle, or squiggly motion still moves the held tool but does not advance a receiver. This gives each tool a learnable motion envelope without adding tutorial text or UI timing indicators.
 
-The broadsword view is a camera-local GLB root with a named normalization group and tuning constants for rest pose, scale, spring lag, drag offsets, swing offsets, recovery, cooldown, hit-zone radius, release speed, and damage-window debug values. Touch input starts only from the projected sword/fallback weapon zone, tracks a short gesture history, classifies slash/thrust/horizontal intent, and queues the existing melee attack path on a valid release. The A attack button remains a fallback and also plays the procedural broadsword swing when the sword is equipped.
+## Contact and receiver path
 
-Fishing A1 / Rod A1 remains separate and should not be coupled to broadsword gestures; the fishing lock, casting, reeling, bite/fight/landing, cooking/eating, and rod physics are intentionally untouched by this weapon pass.
+The authoritative route is:
+
+```text
+touch grab and gesture
+  -> visible held-tool motion
+  -> swept screen/contact-zone test or planted pry contact
+  -> PhysicalToolTargetRegistry validation
+  -> authored runtime receiver
+  -> visual stage change and existing persisted world state
+```
+
+Targets declare accepted tool id, physical action type, gesture requirements, contact zone/pry point, stage order, visual state, prerequisites, completion save key, and wrong-contact feedback. Interact/A has no growth or pry completion dispatch. Interact remains responsible for pickups, inspection, and normal transitions after a tool blocker is already open.
+
+Wrong contact produces recoil, a skid/thud/scrape sound, and short haptics without progression. Valid contact uses tool-weighted recoil, shake, haptics, existing oil/cord/knot effects, staged material/geometry changes, and final blocker collapse/opening.
+
+## Equipment selection and offhand coexistence
+
+The Work Knife and Drain Bar use the existing `tool` slot and can be selected from Key Items. Their pickups equip that slot. Wood Axe remains in the weapon slot. Rod A1 suppresses the physical work-tool view while fishing. Torch and Keeper's Lantern remain independent offhand viewmodels and can remain visible with a right-hand physical tool.
+
+## Scope boundary
+
+The receiver architecture is intentionally reusable for future enemies, but this system does not add enemies, AI, player damage, character weapon damage, bosses, or combat arenas. Character combat remains deferred.

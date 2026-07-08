@@ -26,6 +26,8 @@ The labyrinth is a bounded ten-segment twisting descent with nine meaningful ben
 
 The first state additively enables the second. Existing Chapter 3 planned/progress flags migrate to hatch, knot, terminal, and end-hatch access so old saves beyond the former blocker do not softlock. Existing save keys are not renamed.
 
+The exposed lower knot advances only through physical Old Work Knife cut contacts. It cannot be completed by Interact/A and never removes the front-seal collision. The Under-Shrine Labyrinth end hatch advances only through a planted Iron Drain Bar pry; after it opens, Interact may perform the location transition. Future Chapter 3 White-Scab tool mechanics follow the same physical receiver standard. Enemy/character combat is outside this contract.
+
 ## Scope boundary
 
 Arrival behind the denied threshold ends this pass. A hard boundary prevents progression into the deferred White-Scab Hall and Shrine Mechanism Room mechanics. Pale Panel, Records/Memory, Pale Gates, combat content, First Crypt, and Chapter 4 remain unimplemented.

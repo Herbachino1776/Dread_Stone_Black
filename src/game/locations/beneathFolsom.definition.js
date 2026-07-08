@@ -224,6 +224,12 @@ export const beneathFolsomDefinition = Object.freeze({
   type: 'underworks',
   tags: ['interior', 'underworks', 'compiled-runtime', 'folsom-chapter-2', 'folsom-chapter-3', 'lower-shrine'],
   notes: 'Continuous Beneath Folsom route through the Chapter 2 underworks and the authored Chapter 3 lower-shrine room skeleton.',
+  physicalToolTargets: Object.freeze([
+    { id: 'beneath_folsom_drain_grate', acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', pryPoint: { x: 0, y: 1.3, z: 11.2 }, requiredGesture: 'steady-lever', stageOrder: ['jammed', 'pried'], completionSaveKey: 'beneath_folsom_drain_grate_pried', failFeedback: 'metal-skid' },
+    { id: 'beneath_folsom_hidden_growth_gate', acceptedToolId: 'old_work_knife', acceptedActionType: 'cut', targetZone: { center: [0, 1.55, 21.36], radius: 1.1 }, requiredGesture: 'knife-swipe', requiredHits: 5, stageOrder: ['intact', 'cut-1', 'cut-2', 'cut-3', 'cut-4', 'cleared'], prerequisites: ['keepers_lantern_reveal'], completionSaveKey: 'beneath_folsom_hidden_growth_gate_cleared', failFeedback: 'hidden-or-wet-catch' },
+    { id: 'beneath_folsom_lower_shrine_hatch', acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', pryPoint: { x: 0, y: 1.3, z: 59.65 }, requiredGesture: 'heavy-steady-lever', stageOrder: ['stone-bound', 'strained', 'open'], prerequisites: ['beneath_folsom_hidden_growth_gate_cleared'], completionSaveKey: 'beneath_folsom_lower_shrine_hatch_open', failFeedback: 'stone-skid' },
+    { id: 'beneath_folsom_white_scab_lower_knot', acceptedToolId: 'old_work_knife', acceptedActionType: 'cut', targetZone: { center: [-1.45, 0.9, 103.8], radius: 0.65 }, requiredGesture: 'knife-swipe', requiredHits: 3, stageOrder: ['intact', 'twisted', 'split', 'destroyed'], completionSaveKey: 'beneath_folsom_white_scab_lower_knot_destroyed', failFeedback: 'hard-catch' },
+  ]),
   fog: { color: 0x030403, near: 5, far: 34 },
   lighting: { background: 0x030403 },
   textures,

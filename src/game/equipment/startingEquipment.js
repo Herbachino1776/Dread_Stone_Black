@@ -4,6 +4,7 @@ export const startingEquipment = Object.freeze({
     weapon: 'unarmed',
     armor: null,
     quickItem: null,
+    tool: null,
     offhand: null,
   }),
 });

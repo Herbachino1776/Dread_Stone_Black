@@ -27,7 +27,9 @@ BF05 LOWER SHRINE STAIR
   -> hard production boundary before deferred White-Scab Hall mechanics
 ```
 
-The bypass proves that the player cannot solve the front seal by attacking it. Cutting the exposed lower knot changes the route elsewhere: it releases pressure at the old Folsom shrine terminal. `under-shrine-labyrinth` is a separate compiled authored location, not a Folsom tunnel extension or test room.
+The bypass proves that the player cannot solve the front seal by attacking it. A correct physical Old Work Knife cut sequence destroys only the exposed lower knot and releases pressure at the old Folsom shrine terminal. The front seal remains shut. The labyrinth end hatch uses a planted Iron Drain Bar pry before its normal transition becomes available. `under-shrine-labyrinth` is a separate compiled authored location, not a Folsom tunnel extension or test room.
+
+Chapter 3 White-Scab growth, knots, panels, slabs, grates, and hatches must use the Physical Tool Action System when implemented: Knife=cut/slash, Axe=heavy smooth chop, Drain Bar=planted pry/lever. Interact/A is not a blocker-victory path. Enemy combat remains deferred even though the receiver architecture is reusable.
 
 ## Deferred
 

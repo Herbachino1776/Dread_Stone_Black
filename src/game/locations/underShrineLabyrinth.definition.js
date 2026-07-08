@@ -86,6 +86,9 @@ export const underShrineLabyrinthDefinition = Object.freeze({
   id: 'under-shrine-labyrinth', displayName: 'Under-Shrine Labyrinth', type: 'dungeon', version: 1,
   tags: ['compiled-runtime', 'authored-location', 'chapter-3-lead-in', 'pitch-black', 'no-enemies'],
   notes: 'A bounded, ten-segment spiral-like crawlspace descent from the Folsom shrine terminal to the backside of the impossible White-Scab threshold.',
+  physicalToolTargets: Object.freeze([
+    { id: 'under_shrine_labyrinth_end_hatch', acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry', pryPoint: { x: 62.4, y: -0.95, z: 10 }, requiredGesture: 'heavy-steady-lever', stageOrder: ['buried', 'open'], completionSaveKey: 'under_shrine_labyrinth_end_hatch_open', failFeedback: 'metal-stone-skid' },
+  ]),
   lighting: { background: 0x000000 }, fog: { disabled: true }, textures, defaultFloorY: 0, defaultCeilingY: 2.1,
   geometry: { wallHeight: 2.1, wallThickness: 0.42, floorThickness: 0.22, ceilingThickness: 0.22, roomEdgePolicy: 'sealedUnlessDeclaredOpening' },
   collision: { playerRadius: 0.34, roomFloorSurfaces: true },

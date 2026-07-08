@@ -17,10 +17,13 @@ import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { SurvivalInventoryBridge } from '../src/game/equipment/SurvivalInventoryBridge.js';
 import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisuals.js';
 import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
-import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
-import { FOLSOM_SHRINE_INVESTIGATION_RULES } from '../src/game/world-scene/FolsomShrineInvestigationRuntime.js';
+import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES, FolsomShedGrowthRuntime } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
+import { FOLSOM_SHRINE_INVESTIGATION_RULES, FolsomShrineInvestigationRuntime } from '../src/game/world-scene/FolsomShrineInvestigationRuntime.js';
 import { LanternConeRevealRuntime, LANTERN_REVEAL_DEFAULTS, isPointInsideLanternCone } from '../src/game/world-scene/LanternConeRevealRuntime.js';
 import { BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES } from '../src/game/world-scene/BeneathFolsomHiddenGrowthGateRuntime.js';
+import { evaluatePhysicalToolGesture, PHYSICAL_TOOL_PROFILES } from '../src/game/physical-tools/PhysicalToolProfiles.js';
+import { PhysicalToolTargetRegistry } from '../src/game/physical-tools/PhysicalToolTargetRegistry.js';
+import { PhysicalToolViewmodel } from '../src/game/physical-tools/PhysicalToolViewmodel.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const revealedGlyphAssetRoot = path.join(repoRoot, 'public', 'assets', 'revealed_glyphs');
@@ -37,10 +40,49 @@ const revealedGlyphFiles = collectAssetFiles(revealedGlyphAssetRoot);
 assert.equal(revealedGlyphFiles.some((assetPath) => assetPath.endsWith(`${path.sep}letters${path.sep}letter_001.png`)), true, 'The selected glyph PNG exists.');
 assert.equal(revealedGlyphFiles.some((assetPath) => /keeper|ghiselian/i.test(path.basename(assetPath))), false, 'Revealed glyph filenames remain generic and lore-neutral.');
 
+const knifeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.old_work_knife, { travelPx: 96, velocityPxPerSecond: 1180, smoothness: 0.72, angleRadians: Math.PI * 0.3 });
+const axeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.wood_axe, { travelPx: 132, velocityPxPerSecond: 330, smoothness: 0.93, angleRadians: Math.PI * 0.5 });
+const rushedAxeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.wood_axe, { travelPx: 150, velocityPxPerSecond: 1120, smoothness: 0.9, angleRadians: Math.PI * 0.5 });
+const erraticAxeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.wood_axe, { travelPx: 170, velocityPxPerSecond: 350, smoothness: 0.28, angleRadians: Math.PI * 0.5 });
+const pryGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.iron_drain_bar, { travelPx: 145, velocityPxPerSecond: 170, smoothness: 0.91, angleRadians: -Math.PI * 0.5 });
+assert.equal(knifeGesture.effective, true, 'The light Work Knife accepts a clean fast swipe.');
+assert.equal(axeGesture.effective, true, 'The Wood Axe rewards a slower smooth committed chop.');
+assert.equal(rushedAxeGesture.effective, false, 'An over-fast Axe swing remains visible input but is ineffective.');
+assert.equal(erraticAxeGesture.effective, false, 'A squiggly Axe follow-through remains visible input but is ineffective.');
+assert.equal(pryGesture.effective, true, 'The Drain Bar rewards a slow smooth lever direction.');
+const toolEquipment = new EquipmentRuntime({
+  weaponProfiles: equipmentRegistry.weapons,
+  startingEquipment: { acquiredItemIds: ['unarmed', 'old_work_knife', 'wood_axe', 'iron_drain_bar'], equipped: { weapon: 'unarmed', tool: 'old_work_knife', offhand: null } },
+});
+const toolCamera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 100);
+const toolViewmodel = new PhysicalToolViewmodel({ camera: toolCamera, equipmentRuntime: toolEquipment });
+toolViewmodel.update(1 / 60);
+assert.ok(toolViewmodel.root.visible && toolViewmodel.toolGroups.get('old_work_knife').visible, 'Equipped Old Work Knife has a visible camera-local ready pose.');
+toolEquipment.equip('tool', 'iron_drain_bar'); toolViewmodel.update(1 / 60);
+assert.ok(toolViewmodel.toolGroups.get('iron_drain_bar').visible, 'Equipped Iron Drain Bar has a visible camera-local ready pose.');
+toolEquipment.equip('weapon', 'wood_axe'); toolViewmodel.update(1 / 60);
+assert.ok(toolViewmodel.toolGroups.get('wood_axe').visible, 'Selected Wood Axe has a visible camera-local ready pose.');
+toolViewmodel.setGestureState({ active: true, deltaX: -90, deltaY: 130, travelPx: 158, planted: false });
+toolViewmodel.update(1 / 30);
+assert.ok(Math.abs(toolViewmodel.motionPivot.rotation.z) > 0.02, 'Visible held-tool motion follows the touch direction through a smoothed active pose.');
+toolViewmodel.impact({ strength: 1 }); toolViewmodel.update(1 / 60);
+assert.ok(toolViewmodel.recoilRemaining > 0, 'Physical tools enter impact recoil before returning to ready.');
+toolViewmodel.dispose();
+
+const interactionsSource = readFileSync(new URL('../src/game/Interactions.js', import.meta.url), 'utf8');
+['strikeFolsomShedGrowth', 'strikeBeneathFolsomHiddenGrowthGate', 'clearFolsomGrowthAnchor', 'advanceFolsomShrineSideRoom', 'openFolsomShrineCrawlspace', 'pryBeneathFolsomDrainGrate', 'pryBeneathFolsomLowerShrineHatch', 'strikeBeneathFolsomWhiteScabLowerKnot', 'openUnderShrineLabyrinthEndHatch']
+  .forEach((legacyDispatch) => assert.equal(interactionsSource.includes(legacyDispatch), false, `Interactions/A has no legacy blocker victory dispatch: ${legacyDispatch}.`));
+const physicalRegistry = new PhysicalToolTargetRegistry();
+const physicalGesture = { travelPx: 120, leverTravelPx: 110, velocityPxPerSecond: 280, smoothness: 0.94 };
+const heavyPryGesture = { travelPx: 165, leverTravelPx: 148, velocityPxPerSecond: 185, smoothness: 0.92 };
+const physicalContact = { screen: { x: 100, y: 100 } };
+
 const folsom = getLocationDefinition('folsom');
 assert.equal(hasLocationDefinition('beneath-folsom'), true, 'Beneath Folsom is registered.');
 const beneathFolsom = await loadLocationDefinition('beneath-folsom');
+const underShrineLabyrinth = await loadLocationDefinition('under-shrine-labyrinth');
 const beneathFolsomRuntime = compileDungeonLocation(beneathFolsom, { logValidation: false });
+const underShrineLabyrinthRuntime = compileDungeonLocation(underShrineLabyrinth, { logValidation: false });
 assert.ok(folsom, 'Folsom definition is registered.');
 assert.equal(folsom.id, 'folsom');
 assert.equal((folsom.spawns ?? []).some((spawn) => ['enemy', 'npc'].includes(spawn.kind)), false, 'Folsom has no enemy or NPC spawns.');
@@ -130,6 +172,67 @@ assert.equal(FOLSOM_SHRINE_INVESTIGATION_RULES.sideRoomSaveKey, 'folsom_shrine_s
 assert.equal(FOLSOM_SHRINE_INVESTIGATION_RULES.networkRevealSaveKey, 'folsom_under_shrine_network_revealed');
 assert.equal(FOLSOM_SHRINE_INVESTIGATION_RULES.crawlspaceSaveKey, 'folsom_shrine_crawlspace_open');
 assert.deepEqual(FOLSOM_SHRINE_INVESTIGATION_RULES.sideSealSequence, ['knife-cords', 'axe-knot', 'open']);
+const folsomPhysicalTargets = folsom.physicalToolTargets ?? [];
+assert.deepEqual(folsomPhysicalTargets.map((target) => target.id).sort(), [
+  'folsom_growth_anchor_fire', 'folsom_growth_anchor_pond', 'folsom_growth_anchor_shrine',
+  'folsom_shrine_crawlspace_panel', 'folsom_shrine_side_room_seal', 'folsom_tool_shed_seam_growth',
+].sort(), 'Folsom authors every shed, shrine, and surface endpoint as a physical tool target.');
+assert.equal(folsomPhysicalTargets.find((target) => target.id === 'folsom_tool_shed_seam_growth')?.completionSaveKey, 'folsom_tool_shed_open');
+assert.equal(folsomPhysicalTargets.find((target) => target.id === 'folsom_growth_anchor_fire')?.acceptedToolId, 'wood_axe', 'The fire-hardened endpoint now uses a physical Axe chop, not an interaction/Torch token check.');
+assert.ok(folsomPhysicalTargets.every((target) => target.completionSaveKey && target.failFeedback), 'Every Folsom physical target declares persistence and physical refusal feedback.');
+const proofStorageValues = new Map();
+const proofStorage = {
+  get length() { return proofStorageValues.size; }, key: (index) => [...proofStorageValues.keys()][index] ?? null,
+  getItem: (key) => proofStorageValues.get(key) ?? null, setItem: (key, value) => proofStorageValues.set(key, String(value)), removeItem: (key) => proofStorageValues.delete(key),
+};
+const proofState = new GameState(proofStorage);
+const proofScene = new THREE.Scene();
+const proofCollision = { blockerRects: [], removeBlocker() {} };
+const proofTextureLoader = { load: () => new THREE.Texture() };
+const proofShedRuntime = new FolsomShedGrowthRuntime({ scene: proofScene, collision: proofCollision, compiledGroup: new THREE.Group(), gameState: proofState, textureLoader: proofTextureLoader });
+const proofShrineRuntime = new FolsomShrineInvestigationRuntime({ scene: proofScene, collision: proofCollision, compiledGroup: new THREE.Group(), gameState: proofState, textureLoader: proofTextureLoader, getEmitterState: () => null });
+const folsomProofHarness = Object.assign(Object.create(DungeonScene.prototype), {
+  folsomShedGrowthRuntime: proofShedRuntime,
+  folsomShrineInvestigationRuntime: proofShrineRuntime,
+  gameState: proofState,
+  outdoorInteractions: [],
+});
+let shedPhysicalTarget = folsomProofHarness.getPhysicalToolTargets().find((target) => target.id === 'folsom_tool_shed_seam_growth');
+assert.equal(physicalRegistry.evaluate(shedPhysicalTarget, { toolId: 'wood_axe', actionType: 'chop', gesture: physicalGesture, contact: physicalContact }).accepted, false, 'Shed seam rejects a cosmetic/wrong Axe swing.');
+for (let hit = 1; hit <= 3; hit += 1) {
+  shedPhysicalTarget = folsomProofHarness.getPhysicalToolTargets().find((target) => target.id === 'folsom_tool_shed_seam_growth');
+  const result = physicalRegistry.evaluate(shedPhysicalTarget, { toolId: 'old_work_knife', actionType: 'cut', gesture: physicalGesture, contact: physicalContact });
+  assert.equal(result.accepted, true, `Shed seam accepts physical knife cut ${hit}.`);
+  assert.equal(result.completed, hit === 3, `Shed seam completion state is correct after cut ${hit}.`);
+}
+assert.equal(proofState.isFolsomToolShedOpen(), true, 'Exactly three physical cuts preserve folsom_tool_shed_open.');
+let sideSealTarget = folsomProofHarness.getPhysicalToolTargets().find((target) => target.id === 'folsom_shrine_side_room_seal');
+assert.equal(physicalRegistry.evaluate(sideSealTarget, { toolId: 'wood_axe', actionType: 'chop', gesture: physicalGesture, contact: physicalContact }).accepted, false, 'Axe cannot bypass the Shrine Side Room cord stage.');
+assert.equal(physicalRegistry.evaluate(sideSealTarget, { toolId: 'old_work_knife', actionType: 'cut', gesture: physicalGesture, contact: physicalContact }).accepted, true, 'Knife physically cuts and slackens the side-room cords.');
+sideSealTarget = folsomProofHarness.getPhysicalToolTargets().find((target) => target.id === 'folsom_shrine_side_room_seal');
+assert.equal(sideSealTarget.acceptedToolId, 'wood_axe', 'The side-room target advances to the authored Axe knot stage.');
+assert.equal(physicalRegistry.evaluate(sideSealTarget, { toolId: 'wood_axe', actionType: 'chop', gesture: physicalGesture, contact: physicalContact }).accepted, true, 'A physical Axe chop breaks the exposed hard knot.');
+assert.equal(proofState.isFolsomShrineSideRoomOpen(), true, 'The physical staged seal preserves folsom_shrine_side_room_open.');
+assert.equal(folsomProofHarness.getPhysicalToolTargets().find((target) => target.id === 'folsom_shrine_crawlspace_panel')?.available, false, 'Crawlspace has no actionable physical zone before Lantern network reveal.');
+proofShrineRuntime.markNetworkRevealed();
+const crawlspaceTarget = folsomProofHarness.getPhysicalToolTargets().find((target) => target.id === 'folsom_shrine_crawlspace_panel');
+assert.equal(physicalRegistry.evaluate(crawlspaceTarget, { toolId: 'old_work_knife', actionType: 'cut', gesture: physicalGesture, contact: physicalContact }).accepted, true, 'Knife contact physically clears the revealed crawlspace cords.');
+assert.equal(proofState.isFolsomShrineCrawlspaceOpen(), true, 'Physical crawlspace clear preserves folsom_shrine_crawlspace_open.');
+const reloadedProofScene = new THREE.Scene();
+const reloadedShed = new FolsomShedGrowthRuntime({ scene: reloadedProofScene, collision: proofCollision, compiledGroup: new THREE.Group(), gameState: new GameState(proofStorage), textureLoader: proofTextureLoader });
+const reloadedShrine = new FolsomShrineInvestigationRuntime({ scene: reloadedProofScene, collision: proofCollision, compiledGroup: new THREE.Group(), gameState: new GameState(proofStorage), textureLoader: proofTextureLoader, getEmitterState: () => null });
+assert.ok(reloadedShed.open && reloadedShed.growthGroup.visible === false, 'An old completed shed save loads open with no blocker replay.');
+assert.ok(reloadedShrine.sideRoomOpen && reloadedShrine.crawlspaceOpen, 'Old completed shrine blocker saves load open without physical re-clearing.');
+const labyrinthProofHarness = Object.assign(Object.create(DungeonScene.prototype), { gameState: proofState, scene: new THREE.Scene(), collision: underShrineLabyrinthRuntime.collisionWorld });
+labyrinthProofHarness.configureUnderShrineLabyrinth(underShrineLabyrinthRuntime);
+const endHatchTarget = labyrinthProofHarness.getPhysicalToolTargets().find((target) => target.id === 'under_shrine_labyrinth_end_hatch');
+assert.equal(physicalRegistry.evaluate(endHatchTarget, { toolId: 'old_work_knife', actionType: 'cut', gesture: physicalGesture, contact: physicalContact }).accepted, false, 'Labyrinth hatch rejects a knife swing.');
+assert.equal(physicalRegistry.evaluate(endHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: heavyPryGesture, contact: physicalContact }).accepted, true, 'Labyrinth end hatch now requires a physical Drain Bar lever action.');
+assert.equal(proofState.isUnderShrineLabyrinthEndHatchOpen(), true, 'Physical end-hatch pry preserves under_shrine_labyrinth_end_hatch_open.');
+const reloadedLabyrinthRuntime = compileDungeonLocation(underShrineLabyrinth, { logValidation: false });
+const reloadedLabyrinthHarness = Object.assign(Object.create(DungeonScene.prototype), { gameState: new GameState(proofStorage), scene: new THREE.Scene(), collision: reloadedLabyrinthRuntime.collisionWorld });
+reloadedLabyrinthHarness.configureUnderShrineLabyrinth(reloadedLabyrinthRuntime);
+assert.equal(reloadedLabyrinthRuntime.collisionWorld.blockerRects.some((blocker) => blocker.id === 'under_shrine_labyrinth_end_hatch_blocker'), false, 'An old completed end-hatch save removes its blocker without re-clearing.');
 assert.equal(growthNetwork.revealStateKey, 'folsom_under_shrine_network_revealed', 'The connected network is explicitly owned by the Lantern reveal state.');
 assert.equal(equipmentRegistry.items.keepers_lantern.source, 'folsom_shrine_side_room_keepers_lantern_pickup', 'The Shrine Side Room is the canonical Keeper\'s Lantern source.');
 
@@ -165,6 +268,13 @@ assert.ok(Math.hypot(drainBarPickup.target.x - beneathArrival.position.x, drainB
 assert.equal(drainGrateInteraction?.requiredItemId, 'iron_drain_bar', 'The jammed grate requires the Iron Drain Bar.');
 assert.equal(drainGrateInteraction?.saveKey, 'beneath_folsom_drain_grate_pried', 'The grate maps to the locked world-state key.');
 assert.equal(drainGrateBlocker?.userData?.saveKey, 'beneath_folsom_drain_grate_pried', 'The closed grate collision maps to persisted state.');
+const beneathPhysicalTargets = beneathFolsom.physicalToolTargets ?? [];
+assert.deepEqual(beneathPhysicalTargets.map((target) => target.id).sort(), [
+  'beneath_folsom_drain_grate', 'beneath_folsom_hidden_growth_gate', 'beneath_folsom_lower_shrine_hatch', 'beneath_folsom_white_scab_lower_knot',
+].sort(), 'Beneath Folsom authors every current growth/pry blocker as a physical target.');
+assert.equal(beneathPhysicalTargets.find((target) => target.id === 'beneath_folsom_hidden_growth_gate')?.requiredHits, 5, 'Hidden gate preserves exactly five physical knife contacts.');
+assert.deepEqual(beneathPhysicalTargets.find((target) => target.id === 'beneath_folsom_lower_shrine_hatch')?.prerequisites, ['beneath_folsom_hidden_growth_gate_cleared'], 'Lower hatch preserves the hidden-gate prerequisite.');
+assert.equal(underShrineLabyrinth.physicalToolTargets?.[0]?.acceptedToolId, 'iron_drain_bar', 'The labyrinth end hatch no longer has an interaction-only opening path.');
 assert.ok(drainGrateBlocker?.tags?.includes('blocks-deeper-access'), 'The intact grate explicitly blocks deeper access.');
 assert.ok((beneathFolsom.rooms ?? []).some((room) => room.id === 'BF03' && room.tags?.includes('opened-threshold')), 'A small drain-throat alcove exists beyond the grate.');
 assert.equal(beneathFolsomRuntime.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 13.5)).some((blocker) => blocker.id === drainGrateBlocker.id), true, 'Closed grate collision prevents crossing the threshold.');
@@ -268,6 +378,15 @@ const lanternSceneHarness = Object.assign(Object.create(DungeonScene.prototype),
 });
 lanternSceneHarness.configureBeneathFolsomDrainLoop(beneathFolsomRuntime);
 const hiddenGateRuntime = lanternSceneHarness.beneathFolsomHiddenGrowthGateRuntime;
+const initialBeneathPhysicalTargets = lanternSceneHarness.getPhysicalToolTargets();
+const physicalDrainTarget = initialBeneathPhysicalTargets.find((target) => target.id === 'beneath_folsom_drain_grate');
+const lockedLowerHatchTarget = initialBeneathPhysicalTargets.find((target) => target.id === 'beneath_folsom_lower_shrine_hatch');
+assert.equal(physicalRegistry.evaluate(physicalDrainTarget, { toolId: 'old_work_knife', actionType: 'cut', gesture: physicalGesture, contact: physicalContact }).accepted, false, 'Knife contact cannot pry the drain grate.');
+assert.equal(lanternGameState.isBeneathFolsomDrainGratePried(), false, 'Wrong drain-grate contact writes no state.');
+assert.equal(physicalRegistry.evaluate(lockedLowerHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: heavyPryGesture, contact: physicalContact }).accepted, false, 'Lower shrine hatch rejects the bar before hidden-gate clear.');
+assert.equal(lanternGameState.isBeneathFolsomLowerShrineHatchOpen(), false, 'Premature lower-hatch pry writes no state.');
+assert.equal(physicalRegistry.evaluate(physicalDrainTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: physicalGesture, contact: physicalContact }).accepted, true, 'A planted Drain Bar lever action pries the drain grate.');
+assert.equal(lanternGameState.isBeneathFolsomDrainGratePried(), true, 'Physical grate pry preserves the existing save key.');
 const hiddenGateRevealObjects = hiddenGateRuntime.getRevealObjects();
 assert.ok(hiddenGateRevealObjects.length >= 14 && hiddenGateRuntime.cords.length >= 10, 'The hidden gate is a dense field of thick vertical growth cords and scabs.');
 assert.equal(lanternSceneHarness.beneathFolsomLanternRevealObjects.length, lanternGlyphDecals.length + hiddenGateRevealObjects.length, 'The scene tracks both the glyph cluster and physical hidden-growth seal.');
@@ -328,18 +447,24 @@ liveEmitterState = { ...liveEmitterState, active: true, itemId: 'torch', worldPo
 for (let index = 0; index < 10; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
 assert.equal(gateEntry.object.visible, false, 'Ordinary Torch cannot reveal the hidden growth gate.');
 assert.equal(hiddenGateRuntime.strike().hit, false, 'Growth cannot be damaged while it remains hidden.');
+assert.equal(lanternSceneHarness.getPhysicalToolTargets().find((target) => target.id === 'beneath_folsom_hidden_growth_gate')?.available, false, 'Hidden growth has no actionable physical contact zone before Lantern reveal.');
 liveEmitterState = { ...liveEmitterState, itemId: 'keepers_lantern' };
 for (let index = 0; index < 12; index += 1) lanternSceneHarness.lanternConeRevealRuntime.update(0.05);
 assert.ok(gateEntry.object.visible && hiddenGateRuntime.isRevealed(), 'Keeper\'s Lantern wash reveals the dense physical seal.');
+const physicalHiddenGateTarget = lanternSceneHarness.getPhysicalToolTargets().find((target) => target.id === 'beneath_folsom_hidden_growth_gate');
+assert.ok(physicalHiddenGateTarget, 'Lantern reveal enables the physical knife contact receiver.');
+const wrongHiddenGateContact = physicalRegistry.evaluate(physicalHiddenGateTarget, { toolId: 'wood_axe', actionType: 'chop', gesture: physicalGesture, contact: physicalContact });
+assert.equal(wrongHiddenGateContact.accepted, false, 'Wrong tool/action cannot increment the hidden gate.');
+assert.equal(hiddenGateRuntime.hitCount, 0, 'Wrong hidden-gate contact writes no hit.');
 const initialCordScale = hiddenGateRuntime.cords[0].scale.y;
 for (let hit = 1; hit <= 4; hit += 1) {
-  const result = hiddenGateRuntime.strike();
-  assert.deepEqual({ hit: result.hit, cleared: result.cleared, hitCount: result.hitCount }, { hit: true, cleared: false, hitCount: hit }, `Hidden growth hit ${hit} damages without clearing early.`);
+  const contactResult = physicalRegistry.evaluate(physicalHiddenGateTarget, { toolId: 'old_work_knife', actionType: 'cut', gesture: physicalGesture, contact: physicalContact });
+  assert.deepEqual({ accepted: contactResult.accepted, cleared: contactResult.cleared, hitCount: contactResult.hitCount }, { accepted: true, cleared: false, hitCount: hit }, `Physical knife contact ${hit} damages without clearing early.`);
   hiddenGateRuntime.update(0.05);
 }
 assert.ok(hiddenGateRuntime.cords[0].scale.y < initialCordScale && hiddenGateRuntime.scabs.every((mesh) => hiddenGateRuntime.damagedTextures.includes(mesh.material.map)), 'Hits progressively weaken cords and switch scabs to damaged textures.');
-const finalResult = hiddenGateRuntime.strike();
-assert.deepEqual({ hit: finalResult.hit, cleared: finalResult.cleared, hitCount: finalResult.hitCount }, { hit: true, cleared: true, hitCount: 5 }, 'Exactly the fifth hit clears the hidden growth gate.');
+const finalResult = physicalRegistry.evaluate(physicalHiddenGateTarget, { toolId: 'old_work_knife', actionType: 'cut', gesture: physicalGesture, contact: physicalContact });
+assert.deepEqual({ accepted: finalResult.accepted, cleared: finalResult.cleared, hitCount: finalResult.hitCount }, { accepted: true, cleared: true, hitCount: 5 }, 'Exactly the fifth physical knife contact clears the hidden growth gate.');
 assert.ok(hiddenGateRuntime.effects.length >= 20, 'Final hit produces a substantially stronger bounded black-oil burst.');
 assert.equal(hiddenGateRuntime.hallwayGroup.visible, false, 'Blue-flame fixtures remain concealed during the post-collapse beat.');
 assert.equal(hiddenGateRuntime.blueFlames.length, 10, 'Five paired cold-blue torch rows lead through the hallway.');
@@ -353,6 +478,18 @@ assert.equal(hiddenGateRuntime.wall.visible, false, 'The sealed wall slowly fade
 assert.equal(hiddenGateRuntime.hallwayGroup.visible, true, 'Cold-blue fixtures reveal as the wall begins fading away.');
 assert.equal(lanternSceneHarness.collision.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 21.7)).some((blocker) => blocker.id === hiddenGrowthGateBlocker.id), false, 'Cleared wall collision opens the bounded hallway threshold.');
 assert.equal(new GameState(lanternStorage).isBeneathFolsomHiddenGrowthGateCleared(), true, 'Hidden growth gate remains cleared after GameState reload.');
+const unlockedLowerHatchTarget = lanternSceneHarness.getPhysicalToolTargets().find((target) => target.id === 'beneath_folsom_lower_shrine_hatch');
+assert.equal(physicalRegistry.evaluate(unlockedLowerHatchTarget, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: heavyPryGesture, contact: physicalContact }).accepted, true, 'After hidden-gate clear, a heavier smooth bar lever opens the lower shrine hatch.');
+assert.equal(lanternGameState.isBeneathFolsomLowerShrineHatchOpen(), true, 'Physical lower-hatch pry preserves the existing save key.');
+const whiteKnotTarget = lanternSceneHarness.getPhysicalToolTargets().find((target) => target.id === 'beneath_folsom_white_scab_lower_knot');
+assert.equal(physicalRegistry.evaluate(whiteKnotTarget, { toolId: 'wood_axe', actionType: 'chop', gesture: physicalGesture, contact: physicalContact }).accepted, false, 'The exposed White-Scab lower knot rejects the wrong tool.');
+for (let hit = 1; hit <= 3; hit += 1) {
+  const result = physicalRegistry.evaluate(whiteKnotTarget, { toolId: 'old_work_knife', actionType: 'cut', gesture: physicalGesture, contact: physicalContact });
+  assert.equal(result.accepted, true, `White-Scab lower knot accepts physical knife cut ${hit}.`);
+}
+assert.equal(lanternGameState.isBeneathFolsomWhiteScabLowerKnotDestroyed(), true, 'White-Scab knot destruction preserves its save key.');
+assert.equal(lanternGameState.isFolsomShrineCrawlspaceTerminalOpen(), true, 'Knot destruction still enables the remote shrine terminal route.');
+assert.equal(lanternSceneHarness.collision.blockerRects.some((blocker) => blocker.id === 'beneath_folsom_white_scab_front_seal_blocker'), true, 'Destroying the lower knot still does not open the impossible front seal.');
 assert.ok((beneathFolsom.props ?? []).some((prop) => prop.tags?.includes('black-growth') && prop.tags?.includes('atmospheric-only')), 'Other underground growth remains atmospheric dressing.');
 
 const returnTransitions = [];
@@ -563,9 +700,6 @@ assert.deepEqual(liveAnchorInteractions.map((interaction) => interaction.id).sor
 assert.ok(liveAnchorInteractions.every((interaction) => interaction.target?.isVector3 && interaction.hint && interaction.failMessage && interaction.message && interaction.type === 'folsomGrowthAnchor' && interaction.anchorType), 'Every live anchor interaction has a target, hint, type, anchor identity, and non-silent success/failure feedback.');
 assert.ok(liveAnchorInteractions.every((interaction) => interaction.requiresFolsomNetworkReveal), 'Every surface endpoint interaction is gated by the Lantern-first network reveal.');
 
-const liveMessages = [];
-const liveHints = [];
-const ownedItems = new Set();
 const livePlayer = { position: new THREE.Vector3() };
 const competingCampfire = { id: 'validation_campfire', target: liveAnchorInteractions.find((interaction) => interaction.anchorType === 'fire').target.clone(), range: 4, hint: 'Campfire', message: 'Campfire', type: 'fieldCampfire' };
 const competingShrineInspect = { id: 'validation_shrine_inspect', target: liveAnchorInteractions.find((interaction) => interaction.anchorType === 'shrine').target.clone(), range: 4, hint: 'Inspect shrine', message: 'Inspect shrine', type: 'outdoorInspect' };
@@ -585,41 +719,41 @@ const liveDungeon = {
     return result;
   },
 };
-const liveEquipment = {
-  hasItem: (itemId) => ownedItems.has(itemId),
-  getEquippedOffhandId: () => null,
-  getEquippedWeaponProfile: () => ({ id: 'fishing_rod' }),
-};
 const liveInteractions = new Interactions({
   player: livePlayer,
   dungeon: liveDungeon,
-  equipmentRuntime: liveEquipment,
-  hud: { showHint: (message) => liveHints.push(message), showMessage: (message) => liveMessages.push(message), updateFieldKitStatus: () => {} },
+  equipmentRuntime: { hasItem: () => true, getEquippedOffhandId: () => 'keepers_lantern', getEquippedWeaponProfile: () => ({ id: 'unarmed' }) },
+  hud: { showHint: () => {}, showMessage: () => {}, updateFieldKitStatus: () => {} },
   feedback: { shake: () => {} },
 });
 assert.equal(liveInteractions.isOutdoorInteractionAvailable(liveAnchorInteractions[0]), false, 'Fresh-save surface endpoint interactions stay unavailable before the reveal.');
 liveGrowth.revealNetwork();
-assert.equal(liveInteractions.isOutdoorInteractionAvailable(liveAnchorInteractions[0]), true, 'Surface endpoint interactions become available after the reveal.');
+assert.equal(liveInteractions.isOutdoorInteractionAvailable(liveAnchorInteractions[0]), false, 'Revealed surface endpoints remain absent from Interact/A and wait for physical tool contact.');
+livePlayer.position.copy(liveAnchorInteractions[0].target);
+liveInteractions.interact();
+liveInteractions.attack();
+assert.equal(liveGameState.isFolsomGrowthAnchorCleared('fire'), false, 'Interact and attack-button input cannot clear a revealed endpoint.');
 
-const exerciseLiveAnchor = (anchorType, itemId) => {
-  const interaction = liveAnchorInteractions.find((candidate) => candidate.anchorType === anchorType);
-  livePlayer.position.copy(interaction.target);
-  assert.equal(liveInteractions.getNearbyOutdoorInteraction()?.id, interaction.id, `${anchorType} growth wins live interaction selection over overlapping campfire, fishing, or shrine interactions.`);
-  assert.equal(liveInteractions.getNearbyInteraction()?.hint, interaction.hint, `${anchorType} exposes its minimal hint through the live player-facing interaction path.`);
-  ownedItems.delete(itemId);
-  liveInteractions.interact();
-  assert.equal(liveMessages.at(-1), interaction.failMessage, `${anchorType} interact gives explicit feedback when its capability is missing.`);
-  assert.equal(liveGameState.isFolsomGrowthAnchorCleared(anchorType), false, `${anchorType} remains uncleared after a failed live interaction.`);
-  ownedItems.add(itemId);
-  liveInteractions.interact();
-  assert.equal(liveGameState.isFolsomGrowthAnchorCleared(anchorType), true, `${anchorType} clears through the live nearby-interact route.`);
-  assert.ok(liveMessages.at(-1).includes(interaction.message), `${anchorType} live success feedback is shown.`);
+const exercisePhysicalAnchor = (anchorType, acceptedToolId, acceptedActionType) => {
+  const anchor = liveGrowth.getAnchorTargets().find((candidate) => candidate.type === anchorType);
+  const target = {
+    id: anchor.id, target: anchor.target, acceptedToolId, acceptedActionType,
+    requiredGesture: { minTravelPx: 40, minVelocityPxPerSecond: 80, minSmoothness: 0.5 },
+    receivePhysicalToolEvent: () => {
+      const result = liveDungeon.clearFolsomGrowthAnchor(anchor.id);
+      return { accepted: result.cleared, changed: result.cleared, completed: result.cleared };
+    },
+  };
+  const wrong = physicalRegistry.evaluate(target, { toolId: 'iron_drain_bar', actionType: 'pry', gesture: physicalGesture, contact: physicalContact });
+  assert.equal(wrong.accepted, false, `${anchorType} rejects the wrong physical tool/action.`);
+  assert.equal(liveGameState.isFolsomGrowthAnchorCleared(anchorType), false, `${anchorType} writes no state on wrong contact.`);
+  const correct = physicalRegistry.evaluate(target, { toolId: acceptedToolId, actionType: acceptedActionType, gesture: physicalGesture, contact: physicalContact });
+  assert.equal(correct.accepted, true, `${anchorType} clears from the authored physical tool contact.`);
 };
-
-exerciseLiveAnchor('fire', 'torch');
-exerciseLiveAnchor('pond', 'old_work_knife');
-exerciseLiveAnchor('shrine', 'old_work_knife');
-assert.equal(liveGameState.isFolsomUnderworksGrowthUnsealed(), true, 'The live interaction route unseals Underworks after all three anchors.');
+exercisePhysicalAnchor('fire', 'wood_axe', 'chop');
+exercisePhysicalAnchor('pond', 'old_work_knife', 'cut');
+exercisePhysicalAnchor('shrine', 'old_work_knife', 'cut');
+assert.equal(liveGameState.isFolsomUnderworksGrowthUnsealed(), true, 'Three correct physical endpoint actions unseal Underworks.');
 DungeonScene.prototype.syncFolsomUnderworksInteraction.call({
   outdoorInteractions: [lockedUnderworksRuntimeInteraction],
   gameState: liveGameState,
@@ -687,5 +821,12 @@ const legacyStorage = {
 const migratedLegacyState = new GameState(legacyStorage);
 assert.equal(migratedLegacyState.isFolsomGrowthAnchorCleared('pond'), true, 'Migration preserves existing surface-anchor clears.');
 assert.equal(migratedLegacyState.isFolsomUnderShrineNetworkRevealed(), true, 'Existing Chapter 2 progress migrates to the revealed network state without replay.');
+const legacyChapter3StorageValues = new Map([['beneath_folsom_white_scab_lower_knot_destroyed', 'true'], ['folsom_shrine_crawlspace_terminal_open', 'true']]);
+const legacyChapter3Storage = {
+  get length() { return legacyChapter3StorageValues.size; }, key: (index) => [...legacyChapter3StorageValues.keys()][index] ?? null,
+  getItem: (key) => legacyChapter3StorageValues.get(key) ?? null, setItem: (key, value) => legacyChapter3StorageValues.set(key, String(value)), removeItem: (key) => legacyChapter3StorageValues.delete(key),
+};
+const migratedChapter3State = new GameState(legacyChapter3Storage);
+assert.equal(migratedChapter3State.isUnderShrineLabyrinthEndHatchOpen(), true, 'Existing Chapter 3 lead-in saves migrate past the newly physicalized end hatch and cannot softlock.');
 
 console.log('Folsom keeps its starter loops, adds the Lantern-first shrine investigation, persistently unseals Underworks, and connects safely to Beneath Folsom.');

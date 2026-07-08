@@ -13,6 +13,15 @@ const FISHING_TIMED_ACTION_SECONDS = 3;
 const COOKING_TIMED_ACTION_SECONDS = 10;
 const EATING_COOKED_FISH_TIMED_ACTION_SECONDS = 2.75;
 const TIMED_ACTION_MOVE_CANCEL_DISTANCE = 1.4;
+const PHYSICAL_TOOL_INTERACTION_TYPES = new Set([
+  'folsomGrowthAnchor',
+  'folsomShrineSideRoomSeal',
+  'folsomShrineCrawlspacePanel',
+  'beneathFolsomDrainGrate',
+  'beneathFolsomLowerShrineHatch',
+  'beneathFolsomWhiteScabLowerKnot',
+  'underShrineLabyrinthEndHatch',
+]);
 
 export class Interactions {
   constructor({ player, dungeon, hud, feedback = null, equipmentRuntime = null, objectiveRuntime = null, transitionToLocation = null, survivalHost = null }) {
@@ -76,58 +85,9 @@ export class Interactions {
   }
 
   attack() {
-    const hiddenGate = this.dungeon.beneathFolsomHiddenGrowthGateRuntime;
-    if (hiddenGate && !hiddenGate.cleared) {
-      const target = hiddenGate.getTarget();
-      const lanternEquipped = this.equipmentRuntime?.getEquippedOffhandId?.() === 'keepers_lantern';
-      const knifeOwned = this.equipmentRuntime?.hasItem?.('old_work_knife');
-      if (lanternEquipped && knifeOwned && hiddenGate.isRevealed()
-        && this.isCloseEnough(target, 3.45) && this.isMostlyFacing(target, 0.18)) {
-        const now = performance.now();
-        if (now - (this.lastBeneathFolsomGrowthStrikeAt ?? 0) < 280) return false;
-        this.lastBeneathFolsomGrowthStrikeAt = now;
-        const result = this.dungeon.strikeBeneathFolsomHiddenGrowthGate();
-        if (!result.hit) return false;
-        this.feedback?.shake?.(result.cleared
-          ? { durationMs: 680, intensity: 0.21 }
-          : { durationMs: 125, intensity: 0.038 + result.hitCount * 0.006 });
-        return true;
-      }
-    }
-
-    const connectedGrowth = this.dungeon.folsomConnectedGrowthRuntime;
-    const knifeAnchor = connectedGrowth?.getAnchorTargets?.()
-      .filter((anchor) => anchor.available && ['pond', 'shrine'].includes(anchor.type) && !anchor.cleared && anchor.target)
-      .map((anchor) => ({ ...anchor, distance: this.horizontalDistanceTo(anchor.target) }))
-      .filter((anchor) => anchor.distance <= 3.35 && this.isMostlyFacing(anchor.target, 0.15))
-      .sort((a, b) => a.distance - b.distance)[0];
-    if (knifeAnchor && this.equipmentRuntime?.hasItem?.('old_work_knife')) {
-      const now = performance.now();
-      if (now - (this.lastFolsomGrowthStrikeAt ?? 0) < 260) return false;
-      this.lastFolsomGrowthStrikeAt = now;
-      const result = this.dungeon.clearFolsomGrowthAnchor(knifeAnchor.id);
-      if (!result.cleared) return false;
-      const message = result.unsealed ? `${result.message} ${result.underworksMessage}` : result.message;
-      this.setTemporaryHint(message, result.unsealed ? 1900 : 1200);
-      this.hud.showMessage(message);
-      this.feedback?.shake?.(result.unsealed ? { durationMs: 360, intensity: 0.15 } : { durationMs: 150, intensity: 0.065 });
-      return true;
-    }
-
-    const growth = this.dungeon.folsomShedGrowthRuntime;
-    if (!growth || growth.open) return false;
-    const target = growth.getTarget();
-    if (!this.isCloseEnough(target, 3.25) || !this.isMostlyFacing(target, 0.2)) return false;
-    if (!this.equipmentRuntime?.hasItem?.('old_work_knife')) return false;
-    const now = performance.now();
-    if (now - (this.lastFolsomGrowthStrikeAt ?? 0) < 260) return false;
-    this.lastFolsomGrowthStrikeAt = now;
-    const result = this.dungeon.strikeFolsomShedGrowth();
-    if (!result.hit) return false;
-    this.feedback?.shake?.(result.cleared
-      ? { durationMs: 330, intensity: 0.145 }
-      : { durationMs: 105, intensity: result.hitCount === 2 ? 0.045 : 0.03 });
-    return true;
+    // Tool-authored blockers intentionally have no attack-button path. Their only
+    // progression entry point is PhysicalToolActionController swept contact.
+    return false;
   }
 
   getNearbyInteraction() {
@@ -205,53 +165,8 @@ export class Interactions {
       return this.useCentralShrine(interaction);
     }
 
-    if (interaction.type === 'folsomGrowthAnchor') {
-      return this.useFolsomGrowthAnchor(interaction);
-    }
-
-    if (interaction.type === 'folsomShrineSideRoomSeal') {
-      const result = this.dungeon.advanceFolsomShrineSideRoom?.({
-        hasKnife: this.equipmentRuntime?.hasItem?.('old_work_knife'),
-        hasAxe: this.equipmentRuntime?.hasItem?.('wood_axe'),
-      });
-      const message = result?.message ?? interaction.message;
-      this.setTemporaryHint(message, result?.opened ? 1800 : 1300);
-      this.hud.showMessage(message);
-      if (result?.changed) this.feedback?.shake?.(result.opened ? { durationMs: 520, intensity: 0.19 } : { durationMs: 180, intensity: 0.065 });
-      return false;
-    }
-
-    if (interaction.type === 'folsomShrineCrawlspacePanel') {
-      const result = this.dungeon.openFolsomShrineCrawlspace?.({
-        hasKnife: this.equipmentRuntime?.hasItem?.('old_work_knife'),
-      });
-      const message = result?.message ?? interaction.message;
-      this.setTemporaryHint(message, result?.opened ? 1600 : 1200);
-      this.hud.showMessage(message);
-      if (result?.changed) this.feedback?.shake?.({ durationMs: 220, intensity: 0.075 });
-      return false;
-    }
-
     if (interaction.type === 'fieldSurvivalChest') {
       return this.useFieldSurvivalChest(interaction);
-    }
-
-    if (interaction.type === 'beneathFolsomDrainGrate') {
-      const result = this.dungeon.pryBeneathFolsomDrainGrate?.(this.equipmentRuntime?.hasItem?.('iron_drain_bar'));
-      const message = result?.message ?? interaction.failMessage ?? interaction.message;
-      this.setTemporaryHint(message, result?.pried ? 1800 : 1300);
-      this.hud.showMessage(message);
-      this.feedback?.shake?.(result?.pried ? { durationMs: 300, intensity: 0.12 } : { durationMs: 110, intensity: 0.035 });
-      return false;
-    }
-
-    if (interaction.type === 'beneathFolsomLowerShrineHatch') {
-      const result = this.dungeon.pryBeneathFolsomLowerShrineHatch?.(this.equipmentRuntime?.hasItem?.('iron_drain_bar'));
-      const message = result?.message ?? interaction.failMessage ?? interaction.message;
-      this.setTemporaryHint(message, result?.opened ? 2300 : 1400);
-      this.hud.showMessage(message);
-      this.feedback?.shake?.(result?.opened ? { durationMs: 1050, intensity: 0.235 } : { durationMs: 180, intensity: 0.055 });
-      return false;
     }
 
     if (interaction.type === 'equipmentPickup') {
@@ -397,50 +312,8 @@ export class Interactions {
       tags: [interaction.type ?? 'inspect'],
     });
 
-    if (interaction.type === 'beneathFolsomWhiteScabLowerKnot') {
-      const result = this.dungeon.strikeBeneathFolsomWhiteScabLowerKnot?.({
-        hasKnife: this.equipmentRuntime?.hasItem?.('old_work_knife'),
-      });
-      const message = result?.message ?? interaction.message;
-      this.setTemporaryHint(message, result?.destroyed ? 2100 : 1150);
-      this.hud.showMessage(message);
-      if (result?.changed) this.feedback?.shake?.(result.destroyed ? { durationMs: 620, intensity: 0.19 } : { durationMs: 145, intensity: 0.055 });
-      return false;
-    }
-
-    if (interaction.type === 'underShrineLabyrinthEndHatch') {
-      const result = this.dungeon.openUnderShrineLabyrinthEndHatch?.();
-      const message = result?.message ?? interaction.message;
-      this.setTemporaryHint(message, 1200);
-      this.hud.showMessage(message);
-      this.feedback?.shake?.(result?.changed ? { durationMs: 720, intensity: 0.21 } : { durationMs: 160, intensity: 0.05 });
-      if (result?.opened) this.transitionToLocation(interaction.destinationLocationId, {
-        destinationSpawnId: interaction.destinationSpawnId,
-        delayMs: result.changed ? 900 : 180,
-      });
-      return false;
-    }
-
     if (interaction.type === 'equipmentPickup') {
       return this.useEquipmentPickup(interaction);
-    }
-
-    if (interaction.type === 'beneathFolsomDrainGrate') {
-      const result = this.dungeon.pryBeneathFolsomDrainGrate?.(this.equipmentRuntime?.hasItem?.('iron_drain_bar'));
-      const message = result?.message ?? interaction.failMessage ?? interaction.message;
-      this.setTemporaryHint(message, result?.pried ? 1800 : 1300);
-      this.hud.showMessage(message);
-      this.feedback?.shake?.(result?.pried ? { durationMs: 300, intensity: 0.12 } : { durationMs: 110, intensity: 0.035 });
-      return false;
-    }
-
-    if (interaction.type === 'beneathFolsomLowerShrineHatch') {
-      const result = this.dungeon.pryBeneathFolsomLowerShrineHatch?.(this.equipmentRuntime?.hasItem?.('iron_drain_bar'));
-      const message = result?.message ?? interaction.failMessage ?? interaction.message;
-      this.setTemporaryHint(message, result?.opened ? 2300 : 1400);
-      this.hud.showMessage(message);
-      this.feedback?.shake?.(result?.opened ? { durationMs: 1050, intensity: 0.235 } : { durationMs: 180, intensity: 0.055 });
-      return false;
     }
 
     if (interaction.type === 'fieldSurvivalChest') {
@@ -476,7 +349,9 @@ export class Interactions {
       source: interaction.id,
       tags: ['pickup', this.dungeon.area],
     });
-    if (interaction.autoEquip === true) {
+    if (['old_work_knife', 'iron_drain_bar'].includes(interaction.itemId)) {
+      this.equipmentRuntime.equip(EQUIPMENT_SLOTS.tool, interaction.itemId);
+    } else if (interaction.autoEquip === true) {
       this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, interaction.itemId);
     }
     this.emitObjectiveEvent(OBJECTIVE_EVENTS.chestOpened, {
@@ -527,28 +402,6 @@ export class Interactions {
       }
     }
 
-    return false;
-  }
-
-  useFolsomGrowthAnchor(interaction) {
-    const hasCapability = interaction.anchorType === 'fire'
-      ? this.equipmentRuntime?.hasItem?.('torch')
-        || this.equipmentRuntime?.getEquippedOffhandId?.() === 'torch'
-        || this.dungeon.gameState?.hasFieldOffhandItem?.('torch')
-        || this.dungeon.gameState?.getEquippedFieldOffhand?.() === 'torch'
-      : this.equipmentRuntime?.hasItem?.('old_work_knife');
-    if (!hasCapability) {
-      const message = interaction.failMessage ?? 'The growth resists bare hands.';
-      this.setTemporaryHint(message, 1100);
-      this.hud.showMessage(message);
-      return false;
-    }
-    const result = this.dungeon.clearFolsomGrowthAnchor(interaction.id);
-    if (!result.cleared) return false;
-    const message = result.unsealed ? `${result.message} ${result.underworksMessage}` : result.message;
-    this.setTemporaryHint(message, result.unsealed ? 1900 : 1200);
-    this.hud.showMessage(message);
-    this.feedback?.shake?.(result.unsealed ? { durationMs: 360, intensity: 0.15 } : { durationMs: 180, intensity: 0.075 });
     return false;
   }
 
@@ -1009,6 +862,7 @@ export class Interactions {
 
   isOutdoorInteractionAvailable(interaction) {
     if (interaction.collected) return false;
+    if (PHYSICAL_TOOL_INTERACTION_TYPES.has(interaction.type)) return false;
     if (interaction.requiresFolsomNetworkReveal) {
       const revealPersisted = this.dungeon.gameState?.isFolsomUnderShrineNetworkRevealed?.() === true;
       const revealActive = this.dungeon.folsomConnectedGrowthRuntime?.networkRevealed === true;
@@ -1049,7 +903,7 @@ export class Interactions {
   getNearbyIndoorExit() {
     if (this.dungeon.area === 'field') return null;
     return (this.dungeon.compiledLocationRuntime?.exits ?? [])
-      .filter((exit) => !exit.tags?.includes('interaction-controlled'))
+      .filter((exit) => !exit.tags?.includes('interaction-controlled') || this.dungeon.underShrineLabyrinthEndHatchRuntime?.open === true)
       .map((exit) => ({ exit, distance: this.horizontalDistanceTo(exit.position) }))
       .filter(({ distance }) => distance <= INDOOR_EXIT_RANGE)
       .sort((a, b) => a.distance - b.distance)[0]?.exit ?? null;
@@ -1068,6 +922,7 @@ export class Interactions {
 
     return this.dungeon.inspectInteractions
       .filter((interaction) => !interaction.collected)
+      .filter((interaction) => !PHYSICAL_TOOL_INTERACTION_TYPES.has(interaction.type))
       .filter((interaction) => {
         if (!interaction.requiredItemId) return true;
         return this.equipmentRuntime?.hasItem?.(interaction.requiredItemId);

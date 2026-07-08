@@ -40,9 +40,9 @@ Low frames + buried slabs + cords -> barred stone throat; no route bypass
   | revealed feeds point back to the surface network
   v
 SURFACE ENDPOINTS (free order after reveal)
-  |- Fire endpoint: Torch
-  |- Pond endpoint: Old Work Knife
-  `- Shrine endpoint: Old Work Knife
+  |- Fire endpoint: physical Wood Axe chop
+  |- Pond endpoint: physical Old Work Knife cut
+  `- Shrine endpoint: physical Old Work Knife cut
   |
   | existing anchor save keys retained
   | save: folsom_underworks_growth_unsealed
@@ -92,6 +92,8 @@ BF05 LOWER SHRINE STAIR
 
 ## State contract
 
+All growth, cord, knot, grate, and hatch state changes in this flow use the Physical Tool Action System. Interact/A cannot complete them. The touch path drives the visible held tool, a swept contact or planted pry contact is resolved, and the authored receiver validates tool id, action type, gesture quality, stage, prerequisites, and save key.
+
 New additive state:
 
 - `folsom_shrine_side_room_open`
@@ -121,7 +123,8 @@ Keeper's Lantern ownership remains equipment state under the unchanged `keepers_
 - Existing Underworks access and the Beneath Folsom return route remain valid.
 - The BF03 niche is environmental dressing only. Saves without the Lantern acquire it through the side room and can always return from Beneath Folsom.
 - On the first hatch-aware load, legacy saves that had already cleared the formerly open BF04/BF05 seam are migrated to hatch-open. Any existing or future save with a planned Chapter 3 state also forces the hatch open, preventing a route softlock.
+- On the first physical-tool-aware load, saves that already destroyed the White-Scab lower knot or opened the shrine terminal migrate the labyrinth end hatch open. New playthroughs use the physical Drain Bar pry; already-progressed Chapter 3 saves cannot be trapped behind the newly physicalized hatch.
 
 ## Scope boundary
 
-Chapter 2 remains preserved. Chapter 3 now bypasses the impossible front seal through the old shrine terminal and the standalone `under-shrine-labyrinth` location, exiting behind the denied threshold. White-Scab Hall clear, Pale Panel, Shrine Mechanism Room mechanics, Records/Memory UI, enemies, bosses, and physical weapon swings remain deferred.
+Chapter 2 remains preserved. Chapter 3 now bypasses the impossible front seal through the old shrine terminal and the standalone `under-shrine-labyrinth` location, exiting behind the denied threshold. White-Scab Hall clear, Pale Panel, Shrine Mechanism Room mechanics, Records/Memory UI, enemies, bosses, and damage against characters remain deferred. Physical Knife/Axe/Drain Bar actions are active production systems.

@@ -218,7 +218,7 @@ Status terms are applied to guide beats, not to general playability.
 | Old Work Knife behind the shed | MATCHES | Correct environmental placement and tool proportions are implemented. |
 | Exactly three shed swipes: intact -> damaged -> cleared | MATCHES | Hit count, state change, reaction, oil, cord collapse, shake, door opening, and persistence are implemented. |
 | Shed reward: Wood Axe + Torch | MATCHES | Both are inside the opened shed. |
-| Restore common fire with film/cord/knot tool roles | INTENTIONAL DIVERGENCE ALREADY DOCUMENTED | Production moved fire into the Chapter 2 surface-anchor loop and simplifies it to a Torch capability check. The guide's richer physical sequence and `Common Fire Restored` state are absent. |
+| Restore common fire with film/cord/knot tool roles | INTENTIONAL DIVERGENCE ALREADY DOCUMENTED | Production keeps fire in the Chapter 2 surface-anchor loop. Its hardened knot now requires a physical Wood Axe chop; the guide's full `Common Fire Restored` sequence/state remains absent. |
 | Pond path and optional fishing | PARTIAL | Pond/path/fishing exist. The guide's marker-stone reveal and clue are absent. |
 | Pond Clue Recorded | MISSING | No Records event/domain entry exists. |
 | Old Shrine Exterior as marked Chapter 1 endpoint | PARTIAL | The shrine exterior and altar inspection exist; no map mark, side-wall clue, keeper warning, or explicit Chapter 1 endpoint state exists. |
