@@ -554,7 +554,6 @@ export class DungeonScene {
       interactions: this.inspectInteractions,
     });
     this.scene.background = new THREE.Color(0x000000);
-    this.scene.fog = new THREE.Fog(0x000000, 0.9, 7.5);
   }
 
   revealBeneathFolsomKeepersLanternTraces() {
@@ -3269,11 +3268,13 @@ export class DungeonScene {
     const runtime = this.compiledLocationRuntime ?? this.configureCompiledLocationRuntime(this.area);
     this.compiledLocationRuntime = runtime;
     this.scene.background = new THREE.Color(runtime.definition.lighting?.background ?? 0x100f0d);
-    this.scene.fog = new THREE.Fog(
-      runtime.definition.fog?.color ?? 0x242018,
-      runtime.definition.fog?.near ?? 10,
-      runtime.definition.fog?.far ?? 52,
-    );
+    this.scene.fog = runtime.definition.fog?.disabled === true
+      ? null
+      : new THREE.Fog(
+        runtime.definition.fog?.color ?? 0x242018,
+        runtime.definition.fog?.near ?? 10,
+        runtime.definition.fog?.far ?? 52,
+      );
     this.scene.add(runtime.group);
     this.logBalthazanTextureQa(runtime);
     this.torchFlickerController.registerFromObject(runtime.group);

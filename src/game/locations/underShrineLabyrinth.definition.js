@@ -1,5 +1,8 @@
 const textures = Object.freeze({
-  wall: { path: './assets/textures/wall_black_stone_01.png', repeat: [2.2, 1.1], color: 0x403b35, roughness: 1 },
+  rockWall01: { path: './assets/textures/rock/rock_wall_dark_cliff_01.png', repeat: [2.4, 1.25], color: 0x81796d, roughness: 1 },
+  rockWall02: { path: './assets/textures/rock/rock_wall_dark_cliff_02.png', repeat: [2.2, 1.2], color: 0x776f64, roughness: 1 },
+  rockWall03: { path: './assets/textures/rock/rock_wall_dark_cliff_03.png', repeat: [2.35, 1.3], color: 0x837b70, roughness: 1 },
+  rockWall04: { path: './assets/textures/rock/rock_wall_dark_cliff_04.png', repeat: [2.15, 1.2], color: 0x746d64, roughness: 1 },
   floor: { path: './assets/textures/floor_worn_stone_01.png', repeat: [2.2, 2.8], color: 0x39342e, roughness: 1 },
   ceiling: { path: './assets/textures/ceiling_dark_stone_01.png', repeat: [2, 2], color: 0x302c28, roughness: 1 },
   dirt: { path: './assets/textures/outdoor/field_dead_grass_01.png', repeat: [1.8, 1.8], color: 0x51483b, roughness: 1 },
@@ -13,11 +16,11 @@ const textures = Object.freeze({
 const route = [
   ['USL01', 'Terminal Throat', -3, 3, -3, 13, 0, 2.15],
   ['USL02', 'First Turn', 3, 15, 7, 13, -0.28, 2.05],
-  ['USL03', 'North Squeeze', 11, 15, -5, 7, -0.56, 1.82],
+  ['USL03', 'North Squeeze', 10.2, 15, -5, 7, -0.56, 1.82],
   ['USL04', 'Root Elbow', 15, 27, -5, 1, -0.84, 1.95],
   ['USL05', 'Buried Rise', 21, 27, 1, 13, -1.12, 1.9],
   ['USL06', 'Breathing Pocket', 27, 39, 7, 13, -1.4, 2.45],
-  ['USL07', 'Stone Squeeze', 35, 39, -5, 7, -1.68, 1.76],
+  ['USL07', 'Stone Squeeze', 34.2, 39, -5, 7, -1.68, 1.76],
   ['USL08', 'Maintenance Bend', 39, 51, -5, 1, -1.96, 1.9],
   ['USL09', 'Final Coil', 45, 51, 1, 13, -2.24, 1.86],
   ['USL10', 'End Hatch Pocket', 51, 65, 7, 13, -2.52, 2.2],
@@ -25,7 +28,7 @@ const route = [
 
 const rooms = route.map(([id, label, minX, maxX, minZ, maxZ, floorY, headroom], index) => ({
   id, label, minX, maxX, minZ, maxZ, floorY, ceilingY: floorY + headroom,
-  floorTexture: index % 3 === 1 ? 'dirt' : 'floor', wallTexture: 'wall', ceilingTexture: 'ceiling',
+  floorTexture: index % 3 === 1 ? 'dirt' : 'floor', wallTexture: `rockWall0${(index % 4) + 1}`, ceilingTexture: 'ceiling',
   safeForSpawn: index === 0 || index === route.length - 1, encounterWeight: 0,
   tags: ['under-shrine-labyrinth', 'claustrophobic', 'no-encounters', index === 2 || index === 6 ? 'tight-squeeze' : 'twisting-descent'],
 }));
@@ -38,8 +41,8 @@ const connections = [
 
 const doors = connections.map(([fromRoom, toRoom, x, z], index) => ({
   id: `under_shrine_labyrinth_bend_${index + 1}`, fromRoom, toRoom,
-  position: { x, y: route[index + 1][6], z }, navWaypoint: { x, y: route[index + 1][6], z }, width: index === 1 || index === 5 ? 2.45 : 3.2,
-  wallGaps: [{ roomId: fromRoom, position: { x, y: 0, z }, width: index === 1 || index === 5 ? 2.45 : 3.2 }, { roomId: toRoom, position: { x, y: 0, z }, width: index === 1 || index === 5 ? 2.45 : 3.2 }],
+  position: { x, y: route[index + 1][6], z }, navWaypoint: { x, y: route[index + 1][6], z }, width: index === 1 || index === 5 ? 3.2 : 3.8,
+  wallGaps: [{ roomId: fromRoom, position: { x, y: 0, z }, width: index === 1 || index === 5 ? 3.2 : 3.8 }, { roomId: toRoom, position: { x, y: 0, z }, width: index === 1 || index === 5 ? 3.2 : 3.8 }],
   tags: ['meaningful-bend', 'descending-connector'],
 }));
 
@@ -52,7 +55,7 @@ const ramps = connections.map(([, , x, z], index) => {
     id: `under_shrine_labyrinth_descent_${index + 1}`,
     from: [x - dx * 1.5, z - dz * 1.5],
     to: [x + dx * 1.5, z + dz * 1.5],
-    width: index === 1 || index === 5 ? 2.35 : 3,
+    width: index === 1 || index === 5 ? 3.1 : 3.6,
     y0: route[index][6], y1: route[index + 1][6], material: 'floor',
     tags: ['continuous-descent', 'mobile-safe-ramp'],
   };
@@ -83,8 +86,9 @@ export const underShrineLabyrinthDefinition = Object.freeze({
   id: 'under-shrine-labyrinth', displayName: 'Under-Shrine Labyrinth', type: 'dungeon', version: 1,
   tags: ['compiled-runtime', 'authored-location', 'chapter-3-lead-in', 'pitch-black', 'no-enemies'],
   notes: 'A bounded, ten-segment spiral-like crawlspace descent from the Folsom shrine terminal to the backside of the impossible White-Scab threshold.',
-  lighting: { background: 0x000000 }, fog: { color: 0x000000, near: 0.9, far: 7.5 }, textures, defaultFloorY: 0, defaultCeilingY: 2.1,
+  lighting: { background: 0x000000 }, fog: { disabled: true }, textures, defaultFloorY: 0, defaultCeilingY: 2.1,
   geometry: { wallHeight: 2.1, wallThickness: 0.42, floorThickness: 0.22, ceilingThickness: 0.22, roomEdgePolicy: 'sealedUnlessDeclaredOpening' },
+  collision: { playerRadius: 0.34, roomFloorSurfaces: true },
   rooms, doors, ramps,
   blockers: [{ id: 'under_shrine_labyrinth_end_hatch_blocker', type: 'gate', minX: 64.15, maxX: 64.95, minZ: 8.05, maxZ: 11.95, height: 2.2, blocksPlayer: true, blocksActors: true, tags: ['physical-end-hatch'], userData: { saveKey: 'under_shrine_labyrinth_end_hatch_open' } }],
   props,

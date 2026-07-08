@@ -333,6 +333,24 @@ function stairPrimitiveEndpoints(primitive) {
 function buildWalkableSurfaces(definition) {
   const surfaces = [];
   const defaultY = definition.defaultFloorY ?? 0;
+  if (definition.collision?.roomFloorSurfaces === true) {
+    asArray(definition.rooms).forEach((room) => {
+      if (![room.minX, room.maxX, room.minZ, room.maxZ].every(Number.isFinite)) return;
+      surfaces.push({
+        id: `${room.id}_room_floor_walkable`,
+        kind: 'flatPolygon',
+        footprint: [
+          [room.minX, room.minZ],
+          [room.maxX, room.minZ],
+          [room.maxX, room.maxZ],
+          [room.minX, room.maxZ],
+        ],
+        y: room.floorY ?? defaultY,
+        priority: -10,
+        tags: ['compiled-room-floor', ...(room.tags ?? [])],
+      });
+    });
+  }
   asArray(definition.polygonFloors).forEach((floor) => {
     const footprint = asArray(floor.points).map(walkableSurfacePoint);
     if (footprint.length >= 3) surfaces.push({

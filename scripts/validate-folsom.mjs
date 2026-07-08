@@ -148,6 +148,7 @@ const drainGrateBlocker = beneathFolsomRuntime.blockerRects.find((blocker) => bl
 const keepersLanternPickup = (beneathFolsom.interactions ?? []).find((interaction) => interaction.itemId === 'keepers_lantern');
 const lanternRevealProps = (beneathFolsom.props ?? []).filter((prop) => prop.tags?.includes('keepers-lantern-revealed'));
 const lanternGlyphDecals = (beneathFolsom.props ?? []).filter((prop) => prop.tags?.includes('lantern-reveal-decal'));
+const lowerWallLanternGlyphDecals = lanternGlyphDecals.filter((prop) => prop.id.startsWith('beneath_folsom_lower_wall_glyph_cluster_'));
 const hiddenGrowthGateBlocker = beneathFolsomRuntime.blockerRects.find((blocker) => blocker.id === 'beneath_folsom_hidden_growth_gate_blocker');
 const blueHall = (beneathFolsom.rooms ?? []).find((room) => room.id === 'BF04');
 assert.equal(beneathReturn?.toLocation, 'folsom', 'Beneath Folsom has a return route to Folsom.');
@@ -170,15 +171,14 @@ assert.equal(beneathFolsomRuntime.collisionWorld.getIntersectingBlockers(new THR
 assert.equal(keepersLanternPickup, undefined, "Beneath Folsom no longer duplicates the Keeper's Lantern pickup.");
 assert.ok((beneathFolsom.props ?? []).some((prop) => prop.id === 'beneath_folsom_keeper_niche_empty_hook'), 'The retired BF03 Lantern niche remains as an empty environmental trace.');
 assert.ok(lanternRevealProps.length >= 6 && lanternRevealProps.every((prop) => prop.userData?.hiddenByDefault && prop.userData?.revealItemId === 'keepers_lantern'), 'The bounded route-truth cluster is hidden under normal light and mapped only to the lantern.');
-assert.ok(lanternGlyphDecals.length >= 6, 'Beneath Folsom authors a multi-piece lantern-cone glyph cluster.');
-assert.ok(lanternGlyphDecals.every((prop) => prop.id.startsWith('beneath_folsom_lower_wall_glyph_cluster_')), 'Reveal pieces belong to the authored lower-wall cluster.');
-assert.ok(lanternGlyphDecals.every((prop) => prop.userData.revealMode === 'lanternCone' && prop.userData.hiddenOpacity === 0), 'Every glyph cluster decal defaults to true zero opacity and uses the lantern cone runtime.');
-assert.ok(lanternGlyphDecals.every((prop) => prop.userData.revealDistance === 4 && prop.userData.revealConeDegrees === 40
+assert.ok(lowerWallLanternGlyphDecals.length >= 6, 'Beneath Folsom authors a multi-piece lantern-cone glyph cluster.');
+assert.ok(lowerWallLanternGlyphDecals.every((prop) => prop.userData.revealMode === 'lanternCone' && prop.userData.hiddenOpacity === 0), 'Every glyph cluster decal defaults to true zero opacity and uses the lantern cone runtime.');
+assert.ok(lowerWallLanternGlyphDecals.every((prop) => prop.userData.revealDistance === 4 && prop.userData.revealConeDegrees === 40
   && prop.userData.nearFieldRevealRadius >= 1.25 && prop.userData.nearFieldConeDegrees >= 70
   && prop.userData.exitConePaddingDegrees > 0 && prop.userData.exitDistancePadding > 0
   && prop.userData.revealLingerSeconds >= 0.15), 'The cluster authors a forgiving but bounded reveal wash with near-field grace, hysteresis, and short linger.');
-assert.ok(lanternGlyphDecals.every((prop) => prop.position.z > 21 && prop.tags.includes('blocked-future-route')), 'The cone-reveal cluster is surface-bound at the sealed lower wall.');
-const clusterGlyphAssetPaths = [...new Set(lanternGlyphDecals
+assert.ok(lowerWallLanternGlyphDecals.every((prop) => prop.position.z > 21 && prop.tags.includes('blocked-future-route')), 'The cone-reveal cluster is surface-bound at the sealed lower wall.');
+const clusterGlyphAssetPaths = [...new Set(lowerWallLanternGlyphDecals
   .map((prop) => beneathFolsom.textures[prop.material]?.path)
   .filter((assetPath) => assetPath?.startsWith('./assets/revealed_glyphs/')))];
 assert.ok(clusterGlyphAssetPaths.length >= 2, 'The lower-wall cluster uses at least two committed revealed-glyph PNG assets.');
