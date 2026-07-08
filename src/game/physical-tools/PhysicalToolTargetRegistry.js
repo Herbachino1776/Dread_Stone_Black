@@ -2,6 +2,9 @@ import * as THREE from 'three';
 
 const projectedPoint = new THREE.Vector3();
 const worldPoint = new THREE.Vector3();
+const worldSweepStart = new THREE.Vector3();
+const worldSweepEnd = new THREE.Vector3();
+const worldRadiusEdge = new THREE.Vector3();
 
 function distanceToSegment(point, start, end) {
   const dx = end.x - start.x;
@@ -16,6 +19,31 @@ function resolveVector(value) {
   if (value?.isVector3) return value;
   if (Array.isArray(value)) return worldPoint.set(Number(value[0]) || 0, Number(value[1]) || 0, Number(value[2]) || 0);
   return worldPoint.set(Number(value?.x) || 0, Number(value?.y) || 0, Number(value?.z) || 0);
+}
+
+function unprojectScreenPoint(point, depth, camera, rect, target) {
+  return target.set(
+    ((point.x - rect.left) / rect.width) * 2 - 1,
+    -(((point.y - rect.top) / rect.height) * 2 - 1),
+    depth,
+  ).unproject(camera);
+}
+
+function distanceToWorldSegment(point, start, end) {
+  const segmentX = end.x - start.x;
+  const segmentY = end.y - start.y;
+  const segmentZ = end.z - start.z;
+  const lengthSquared = segmentX * segmentX + segmentY * segmentY + segmentZ * segmentZ;
+  if (lengthSquared <= 0.0000001) return point.distanceTo(start);
+  const t = THREE.MathUtils.clamp(
+    ((point.x - start.x) * segmentX + (point.y - start.y) * segmentY + (point.z - start.z) * segmentZ) / lengthSquared,
+    0,
+    1,
+  );
+  const contactX = start.x + segmentX * t;
+  const contactY = start.y + segmentY * t;
+  const contactZ = start.z + segmentZ * t;
+  return Math.hypot(point.x - contactX, point.y - contactY, point.z - contactZ);
 }
 
 export class PhysicalToolTargetRegistry {
@@ -56,17 +84,39 @@ export class PhysicalToolTargetRegistry {
     return Math.hypot(dx, dz) <= (target.range ?? 3.5);
   }
 
-  findSweepContact(start, end, profile) {
+  findActivePartSweepContact(start, end, profile) {
     const candidates = [];
+    const rect = this.viewport?.getBoundingClientRect?.();
+    if (!rect?.width || !rect?.height || !this.camera) return null;
     for (const target of this.getTargets()) {
       if (!this.isInWorldRange(target)) continue;
       const screen = this.projectTarget(target);
       if (!screen) continue;
       const radius = target.contactRadiusPx ?? profile?.contactRadiusPx ?? 58;
       const distance = distanceToSegment(screen, start, end);
-      if (distance <= radius) candidates.push({ target, screen, distance, radius });
+      const targetWorld = resolveVector(typeof target.target === 'function' ? target.target() : target.target).clone();
+      unprojectScreenPoint(start, screen.depth, this.camera, rect, worldSweepStart);
+      unprojectScreenPoint(end, screen.depth, this.camera, rect, worldSweepEnd);
+      unprojectScreenPoint({ x: screen.x + radius, y: screen.y }, screen.depth, this.camera, rect, worldRadiusEdge);
+      const worldRadius = targetWorld.distanceTo(worldRadiusEdge);
+      const worldDistance = distanceToWorldSegment(targetWorld, worldSweepStart, worldSweepEnd);
+      if (distance <= radius && worldDistance <= worldRadius * 1.001) candidates.push({
+        target,
+        screen,
+        distance,
+        radius,
+        worldDistance,
+        worldRadius,
+        sweep: { start: { x: start.x, y: start.y }, end: { x: end.x, y: end.y } },
+        worldSweep: { start: worldSweepStart.clone(), end: worldSweepEnd.clone() },
+        activePartKind: end.kind ?? (profile?.actionType === 'pry' ? 'pry-tip' : profile?.actionType === 'chop' ? 'axe-head' : 'knife-blade'),
+      });
     }
     return candidates.sort((a, b) => a.distance - b.distance)[0] ?? null;
+  }
+
+  findSweepContact(start, end, profile) {
+    return this.findActivePartSweepContact(start, end, profile);
   }
 
   evaluate(target, { toolId, actionType, gesture, contact } = {}) {
@@ -94,8 +144,18 @@ export class PhysicalToolTargetRegistry {
       stage: target.stage,
       gesture: { ...gesture },
       contact: {
-        kind: actionType === 'pry' ? 'planted-pry-contact' : 'swept-screen-contact',
+        kind: actionType === 'pry' ? 'planted-pry-tip-contact' : 'swept-active-part-contact',
+        activePart: contact.activePartKind ?? (actionType === 'chop' ? 'axe-head' : actionType === 'pry' ? 'pry-tip' : 'knife-blade'),
         screen: { x: contact.screen.x, y: contact.screen.y },
+        sweep: contact.sweep ? {
+          start: { ...contact.sweep.start },
+          end: { ...contact.sweep.end },
+        } : null,
+        worldSweep: contact.worldSweep ? {
+          start: contact.worldSweep.start.clone(),
+          end: contact.worldSweep.end.clone(),
+          radius: contact.worldRadius,
+        } : null,
         world: resolveVector(typeof target.target === 'function' ? target.target() : target.target).clone(),
       },
     };

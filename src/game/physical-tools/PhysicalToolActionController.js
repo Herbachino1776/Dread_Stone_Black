@@ -23,7 +23,7 @@ export class PhysicalToolActionController {
   }
 
   createIdleState() {
-    return { active: false, pointerId: null, samples: [], startX: 0, startY: 0, x: 0, y: 0, deltaX: 0, deltaY: 0, travelPx: 0, planted: false, plantX: 0, plantY: 0, plantSampleIndex: 0, leverTravelPx: 0, contact: null, contactSampleIndex: 0, contactAngleRadians: null };
+    return { active: false, pointerId: null, samples: [], startX: 0, startY: 0, x: 0, y: 0, deltaX: 0, deltaY: 0, travelPx: 0, planted: false, plantX: 0, plantY: 0, plantSampleIndex: 0, leverTravelPx: 0, contact: null, contactSampleIndex: 0, contactAngleRadians: null, activePartPoint: null };
   }
 
   bind() {
@@ -44,24 +44,25 @@ export class PhysicalToolActionController {
     if (this.cooldownRemaining > 0 || this.state.active || this.isInputBlocked(event)) return;
     const toolId = this.viewmodel?.getActiveToolId?.();
     const profile = getPhysicalToolProfile(toolId);
+    // A generous invisible grip zone owns input capture. Blade/head/tip geometry is
+    // deliberately excluded here and is sampled separately for physical contact.
     if (!profile || !this.viewmodel?.projectGrabHit?.(event.clientX, event.clientY, this.viewport)) return;
     event.preventDefault();
+    event.stopImmediatePropagation?.();
     event.stopPropagation();
     this.viewport?.setPointerCapture?.(event.pointerId);
     const sample = this.makeSample(event);
     this.state = { ...this.createIdleState(), active: true, pointerId: event.pointerId, toolId, actionType: profile.actionType, startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, samples: [sample] };
+    this.state.activePartPoint = this.viewmodel?.getProjectedActivePoint?.(this.viewport, this.state) ?? null;
     this.viewmodel?.setGestureState?.(this.state);
   }
 
   pointerMove(event) {
     if (!this.state.active || event.pointerId !== this.state.pointerId) return;
-    if (this.isInputBlocked(event)) {
-      this.cancelGesture();
-      return;
-    }
     event.preventDefault();
+    event.stopImmediatePropagation?.();
     event.stopPropagation();
-    const previous = { x: this.state.x, y: this.state.y };
+    const previousInput = { x: this.state.x, y: this.state.y };
     this.state.x = event.clientX;
     this.state.y = event.clientY;
     this.state.deltaX = event.clientX - this.state.startX;
@@ -70,12 +71,17 @@ export class PhysicalToolActionController {
     this.state.samples.push(this.makeSample(event));
     this.trimSamples();
     const profile = getPhysicalToolProfile(this.state.toolId);
-    const segmentLength = Math.hypot(event.clientX - previous.x, event.clientY - previous.y);
-    const contact = segmentLength >= 1
-      ? this.registry.findSweepContact(previous, { x: event.clientX, y: event.clientY }, profile)
+    const previousActivePart = this.state.activePartPoint;
+    const activePart = this.viewmodel?.getProjectedActivePoint?.(this.viewport, this.state) ?? null;
+    this.state.activePartPoint = activePart;
+    const segmentLength = previousActivePart && activePart
+      ? Math.hypot(activePart.x - previousActivePart.x, activePart.y - previousActivePart.y)
+      : 0;
+    const contact = segmentLength > 0.001
+      ? this.registry.findActivePartSweepContact(previousActivePart, activePart, profile)
       : null;
     if (contact) {
-      const segmentAngle = Math.atan2(event.clientY - previous.y, event.clientX - previous.x);
+      const segmentAngle = Math.atan2(event.clientY - previousInput.y, event.clientX - previousInput.x);
       const angleError = getPhysicalToolAngleError(profile, segmentAngle);
       const contactScore = contact.distance + angleError * 22;
       if (!this.state.contact || contactScore <= (this.state.contact.score ?? Infinity)) {
@@ -100,6 +106,7 @@ export class PhysicalToolActionController {
   pointerEnd(event) {
     if (!this.state.active || event.pointerId !== this.state.pointerId) return;
     event.preventDefault();
+    event.stopImmediatePropagation?.();
     event.stopPropagation();
     this.pointerMove(event);
     if (!this.state.active) return;
@@ -136,6 +143,7 @@ export class PhysicalToolActionController {
     }
     this.resolveFeedback(result, profile);
     this.cooldownRemaining = result.accepted ? profile.cooldownSeconds : Math.min(0.22, profile.cooldownSeconds * 0.4);
+    this.viewport?.releasePointerCapture?.(event.pointerId);
     this.state = this.createIdleState();
     this.viewmodel?.setGestureState?.(this.state);
   }
@@ -147,6 +155,7 @@ export class PhysicalToolActionController {
   }
 
   cancelGesture() {
+    if (this.state.pointerId != null) this.viewport?.releasePointerCapture?.(this.state.pointerId);
     this.state = this.createIdleState();
     this.viewmodel?.setGestureState?.(this.state);
   }

@@ -29,7 +29,9 @@ BF05 LOWER SHRINE STAIR
 
 The bypass proves that the player cannot solve the front seal by attacking it. A correct physical Old Work Knife cut sequence destroys only the exposed lower knot and releases pressure at the old Folsom shrine terminal. The front seal remains shut. The labyrinth end hatch uses a planted Iron Drain Bar pry before its normal transition becomes available. `under-shrine-labyrinth` is a separate compiled authored location, not a Folsom tunnel extension or test room.
 
-Chapter 3 White-Scab growth, knots, panels, slabs, grates, and hatches must use the Physical Tool Action System when implemented: Knife=cut/slash, Axe=heavy smooth chop, Drain Bar=planted pry/lever. Interact/A is not a blocker-victory path. Enemy combat remains deferred even though the receiver architecture is reusable.
+Chapter 3 White-Scab growth, knots, panels, slabs, grates, and hatches must use the Physical Tool Action System when implemented. Right-hand tools originate lower-right and capture touch only at the grip/handle; movement stays left-side and ordinary right-look remains available outside that grip. Knife blade contact comes from a fast cut, Axe head contact from a heavy chop, and Drain Bar tip contact from plant-and-pry. Interact/A is not a blocker-victory path. Enemy combat remains deferred even though the receiver architecture is reusable.
+
+White-Scab Hall must not be implemented until the physical-tool ergonomics pass is stable against the existing Folsom, shrine, Beneath Folsom, and Chapter 3 lead-in blockers.
 
 ## Deferred
 

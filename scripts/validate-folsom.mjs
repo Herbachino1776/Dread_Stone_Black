@@ -46,6 +46,7 @@ const knifeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.old_work
 const reverseKnifeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.old_work_knife, { travelPx: 96, velocityPxPerSecond: 760, smoothness: 0.9, angleRadians: -Math.PI * 0.75 });
 const crosswiseKnifeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.old_work_knife, { travelPx: 96, velocityPxPerSecond: 760, smoothness: 0.9, angleRadians: -Math.PI * 0.25 });
 const axeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.wood_axe, { travelPx: 132, velocityPxPerSecond: 330, smoothness: 0.93, angleRadians: Math.PI * 0.5 });
+const upwardAxeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.wood_axe, { travelPx: 132, velocityPxPerSecond: 330, smoothness: 0.93, angleRadians: -Math.PI * 0.5 });
 const rushedAxeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.wood_axe, { travelPx: 150, velocityPxPerSecond: 1120, smoothness: 0.9, angleRadians: Math.PI * 0.5 });
 const erraticAxeGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.wood_axe, { travelPx: 170, velocityPxPerSecond: 350, smoothness: 0.28, angleRadians: Math.PI * 0.5 });
 const pryGesture = evaluatePhysicalToolGesture(PHYSICAL_TOOL_PROFILES.iron_drain_bar, { travelPx: 145, velocityPxPerSecond: 170, smoothness: 0.91, angleRadians: -Math.PI * 0.5 });
@@ -53,6 +54,7 @@ assert.equal(knifeGesture.effective, true, 'The light Work Knife accepts a clean
 assert.equal(reverseKnifeGesture.effective, true, 'The Work Knife accepts the natural lower-right to upper-left cutting stroke as the reverse direction on its slash axis.');
 assert.equal(crosswiseKnifeGesture.effective, false, 'The Work Knife still rejects a crosswise stroke outside its learned cutting axis.');
 assert.equal(axeGesture.effective, true, 'The Wood Axe rewards a slower smooth committed chop.');
+assert.equal(upwardAxeGesture.effective, true, 'The Wood Axe accepts the lower-right grip driving its head upward through center on the chop axis.');
 assert.equal(rushedAxeGesture.effective, false, 'An over-fast Axe swing remains visible input but is ineffective.');
 assert.equal(erraticAxeGesture.effective, false, 'A squiggly Axe follow-through remains visible input but is ineffective.');
 assert.equal(pryGesture.effective, true, 'The Drain Bar rewards a slow smooth lever direction.');
@@ -98,13 +100,19 @@ toolEquipment.equip('weapon', 'unarmed');
 toolEquipment.equip('tool', 'old_work_knife');
 toolViewmodel.update(1 / 60);
 const knifeGrab = toolViewmodel.getProjectedGrabPoint(controllerViewport);
-assert.ok(knifeGrab, 'The portrait Work Knife exposes a visible physical grab/contact point.');
+const knifeActivePart = toolViewmodel.getProjectedActivePoint(controllerViewport);
+assert.ok(knifeGrab, 'The portrait Work Knife exposes a visible grip input zone.');
+assert.equal(knifeGrab.kind, 'grip-input-capture', 'The Work Knife input zone is explicitly the grip, not its blade.');
+assert.equal(knifeActivePart.kind, 'knife-blade', 'The Work Knife exposes its blade as a separate physical contact surface.');
+assert.ok(knifeGrab.x > knifeActivePart.x && knifeGrab.y > knifeActivePart.y, 'The Work Knife grip is lower-right of its upward-angled blade.');
+assert.ok(Math.hypot(knifeGrab.x - knifeActivePart.x, knifeGrab.y - knifeActivePart.y) > knifeGrab.radius * 2, 'The Work Knife blade cannot overlap the grip input zone.');
 let controllerShedHits = 0;
+let controllerContactEvent = null;
 const controllerTarget = {
   id: 'folsom_tool_shed_seam_growth', target: new THREE.Vector3(0, 0, -3), range: 3.25, contactRadiusPx: 62,
   acceptedToolId: 'old_work_knife', acceptedActionType: 'cut',
   requiredGesture: PHYSICAL_TOOL_PROFILES.old_work_knife,
-  receivePhysicalToolEvent: () => { controllerShedHits += 1; return { accepted: true, changed: true, hit: true }; },
+  receivePhysicalToolEvent: (event) => { controllerShedHits += 1; controllerContactEvent = event; return { accepted: true, changed: true, hit: true }; },
 };
 const toolController = new PhysicalToolActionController({
   app: controllerViewport, camera: toolCamera, player: { position: new THREE.Vector3(0, 0, 0) },
@@ -112,22 +120,89 @@ const toolController = new PhysicalToolActionController({
 });
 let simulatedToolTime = performance.now();
 toolController.makeSample = (event) => ({ x: event.clientX, y: event.clientY, timeMs: (simulatedToolTime += 40) });
-const toolPointerEvent = (x, y) => ({ clientX: x, clientY: y, pointerId: 7, preventDefault() {}, stopPropagation() {}, target: { closest: () => null } });
-toolController.pointerDown(toolPointerEvent(knifeGrab.x, knifeGrab.y));
+const toolPointerEvent = (x, y, closest = null) => ({
+  clientX: x, clientY: y, pointerId: 7, defaultPrevented: false,
+  preventDefault() { this.defaultPrevented = true; }, stopPropagation() {}, stopImmediatePropagation() {},
+  target: { closest: () => closest },
+});
+const bladePointerDown = toolPointerEvent(knifeActivePart.x, knifeActivePart.y);
+toolController.pointerDown(bladePointerDown);
+assert.equal(toolController.state.active, false, 'Touching the Work Knife blade does not capture or start a tool gesture.');
+assert.equal(bladePointerDown.defaultPrevented, false, 'A touch outside the grip zone remains available to normal look/offhand input.');
+const gripPointerDown = toolPointerEvent(knifeGrab.x, knifeGrab.y);
+toolController.pointerDown(gripPointerDown);
+assert.equal(toolController.state.active, true, 'Touching the Work Knife grip captures the tool gesture.');
+assert.equal(gripPointerDown.defaultPrevented, true, 'The captured grip gesture owns its pointer.');
 for (let step = 1; step <= 5; step += 1) {
   const progress = step / 5;
   toolController.pointerMove(toolPointerEvent(
     THREE.MathUtils.lerp(knifeGrab.x, controllerViewportRect.width * 0.5, progress),
     THREE.MathUtils.lerp(knifeGrab.y, controllerViewportRect.height * 0.5, progress),
+    step === 3 ? 'button' : null,
   ));
 }
+assert.equal(toolController.state.active, true, 'A grip-zone pointer remains captured across the swipe even when it crosses another control surface.');
 toolController.pointerEnd(toolPointerEvent(controllerViewportRect.width * 0.5, controllerViewportRect.height * 0.5));
 assert.equal(controllerShedHits, 1, 'A touch beginning on the visible portrait Knife and sweeping into centered shed growth produces a physical damage event.');
+assert.equal(controllerContactEvent?.contact?.activePart, 'knife-blade', 'The swept Knife blade, not the grip or finger path, is recorded as the physical contact surface.');
+assert.equal(controllerContactEvent?.contact?.kind, 'swept-active-part-contact', 'Knife progression records a swept active-part contact.');
+assert.ok(controllerContactEvent?.contact?.worldSweep?.radius > 0, 'Knife contact carries the blade sweep volume into target-depth world space.');
 toolController.dispose();
 toolEquipment.equip('tool', 'iron_drain_bar'); toolViewmodel.update(1 / 60);
 assert.ok(toolViewmodel.toolGroups.get('iron_drain_bar').visible, 'Equipped Iron Drain Bar has a visible camera-local ready pose.');
+const barGrip = toolViewmodel.getProjectedGripZone(controllerViewport);
+const barTip = toolViewmodel.getProjectedActivePoint(controllerViewport);
+assert.ok(barGrip.x > barTip.x && barGrip.y > barTip.y && barTip.kind === 'pry-tip', 'Drain Bar grip starts lower-right while its separate pry tip aims toward center.');
+let controllerPryHits = 0;
+let controllerPryEvent = null;
+const controllerPryTarget = {
+  id: 'beneath_folsom_drain_grate', target: new THREE.Vector3(0, 0, -3), range: 3.25, contactRadiusPx: 70,
+  acceptedToolId: 'iron_drain_bar', acceptedActionType: 'pry',
+  requiredGesture: { ...PHYSICAL_TOOL_PROFILES.iron_drain_bar, minLeverTravelPx: 78 },
+  receivePhysicalToolEvent: (event) => { controllerPryHits += 1; controllerPryEvent = event; return { accepted: true, changed: true, pried: true }; },
+};
+const barController = new PhysicalToolActionController({
+  app: controllerViewport, camera: toolCamera, player: { position: new THREE.Vector3(0, 0, 0) },
+  dungeon: { getPhysicalToolTargets: () => [controllerPryTarget] }, equipmentRuntime: toolEquipment, viewmodel: toolViewmodel,
+});
+let simulatedPryTime = performance.now();
+barController.makeSample = (event) => ({ x: event.clientX, y: event.clientY, timeMs: (simulatedPryTime += 10) });
+const barPointerEvent = (x, y) => ({ clientX: x, clientY: y, pointerId: 8, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, target: { closest: () => null } });
+barController.pointerDown(barPointerEvent(barGrip.x, barGrip.y));
+for (let step = 1; step <= 100; step += 1) barController.pointerMove(barPointerEvent(barGrip.x, barGrip.y - step * 2));
+assert.equal(barController.state.planted, true, 'The Drain Bar tip plants on the authored pry point before lever travel is evaluated.');
+barController.pointerEnd(barPointerEvent(barGrip.x, barGrip.y - 200));
+assert.equal(controllerPryHits, 1, 'A slow grip-driven Drain Bar pull advances a physical pry receiver once.');
+assert.equal(controllerPryEvent?.contact?.activePart, 'pry-tip', 'Drain Bar progression records the tip, not its grip, as the contact surface.');
+assert.equal(controllerPryEvent?.contact?.kind, 'planted-pry-tip-contact', 'Drain Bar progression records a planted pry contact rather than a sword sweep.');
+assert.ok(controllerPryEvent?.contact?.worldSweep?.radius > 0, 'Drain Bar contact carries its tip sweep volume into target-depth world space.');
+barController.dispose();
 toolEquipment.equip('weapon', 'wood_axe'); toolViewmodel.update(1 / 60);
 assert.ok(toolViewmodel.toolGroups.get('wood_axe').visible, 'Selected Wood Axe has a visible camera-local ready pose.');
+const axeGrip = toolViewmodel.getProjectedGripZone(controllerViewport);
+const axeHead = toolViewmodel.getProjectedActivePoint(controllerViewport);
+assert.ok(axeGrip.x > axeHead.x && axeGrip.y > axeHead.y && axeHead.kind === 'axe-head', 'Wood Axe grip starts lower-right while its separate head rests above it.');
+let controllerChopHits = 0;
+let controllerChopEvent = null;
+const controllerChopTarget = {
+  id: 'folsom_growth_anchor_fire', target: new THREE.Vector3(0, 0, -3), range: 3.6, contactRadiusPx: 64,
+  acceptedToolId: 'wood_axe', acceptedActionType: 'chop', requiredGesture: PHYSICAL_TOOL_PROFILES.wood_axe,
+  receivePhysicalToolEvent: (event) => { controllerChopHits += 1; controllerChopEvent = event; return { accepted: true, changed: true, cleared: true }; },
+};
+const axeController = new PhysicalToolActionController({
+  app: controllerViewport, camera: toolCamera, player: { position: new THREE.Vector3(0, 0, 0) },
+  dungeon: { getPhysicalToolTargets: () => [controllerChopTarget] }, equipmentRuntime: toolEquipment, viewmodel: toolViewmodel,
+});
+let simulatedChopTime = performance.now();
+axeController.makeSample = (event) => ({ x: event.clientX, y: event.clientY, timeMs: (simulatedChopTime += 10) });
+const axePointerEvent = (x, y) => ({ clientX: x, clientY: y, pointerId: 9, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, target: { closest: () => null } });
+axeController.pointerDown(axePointerEvent(axeGrip.x, axeGrip.y));
+for (let step = 1; step <= 100; step += 1) axeController.pointerMove(axePointerEvent(axeGrip.x, axeGrip.y - step * 2));
+axeController.pointerEnd(axePointerEvent(axeGrip.x, axeGrip.y - 200));
+assert.equal(controllerChopHits, 1, 'A longer slow grip-driven Axe chop advances a physical heavy receiver once.');
+assert.equal(controllerChopEvent?.contact?.activePart, 'axe-head', 'Axe progression records the head, not its handle, as the contact surface.');
+assert.ok(controllerChopEvent?.contact?.worldSweep?.radius > 0, 'Axe contact carries the head sweep volume into target-depth world space.');
+axeController.dispose();
 toolViewmodel.setGestureState({ active: true, deltaX: -90, deltaY: 130, travelPx: 158, planted: false });
 toolViewmodel.update(1 / 30);
 assert.ok(Math.abs(toolViewmodel.motionPivot.rotation.z) > 0.02, 'Visible held-tool motion follows the touch direction through a smoothed active pose.');

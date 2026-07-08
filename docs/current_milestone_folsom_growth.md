@@ -9,7 +9,7 @@ Chapter 2 remains complete through the blue-flame hallway, Iron Drain Bar lower-
 The implemented spine remains valuable production truth:
 
 1. Find the Old Work Knife behind the Folsom tool shed.
-2. Equip the visible Old Work Knife, grab it on the right-side touch surface, and clear the shed seam growth with exactly three physically contacting swipes before recovering the Wood Axe and Torch.
+2. Equip the visible Old Work Knife, grab its lower-right handle zone, and clear the shed seam growth with exactly three blade-contacting swipes before recovering the Wood Axe and Torch.
 3. Physically cut the Shrine Side Room cords with the Knife, then use a slower smooth Axe chop to break the exposed knot and persist the opened room.
 4. Recover the Keeper's Lantern in the side room and reveal the under-shrine convergence marks and three surface feeds.
 5. Cut open the low maintenance panel and inspect the bounded crawlspace ending at the blocked maintenance throat.
@@ -32,9 +32,13 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - The Old Work Knife is a short, worn work tool behind the shed, never a sword or fantasy dagger.
 - Growth and pry blockers never advance from Interact/A. Interact remains for pickups, inspections, and non-tool transitions. Every tool-authored blocker advances only from the correct held tool, gesture quality, swept/pry contact, stage, and prerequisite state.
 - Old Work Knife, Wood Axe, and Iron Drain Bar are camera-local visible held tools with ready, active, impact-recoil, cooldown, and return poses. Their motion follows the touch path; bad motion is shown but is not effective contact.
-- Knife uses cut/slash. It is light, quick, tolerant of faster direction changes, and owns thin cord, film, seam, and exposed-knot targets.
-- Axe uses heavy chop. It rewards a slower, smooth, correctly angled committed stroke; over-fast or squiggly follow-through does not advance heavy targets.
-- Iron Drain Bar uses pry/lever only. It must plant at an authored pry contact and move through a steady lever arc; it is not a sword or chop tool.
+- Every right-hand ready pose originates in the camera's lower-right. The handle/grip is nearest and lowest; the active blade, head, or tip rests above it and crosses center only during the appropriate action arc.
+- Touch begins only in the generous invisible grip/handle zone. That pointer remains captured until release and drives the tool. The blade, axe head, and pry tip are physical contact surfaces, never touch-start surfaces.
+- Left-side movement remains untouched. Right-side look and offhand aim remain normal unless a touch begins inside the held-tool grip zone. Torch/Lantern coexistence and Lantern reveal behavior remain unchanged.
+- Knife uses a fast cut/slash. Its handle starts lower-right, its blade angles upward, and only the moving blade owns thin cord, film, seam, and exposed-knot contact.
+- Axe uses a heavy chop. Its handle starts lower-right, its head rests above/right, and only the head crosses the target during a slower, smooth committed stroke; over-fast or squiggly follow-through does not advance heavy targets.
+- Iron Drain Bar uses plant-and-pry only. Its lower bar is the grip; its tip must contact an authored pry point, plant, lean, and pull through a steady lever arc. It is not a sword or chop tool.
+- Interact/A has no growth or pry victory fallback. Misses and wrong-tool contacts may animate and refuse physically, but they never advance target state.
 - The shed clear remains exactly three successful physical Knife contacts with hit reaction, cord snap, black-oil feedback, collapse, screen shake, and persisted opening.
 - The shed reward remains Wood Axe + Torch.
 - The Shrine Side Room seal remains a Knife-cords then Axe-knot sequence and persists `folsom_shrine_side_room_open`. The Knife visibly severs and drops the cord halves; the Axe fractures the damaged hard knot with the stronger door-opening response.
@@ -60,7 +64,7 @@ The front seal `beneath_folsom_white_scab_front_seal` remains impossible from th
 
 The Folsom terminal physically cracks open into `under-shrine-labyrinth`. That separate authored location provides a pitch-black, ten-segment twisting descent, two squeeze sections, a breathing pocket, an impossible pressure moment, and a persistent end hatch. It exits at `beneath_folsom_white_scab_threshold_backside`, where a hard production boundary prevents entry into deferred content.
 
-White-Scab Hall reveal/clear and all Pale Panel/Shrine Mechanism Room mechanics remain deferred.
+White-Scab Hall reveal/clear and all Pale Panel/Shrine Mechanism Room mechanics remain deferred. Do not implement White-Scab Hall until the lower-right viewmodels, grip capture, look/movement coexistence, and active-part contact ergonomics are stable.
 
 ## Validation posture
 

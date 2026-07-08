@@ -21,6 +21,13 @@ export const PHYSICAL_TOOL_PROFILES = Object.freeze({
     recoilSeconds: 0.18,
     shake: Object.freeze({ durationMs: 115, intensity: 0.038 }),
     finalShake: Object.freeze({ durationMs: 390, intensity: 0.15 }),
+    viewmodel: Object.freeze({
+      ready: Object.freeze({ screen: Object.freeze([0.48, -0.5]), depth: 1.18, rotation: Object.freeze([-0.18, -0.18, 0.34]), motion: Object.freeze([0.55, 0.46]) }),
+      grip: Object.freeze({ local: Object.freeze([0, -0.3, 0]), viewportRatio: 0.2, minRadiusPx: 72, maxRadiusPx: 112 }),
+      active: Object.freeze({ local: Object.freeze([0, 0.5, 0]) }),
+      follow: 22,
+      recoil: Object.freeze({ depth: 0.13, pitch: 0.18 }),
+    }),
   }),
   wood_axe: Object.freeze({
     id: 'wood_axe',
@@ -31,12 +38,20 @@ export const PHYSICAL_TOOL_PROFILES = Object.freeze({
     maxVelocityPxPerSecond: 720,
     minSmoothness: 0.7,
     preferredAngleRadians: Math.PI * 0.5,
+    angleMode: 'axis',
     angleToleranceRadians: 0.78,
     cooldownSeconds: 0.62,
     contactRadiusPx: 64,
     recoilSeconds: 0.3,
     shake: Object.freeze({ durationMs: 210, intensity: 0.085 }),
     finalShake: Object.freeze({ durationMs: 650, intensity: 0.205 }),
+    viewmodel: Object.freeze({
+      ready: Object.freeze({ screen: Object.freeze([0.82, -0.56]), depth: 1.58, rotation: Object.freeze([-0.1, -0.2, 0.12]), motion: Object.freeze([0.42, 0.34]) }),
+      grip: Object.freeze({ local: Object.freeze([0, -0.28, 0]), viewportRatio: 0.21, minRadiusPx: 76, maxRadiusPx: 122 }),
+      active: Object.freeze({ local: Object.freeze([-0.4, 0.62, 0]) }),
+      follow: 9.2,
+      recoil: Object.freeze({ depth: 0.2, pitch: 0.25 }),
+    }),
   }),
   iron_drain_bar: Object.freeze({
     id: 'iron_drain_bar',
@@ -53,6 +68,13 @@ export const PHYSICAL_TOOL_PROFILES = Object.freeze({
     recoilSeconds: 0.38,
     shake: Object.freeze({ durationMs: 330, intensity: 0.11 }),
     finalShake: Object.freeze({ durationMs: 980, intensity: 0.235 }),
+    viewmodel: Object.freeze({
+      ready: Object.freeze({ screen: Object.freeze([0.65, -0.62]), depth: 1.48, rotation: Object.freeze([-0.18, -0.12, 0.22]), motion: Object.freeze([0.38, 0.34]) }),
+      grip: Object.freeze({ local: Object.freeze([0.02, -0.3, 0]), viewportRatio: 0.21, minRadiusPx: 76, maxRadiusPx: 122 }),
+      active: Object.freeze({ local: Object.freeze([-0.31, 0.9, 0]) }),
+      follow: 7.5,
+      recoil: Object.freeze({ depth: 0.16, pitch: 0.3 }),
+    }),
   }),
 });
 

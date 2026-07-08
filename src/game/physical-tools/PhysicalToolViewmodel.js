@@ -1,15 +1,14 @@
 import * as THREE from 'three';
 import { KEEPERS_LANTERN_VIEWMODEL_LAYER } from '../viewmodels/KeepersLanternViewmodel.js';
-
-const READY_POSES = Object.freeze({
-  old_work_knife: Object.freeze({ screen: [0.25, -0.5], depth: 1.18, rotation: [-0.18, -0.18, -0.56], motion: [0.38, 0.3] }),
-  wood_axe: Object.freeze({ screen: [0.05, -0.56], depth: 1.58, rotation: [-0.1, -0.2, -0.5], motion: [0.34, 0.26] }),
-  iron_drain_bar: Object.freeze({ screen: [0.02, -0.54], depth: 1.48, rotation: [-0.18, -0.12, -0.62], motion: [0.34, 0.27] }),
-});
+import { getPhysicalToolProfile } from './PhysicalToolProfiles.js';
 
 const readyPosition = new THREE.Vector3();
 const projectedBox = new THREE.Box3();
 const projectedCorner = new THREE.Vector3();
+const projectedToolPoint = new THREE.Vector3();
+const motionTranslation = new THREE.Vector3();
+const rootEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+const motionEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 
 function makeMaterial(color, roughness = 0.82, metalness = 0) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
@@ -41,6 +40,7 @@ export class PhysicalToolViewmodel {
     this.recoilRemaining = 0;
     this.recoilStrength = 0;
     this.gesture = null;
+    this.motionPhase = 'ready';
     this.smoothedMotion = { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0 };
     this.toolGroups = new Map();
     this.root = new THREE.Group();
@@ -72,7 +72,7 @@ export class PhysicalToolViewmodel {
     knifeBlade.name = 'old-work-knife-short-rusted-blade';
     knifeBlade.position.y = 0.02;
     knife.add(knifeBlade);
-    this.addTool('old_work_knife', knife, new THREE.Vector3(0, 0.5, 0));
+    this.addTool('old_work_knife', knife);
 
     const axe = new THREE.Group();
     axe.name = 'wood-axe-held';
@@ -88,7 +88,7 @@ export class PhysicalToolViewmodel {
     axeEdge.position.set(-0.31, 0.61, 0);
     axeEdge.rotation.z = Math.PI / 2;
     axe.add(axeEdge);
-    this.addTool('wood_axe', axe, new THREE.Vector3(-0.4, 0.62, 0));
+    this.addTool('wood_axe', axe);
 
     const bar = new THREE.Group();
     bar.name = 'iron-drain-bar-held';
@@ -103,12 +103,11 @@ export class PhysicalToolViewmodel {
     foot.position.set(-0.23, 0.88, 0);
     foot.rotation.z = 0.18;
     bar.add(foot);
-    this.addTool('iron_drain_bar', bar, new THREE.Vector3(-0.31, 0.9, 0));
+    this.addTool('iron_drain_bar', bar);
   }
 
-  addTool(id, group, contactPoint) {
+  addTool(id, group) {
     group.visible = false;
-    group.userData.contactPoint = contactPoint;
     this.motionPivot.add(group);
     this.toolGroups.set(id, group);
   }
@@ -141,6 +140,25 @@ export class PhysicalToolViewmodel {
     );
   }
 
+  getDesiredMotion(toolId, gesture = null) {
+    const config = getPhysicalToolProfile(toolId)?.viewmodel;
+    const pose = config?.ready;
+    if (!pose) return { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0 };
+    const nx = THREE.MathUtils.clamp((gesture?.deltaX ?? 0) / 170, -1, 1);
+    const ny = THREE.MathUtils.clamp((gesture?.deltaY ?? 0) / 170, -1, 1);
+    const pry = toolId === 'iron_drain_bar' && gesture?.planted;
+    const verticalHalfExtent = Math.tan(THREE.MathUtils.degToRad((this.camera?.fov ?? 68) * 0.5)) * pose.depth;
+    const horizontalHalfExtent = verticalHalfExtent * (this.camera?.aspect ?? 1);
+    return {
+      x: nx * horizontalHalfExtent * pose.motion[0],
+      y: -ny * verticalHalfExtent * pose.motion[1],
+      z: gesture ? (pry ? -0.34 : -0.08 * Math.min(1, (gesture.travelPx ?? 0) / 90)) : 0,
+      pitch: ny * (pry ? 0.78 : 0.34),
+      yaw: -nx * (pry ? 0.38 : 0.24),
+      roll: -nx * (pry ? 0.72 : toolId === 'wood_axe' ? 0.92 : 0.66),
+    };
+  }
+
   update(deltaSeconds) {
     const toolId = this.getActiveToolId();
     this.root.visible = Boolean(toolId);
@@ -154,26 +172,16 @@ export class PhysicalToolViewmodel {
       this.gesture = null;
       this.lastToolId = toolId;
     }
-    const pose = READY_POSES[toolId];
+    const profile = getPhysicalToolProfile(toolId);
+    const pose = profile?.viewmodel?.ready;
+    if (!pose) return;
     const dt = THREE.MathUtils.clamp(deltaSeconds, 0.001, 0.05);
     this.elapsed += dt;
     const gesture = this.gesture?.active ? this.gesture : null;
-    const nx = THREE.MathUtils.clamp((gesture?.deltaX ?? 0) / 170, -1, 1);
-    const ny = THREE.MathUtils.clamp((gesture?.deltaY ?? 0) / 170, -1, 1);
-    const pry = toolId === 'iron_drain_bar' && gesture?.planted;
-    const follow = toolId === 'old_work_knife' ? 22 : toolId === 'wood_axe' ? 10.5 : 8.5;
+    const follow = profile.viewmodel.follow;
     const alpha = 1 - Math.exp(-follow * dt);
     const readyPosition = this.getReadyPosition(pose);
-    const verticalHalfExtent = Math.tan(THREE.MathUtils.degToRad((this.camera?.fov ?? 68) * 0.5)) * pose.depth;
-    const horizontalHalfExtent = verticalHalfExtent * (this.camera?.aspect ?? 1);
-    const desired = {
-      x: nx * horizontalHalfExtent * pose.motion[0],
-      y: -ny * verticalHalfExtent * pose.motion[1],
-      z: gesture ? (pry ? -0.34 : -0.08 * Math.min(1, (gesture.travelPx ?? 0) / 90)) : 0,
-      pitch: ny * (pry ? 0.78 : 0.34),
-      yaw: -nx * (pry ? 0.38 : 0.24),
-      roll: -nx * (pry ? 0.72 : toolId === 'wood_axe' ? 0.92 : 0.66),
-    };
+    const desired = this.getDesiredMotion(toolId, gesture);
     Object.keys(this.smoothedMotion).forEach((key) => {
       this.smoothedMotion[key] = THREE.MathUtils.lerp(this.smoothedMotion[key], desired[key], alpha);
     });
@@ -194,31 +202,73 @@ export class PhysicalToolViewmodel {
     if (this.recoilRemaining > 0) {
       this.recoilRemaining = Math.max(0, this.recoilRemaining - dt * 5.2);
       const kick = Math.sin(this.recoilRemaining * Math.PI) * this.recoilStrength;
-      this.root.position.z += kick * 0.18;
-      this.motionPivot.rotation.x -= kick * 0.2;
+      this.root.position.z += kick * profile.viewmodel.recoil.depth;
+      this.motionPivot.rotation.x -= kick * profile.viewmodel.recoil.pitch;
     }
+    const motionMagnitude = Object.values(this.smoothedMotion).reduce((sum, value) => sum + Math.abs(value), 0);
+    this.motionPhase = gesture
+      ? ((gesture.travelPx ?? 0) < profile.minTravelPx * 0.3 ? 'windup' : (gesture.planted ? 'plant-and-pry' : 'action'))
+      : (this.recoilRemaining > 0 ? 'recoil' : (motionMagnitude > 0.025 ? 'return' : 'ready'));
   }
 
   projectGrabHit(clientX, clientY, viewport) {
-    const point = this.getProjectedGrabPoint(viewport);
+    const point = this.getProjectedGripZone(viewport);
     if (!point) return false;
     return Math.hypot(clientX - point.x, clientY - point.y) <= point.radius;
   }
 
   getProjectedGrabPoint(viewport) {
+    return this.getProjectedGripZone(viewport);
+  }
+
+  getProjectedGripZone(viewport) {
     const toolId = this.getActiveToolId();
     const group = this.toolGroups.get(toolId);
     if (!toolId || !group?.visible || !viewport || !this.camera) return null;
+    const profile = getPhysicalToolProfile(toolId);
+    const grip = profile?.viewmodel?.grip;
+    if (!grip) return null;
     this.camera.updateMatrixWorld(true);
     this.root.updateMatrixWorld(true);
-    const point = group.userData.contactPoint.clone();
+    // The grip zone only captures input. It never counts as physical tool contact.
+    const point = new THREE.Vector3(...grip.local);
     group.localToWorld(point);
     point.project(this.camera);
     const rect = viewport.getBoundingClientRect();
     const x = rect.left + (point.x * 0.5 + 0.5) * rect.width;
     const y = rect.top + (-point.y * 0.5 + 0.5) * rect.height;
-    const radius = Math.max(76, Math.min(125, Math.min(rect.width, rect.height) * 0.2));
-    return point.z >= -1 && point.z <= 1 ? { x, y, depth: point.z, radius } : null;
+    const radius = Math.max(grip.minRadiusPx, Math.min(grip.maxRadiusPx, Math.min(rect.width, rect.height) * grip.viewportRatio));
+    return point.z >= -1 && point.z <= 1 ? { x, y, depth: point.z, radius, toolId, kind: 'grip-input-capture' } : null;
+  }
+
+  getProjectedActivePoint(viewport, gesture = null) {
+    const toolId = gesture?.toolId ?? this.getActiveToolId();
+    const profile = getPhysicalToolProfile(toolId);
+    const pose = profile?.viewmodel?.ready;
+    const active = profile?.viewmodel?.active;
+    if (!toolId || !pose || !active || !viewport || !this.camera) return null;
+    const rect = viewport.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+
+    // The blade/head/pry tip is the physical contact surface. Predict its camera-local
+    // transform from the captured grip gesture so contact never follows the finger itself.
+    const motion = this.getDesiredMotion(toolId, gesture?.active ? gesture : null);
+    projectedToolPoint.set(...active.local);
+    motionEuler.set(motion.pitch, motion.yaw, motion.roll, 'YXZ');
+    projectedToolPoint.applyEuler(motionEuler);
+    projectedToolPoint.add(motionTranslation.set(motion.x, motion.y, motion.z));
+    rootEuler.set(...pose.rotation, 'YXZ');
+    projectedToolPoint.applyEuler(rootEuler).add(this.getReadyPosition(pose));
+    this.camera.localToWorld(projectedToolPoint);
+    projectedToolPoint.project(this.camera);
+    if (projectedToolPoint.z < -1 || projectedToolPoint.z > 1) return null;
+    return {
+      x: rect.left + (projectedToolPoint.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (-projectedToolPoint.y * 0.5 + 0.5) * rect.height,
+      depth: projectedToolPoint.z,
+      toolId,
+      kind: profile.actionType === 'pry' ? 'pry-tip' : profile.actionType === 'chop' ? 'axe-head' : 'knife-blade',
+    };
   }
 
   getProjectedBounds(toolId = this.getActiveToolId()) {
