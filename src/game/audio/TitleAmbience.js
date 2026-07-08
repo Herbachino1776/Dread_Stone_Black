@@ -1,4 +1,4 @@
-const DEFAULT_TITLE_AMBIENCE_SRC = '/assets/audio/title_drone_loop.mp3';
+const DEFAULT_TITLE_AMBIENCE_SRC = null;
 const DEFAULT_TITLE_AMBIENCE_VOLUME = 0.28;
 const DEFAULT_AUDIO_TIMEOUT_MS = 1200;
 
@@ -20,6 +20,8 @@ export class TitleAmbience {
   }
 
   async unlockAndPlay({ timeoutMs = DEFAULT_AUDIO_TIMEOUT_MS } = {}) {
+    if (!this.src) return;
+
     try {
       await this.resumeAudioContext({ timeoutMs });
       await this.playLoop({ timeoutMs });
