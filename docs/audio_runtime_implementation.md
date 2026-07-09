@@ -4,11 +4,21 @@ Accepted audio library v024 is installed and wired through `src/game/audio/GameA
 
 ## Runtime shape
 
-- Browser/mobile unlock is centralized in `GameAudioRuntime` through pointer, touch, and key wake events.
+- Browser/mobile unlock is centralized in `GameAudioRuntime` through pointer, touch, and key wake events. The runtime tracks `locked`, `unlocking`, and `unlocked` readiness, the current `AudioContext.state`, and dev-only unlock attempt counts.
+- `Game.startUnsafe()` also asks the runtime to unlock during startup so the title menu selection gesture can wake game audio when the browser still grants activation.
 - Runtime playback supports 2D one-shots, 3D one-shots, 2D loops, 3D loops, fade in/out, loop cleanup, pause/resume, mute, listener updates, distance attenuation, and pitch/volume variation.
 - Buses are lightweight WebAudio gain nodes: `master`, `ambience`, `sfx`, `ui`, `tools`, `growth`, `machinery`, `footsteps`, plus `prybar` for accepted prybar-folder assets.
 - Missing cue warnings are dev-only and one-time per cue ID.
+- Dev-only logging reports audio context creation, unlock attempts, unlock success/failure, cue load failures, deferred loop resume, and deferred one-shot playback/drop decisions.
 - No PREVIEW files are referenced by runtime code.
+
+## Unlock and deferred playback
+
+The Old Work Knife is not an audio unlock dependency. The first real startup, viewport, movement touch, pointer, touch, or keyboard gesture should unlock the game audio context. If the browser does not allow the startup attempt, the next in-game gesture retries through capture-phase listeners on `window`, `document`, and the app root.
+
+Loop requests made while audio is locked are remembered by loop key and cue ID. If the player stops moving or leaves the relevant zone before unlock, the pending loop is removed. If the loop is still desired when unlock succeeds, it starts with the original fade and placement options.
+
+Important one-shot route, pickup, reveal, and open cues requested while locked are deferred briefly, de-duplicated by cue and position, and played after unlock if still fresh. Stale deferred one-shots are dropped instead of replaying late route audio.
 
 ## Cue manifest
 
@@ -69,6 +79,15 @@ Route-open and reveal cues are fired from state-change methods, not constructors
 - Lower Shrine landing reveal is session-crossing based because there is no dedicated persisted audio-only reveal flag.
 - No broad White-Scab Hall mechanics were added.
 - No reverb/occlusion snapshot system was added.
+
+## Manual startup audio test
+
+1. Hard refresh.
+2. Tap or touch anywhere in the viewport/start flow.
+3. Walk before picking up any item.
+4. Confirm footsteps are audible while moving and silent while standing still.
+5. Approach the shed and confirm the growth tension loop is audible.
+6. Pick up the Old Work Knife and confirm audio was already active before pickup.
 
 ## Recommended next audio pass
 

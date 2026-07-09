@@ -53,6 +53,7 @@ export class Game {
     });
     this.rendererHost = new RendererHost({ root: this.app });
     this.audioRuntime = new GameAudioRuntime({ root: this.app });
+    this.audioRuntime.unlock({ reason: 'game-startup' });
 
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
     this.saveHost = new SaveHost();

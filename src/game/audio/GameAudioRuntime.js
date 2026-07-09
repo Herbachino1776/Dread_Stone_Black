@@ -13,6 +13,8 @@ const BUS_DEFAULTS = Object.freeze({
   prybar: 0.95,
 });
 
+const DEFERRED_ONE_SHOT_MAX_AGE_MS = 3000;
+const DEFERRED_ONE_SHOT_LIMIT = 8;
 const TMP_VECTOR = new THREE.Vector3();
 const TMP_FORWARD = new THREE.Vector3();
 const TMP_UP = new THREE.Vector3(0, 1, 0);
@@ -36,12 +38,18 @@ export class GameAudioRuntime {
   constructor({ root = null } = {}) {
     this.root = root;
     this.context = null;
+    this.readiness = 'locked';
+    this.contextState = 'none';
+    this.unlockAttemptCount = 0;
     this.masterGain = null;
     this.busGains = new Map();
     this.buffers = new Map();
     this.loading = new Map();
     this.loops = new Map();
+    this.pendingLoops = new Map();
+    this.deferredOneShots = new Map();
     this.warnedMissing = new Set();
+    this.loggedEvents = new Set();
     this.oneShotNodes = new Set();
     this.previousPlayerPosition = null;
     this.previousLocationId = null;
@@ -49,7 +57,7 @@ export class GameAudioRuntime {
     this.underworksTensionPlayed = false;
     this.muted = false;
     this.paused = false;
-    this.boundUnlock = () => this.unlock();
+    this.boundUnlock = (event) => this.unlock({ reason: event?.type ?? 'gesture' });
     this.boundVisibility = () => this.handleVisibilityChanged();
     this.unlockTargets = [];
     this.bindUnlockEvents();
@@ -72,6 +80,9 @@ export class GameAudioRuntime {
     const AudioContextClass = globalThis.AudioContext ?? globalThis.webkitAudioContext;
     if (!AudioContextClass) return null;
     this.context = new AudioContextClass();
+    this.contextState = this.context.state;
+    this.context.onstatechange = () => this.handleContextStateChanged();
+    this.logDev('context-created', `Audio context created with state "${this.context.state}".`);
     this.masterGain = this.context.createGain();
     this.masterGain.gain.value = BUS_DEFAULTS.master;
     this.masterGain.connect(this.context.destination);
@@ -85,14 +96,40 @@ export class GameAudioRuntime {
     return this.context;
   }
 
-  async unlock() {
+  isAudioRunning() {
+    return this.context?.state === 'running';
+  }
+
+  async unlock({ reason = 'gesture' } = {}) {
     const context = this.ensureContext();
-    if (!context || context.state !== 'suspended') return;
+    if (!context) return false;
+    this.contextState = context.state;
+    if (context.state === 'running') {
+      this.markUnlocked();
+      return true;
+    }
+
+    this.readiness = 'unlocking';
+    this.unlockAttemptCount += 1;
+    this.logUnlockAttempt(reason, context.state);
     try {
       await context.resume();
+      this.contextState = context.state;
+      if (context.state === 'running') {
+        this.markUnlocked();
+        return true;
+      }
+      if (this.readiness !== 'unlocked') this.readiness = 'locked';
+      this.logDev('unlock-not-running', `Audio unlock did not reach running state; context state "${context.state}".`);
     } catch (error) {
+      if (context.state === 'running') {
+        this.markUnlocked();
+        return true;
+      }
+      this.readiness = 'locked';
       this.warnDev('audio-unlock', 'Audio context resume failed.', error);
     }
+    return false;
   }
 
   hasCue(cueId) {
@@ -146,9 +183,16 @@ export class GameAudioRuntime {
     }
     const context = this.ensureContext();
     if (!context) return false;
-    if (context.state === 'suspended') this.unlock();
+    if (!this.isAudioRunning() && !options.skipDefer) {
+      if (options.deferUntilUnlocked ?? cue.deferUntilUnlocked ?? true) {
+        this.deferOneShot(cueId, options);
+        this.unlock({ reason: `one-shot:${cueId}` });
+        return false;
+      }
+      this.unlock({ reason: `one-shot:${cueId}` });
+    }
     const buffer = await this.loadCue(cueId);
-    if (!buffer || this.muted) return false;
+    if (!buffer || this.muted || (!this.isAudioRunning() && !options.allowSuspendedStart)) return false;
 
     const source = context.createBufferSource();
     const gain = context.createGain();
@@ -195,14 +239,19 @@ export class GameAudioRuntime {
       existing.targetVolume = options.volume ?? cue.volume ?? existing.targetVolume;
       this.setLoopPosition(key, options.position);
       this.fadeGain(existing.gain, existing.targetVolume, options.fadeSeconds ?? 0.6);
+      this.pendingLoops.delete(key);
       return true;
     }
 
     const context = this.ensureContext();
     if (!context) return false;
-    if (context.state === 'suspended') this.unlock();
+    if (!this.isAudioRunning() && !options.skipDefer) {
+      this.rememberPendingLoop(cueId, key, options);
+      this.unlock({ reason: `loop:${cueId}` });
+      return false;
+    }
     const buffer = await this.loadCue(cueId);
-    if (!buffer || this.muted || this.loops.has(key)) return false;
+    if (!buffer || this.muted || this.loops.has(key) || (!this.isAudioRunning() && !options.allowSuspendedStart)) return false;
 
     const source = context.createBufferSource();
     const gain = context.createGain();
@@ -231,12 +280,14 @@ export class GameAudioRuntime {
       targetVolume: options.volume ?? cue.volume ?? 1,
     };
     this.loops.set(key, loop);
+    this.pendingLoops.delete(key);
     source.start();
     this.fadeGain(gain, loop.targetVolume, options.fadeSeconds ?? 0.8);
     return true;
   }
 
   stopLoop(key, fadeSeconds = 0.5) {
+    this.pendingLoops.delete(key);
     const loop = this.loops.get(key);
     if (!loop) return;
     this.loops.delete(key);
@@ -292,6 +343,85 @@ export class GameAudioRuntime {
     gain.gain.cancelScheduledValues(now);
     gain.gain.setValueAtTime(Math.max(0.0001, gain.gain.value), now);
     gain.gain.linearRampToValueAtTime(Math.max(0.0001, target), now + Math.max(0.02, seconds));
+  }
+
+  markUnlocked() {
+    const wasUnlocked = this.readiness === 'unlocked';
+    this.readiness = 'unlocked';
+    this.contextState = this.context?.state ?? 'none';
+    if (!wasUnlocked) this.logDev('unlock-succeeded', `Audio unlock succeeded; context state "${this.contextState}".`);
+    this.resumePendingLoops();
+    this.flushDeferredOneShots();
+  }
+
+  handleContextStateChanged() {
+    this.contextState = this.context?.state ?? 'none';
+    this.logDev(`context-state:${this.contextState}`, `Audio context state changed to "${this.contextState}".`);
+    if (this.contextState === 'running') this.markUnlocked();
+    else if (this.readiness === 'unlocking') this.readiness = 'locked';
+  }
+
+  rememberPendingLoop(cueId, key, options = {}) {
+    this.pendingLoops.set(key, {
+      cueId,
+      key,
+      options: this.clonePlaybackOptions(options),
+    });
+  }
+
+  resumePendingLoops() {
+    if (!this.isAudioRunning() || this.muted || this.paused || this.pendingLoops.size === 0) return;
+    const pending = [...this.pendingLoops.values()];
+    pending.forEach(({ cueId, key, options }) => {
+      if (!this.pendingLoops.has(key) || this.loops.has(key)) return;
+      this.logDev(`deferred-loop:${key}`, `Deferred loop resumed: ${cueId}.`);
+      this.startLoop(cueId, key, { ...options, skipDefer: true });
+    });
+  }
+
+  deferOneShot(cueId, options = {}) {
+    const key = this.getOneShotDeferKey(cueId, options);
+    if (this.deferredOneShots.has(key)) return;
+    if (this.deferredOneShots.size >= DEFERRED_ONE_SHOT_LIMIT) {
+      const oldestKey = this.deferredOneShots.keys().next().value;
+      this.deferredOneShots.delete(oldestKey);
+      this.logDev('deferred-one-shot-drop-oldest', 'Dropped oldest deferred one-shot because the queue is full.');
+    }
+    this.deferredOneShots.set(key, {
+      cueId,
+      options: this.clonePlaybackOptions(options),
+      queuedAt: performance.now(),
+    });
+  }
+
+  flushDeferredOneShots() {
+    if (!this.isAudioRunning() || this.muted || this.paused || this.deferredOneShots.size === 0) return;
+    const now = performance.now();
+    const entries = [...this.deferredOneShots.entries()];
+    entries.forEach(([key, entry]) => {
+      this.deferredOneShots.delete(key);
+      if (now - entry.queuedAt > DEFERRED_ONE_SHOT_MAX_AGE_MS) {
+        this.logDev(`deferred-one-shot-dropped:${key}`, `Deferred one-shot dropped as stale: ${entry.cueId}.`);
+        return;
+      }
+      this.logDev(`deferred-one-shot-played:${key}`, `Deferred one-shot played after unlock: ${entry.cueId}.`);
+      this.playOneShot(entry.cueId, { ...entry.options, skipDefer: true });
+    });
+  }
+
+  getOneShotDeferKey(cueId, options = {}) {
+    const position = toVector3Like(options.position);
+    if (!position) return cueId;
+    return `${cueId}:${position.x.toFixed(2)},${position.y.toFixed(2)},${position.z.toFixed(2)}`;
+  }
+
+  clonePlaybackOptions(options = {}) {
+    const clone = { ...options };
+    delete clone.skipDefer;
+    delete clone.allowSuspendedStart;
+    if (options.position?.isVector3) clone.position = options.position.clone();
+    else if (options.position) clone.position = { ...options.position };
+    return clone;
   }
 
   update(deltaSeconds, { camera = null, player = null, dungeon = null, locationId = null, controls = null, paused = false } = {}) {
@@ -440,7 +570,7 @@ export class GameAudioRuntime {
     const context = this.context;
     if (!context) return;
     if (this.paused && context.state === 'running') context.suspend?.();
-    if (!this.paused && context.state === 'suspended') this.unlock();
+    if (!this.paused && context.state === 'suspended') this.unlock({ reason: 'resume' });
   }
 
   setMuted(muted) {
@@ -463,12 +593,25 @@ export class GameAudioRuntime {
     console.warn(`[Dread Stone Black Audio] ${message}`, error ?? '');
   }
 
+  logDev(key, message, data = null) {
+    if (!import.meta.env?.DEV || this.loggedEvents.has(key)) return;
+    this.loggedEvents.add(key);
+    console.info(`[Dread Stone Black Audio] ${message}`, data ?? '');
+  }
+
+  logUnlockAttempt(reason, contextState) {
+    if (!import.meta.env?.DEV) return;
+    console.info(`[Dread Stone Black Audio] Audio unlock attempted (${reason}); attempt ${this.unlockAttemptCount}; context state "${contextState}".`);
+  }
+
   dispose() {
     this.unlockTargets.forEach(([target, eventName]) => {
       target.removeEventListener?.(eventName, this.boundUnlock, { capture: true });
     });
     this.unlockTargets = [];
     document.removeEventListener('visibilitychange', this.boundVisibility);
+    this.pendingLoops.clear();
+    this.deferredOneShots.clear();
     [...this.loops.keys()].forEach((key) => this.stopLoop(key, 0.05));
     this.oneShotNodes.forEach(({ source, gain, panner }) => {
       try { source.stop(); } catch {}
@@ -479,6 +622,8 @@ export class GameAudioRuntime {
     this.oneShotNodes.clear();
     this.context?.close?.();
     this.context = null;
+    this.readiness = 'locked';
+    this.contextState = 'none';
   }
 }
 
