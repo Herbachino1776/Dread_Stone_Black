@@ -4,8 +4,9 @@ Accepted audio library v024 is installed and wired through `src/game/audio/GameA
 
 ## Runtime shape
 
-- Browser/mobile unlock is centralized in `GameAudioRuntime` through pointer, touch, and key wake events. The runtime tracks `locked`, `unlocking`, and `unlocked` readiness, the current `AudioContext.state`, and dev-only unlock attempt counts.
-- `Game.startUnsafe()` also asks the runtime to unlock during startup so the title menu selection gesture can wake game audio when the browser still grants activation.
+- Browser/mobile unlock is centralized around a shared WebAudio context in `src/game/audio/sharedAudioContext.js`. The title wake and title menu selection both attempt to create/resume this context directly inside the user's touch/click/key gesture, then `GameAudioRuntime` reuses the same context.
+- `GameAudioRuntime` also listens for `pointerdown`, `touchstart`, `touchend`, `keydown`, and `click` as fallback wake events. The runtime tracks `locked`, `unlocking`, and `unlocked` readiness, the current `AudioContext.state`, and dev-only unlock attempt counts.
+- `Game.startUnsafe()` still asks the runtime to unlock during startup, but startup is no longer the first place the context is created on iPhone Safari.
 - Runtime playback supports 2D one-shots, 3D one-shots, 2D loops, 3D loops, fade in/out, loop cleanup, pause/resume, mute, listener updates, distance attenuation, and pitch/volume variation.
 - Buses are lightweight WebAudio gain nodes: `master`, `ambience`, `sfx`, `ui`, `tools`, `growth`, `machinery`, `footsteps`, plus `prybar` for accepted prybar-folder assets.
 - Missing cue warnings are dev-only and one-time per cue ID.
@@ -14,7 +15,9 @@ Accepted audio library v024 is installed and wired through `src/game/audio/GameA
 
 ## Unlock and deferred playback
 
-The Old Work Knife is not an audio unlock dependency. The first real startup, viewport, movement touch, pointer, touch, or keyboard gesture should unlock the game audio context. If the browser does not allow the startup attempt, the next in-game gesture retries through capture-phase listeners on `window`, `document`, and the app root.
+The Old Work Knife is not an audio unlock dependency. The first real title wake, title start, viewport, movement touch, pointer, touch, or keyboard gesture should unlock the shared game audio context. If the browser does not allow the title/start attempt, the next in-game gesture retries through capture-phase listeners on `window`, `document`, and the app root.
+
+For iPhone Safari, the title wake path performs a silent one-frame WebAudio tick while resuming the shared context. This gives the game an already-created context to attach accepted cues to before the player ever picks up the Old Work Knife.
 
 Loop requests made while audio is locked are remembered by loop key and cue ID. If the player stops moving or leaves the relevant zone before unlock, the pending loop is removed. If the loop is still desired when unlock succeeds, it starts with the original fade and placement options.
 
@@ -83,7 +86,7 @@ Route-open and reveal cues are fired from state-change methods, not constructors
 ## Manual startup audio test
 
 1. Hard refresh.
-2. Tap or touch anywhere in the viewport/start flow.
+2. Tap or touch the title wake/start flow on iPhone Safari.
 3. Walk before picking up any item.
 4. Confirm footsteps are audible while moving and silent while standing still.
 5. Approach the shed and confirm the growth tension loop is audible.

@@ -87,8 +87,10 @@ export class TitleScreen {
       }
     };
     this.root.addEventListener('pointerdown', onPointerDown, { passive: false });
+    this.root.addEventListener('touchstart', onPointerDown, { passive: false });
     window.addEventListener('keydown', onKeyDown);
     this.disposers.push(() => this.root.removeEventListener('pointerdown', onPointerDown));
+    this.disposers.push(() => this.root.removeEventListener('touchstart', onPointerDown));
     this.disposers.push(() => window.removeEventListener('keydown', onKeyDown));
   }
 
@@ -140,6 +142,7 @@ export class TitleScreen {
     if (action === 'continue' && !this.hasSave) return;
     this.stage = 'starting';
     this.root.classList.add('title-screen--starting');
+    this.ambience.unlockAndPlay({ timeoutMs: AUDIO_UNLOCK_TIMEOUT_MS });
     this.resolveChoice?.({ action });
   }
 

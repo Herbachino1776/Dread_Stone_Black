@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AUDIO_CUE_MANIFEST, getAudioCue } from './audioCueManifest.js';
+import { ensureSharedAudioContext, unlockSharedAudioContext } from './sharedAudioContext.js';
 
 const BUS_DEFAULTS = Object.freeze({
   master: 1,
@@ -67,7 +68,7 @@ export class GameAudioRuntime {
   bindUnlockEvents() {
     const targets = [window, document, this.root].filter(Boolean);
     const uniqueTargets = [...new Set(targets)];
-    ['pointerdown', 'touchstart', 'keydown'].forEach((eventName) => {
+    ['pointerdown', 'touchstart', 'touchend', 'keydown', 'click'].forEach((eventName) => {
       uniqueTargets.forEach((target) => {
         target.addEventListener?.(eventName, this.boundUnlock, { passive: true, capture: true });
         this.unlockTargets.push([target, eventName]);
@@ -77,9 +78,8 @@ export class GameAudioRuntime {
 
   ensureContext() {
     if (this.context) return this.context;
-    const AudioContextClass = globalThis.AudioContext ?? globalThis.webkitAudioContext;
-    if (!AudioContextClass) return null;
-    this.context = new AudioContextClass();
+    this.context = ensureSharedAudioContext();
+    if (!this.context) return null;
     this.contextState = this.context.state;
     this.context.onstatechange = () => this.handleContextStateChanged();
     this.logDev('context-created', `Audio context created with state "${this.context.state}".`);
@@ -113,7 +113,7 @@ export class GameAudioRuntime {
     this.unlockAttemptCount += 1;
     this.logUnlockAttempt(reason, context.state);
     try {
-      await context.resume();
+      await unlockSharedAudioContext();
       this.contextState = context.state;
       if (context.state === 'running') {
         this.markUnlocked();

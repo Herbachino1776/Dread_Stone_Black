@@ -1,3 +1,5 @@
+import { unlockSharedAudioContext } from './sharedAudioContext.js';
+
 const DEFAULT_TITLE_AMBIENCE_SRC = null;
 const DEFAULT_TITLE_AMBIENCE_VOLUME = 0.28;
 const DEFAULT_AUDIO_TIMEOUT_MS = 1200;
@@ -15,32 +17,24 @@ export class TitleAmbience {
     this.src = src;
     this.volume = volume;
     this.audio = null;
-    this.audioContext = null;
     this.warned = false;
   }
 
   async unlockAndPlay({ timeoutMs = DEFAULT_AUDIO_TIMEOUT_MS } = {}) {
-    if (!this.src) return;
-
     try {
       await this.resumeAudioContext({ timeoutMs });
+      if (!this.src) return;
       await this.playLoop({ timeoutMs });
     } catch (error) {
-      this.warnOnce(`Title ambience at ${this.src} could not be unlocked. The game will continue without title audio.`, error);
+      this.warnOnce('Startup audio unlock failed. The game will continue and retry on the next gesture.', error);
     }
   }
 
   async resumeAudioContext({ timeoutMs = DEFAULT_AUDIO_TIMEOUT_MS } = {}) {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-
     try {
-      this.audioContext ??= new AudioContextClass();
-      if (this.audioContext.state === 'suspended') {
-        await withTimeout(this.audioContext.resume(), timeoutMs, 'Title audio context resume');
-      }
+      await unlockSharedAudioContext({ timeoutMs });
     } catch (error) {
-      this.warnOnce('Could not resume WebAudio context for title ambience.', error);
+      this.warnOnce('Could not resume shared WebAudio context during title wake.', error);
     }
   }
 
