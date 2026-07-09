@@ -51,14 +51,19 @@ export class GameAudioRuntime {
     this.paused = false;
     this.boundUnlock = () => this.unlock();
     this.boundVisibility = () => this.handleVisibilityChanged();
+    this.unlockTargets = [];
     this.bindUnlockEvents();
     document.addEventListener('visibilitychange', this.boundVisibility);
   }
 
   bindUnlockEvents() {
-    const target = this.root ?? window;
+    const targets = [window, document, this.root].filter(Boolean);
+    const uniqueTargets = [...new Set(targets)];
     ['pointerdown', 'touchstart', 'keydown'].forEach((eventName) => {
-      target.addEventListener?.(eventName, this.boundUnlock, { passive: true });
+      uniqueTargets.forEach((target) => {
+        target.addEventListener?.(eventName, this.boundUnlock, { passive: true, capture: true });
+        this.unlockTargets.push([target, eventName]);
+      });
     });
   }
 
@@ -459,10 +464,10 @@ export class GameAudioRuntime {
   }
 
   dispose() {
-    const target = this.root ?? window;
-    ['pointerdown', 'touchstart', 'keydown'].forEach((eventName) => {
-      target.removeEventListener?.(eventName, this.boundUnlock);
+    this.unlockTargets.forEach(([target, eventName]) => {
+      target.removeEventListener?.(eventName, this.boundUnlock, { capture: true });
     });
+    this.unlockTargets = [];
     document.removeEventListener('visibilitychange', this.boundVisibility);
     [...this.loops.keys()].forEach((key) => this.stopLoop(key, 0.05));
     this.oneShotNodes.forEach(({ source, gain, panner }) => {

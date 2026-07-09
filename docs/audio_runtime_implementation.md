@@ -57,7 +57,7 @@ Production runtime service:
 
 ## Procedural audio policy
 
-Accepted assets are now primary for route-critical physical successes. The previous hidden growth procedural hit sound and lower hatch procedural strain sound were removed from their runtimes. `PhysicalToolActionController.playContactSound()` remains only as a small generic contact/refusal/sweetener path and is skipped when an accepted success cue has played or when a requested optional accepted cue is missing.
+Accepted assets are now primary for route-critical physical successes. The previous hidden growth procedural hit sound and lower hatch procedural strain sound were removed from their runtimes. `PhysicalToolActionController.playContactSound()` is disabled whenever the production audio runtime exists, so placeholder oscillator success/failure sounds do not leak into the accepted audio pass.
 
 ## Persistence policy
 

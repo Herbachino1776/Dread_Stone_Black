@@ -276,6 +276,7 @@ export class PhysicalToolActionController {
   }
 
   playContactSound(kind) {
+    if (this.audioRuntime) return;
     try {
       const AudioContextClass = globalThis.AudioContext ?? globalThis.webkitAudioContext;
       if (!AudioContextClass) return;
