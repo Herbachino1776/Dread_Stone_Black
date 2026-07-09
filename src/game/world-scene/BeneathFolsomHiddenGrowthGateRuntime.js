@@ -13,12 +13,13 @@ export const BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES = Object.freeze({
 });
 
 export class BeneathFolsomHiddenGrowthGateRuntime {
-  constructor({ scene, collision, compiledGroup, gameState, textureLoader }) {
+  constructor({ scene, collision, compiledGroup, gameState, textureLoader, audioRuntime = null }) {
     this.scene = scene;
     this.collision = collision;
     this.compiledGroup = compiledGroup;
     this.gameState = gameState;
     this.textureLoader = textureLoader;
+    this.audioRuntime = audioRuntime;
     this.cleared = Boolean(gameState?.isBeneathFolsomHiddenGrowthGateCleared?.());
     this.hitCount = this.cleared ? BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES.hitsRequired : 0;
     this.pulseRemaining = 0;
@@ -139,10 +140,16 @@ export class BeneathFolsomHiddenGrowthGateRuntime {
     this.hitCount += 1;
     this.pulseRemaining = 0.3;
     this.spawnOilImpact(this.hitCount === 5 ? 1.45 : 0.5 + this.hitCount * 0.11);
-    this.playWetGrowthHit(this.hitCount === 5);
+    const finalHit = this.hitCount === BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES.hitsRequired;
+    const cueId = finalHit
+      ? 'audio_ch2_beneath_folsom_hidden_growth_gate_collapse_oneshot'
+      : this.hitCount % 2
+        ? 'audio_ch2_beneath_folsom_hidden_growth_gate_axe_hit_01_oneshot'
+        : 'audio_ch2_beneath_folsom_hidden_growth_gate_axe_hit_02_oneshot';
+    this.audioRuntime?.play3D?.(cueId, GATE_TARGET);
     this.applyDamageState();
     if (this.hitCount >= BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES.hitsRequired) this.clear();
-    return { hit: true, cleared: this.cleared, hitCount: this.hitCount };
+    return { hit: true, cleared: this.cleared, hitCount: this.hitCount, audioAcceptedCuePlayed: true };
   }
 
   applyDamageState() {
@@ -181,31 +188,6 @@ export class BeneathFolsomHiddenGrowthGateRuntime {
       fleck.renderOrder = 10;
       this.scene.add(fleck);
       this.effects.push({ object: fleck, life: 0.48 + Math.random() * 0.3, velocity: new THREE.Vector3((Math.random() - 0.5) * strength * 1.4, (0.25 + Math.random()) * strength, -0.03) });
-    }
-  }
-
-  playWetGrowthHit(finalHit) {
-    try {
-      const AudioContextClass = globalThis.AudioContext ?? globalThis.webkitAudioContext;
-      if (!AudioContextClass) return;
-      this.audioContext ??= new AudioContextClass();
-      const context = this.audioContext;
-      if (context.state === 'suspended') context.resume?.();
-      const duration = finalHit ? 0.42 : 0.18;
-      const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < data.length; i += 1) {
-        const t = i / data.length;
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-t * (finalHit ? 5 : 9)) * (0.55 + 0.45 * Math.sin(i * 0.045));
-      }
-      const source = context.createBufferSource();
-      const filter = context.createBiquadFilter();
-      const gain = context.createGain();
-      filter.type = 'lowpass'; filter.frequency.value = finalHit ? 780 : 620;
-      gain.gain.value = finalHit ? 0.24 : 0.13;
-      source.buffer = buffer; source.connect(filter); filter.connect(gain); gain.connect(context.destination); source.start();
-    } catch {
-      // Audio is optional when a browser blocks WebAudio; visual and haptic feedback still run.
     }
   }
 
@@ -288,8 +270,6 @@ export class BeneathFolsomHiddenGrowthGateRuntime {
   }
 
   dispose() {
-    this.audioContext?.close?.();
-    this.audioContext = null;
     this.effects = [];
   }
 }

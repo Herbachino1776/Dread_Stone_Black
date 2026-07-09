@@ -17,6 +17,7 @@ import { FirstPersonViewmodelHost } from './hosts/FirstPersonViewmodelHost.js';
 import { Interactions } from './Interactions.js';
 import { PerfDebugPanel } from './PerfDebugPanel.js';
 import { reloadToNewGameStartupRoute } from './startupRoute.js';
+import { GameAudioRuntime } from './audio/GameAudioRuntime.js';
 
 export class Game {
   constructor(app) {
@@ -51,6 +52,7 @@ export class Game {
       onReset: () => this.requestProgressReset(),
     });
     this.rendererHost = new RendererHost({ root: this.app });
+    this.audioRuntime = new GameAudioRuntime({ root: this.app });
 
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
     this.saveHost = new SaveHost();
@@ -60,13 +62,17 @@ export class Game {
       startingEquipment: this.gameState.getEquipmentSnapshot() ?? startingEquipment,
     });
     this.disposers = [];
-    this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, () => this.saveEquipmentState()));
+    this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, (payload) => {
+      this.saveEquipmentState();
+      this.handleEquipmentAcquired(payload);
+    }));
     this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.saveEquipmentState()));
     this.survivalInventory = new SurvivalInventoryBridge({ equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
     this.sceneSessionHost = new SceneSessionHost({
       rendererHost: this.rendererHost,
       gameState: this.gameState,
       query,
+      audioRuntime: this.audioRuntime,
       onSessionChanged: (session) => this.handleSceneSessionChanged(session),
     });
     await this.sceneSessionHost.startInitialSession();
@@ -103,6 +109,7 @@ export class Game {
       hudHost: this.hudHost,
       inputHost: this.inputHost,
       feedback: this.feedback,
+      audioRuntime: this.audioRuntime,
     });
     this.viewmodelHost.initializeForSession(this.sceneSessionHost);
     this.interactions = new Interactions({
@@ -176,6 +183,18 @@ export class Game {
     this.saveHost.saveEquipmentState(this.gameState, this.equipmentRuntime);
   }
 
+  handleEquipmentAcquired({ item, metadata } = {}) {
+    const cueByItem = {
+      wood_axe: 'audio_ch1_folsom_shed_wood_axe_pickup_oneshot',
+      torch: 'audio_ch1_folsom_shed_torch_pickup_oneshot',
+      keepers_lantern: 'audio_ch2_keepers_lantern_pickup_reveal_oneshot',
+      iron_drain_bar: 'audio_ch2_beneath_folsom_iron_drain_bar_pickup_oneshot',
+    };
+    const cueId = cueByItem[item?.id];
+    if (!cueId || metadata?.source === 'field_survival_state_sync') return;
+    this.audioRuntime?.play2D(cueId);
+  }
+
   update(time) {
     if (this.hasFatalRuntimeError) return;
 
@@ -207,6 +226,14 @@ export class Game {
       controls: this.controls,
       isPaused: false,
       isPlayerDead: this.isPlayerDead,
+    });
+    this.audioRuntime?.update(deltaSeconds, {
+      camera: this.camera,
+      player: this.player,
+      dungeon: this.dungeon,
+      locationId: this.locationId,
+      controls: this.controls,
+      paused: this.isPaused,
     });
     this.viewmodelHost?.update(deltaSeconds);
     this.survivalHost?.update(deltaSeconds, {
@@ -295,6 +322,7 @@ export class Game {
   setPaused(isPaused) {
     this.isPaused = isPaused;
     this.hudHost?.setPaused(this.isPaused);
+    this.audioRuntime?.setPaused(this.isPaused);
     if (!this.isPaused) this.clearResetConfirmation();
   }
 
@@ -355,6 +383,7 @@ export class Game {
     this.inputHost?.dispose?.();
     this.hudHost?.dispose?.();
     this.sceneSessionHost?.dispose?.();
+    this.audioRuntime?.dispose?.();
     this.rendererHost?.dispose?.();
   }
 

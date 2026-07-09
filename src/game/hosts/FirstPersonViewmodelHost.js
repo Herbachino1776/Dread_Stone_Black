@@ -17,7 +17,7 @@ const ROD_VIEWMODEL_LIGHTING = Object.freeze({
 });
 
 export class FirstPersonViewmodelHost {
-  constructor({ app, sceneSessionHost, equipmentRuntime, inventoryBridge = null, gameState = null, hudHost = null, inputHost = null, feedback = null } = {}) {
+  constructor({ app, sceneSessionHost, equipmentRuntime, inventoryBridge = null, gameState = null, hudHost = null, inputHost = null, feedback = null, audioRuntime = null } = {}) {
     this.app = app;
     this.sceneSessionHost = sceneSessionHost;
     this.equipmentRuntime = equipmentRuntime;
@@ -26,6 +26,7 @@ export class FirstPersonViewmodelHost {
     this.hudHost = hudHost;
     this.inputHost = inputHost;
     this.feedback = feedback;
+    this.audioRuntime = audioRuntime;
     this.session = null;
     this.disposers = [];
   }
@@ -55,6 +56,7 @@ export class FirstPersonViewmodelHost {
       viewmodel: this.physicalToolViewmodel,
       feedback: this.feedback,
       controls: this.controls,
+      audioRuntime: this.audioRuntime,
     });
 
     this.disposers.push(this.equipmentRuntime?.on?.(EQUIPMENT_EVENTS.equippedChanged, (equipmentState) => this.handleEquipmentChanged(equipmentState)));

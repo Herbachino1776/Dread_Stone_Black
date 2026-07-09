@@ -5,7 +5,7 @@ import { PhysicalToolTargetRegistry } from './PhysicalToolTargetRegistry.js';
 const GESTURE_HISTORY_MS = 140;
 
 export class PhysicalToolActionController {
-  constructor({ app, camera, player, dungeon, equipmentRuntime, viewmodel, feedback = null, controls = null } = {}) {
+  constructor({ app, camera, player, dungeon, equipmentRuntime, viewmodel, feedback = null, controls = null, audioRuntime = null } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.camera = camera;
@@ -15,6 +15,7 @@ export class PhysicalToolActionController {
     this.viewmodel = viewmodel;
     this.feedback = feedback;
     this.controls = controls;
+    this.audioRuntime = audioRuntime;
     this.registry = new PhysicalToolTargetRegistry({ dungeon, camera, player, viewport: this.viewport });
     this.state = this.createIdleState();
     this.cooldownRemaining = 0;
@@ -120,7 +121,8 @@ export class PhysicalToolActionController {
         this.state.settle = 0;
         this.setControlsConstrained(true);
         navigator.vibrate?.([8, 18, 12]);
-        this.playContactSound('plant');
+        const acceptedSocketCue = this.playAcceptedSocketCue(seatedContact.target);
+        if (!acceptedSocketCue) this.playContactSound('plant');
         this.viewmodel?.impact?.({ strength: 0.42 });
         return;
       }
@@ -263,7 +265,7 @@ export class PhysicalToolActionController {
       this.viewmodel?.impact?.({ strength: final ? 1.35 : profile.actionType === 'chop' ? 1.05 : 0.72 });
       this.feedback?.shake?.(final ? profile.finalShake : profile.shake);
       navigator.vibrate?.(profile.actionType === 'chop' ? (final ? [28, 30, 48] : 32) : profile.actionType === 'pry' ? (final ? [35, 45, 70] : 24) : (final ? [18, 22, 30] : 14));
-      this.playContactSound(final ? 'final' : profile.actionType);
+      if (!result.audioAcceptedCuePlayed && !result.suppressProceduralSuccessAudio) this.playContactSound(final ? 'final' : profile.actionType);
       return;
     }
     if (this.state.contact) {
@@ -296,6 +298,13 @@ export class PhysicalToolActionController {
     } catch {
       // Physical animation, contact validation, haptics, and world response remain authoritative.
     }
+  }
+
+  playAcceptedSocketCue(target) {
+    if (target?.id !== 'beneath_folsom_drain_grate') return false;
+    const position = target.socket?.position ?? target.target;
+    this.audioRuntime?.play3D?.('audio_ch2_beneath_folsom_drain_grate_bar_socket_oneshot', position);
+    return true;
   }
 
   makeSample(event) {

@@ -11,12 +11,13 @@ export const FOLSOM_SHED_GROWTH_RULES = Object.freeze({
 export const FOLSOM_SHED_GROWTH_TEXTURES = BLACK_GROWTH_TEXTURES;
 
 export class FolsomShedGrowthRuntime {
-  constructor({ scene, collision, compiledGroup, gameState, textureLoader }) {
+  constructor({ scene, collision, compiledGroup, gameState, textureLoader, audioRuntime = null }) {
     this.scene = scene;
     this.collision = collision;
     this.compiledGroup = compiledGroup;
     this.gameState = gameState;
     this.textureLoader = textureLoader;
+    this.audioRuntime = audioRuntime;
     this.open = Boolean(gameState?.isFolsomToolShedOpen?.());
     this.hitCount = this.open ? 3 : 0;
     this.pulseRemaining = 0;
@@ -88,11 +89,22 @@ export class FolsomShedGrowthRuntime {
   strike() {
     if (this.open || this.hitCount >= FOLSOM_SHED_GROWTH_RULES.hitsRequired) return { hit: false, cleared: true, hitCount: FOLSOM_SHED_GROWTH_RULES.hitsRequired };
     this.hitCount += 1;
+    const cueId = this.hitCount === 1
+      ? 'audio_ch1_folsom_shed_growth_knife_first_bite_oneshot'
+      : this.hitCount === 2
+        ? 'audio_ch1_folsom_shed_growth_knife_second_damage_oneshot'
+        : 'audio_ch1_folsom_shed_growth_knife_final_clear_oneshot';
+    this.audioRuntime?.play3D?.(cueId, GROWTH_TARGET);
     this.pulseRemaining = this.hitCount === 2 ? 0.32 : 0.24;
     this.spawnOilImpact(this.hitCount === 3 ? 1 : this.hitCount === 2 ? 0.72 : 0.48);
     if (this.hitCount === 2) this.applyDamagedState();
     if (this.hitCount === FOLSOM_SHED_GROWTH_RULES.hitsRequired) this.clearGrowth();
-    return { hit: true, cleared: this.hitCount === FOLSOM_SHED_GROWTH_RULES.hitsRequired, hitCount: this.hitCount };
+    return {
+      hit: true,
+      cleared: this.hitCount === FOLSOM_SHED_GROWTH_RULES.hitsRequired,
+      hitCount: this.hitCount,
+      audioAcceptedCuePlayed: true,
+    };
   }
 
   applyDamagedState() {
@@ -106,7 +118,6 @@ export class FolsomShedGrowthRuntime {
   }
 
   clearGrowth() {
-    // Deliberate audio hook: play the wet cord-snap cue here when field SFX routing exists.
     this.open = true;
     this.collapseRemaining = 0.55;
     this.doorBlockers.forEach((blocker) => this.collision?.removeBlocker?.(blocker));
@@ -115,6 +126,7 @@ export class FolsomShedGrowthRuntime {
       cord.userData.snapDirection = index % 2 ? -1 : 1;
     });
     this.gameState?.markFolsomToolShedOpen?.();
+    this.audioRuntime?.play3D?.('audio_ch1_folsom_shed_door_open_oneshot', GROWTH_TARGET.clone().add(new THREE.Vector3(0, -0.12, 0.18)));
   }
 
   spawnOilImpact(strength) {

@@ -5,10 +5,11 @@ import { resolveLocationIdForArea, resolveLocationReturnSpawn, resolveStartupAre
 import { getLoadedLocationDefinitionIds, getLocationDefinition, getLocationRegistryDebugSummary, loadLocationDefinition } from '../locations/locationRegistry.js';
 
 export class SceneSessionHost {
-  constructor({ rendererHost, gameState, query = new URLSearchParams(window.location.search), onSessionChanged = null } = {}) {
+  constructor({ rendererHost, gameState, query = new URLSearchParams(window.location.search), audioRuntime = null, onSessionChanged = null } = {}) {
     this.rendererHost = rendererHost;
     this.gameState = gameState;
     this.query = query;
+    this.audioRuntime = audioRuntime;
     this.dungeon = null;
     this.scene = null;
     this.player = null;
@@ -41,7 +42,7 @@ export class SceneSessionHost {
 
   createSession({ area, fieldSpawn = 'start', spawnId = null } = {}) {
     this.disposeCurrentSession();
-    this.dungeon = new DungeonScene({ area, fieldSpawn, spawnId, gameState: this.gameState });
+    this.dungeon = new DungeonScene({ area, fieldSpawn, spawnId, gameState: this.gameState, audioRuntime: this.audioRuntime });
     this.scene = this.dungeon.build();
     this.dungeon.setLanternRevealEmitterProvider?.(this.lanternRevealEmitterProvider);
     this.scene.add(this.camera);
@@ -90,6 +91,7 @@ export class SceneSessionHost {
       fieldSpawn,
       spawnId: destinationArea === 'field' ? null : destinationSpawnId,
     });
+    this.audioRuntime?.handleLocationTransition?.(locationId);
 
     const params = new URLSearchParams({ area: destinationArea });
     if (fromArea) params.set('from', fromArea);

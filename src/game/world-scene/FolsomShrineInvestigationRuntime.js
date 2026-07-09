@@ -34,7 +34,7 @@ function cloneObjectMaterials(root) {
 }
 
 export class FolsomShrineInvestigationRuntime {
-  constructor({ scene, collision, compiledGroup, gameState, textureLoader, getEmitterState, onNetworkRevealed }) {
+  constructor({ scene, collision, compiledGroup, gameState, textureLoader, getEmitterState, onNetworkRevealed, audioRuntime = null }) {
     this.scene = scene;
     this.collision = collision;
     this.compiledGroup = compiledGroup;
@@ -42,6 +42,7 @@ export class FolsomShrineInvestigationRuntime {
     this.textureLoader = textureLoader;
     this.getEmitterState = getEmitterState;
     this.onNetworkRevealed = onNetworkRevealed;
+    this.audioRuntime = audioRuntime;
     this.sideRoomOpen = Boolean(gameState?.isFolsomShrineSideRoomOpen?.());
     this.networkRevealed = Boolean(gameState?.isFolsomUnderShrineNetworkRevealed?.());
     this.crawlspaceOpen = Boolean(gameState?.isFolsomShrineCrawlspaceOpen?.());
@@ -260,7 +261,8 @@ export class FolsomShrineInvestigationRuntime {
         mesh.material.needsUpdate = true;
       });
       this.spawnOilImpact(4);
-      return { changed: true, opened: false, message: 'The work knife parts the cords. A hard knot still grips the latch.' };
+      this.audioRuntime?.play3D?.('audio_ch2_shrine_side_room_seal_knife_cords_cut_oneshot', SIDE_SEAL_TARGET);
+      return { changed: true, opened: false, message: 'The work knife parts the cords. A hard knot still grips the latch.', audioAcceptedCuePlayed: true };
     }
     if (!hasAxe) return { changed: false, opened: false, message: 'The exposed knot is too hard for the knife.' };
     this.sideSealStage = 2;
@@ -272,7 +274,8 @@ export class FolsomShrineInvestigationRuntime {
     this.sideDoorBlockers.forEach((blocker) => this.collision?.removeBlocker?.(blocker));
     this.spawnOilImpact(14);
     this.spawnKnotFragments();
-    return { changed: true, opened: true, message: 'The axe cracks the knot. The old side door gives.' };
+    this.audioRuntime?.play3D?.('audio_ch2_shrine_side_room_seal_axe_knot_crack_oneshot', SIDE_SEAL_TARGET);
+    return { changed: true, opened: true, message: 'The axe cracks the knot. The old side door gives.', audioAcceptedCuePlayed: true };
   }
 
   openCrawlspace({ hasKnife = false } = {}) {
@@ -283,7 +286,8 @@ export class FolsomShrineInvestigationRuntime {
     this.gameState?.markFolsomShrineCrawlspaceOpen?.();
     this.crawlspaceBlockers.forEach((blocker) => this.collision?.removeBlocker?.(blocker));
     this.spawnOilImpact(5, CRAWLSPACE_TARGET);
-    return { changed: true, opened: true, message: 'The cords split. The maintenance panel sinks aside.' };
+    this.audioRuntime?.play3D?.('audio_ch2_shrine_crawlspace_panel_open_oneshot', CRAWLSPACE_TARGET);
+    return { changed: true, opened: true, message: 'The cords split. The maintenance panel sinks aside.', audioAcceptedCuePlayed: true };
   }
 
   markNetworkRevealed() {
@@ -293,6 +297,8 @@ export class FolsomShrineInvestigationRuntime {
     this.gameState?.markFolsomUnderShrineNetworkRevealed?.();
     this.onNetworkRevealed?.();
     this.revealMarks.forEach((mesh) => { mesh.visible = true; });
+    const primary = this.revealMarks.find((mesh) => mesh.userData.primaryNetworkReveal);
+    this.audioRuntime?.play3D?.('audio_ch2_keepers_lantern_network_reveal_oneshot', primary?.position ?? CRAWLSPACE_TARGET);
     return true;
   }
 

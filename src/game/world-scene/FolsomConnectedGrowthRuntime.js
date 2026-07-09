@@ -38,12 +38,13 @@ function tagData(source, extra = {}) {
 }
 
 export class FolsomConnectedGrowthRuntime {
-  constructor({ scene, network, textureLoader, sampleSurfaceY, gameState = null, compiledGroup = null }) {
+  constructor({ scene, network, textureLoader, sampleSurfaceY, gameState = null, compiledGroup = null, audioRuntime = null }) {
     this.scene = scene;
     this.network = network;
     this.sampleSurfaceY = sampleSurfaceY;
     this.gameState = gameState;
     this.compiledGroup = compiledGroup;
+    this.audioRuntime = audioRuntime;
     this.anchorGroups = new Map();
     this.anchorVisuals = new Map();
     this.feedVisuals = new Map();
@@ -348,6 +349,9 @@ export class FolsomConnectedGrowthRuntime {
     this.clearedAnchorTypes.add(anchor.type);
     this.gameState?.markFolsomGrowthAnchorCleared?.(anchor.type);
     this.startAnchorCollapse(anchor);
+    const group = this.anchorGroups.get(anchor.id);
+    const target = group?.position?.clone?.().add(new THREE.Vector3(0, anchor.type === 'shrine' ? 0.75 : 0.35, 0));
+    this.audioRuntime?.play3D?.('audio_ch2_surface_anchor_clear_oneshot', target ?? group?.position);
     const clearedCount = this.network.anchors.filter((candidate) => this.isAnchorCleared(candidate.type)).length;
     this.applyLockProgress(clearedCount);
     const shouldUnseal = clearedCount === this.network.anchors.length;
@@ -357,6 +361,7 @@ export class FolsomConnectedGrowthRuntime {
       anchorType: anchor.type,
       clearedCount,
       unsealed: shouldUnseal,
+      audioAcceptedCuePlayed: true,
       message: FOLSOM_CONNECTED_GROWTH_RULES[anchor.type].message,
       underworksMessage: shouldUnseal ? FOLSOM_CONNECTED_GROWTH_RULES.underworks.message : '',
     };
@@ -409,6 +414,7 @@ export class FolsomConnectedGrowthRuntime {
     });
     this.gateOpenProgress = 0;
     this.spawnOilBurst();
+    this.audioRuntime?.play3D?.('audio_ch2_underworks_gate_unseal_oneshot', new THREE.Vector3(this.network.lock.position[0], this.network.lock.position[1], this.network.lock.position[2]));
     return true;
   }
 

@@ -303,11 +303,12 @@ export const FIELD_SURVIVAL_PLACEMENTS = Object.freeze({
 });
 
 export class DungeonScene {
-  constructor({ area = 'field', fieldSpawn = 'start', spawnId = null, gameState = null } = {}) {
+  constructor({ area = 'field', fieldSpawn = 'start', spawnId = null, gameState = null, audioRuntime = null } = {}) {
     this.area = area;
     this.fieldSpawn = fieldSpawn;
     this.spawnId = spawnId;
     this.gameState = gameState;
+    this.audioRuntime = audioRuntime;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(INDOOR_BACKGROUND_COLOR);
     this.scene.fog = new THREE.Fog(INDOOR_FOG_COLOR, INDOOR_FOG_NEAR, INDOOR_FOG_FAR);
@@ -514,12 +515,14 @@ export class DungeonScene {
       compiledGroup: group,
       gameState: this.gameState,
       textureLoader: this.textureLoader,
+      audioRuntime: this.audioRuntime,
     });
     this.beneathFolsomLowerShrineHatchRuntime = new BeneathFolsomLowerShrineHatchRuntime({
       collision: this.collision,
       compiledGroup: group,
       gameState: this.gameState,
       interactions: this.inspectInteractions,
+      audioRuntime: this.audioRuntime,
     });
     this.beneathFolsomWhiteScabRuntime = new BeneathFolsomWhiteScabRuntime({
       scene: this.scene,
@@ -527,6 +530,7 @@ export class DungeonScene {
       compiledGroup: group,
       gameState: this.gameState,
       interactions: this.inspectInteractions,
+      audioRuntime: this.audioRuntime,
     });
 
     const lanternRevealDecals = this.beneathFolsomHiddenGrowthGateRuntime.getRevealObjects();
@@ -558,6 +562,7 @@ export class DungeonScene {
       compiledGroup: runtime.group,
       gameState: this.gameState,
       interactions: this.inspectInteractions,
+      audioRuntime: this.audioRuntime,
     });
     this.scene.background = new THREE.Color(0x000000);
   }
@@ -594,7 +599,8 @@ export class DungeonScene {
     }
     const interaction = this.inspectInteractions.find((candidate) => candidate.id === 'beneath_folsom_drain_grate_pry');
     if (interaction) interaction.collected = true;
-    return { pried: true, message: 'The old drain bars shriek open.' };
+    this.audioRuntime?.play3D?.('audio_ch2_beneath_folsom_drain_grate_pry_open_oneshot', new THREE.Vector3(-2.1, 0.72, 13.02));
+    return { pried: true, message: 'The old drain bars shriek open.', audioAcceptedCuePlayed: true };
   }
 
   setBeneathFolsomDrainGratePryStrain(strain = 0) {
@@ -949,6 +955,7 @@ export class DungeonScene {
       compiledGroup: this.compiledLocationRuntime?.group,
       gameState: this.gameState,
       textureLoader: this.textureLoader,
+      audioRuntime: this.audioRuntime,
     });
     this.folsomConnectedGrowthRuntime = new FolsomConnectedGrowthRuntime({
       scene: this.scene,
@@ -957,6 +964,7 @@ export class DungeonScene {
       sampleSurfaceY: (x, z) => this.resolveOutdoorVisibleSurfaceY(x, z, { water: false }).y,
       gameState: this.gameState,
       compiledGroup: this.compiledLocationRuntime?.group,
+      audioRuntime: this.audioRuntime,
     });
     this.folsomShrineInvestigationRuntime = new FolsomShrineInvestigationRuntime({
       scene: this.scene,
@@ -966,6 +974,7 @@ export class DungeonScene {
       textureLoader: this.textureLoader,
       getEmitterState: () => this.lanternRevealEmitterProvider?.() ?? null,
       onNetworkRevealed: () => this.folsomConnectedGrowthRuntime?.revealNetwork?.(),
+      audioRuntime: this.audioRuntime,
     });
     this.outdoorInteractions.push(...this.folsomConnectedGrowthRuntime.getAnchorInteractions());
     const lanternOwned = this.gameState?.getEquipmentSnapshot?.()?.acquiredItemIds?.includes('keepers_lantern');

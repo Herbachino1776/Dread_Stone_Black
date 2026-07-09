@@ -1,0 +1,292 @@
+{
+  "pack": "Dreadstone Black Accepted Audio Library v024",
+  "naming_convention": "audio_ch{chapter}_{location_or_system}_{object_or_beat}_{action}_{type}; system-level reusable cues may use audio_system_*",
+  "accepted_runtime_files": [
+    {
+      "filename": "audio_ch1_folsom_shed_door_open_oneshot.wav",
+      "duration_seconds": 3.88,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -44.08,
+      "peak_dbfs": -22.0
+    },
+    {
+      "filename": "audio_ch1_folsom_shed_growth_knife_final_clear_oneshot.wav",
+      "duration_seconds": 1.85,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -39.48,
+      "peak_dbfs": -19.0
+    },
+    {
+      "filename": "audio_ch1_folsom_shed_growth_knife_first_bite_oneshot.wav",
+      "duration_seconds": 0.82,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -41.33,
+      "peak_dbfs": -23.01
+    },
+    {
+      "filename": "audio_ch1_folsom_shed_growth_knife_second_damage_oneshot.wav",
+      "duration_seconds": 1.25,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -47.7,
+      "peak_dbfs": -21.0
+    },
+    {
+      "filename": "audio_ch1_folsom_shed_growth_tension_loop.wav",
+      "duration_seconds": 6.4,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -50.2,
+      "peak_dbfs": -36.76
+    },
+    {
+      "filename": "audio_ch1_folsom_shed_torch_pickup_oneshot.wav",
+      "duration_seconds": 1.0,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -42.57,
+      "peak_dbfs": -28.02
+    },
+    {
+      "filename": "audio_ch1_folsom_shed_wood_axe_pickup_oneshot.wav",
+      "duration_seconds": 1.48,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -49.97,
+      "peak_dbfs": -24.0
+    },
+    {
+      "filename": "audio_ch2_beneath_folsom_drain_grate_bar_socket_oneshot.wav",
+      "duration_seconds": 0.48,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -40.41,
+      "peak_dbfs": -25.28
+    },
+    {
+      "filename": "audio_ch2_beneath_folsom_drain_grate_pry_open_oneshot.wav",
+      "duration_seconds": 3.2,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -37.45,
+      "peak_dbfs": -21.0
+    },
+    {
+      "filename": "audio_ch2_beneath_folsom_entry_stinger_oneshot.wav",
+      "duration_seconds": 4.08,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -37.33,
+      "peak_dbfs": -24.5
+    },
+    {
+      "filename": "audio_ch2_beneath_folsom_hidden_growth_gate_axe_hit_01_oneshot.wav",
+      "duration_seconds": 1.22,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -40.51,
+      "peak_dbfs": -23.22
+    },
+    {
+      "filename": "audio_ch2_beneath_folsom_hidden_growth_gate_axe_hit_02_oneshot.wav",
+      "duration_seconds": 1.4,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -39.14,
+      "peak_dbfs": -20.0
+    },
+    {
+      "filename": "audio_ch2_beneath_folsom_hidden_growth_gate_collapse_oneshot.wav",
+      "duration_seconds": 2.15,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -38.02,
+      "peak_dbfs": -18.8
+    },
+    {
+      "filename": "audio_ch2_beneath_folsom_iron_drain_bar_pickup_oneshot.wav",
+      "duration_seconds": 1.48,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -41.21,
+      "peak_dbfs": -24.6
+    },
+    {
+      "filename": "audio_ch2_blue_flame_hall_ambience_layer_a_loop.wav",
+      "duration_seconds": 20.0,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -53.31,
+      "peak_dbfs": -41.84
+    },
+    {
+      "filename": "audio_ch2_blue_flame_hall_ambience_layer_b_loop.wav",
+      "duration_seconds": 20.0,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -54.84,
+      "peak_dbfs": -42.6
+    },
+    {
+      "filename": "audio_ch2_blue_flame_hall_ambience_loop.wav",
+      "duration_seconds": 20.0,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -51.17,
+      "peak_dbfs": -38.94
+    },
+    {
+      "filename": "audio_ch2_keepers_lantern_network_reveal_oneshot.wav",
+      "duration_seconds": 7.2098,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -43.36,
+      "peak_dbfs": -27.77
+    },
+    {
+      "filename": "audio_ch2_keepers_lantern_pickup_reveal_oneshot.wav",
+      "duration_seconds": 5.88,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -44.67,
+      "peak_dbfs": -31.33
+    },
+    {
+      "filename": "audio_ch2_lower_shrine_hatch_final_pry_oneshot.wav",
+      "duration_seconds": 3.48,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -35.53,
+      "peak_dbfs": -20.1
+    },
+    {
+      "filename": "audio_ch2_lower_shrine_landing_ambience_loop.wav",
+      "duration_seconds": 24.0,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -51.4,
+      "peak_dbfs": -35.12
+    },
+    {
+      "filename": "audio_ch2_lower_shrine_landing_reveal_stinger_oneshot.wav",
+      "duration_seconds": 6.0,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -39.72,
+      "peak_dbfs": -25.83
+    },
+    {
+      "filename": "audio_ch2_shrine_crawlspace_panel_open_oneshot.wav",
+      "duration_seconds": 3.0,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -44.72,
+      "peak_dbfs": -24.0
+    },
+    {
+      "filename": "audio_ch2_shrine_side_room_seal_axe_knot_crack_oneshot.wav",
+      "duration_seconds": 1.12,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -37.92,
+      "peak_dbfs": -20.2
+    },
+    {
+      "filename": "audio_ch2_shrine_side_room_seal_knife_cords_cut_oneshot.wav",
+      "duration_seconds": 1.26,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -40.65,
+      "peak_dbfs": -25.57
+    },
+    {
+      "filename": "audio_ch2_surface_anchor_clear_oneshot.wav",
+      "duration_seconds": 1.62,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -40.11,
+      "peak_dbfs": -21.0
+    },
+    {
+      "filename": "audio_ch2_underworks_gate_ambient_tension_stinger_oneshot.wav",
+      "duration_seconds": 4.08,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -50.07,
+      "peak_dbfs": -31.44
+    },
+    {
+      "filename": "audio_ch2_underworks_gate_unseal_oneshot.wav",
+      "duration_seconds": 4.08,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -38.3,
+      "peak_dbfs": -20.3
+    },
+    {
+      "filename": "audio_system_footsteps_grass_walk_loop.wav",
+      "duration_seconds": 12.0,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -54.14,
+      "peak_dbfs": -31.0
+    },
+    {
+      "filename": "audio_system_footsteps_temple_stone_walk_loop.wav",
+      "duration_seconds": 12.0,
+      "sample_rate": 48000,
+      "channels": 2,
+      "active_rms_dbfs": -54.87,
+      "peak_dbfs": -30.0
+    }
+  ],
+  "new_in_v024": [
+    {
+      "cue": "Player footsteps grass walk loop, long version",
+      "filename": "audio_system_footsteps_grass_walk_loop.wav",
+      "source_file": "Footsteps_walking_on_#3-1783569340838.wav",
+      "source_duration_seconds": 1.5,
+      "accepted_duration_seconds": 12.0,
+      "implementation_note": "Use as continuous player walking loop on grass/soft outdoor ground. This replaces the shorter v023 grass loop.",
+      "level": {
+        "target_active_rms_dbfs": "-52 dBFS",
+        "peak_ceiling_dbfs": "-31 dBFS",
+        "measured_active_rms_dbfs": -54.17,
+        "measured_peak_dbfs": -31.0
+      }
+    },
+    {
+      "cue": "Player footsteps temple/dungeon stone walk loop",
+      "filename": "audio_system_footsteps_temple_stone_walk_loop.wav",
+      "source_file": "boots_walk_on_slate__#1-1783569570267.wav",
+      "source_duration_seconds": 8.6,
+      "accepted_duration_seconds": 12.0,
+      "implementation_note": "Use as continuous player walking loop on temple/dungeon/slate/stone interior surfaces.",
+      "level": {
+        "target_active_rms_dbfs": "-51 dBFS",
+        "peak_ceiling_dbfs": "-30 dBFS",
+        "measured_active_rms_dbfs": -55.17,
+        "measured_peak_dbfs": -30.0
+      }
+    }
+  ],
+  "processing_note": [
+    "Grass rebuilt from 1.5s source into a 12s loop with tiny deterministic level/pan variation.",
+    "Temple/dungeon stone built from boots on slate source into a 12s loop.",
+    "Both are kept tucked for gameplay/phone playback so footsteps do not overpower ambience.",
+    "Stone cue is intentionally named temple_stone, not generic outdoor stone."
+  ],
+  "preview_files": [
+    "PREVIEW_grass_short_source_then_12s_long_loop.wav",
+    "PREVIEW_temple_stone_source_then_12s_loop.wav",
+    "PREVIEW_grass_to_temple_stone_surface_swap.wav",
+    "PREVIEW_grass_12s_loop_seam_last1_first1.wav",
+    "PREVIEW_temple_stone_12s_loop_seam_last1_first1.wav",
+    "PREVIEW_grass_walk_20s_loop_mockup.wav",
+    "PREVIEW_temple_stone_walk_20s_loop_mockup.wav"
+  ],
+  "next_cue_target": "none"
+}

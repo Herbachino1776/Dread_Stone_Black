@@ -7,11 +7,12 @@ function cloneMaterial(object) {
 }
 
 export class BeneathFolsomWhiteScabRuntime {
-  constructor({ scene, collision, compiledGroup, gameState, interactions = [] } = {}) {
+  constructor({ scene, collision, compiledGroup, gameState, interactions = [], audioRuntime = null } = {}) {
     this.scene = scene;
     this.collision = collision;
     this.gameState = gameState;
     this.interactions = interactions;
+    this.audioRuntime = audioRuntime;
     this.destroyed = Boolean(gameState?.isBeneathFolsomWhiteScabLowerKnotDestroyed?.());
     this.hitCount = this.destroyed ? 3 : 0;
     this.pulse = 0;
@@ -39,9 +40,13 @@ export class BeneathFolsomWhiteScabRuntime {
     this.destroyed = true;
     this.recoil = 0.001;
     this.gameState?.markBeneathFolsomWhiteScabLowerKnotDestroyed?.();
+    if (this.audioRuntime?.hasCue?.('audio_ch3_white_scab_lower_knot_final_tear_oneshot')) {
+      const target = this.knot?.getWorldPosition?.(new THREE.Vector3()) ?? new THREE.Vector3(-1.45, 0.9, 103.8);
+      this.audioRuntime.play3D('audio_ch3_white_scab_lower_knot_final_tear_oneshot', target);
+    }
     const interaction = this.interactions.find((candidate) => candidate.id === 'beneath_folsom_white_scab_lower_knot');
     if (interaction) interaction.collected = true;
-    return { changed: true, destroyed: true, message: 'The lower cords tear backward into the earth. The impossible seal does not move.' };
+    return { changed: true, destroyed: true, message: 'The lower cords tear backward into the earth. The impossible seal does not move.', suppressProceduralSuccessAudio: !this.audioRuntime?.hasCue?.('audio_ch3_white_scab_lower_knot_final_tear_oneshot') };
   }
 
   applyDestroyedState() {
@@ -111,10 +116,11 @@ export class BeneathFolsomWhiteScabRuntime {
 }
 
 export class UnderShrineLabyrinthEndHatchRuntime {
-  constructor({ collision, compiledGroup, gameState, interactions = [] } = {}) {
+  constructor({ collision, compiledGroup, gameState, interactions = [], audioRuntime = null } = {}) {
     this.collision = collision;
     this.gameState = gameState;
     this.interactions = interactions;
+    this.audioRuntime = audioRuntime;
     this.hatch = compiledGroup?.getObjectByName('under_shrine_labyrinth_end_hatch') ?? null;
     this.socket = compiledGroup?.getObjectByName('under_shrine_labyrinth_end_hatch_pry_socket') ?? null;
     this.blocker = (collision?.blockerRects ?? []).find((candidate) => candidate.id === 'under_shrine_labyrinth_end_hatch_blocker') ?? null;
@@ -137,7 +143,15 @@ export class UnderShrineLabyrinthEndHatchRuntime {
     this.open = true;
     this.gameState?.markUnderShrineLabyrinthEndHatchOpen?.();
     if (this.blocker) this.collision?.removeBlocker?.(this.blocker);
-    return { changed, opened: true, message: changed ? 'The buried end hatch tears inward.' : 'The end hatch stands open behind the White-Scab threshold.' };
+    if (changed && this.audioRuntime?.hasCue?.('audio_ch3_under_shrine_end_hatch_open_oneshot')) {
+      this.audioRuntime.play3D('audio_ch3_under_shrine_end_hatch_open_oneshot', { x: 64.18, y: -1.35, z: 8.72 });
+    }
+    return {
+      changed,
+      opened: true,
+      message: changed ? 'The buried end hatch tears inward.' : 'The end hatch stands open behind the White-Scab threshold.',
+      suppressProceduralSuccessAudio: changed && !this.audioRuntime?.hasCue?.('audio_ch3_under_shrine_end_hatch_open_oneshot'),
+    };
   }
 
   setPryStrain(strain = 0) {

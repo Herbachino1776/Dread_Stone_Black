@@ -3,10 +3,11 @@ const HATCH_BLOCKER_ID = 'beneath_folsom_lower_shrine_hatch_blocker';
 const HATCH_INTERACTION_ID = 'beneath_folsom_lower_shrine_hatch_pry';
 
 export class BeneathFolsomLowerShrineHatchRuntime {
-  constructor({ collision, compiledGroup, gameState, interactions = [] } = {}) {
+  constructor({ collision, compiledGroup, gameState, interactions = [], audioRuntime = null } = {}) {
     this.collision = collision;
     this.gameState = gameState;
     this.interactions = interactions;
+    this.audioRuntime = audioRuntime;
     this.blocker = (collision?.blockerRects ?? []).find((candidate) => candidate.id === HATCH_BLOCKER_ID) ?? null;
     this.parts = [
       HATCH_VISUAL_ID,
@@ -24,7 +25,6 @@ export class BeneathFolsomLowerShrineHatchRuntime {
     this.opening = false;
     this.progress = this.open ? 1 : 0;
     this.pryStrain = 0;
-    this.audioContext = null;
     if (this.open) this.applyOpenState();
   }
 
@@ -42,8 +42,8 @@ export class BeneathFolsomLowerShrineHatchRuntime {
     if (this.blocker) this.collision?.removeBlocker?.(this.blocker);
     const interaction = this.interactions.find((candidate) => candidate.id === HATCH_INTERACTION_ID);
     if (interaction) interaction.collected = true;
-    this.playStrain();
-    return { opened: true, message: 'Iron bites stone. The lower shrine hatch tears open.' };
+    this.audioRuntime?.play3D?.('audio_ch2_lower_shrine_hatch_final_pry_oneshot', { x: -2.18, y: 0.78, z: 60.98 });
+    return { opened: true, message: 'Iron bites stone. The lower shrine hatch tears open.', audioAcceptedCuePlayed: true };
   }
 
   setPryStrain(strain = 0) {
@@ -96,40 +96,5 @@ export class BeneathFolsomLowerShrineHatchRuntime {
     });
   }
 
-  playStrain() {
-    try {
-      const AudioContextClass = globalThis.AudioContext ?? globalThis.webkitAudioContext;
-      if (!AudioContextClass) return;
-      this.audioContext ??= new AudioContextClass();
-      const context = this.audioContext;
-      if (context.state === 'suspended') context.resume?.();
-      const duration = 1.85;
-      const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let index = 0; index < data.length; index += 1) {
-        const t = index / data.length;
-        const scrape = (Math.random() * 2 - 1) * (0.32 + Math.sin(index * 0.071) * 0.12);
-        const groan = Math.sin(index * 0.013 + Math.sin(index * 0.0007) * 5) * 0.42;
-        data[index] = (scrape + groan) * Math.sin(Math.min(1, t * 9) * Math.PI * 0.5) * Math.exp(-t * 1.25);
-      }
-      const source = context.createBufferSource();
-      const filter = context.createBiquadFilter();
-      const gain = context.createGain();
-      filter.type = 'lowpass';
-      filter.frequency.value = 520;
-      gain.gain.value = 0.2;
-      source.buffer = buffer;
-      source.connect(filter);
-      filter.connect(gain);
-      gain.connect(context.destination);
-      source.start();
-    } catch {
-      // Browsers may block WebAudio. Movement and camera feedback remain authoritative.
-    }
-  }
-
-  dispose() {
-    this.audioContext?.close?.();
-    this.audioContext = null;
-  }
+  dispose() {}
 }
