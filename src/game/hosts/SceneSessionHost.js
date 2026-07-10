@@ -47,6 +47,7 @@ export class SceneSessionHost {
     this.dungeon.setLanternRevealEmitterProvider?.(this.lanternRevealEmitterProvider);
     this.scene.add(this.camera);
     this.locationId = this.resolveLocationId(this.dungeon.area);
+    this.configureCameraForLocation(this.locationId);
     this.player = new PlayerController(this.camera, this.dungeon.collision, {
       ...this.dungeon.playerSpawn,
       ...this.getMovementProfile(this.locationId),
@@ -189,6 +190,13 @@ export class SceneSessionHost {
       hasPlayer: Boolean(this.player),
       locationLoadDebug: this.getLocationLoadDebugSummary(),
     };
+  }
+
+  configureCameraForLocation(locationId) {
+    const definition = getLocationDefinition(locationId);
+    const fogFar = Number(definition?.fog?.far);
+    this.camera.far = Number.isFinite(fogFar) ? Math.max(260, fogFar + 80) : 260;
+    this.camera.updateProjectionMatrix();
   }
 
   setLanternRevealEmitterProvider(provider) {

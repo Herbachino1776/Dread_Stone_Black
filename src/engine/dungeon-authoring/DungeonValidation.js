@@ -20,7 +20,8 @@ const OUTDOOR_PATH_GRADE_FIELDS = new Set(['smoothingDistance', 'maxSlope', 'max
 const OUTDOOR_PATH_CROSS_SECTION_FIELDS = new Set(['crownHeight', 'shoulderWidth', 'shoulderDrop', 'terrainBlendWidth', 'lateralSamples']);
 const CURVED_BLOCKER_FIELDS = new Set(['id', 'kind', 'points', 'thickness', 'center', 'radius', 'from', 'to', 'visibleStructureId', 'metadata', 'tags', 'userData', 'intentionallyInvisible']);
 const OUTDOOR_PRIMITIVE_FIELDS = new Set(['id', 'kind', 'points', 'height', 'thickness', 'from', 'to', 'center', 'radius', 'material', 'metadata', 'tags', 'userData']);
-const WATER_BODY_FIELDS = new Set(['id', 'kind', 'center', 'radius', 'y', 'material', 'fishable', 'fishableRadius', 'fishSpeciesPool', 'fishCatchSeed', 'shoreMaterial', 'shoreWidth', 'bedMaterial', 'bedRadius', 'footprint', 'pondDecor', 'tags', 'metadata', 'userData']);
+const WATER_BODY_FIELDS = new Set(['id', 'kind', 'center', 'radius', 'y', 'material', 'fishable', 'fishableRadius', 'fishSpeciesPool', 'fishCatchSeed', 'shoreMaterial', 'shoreWidth', 'bedMaterial', 'bedRadius', 'footprint', 'shorelineProfile', 'fishingBanks', 'pondDecor', 'tags', 'metadata', 'userData']);
+const WATERWAY_FIELDS = new Set(['id', 'displayName', 'kind', 'points', 'sampleSpacing', 'flow', 'channel', 'banks', 'materials', 'water', 'fishing', 'crossings', 'tags', 'metadata', 'userData']);
 const OUTDOOR_CHEST_FIELDS = new Set(['id', 'label', 'position', 'itemId', 'acquiredMessage', 'tags', 'metadata', 'userData']);
 const FIELD_SURVIVAL_ITEM_IDS = new Set(['wood_axe', 'fishing_rod', 'flint_stick', 'torch']);
 const CURVED_BLOCKER_KINDS = new Set(['capsule', 'spline', 'circle', 'hazard', 'cliff']);
@@ -69,9 +70,18 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
     if (segments.length !== 2 || !segments.every((value) => Number.isInteger(value) && value > 0)) {
       addIssue(errors, 'error', 'terrain.segments must be two finite positive integers', 'terrain');
     } else {
-      if (segments.some((value) => value > OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS) || segments[0] * segments[1] > OARB_TERRAIN_MAX_TOTAL_CELLS) {
-        addIssue(errors, 'error', `terrain.segments must remain mobile-safe (<= ${OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS} per axis and <= ${OARB_TERRAIN_MAX_TOTAL_CELLS} cells)`, 'terrain');
-      } else if (segments.some((value) => value > OUTDOOR_TERRAIN_WARN_SEGMENTS_PER_AXIS) || segments[0] * segments[1] > OUTDOOR_TERRAIN_WARN_TOTAL_CELLS) {
+      const chunked = terrain?.composition?.chunked === true;
+      const columns = Math.max(1, Math.round(terrain?.composition?.columns ?? 1));
+      const rows = Math.max(1, Math.round(terrain?.composition?.rows ?? 1));
+      const chunkSegments = [segments[0] / columns, segments[1] / rows];
+      const invalidChunkGrid = chunked && (!Number.isInteger(chunkSegments[0]) || !Number.isInteger(chunkSegments[1]));
+      const exceedsSingleMeshBudget = chunkSegments.some((value) => value > OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS) || chunkSegments[0] * chunkSegments[1] > OARB_TERRAIN_MAX_TOTAL_CELLS;
+      const exceedsCompositionBudget = chunked && (segments.some((value) => value > 512) || segments[0] * segments[1] > 131072);
+      if (invalidChunkGrid) {
+        addIssue(errors, 'error', 'chunked terrain segments must divide evenly across composition columns and rows', 'terrain');
+      } else if (exceedsSingleMeshBudget || exceedsCompositionBudget) {
+        addIssue(errors, 'error', `terrain chunks must remain mobile-safe (<= ${OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS} segments per axis and <= ${OARB_TERRAIN_MAX_TOTAL_CELLS} cells per chunk)`, 'terrain');
+      } else if (!chunked && (segments.some((value) => value > OUTDOOR_TERRAIN_WARN_SEGMENTS_PER_AXIS) || segments[0] * segments[1] > OUTDOOR_TERRAIN_WARN_TOTAL_CELLS)) {
         addIssue(warnings, 'warning', `terrain.segments are high for mobile; prefer <= ${OUTDOOR_TERRAIN_WARN_SEGMENTS_PER_AXIS} per axis unless the location needs the extra vertices`, 'terrain');
       }
     }
@@ -140,6 +150,20 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
     });
   });
 
+  if (definition.waterways !== undefined && !Array.isArray(definition.waterways)) addIssue(errors, 'error', 'waterways must be an array when present', 'waterways');
+  asArray(definition.waterways).forEach((waterway, index) => {
+    const id = waterway.id ?? `waterways[${index}]`;
+    if (!hasUsableId(waterway)) addIssue(errors, 'error', `waterways[${index}] is missing a stable id`, id);
+    if (!pointArrayIsFinite(waterway.points, 2)) addIssue(errors, 'error', `waterway ${id} needs at least two finite [x, z] points`, id);
+    if (!isFinitePositive(waterway.sampleSpacing) || waterway.sampleSpacing < 0.45 || waterway.sampleSpacing > 2.5) addIssue(errors, 'error', `waterway ${id} sampleSpacing must remain between 0.45 and 2.5 meters`, id);
+    if (!Number.isFinite(waterway.flow?.sourceY) || !Number.isFinite(waterway.flow?.outletY) || waterway.flow.outletY > waterway.flow.sourceY) addIssue(errors, 'error', `waterway ${id} needs a finite downhill sourceY/outletY profile`, id);
+    if (!Array.isArray(waterway.channel?.width) || waterway.channel.width.length !== 2 || !waterway.channel.width.every(isFinitePositive)) addIssue(errors, 'error', `waterway ${id} channel.width must be two positive values`, id);
+    if (!Array.isArray(waterway.channel?.depth) || waterway.channel.depth.length !== 2 || !waterway.channel.depth.every(isFinitePositive)) addIssue(errors, 'error', `waterway ${id} channel.depth must be two positive values`, id);
+    ['bed', 'submergedShelf', 'wetBank', 'dryBank'].forEach((key) => validateOutdoorMaterial(definition, waterway.materials?.[key], `waterway ${id} materials.${key}`, id, errors, warnings, { required: true }));
+    validateOutdoorMaterial(definition, waterway.water?.material, `waterway ${id} water.material`, id, errors, warnings, { required: true });
+    Object.keys(waterway).filter((key) => !WATERWAY_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `waterway ${id} uses unsupported field ${key}`, id));
+  });
+
   if (definition.curvedBlockers !== undefined && !Array.isArray(definition.curvedBlockers)) addIssue(errors, 'error', 'curvedBlockers must be an array when present', 'curvedBlockers');
   asArray(definition.curvedBlockers).forEach((blocker, index) => {
     const id = blocker.id ?? `curvedBlockers[${index}]`;
@@ -160,10 +184,15 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
   });
 
   if (definition.outdoorPrimitives !== undefined && !Array.isArray(definition.outdoorPrimitives)) addIssue(errors, 'error', 'outdoorPrimitives must be an array when present', 'outdoorPrimitives');
-  const outdoorPrimitiveIds = new Set(asArray(definition.outdoorPrimitives).map((primitive) => primitive?.id).filter((id) => typeof id === 'string' && id.trim()));
+  const outdoorPrimitiveIds = new Set([
+    ...asArray(definition.outdoorPrimitives),
+    ...asArray(definition.outdoorStructureKits),
+    ...asArray(definition.outdoorCrossings),
+    ...asArray(definition.routeStateStructures),
+  ].map((primitive) => primitive?.id).filter((id) => typeof id === 'string' && id.trim()));
   const visibleStructureIds = new Set(asArray(definition.curvedBlockers).map((blocker) => blocker?.visibleStructureId).filter((id) => typeof id === 'string' && id.trim()));
   visibleStructureIds.forEach((visibleStructureId) => {
-    if (!outdoorPrimitiveIds.has(visibleStructureId)) addIssue(warnings, 'warning', `curvedBlockers.visibleStructureId ${visibleStructureId} has no matching outdoorPrimitives.id yet`, visibleStructureId);
+    if (!outdoorPrimitiveIds.has(visibleStructureId)) addIssue(warnings, 'warning', `curvedBlockers.visibleStructureId ${visibleStructureId} has no matching outdoor visible-structure id yet`, visibleStructureId);
   });
 
   asArray(definition.outdoorPrimitives).forEach((primitive, index) => {
@@ -433,6 +462,7 @@ export function validateDungeonDefinition(definition, { destinationSpawnIds = ne
     { label: 'curvedBlockers', items: definition.curvedBlockers },
     { label: 'outdoorPrimitives', items: definition.outdoorPrimitives },
     { label: 'waterBodies', items: definition.waterBodies },
+    { label: 'waterways', items: definition.waterways },
     { label: 'outdoorChests', items: definition.outdoorChests },
     { label: 'decorationZones', items: definition.decorationZones },
   ], errors);

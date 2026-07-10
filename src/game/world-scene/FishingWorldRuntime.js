@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { FISH_SPECS, FISH_TEXTURE_PROFILES, createFishMesh } from '../fishing/FishMeshFactory.js';
 import { PhysicalFishAngling } from '../fishing/PhysicalFishAngling.js';
 import { resolveFishSizeGroup } from '../fishing/FishSizeGroups.js';
+import { isPointInFishingZone, sampleFishingZoneWaterY } from '../fishing/FishingZoneGeometry.js';
 
 export { FISH_SPECS, FISH_TEXTURE_PROFILES, createFishMesh, PhysicalFishAngling, resolveFishSizeGroup };
 
@@ -66,25 +67,14 @@ export class FishingWorldRuntime {
   }
 
   isPointInZone(position, zone, margin = 0) {
-    if (!position || !zone) return false;
-    if (zone.shape === 'ellipse') {
-      const dx = position.x - zone.centerX;
-      const dz = position.z - zone.centerZ;
-      const rx = zone.radiusX + margin;
-      const rz = zone.radiusZ + margin;
-      return rx > 0 && rz > 0 && ((dx * dx) / (rx * rx)) + ((dz * dz) / (rz * rz)) <= 1;
-    }
-    return position.x >= zone.minX - margin
-      && position.x <= zone.maxX + margin
-      && position.z >= zone.minZ - margin
-      && position.z <= zone.maxZ + margin;
+    return isPointInFishingZone(position, zone, margin);
   }
 
   sampleFishLandingSurfaceY(position, fishingZone = null) {
     if (!position) return 0;
     const zone = fishingZone ?? this.getNearbyFishingZone(position);
     if (zone && this.isPositionInFishingWater(position, -0.05)) {
-      const waterY = zone.position?.y;
+      const waterY = sampleFishingZoneWaterY(position, zone);
       if (Number.isFinite(waterY)) return waterY + 0.035;
     }
     return this.resolveOutdoorVisibleSurfaceY(position.x, position.z, { water: false }).y;

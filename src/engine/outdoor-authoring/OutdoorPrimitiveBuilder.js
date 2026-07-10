@@ -51,19 +51,51 @@ function segmentTransform(mesh, from, to, y, thickness, height) {
   return length;
 }
 
+function addRootCord(group, name, from, to, radius, material) {
+  const direction = new THREE.Vector3().subVectors(to, from);
+  const length = direction.length();
+  if (length <= 0.001) return;
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.82, radius, length, 7, 1, false), material);
+  mesh.name = name;
+  mesh.position.copy(from).add(to).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+}
+
 function addPolylineWall(group, safe, material, terrainSampler, { organic = false } = {}) {
   for (let i = 0; i < safe.points.length - 1; i += 1) {
     const from = safe.points[i];
     const to = safe.points[i + 1];
-    const y = Math.min(terrainSampler.sampleOutdoorY(from.x, from.z), terrainSampler.sampleOutdoorY(to.x, to.z));
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, 1, 1, 2), material);
-    segmentTransform(mesh, from, to, y, safe.thickness, safe.height);
-    mesh.name = `${group.name}-segment-${i}`;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-
     const length = Math.hypot(to.x - from.x, to.z - from.z);
+    const pieceCount = Math.min(32, Math.max(1, Math.ceil(length / (organic ? 10 : 16))));
+    const dx = to.x - from.x; const dz = to.z - from.z; const inverseLength = 1 / Math.max(length, 0.001);
+    const normal = { x: -dz * inverseLength, z: dx * inverseLength };
+    for (let piece = 0; piece < pieceCount; piece += 1) {
+      const t0 = piece / pieceCount; const t1 = (piece + 1) / pieceCount;
+      const wobble0 = organic ? Math.sin((piece + i * 3) * 1.73) * safe.thickness * 0.34 : 0;
+      const wobble1 = organic ? Math.sin((piece + 1 + i * 3) * 1.73) * safe.thickness * 0.34 : 0;
+      const p0 = { x: THREE.MathUtils.lerp(from.x, to.x, t0) + normal.x * wobble0, z: THREE.MathUtils.lerp(from.z, to.z, t0) + normal.z * wobble0 };
+      const p1 = { x: THREE.MathUtils.lerp(from.x, to.x, t1) + normal.x * wobble1, z: THREE.MathUtils.lerp(from.z, to.z, t1) + normal.z * wobble1 };
+      if (organic) {
+        for (let cord = 0; cord < 2; cord += 1) {
+          const base = 0.65 + cord * safe.height * 0.44;
+          const y0 = terrainSampler.sampleOutdoorY(p0.x, p0.z) + base + Math.sin(piece * 1.17 + cord) * 0.45;
+          const y1 = terrainSampler.sampleOutdoorY(p1.x, p1.z) + base + Math.sin((piece + 1) * 1.17 + cord) * 0.45;
+          addRootCord(group, `${group.name}-woven-root-${i}-${piece}-${cord}`, new THREE.Vector3(p0.x, y0, p0.z), new THREE.Vector3(p1.x, y1, p1.z), safe.thickness * (cord ? 0.105 : 0.145), material);
+        }
+      } else {
+        const pieceHeight = safe.height * (0.78 + ((piece * 37 + i * 11) % 6) * 0.045);
+        const y = Math.min(terrainSampler.sampleOutdoorY(p0.x, p0.z), terrainSampler.sampleOutdoorY(p1.x, p1.z));
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, 1, 1, 2), material);
+        segmentTransform(mesh, p0, p1, y, safe.thickness * (0.88 + (piece % 3) * 0.08), pieceHeight);
+        mesh.name = `${group.name}-broken-cliff-segment-${i}-${piece}`;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+      }
+    }
     const detailCount = organic ? Math.min(5, Math.max(2, Math.ceil(length / 12))) : Math.min(6, Math.max(2, Math.ceil(length / 16)));
     for (let j = 0; j < detailCount; j += 1) {
       const t = (j + 0.5) / detailCount;

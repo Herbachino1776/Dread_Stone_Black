@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { auditOutdoorPathCorridors, buildOutdoorPathCorridors, deformOutdoorTerrainForPathCorridors, isPointInOutdoorPathCorridorFootprint } from './OutdoorPathCorridorBuilder.js';
+import { buildOutdoorWaterways, deformOutdoorTerrainForWaterways, isPointInOutdoorWaterwayFootprint } from './OutdoorWaterwayBuilder.js';
 
 export const OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS = 160;
 export const OARB_TERRAIN_MAX_TOTAL_CELLS = 16384;
@@ -25,8 +26,11 @@ function sanitizeTerrain(terrain) {
 
   if (!finitePositive(sizeX) || !finitePositive(sizeZ)) throw new Error('OARB terrain size must contain two finite positive values.');
   if (!Number.isInteger(segmentsX) || !Number.isInteger(segmentsZ) || segmentsX <= 0 || segmentsZ <= 0) throw new Error('OARB terrain segments must contain two finite positive integers.');
-  if (segmentsX > OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS || segmentsZ > OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS || segmentsX * segmentsZ > OARB_TERRAIN_MAX_TOTAL_CELLS) {
-    throw new Error(`OARB terrain segments exceed mobile-safe limits (${OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS} per axis, ${OARB_TERRAIN_MAX_TOTAL_CELLS} total cells).`);
+  const chunked = terrain?.composition?.chunked === true;
+  const maxSegmentsPerAxis = chunked ? 512 : OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS;
+  const maxTotalCells = chunked ? 131072 : OARB_TERRAIN_MAX_TOTAL_CELLS;
+  if (segmentsX > maxSegmentsPerAxis || segmentsZ > maxSegmentsPerAxis || segmentsX * segmentsZ > maxTotalCells) {
+    throw new Error(`OARB terrain segments exceed ${chunked ? 'chunked-composition' : 'mobile-safe mesh'} limits (${maxSegmentsPerAxis} per axis, ${maxTotalCells} total cells).`);
   }
   if (!Number.isFinite(baseY)) throw new Error('OARB terrain baseY must be finite.');
 
@@ -207,6 +211,15 @@ function splitTerrainStampOrder(heightStamps = []) {
   return { broad, destinationPads, microDetail };
 }
 
+function preserveSubmergedPondFloors(y, x, z, stamps = []) {
+  let protectedY = y;
+  stamps.forEach((stamp) => {
+    if (stamp.kind !== 'flattenOutline' || !stampHasTag(stamp, 'water-floor') || !pointInPolygon2D(x, z, stamp.outline)) return;
+    protectedY = Math.min(protectedY, stamp.y);
+  });
+  return protectedY;
+}
+
 function sampleHeightDataBilinear(heightData, { sizeX, sizeZ, segmentsX, segmentsZ, baseY }, x, z) {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return baseY;
   const halfX = sizeX * 0.5;
@@ -254,17 +267,30 @@ function makeTerrainSamplerRecord(safe, heightData, heightStampsApplied, extra =
   };
 }
 
-export function createOutdoorTerrainSampler(terrain, { pathCorridors = [] } = {}) {
+export function createOutdoorTerrainSampler(terrain, { pathCorridors = [], waterways = [] } = {}) {
   const safe = sanitizeTerrain(terrain);
   const stamps = Array.isArray(terrain?.heightStamps) ? terrain.heightStamps : [];
   const explicitCorridors = Array.isArray(pathCorridors) ? pathCorridors.filter((path) => ['conform', 'graded', 'bridge'].includes(path?.surfaceMode)) : [];
-  if (!explicitCorridors.length) return Object.freeze(makeTerrainSamplerRecord(safe, createStampedHeightData(safe, stamps), stamps.length));
+  const explicitWaterways = Array.isArray(waterways) ? waterways.filter((waterway) => waterway?.id) : [];
+  if (!explicitCorridors.length && !explicitWaterways.length) return Object.freeze(makeTerrainSamplerRecord(safe, createStampedHeightData(safe, stamps), stamps.length));
 
   const { broad, destinationPads, microDetail } = splitTerrainStampOrder(stamps);
-  const preCorridorHeightData = createStampedHeightData(safe, [...broad, ...destinationPads]);
+  const broadHeightData = createStampedHeightData(safe, [...broad, ...destinationPads]);
+  const broadSampler = makeTerrainSamplerRecord(safe, broadHeightData, broad.length + destinationPads.length, {
+    kind: 'oarbBroadTerrainSampler',
+    stampOrder: Object.freeze(['large-landforms-and-pond-shaping', 'destination-pads']),
+  });
+  const waterwayRuntime = buildOutdoorWaterways(explicitWaterways, { terrainSampler: broadSampler });
+  const pondWaterFloorStamps = broad.filter((stamp) => stampHasTag(stamp, 'water-floor'));
+  const preCorridorHeightData = new Float32Array(broadHeightData.length);
+  for (let index = 0; index < preCorridorHeightData.length; index += 1) {
+    const [x, z] = pointForHeightIndex(index, safe);
+    const waterwayY = deformOutdoorTerrainForWaterways(waterwayRuntime, x, z, broadHeightData[index]).y;
+    preCorridorHeightData[index] = preserveSubmergedPondFloors(waterwayY, x, z, pondWaterFloorStamps);
+  }
   const preCorridorSampler = makeTerrainSamplerRecord(safe, preCorridorHeightData, broad.length + destinationPads.length, {
-    kind: 'oarbPreCorridorTerrainSampler',
-    stampOrder: Object.freeze(['large-landforms-and-water-shaping', 'destination-pads']),
+    kind: 'oarbPreCorridorTerrainSampler', broadTerrainSampler: broadSampler, waterwayRuntime,
+    stampOrder: Object.freeze(['large-landforms-and-pond-shaping', 'destination-pads', 'waterway-channels-and-banks']),
   });
   const pathCorridorRuntime = buildOutdoorPathCorridors(explicitCorridors, { terrainSampler: preCorridorSampler, terrainBounds: preCorridorSampler.bounds });
   const heightData = new Float32Array(preCorridorHeightData.length);
@@ -272,7 +298,7 @@ export function createOutdoorTerrainSampler(terrain, { pathCorridors = [] } = {}
     const [x, z] = pointForHeightIndex(index, safe);
     let y = preCorridorHeightData[index];
     y = deformOutdoorTerrainForPathCorridors(pathCorridorRuntime, x, z, y).y;
-    if (!isPointInOutdoorPathCorridorFootprint(pathCorridorRuntime, x, z, ['conform', 'graded'])) {
+    if (!isPointInOutdoorPathCorridorFootprint(pathCorridorRuntime, x, z, ['conform', 'graded']) && !isPointInOutdoorWaterwayFootprint(waterwayRuntime, x, z)) {
       for (const stamp of microDetail) y = applyHeightStampAtPoint(y, stamp, x, z);
     }
     heightData[index] = Number.isFinite(y) ? y : safe.baseY;
@@ -280,8 +306,8 @@ export function createOutdoorTerrainSampler(terrain, { pathCorridors = [] } = {}
   const sampler = makeTerrainSamplerRecord(safe, heightData, stamps.length, {
     kind: 'oarbPathCorridorTerrainSampler',
     pathCorridorRuntime,
-    preCorridorTerrainSampler: preCorridorSampler,
-    stampOrder: Object.freeze(['large-landforms-and-water-shaping', 'destination-pads', 'graded-path-corridors', 'micro-detail-outside-protected-corridors']),
+    preCorridorTerrainSampler: preCorridorSampler, waterwayRuntime,
+    stampOrder: Object.freeze(['large-landforms-and-pond-shaping', 'destination-pads', 'waterway-channels-and-banks', 'graded-path-corridors', 'micro-detail-outside-protected-corridors']),
     protectedMicroDetail: true,
   });
   auditOutdoorPathCorridors(pathCorridorRuntime, sampler);
@@ -293,9 +319,10 @@ export function createOutdoorTerrainMesh(terrain, {
   makeMaterial,
   name = 'OARB-terrain-heightfield-mesh',
   pathCorridors = [],
+  waterways = [],
 } = {}) {
   const safe = sanitizeTerrain(terrain);
-  const terrainSampler = createOutdoorTerrainSampler(terrain, { pathCorridors });
+  const terrainSampler = createOutdoorTerrainSampler(terrain, { pathCorridors, waterways });
   const { materialKey, profile, usedFallback } = resolveTerrainMaterialProfile(terrain, textures);
   const geometry = new THREE.PlaneGeometry(safe.sizeX, safe.sizeZ, safe.segmentsX, safe.segmentsZ);
   const uvMetadata = applyWorldScaleUvs(geometry, safe, profile);

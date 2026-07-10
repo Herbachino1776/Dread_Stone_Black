@@ -203,6 +203,12 @@ export class Interactions {
       return this.pickupRawFish(interaction);
     }
 
+    if (interaction.saveKey) {
+      const changed = this.dungeon.gameState?.markWorldState?.(interaction.saveKey) === true;
+      if (changed && interaction.oneTimeWorldState) interaction.collected = true;
+      this.dungeon.onWorldStateChanged?.(interaction.saveKey, changed);
+    }
+
     this.setTemporaryHint(interaction.message, 1200);
 
     if (interaction.functional) {

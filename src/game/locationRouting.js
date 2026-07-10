@@ -25,6 +25,7 @@ export function resolveStartupArea(requestedArea) {
   if (!requestedArea) return DEFAULT_STARTUP_LOCATION;
   if (FIELD_AREA_ALIASES.has(requestedArea)) return 'field';
   if (requestedArea === 'dungeon') return 'dungeon';
+  if (requestedArea === 'north-road' && !import.meta.env?.DEV) return DEFAULT_STARTUP_LOCATION;
 
   const requestedLocation = getLocationDefinition(requestedArea);
   if (requestedLocation?.tags?.includes('compiled-runtime')) return requestedArea;

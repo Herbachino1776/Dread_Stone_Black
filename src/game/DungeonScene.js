@@ -9,7 +9,7 @@ import {
   createOutdoorCurvedBlockers,
   buildOutdoorFieldRuntime,
   createOutdoorFieldBlockers,
-  createOutdoorTerrainMesh,
+  createOutdoorTerrainSampler,
 } from './world-scene/OutdoorWorldRuntime.js';
 import { TorchFlickerController } from '../engine/lighting/TorchFlickerController.js';
 import { CollisionWorld } from './Collision.js';
@@ -25,6 +25,7 @@ import { BeneathFolsomHiddenGrowthGateRuntime } from './world-scene/BeneathFolso
 import { BeneathFolsomLowerShrineHatchRuntime } from './world-scene/BeneathFolsomLowerShrineHatchRuntime.js';
 import { BeneathFolsomWhiteScabRuntime, UnderShrineLabyrinthEndHatchRuntime } from './world-scene/Chapter3LeadInRuntime.js';
 import { PHYSICAL_TOOL_PROFILES } from './physical-tools/PhysicalToolProfiles.js';
+import { NorthRoadRouteRuntime } from './world-scene/NorthRoadRouteRuntime.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -447,7 +448,7 @@ export class DungeonScene {
     if (playerSpawn?.position) {
       const position = this.toVector3(playerSpawn.position, 1.55);
       if (this.isCompiledOutdoorFieldArea()) {
-        const terrainSampler = definition.terrain ? createOutdoorTerrainMesh(definition.terrain, { textures: definition.textures }).userData.terrainSampler : null;
+        const terrainSampler = definition.terrain ? createOutdoorTerrainSampler(definition.terrain, { pathCorridors: definition.splineTrails, waterways: definition.waterways }) : null;
         const groundY = terrainSampler?.sampleOutdoorY?.(position.x, position.z);
         if (Number.isFinite(groundY)) position.y = groundY + 1.55;
       }
@@ -669,7 +670,7 @@ export class DungeonScene {
     const playerStart = (this.spawnId ? runtime.spawnAnchors.find((spawn) => spawn.id === this.spawnId) : null)
       ?? runtime.spawnAnchors.find((spawn) => spawn.kind === 'player');
     if (playerStart) {
-      const terrainSampler = createOutdoorTerrainMesh(definition.terrain, { textures: definition.textures }).userData.terrainSampler;
+      const terrainSampler = createOutdoorTerrainSampler(definition.terrain, { pathCorridors: definition.splineTrails, waterways: definition.waterways });
       const groundY = terrainSampler?.sampleOutdoorY?.(playerStart.position.x, playerStart.position.z);
       this.playerSpawn = {
         spawnPosition: playerStart.position.clone().setY((Number.isFinite(groundY) ? groundY : 0) + 1.55),
@@ -944,7 +945,11 @@ export class DungeonScene {
     this.addAuthoredOutdoorChests(definition);
     this.addAuthoredOutdoorSurvivalObjects(definition);
     this.addAuthoredOutdoorInteractions(definition);
-    if (definition.id === 'folsom') this.addFolsomGrowthFoundation(definition);
+    if (definition.id === 'folsom') {
+      this.addFolsomGrowthFoundation(definition);
+      this.syncFolsomNorthRoadInteraction();
+    }
+    if (definition.id === 'north-road') this.addNorthRoadRouteFoundation();
     this.addCompiledOutdoorExitCues(definition);
   }
 
@@ -1036,6 +1041,10 @@ export class DungeonScene {
       type: 'equipmentPickup',
       pickupObject: group,
     });
+  }
+
+  addNorthRoadRouteFoundation() {
+    this.northRoadRouteRuntime = new NorthRoadRouteRuntime({ scene: this.scene, collision: this.collision, gameState: this.gameState, terrainSampler: this.outdoorTerrainRuntime, textureLoader: this.textureLoader, audioRuntime: this.audioRuntime });
   }
 
   addCompiledOutdoorSkyDome(definition = {}) {
@@ -1182,6 +1191,7 @@ export class DungeonScene {
     this.beneathFolsomLowerShrineHatchRuntime?.update(deltaSeconds);
     this.lanternConeRevealRuntime?.update(deltaSeconds);
     this.beneathFolsomHiddenGrowthGateRuntime?.update(deltaSeconds);
+    this.northRoadRouteRuntime?.update(deltaSeconds);
     this.updatePryDustEffects(deltaSeconds);
     this.dungeonDebugRenderer?.update(player?.position);
     this.updateBalthazanFloorCoverageQa(player);
@@ -1732,6 +1742,7 @@ export class DungeonScene {
         ...interaction,
         target: this.toVector3(interaction.target, 1),
         functional: false,
+        collected: interaction.oneTimeWorldState === true && this.gameState?.isWorldStateSet?.(interaction.saveKey) === true,
       });
     });
   }
@@ -3495,7 +3506,12 @@ export class DungeonScene {
         return { accepted: result.changed, completed: result.opened, ...result };
       }),
     });
+    targets.push(...(this.northRoadRouteRuntime?.getPhysicalToolTargets({ cutGesture, chopGesture, receiver }) ?? []));
     return targets;
+  }
+
+  onWorldStateChanged(key, changed) {
+    if (changed) this.northRoadRouteRuntime?.syncFromState?.();
   }
 
   updateBeneathFolsomDrainGrate(deltaSeconds) {
@@ -3652,6 +3668,24 @@ export class DungeonScene {
     interaction.message = 'Darkness breathes below the cracked grate.';
   }
 
+  syncFolsomNorthRoadInteraction() {
+    const interaction = this.outdoorInteractions.find((candidate) => candidate.id === 'folsom_north_road_gate');
+    if (!interaction) return;
+    const gateOpen = this.gameState?.isWorldStateSet?.('folsom_north_gate_open') === true;
+    const developmentAccess = import.meta.env?.DEV === true;
+    interaction.functional = gateOpen || developmentAccess;
+    if (gateOpen) {
+      interaction.hint = 'Pass through the open north gate';
+      interaction.message = 'The North Road climbs beyond Folsom.';
+    } else if (developmentAccess) {
+      interaction.hint = 'Development: enter the North Road';
+      interaction.message = 'Development access does not grant Road Warden proof.';
+    } else {
+      interaction.hint = 'The north gate is barred';
+      interaction.message = 'The Road Warden proof has not been accepted.';
+    }
+  }
+
   addLights() {
     this.scene.background = new THREE.Color(INDOOR_BACKGROUND_COLOR);
     this.scene.fog = new THREE.Fog(INDOOR_FOG_COLOR, INDOOR_FOG_NEAR, INDOOR_FOG_FAR);
@@ -3746,14 +3780,15 @@ export class DungeonScene {
     });
   }
 
-  makeTexturedMaterial({ path, repeat, color = 0xffffff, roughness = 0.92, metalness = 0.02, emissive, emissiveIntensity, transparent = false, opacity = 1 } = {}) {
+  makeTexturedMaterial({ path, repeat = [1, 1], color = 0xffffff, roughness = 0.92, metalness = 0.02, emissive, emissiveIntensity, transparent = false, opacity = 1, side } = {}) {
     return new THREE.MeshStandardMaterial({
       color,
-      map: this.loadRepeatingTexture(path, repeat),
+      map: path ? this.loadRepeatingTexture(path, repeat) : null,
       roughness,
       metalness,
       transparent,
       opacity,
+      ...(side === 'double' ? { side: THREE.DoubleSide } : {}),
       ...(emissive !== undefined ? { emissive, emissiveIntensity } : {}),
     });
   }

@@ -64,8 +64,10 @@ Locations with explicit corridors compile terrain in this order:
 
 1. broad landforms, ponds, gullies, ridges, ravines, and other large shaping
 2. building pads and courtyard shelves
-3. explicit graded path corridors
-4. micro-bump stamps only outside protected corridor footprints
+3. waterway channels, submerged shelves, wet banks, and dry transitions
+4. submerged pond-floor protection at connected outlets
+5. explicit graded path corridors
+6. micro-bump stamps only outside protected road and waterway footprints
 
 The order is metadata-visible as `terrainSampler.stampOrder`. Locations with no explicit corridors retain the previous authored stamp order exactly.
 
@@ -187,7 +189,7 @@ Legacy visual offsets, edge meshes, and support surfaces remain available only t
 
 - The road material has a hard visual edge; the terrain height blends, but shader-level albedo splatting is not part of this pass.
 - Turn handling smooths cross-section orientation rather than generating full civil-engineering miter/intersection topology. Severe near-reversal turns emit an authoring warning.
-- Explicit bridge mode provides a deterministic profile and dense collision segments but no bridge rail, pier, deck thickness, or structural art.
+- Explicit bridge mode provides the deterministic deck profile and collision truth. `OutdoorCrossingKit` supplies the visible timber deck, abutments, and rails for authored bridge crossings.
 - The heightfield still resolves deformation at the location terrain grid. Very narrow roads need a suitable terrain segment density.
 - Drainage culverts, retaining walls, switchbacks, ruts, puddles, debris, and wheel tracks remain future authored or visual systems.
 

@@ -16,6 +16,23 @@ const FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY = 'folsom_shrine_crawlspace_ter
 const UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY = 'under_shrine_labyrinth_end_hatch_open';
 const BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY = 'dreadStoneBlack.lowerShrineHatchMigrationV1';
 const PHYSICAL_TOOL_ACTION_MIGRATION_KEY = 'dreadStoneBlack.physicalToolActionMigrationV1';
+export const NORTH_ROAD_WORLD_KEYS = Object.freeze({
+  roadWardenProofAccepted: 'road_warden_proof_accepted',
+  folsomNorthGateOpen: 'folsom_north_gate_open',
+  mapUpdated: 'north_road_map_updated',
+  hunterCampMarked: 'north_road_hunter_camp_marked',
+  churchCampMarked: 'north_road_church_camp_marked',
+  scoutCampMarked: 'north_road_scout_camp_marked',
+  hunterRootCleared: 'north_road_hunter_root_cleared',
+  churchRootCleared: 'north_road_church_root_cleared',
+  scoutRootCleared: 'north_road_scout_root_cleared',
+  bentRoadCorrected: 'north_road_bent_road_corrected',
+  growthGateLeftKnotCleared: 'north_road_growth_gate_left_knot_cleared',
+  growthGateRightCordsCleared: 'north_road_growth_gate_right_cords_cleared',
+  growthGateSoftMatCleared: 'north_road_growth_gate_soft_mat_cleared',
+  growthGateOpen: 'north_road_growth_gate_open',
+  emptyFortApproachMarked: 'north_road_empty_fort_approach_marked',
+});
 const BENEATH_FOLSOM_CHAPTER_3_PLANNED_KEYS = Object.freeze([
   'beneath_folsom_white_mechanism_exposed',
   'beneath_folsom_pale_panel_activated',
@@ -69,6 +86,7 @@ export class GameState {
       storage.removeItem(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY);
       storage.removeItem(PHYSICAL_TOOL_ACTION_MIGRATION_KEY);
       Object.values(FOLSOM_GROWTH_WORLD_KEYS).forEach((key) => storage.removeItem(key));
+      Object.values(NORTH_ROAD_WORLD_KEYS).forEach((key) => storage.removeItem(key));
     } catch {
       // Reset should never wipe unrelated storage or crash if localStorage is blocked.
     }
@@ -109,6 +127,16 @@ export class GameState {
   markFolsomToolShedOpen() {
     if (this.isFolsomToolShedOpen()) return false;
     this.writeFlag(FOLSOM_TOOL_SHED_OPEN_KEY, true);
+    return true;
+  }
+
+  isWorldStateSet(key) {
+    return typeof key === 'string' && key.length > 0 ? this.readFlag(key, false) : false;
+  }
+
+  markWorldState(key) {
+    if (typeof key !== 'string' || !key.length || this.isWorldStateSet(key)) return false;
+    this.writeFlag(key, true);
     return true;
   }
 

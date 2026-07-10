@@ -80,6 +80,7 @@ function makeLateralOffsets(width, crossSection) {
   const shoulderEdge = bedHalf + crossSection.shoulderWidth;
   const outer = shoulderEdge + crossSection.terrainBlendWidth;
   const count = crossSection.lateralSamples;
+  if (count === 7 && crossSection.shoulderWidth <= 0.001) return [bedHalf, bedHalf * (2 / 3), bedHalf * (1 / 3), 0, -bedHalf * (1 / 3), -bedHalf * (2 / 3), -bedHalf];
   if (count === 7) return [outer, shoulderEdge, bedHalf, 0, -bedHalf, -shoulderEdge, -outer];
   const offsets = [];
   for (let index = 0; index < count; index += 1) offsets.push(lerp(outer, -outer, index / (count - 1)));
@@ -184,11 +185,18 @@ function resampleAuthoredPolyline(path, terrainSampler) {
   }
   refined.push(points.at(-1));
 
+  // Terrain refinement must never invalidate the same mobile budget that the
+  // base resampler just enforced. Retain both endpoints and distribute the
+  // bounded rows deterministically across the refined profile.
+  const bounded = refined.length <= sampleBudget
+    ? refined
+    : Array.from({ length: sampleBudget }, (_, index) => refined[Math.round((index / (sampleBudget - 1)) * (refined.length - 1))]);
+
   let cumulativeDistance = 0;
   return {
-    samples: refined.map((point, index) => {
-      if (index > 0) cumulativeDistance += Math.hypot(point.x - refined[index - 1].x, point.z - refined[index - 1].z);
-      const tangent = tangentAt(refined, index);
+    samples: bounded.map((point, index) => {
+      if (index > 0) cumulativeDistance += Math.hypot(point.x - bounded[index - 1].x, point.z - bounded[index - 1].z);
+      const tangent = tangentAt(bounded, index);
       return {
         ...point,
         distance: cumulativeDistance,
@@ -318,11 +326,12 @@ function buildCorridor(path, terrainSampler, bounds) {
   const warnings = [];
   const errors = [];
   const generatedGrade = maxCenterlineGrade(samples, profile);
+  const gradeConstrained = generatedGrade > path.grade.maxSlope + 0.002;
   if (sampleBudgetAdapted) warnings.push(makeIssue('warning', 'sample-budget-adapted', `Sampling spacing was increased deterministically to keep the complete route within the ${sampleBudget}-sample geometry budget.`));
   if (samples.length > sampleBudget) errors.push(makeIssue('error', 'sample-budget', `Generated sample count exceeds the mobile-safe cap of ${sampleBudget} for this cross-section.`));
-  if (generatedGrade > path.grade.maxSlope + 0.002) warnings.push(makeIssue('warning', 'grade-limit', `Requested route cannot satisfy maxSlope ${path.grade.maxSlope.toFixed(3)} everywhere without exceeding cut/fill limits.`));
-  if (requestedCutExceeded) warnings.push(makeIssue('warning', 'cut-limit', `Smoothed profile requested more than maxCut ${path.grade.maxCut.toFixed(3)}; the profile was pulled back toward terrain.`));
-  if (requestedFillExceeded) warnings.push(makeIssue('warning', 'fill-limit', `Smoothed profile requested more than maxFill ${path.grade.maxFill.toFixed(3)}; the profile conforms more closely instead of spanning unsupported space.`));
+  if (gradeConstrained) warnings.push(makeIssue('warning', 'grade-limit', `Requested route cannot satisfy maxSlope ${path.grade.maxSlope.toFixed(3)} everywhere without exceeding cut/fill limits.`));
+  if (requestedCutExceeded && (gradeConstrained || crossSectionInfeasible)) warnings.push(makeIssue('warning', 'cut-limit', `Cut limits prevent the requested smoothed cross-section from satisfying the authored grade.`));
+  if (requestedFillExceeded && (gradeConstrained || crossSectionInfeasible)) warnings.push(makeIssue('warning', 'fill-limit', `Fill limits prevent the requested smoothed cross-section from satisfying the authored grade.`));
   if (path.surfaceMode === 'graded' && crossSectionInfeasible) warnings.push(makeIssue('warning', 'cross-section-cut-fill-conflict', 'Existing side slope cannot fit the requested cross-section within both cut and fill limits; author correction may be required.'));
   if (pathBoundsWarning(path, samples, bounds)) warnings.push(makeIssue('warning', 'terrain-bounds', 'Corridor blend footprint reaches outside the terrain bounds.'));
   const authoredTurns = path.points.map((_, index) => turnAngle(path.points, index));
@@ -378,53 +387,82 @@ export function buildOutdoorPathCorridors(paths = [], { terrainSampler, terrainB
     generatedVertexBudget: corridors.reduce((sum, corridor) => sum + corridor.summary.generatedVertexCount, 0),
     generatedTriangleBudget: corridors.reduce((sum, corridor) => sum + corridor.summary.generatedTriangleCount, 0),
   };
+  runtime.spatialIndex = buildPathSegmentSpatialIndex(corridors);
   runtime.sampleCorridor = (x, z, modes) => sampleOutdoorPathCorridor(runtime, x, z, modes);
   runtime.deformTerrainY = (x, z, currentY) => deformOutdoorTerrainForPathCorridors(runtime, x, z, currentY);
   runtime.isPointInProtectedFootprint = (x, z) => isPointInOutdoorPathCorridorFootprint(runtime, x, z);
   return runtime;
 }
 
-function collectOutdoorPathCorridorSamples(runtime, x, z, modes = null) {
-  if (!runtime?.corridors || !Number.isFinite(x) || !Number.isFinite(z)) return [];
-  const matches = [];
-  runtime.corridors.forEach((corridor) => {
-    if (modes && !modes.includes(corridor.surfaceMode)) return;
-    let bestForCorridor = null;
+function buildPathSegmentSpatialIndex(corridors, cellSize = 12) {
+  const buckets = new Map();
+  corridors.forEach((corridor) => {
     for (let index = 0; index < corridor.samples.length - 1; index += 1) {
       const from = corridor.samples[index];
       const to = corridor.samples[index + 1];
-      const dx = to.x - from.x;
-      const dz = to.z - from.z;
-      const lengthSq = dx * dx + dz * dz;
-      if (lengthSq <= 0.000001) continue;
-      const t = clamp(((x - from.x) * dx + (z - from.z) * dz) / lengthSq, 0, 1);
-      const closestX = from.x + dx * t;
-      const closestZ = from.z + dz * t;
-      const tangent = normalize2(lerp(from.tangent.x, to.tangent.x, t), lerp(from.tangent.z, to.tangent.z, t));
-      const normal = { x: -tangent.z, z: tangent.x };
-      const offsetX = x - closestX;
-      const offsetZ = z - closestZ;
-      const distanceSq = offsetX * offsetX + offsetZ * offsetZ;
-      if (distanceSq > corridor.footprintHalfWidth * corridor.footprintHalfWidth) continue;
-      if (!bestForCorridor || distanceSq < bestForCorridor.distanceSq) {
-        bestForCorridor = {
-          corridor,
-          segmentIndex: index,
-          t,
-          closestX,
-          closestZ,
-          tangent,
-          normal,
-          lateral: offsetX * normal.x + offsetZ * normal.z,
-          distanceSq,
-          profileY: lerp(from.profileY, to.profileY, t),
-          rawY: lerp(from.rawY, to.rawY, t),
-          distance: lerp(from.distance, to.distance, t),
-        };
+      const padding = corridor.footprintHalfWidth;
+      const minCellX = Math.floor((Math.min(from.x, to.x) - padding) / cellSize);
+      const maxCellX = Math.floor((Math.max(from.x, to.x) + padding) / cellSize);
+      const minCellZ = Math.floor((Math.min(from.z, to.z) - padding) / cellSize);
+      const maxCellZ = Math.floor((Math.max(from.z, to.z) + padding) / cellSize);
+      for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ += 1) {
+        for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+          const key = `${cellX},${cellZ}`;
+          if (!buckets.has(key)) buckets.set(key, []);
+          buckets.get(key).push({ corridor, index, from, to });
+        }
       }
     }
-    if (bestForCorridor) matches.push(bestForCorridor);
   });
+  return Object.freeze({
+    cellSize,
+    buckets,
+    get(x, z) {
+      return buckets.get(`${Math.floor(x / cellSize)},${Math.floor(z / cellSize)}`) ?? [];
+    },
+  });
+}
+
+function collectOutdoorPathCorridorSamples(runtime, x, z, modes = null) {
+  if (!runtime?.corridors || !Number.isFinite(x) || !Number.isFinite(z)) return [];
+  const matches = [];
+  const bestByCorridor = new Map();
+  const candidates = runtime.spatialIndex?.get?.(x, z) ?? runtime.corridors.flatMap((corridor) => corridor.samples.slice(0, -1).map((from, index) => ({ corridor, index, from, to: corridor.samples[index + 1] })));
+  candidates.forEach(({ corridor, index, from, to }) => {
+    if (modes && !modes.includes(corridor.surfaceMode)) return;
+    let bestForCorridor = bestByCorridor.get(corridor) ?? null;
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const lengthSq = dx * dx + dz * dz;
+    if (lengthSq <= 0.000001) return;
+    const t = clamp(((x - from.x) * dx + (z - from.z) * dz) / lengthSq, 0, 1);
+    const closestX = from.x + dx * t;
+    const closestZ = from.z + dz * t;
+    const tangent = normalize2(lerp(from.tangent.x, to.tangent.x, t), lerp(from.tangent.z, to.tangent.z, t));
+    const normal = { x: -tangent.z, z: tangent.x };
+    const offsetX = x - closestX;
+    const offsetZ = z - closestZ;
+    const distanceSq = offsetX * offsetX + offsetZ * offsetZ;
+    if (distanceSq > corridor.footprintHalfWidth * corridor.footprintHalfWidth) return;
+    if (!bestForCorridor || distanceSq < bestForCorridor.distanceSq) {
+      bestForCorridor = {
+        corridor,
+        segmentIndex: index,
+        t,
+        closestX,
+        closestZ,
+        tangent,
+        normal,
+        lateral: offsetX * normal.x + offsetZ * normal.z,
+        distanceSq,
+        profileY: lerp(from.profileY, to.profileY, t),
+        rawY: lerp(from.rawY, to.rawY, t),
+        distance: lerp(from.distance, to.distance, t),
+      };
+    }
+    if (bestForCorridor) bestByCorridor.set(corridor, bestForCorridor);
+  });
+  matches.push(...bestByCorridor.values());
   return matches.sort((a, b) => a.distanceSq - b.distanceSq || a.corridor.id.localeCompare(b.corridor.id));
 }
 

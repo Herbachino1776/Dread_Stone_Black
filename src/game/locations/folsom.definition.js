@@ -444,12 +444,13 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_shrine_crawlspace_terminal_entrance', label: 'Opened terminal throat', target: { x: -67.15, y: 1.15, z: 39 }, range: 3.05, hint: 'Darkness breathes below the cracked grate', message: 'Cold dark draws through the opened throat.', type: 'areaEntrance', targetLocationId: 'under-shrine-labyrinth', destinationSpawnId: 'under_shrine_labyrinth_shrine_terminal_arrival', requiredWorldState: 'folsom_shrine_crawlspace_terminal_open', tags: ['shrine-crawlspace', 'conditional-transition', 'under-shrine-labyrinth-entrance'] },
     { id: 'folsom_house_note_placeholder', label: 'Caretaker Note', target: { x: 37, y: 1, z: -7 }, range: 3, hint: 'Read the faded note', message: 'The last caretaker left the lamps trimmed.', type: 'outdoorInspect' },
     { id: 'folsom_underworks_locked', label: 'Folsom Underworks', target: { x: 42, y: 1.4, z: 40.5 }, range: 4, hint: 'Inspect the locked Underworks gate', message: 'The Underworks are sealed by living growth.', type: 'areaEntrance', targetLocationId: 'beneath-folsom', destinationSpawnId: 'beneath_folsom_underworks_arrival', requiredWorldState: 'folsom_underworks_growth_unsealed', tags: ['folsom-underworks', 'conditional-transition'] },
-    { id: 'folsom_future_road', label: 'North Road', target: { x: 0, y: 1, z: 88 }, range: 5, hint: 'Look beyond the north road', message: 'The old road follows a dry channel into the wilds.', type: 'outdoorInspect' },
+    { id: 'folsom_north_road_gate', label: 'Folsom North Gate', target: { x: 0, y: 1, z: 88 }, range: 5, hint: 'The north gate is barred', message: 'The Road Warden proof has not been accepted.', type: 'areaEntrance', targetLocationId: 'north-road', destinationSpawnId: 'north-gate-exterior', requiredWorldState: 'folsom_north_gate_open', tags: ['north-road', 'chapter-5', 'conditional-transition', 'development-direct-entry'] },
   ],
   spawns: [
     { id: 'folsom_player_start', kind: 'player', position: { x: -2, y: 1.71, z: -4 }, yaw: 0, roomId: 'folsom_bounds', tags: ['default-start', 'courtyard'] },
     { id: 'folsom_reliquary_return', kind: 'return', position: { x: 73, y: 1.67, z: 4 }, yaw: -Math.PI / 2, roomId: 'folsom_bounds', tags: ['legacy-door-return'] },
     { id: 'folsom_underworks_return', kind: 'return', position: { x: 42, y: 1.9, z: 38.2 }, yaw: Math.PI, roomId: 'folsom_bounds', tags: ['beneath-folsom', 'underworks-return'], userData: { returnFromLocation: 'beneath-folsom' } },
+    { id: 'folsom_north_gate_return', kind: 'return', position: { x: 0, y: 1.65, z: 84 }, yaw: Math.PI, roomId: 'folsom_bounds', tags: ['north-road', 'north-gate-return'], userData: { returnFromLocation: 'north-road' } },
   ],
   exits: [{
     id: 'folsom_rusted_reliquary_door', fromLocation: 'folsom', toLocation: 'reliquary-field',

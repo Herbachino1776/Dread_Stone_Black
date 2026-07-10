@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createOutdoorTerrainMesh } from '../../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
+import { createOutdoorTerrainComposition } from '../../engine/outdoor-authoring/OutdoorTerrainCompositionBuilder.js';
 import { createOutdoorPathCorridorBridgeSurfaces, createOutdoorPathCorridorDebugGroup, createOutdoorPathCorridorMeshes, createOutdoorPathCorridorSurfaceSampler } from '../../engine/outdoor-authoring/OutdoorPathCorridorBuilder.js';
 import { createPondCompositeGeometry, createPondOutlineDiscGeometry, createPondOutlineRingGeometry } from '../../engine/outdoor-authoring/PondCompositeBuilder.js';
 import { createOutdoorSplinePathSupportSurfaces, createOutdoorSplineTrailEdgeMeshes, createOutdoorSplineTrailMeshes, createOutdoorSplineVisibleSurfaceSampler } from '../../engine/outdoor-authoring/OutdoorSplineBuilder.js';
@@ -8,8 +9,14 @@ import { createOutdoorPrimitiveMeshes } from '../../engine/outdoor-authoring/Out
 import { createPondDecorGroups } from '../../engine/outdoor-authoring/PondDecorBuilder.js';
 import { OUTDOOR_FOLIAGE_SPRITES, OUTDOOR_REDWOOD_FOLIAGE_SPRITES, OUTDOOR_SMALL_FOLIAGE_SPRITES } from '../../engine/outdoor-authoring/OutdoorFoliageRegistry.js';
 import { FISH_SPECS } from '../fishing/FishMeshFactory.js';
+import { createOutdoorWaterwayDebugGroup, createOutdoorWaterwayMeshes } from '../../engine/outdoor-authoring/OutdoorWaterwayBuilder.js';
+import { createOutdoorCrossingGroups } from '../world-kits/structures/OutdoorCrossingKit.js';
+import { createOutdoorWildernessStructureGroups } from '../world-kits/structures/OutdoorWildernessStructureKit.js';
+import { createOutdoorWorldDebugGroup, resolveOutdoorDebugFlags } from './OutdoorWorldDebug.js';
+import { createOutdoorMaterialGallery } from './OutdoorMaterialGallery.js';
 
 export { createOutdoorTerrainMesh } from '../../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
+export { createOutdoorTerrainSampler } from '../../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 export { createOutdoorCurvedBlockers } from '../../engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 export { OUTDOOR_FOLIAGE_SPRITES, OUTDOOR_REDWOOD_FOLIAGE_SPRITES, OUTDOOR_SMALL_FOLIAGE_SPRITES } from '../../engine/outdoor-authoring/OutdoorFoliageRegistry.js';
 
@@ -92,14 +99,23 @@ export function createOutdoorFieldBlockers(definition, rectangularBlockers = [])
 export function buildOutdoorFieldRuntime({ definition = {}, textureProfiles = {}, scene, collision = null, makeTexturedMaterial, loadFoliageTexture, registerAnimatedTextureFlipbook = null, createPondLabel = null, createHarvestable = null, gameState = null, constants = {} }) {
   const addedObjects = [];
   const add = (object) => { scene.add(object); addedObjects.push(object); return object; };
-  const terrain = createOutdoorTerrainMesh(definition.terrain ?? { size: [DEFAULT_FIELD_SIZE, DEFAULT_FIELD_SIZE], segments: [1, 1], baseY: 0, material: 'fieldGrass', heightStamps: [] }, {
+  const terrainDefinition = definition.terrain ?? { size: [DEFAULT_FIELD_SIZE, DEFAULT_FIELD_SIZE], segments: [1, 1], baseY: 0, material: 'fieldGrass', heightStamps: [] };
+  const composition = createOutdoorTerrainComposition(terrainDefinition, {
+    textures: textureProfiles,
+    name: constants.terrainName ?? 'TERRAIN01-oarb-terrain-composition',
+    makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbTerrainMaterial'),
+    pathCorridors: definition.splineTrails,
+    waterways: definition.waterways,
+  });
+  const terrain = composition?.group ?? createOutdoorTerrainMesh(terrainDefinition, {
     textures: textureProfiles,
     name: constants.terrainName ?? 'TERRAIN01-reliquary-field-oarb-heightfield-terrain',
     makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbTerrainMaterial'),
     pathCorridors: definition.splineTrails,
+    waterways: definition.waterways,
   });
   terrain.userData = { ...terrain.userData, blueprint: 'docs/DARB_OUTDOOR_AUTHORING_RUNTIME_MILESTONE.md', legacyFieldBlueprint: 'docs/world/overworld/reliquary_field_v01.md', longTermBlueprintSize: 800, playerGroundingChanged: true };
-  const terrainSampler = terrain.userData.terrainSampler;
+  const terrainSampler = composition?.terrainSampler ?? terrain.userData.terrainSampler;
   add(terrain);
 
   const pathCorridorRuntime = terrainSampler.pathCorridorRuntime ?? null;
@@ -121,6 +137,13 @@ export function buildOutdoorFieldRuntime({ definition = {}, textureProfiles = {}
   }
 
   const fishingZones = [];
+  const waterwayRuntime = terrainSampler.waterwayRuntime ?? null;
+  createOutdoorWaterwayMeshes(waterwayRuntime, { textures: textureProfiles, makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbWaterwayMaterial'), registerAnimatedTextureFlipbook }).forEach(add);
+  const crossingGroups = createOutdoorCrossingGroups(definition.outdoorCrossings, { terrainSampler, waterwayRuntime, pathCorridorRuntime, textures: textureProfiles, makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbCrossingMaterial') });
+  crossingGroups.forEach(add);
+  const wildernessStructureGroups = createOutdoorWildernessStructureGroups(definition.outdoorStructureKits, { terrainSampler, textures: textureProfiles, makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbWildernessStructureMaterial') });
+  wildernessStructureGroups.forEach(add);
+  fishingZones.push(...(waterwayRuntime?.fishingZones ?? []));
   const pondMeshes = buildOutdoorPonds({ waterBodies: definition.waterBodies, textureProfiles, makeTexturedMaterial, registerAnimatedTextureFlipbook, createPondLabel, fishingZones });
   pondMeshes.forEach(add);
   createPondDecorGroups(definition.waterBodies, { terrainSampler, textures: textureProfiles, makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbPondDecorMaterial'), loadFoliageTexture }).forEach(add);
@@ -133,11 +156,22 @@ export function buildOutdoorFieldRuntime({ definition = {}, textureProfiles = {}
 
   const pathDebugGroup = createOutdoorPathCorridorDebugGroup(pathCorridorRuntime, { terrainSampler, enabled: Boolean(import.meta.env?.DEV && globalThis.__DSB_PATH_CORRIDOR_DEBUG__) });
   if (pathDebugGroup) add(pathDebugGroup);
+  const waterwayDebugGroup = createOutdoorWaterwayDebugGroup(waterwayRuntime, { enabled: Boolean(import.meta.env?.DEV && globalThis.__DSB_WATERWAY_DEBUG__) });
+  if (waterwayDebugGroup) add(waterwayDebugGroup);
+
+  const debugFlags = import.meta.env?.DEV ? resolveOutdoorDebugFlags() : null;
+  const outdoorDebugGroup = debugFlags ? createOutdoorWorldDebugGroup(definition, { terrainSampler, fishingZones, debug: { terrainChunkSummaries: composition?.summaries ?? null } }, debugFlags) : null;
+  if (outdoorDebugGroup) add(outdoorDebugGroup);
+  const materialGallery = debugFlags?.gallery && definition.development?.materialGallery
+    ? createOutdoorMaterialGallery({ profiles: textureProfiles, makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbMaterialGallery'), loadTexture: loadFoliageTexture, origin: definition.development.materialGallery.origin, maxProfiles: definition.development.materialGallery.maxProfiles })
+    : null;
+  if (materialGallery) add(materialGallery);
 
   return {
     terrain,
     terrainSampler,
     pathCorridorRuntime,
+    waterwayRuntime,
     pathSurfaceSampler,
     visibleSurfaceSampler: null,
     pathSupportSurfaces,
@@ -150,11 +184,19 @@ export function buildOutdoorFieldRuntime({ definition = {}, textureProfiles = {}
       primitiveCount: definition.outdoorPrimitives?.length ?? 0,
       pathCorridorAudit: pathCorridorRuntime?.audit ?? null,
       pathDebugOverlayEnabled: Boolean(pathDebugGroup),
+      terrainChunkCount: composition?.chunks.length ?? 1,
+      terrainChunkSummaries: composition?.summaries ?? null,
+      waterwayAudit: waterwayRuntime?.audit ?? null,
+      waterwayDebugOverlayEnabled: Boolean(waterwayDebugGroup),
+      crossingMeshCount: crossingGroups.reduce((sum, group) => sum + group.children.length, 0),
+      wildernessStructureMeshCount: wildernessStructureGroups.reduce((sum, group) => sum + group.children.length, 0),
+      outdoorDebugOverlayEnabled: Boolean(outdoorDebugGroup),
+      materialGalleryEnabled: Boolean(materialGallery),
     },
   };
 }
 
-function buildOutdoorPonds({ waterBodies = [], textureProfiles = {}, makeTexturedMaterial, registerAnimatedTextureFlipbook, createPondLabel, fishingZones }) {
+export function buildOutdoorPonds({ waterBodies = [], textureProfiles = {}, makeTexturedMaterial, registerAnimatedTextureFlipbook, createPondLabel, fishingZones }) {
   const meshes = [];
   if (!Array.isArray(waterBodies)) return meshes;
   waterBodies.forEach((body) => {
@@ -191,7 +233,7 @@ function buildOutdoorPonds({ waterBodies = [], textureProfiles = {}, makeTexture
     if (body.userData?.pondExpoId) createPondLabel?.(body, cx, composite?.water.position[1] ?? y, cz);
     if (body.fishable) {
       const fishableRadius = Number.isFinite(body.fishableRadius) ? body.fishableRadius : Math.max(rx, rz) + 4;
-      fishingZones.push({ id: `${body.id}_fishing_zone`, name: body.id, shape: 'ellipse', centerX: cx, centerZ: cz, radiusX: rx, radiusZ: rz, minX: cx - rx, maxX: cx + rx, minZ: cz - rz, maxZ: cz + rz, interactPadding: Math.max(0, fishableRadius - Math.max(rx, rz)), position: new THREE.Vector3(cx, y, cz), label: 'Pond Fishing', fishSpeciesPool: (body.fishSpeciesPool ?? []).filter((species) => FISH_SPECS[species]), fishCatchSeed: body.fishCatchSeed ?? body.id });
+      fishingZones.push({ id: `${body.id}_fishing_zone`, name: body.userData?.name ?? body.id, debugName: `${body.userData?.name ?? body.id} casting water`, shape: waterOutline?.length >= 3 ? 'polygon' : 'ellipse', points: waterOutline?.length >= 3 ? waterOutline.map((point) => [...point]) : undefined, centerX: cx, centerZ: cz, radiusX: rx, radiusZ: rz, minX: cx - rx, maxX: cx + rx, minZ: cz - rz, maxZ: cz + rz, interactPadding: Math.max(0, fishableRadius - Math.max(rx, rz)), position: new THREE.Vector3(cx, y, cz), label: 'Pond Fishing', waterBodyId: body.id, fishSpeciesPool: (body.fishSpeciesPool ?? []).filter((species) => FISH_SPECS[species]), fishCatchSeed: body.fishCatchSeed ?? body.id, minimumDepth: body.userData?.depthMetersApprox ?? 0.3, castingBanks: body.fishingBanks ?? [], noFoliageLanes: body.fishingBanks?.map((bank) => ({ center: bank.position, radius: bank.noFoliageRadius })) ?? [], visualSpawnBounds: { minX: cx - rx * 0.82, maxX: cx + rx * 0.82, minZ: cz - rz * 0.82, maxZ: cz + rz * 0.82, maximumY: y - 0.08 }, shorelineProfileVersion: body.userData?.shorelineProfileVersion ?? 0 });
     }
   });
   return meshes;

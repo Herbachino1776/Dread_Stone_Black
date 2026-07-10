@@ -58,9 +58,18 @@ export class Game {
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
     this.saveHost = new SaveHost();
     this.gameState = this.saveHost.loadInitialState();
+    const savedEquipment = this.gameState.getEquipmentSnapshot() ?? startingEquipment;
+    const developmentLoadoutEnabled = import.meta.env.DEV && query.get('area') === 'north-road' && query.get('devLoadout') === '1';
+    const developmentItems = ['old_work_knife', 'wood_axe', 'fishing_rod', 'torch', 'keepers_lantern'];
+    this.devEphemeralEquipmentIds = new Set(developmentLoadoutEnabled ? developmentItems.filter((itemId) => !(savedEquipment.acquiredItemIds ?? []).includes(itemId)) : []);
+    const runtimeStartingEquipment = developmentLoadoutEnabled ? {
+      ...savedEquipment,
+      acquiredItemIds: [...new Set([...(savedEquipment.acquiredItemIds ?? ['unarmed']), ...developmentItems])],
+      equipped: { ...(savedEquipment.equipped ?? {}), weapon: 'wood_axe', tool: 'old_work_knife', offhand: 'keepers_lantern' },
+    } : savedEquipment;
     this.equipmentRuntime = new EquipmentRuntime({
       weaponProfiles: equipmentRegistry.weapons,
-      startingEquipment: this.gameState.getEquipmentSnapshot() ?? startingEquipment,
+      startingEquipment: runtimeStartingEquipment,
     });
     this.disposers = [];
     this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, (payload) => {
@@ -181,7 +190,14 @@ export class Game {
 
 
   saveEquipmentState() {
-    this.saveHost.saveEquipmentState(this.gameState, this.equipmentRuntime);
+    if (!this.devEphemeralEquipmentIds?.size) {
+      this.saveHost.saveEquipmentState(this.gameState, this.equipmentRuntime);
+      return;
+    }
+    const snapshot = this.equipmentRuntime.getSnapshot();
+    snapshot.acquiredItemIds = snapshot.acquiredItemIds.filter((itemId) => !this.devEphemeralEquipmentIds.has(itemId));
+    Object.keys(snapshot.equipped).forEach((slot) => { if (this.devEphemeralEquipmentIds.has(snapshot.equipped[slot])) snapshot.equipped[slot] = slot === 'weapon' ? 'unarmed' : null; });
+    this.gameState.saveEquipmentSnapshot(snapshot);
   }
 
   handleEquipmentAcquired({ item, metadata } = {}) {

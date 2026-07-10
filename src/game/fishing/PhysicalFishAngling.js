@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isPointInFishingZone } from './FishingZoneGeometry.js';
 import { createFishMesh, FISH_SPECS } from './FishMeshFactory.js';
 import { chooseFishSizeGroup, resolveFishSizeGroup } from './FishSizeGroups.js';
 
@@ -308,7 +309,7 @@ export class PhysicalFishAngling {
 
   syncVisual() { const a = this.actor; if (!a) return; a.mesh.position.copy(a.position); if (a.velocity.lengthSq() > 0.001) a.mesh.rotation.y = Math.atan2(a.velocity.x, a.velocity.z) + Math.PI / 2; if (a.state === 'breach') a.mesh.rotation.z = Math.sin(a.stateAge * 12) * 0.28; else a.mesh.rotation.z = 0; }
   selectSpecies(zone) { const pool = zone?.fishSpeciesPool?.length ? zone.fishSpeciesPool : ['smallRiverFish']; return pool[Math.floor(this.rng() * pool.length)] ?? 'smallRiverFish'; }
-  pointInZone(p, z) { if (!z) return false; const dx = p.x - z.centerX; const dz = p.z - z.centerZ; return z.shape === 'ellipse' ? (dx * dx) / (z.radiusX * z.radiusX) + (dz * dz) / (z.radiusZ * z.radiusZ) <= 1 : p.x >= z.minX && p.x <= z.maxX && p.z >= z.minZ && p.z <= z.maxZ; }
+  pointInZone(p, z) { return isPointInFishingZone(p, z); }
   randomPointInZone(zone, near) { for (let i = 0; i < 8; i += 1) { const p = new THREE.Vector3(zone.centerX + (this.rng() * 2 - 1) * zone.radiusX * 0.68, 0, zone.centerZ + (this.rng() * 2 - 1) * zone.radiusZ * 0.68); if (this.pointInZone(p, zone) && (!near || this.horizontalDistance(p, near) > 3)) return p; } return new THREE.Vector3(zone.centerX, 0, zone.centerZ); }
   clampToZone(p, strength = 0.08) { if (!this.zone || this.pointInZone(p, this.zone)) return; tmp.set(this.zone.centerX ?? p.x, p.y, this.zone.centerZ ?? p.z); p.lerp(tmp, strength); }
   horizontalDistance(a, b) { return tmp2.copy(a).setY(0).distanceTo(tmp.copy(b).setY(0)); }

@@ -6,7 +6,7 @@
 
 - Authored bounds: 500 meters wide by 1,200 meters long.
 - Useful traversable width: approximately 420 meters.
-- Main road target length: 1,000–1,100 meters.
+- Generated main-road centerline: 1,156.47 meters, including the ford and engineered fort climb.
 - Terrain sectors, south to north: `NR00` Folsom North Gate Exterior Shelf, `NR01` North Road Rise, `NR02` Hunter Hollow, `NR03` Creek Lowland, `NR04` Church Grove, `NR05` Scout Ridge, `NR06` Bent Road Basin, `NR07` Growth Gate Ravine, `NR08` Empty Fort Approach.
 - The Empty Fort is exterior silhouette and intentional production boundary only.
 
@@ -35,3 +35,9 @@ These are world state, never inventory tokens. Camp inspection can mark the rout
 - Transparent water and effects are bounded and cleaned up.
 - Foliage is deterministic, distance-limited, non-colliding except for separately authored visible blockers, and excludes critical routes/casting lanes.
 - Dynamic lights remain at or below four for the location.
+
+## Development and debug
+
+Direct development entry is `?area=north-road&spawn=<spawn-id>`. Add `devLoadout=1` for an ephemeral knife, axe, fishing rod, torch, and Keeper's Lantern; these IDs are filtered out of normal equipment saves. `debug=outdoors` enables the combined development overlay. Narrow flags are `terrain`, `ponds`, `fishing`, `foliage`, and `route`; `outdoor-material-gallery` opens the raw/final material gallery. All debug construction is guarded by `import.meta.env.DEV`.
+
+Validation is `npm run validate:north-road`; the broader regression suite is `npm run validate:outdoors`.

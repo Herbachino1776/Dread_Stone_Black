@@ -1,4 +1,5 @@
 import { expandPondOutlinePerVertex, expandPondOutlineRadially } from './PondCompositeBuilder.js';
+import { createOutdoorFishingBankMetadata, createOutdoorWaterBodyShorelineProfile } from './OutdoorWaterBodyBuilder.js';
 
 const TAU = Math.PI * 2;
 const WATER_FRAMES = Object.freeze(
@@ -129,7 +130,7 @@ function buildTerrainStamps(recipe, footprint, layers) {
   stamps.push({
     id: `${id}_outline_support`, kind: 'flattenOutline', outline: footprint.terrainSupportOutline,
     sourceOutline: 'outerShoreOutline', derivedFrom: 'waterOutline', expansion: footprint.terrainSafetyMargin,
-    feather: Math.max(3.5, finite(terrain.bankSoftness, 0.7) * 6), y: layers.terrainMaxY, tags: [...tags, 'outline-derived-support'],
+    feather: Math.max(3.5, footprint.terrainSafetyMargin * 1.25, finite(terrain.bankSoftness, 0.7) * 6), y: layers.terrainMaxY, tags: [...tags, 'outline-derived-support'],
   });
   stamps.push({
     id: `${id}_water_floor`, kind: 'flattenOutline', outline: footprint.waterOutline,
@@ -279,6 +280,10 @@ export function buildOutdoorPond(input) {
       validation: { coordinateBasis: recipe.center, waterInsideMud: true, wetShoreOutsideMud: true, avoidsGrassContact: true, generatedGeometry: footprint },
     },
   };
+  body.shorelineProfile = createOutdoorWaterBodyShorelineProfile({ id: body.id, center: recipe.center, footprint, layers: { ...layers, visibleShelfDepth }, bands: { submergedShelfWidth: Math.max(0.4, mudMargin * 0.35), exposedMudWidth: mudMargin, wetBankWidth: wetShoreWidth, dryTransitionWidth: terrainSafetyMargin } });
+  body.fishingBanks = recipe.fishable ? createOutdoorFishingBankMetadata(body, recipe.clearFishingLanes) : Object.freeze([]);
+  body.userData.shorelineProfileVersion = 1;
+  body.userData.fishingBankCount = body.fishingBanks.length;
   const wetShorePaths = { mudWetDark: './assets/textures/outdoor/mud_wet_dark_01.png', mudChurnedWet: './assets/textures/outdoor/mud_churned_wet_03.png' };
   const textures = {
     [waterMaterialKey]: {
