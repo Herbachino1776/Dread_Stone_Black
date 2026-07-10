@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createOutdoorTerrainMesh } from '../../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
+import { createOutdoorPathCorridorBridgeSurfaces, createOutdoorPathCorridorDebugGroup, createOutdoorPathCorridorMeshes, createOutdoorPathCorridorSurfaceSampler } from '../../engine/outdoor-authoring/OutdoorPathCorridorBuilder.js';
 import { createPondCompositeGeometry, createPondOutlineDiscGeometry, createPondOutlineRingGeometry } from '../../engine/outdoor-authoring/PondCompositeBuilder.js';
 import { createOutdoorSplinePathSupportSurfaces, createOutdoorSplineTrailEdgeMeshes, createOutdoorSplineTrailMeshes, createOutdoorSplineVisibleSurfaceSampler } from '../../engine/outdoor-authoring/OutdoorSplineBuilder.js';
 import { createOutdoorCurvedBlockers } from '../../engine/outdoor-authoring/OutdoorBlockerBuilder.js';
@@ -65,6 +66,22 @@ function makeRuntimeMaterial(makeTexturedMaterial, marker) {
   };
 }
 
+function combinePathSurfaceSamplers(primary, fallback) {
+  if (!primary) return fallback;
+  if (!fallback) return primary;
+  return {
+    kind: 'oarbCompositePathSurfaceSampler',
+    sampleOutdoorY(x, z) {
+      const primaryY = primary.sampleOutdoorY(x, z);
+      return Number.isFinite(primaryY) ? primaryY : fallback.sampleOutdoorY(x, z);
+    },
+    sampleSurface(x, z) {
+      return primary.sampleSurface?.(x, z) ?? fallback.sampleSurface?.(x, z) ?? null;
+    },
+    userData: { primary: primary.kind, fallback: fallback.kind },
+  };
+}
+
 export function createOutdoorFieldBlockers(definition, rectangularBlockers = []) {
   return [
     ...rectangularBlockers.filter((blocker) => blocker.blocksPlayer !== false).map(({ id, minX, maxX, minZ, maxZ, height, type, tags, userData }) => ({ id, minX, maxX, minZ, maxZ, height, type, tags, userData })),
@@ -79,16 +96,25 @@ export function buildOutdoorFieldRuntime({ definition = {}, textureProfiles = {}
     textures: textureProfiles,
     name: constants.terrainName ?? 'TERRAIN01-reliquary-field-oarb-heightfield-terrain',
     makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbTerrainMaterial'),
+    pathCorridors: definition.splineTrails,
   });
   terrain.userData = { ...terrain.userData, blueprint: 'docs/DARB_OUTDOOR_AUTHORING_RUNTIME_MILESTONE.md', legacyFieldBlueprint: 'docs/world/overworld/reliquary_field_v01.md', longTermBlueprintSize: 800, playerGroundingChanged: true };
   const terrainSampler = terrain.userData.terrainSampler;
   add(terrain);
 
-  const pathSurfaceSampler = createOutdoorSplineVisibleSurfaceSampler(definition.splineTrails, { terrainSampler });
+  const pathCorridorRuntime = terrainSampler.pathCorridorRuntime ?? null;
+  const legacySplineTrails = (definition.splineTrails ?? []).filter((trail) => !trail?.surfaceMode);
+  const corridorSurfaceSampler = createOutdoorPathCorridorSurfaceSampler(pathCorridorRuntime, { terrainSampler });
+  const legacyPathSurfaceSampler = createOutdoorSplineVisibleSurfaceSampler(legacySplineTrails, { terrainSampler });
+  const pathSurfaceSampler = combinePathSurfaceSamplers(corridorSurfaceSampler, legacyPathSurfaceSampler);
   const splineMaterialFactory = makeRuntimeMaterial(makeTexturedMaterial, 'oarbSplineTrailMaterial');
-  createOutdoorSplineTrailMeshes(definition.splineTrails, { terrainSampler, textures: textureProfiles, makeMaterial: splineMaterialFactory }).forEach(add);
-  createOutdoorSplineTrailEdgeMeshes(definition.splineTrails, { terrainSampler, textures: textureProfiles, makeMaterial: splineMaterialFactory }).forEach(add);
-  const pathSupportSurfaces = createOutdoorSplinePathSupportSurfaces(definition.splineTrails, { terrainSampler });
+  createOutdoorPathCorridorMeshes(pathCorridorRuntime, { terrainSampler, textures: textureProfiles, makeMaterial: splineMaterialFactory }).forEach(add);
+  createOutdoorSplineTrailMeshes(legacySplineTrails, { terrainSampler, textures: textureProfiles, makeMaterial: splineMaterialFactory }).forEach(add);
+  createOutdoorSplineTrailEdgeMeshes(legacySplineTrails, { terrainSampler, textures: textureProfiles, makeMaterial: splineMaterialFactory }).forEach(add);
+  const pathSupportSurfaces = [
+    ...createOutdoorPathCorridorBridgeSurfaces(pathCorridorRuntime),
+    ...createOutdoorSplinePathSupportSurfaces(legacySplineTrails, { terrainSampler }),
+  ];
   if (collision) {
     collision.walkableSurfaces = [...(collision.walkableSurfaces ?? []), ...pathSupportSurfaces];
     collision.userData = { ...(collision.userData ?? {}), oarbSplinePathSupportSurfaces: pathSupportSurfaces.length };
@@ -100,12 +126,32 @@ export function buildOutdoorFieldRuntime({ definition = {}, textureProfiles = {}
   createPondDecorGroups(definition.waterBodies, { terrainSampler, textures: textureProfiles, makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbPondDecorMaterial'), loadFoliageTexture }).forEach(add);
 
   const foliageBillboards = [];
-  const foliageGroup = buildAuthoredFoliageGroup({ foliageBillboards: definition.foliageBillboards, foliageBillboardVariants: definition.foliageBillboardVariants, terrainSampler, loadFoliageTexture, createHarvestable, gameState, visibleDistanceSq: constants.visibleDistanceSq, alphaTest: constants.alphaTest });
+  const foliageGroup = buildAuthoredFoliageGroup({ foliageBillboards: definition.foliageBillboards, foliageBillboardVariants: definition.foliageBillboardVariants, terrainSampler, pathCorridorRuntime, loadFoliageTexture, createHarvestable, gameState, visibleDistanceSq: constants.visibleDistanceSq, alphaTest: constants.alphaTest });
   if (foliageGroup) { foliageGroup.children.forEach((child) => foliageBillboards.push(child)); add(foliageGroup); }
 
   createOutdoorPrimitiveMeshes(definition.outdoorPrimitives, { terrainSampler, textures: textureProfiles, makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbOutdoorPrimitiveMaterial') }).forEach(add);
 
-  return { terrain, terrainSampler, pathSurfaceSampler, visibleSurfaceSampler: null, pathSupportSurfaces, fishingZones, foliageGroup, foliageBillboards, addedObjects, debug: { pondMeshCount: pondMeshes.length, primitiveCount: definition.outdoorPrimitives?.length ?? 0 } };
+  const pathDebugGroup = createOutdoorPathCorridorDebugGroup(pathCorridorRuntime, { terrainSampler, enabled: Boolean(import.meta.env?.DEV && globalThis.__DSB_PATH_CORRIDOR_DEBUG__) });
+  if (pathDebugGroup) add(pathDebugGroup);
+
+  return {
+    terrain,
+    terrainSampler,
+    pathCorridorRuntime,
+    pathSurfaceSampler,
+    visibleSurfaceSampler: null,
+    pathSupportSurfaces,
+    fishingZones,
+    foliageGroup,
+    foliageBillboards,
+    addedObjects,
+    debug: {
+      pondMeshCount: pondMeshes.length,
+      primitiveCount: definition.outdoorPrimitives?.length ?? 0,
+      pathCorridorAudit: pathCorridorRuntime?.audit ?? null,
+      pathDebugOverlayEnabled: Boolean(pathDebugGroup),
+    },
+  };
 }
 
 function buildOutdoorPonds({ waterBodies = [], textureProfiles = {}, makeTexturedMaterial, registerAnimatedTextureFlipbook, createPondLabel, fishingZones }) {
@@ -151,12 +197,12 @@ function buildOutdoorPonds({ waterBodies = [], textureProfiles = {}, makeTexture
   return meshes;
 }
 
-function buildAuthoredFoliageGroup({ foliageBillboards = [], foliageBillboardVariants = [], terrainSampler, loadFoliageTexture, createHarvestable, gameState, visibleDistanceSq = 67600, alphaTest = 0.48 }) {
+function buildAuthoredFoliageGroup({ foliageBillboards = [], foliageBillboardVariants = [], terrainSampler, pathCorridorRuntime = null, loadFoliageTexture, createHarvestable, gameState, visibleDistanceSq = 67600, alphaTest = 0.48 }) {
   if (!Array.isArray(foliageBillboards) || foliageBillboards.length === 0 || !terrainSampler) return null;
   const variants = new Map((foliageBillboardVariants ?? []).map((variant) => [variant.id, variant]));
   const group = new THREE.Group();
   group.name = `OARB-authored-foliage-billboard-forest-${foliageBillboards.length}-instances`;
-  group.userData = { kind: 'authoredFoliageBillboards', billboardCount: foliageBillboards.length, variantCount: variants.size, alphaCutoutDepthWrite: true };
+  group.userData = { kind: 'authoredFoliageBillboards', billboardCount: foliageBillboards.length, variantCount: variants.size, alphaCutoutDepthWrite: true, generatedPathCorridorExclusion: Boolean(pathCorridorRuntime) };
   const geometry = new THREE.PlaneGeometry(1, 1); geometry.translate(0, 0.5, 0);
   const materials = new Map();
   foliageBillboards.forEach((placement) => {
@@ -166,7 +212,9 @@ function buildAuthoredFoliageGroup({ foliageBillboards = [], foliageBillboardVar
       const material = new THREE.MeshBasicMaterial({ map: loadFoliageTexture(spritePath), alphaTest, depthTest: true, depthWrite: true, transparent: false, side: THREE.DoubleSide, toneMapped: false });
       material.name = `${placement.variantId}-authored-foliage-alpha-cutout-depth-billboard-material`; material.userData = { authoredFoliageAlphaCutout: true, occludesTransparentWater: true }; materials.set(spritePath, material);
     }
-    const [x, authoredY, z] = placement.position ?? []; const groundY = terrainSampler.sampleOutdoorY(x, z);
+    const [x, authoredY, z] = placement.position ?? [];
+    if (pathCorridorRuntime?.isPointInProtectedFootprint?.(x, z)) return;
+    const groundY = terrainSampler.sampleOutdoorY(x, z);
     const height = placement.height ?? variant?.height ?? 5; const width = placement.width ?? variant?.width ?? 3;
     const mesh = new THREE.Mesh(geometry, materials.get(spritePath)); mesh.name = `OARB-${placement.id}-${placement.variantId}`;
     const sinkIntoGround = placement.sinkIntoGround ?? variant?.sinkIntoGround ?? 0.06; const bottomTransparentPaddingRatio = placement.bottomTransparentPaddingRatio ?? variant?.bottomTransparentPaddingRatio ?? 0; const rootOffsetY = placement.rootOffsetY ?? variant?.rootOffsetY ?? 0; const groundOffset = placement.groundOffset ?? variant?.groundOffset ?? 0; const visualBaseGroundingOffset = height * bottomTransparentPaddingRatio; const maxBillboardYawOffset = placement.maxBillboardYawOffset ?? (placement.tags?.includes('folsom-foliage-billboard') ? 0.18 : Infinity);

@@ -1786,8 +1786,13 @@ export class DungeonScene {
     const waterAllowed = options.water === true || options.kind === 'water';
     const polygon = (this.outdoorSurfaceDefinition?.polygonFloors ?? []).find((floor) => pointInFootprint(x, z, floor.points));
     if (polygon) return { y: polygon.y ?? fallbackY, source: 'authored-polygon-floor', floorId: polygon.id };
-    const pathY = this.outdoorVisiblePathSurfaceRuntime?.sampleOutdoorY?.(x, z);
-    if (Number.isFinite(pathY)) return { y: pathY, source: 'visible-path-ribbon' };
+    const pathSurface = this.outdoorVisiblePathSurfaceRuntime?.sampleSurface?.(x, z);
+    const pathY = pathSurface?.y ?? this.outdoorVisiblePathSurfaceRuntime?.sampleOutdoorY?.(x, z);
+    if (Number.isFinite(pathY)) return {
+      y: pathY,
+      source: pathSurface?.source ?? 'visible-path-ribbon',
+      corridorId: pathSurface?.corridorId,
+    };
     if (waterAllowed) {
       const zone = this.getNearbyFishingZone?.({ x, z });
       if (zone && this.isPositionInFishingWater({ x, z }, -0.05) && Number.isFinite(zone.position?.y)) return { y: zone.position.y + 0.035, source: 'pond-water-surface', zoneId: zone.id };

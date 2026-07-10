@@ -11,6 +11,7 @@
     "validate:dungeons": "npm run validate:integrity",
     "validate:fish": "node scripts/validate-fish-geometry.mjs",
     "validate:oarb-terrain": "node scripts/validate-oarb-terrain-sampling.mjs && node scripts/validate-folsom.mjs",
+    "validate:path-corridors": "node tests/outdoor-path-corridor.test.mjs",
     "validate:folsom": "node scripts/validate-folsom.mjs",
     "validate:objectives": "node scripts/validate-objective-runtime.mjs",
     "validate:reliquary-startup": "node scripts/validate-reliquary-field-startup.mjs",

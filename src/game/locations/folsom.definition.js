@@ -34,6 +34,46 @@ const folsomPondSystem = buildOutdoorPondSystem([{
   clearFishingLanes: [{ angle: 0, width: 0.82, reason: 'clear north-bank starter casting lane' }],
 }]);
 
+const FOLSOM_PATH_GRADE = Object.freeze({
+  smoothingDistance: 5,
+  maxSlope: 0.12,
+  maxCrossSlope: 0.16,
+  maxCut: 0.7,
+  maxFill: 0.55,
+});
+
+const FOLSOM_PATH_CROSS_SECTION = Object.freeze({
+  crownHeight: 0.035,
+  shoulderWidth: 0.9,
+  shoulderDrop: 0.06,
+  terrainBlendWidth: 1.4,
+  lateralSamples: 7,
+});
+
+const makeFolsomGradedPath = ({ id, points, width, tags }) => Object.freeze({
+  id,
+  points,
+  width,
+  material: 'townPath',
+  surfaceMode: 'graded',
+  sampleSpacing: 0.65,
+  grade: FOLSOM_PATH_GRADE,
+  crossSection: FOLSOM_PATH_CROSS_SECTION,
+  edgeMeshes: false,
+  pathSupport: false,
+  tags,
+});
+
+export const FOLSOM_GRADED_PATHS = Object.freeze([
+  makeFolsomGradedPath({ id: 'folsom_courtyard_to_pond', points: [[0, -5], [-2, -22], [-8, -38], [0, -45]], width: 5.6, tags: ['walkable-route', 'pond-route'] }),
+  makeFolsomGradedPath({ id: 'folsom_courtyard_to_shrine', points: [[-6, 5], [-18, 18], [-30, 28], [-42, 31]], width: 4.8, tags: ['walkable-route', 'shrine-route'] }),
+  makeFolsomGradedPath({ id: 'folsom_courtyard_to_house', points: [[8, -10], [24, -20], [42, -22], [42, -15]], width: 4.6, tags: ['walkable-route', 'house-route'] }),
+  makeFolsomGradedPath({ id: 'folsom_courtyard_to_cellar', points: [[7, 7], [20, 20], [34, 35]], width: 4.8, tags: ['walkable-route', 'dungeon-route'] }),
+  makeFolsomGradedPath({ id: 'folsom_courtyard_to_reliquary', points: [[10, 6], [32, 12], [58, 8], [76, 4]], width: 5.2, tags: ['walkable-route', 'rusty-door-route'] }),
+  makeFolsomGradedPath({ id: 'folsom_courtyard_to_north_road', points: [[0, 9], [-2, 34], [2, 60], [0, 94]], width: 5.8, tags: ['walkable-route', 'future-road-route'] }),
+  makeFolsomGradedPath({ id: 'folsom_tool_yard_path', points: [[-5, -14], [-18, -25], [-28, -36], [-9, -47]], width: 4.2, tags: ['walkable-route', 'work-yard'] }),
+]);
+
 const FOLSOM_BORDER_WALL_HEIGHT = 6.1;
 const FOLSOM_BORDER_WALL_THICKNESS = 0.65;
 const FOLSOM_BORDER_WALL_PANEL_LENGTH = 5.75;
@@ -81,7 +121,7 @@ const rectFloor = (id, minX, maxX, minZ, maxZ, material, roomId, tags = [], y = 
 });
 
 const folsomTerrain = Object.freeze({
-  size: [200, 200], segments: [64, 64], baseY: 0, material: 'folsomGrass',
+  size: [200, 200], segments: [96, 96], baseY: 0, material: 'folsomGrass',
   heightStamps: [
       terrainStampKit.softTownRise({ id: 'folsom_west_shoulder_hill', center: [-74, 4], radius: 34, height: 2.65, tags: ['terrain-frame', 'large-landform'] }),
       terrainStampKit.softTownRise({ id: 'folsom_southwest_roll', center: [-48, -62], radius: 30, height: 1.15, tags: ['pond-bank-rise', 'large-landform'] }),
@@ -121,7 +161,7 @@ const folsomTerrain = Object.freeze({
       ], tags: ['safe-grass-texture'] }),
   ],
 });
-const folsomTerrainSampler = createOutdoorTerrainSampler(folsomTerrain);
+const folsomTerrainSampler = createOutdoorTerrainSampler(folsomTerrain, { pathCorridors: FOLSOM_GRADED_PATHS });
 
 const folsomFoliageBillboardVariants = createFolsomFoliageBillboardVariants();
 const folsomFoliageAvoidZones = Object.freeze([
@@ -133,6 +173,11 @@ const folsomFoliageAvoidZones = Object.freeze([
   { minX: -8, maxX: 8, minZ: 14, maxZ: 99 }, { minX: 68, maxX: 94, minZ: -6, maxZ: 14 },
   { minX: -7, maxX: 7, minZ: -48, maxZ: 10 }, { minX: -50, maxX: -18, minZ: -42, maxZ: -18 },
   { minX: -48, maxX: -25, minZ: 25, maxZ: 47 }, { minX: 28, maxX: 55, minZ: -24, maxZ: 5 },
+  ...FOLSOM_GRADED_PATHS.map((path) => ({
+    kind: 'pathCorridor',
+    points: path.points,
+    width: path.width + (path.crossSection.shoulderWidth + path.crossSection.terrainBlendWidth) * 2,
+  })),
 ]);
 export const FOLSOM_VISIBLE_TREE_BOUNDS = Object.freeze({ minX: -96, maxX: 96, minZ: -96, maxZ: 96 });
 export const FOLSOM_FOLIAGE_SWATHE_SPECS = Object.freeze([
@@ -240,15 +285,7 @@ export const folsomDefinition = Object.freeze({
   terrain: folsomTerrain,
   connectedGrowthNetwork: FOLSOM_CONNECTED_GROWTH_NETWORK,
   rooms: [{ id: 'folsom_bounds', label: 'Folsom Town Bounds', minX: -98, maxX: 98, minZ: -98, maxZ: 98, floorY: 0, ceilingY: 18, visibleGeometry: false, wallGeometry: false, safeForSpawn: true, tags: ['field-bounds', 'starter-town'] }],
-  splineTrails: [
-    { id: 'folsom_courtyard_to_pond', points: [[0, -5], [-2, -22], [-8, -38], [0, -45]], width: 5.6, material: 'townPath', flatten: true, tags: ['walkable-route', 'pond-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
-    { id: 'folsom_courtyard_to_shrine', points: [[-6, 5], [-18, 18], [-30, 28], [-42, 31]], width: 4.8, material: 'townPath', flatten: true, tags: ['walkable-route', 'shrine-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
-    { id: 'folsom_courtyard_to_house', points: [[8, -10], [24, -20], [42, -22], [42, -15]], width: 4.6, material: 'townPath', flatten: true, tags: ['walkable-route', 'house-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
-    { id: 'folsom_courtyard_to_cellar', points: [[7, 7], [20, 20], [34, 35]], width: 4.8, material: 'townPath', flatten: true, tags: ['walkable-route', 'dungeon-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
-    { id: 'folsom_courtyard_to_reliquary', points: [[10, 6], [32, 12], [58, 8], [76, 4]], width: 5.2, material: 'townPath', flatten: true, tags: ['walkable-route', 'rusty-door-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
-    { id: 'folsom_courtyard_to_north_road', points: [[0, 9], [-2, 34], [2, 60], [0, 94]], width: 5.8, material: 'townPath', flatten: true, tags: ['walkable-route', 'future-road-route'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
-    { id: 'folsom_tool_yard_path', points: [[-5, -14], [-18, -25], [-28, -36], [-9, -47]], width: 4.2, material: 'townPath', flatten: true, tags: ['walkable-route', 'work-yard'], edgeMeshes: false, pathSupport: false, visualYOffset: 0.055 },
-  ],
+  splineTrails: FOLSOM_GRADED_PATHS,
   waterBodies: [...folsomPondSystem.waterBodies],
   foliageBillboardVariants: folsomFoliageBillboardVariants,
   foliageBillboards: folsomFoliageBillboards,

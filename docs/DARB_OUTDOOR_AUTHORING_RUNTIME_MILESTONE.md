@@ -112,10 +112,16 @@ splineTrails: [
     points: [[-120, -80], [-70, -40], [-30, 10], [20, 44]],
     width: 5,
     material: 'mudTrail',
-    flatten: true
+    surfaceMode: 'graded',
+    sampleSpacing: 0.65,
+    grade: { smoothingDistance: 5, maxSlope: 0.12, maxCrossSlope: 0.16, maxCut: 0.5, maxFill: 0.4 },
+    crossSection: { crownHeight: 0.035, shoulderWidth: 0.9, shoulderDrop: 0.06, terrainBlendWidth: 1.4, lateralSamples: 7 },
+    pathSupport: false
   }
 ]
 ```
+
+The production source of truth for normal outdoor dirt roads is [Outdoor Path Corridor System](./outdoor_path_corridor_system.md). Paths without `surfaceMode` remain on the legacy ribbon renderer for compatibility; legacy `flatten: true` does not deform terrain and is deprecated.
 
 Supported spline feature types:
 
@@ -129,11 +135,12 @@ Supported spline feature types:
 
 Runtime responsibilities:
 
-- generate curved ribbon meshes
-- optionally flatten or depress terrain beneath the spline
-- optionally add border geometry, such as creek banks or trail shoulders
+- densely resample authored route controls into mobile-bounded multi-strip meshes
+- grade and deform normal dirt-road corridors within explicit slope, cut, and fill limits
+- generate road crown, shoulders, and smooth terrain-blend boundaries from one cross-section
 - allow authored material profiles per spline
-- support debug drawing for spline centerline, width, and collision
+- share final heightfield truth with collision, placement, foliage, and visible-surface queries
+- support debug drawing and deterministic per-path grade/clearance audits
 
 ### 4. Curved Collision and Visible Boundaries
 
@@ -392,7 +399,7 @@ This milestone is about the runtime foundation.
 2. Add heightfield terrain mesh generation.
 3. Add terrain height sampling for player movement.
 4. Add terrain stamps: hill, hollow, ridge, ravine, flatten.
-5. Add spline trail mesh generation.
+5. Add explicit conform/graded/bridge path corridor generation; keep old spline ribbons only as a compatibility path.
 6. Add curved blocker collision.
 7. Add cliff wall or mountain skirt primitive.
 8. Add outdoor validation.

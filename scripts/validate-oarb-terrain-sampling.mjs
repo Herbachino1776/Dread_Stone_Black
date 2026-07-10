@@ -217,14 +217,15 @@ assert.equal(pondChest.itemId, 'fishing_rod', 'OARB fishing rod chest still gran
 
 
 const dungeonSceneSource = readFileSync(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
+const fishingWorldRuntimeSource = readFileSync(new URL('../src/game/world-scene/FishingWorldRuntime.js', import.meta.url), 'utf8');
 const lockedFishSpecies = new Set(['smallRiverFish', 'broadCarpFish', 'longEelFish', 'spineBackFish', 'flatMarshFish', 'jawHunterFish', 'sacredGlowFish']);
 assert.deepEqual(new Set(FISH_SPECIES_IDS), lockedFishSpecies, 'Shared fish registry must expose exactly the seven permanent Kerovac fish species.');
 lockedFishSpecies.forEach((species) => assert.ok(FISH_SPECS[species], `Shared fish registry missing ${species}.`));
 assert.ok(FISH_SPECS.spineBackFish, 'Shared fish registry missing C4 spineBackFish.');
 assert.equal(/FIELD_FISH_SPECIES\s*=/.test(dungeonSceneSource), false, 'DungeonScene.js must not define a duplicate FIELD_FISH_SPECIES shortcut table.');
 assert.equal(/FIELD_FISH_SPECIES/.test(dungeonSceneSource), false, 'DungeonScene.js must not reference the retired FIELD_FISH_SPECIES shortcut table.');
-assert.match(dungeonSceneSource, /createFishMesh\(resolvedSpecies/, 'Raw fish pickups must be built by the shared Kerovac fish mesh factory.');
-assert.match(dungeonSceneSource, /visualSource:\s*'sharedKerovacFishSpeciesFactory'/, 'Raw fish pickup metadata must identify the shared Kerovac fish factory.');
+assert.match(fishingWorldRuntimeSource, /createFishMesh\(resolvedSpecies/, 'Raw fish pickups must be built by the shared Kerovac fish mesh factory.');
+assert.match(fishingWorldRuntimeSource, /visualSource:\s*'sharedKerovacFishSpeciesFactory'/, 'Raw fish pickup metadata must identify the shared Kerovac fish factory.');
 assert.equal(/new THREE\.ConeGeometry\(0\.2, 0\.34, 3\)/.test(dungeonSceneSource), false, 'Raw fish pickups must not use the old simple cone-tail placeholder.');
 assert.match(dungeonSceneSource, /new THREE\.Box3\(\)\.setFromObject\(object\)/, 'Fish pickup invalid: grounded placement does not account for mesh bounding box.');
 assert.equal(/brown-placeholder-pickup/.test(dungeonSceneSource), false, 'Cooked fish pickup must not use the old brown placeholder blob/capsule.');

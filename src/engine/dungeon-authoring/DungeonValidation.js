@@ -1,6 +1,7 @@
 import { asArray, hasUsableId } from './DungeonDefinitionTypes.js';
 import { OARB_TERRAIN_FALLBACK_MATERIAL_KEY, OARB_TERRAIN_MAX_SEGMENTS_PER_AXIS, OARB_TERRAIN_MAX_TOTAL_CELLS } from '../outdoor-authoring/OutdoorTerrainBuilder.js';
 import { OARB_SPLINE_TRAIL_FALLBACK_MATERIAL_KEY, OARB_SPLINE_TRAIL_MAX_WIDTH } from '../outdoor-authoring/OutdoorSplineBuilder.js';
+import { OARB_PATH_CORRIDOR_SURFACE_MODES } from '../outdoor-authoring/OutdoorPathCorridorBuilder.js';
 import { OARB_CURVED_BLOCKER_MAX_COORDINATE, OARB_CURVED_BLOCKER_MAX_RADIUS, OARB_CURVED_BLOCKER_MAX_THICKNESS } from '../outdoor-authoring/OutdoorBlockerBuilder.js';
 import { OARB_OUTDOOR_PRIMITIVE_FALLBACK_MATERIAL_PROFILES, OARB_OUTDOOR_PRIMITIVE_KINDS, OARB_OUTDOOR_PRIMITIVE_MAX_COORDINATE, OARB_OUTDOOR_PRIMITIVE_MAX_HEIGHT, OARB_OUTDOOR_PRIMITIVE_MAX_POINTS, OARB_OUTDOOR_PRIMITIVE_MAX_RADIUS, OARB_OUTDOOR_PRIMITIVE_MAX_THICKNESS } from '../outdoor-authoring/OutdoorPrimitiveBuilder.js';
 
@@ -13,7 +14,10 @@ const OUTDOOR_TERRAIN_WARN_SEGMENTS_PER_AXIS = 96;
 const OUTDOOR_TERRAIN_WARN_TOTAL_CELLS = 9216;
 const OUTDOOR_TERRAIN_MAX_SIZE_PER_AXIS = 2000;
 const TERRAIN_STAMP_KINDS = new Set(['hill', 'hollow', 'ridge', 'ravine', 'flatten', 'flattenOutline']);
-const OUTDOOR_SPLINE_FIELDS = new Set(['id', 'points', 'width', 'material', 'flatten', 'metadata', 'tags', 'userData']);
+const OUTDOOR_SPLINE_FIELDS = new Set(['id', 'points', 'width', 'material', 'surfaceMode', 'sampleSpacing', 'grade', 'crossSection', 'flatten', 'edgeMeshes', 'edgeMaterial', 'edgeHeight', 'edgeThickness', 'pathSupport', 'supportYOffset', 'visualYOffset', 'metadata', 'tags', 'userData']);
+const OUTDOOR_PATH_SURFACE_MODES = new Set(OARB_PATH_CORRIDOR_SURFACE_MODES);
+const OUTDOOR_PATH_GRADE_FIELDS = new Set(['smoothingDistance', 'maxSlope', 'maxCrossSlope', 'maxCut', 'maxFill']);
+const OUTDOOR_PATH_CROSS_SECTION_FIELDS = new Set(['crownHeight', 'shoulderWidth', 'shoulderDrop', 'terrainBlendWidth', 'lateralSamples']);
 const CURVED_BLOCKER_FIELDS = new Set(['id', 'kind', 'points', 'thickness', 'center', 'radius', 'from', 'to', 'visibleStructureId', 'metadata', 'tags', 'userData', 'intentionallyInvisible']);
 const OUTDOOR_PRIMITIVE_FIELDS = new Set(['id', 'kind', 'points', 'height', 'thickness', 'from', 'to', 'center', 'radius', 'material', 'metadata', 'tags', 'userData']);
 const WATER_BODY_FIELDS = new Set(['id', 'kind', 'center', 'radius', 'y', 'material', 'fishable', 'fishableRadius', 'fishSpeciesPool', 'fishCatchSeed', 'shoreMaterial', 'shoreWidth', 'bedMaterial', 'bedRadius', 'footprint', 'pondDecor', 'tags', 'metadata', 'userData']);
@@ -107,7 +111,31 @@ function validateOutdoorAuthoring(definition, errors, warnings) {
       if (label === 'splineTrails' && isFinitePositive(spline.width) && spline.width > OARB_SPLINE_TRAIL_MAX_WIDTH) addIssue(errors, 'error', `${label} ${id} width must be <= ${OARB_SPLINE_TRAIL_MAX_WIDTH} for mobile-safe ribbon generation`, id);
       validateOutdoorMaterial(definition, spline.material, `${label} ${id}`, id, errors, warnings);
       if (spline.flatten !== undefined && typeof spline.flatten !== 'boolean') addIssue(errors, 'error', `${label} ${id} flatten must be boolean when present`, id);
-      if (spline.collision || spline.blocksPlayer || spline.blocksActors || spline.deformTerrain) addIssue(errors, 'error', `${label} ${id} cannot claim collision, blocking, or terrain deformation behavior yet`, id);
+      if (label === 'splineTrails' && spline.surfaceMode !== undefined && !OUTDOOR_PATH_SURFACE_MODES.has(spline.surfaceMode)) addIssue(errors, 'error', `${label} ${id} surfaceMode must be conform, graded, or bridge`, id);
+      if (label === 'splineTrails' && spline.surfaceMode !== undefined) {
+        if (!isFinitePositive(spline.sampleSpacing)) addIssue(errors, 'error', `${label} ${id} explicit corridor needs sampleSpacing > 0`, id);
+        if (spline.sampleSpacing < 0.35 || spline.sampleSpacing > 2) addIssue(errors, 'error', `${label} ${id} sampleSpacing must remain between 0.35 and 2 meters`, id);
+        if (spline.flatten !== undefined) addIssue(warnings, 'warning', `${label} ${id} uses deprecated flatten alongside explicit surfaceMode; remove flatten because corridor behavior is now explicit`, id);
+        if (spline.visualYOffset !== undefined) addIssue(warnings, 'warning', `${label} ${id} explicit corridor should not use visualYOffset as structural compensation`, id);
+        if (spline.surfaceMode !== 'bridge' && spline.pathSupport !== false && spline.pathSupport !== undefined) addIssue(errors, 'error', `${label} ${id} normal terrain corridor cannot enable pathSupport; only explicit bridge mode may create a constructed span`, id);
+        if (spline.grade === null || typeof spline.grade !== 'object' || Array.isArray(spline.grade)) addIssue(errors, 'error', `${label} ${id} explicit corridor needs a grade object`, id);
+        else {
+          Object.keys(spline.grade).filter((key) => !OUTDOOR_PATH_GRADE_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `${label} ${id} grade uses unsupported field ${key}`, id));
+          ['maxSlope', 'maxCrossSlope'].forEach((key) => { if (!isFinitePositive(spline.grade[key])) addIssue(errors, 'error', `${label} ${id} grade.${key} must be > 0`, id); });
+          ['smoothingDistance', 'maxCut', 'maxFill'].forEach((key) => { if (!Number.isFinite(spline.grade[key]) || spline.grade[key] < 0) addIssue(errors, 'error', `${label} ${id} grade.${key} must be finite and non-negative`, id); });
+        }
+        if (spline.crossSection === null || typeof spline.crossSection !== 'object' || Array.isArray(spline.crossSection)) addIssue(errors, 'error', `${label} ${id} explicit corridor needs a crossSection object`, id);
+        else {
+          Object.keys(spline.crossSection).filter((key) => !OUTDOOR_PATH_CROSS_SECTION_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `${label} ${id} crossSection uses unsupported field ${key}`, id));
+          ['crownHeight', 'shoulderWidth', 'shoulderDrop', 'terrainBlendWidth'].forEach((key) => { if (!Number.isFinite(spline.crossSection[key]) || spline.crossSection[key] < 0) addIssue(errors, 'error', `${label} ${id} crossSection.${key} must be finite and non-negative`, id); });
+          if (!Number.isInteger(spline.crossSection.lateralSamples) || spline.crossSection.lateralSamples < 5 || spline.crossSection.lateralSamples > 9 || spline.crossSection.lateralSamples % 2 === 0) addIssue(errors, 'error', `${label} ${id} crossSection.lateralSamples must be an odd integer from 5 through 9`, id);
+        }
+      } else if (label === 'splineTrails' && spline.flatten === true) {
+        addIssue(warnings, 'warning', `${label} ${id} uses deprecated legacy flatten; legacy ribbons remain visual-only and do not grade terrain`, id);
+      }
+      if (spline.edgeMeshes !== undefined && typeof spline.edgeMeshes !== 'boolean') addIssue(errors, 'error', `${label} ${id} edgeMeshes must be boolean when present`, id);
+      if (spline.pathSupport !== undefined && typeof spline.pathSupport !== 'boolean') addIssue(errors, 'error', `${label} ${id} pathSupport must be boolean when present`, id);
+      if (spline.collision || spline.blocksPlayer || spline.blocksActors || spline.deformTerrain) addIssue(errors, 'error', `${label} ${id} cannot use legacy collision/deformation claim flags; use the explicit path surface contract`, id);
       Object.keys(spline).filter((key) => !OUTDOOR_SPLINE_FIELDS.has(key)).forEach((key) => addIssue(errors, 'error', `${label} ${id} uses unsupported field ${key}; rendering/collision behavior is not implemented in this foundation PR`, id));
     });
   });

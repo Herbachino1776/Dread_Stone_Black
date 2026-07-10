@@ -299,11 +299,12 @@ export function validateRenderedPondComposite(pond, definition, options = {}) {
 
   const center = pond.center ?? [];
   const waterVertices = geometryWorldXZ(composite.water.geometry, composite.water.position);
+  const renderedWaterOutline = footprint.visualWaterOutline ?? footprint.waterOutline ?? [];
   const mudOuterIndices = composite.mudBed.geometry.userData?.pondGeometryKind === 'conformedMudBed' ? Array.from({ length: footprint.mudBedOutline?.length ?? 0 }, (_, index) => index * 2 + 2) : null;
   const mudVertices = geometryWorldXZForIndices(composite.mudBed.geometry, composite.mudBed.position, mudOuterIndices);
   const outerIndices = Array.from({ length: footprint.outerShoreOutline?.length ?? 0 }, (_, index) => index * 2 + 1);
   const shoreOuterVertices = composite.wetShore ? geometryWorldXZ(composite.wetShore.geometry, composite.wetShore.position, outerIndices) : [];
-  if (!samePointList(waterVertices, footprint.waterOutline ?? [])) fail('generated water BufferGeometry vertices do not match waterOutline in world coordinates.');
+  if (!samePointList(waterVertices, renderedWaterOutline)) fail('generated water BufferGeometry vertices do not match the authored rendered water outline in world coordinates.');
   if (!samePointList(mudVertices, footprint.mudBedOutline ?? [])) fail('generated bright-mud BufferGeometry vertices do not match mudBedOutline in world coordinates.');
   if (composite.wetShore && !samePointList(shoreOuterVertices, footprint.outerShoreOutline ?? [])) fail('generated wet-shore BufferGeometry vertices do not match outerShoreOutline in world coordinates.');
   if ([composite.water, composite.mudBed, composite.wetShore].filter(Boolean).some((layer) => layer.position[0] !== center[0] || layer.position[2] !== center[1])) fail('water, mud, and shore meshes do not share the authored world-coordinate basis.');
@@ -312,15 +313,18 @@ export function validateRenderedPondComposite(pond, definition, options = {}) {
   const waterProfile = definition?.textures?.[pond.material];
   if (!Array.isArray(waterProfile?.animatedFrames) || waterProfile.animatedFrames.length !== 6) fail('runtime water material must resolve all six animated pond frames.');
   if (!['loop', 'pingPong'].includes(waterProfile?.playbackMode)) fail('runtime water playback mode must be loop or pingPong.');
-  if (composite.water.source !== 'waterOutline' || composite.mudBed.source !== 'mudBedOutline' || composite.wetShore?.source !== 'outerShoreOutline') fail('one or more runtime layers selected a fallback ellipse/square geometry source.');
+  if (!['waterOutline', 'visualWaterOutline-shore-overlap'].includes(composite.water.source) || composite.mudBed.source !== 'mudBedOutline' || composite.wetShore?.source !== 'outerShoreOutline') fail('one or more runtime layers selected a fallback ellipse/square geometry source.');
   if (![composite.water.geometry, composite.mudBed.geometry, composite.wetShore?.geometry].filter(Boolean).every(geometryHasAcceptableTopNormals)) fail('generated pond top geometry contains downward-facing normals.');
 
   waterVertices.forEach((point, index) => {
     if (!pointInPolygon(point, mudVertices)) fail(`generated water vertex ${index} falls outside the generated mud mesh polygon.`);
-    else if (distanceToPolygonEdge(point, mudVertices) < (footprint.minMudMarginWorld ?? DEFAULT_MIN_MUD_MARGIN_WORLD)) fail(`generated water vertex ${index} has insufficient rendered mud margin.`);
+  });
+  const logicalWaterVertices = footprint.waterOutline ?? waterVertices;
+  logicalWaterVertices.forEach((point, index) => {
+    if (distanceToPolygonEdge(point, mudVertices) < (footprint.minMudMarginWorld ?? DEFAULT_MIN_MUD_MARGIN_WORLD)) fail(`authored water vertex ${index} has insufficient logical mud margin.`);
   });
   sampleOutlineBand(
-    waterVertices,
+    logicalWaterVertices,
     mudVertices,
     footprint.minVisibleMudBandWorld ?? DEFAULT_MIN_VISIBLE_MUD_BAND_WORLD,
     footprint.shorelineSampleStepWorld ?? DEFAULT_SHORELINE_SAMPLE_STEP_WORLD,
