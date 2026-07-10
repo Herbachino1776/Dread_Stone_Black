@@ -26,6 +26,7 @@ import { BeneathFolsomLowerShrineHatchRuntime } from './world-scene/BeneathFolso
 import { BeneathFolsomWhiteScabRuntime, UnderShrineLabyrinthEndHatchRuntime } from './world-scene/Chapter3LeadInRuntime.js';
 import { PHYSICAL_TOOL_PROFILES } from './physical-tools/PhysicalToolProfiles.js';
 import { NorthRoadRouteRuntime } from './world-scene/NorthRoadRouteRuntime.js';
+import { FolsomNorthGateRuntime } from './world-scene/FolsomNorthGateRuntime.js';
 
 const WALL_HEIGHT = 3.2;
 const FLOOR_Y = 0;
@@ -947,6 +948,11 @@ export class DungeonScene {
     this.addAuthoredOutdoorInteractions(definition);
     if (definition.id === 'folsom') {
       this.addFolsomGrowthFoundation(definition);
+      this.folsomNorthGateRuntime = new FolsomNorthGateRuntime({
+        collision: this.collision,
+        compiledGroup: this.compiledLocationRuntime?.group,
+        gameState: this.gameState,
+      });
       this.syncFolsomNorthRoadInteraction();
     }
     if (definition.id === 'north-road') this.addNorthRoadRouteFoundation();
@@ -3511,7 +3517,12 @@ export class DungeonScene {
   }
 
   onWorldStateChanged(key, changed) {
-    if (changed) this.northRoadRouteRuntime?.syncFromState?.();
+    if (!changed) return;
+    this.northRoadRouteRuntime?.syncFromState?.();
+    if (key === 'folsom_north_gate_open' || key === 'beneath_folsom_lower_shrine_hatch_open') {
+      this.folsomNorthGateRuntime?.syncFromState?.();
+      this.syncFolsomNorthRoadInteraction();
+    }
   }
 
   updateBeneathFolsomDrainGrate(deltaSeconds) {
@@ -3671,7 +3682,7 @@ export class DungeonScene {
   syncFolsomNorthRoadInteraction() {
     const interaction = this.outdoorInteractions.find((candidate) => candidate.id === 'folsom_north_road_gate');
     if (!interaction) return;
-    const gateOpen = this.gameState?.isWorldStateSet?.('folsom_north_gate_open') === true;
+    const gateOpen = this.gameState?.isFolsomNorthGateOpen?.() === true;
     const developmentAccess = import.meta.env?.DEV === true;
     interaction.functional = gateOpen || developmentAccess;
     if (gateOpen) {
@@ -3679,10 +3690,10 @@ export class DungeonScene {
       interaction.message = 'The North Road climbs beyond Folsom.';
     } else if (developmentAccess) {
       interaction.hint = 'Development: enter the North Road';
-      interaction.message = 'Development access does not grant Road Warden proof.';
+      interaction.message = 'Development access does not alter Chapter 2 progress.';
     } else {
       interaction.hint = 'The north gate is barred';
-      interaction.message = 'The Road Warden proof has not been accepted.';
+      interaction.message = 'The north gate stays barred until the buried shrine route is opened.';
     }
   }
 

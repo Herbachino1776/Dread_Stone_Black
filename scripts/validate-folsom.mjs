@@ -19,6 +19,7 @@ import { BLACK_GROWTH_TEXTURES } from '../src/game/world-scene/BlackGrowthVisual
 import { FOLSOM_CONNECTED_GROWTH_RULES, FolsomConnectedGrowthRuntime } from '../src/game/world-scene/FolsomConnectedGrowthRuntime.js';
 import { FOLSOM_SHED_GROWTH_RULES, FOLSOM_SHED_GROWTH_TEXTURES, FolsomShedGrowthRuntime } from '../src/game/world-scene/FolsomShedGrowthRuntime.js';
 import { FOLSOM_SHRINE_INVESTIGATION_RULES, FolsomShrineInvestigationRuntime } from '../src/game/world-scene/FolsomShrineInvestigationRuntime.js';
+import { FOLSOM_NORTH_GATE_RUNTIME_IDS, FolsomNorthGateRuntime } from '../src/game/world-scene/FolsomNorthGateRuntime.js';
 import { LanternConeRevealRuntime, LANTERN_REVEAL_DEFAULTS, isPointInsideLanternCone } from '../src/game/world-scene/LanternConeRevealRuntime.js';
 import { BENEATH_FOLSOM_HIDDEN_GROWTH_GATE_RULES } from '../src/game/world-scene/BeneathFolsomHiddenGrowthGateRuntime.js';
 import { evaluatePhysicalToolGesture, PHYSICAL_TOOL_PROFILES } from '../src/game/physical-tools/PhysicalToolProfiles.js';
@@ -277,16 +278,61 @@ const borderWalls = (folsom.wallSegments ?? []).filter((wall) => wall.tags?.incl
 const borderSeamPosts = (folsom.architecturalPrimitives ?? []).filter((primitive) => primitive.tags?.includes('city-border-wall-post'));
 const borderValidation = folsom.validation?.cityBorderWoodenWall;
 assert.equal(folsom.validation?.cityBorderWoodenWall?.continuousMembrane, true, 'Folsom border uses continuous membrane authoring.');
-assert.equal(borderWalls.length, 17, 'Folsom border compiles to one wall run for every perimeter edge.');
+assert.equal(borderWalls.length, 18, 'Folsom border splits the north run into correctly paired wall segments around the gate opening.');
 assert.equal(borderSeamPosts.length, 0, 'Continuous Folsom wall does not stack decorative posts at every former panel seam.');
 assert.ok(borderWalls.every((wall) => wall.y === 0 && wall.tags.includes('fixed-elevation') && wall.tags.includes('continuous-wall-membrane')), 'Every Folsom border run shares one flush elevation.');
 assert.ok(borderWalls.every((wall) => wall.textureRepeat?.[0] >= 1 && wall.textureRepeat?.[1] === 1), 'Long wall runs preserve readable tiled wood texture scale.');
-assert.equal(borderValidation.gateOpenings.length, 0, 'Folsom perimeter does not leave empty spans for inset or future gate props.');
-assert.equal(borderValidation.generatedRuns.length, borderValidation.perimeter.length - 1, 'Every authored perimeter edge generates wall coverage.');
-assert.ok(borderValidation.generatedRuns.every((run) => run.startT === 0 && run.endT === 1), 'Every perimeter edge is covered end to end without a cut interval.');
+assert.equal(borderValidation.gateOpenings.length, 1, 'Folsom perimeter authors exactly one canonical north-gate opening.');
+assert.equal(borderValidation.generatedRuns.length, borderValidation.perimeter.length, 'The north edge compiles as two paired wall runs while every other perimeter edge remains covered.');
+const northGateRuns = borderValidation.generatedRuns.filter((run) => run.runIndex === 11);
+assert.equal(northGateRuns.length, 2, 'The north wall has one collision/geometry run on each side of the gate.');
+assert.ok(northGateRuns.every((run) => Math.min(Math.abs(run.from[0]), Math.abs(run.to[0])) >= 4.9), 'The paired north-wall runs leave the authored ten-meter gate span clear.');
 const folsomCollision = buildDungeonCollision(folsom);
 assert.ok(folsomCollision.collisionWorld.getIntersectingBlockers(new THREE.Vector3(88, 1.55, 4)).some((blocker) => blocker.tags?.includes('city-border-wall')), 'The former east gate gap now has wooden wall collision.');
-assert.ok(folsomCollision.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 96)).some((blocker) => blocker.tags?.includes('city-border-wall')), 'The former north road gap now has wooden wall collision.');
+assert.equal(folsomCollision.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 96)).some((blocker) => blocker.tags?.includes('city-border-wall')), false, 'The canonical north gate has no wall collision across its opening.');
+assert.ok(folsomCollision.collisionWorld.getIntersectingBlockers(new THREE.Vector3(0, 1.55, 96)).some((blocker) => blocker.id === FOLSOM_NORTH_GATE_RUNTIME_IDS.blockerId), 'Fresh Chapter 1-2 state is stopped by the closed gate leaves instead.');
+
+const northGateStorageValues = new Map();
+const northGateStorage = {
+  get length() { return northGateStorageValues.size; },
+  key: (index) => [...northGateStorageValues.keys()][index] ?? null,
+  getItem: (key) => northGateStorageValues.get(key) ?? null,
+  setItem: (key, value) => northGateStorageValues.set(key, String(value)),
+  removeItem: (key) => northGateStorageValues.delete(key),
+};
+const northGateState = new GameState(northGateStorage);
+const lockedFolsomRuntime = compileDungeonLocation(folsom, { logValidation: false });
+const northGateRuntime = new FolsomNorthGateRuntime({ collision: lockedFolsomRuntime.collisionWorld, compiledGroup: lockedFolsomRuntime.group, gameState: northGateState });
+const northGateInteraction = { ...(folsom.outdoorInteractions ?? []).find((interaction) => interaction.id === 'folsom_north_road_gate'), functional: false };
+DungeonScene.prototype.syncFolsomNorthRoadInteraction.call({ outdoorInteractions: [northGateInteraction], gameState: northGateState });
+assert.equal(northGateRuntime.open, false, 'The physical north gate remains visibly locked during Chapters 1-2.');
+assert.equal(northGateRuntime.leaves.length, 2, 'The north gate renders as a paired set of timber leaves inside the wall opening.');
+assert.equal(northGateInteraction.functional, false, 'The canonical North Road transition is unavailable before Chapter 2 completion.');
+assert.equal(northGateState.isWorldStateSet('road_warden_proof_accepted'), false, 'The route does not require or grant obsolete Road Warden state.');
+
+northGateState.markBeneathFolsomLowerShrineHatchOpen();
+assert.equal(northGateState.isWorldStateSet('folsom_north_gate_open'), true, 'The real Chapter 2 completion state automatically persists the north-gate state.');
+assert.equal(northGateState.isWorldStateSet('beneath_folsom_white_scab_lower_knot_destroyed'), false, 'Opening the north gate grants no Chapter 3 lead-in progress.');
+northGateRuntime.syncFromState();
+DungeonScene.prototype.syncFolsomNorthRoadInteraction.call({ outdoorInteractions: [northGateInteraction], gameState: northGateState });
+assert.equal(northGateRuntime.open, true, 'Chapter 2 completion visibly opens the paired gate leaves.');
+assert.equal(lockedFolsomRuntime.collisionWorld.blockerRects.some((blocker) => blocker.id === FOLSOM_NORTH_GATE_RUNTIME_IDS.blockerId), false, 'Chapter 2 completion removes only the gate-leaf collision and leaves the wall opening traversable.');
+assert.equal(northGateInteraction.functional, true, 'Chapter 2 completion enables the canonical North Road transition.');
+
+const outboundTransitions = [];
+const outboundInteractions = new Interactions({
+  player: { position: new THREE.Vector3(0, 1.55, 92) },
+  dungeon: { area: 'folsom', gameState: northGateState, onWorldStateChanged: () => {} },
+  hud: { showHint: () => {}, showMessage: () => {} },
+  transitionToLocation: (...args) => outboundTransitions.push(args),
+});
+await outboundInteractions.useOutdoorInteraction(northGateInteraction);
+assert.deepEqual(outboundTransitions[0], ['north-road', { destinationSpawnId: 'north-gate-exterior', delayMs: 220 }], 'The opened Folsom gate exits to the canonical North Road exterior spawn.');
+
+const restoredFolsomRuntime = compileDungeonLocation(folsom, { logValidation: false });
+const restoredNorthGate = new FolsomNorthGateRuntime({ collision: restoredFolsomRuntime.collisionWorld, compiledGroup: restoredFolsomRuntime.group, gameState: new GameState(northGateStorage) });
+assert.equal(restoredNorthGate.open, true, 'Saved games restore the north gate visually open.');
+assert.equal(restoredFolsomRuntime.collisionWorld.blockerRects.some((blocker) => blocker.id === FOLSOM_NORTH_GATE_RUNTIME_IDS.blockerId), false, 'Saved games restore the opened collision gap.');
 
 const shedWalls = (folsom.wallSegments ?? []).filter((wall) => wall.tags?.includes('tool-shed'));
 const shedDoorPanels = (folsom.architecturalPrimitives ?? []).filter((primitive) => primitive.tags?.includes('shed-door') && primitive.tags?.includes('closed-door'));

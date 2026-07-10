@@ -17,7 +17,6 @@ const UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY = 'under_shrine_labyrinth_end_ha
 const BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY = 'dreadStoneBlack.lowerShrineHatchMigrationV1';
 const PHYSICAL_TOOL_ACTION_MIGRATION_KEY = 'dreadStoneBlack.physicalToolActionMigrationV1';
 export const NORTH_ROAD_WORLD_KEYS = Object.freeze({
-  roadWardenProofAccepted: 'road_warden_proof_accepted',
   folsomNorthGateOpen: 'folsom_north_gate_open',
   mapUpdated: 'north_road_map_updated',
   hunterCampMarked: 'north_road_hunter_camp_marked',
@@ -85,6 +84,7 @@ export class GameState {
       storage.removeItem(UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY);
       storage.removeItem(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY);
       storage.removeItem(PHYSICAL_TOOL_ACTION_MIGRATION_KEY);
+      storage.removeItem('road_warden_proof_accepted');
       Object.values(FOLSOM_GROWTH_WORLD_KEYS).forEach((key) => storage.removeItem(key));
       Object.values(NORTH_ROAD_WORLD_KEYS).forEach((key) => storage.removeItem(key));
     } catch {
@@ -101,6 +101,7 @@ export class GameState {
     this.fieldSurvivalState = this.repairFieldSurvivalState(this.readJson(FIELD_SURVIVAL_STATE_KEY, null));
     this.migrateFolsomChapter2Backfill();
     this.migrateBeneathFolsomLowerShrineHatch();
+    this.syncFolsomNorthGateWithChapter2Completion();
     this.migratePhysicalToolActions();
   }
 
@@ -216,8 +217,24 @@ export class GameState {
   }
 
   markBeneathFolsomLowerShrineHatchOpen() {
-    if (this.isBeneathFolsomLowerShrineHatchOpen()) return false;
+    if (this.isBeneathFolsomLowerShrineHatchOpen()) {
+      this.syncFolsomNorthGateWithChapter2Completion();
+      return false;
+    }
     this.writeFlag(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY, true);
+    this.syncFolsomNorthGateWithChapter2Completion();
+    return true;
+  }
+
+  isFolsomNorthGateOpen() {
+    this.syncFolsomNorthGateWithChapter2Completion();
+    return this.readFlag(NORTH_ROAD_WORLD_KEYS.folsomNorthGateOpen, false);
+  }
+
+  syncFolsomNorthGateWithChapter2Completion() {
+    if (!this.readFlag(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY, false)
+      || this.readFlag(NORTH_ROAD_WORLD_KEYS.folsomNorthGateOpen, false)) return false;
+    this.writeFlag(NORTH_ROAD_WORLD_KEYS.folsomNorthGateOpen, true);
     return true;
   }
 

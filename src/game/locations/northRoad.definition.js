@@ -198,7 +198,7 @@ const outdoorStructureKits = Object.freeze([
 export const northRoadDefinition = Object.freeze({
   id: 'north-road', displayName: 'The North Road', type: 'field',
   tags: ['compiled-runtime', 'north-road', 'chapter-5-parallel-production', 'large-outdoor-location'],
-  notes: ['Chapter 5 terrain foundation built early; normal entry remains behind Road Warden proof and Folsom north-gate state.', 'No enemy or Empty Fort interior content is authored.'],
+  notes: ['Chapter 5 terrain foundation built early; normal entry opens from Folsom when the canonical Chapter 2 lower-shrine hatch state resolves the north gate.', 'North Road entry does not grant Chapter 3-5 progression, and no enemy or Empty Fort interior content is authored.'],
   defaultFloorY: 0, fog: { color: 0x78807a, near: 110, far: 620 }, lighting: { background: 0x89938e }, textures,
   terrain: {
     size: [500, 1200], segments: [192, 360], baseY: 0, material: 'grassMatted', heightStamps,

@@ -1,7 +1,7 @@
 # North Road Flow Map
 
 ```text
-Folsom north gate (future Road Warden proof)
+Folsom north gate (opens after Chapter 2 lower-shrine hatch)
   -> NR00 exterior shelf / safe return
   -> NR01 graded redwood rise
   -> NR02 Hunter Hollow -> Hunter Camp -> Hunter's Mere

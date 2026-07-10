@@ -57,6 +57,7 @@ This spine is an explicit adaptation, not the guide's complete Chapter 2 room li
 - The hidden lower growth gate requires the Keeper's Lantern reveal, the Old Work Knife, and exactly five successful hits. Its final clear persists and opens the blue-flame threshold.
 - The blue-flame hallway is threshold atmosphere, not a replacement for the lower shrine hatch.
 - The explicit BF04/BF05 hatch requires the hidden gate clear and Iron Drain Bar, rejects bare-hand and unseated attempts, and uses a heavy stone/iron notch with a longer arc and stronger final tension than the drain grate. It persists `beneath_folsom_lower_shrine_hatch_open`.
+- `beneath_folsom_lower_shrine_hatch_open` is the canonical Chapter 2 completion state and resolves the physical Folsom north gate as `folsom_north_gate_open`. This opens the route to `north-road` without granting Chapter 3–5 progress or requiring Road Warden proof.
 - Use environmental teaching. Do not add tutorial prose to these loops.
 - Enemy combat remains intentionally deferred. The reusable physical target receiver can accept future hit receivers, but this milestone adds no enemies, AI, character damage, bosses, or arenas.
 

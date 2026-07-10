@@ -10,6 +10,7 @@ import { createOutdoorWaterwayMeshes, sampleOutdoorWaterway } from '../src/engin
 import { auditOutdoorWaterBodyTerrain } from '../src/engine/outdoor-authoring/OutdoorWaterBodyBuilder.js';
 import { getLocationDefinition, hasLocationDefinition, isLocationDefinitionLoaded, loadLocationDefinition } from '../src/game/locations/locationRegistry.js';
 import { NORTH_ROAD_WORLD_KEYS } from '../src/game/GameState.js';
+import { Interactions } from '../src/game/Interactions.js';
 import { FISH_SPECS } from '../src/game/fishing/FishMeshFactory.js';
 import { isPointInFishingZone, sampleFishingZoneWaterY } from '../src/game/fishing/FishingZoneGeometry.js';
 import { buildOutdoorPonds } from '../src/game/world-scene/OutdoorWorldRuntime.js';
@@ -88,14 +89,32 @@ check('location dimensions, sectors, and chunk contract', () => {
 });
 check('valid entry, safe return, and development spawns', () => {
   assert.ok(compiled.validation.ok, compiled.validation.errors.map((issue) => issue.message).join('; '));
-  assert.ok(compiled.exits.some((exit) => exit.toLocation === 'folsom' && exit.destinationSpawnId === 'folsom_north_gate_return'));
+  const returnExit = compiled.exits.find((exit) => exit.toLocation === 'folsom' && exit.destinationSpawnId === 'folsom_north_gate_return');
+  assert.ok(returnExit);
+  const folsom = getLocationDefinition('folsom');
+  const returnSpawn = folsom.spawns.find((spawn) => spawn.id === returnExit.destinationSpawnId);
+  assert.ok(returnSpawn?.tags?.includes('north-gate-return'));
+  const folsomRuntime = compileDungeonLocation(folsom, { logValidation: false });
+  assert.equal(folsomRuntime.collisionWorld.getIntersectingBlockers(new THREE.Vector3(returnSpawn.position.x, returnSpawn.position.y, returnSpawn.position.z)).length, 0);
+  const returnTransitions = [];
+  const returnInteractions = new Interactions({
+    dungeon: { area: 'north-road' }, player: { position: returnExit.position.clone() }, hud: { showHint() {}, showMessage() {} },
+    transitionToLocation: (...args) => returnTransitions.push(args),
+  });
+  returnInteractions.getNearbyIndoorExit = () => returnExit;
+  returnInteractions.useIndoorExit();
+  assert.deepEqual(returnTransitions[0], ['folsom', { areaParam: 'folsom', fromArea: null, destinationSpawnId: 'folsom_north_gate_return', delayMs: 160 }]);
   assert.ok(definition.development.spawnIds.every((id) => definition.spawns.some((spawn) => spawn.id === id)));
   assert.equal(definition.development.spawnIds.length, 12);
 });
-check('normal progression remains locked and dev access grants nothing', () => {
+check('Chapter 2 gate contract replaces Road Warden while dev access grants nothing', () => {
   const folsomSource = fs.readFileSync(path.join(ROOT, 'src/game/locations/folsom.definition.js'), 'utf8');
+  const gameStateSource = fs.readFileSync(path.join(ROOT, 'src/game/GameState.js'), 'utf8');
   assert.match(folsomSource, /requiredWorldState: 'folsom_north_gate_open'/);
   assert.match(folsomSource, /destinationSpawnId: 'north-gate-exterior'/);
+  assert.match(gameStateSource, /BENEATH_FOLSOM_LOWER_SHRINE_HATCH_OPEN_KEY[\s\S]*NORTH_ROAD_WORLD_KEYS\.folsomNorthGateOpen/);
+  assert.doesNotMatch(folsomSource, /road_warden_proof_accepted|Road Warden/);
+  assert.equal('roadWardenProofAccepted' in NORTH_ROAD_WORLD_KEYS, false);
   assert.equal(definition.development.productionStartupAllowed, false);
   assert.equal(definition.development.grantsProgression, false);
   assert.doesNotMatch(definition.development.directEntry, /road_warden_proof_accepted|folsom_north_gate_open/);

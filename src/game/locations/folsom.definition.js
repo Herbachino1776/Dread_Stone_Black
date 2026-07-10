@@ -70,13 +70,14 @@ export const FOLSOM_GRADED_PATHS = Object.freeze([
   makeFolsomGradedPath({ id: 'folsom_courtyard_to_house', points: [[8, -10], [24, -20], [42, -22], [42, -15]], width: 4.6, tags: ['walkable-route', 'house-route'] }),
   makeFolsomGradedPath({ id: 'folsom_courtyard_to_cellar', points: [[7, 7], [20, 20], [34, 35]], width: 4.8, tags: ['walkable-route', 'dungeon-route'] }),
   makeFolsomGradedPath({ id: 'folsom_courtyard_to_reliquary', points: [[10, 6], [32, 12], [58, 8], [76, 4]], width: 5.2, tags: ['walkable-route', 'rusty-door-route'] }),
-  makeFolsomGradedPath({ id: 'folsom_courtyard_to_north_road', points: [[0, 9], [-2, 34], [2, 60], [0, 94]], width: 5.8, tags: ['walkable-route', 'future-road-route'] }),
+  makeFolsomGradedPath({ id: 'folsom_courtyard_to_north_road', points: [[0, 9], [-2, 34], [2, 60], [0, 99]], width: 6.4, tags: ['walkable-route', 'north-road-approach', 'canonical-road-exit'] }),
   makeFolsomGradedPath({ id: 'folsom_tool_yard_path', points: [[-5, -14], [-18, -25], [-28, -36], [-9, -47]], width: 4.2, tags: ['walkable-route', 'work-yard'] }),
 ]);
 
 const FOLSOM_BORDER_WALL_HEIGHT = 6.1;
 const FOLSOM_BORDER_WALL_THICKNESS = 0.65;
 const FOLSOM_BORDER_WALL_PANEL_LENGTH = 5.75;
+const FOLSOM_NORTH_GATE_WIDTH = 10;
 const FOLSOM_BORDER_WALL_MATERIALS = Object.freeze([
   'cityBorderWoodenWall01',
   'cityBorderWoodenWall02',
@@ -205,6 +206,7 @@ const folsomCityBorderWoodenWall = createCityBorderWoodenWall({
   thickness: FOLSOM_BORDER_WALL_THICKNESS,
   panelLength: FOLSOM_BORDER_WALL_PANEL_LENGTH,
   materialKeys: FOLSOM_BORDER_WALL_MATERIALS,
+  gateOpenings: [{ id: 'folsom_north_gate_wall_opening', center: [0, 96], width: FOLSOM_NORTH_GATE_WIDTH, tolerance: 1 }],
   terrainSampler: folsomTerrainSampler,
   terrainSamplerAware: false,
   continuousMembrane: true,
@@ -346,6 +348,7 @@ export const folsomDefinition = Object.freeze({
   ],
   architecturalPrimitives: [
     ...folsomCityBorderWoodenWall.architecturalPrimitives,
+    { id: 'folsom_north_gate', kind: 'doubleTempleDoor', position: [0, 0, 96], yaw: 0, width: FOLSOM_NORTH_GATE_WIDTH, height: FOLSOM_BORDER_WALL_HEIGHT, depth: 0.82, frameWidth: 0.78, lintelHeight: 0.72, frameMaterial: 'agedWood', doorMaterial: 'cityBorderWoodenWall03', trimMaterial: 'rustedIron', emblemMaterial: 'rustedIron', state: 'locked', passable: false, roomId: 'folsom_bounds', tags: ['north-road', 'north-gate', 'canonical-road-exit', 'chapter-2-unlock'], userData: { saveKey: 'folsom_north_gate_open', unlockStateKey: 'beneath_folsom_lower_shrine_hatch_open', destinationLocationId: 'north-road', destinationSpawnId: 'north-gate-exterior' } },
     { id: 'folsom_shed_door_frame', kind: 'doorFrame', position: [-35, 0.188, -35.28], yaw: 0, width: 4.45, height: 4.08, thickness: 0.46, depth: 0.62, material: 'agedWood', blocksPlayer: false, roomId: 'folsom_bounds', tags: ['tool-shed', 'shed-door-frame', 'future-growth-target'], userData: { futureGrowthCoverage: 'door seam and frame' } },
     { id: 'folsom_shed_door_left', kind: 'stela', position: [-35.82, 0.188, -35.34], yaw: 0, width: 1.58, height: 3.34, thickness: 0.24, material: 'agedWood', blocksPlayer: true, roomId: 'folsom_bounds', tags: ['tool-shed', 'shed-door', 'closed-door'] },
     { id: 'folsom_shed_door_right', kind: 'stela', position: [-34.18, 0.188, -35.34], yaw: 0, width: 1.58, height: 3.34, thickness: 0.24, material: 'agedWood', blocksPlayer: true, roomId: 'folsom_bounds', tags: ['tool-shed', 'shed-door', 'closed-door'] },
@@ -410,8 +413,8 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_shrine_column_right', kind: 'brokenColumn', position: [-35, 0.76, 34], radius: 0.65, height: 3.2, material: 'darkStone', blocksPlayer: true, tags: ['shrine', 'open-ceiling'] },
     { id: 'folsom_cellar_gate', kind: 'lockedRitualGate', position: [42, 0.34, 44], yaw: 0, width: 5.8, height: 4.5, depth: 0.7, material: 'rustedIron', state: 'locked', passable: false, blocksPlayer: false, tags: ['first-dungeon-placeholder', 'folsom-underworks', 'blocks-underworks'], userData: { collision: 'visual-only locked gate; connected growth and inspect interaction keep the Underworks sealed', growthLockId: 'folsom_underworks_growth_lock' } },
     { id: 'folsom_reliquary_door', kind: 'brokenGateFrame', position: [82, 0.28, 4], yaw: Math.PI / 2, width: 6, height: 4.6, depth: 0.75, material: 'rustedIron', state: 'open', passable: true, blocksOpening: false, tags: ['authored-gate', 'rusty-border-door', 'legacy-route'] },
-    { id: 'folsom_north_road_marker_left', kind: 'brokenColumn', position: [-4.5, 0.08, 88], radius: 0.55, height: 2.2, material: 'darkStone', blocksPlayer: true, tags: ['future-road-exit'] },
-    { id: 'folsom_north_road_marker_right', kind: 'brokenColumn', position: [4.5, 0.08, 88], radius: 0.55, height: 1.7, material: 'darkStone', blocksPlayer: true, tags: ['future-road-exit'] },
+    { id: 'folsom_north_road_marker_left', kind: 'brokenColumn', position: [-6.2, 0.08, 91], radius: 0.55, height: 2.2, material: 'darkStone', blocksPlayer: true, tags: ['north-road-approach', 'gate-wayfinding'] },
+    { id: 'folsom_north_road_marker_right', kind: 'brokenColumn', position: [6.2, 0.08, 91], radius: 0.55, height: 1.7, material: 'darkStone', blocksPlayer: true, tags: ['north-road-approach', 'gate-wayfinding'] },
   ],
   props: [
     { id: 'folsom_shed_roof_west_pitch', position: [-38.82, 4.89, -30], rotation: [0, 0, 0.13], dimensions: { width: 8.15, height: 0.3, depth: 11.6 }, material: 'shedRoofWood', roomId: 'folsom_bounds', tags: ['tool-shed', 'shed-roof', 'pitched-roof', 'broad-overhang'] },
@@ -444,7 +447,7 @@ export const folsomDefinition = Object.freeze({
     { id: 'folsom_shrine_crawlspace_terminal_entrance', label: 'Opened terminal throat', target: { x: -67.15, y: 1.15, z: 39 }, range: 3.05, hint: 'Darkness breathes below the cracked grate', message: 'Cold dark draws through the opened throat.', type: 'areaEntrance', targetLocationId: 'under-shrine-labyrinth', destinationSpawnId: 'under_shrine_labyrinth_shrine_terminal_arrival', requiredWorldState: 'folsom_shrine_crawlspace_terminal_open', tags: ['shrine-crawlspace', 'conditional-transition', 'under-shrine-labyrinth-entrance'] },
     { id: 'folsom_house_note_placeholder', label: 'Caretaker Note', target: { x: 37, y: 1, z: -7 }, range: 3, hint: 'Read the faded note', message: 'The last caretaker left the lamps trimmed.', type: 'outdoorInspect' },
     { id: 'folsom_underworks_locked', label: 'Folsom Underworks', target: { x: 42, y: 1.4, z: 40.5 }, range: 4, hint: 'Inspect the locked Underworks gate', message: 'The Underworks are sealed by living growth.', type: 'areaEntrance', targetLocationId: 'beneath-folsom', destinationSpawnId: 'beneath_folsom_underworks_arrival', requiredWorldState: 'folsom_underworks_growth_unsealed', tags: ['folsom-underworks', 'conditional-transition'] },
-    { id: 'folsom_north_road_gate', label: 'Folsom North Gate', target: { x: 0, y: 1, z: 88 }, range: 5, hint: 'The north gate is barred', message: 'The Road Warden proof has not been accepted.', type: 'areaEntrance', targetLocationId: 'north-road', destinationSpawnId: 'north-gate-exterior', requiredWorldState: 'folsom_north_gate_open', tags: ['north-road', 'chapter-5', 'conditional-transition', 'development-direct-entry'] },
+    { id: 'folsom_north_road_gate', label: 'Folsom North Gate', target: { x: 0, y: 1, z: 92 }, range: 5, hint: 'The north gate is barred', message: 'The north gate stays barred until the buried shrine route is opened.', type: 'areaEntrance', targetLocationId: 'north-road', destinationSpawnId: 'north-gate-exterior', requiredWorldState: 'folsom_north_gate_open', tags: ['north-road', 'chapter-2-unlock', 'canonical-road-exit', 'conditional-transition', 'development-direct-entry'] },
   ],
   spawns: [
     { id: 'folsom_player_start', kind: 'player', position: { x: -2, y: 1.71, z: -4 }, yaw: 0, roomId: 'folsom_bounds', tags: ['default-start', 'courtyard'] },
@@ -485,6 +488,6 @@ export const folsomDefinition = Object.freeze({
     { id: 'house', points: [[0, -7], [16, -16], [30, -22], [42, -21], [42, -14]] },
     { id: 'underworks', points: [[0, -7], [12, 9], [26, 24], [38, 36]] },
     { id: 'reliquary-door', points: [[0, -7], [12, 7], [30, 12], [50, 9], [66, 5], [76, 4]] },
-    { id: 'north-road', points: [[0, -7], [6, -4], [6, 8], [2, 20], [0, 48], [0, 78], [0, 88]] },
+    { id: 'north-road', points: [[0, -7], [6, -4], [6, 8], [2, 20], [0, 48], [0, 78], [0, 92], [0, 98]] },
   ],
 });

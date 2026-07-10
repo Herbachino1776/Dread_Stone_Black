@@ -1,6 +1,6 @@
 # North Road Location Contract
 
-`north-road` is a separately compiled, lazy-loaded Chapter 5 wilderness location built early in parallel with the active Chapter 3 lock. It never marks Chapters 3 or 4 complete and never grants Road Warden proof.
+`north-road` is a separately compiled, lazy-loaded wilderness location whose route content was built early for Chapter 5. Its canonical Folsom entrance now opens after Chapter 2, but entering it never marks Chapters 3–5 complete or grants unrelated progression.
 
 ## Bounds and route
 
@@ -12,7 +12,7 @@
 
 ## Transition and progression contract
 
-Normal Folsom entry requires future world state `road_warden_proof_accepted`; opening persists as `folsom_north_gate_open`. Neither state is granted by North Road development access. The return exit targets `folsom_north_gate_return` and is always safe. Development query/spawn access loads the location directly and supplies tools only through the existing development-loadout path.
+The canonical Chapter 2 completion state is `beneath_folsom_lower_shrine_hatch_open`. Reaching that state automatically resolves and persists `folsom_north_gate_open`; there is no separate Road Warden requirement. The physical gate and its collision restore from the persisted gate state. Folsom exits to `north-gate-exterior`, while the always-safe return exit targets `folsom_north_gate_return`. Development query/spawn access still loads the location directly and supplies tools only through the existing development-loadout path without granting progression.
 
 ## World-state ownership
 
