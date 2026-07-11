@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { updateOutdoorWaterMaterial } from './OutdoorWaterMaterialRuntime.js';
+import { updateOutdoorFoliageMaterial } from './OutdoorFoliageMaterialRuntime.js';
 
 export const OUTDOOR_LIGHTING_PROFILES = Object.freeze({
   noon: { sky: 0xb9d5ef, ground: 0x706b55, hemi: 0.9, key: 0xffe8be, keyIntensity: 1.12, moon: 0x9eb9df, moonIntensity: 0, fog: 0xb5c7cd, fogNear: 105, fogFar: 470, exposure: 1.0, elevation: 0.82 },
@@ -34,9 +35,10 @@ export class OutdoorLightingDirector {
     scene.add(this.hemisphere,this.key,this.key.target,this.moon,this.moon.target);
     if (!(scene.fog instanceof THREE.Fog)) scene.fog=new THREE.Fog(0xb5c7cd,105,470);
     scene.userData.outdoorLightingDirector={ qualityTier, shadowMapSize:this.shadowMapSize, primaryShadowCasters:1 };
-    this.waterMaterials=[];
+    this.waterMaterials=[];this.foliageMaterials=[];this.contactMaterials=[];
+    const debugTokens=new Set((globalThis.location?new URLSearchParams(globalThis.location.search).get('debug')??'':'').split(','));if(globalThis.document&&(debugTokens.has('outdoor-lighting')||debugTokens.has('outdoor-shadows'))){this.debugPanel=document.querySelector('[data-outdoor-presentation-debug]')??document.body.appendChild(document.createElement('pre'));this.debugPanel.dataset.outdoorPresentationDebug='true';this.debugPanel.style.cssText='position:fixed;left:8px;top:8px;z-index:9999;max-width:440px;padding:8px;background:#071018dd;color:#bfe8ff;font:11px/1.35 monospace;pointer-events:none;white-space:pre-wrap';}
   }
-  bindSceneMaterials(){const found=new Set();this.scene.traverse(object=>{const materials=Array.isArray(object.material)?object.material:[object.material];materials.filter(Boolean).forEach(material=>{if(material.userData?.outdoorWater)found.add(material);});});this.waterMaterials=[...found];this.scene.userData.outdoorLightingDirector.waterMaterialCount=this.waterMaterials.length;}
+  bindSceneMaterials(){const water=new Set(),foliage=new Set(),contacts=new Set();this.scene.traverse(object=>{const materials=Array.isArray(object.material)?object.material:[object.material];materials.filter(Boolean).forEach(material=>{if(material.userData?.outdoorWater)water.add(material);if(material.userData?.outdoorFoliage)foliage.add(material);if(material.userData?.outdoorFoliageContact)contacts.add(material);});});this.waterMaterials=[...water];this.foliageMaterials=[...foliage];this.contactMaterials=[...contacts];Object.assign(this.scene.userData.outdoorLightingDirector,{waterMaterialCount:this.waterMaterials.length,foliageMaterialCount:this.foliageMaterials.length,contactMaterialCount:this.contactMaterials.length});}
   update(player=null) {
     const state=this.clock.getSnapshot(); const p=resolveOutdoorLightingProfile(state.phase);
     this.hemisphere.color.copy(p.sky); this.hemisphere.groundColor.copy(p.ground); this.hemisphere.intensity=p.hemi;
@@ -49,6 +51,7 @@ export class OutdoorLightingDirector {
     const camera=this.key.shadow.camera; camera.left=camera.bottom=-this.shadowRadius; camera.right=camera.top=this.shadowRadius; camera.updateProjectionMatrix();
     this.key.target.updateMatrixWorld(); this.moon.target.updateMatrixWorld();
     this.waterMaterials.forEach(material=>updateOutdoorWaterMaterial(material,p,state));
-    this.exposure=p.exposure; this.debug={...state, exposure:p.exposure, fogNear:p.fogNear, fogFar:p.fogFar, shadowMapSize:this.shadowMapSize, shadowRadius:this.shadowRadius, texelSize:texel, snappedCenter:{x:cx,z:cz},waterMaterialCount:this.waterMaterials.length}; return this.debug;
+    this.foliageMaterials.forEach(material=>updateOutdoorFoliageMaterial(material,p));this.contactMaterials.forEach(material=>{material.uniforms.intensity.value=.035+.105*Math.max(p.keyIntensity,p.moonIntensity*.45);});
+    this.exposure=p.exposure; this.debug={...state, exposure:p.exposure, fogNear:p.fogNear, fogFar:p.fogFar, shadowMapSize:this.shadowMapSize, shadowRadius:this.shadowRadius, texelSize:texel, snappedCenter:{x:cx,z:cz},waterMaterialCount:this.waterMaterials.length};if(this.debugPanel)this.debugPanel.textContent=`OUTDOOR ${state.name.toUpperCase()} phase ${state.phase.toFixed(4)}\nsky d/r/n ${state.dayWeight.toFixed(2)} ${state.redWeight.toFixed(2)} ${state.nightWeight.toFixed(2)} rot ${state.skyRotation.toFixed(3)}\nkey ${p.keyIntensity.toFixed(2)} moon ${p.moonIntensity.toFixed(2)} hemi ${p.hemi.toFixed(2)}\nfog ${p.fogNear.toFixed(0)}–${p.fogFar.toFixed(0)} exposure ${p.exposure.toFixed(2)}\nshadow ${this.shadowMapSize}px radius ${this.shadowRadius} texel ${texel.toFixed(3)}\ncenter ${cx.toFixed(2)}, ${cz.toFixed(2)} casters 1\nwater mats ${this.waterMaterials.length} foliage mats ${this.foliageMaterials.length}`;return this.debug;
   }
 }

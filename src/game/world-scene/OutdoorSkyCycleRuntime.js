@@ -15,7 +15,7 @@ function configure(texture, anisotropy = 1) {
 }
 
 export class OutdoorSkyCycleRuntime {
-  constructor({ scene, textureLoader, clock, radius = 700, anisotropy = 1 } = {}) {
+  constructor({ scene, textureLoader, clock, radius = 160, anisotropy = 1 } = {}) {
     this.scene = scene; this.clock = clock;
     this.textures = {
       day: configure(textureLoader.load(OUTDOOR_SKY_TEXTURES.day), anisotropy),
@@ -26,14 +26,9 @@ export class OutdoorSkyCycleRuntime {
       dayMap: { value: this.textures.day }, redMap: { value: this.textures.red }, nightMap: { value: this.textures.night },
       skyWeights: { value: new THREE.Vector3(1, 0, 0) }, rotationOffset: { value: 0 }, redOrientation: { value: 0 },
     };
-    this.material = new THREE.ShaderMaterial({
-      name: 'outdoor-shared-three-texture-sky-cycle-material', side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, toneMapped: true,
-      uniforms: this.uniforms,
-      vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-      fragmentShader: `uniform sampler2D dayMap; uniform sampler2D redMap; uniform sampler2D nightMap; uniform vec3 skyWeights; uniform float rotationOffset; uniform float redOrientation; varying vec2 vUv;
-        vec2 skyUv(float extra){ return vec2(fract(vUv.x + (rotationOffset + extra) / 6.28318530718), clamp(vUv.y, 0.001, 0.999)); }
-        void main(){ vec3 day=texture2D(dayMap,skyUv(0.0)).rgb; vec3 red=texture2D(redMap,skyUv(redOrientation)).rgb; vec3 night=texture2D(nightMap,skyUv(0.0)).rgb; gl_FragColor=vec4(day*skyWeights.x+red*skyWeights.y+night*skyWeights.z,1.0); #include <tonemapping_fragment> #include <colorspace_fragment> }`,
-    });
+    this.material = new THREE.MeshBasicMaterial({name:'outdoor-shared-three-texture-sky-cycle-material',map:this.textures.day,side:THREE.BackSide,depthWrite:false,depthTest:false,fog:false,toneMapped:true});
+    this.material.onBeforeCompile=(shader)=>{Object.assign(shader.uniforms,this.uniforms);shader.vertexShader=`varying vec2 vSkyUv;\n${shader.vertexShader}`.replace('#include <uv_vertex>','#include <uv_vertex>\nvSkyUv=uv;');shader.fragmentShader=`uniform sampler2D redMap;uniform sampler2D nightMap;uniform vec3 skyWeights;uniform float rotationOffset;uniform float redOrientation;varying vec2 vSkyUv;\n${shader.fragmentShader}`.replace('#include <map_fragment>',`vec2 dayUv=vec2(fract(vSkyUv.x+rotationOffset/6.28318530718),clamp(vSkyUv.y,.001,.999));vec2 redUv=vec2(fract(vSkyUv.x+(rotationOffset+redOrientation)/6.28318530718),clamp(vSkyUv.y,.001,.999));vec4 sampledDiffuseColor=vec4(texture2D(map,dayUv).rgb*skyWeights.x+texture2D(redMap,redUv).rgb*skyWeights.y+texture2D(nightMap,dayUv).rgb*skyWeights.z,1.0);diffuseColor*=sampledDiffuseColor;`);this.material.userData.shader=shader;};
+    this.material.customProgramCacheKey=()=> 'dsb-three-texture-sky-v2';
     this.mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 40, 20), this.material);
     this.mesh.name = 'outdoor-shared-single-sky-cycle-sphere'; this.mesh.renderOrder = -1000;
     this.mesh.frustumCulled = false; this.mesh.userData = { kind: 'outdoorSkyCycle', oneSkyMesh: true, followPlayerXZ: true, texturePaths: OUTDOOR_SKY_TEXTURES };

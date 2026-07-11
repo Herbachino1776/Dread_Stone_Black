@@ -16,6 +16,7 @@ import { createOutdoorWildernessStructureGroups } from '../world-kits/structures
 import { createOutdoorWorldDebugGroup, resolveOutdoorDebugFlags } from './OutdoorWorldDebug.js';
 import { createOutdoorMaterialGallery } from './OutdoorMaterialGallery.js';
 import { createOutdoorWaterMaterial } from './OutdoorWaterMaterialRuntime.js';
+import { createFoliageContactMaterial, createOutdoorFoliageMaterial } from './OutdoorFoliageMaterialRuntime.js';
 
 export { createOutdoorTerrainMesh } from '../../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 export { createOutdoorTerrainSampler } from '../../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
@@ -253,8 +254,8 @@ function buildAuthoredFoliageGroup({ foliageBillboards = [], foliageBillboardVar
     const variant = variants.get(placement.variantId); const spritePath = placement.spritePath ?? variant?.path;
     if (!spritePath) throw new Error(`Folsom invalid: foliage sprite texture missing for ${placement.id}.`);
     if (!materials.has(spritePath)) {
-      const material = new THREE.MeshBasicMaterial({ map: loadFoliageTexture(spritePath), alphaTest, depthTest: true, depthWrite: true, transparent: false, side: THREE.DoubleSide, toneMapped: false });
-      material.name = `${placement.variantId}-authored-foliage-alpha-cutout-depth-billboard-material`; material.userData = { authoredFoliageAlphaCutout: true, occludesTransparentWater: true }; materials.set(spritePath, material);
+      const material = createOutdoorFoliageMaterial(loadFoliageTexture(spritePath),{alphaTest,name:`${placement.variantId}-authored-foliage-alpha-cutout-lit-material`});
+      material.name = `${placement.variantId}-authored-foliage-alpha-cutout-depth-billboard-material`; Object.assign(material.userData, { authoredFoliageAlphaCutout: true, occludesTransparentWater: true }); materials.set(spritePath, material);
     }
     const [x, authoredY, z] = placement.position ?? [];
     if (pathCorridorRuntime?.isPointInProtectedFootprint?.(x, z)) return;
@@ -263,10 +264,11 @@ function buildAuthoredFoliageGroup({ foliageBillboards = [], foliageBillboardVar
     const metadata=resolveOutdoorFoliageGrounding(placement,variant,registryByPath.get(spritePath)); const grounding=sampleFoliageRootFootprint({terrainSampler,x,z,height,width,metadata}); const maxBillboardYawOffset = placement.maxBillboardYawOffset ?? (placement.tags?.includes('folsom-foliage-billboard') ? 0.18 : Infinity);
     mesh.position.set(x, grounding.positionY, z); mesh.scale.set(width, height, 1); mesh.rotation.y = placement.yawOffset ?? 0; mesh.visible=grounding.status!=='rejected';
     mesh.userData = { ...placement, authoredY, groundY:grounding.centerGroundY, ...metadata, ...grounding, groundingStatus:grounding.status, visualBaseGroundingOffset:grounding.appliedPaddingOffset, maxBillboardYawOffset, bottomAnchoredBillboard: true, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq }; groundingReport.push({id:placement.id,spriteId:metadata.id,...grounding});
-    if (placement.layer === 'redwood' && placement.harvestable !== false) { const harvestable = createHarvestable?.({ ...placement, x, z, groundY, zone: placement.tags?.join(':') }, mesh); if (harvestable) mesh.userData.harvestableTreeId = harvestable.id; }
+    if (placement.layer === 'redwood' && placement.harvestable !== false) { const harvestable = createHarvestable?.({ ...placement, x, z, groundY: grounding.centerGroundY, zone: placement.tags?.join(':') }, mesh); if (harvestable) mesh.userData.harvestableTreeId = harvestable.id; }
     if (mesh.userData.harvestableTreeId && gameState?.hasHarvestedFieldTree?.(mesh.userData.harvestableTreeId)) mesh.visible = false;
     group.add(mesh);
   });
+  const contactSources=group.children.filter(mesh=>mesh.userData?.placementCategory?.includes('tree')&&mesh.userData.groundingStatus!=='rejected').slice(0,128);if(contactSources.length){const contactGeometry=new THREE.CircleGeometry(1,16);contactGeometry.rotateX(-Math.PI/2);const contacts=new THREE.InstancedMesh(contactGeometry,createFoliageContactMaterial(),contactSources.length);contacts.name='outdoor-pooled-root-contact-patches';contacts.renderOrder=2;const matrix=new THREE.Matrix4();contactSources.forEach((mesh,index)=>{const radius=Math.max(.35,mesh.userData.radius*.9);matrix.compose(new THREE.Vector3(mesh.position.x,mesh.userData.rootSampleMinY+.018,mesh.position.z),new THREE.Quaternion(),new THREE.Vector3(radius,1,radius*.58));contacts.setMatrixAt(index,matrix);});contacts.instanceMatrix.needsUpdate=true;contacts.userData={kind:'pooledFoliageRootContacts',contactPatchCount:contactSources.length,mobileBound:128};group.add(contacts);group.userData.contactPatchCount=contactSources.length;}
   group.userData.groundingReport=groundingReport.sort((a,b)=>b.localGroundVariance-a.localGroundVariance); group.userData.groundingStatusCounts=Object.groupBy?Object.fromEntries(Object.entries(Object.groupBy(groundingReport,item=>item.status)).map(([k,v])=>[k,v.length])):{};
   const debugGrounding=import.meta.env?.DEV&&globalThis.location&&new URLSearchParams(globalThis.location.search).get('debug')==='foliage-grounding';
   if(debugGrounding){const debugGroup=new THREE.Group();debugGroup.name='debug-foliage-grounding-root-footprints';const colors={valid:0x35d45b,adjusted:0xf1cf3a,'slope-warning':0xff4a35,rejected:0xff2020,'missing-metadata':0xff2ad4};const order=[1,5,3,7,2,8,4,6];groundingReport.slice(0,120).forEach(report=>{const points=order.map(index=>new THREE.Vector3(report.samples[index].x,report.samples[index].y+.035,report.samples[index].z));const line=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:colors[report.status]??0x2a8cff,depthTest:false}));line.userData={...report,samples:undefined};debugGroup.add(line);});group.add(debugGroup);console.table(groundingReport.slice(0,20).map(({id,spriteId,status,localGroundVariance,localSlope,appliedBurial})=>({id,spriteId,status,localGroundVariance,localSlope,appliedBurial})));}
