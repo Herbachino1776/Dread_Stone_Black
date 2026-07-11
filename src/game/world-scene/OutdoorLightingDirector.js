@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { resolveOutdoorSkyWeights, resolveOutdoorTimeOfDay } from './OutdoorWorldClock.js';
 import { updateOutdoorWaterMaterial } from './OutdoorWaterMaterialRuntime.js';
-import { updateOutdoorFoliageMaterial } from './OutdoorFoliageMaterialRuntime.js';
+import { findUnlitOutdoorFoliageMaterials, updateOutdoorFoliageMaterial } from './OutdoorFoliageMaterialRuntime.js';
 import { getOutdoorLightSourceRegistry, OUTDOOR_LIGHT_OWNER } from './OutdoorLightSourceRegistry.js';
 
 export const OUTDOOR_LIGHTING_PROFILES = Object.freeze({
@@ -133,7 +133,9 @@ export class OutdoorLightingDirector {
       });
     });
     this.waterMaterials = [...water]; this.foliageMaterials = [...foliage]; this.contactMaterials = [...contacts]; this.ordinaryMaterials = [...ordinary];
-    Object.assign(this.scene.userData.outdoorLightingDirector, { waterMaterialCount: this.waterMaterials.length, foliageMaterialCount: this.foliageMaterials.length, contactMaterialCount: this.contactMaterials.length, ordinaryMaterialCount: this.ordinaryMaterials.length });
+    const unlitFoliageMaterials = findUnlitOutdoorFoliageMaterials(this.scene);
+    if (unlitFoliageMaterials.length) throw new Error(`Outdoor foliage lighting violation: ${JSON.stringify(unlitFoliageMaterials)}`);
+    Object.assign(this.scene.userData.outdoorLightingDirector, { waterMaterialCount: this.waterMaterials.length, foliageMaterialCount: this.foliageMaterials.length, contactMaterialCount: this.contactMaterials.length, ordinaryMaterialCount: this.ordinaryMaterials.length, unlitFoliageMaterials });
   }
 
   setTorchDebugState(state = {}) { this.torchDebug = state; }

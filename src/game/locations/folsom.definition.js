@@ -142,7 +142,6 @@ const folsomTerrain = Object.freeze({
       terrainStampKit.softTownRise({ id: 'folsom_house_yard_mound', center: [40, -20], radius: 22, height: 0.74, tags: ['between-feature-relief', 'house-grade'] }),
       terrainStampKit.softTownRise({ id: 'folsom_northeast_between_feature_roll', center: [36, 38], radius: 20, height: 0.42, tags: ['between-feature-relief', 'north-road'] }),
       terrainStampKit.shallowGully({ id: 'folsom_west_courtyard_side_hollow', center: [-44, -8], radius: 18, depth: 0.26, tags: ['between-feature-relief', 'courtyard-edge'] }),
-      terrainStampKit.softTownRise({ id: 'folsom_south_campfire_back_roll', center: [6, -34], radius: 18, height: 0.3, tags: ['between-feature-relief', 'campfire-pond'] }),
       terrainStampKit.courtyardShelf({ id: 'folsom_courtyard_pad', center: [0, 0], radius: 18, y: 0.16, tags: ['spawn-courtyard'] }),
       terrainStampKit.buildingPad({ id: 'folsom_tool_shed_pad', center: [-34, -30], radius: 10.5, y: 0.16, tags: ['tool-shed'] }),
       terrainStampKit.buildingPad({ id: 'folsom_shrine_pad', center: [-42, 38], radius: 11.5, y: 0.76, tags: ['shrine'] }),
@@ -437,7 +436,6 @@ export const folsomDefinition = Object.freeze({
   outdoorPickups: [
     { id: 'folsom_shed_rear_knife_pickup', itemId: 'old_work_knife', label: 'Old Work Knife', position: { x: -35, y: 1.1, z: -23.62 }, range: 3.2, acquiredMessage: 'Old Work Knife Acquired.', tags: ['tool-shed', 'shed-back', 'environmental-discovery'] },
   ],
-  outdoorCampfires: [{ id: 'folsom_courtyard_campfire', position: { x: -8, y: 0.16, z: -14 }, tags: ['courtyard', 'pond-path', 'starter-loop'] }],
   // The old folsom_work_yard_tree primitive cylinder/cone fake tree was removed; Folsom harvesting now uses the dark redwood billboard swathes.
   harvestableTrees: [],
   outdoorInteractions: [

@@ -264,6 +264,8 @@ const completedPryGesture = { ...heavyPryGesture, socketState: 'tension_pry', st
 const physicalContact = { screen: { x: 100, y: 100 } };
 
 const folsom = getLocationDefinition('folsom');
+assert.deepEqual(folsom.outdoorCampfires ?? [], [], 'Folsom removes only its authored decorative courtyard campfire.');
+assert.equal(folsom.terrain?.heightStamps?.some((stamp) => stamp.id === 'folsom_south_campfire_back_roll'), false, 'Folsom removes the location-specific campfire terrain reference.');
 assert.equal(hasLocationDefinition('beneath-folsom'), true, 'Beneath Folsom is registered.');
 const beneathFolsom = await loadLocationDefinition('beneath-folsom');
 const underShrineLabyrinth = await loadLocationDefinition('under-shrine-labyrinth');

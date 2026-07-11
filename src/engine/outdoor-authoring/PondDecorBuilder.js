@@ -312,7 +312,7 @@ function createBoulderMaterial(materialKey, textures, makeMaterial) {
   return material;
 }
 
-export function createPondDecorGroup(pond, { terrainSampler, textures = {}, makeMaterial, loadFoliageTexture } = {}) {
+export function createPondDecorGroup(pond, { terrainSampler, textures = {}, makeMaterial, makeFoliageMaterial, loadFoliageTexture } = {}) {
   if (typeof terrainSampler?.sampleOutdoorY !== 'function' || !pond?.pondDecor) return null;
   const placements = generatePondDecorPlacements(pond);
   const group = new THREE.Group();
@@ -335,27 +335,26 @@ export function createPondDecorGroup(pond, { terrainSampler, textures = {}, make
   });
 
   const foliageMaterials = new Map();
+  const foliageGeometry = new THREE.PlaneGeometry(1, 1);
   placements.vegetation.forEach((placement) => {
     if (!foliageMaterials.has(placement.spriteId)) {
       const map = loadFoliageTexture?.(placement.spritePath);
-      const material = new THREE.SpriteMaterial({
-        ...(map ? { map } : {}),
+      const material = makeFoliageMaterial?.(map, {
         alphaTest: POND_FOLIAGE_ALPHA_TEST,
-        depthTest: true,
-        depthWrite: true,
-        transparent: false,
-        toneMapped: false,
-      });
+        name: `${placement.spriteId}-pond-alpha-cutout-depth-billboard-material`,
+      }) ?? new THREE.MeshLambertMaterial({ map, color: 0xffffff, alphaTest: POND_FOLIAGE_ALPHA_TEST, side: THREE.DoubleSide, transparent: false, depthTest: true, depthWrite: true, fog: true, toneMapped: true });
       material.name = `${placement.spriteId}-pond-alpha-cutout-depth-billboard-material`;
       material.userData = {
         ...(material.userData ?? {}),
+        outdoorFoliage: material.userData?.outdoorFoliage ?? { baseColor: new THREE.Color(0xffffff) },
         pondFoliageAlphaCutout: true,
         occludesTransparentPondWater: true,
       };
+      if (!material.isMeshLambertMaterial || material.toneMapped === false || material.fog === false) throw new Error(`Pond vegetation billboard ${placement.spriteId} must use shared light-reactive outdoor foliage material.`);
       if (material.alphaTest < POND_FOLIAGE_ALPHA_TEST || !material.depthTest || !material.depthWrite || material.transparent) throw new Error(`Pond vegetation billboard ${placement.spriteId} must use alpha-cutout depth-writing material.`);
       foliageMaterials.set(placement.spriteId, material);
     }
-    const sprite = new THREE.Sprite(foliageMaterials.get(placement.spriteId));
+    const sprite = new THREE.Mesh(foliageGeometry, foliageMaterials.get(placement.spriteId));
     const [x, z] = placement.position;
     const sinkDepth = placement.scale * placement.sinkRatio;
     const visualBaseOffset = placement.scale * (placement.bottomTransparentPaddingRatio ?? 0);
@@ -364,7 +363,7 @@ export function createPondDecorGroup(pond, { terrainSampler, textures = {}, make
     sprite.name = `OARB-${placement.id}-${placement.spriteId}`;
     sprite.position.set(x, terrainSampler.sampleOutdoorY(x, z) + placement.scale * 0.5 + groundOffset + rootOffsetY - sinkDepth - visualBaseOffset, z);
     sprite.scale.set(placement.scale * placement.width, placement.scale, 1);
-    sprite.userData = { ...placement, sourcePondId: pond.id, visualBaseOffset, rootOffsetY, groundOffset, billboard: true, alphaCutoutDepthWrite: true, visibleDistanceSq: DEFAULT_VISIBLE_DISTANCE_SQ, collision: 'none' };
+    sprite.userData = { ...placement, sourcePondId: pond.id, visualBaseOffset, rootOffsetY, groundOffset, billboard: true, pondFoliageBillboard: true, alphaCutoutDepthWrite: true, visibleDistanceSq: DEFAULT_VISIBLE_DISTANCE_SQ, collision: 'none' };
     group.add(sprite);
   });
   return group;

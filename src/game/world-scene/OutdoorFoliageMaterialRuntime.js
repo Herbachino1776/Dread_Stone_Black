@@ -1,5 +1,27 @@
 import * as THREE from 'three';
 
+function isOutdoorFoliageObject(object, material) {
+  return Boolean(material?.userData?.outdoorFoliage
+    || material?.userData?.pondFoliageAlphaCutout
+    || material?.userData?.authoredFoliageAlphaCutout
+    || object?.userData?.pondFoliageBillboard
+    || (object?.userData?.billboard && String(object?.userData?.spritePath ?? '').includes('/foliage/')));
+}
+
+export function findUnlitOutdoorFoliageMaterials(root) {
+  const violations = [];
+  root?.traverse?.((object) => {
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.filter(Boolean).forEach((material) => {
+      if (!isOutdoorFoliageObject(object, material)) return;
+      if (!material.isMeshLambertMaterial || material.toneMapped === false || material.fog === false || !material.userData?.outdoorFoliage) {
+        violations.push({ objectName: object.name, materialName: material.name, materialType: material.type, toneMapped: material.toneMapped, fog: material.fog });
+      }
+    });
+  });
+  return violations;
+}
+
 export function createOutdoorFoliageMaterial(map, { alphaTest = 0.48, name = 'outdoor-foliage' } = {}) {
   const material = new THREE.MeshLambertMaterial({
     name,

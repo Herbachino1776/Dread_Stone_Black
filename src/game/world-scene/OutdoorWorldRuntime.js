@@ -149,9 +149,10 @@ export function buildOutdoorFieldRuntime({ definition = {}, textureProfiles = {}
   fishingZones.push(...(waterwayRuntime?.fishingZones ?? []));
   const pondMeshes = buildOutdoorPonds({ waterBodies: definition.waterBodies, textureProfiles, makeTexturedMaterial, registerAnimatedTextureFlipbook, createPondLabel, fishingZones });
   pondMeshes.forEach(add);
-  createPondDecorGroups(definition.waterBodies, { terrainSampler, textures: textureProfiles, makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbPondDecorMaterial'), loadFoliageTexture }).forEach(add);
-
   const foliageBillboards = [];
+  const pondDecorGroups = createPondDecorGroups(definition.waterBodies, { terrainSampler, textures: textureProfiles, makeMaterial: makeRuntimeMaterial(makeTexturedMaterial, 'oarbPondDecorMaterial'), makeFoliageMaterial: createOutdoorFoliageMaterial, loadFoliageTexture });
+  pondDecorGroups.forEach((group) => { group.traverse((child) => { if (child.userData?.pondFoliageBillboard) foliageBillboards.push(child); }); add(group); });
+
   const foliageGroup = buildAuthoredFoliageGroup({ foliageBillboards: definition.foliageBillboards, foliageBillboardVariants: definition.foliageBillboardVariants, terrainSampler, pathCorridorRuntime, loadFoliageTexture, createHarvestable, gameState, visibleDistanceSq: constants.visibleDistanceSq, alphaTest: constants.alphaTest });
   if (foliageGroup) { foliageGroup.children.forEach((child) => foliageBillboards.push(child)); add(foliageGroup); }
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createFoliageContactMaterial, createOutdoorFoliageMaterial, updateOutdoorFoliageMaterial } from '../src/game/world-scene/OutdoorFoliageMaterialRuntime.js';
+import { createFoliageContactMaterial, createOutdoorFoliageMaterial, findUnlitOutdoorFoliageMaterials, updateOutdoorFoliageMaterial } from '../src/game/world-scene/OutdoorFoliageMaterialRuntime.js';
+import { createPondDecorGroup } from '../src/engine/outdoor-authoring/PondDecorBuilder.js';
 
 const map = new THREE.Texture();
 const material = createOutdoorFoliageMaterial(map, { alphaTest: 0.48 });
@@ -14,4 +15,19 @@ assert.ok(material.color.r > 0.7 && material.color.g > 0.7 && material.color.b >
 const contact = createFoliageContactMaterial();
 assert.equal(contact.depthWrite, false);
 assert.ok(contact.uniforms.intensity.value < 0.2);
+const pond = { id: 'foliage-material-regression-pond', center: [0, 0], radius: [4, 4], shoreWidth: 1, footprint: {}, pondDecor: { seed: 7, vegetation: { bushesRange: [1, 1], smallTreesRange: [0, 0], foliagePool: ['billboard_bush_dead_scrub_01'] } } };
+const pondGroup = createPondDecorGroup(pond, { terrainSampler: { sampleOutdoorY: () => 0 }, loadFoliageTexture: () => map, makeFoliageMaterial: createOutdoorFoliageMaterial });
+const pondFoliage = [];
+pondGroup.traverse((object) => { if (object.userData?.pondFoliageBillboard) pondFoliage.push(object); });
+assert.equal(pondFoliage.length, 1);
+assert.equal(pondFoliage[0].material.isMeshLambertMaterial, true, 'pond shrubs must not use unlit SpriteMaterial');
+assert.equal(pondFoliage[0].material.userData?.outdoorFoliage != null, true, 'pond shrubs must bind to shared outdoor day/night updates');
+assert.equal(pondFoliage[0].material.toneMapped, true);
+assert.equal(pondFoliage[0].material.fog, true);
+assert.equal(pondFoliage[0].material.alphaTest, 0.35);
+assert.deepEqual(findUnlitOutdoorFoliageMaterials(pondGroup), []);
+const rogueRoot = new THREE.Group();
+const rogue = new THREE.Sprite(new THREE.SpriteMaterial({ map, toneMapped: false }));
+rogue.name = 'regression-unlit-outdoor-shrub'; rogue.userData = { billboard: true, spritePath: './assets/sprites/foliage/regression.png' }; rogueRoot.add(rogue);
+assert.equal(findUnlitOutdoorFoliageMaterials(rogueRoot).length, 1, 'audit must find unlit/full-bright outdoor foliage regressions');
 console.log('Outdoor foliage material: source map, alpha cutout, torch-reactive lighting and pooled contact profile PASS');

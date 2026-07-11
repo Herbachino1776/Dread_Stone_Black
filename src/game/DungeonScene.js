@@ -29,6 +29,7 @@ import { NorthRoadRouteRuntime } from './world-scene/NorthRoadRouteRuntime.js';
 import { getOutdoorWorldClock } from './world-scene/OutdoorWorldClock.js';
 import { OutdoorSkyCycleRuntime } from './world-scene/OutdoorSkyCycleRuntime.js';
 import { OutdoorLightingDirector } from './world-scene/OutdoorLightingDirector.js';
+import { createOutdoorFoliageMaterial } from './world-scene/OutdoorFoliageMaterialRuntime.js';
 import { getOutdoorLightSourceRegistry, OUTDOOR_LIGHT_OWNER } from './world-scene/OutdoorLightSourceRegistry.js';
 import { FolsomNorthGateRuntime } from './world-scene/FolsomNorthGateRuntime.js';
 
@@ -1560,17 +1561,22 @@ export class DungeonScene {
     const group = new THREE.Group();
     group.name = `FIELD-HORIZON-distant-redwood-lod-strip-${FIELD_HORIZON_FOREST_COUNT}-billboards`;
     const geometry = new THREE.PlaneGeometry(1, 1);
-    const materials = FIELD_REDWOOD_SPRITES.map((sprite) => new THREE.MeshBasicMaterial({
-      map: this.loadFoliageTexture(sprite.path),
-      color: 0x2c3028,
-      transparent: true,
-      opacity: 0.72,
-      alphaTest: 0.42,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      fog: true,
-      toneMapped: false,
-    }));
+    const materials = FIELD_REDWOOD_SPRITES.map((sprite) => {
+      const material = new THREE.MeshLambertMaterial({
+        map: this.loadFoliageTexture(sprite.path),
+        color: 0x2c3028,
+        transparent: true,
+        opacity: 0.72,
+        alphaTest: 0.42,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        fog: true,
+        toneMapped: true,
+      });
+      material.userData.outdoorFoliage = { baseColor: material.color.clone() };
+      material.userData.authoredFoliageAlphaCutout = true;
+      return material;
+    });
     materials.forEach((material, index) => { material.name = `${FIELD_REDWOOD_SPRITES[index].id}-distant-haze-lod-material`; });
 
     for (let i = 0; i < FIELD_HORIZON_FOREST_COUNT; i += 1) {
@@ -2091,12 +2097,7 @@ export class DungeonScene {
 
     const geometry = new THREE.PlaneGeometry(1, 1);
     const materials = new Map(FIELD_FOLIAGE_SPRITES.map((sprite) => {
-      const material = new THREE.MeshBasicMaterial({
-        map: this.loadFoliageTexture(sprite.path),
-        ...FOLIAGE_BILLBOARD_DEPTH_SETTINGS,
-        side: THREE.DoubleSide,
-        toneMapped: false,
-      });
+      const material = createOutdoorFoliageMaterial(this.loadFoliageTexture(sprite.path), { alphaTest: FOLIAGE_BILLBOARD_DEPTH_SETTINGS.alphaTest });
       material.name = `${sprite.id}-alpha-tested-billboard-material`;
       return [sprite.id, material];
     }));
