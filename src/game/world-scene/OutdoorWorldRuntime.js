@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { sampleFoliageRootFootprint } from '../../engine/outdoor-authoring/OutdoorFoliageGrounding.js';
 import { createOutdoorTerrainMesh } from '../../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 import { createOutdoorTerrainComposition } from '../../engine/outdoor-authoring/OutdoorTerrainCompositionBuilder.js';
 import { createOutdoorPathCorridorBridgeSurfaces, createOutdoorPathCorridorDebugGroup, createOutdoorPathCorridorMeshes, createOutdoorPathCorridorSurfaceSampler } from '../../engine/outdoor-authoring/OutdoorPathCorridorBuilder.js';
@@ -7,7 +8,7 @@ import { createOutdoorSplinePathSupportSurfaces, createOutdoorSplineTrailEdgeMes
 import { createOutdoorCurvedBlockers } from '../../engine/outdoor-authoring/OutdoorBlockerBuilder.js';
 import { createOutdoorPrimitiveMeshes } from '../../engine/outdoor-authoring/OutdoorPrimitiveBuilder.js';
 import { createPondDecorGroups } from '../../engine/outdoor-authoring/PondDecorBuilder.js';
-import { OUTDOOR_FOLIAGE_SPRITES, OUTDOOR_REDWOOD_FOLIAGE_SPRITES, OUTDOOR_SMALL_FOLIAGE_SPRITES } from '../../engine/outdoor-authoring/OutdoorFoliageRegistry.js';
+import { OUTDOOR_FOLIAGE_SPRITES, OUTDOOR_REDWOOD_FOLIAGE_SPRITES, OUTDOOR_SMALL_FOLIAGE_SPRITES, resolveOutdoorFoliageGrounding } from '../../engine/outdoor-authoring/OutdoorFoliageRegistry.js';
 import { FISH_SPECS } from '../fishing/FishMeshFactory.js';
 import { createOutdoorWaterwayDebugGroup, createOutdoorWaterwayMeshes } from '../../engine/outdoor-authoring/OutdoorWaterwayBuilder.js';
 import { createOutdoorCrossingGroups } from '../world-kits/structures/OutdoorCrossingKit.js';
@@ -247,6 +248,7 @@ function buildAuthoredFoliageGroup({ foliageBillboards = [], foliageBillboardVar
   group.userData = { kind: 'authoredFoliageBillboards', billboardCount: foliageBillboards.length, variantCount: variants.size, alphaCutoutDepthWrite: true, generatedPathCorridorExclusion: Boolean(pathCorridorRuntime) };
   const geometry = new THREE.PlaneGeometry(1, 1); geometry.translate(0, 0.5, 0);
   const materials = new Map();
+  const registryByPath=new Map(OUTDOOR_FOLIAGE_SPRITES.map(sprite=>[sprite.path,sprite])); const groundingReport=[];
   foliageBillboards.forEach((placement) => {
     const variant = variants.get(placement.variantId); const spritePath = placement.spritePath ?? variant?.path;
     if (!spritePath) throw new Error(`Folsom invalid: foliage sprite texture missing for ${placement.id}.`);
@@ -256,15 +258,17 @@ function buildAuthoredFoliageGroup({ foliageBillboards = [], foliageBillboardVar
     }
     const [x, authoredY, z] = placement.position ?? [];
     if (pathCorridorRuntime?.isPointInProtectedFootprint?.(x, z)) return;
-    const groundY = terrainSampler.sampleOutdoorY(x, z);
     const height = placement.height ?? variant?.height ?? 5; const width = placement.width ?? variant?.width ?? 3;
     const mesh = new THREE.Mesh(geometry, materials.get(spritePath)); mesh.name = `OARB-${placement.id}-${placement.variantId}`;
-    const sinkIntoGround = placement.sinkIntoGround ?? variant?.sinkIntoGround ?? 0.06; const bottomTransparentPaddingRatio = placement.bottomTransparentPaddingRatio ?? variant?.bottomTransparentPaddingRatio ?? 0; const rootOffsetY = placement.rootOffsetY ?? variant?.rootOffsetY ?? 0; const groundOffset = placement.groundOffset ?? variant?.groundOffset ?? 0; const visualBaseGroundingOffset = height * bottomTransparentPaddingRatio; const maxBillboardYawOffset = placement.maxBillboardYawOffset ?? (placement.tags?.includes('folsom-foliage-billboard') ? 0.18 : Infinity);
-    mesh.position.set(x, groundY + groundOffset + rootOffsetY - sinkIntoGround - visualBaseGroundingOffset, z); mesh.scale.set(width, height, 1); mesh.rotation.y = placement.yawOffset ?? 0;
-    mesh.userData = { ...placement, authoredY, groundY, sinkIntoGround, bottomTransparentPaddingRatio, rootOffsetY, groundOffset, visualBaseGroundingOffset, maxBillboardYawOffset, bottomAnchoredBillboard: true, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq };
+    const metadata=resolveOutdoorFoliageGrounding(placement,variant,registryByPath.get(spritePath)); const grounding=sampleFoliageRootFootprint({terrainSampler,x,z,height,width,metadata}); const maxBillboardYawOffset = placement.maxBillboardYawOffset ?? (placement.tags?.includes('folsom-foliage-billboard') ? 0.18 : Infinity);
+    mesh.position.set(x, grounding.positionY, z); mesh.scale.set(width, height, 1); mesh.rotation.y = placement.yawOffset ?? 0; mesh.visible=grounding.status!=='rejected';
+    mesh.userData = { ...placement, authoredY, groundY:grounding.centerGroundY, ...metadata, ...grounding, groundingStatus:grounding.status, visualBaseGroundingOffset:grounding.appliedPaddingOffset, maxBillboardYawOffset, bottomAnchoredBillboard: true, billboard: true, alphaCutoutDepthWrite: true, collision: 'none', visibleDistanceSq }; groundingReport.push({id:placement.id,spriteId:metadata.id,...grounding});
     if (placement.layer === 'redwood' && placement.harvestable !== false) { const harvestable = createHarvestable?.({ ...placement, x, z, groundY, zone: placement.tags?.join(':') }, mesh); if (harvestable) mesh.userData.harvestableTreeId = harvestable.id; }
     if (mesh.userData.harvestableTreeId && gameState?.hasHarvestedFieldTree?.(mesh.userData.harvestableTreeId)) mesh.visible = false;
     group.add(mesh);
   });
+  group.userData.groundingReport=groundingReport.sort((a,b)=>b.localGroundVariance-a.localGroundVariance); group.userData.groundingStatusCounts=Object.groupBy?Object.fromEntries(Object.entries(Object.groupBy(groundingReport,item=>item.status)).map(([k,v])=>[k,v.length])):{};
+  const debugGrounding=import.meta.env?.DEV&&globalThis.location&&new URLSearchParams(globalThis.location.search).get('debug')==='foliage-grounding';
+  if(debugGrounding){const debugGroup=new THREE.Group();debugGroup.name='debug-foliage-grounding-root-footprints';const colors={valid:0x35d45b,adjusted:0xf1cf3a,'slope-warning':0xff4a35,rejected:0xff2020,'missing-metadata':0xff2ad4};const order=[1,5,3,7,2,8,4,6];groundingReport.slice(0,120).forEach(report=>{const points=order.map(index=>new THREE.Vector3(report.samples[index].x,report.samples[index].y+.035,report.samples[index].z));const line=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:colors[report.status]??0x2a8cff,depthTest:false}));line.userData={...report,samples:undefined};debugGroup.add(line);});group.add(debugGroup);console.table(groundingReport.slice(0,20).map(({id,spriteId,status,localGroundVariance,localSlope,appliedBurial})=>({id,spriteId,status,localGroundVariance,localSlope,appliedBurial})));}
   return group;
 }

@@ -14,6 +14,8 @@
     "validate:path-corridors": "node tests/outdoor-path-corridor.test.mjs",
     "validate:folsom": "node scripts/validate-folsom.mjs",
     "validate:day-night": "node tests/outdoor-world-clock.test.mjs && node tests/outdoor-lighting.test.mjs && node scripts/validate-outdoor-day-night.mjs",
+    "audit:foliage-alpha": "node scripts/audit-foliage-alpha-baselines.mjs",
+    "validate:foliage-grounding": "node scripts/audit-foliage-alpha-baselines.mjs && node tests/outdoor-foliage-grounding.test.mjs && node scripts/validate-foliage-grounding.mjs",
     "validate:north-road": "node scripts/validate-north-road.mjs",
     "validate:waterways": "node tests/outdoor-waterway.test.mjs",
     "validate:water-bodies": "node tests/outdoor-water-body.test.mjs",
