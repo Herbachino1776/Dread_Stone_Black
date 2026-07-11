@@ -11,4 +11,5 @@ const skySource=readFileSync('src/game/world-scene/OutdoorSkyCycleRuntime.js','u
 const clockSource=readFileSync('src/game/world-scene/OutdoorWorldClock.js','utf8'); assert.match(clockSource,/Date\.now/); assert.equal(OUTDOOR_CYCLE_DURATION_MS,1200000);
 assert.equal(OUTDOOR_SKY_ROTATION_DURATION_MS,1200000);
 for(let i=0;i<=200;i+=1){const p=resolveOutdoorLightingProfile(i/200);assert.ok(p.fogNear<p.fogFar);assert.ok(p.keyIntensity>=0&&p.moonIntensity>=0);assert.ok(p.exposure>=0.9&&p.exposure<=1.1);}
+const night=resolveOutdoorLightingProfile(0.6);assert.ok(night.fogFar<=32);assert.ok(night.fogNear<=3);assert.ok(night.hemi<=0.03);assert.ok(night.moonIntensity<=0.1);assert.ok(night.fog.r<0.001&&night.fog.g<0.001&&night.fog.b<0.001);
 console.log('Day/night validation PASS: 3 assets, normalized blend, 20-minute wall clock, shared red orientation, single sky mesh.');

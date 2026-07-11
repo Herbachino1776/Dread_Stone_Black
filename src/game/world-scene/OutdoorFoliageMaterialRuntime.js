@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export function createOutdoorFoliageMaterial(map, { alphaTest = 0.48, name = 'outdoor-foliage' } = {}) {
-  const material = new THREE.MeshBasicMaterial({
+  const material = new THREE.MeshLambertMaterial({
     name,
     map,
     color: 0xffffff,
@@ -23,8 +23,8 @@ export function createOutdoorFoliageMaterial(map, { alphaTest = 0.48, name = 'ou
 
 export function updateOutdoorFoliageMaterial(material, lighting) {
   if (!material?.userData?.outdoorFoliage) return;
-  const brightness = THREE.MathUtils.clamp(0.78 + lighting.hemi * 0.24 + lighting.keyIntensity * 0.035, 0.82, 1.04);
-  material.color.setRGB(brightness, brightness, brightness).lerp(lighting.sky, 0.08);
+  const brightness = THREE.MathUtils.clamp(0.78 + lighting.hemi * 0.2 + lighting.keyIntensity * 0.03, 0.78, 1.02);
+  material.color.setRGB(brightness, brightness, brightness).lerp(lighting.sky, 0.045);
 }
 
 export function createFoliageContactMaterial() {

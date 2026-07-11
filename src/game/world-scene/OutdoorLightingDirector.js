@@ -5,7 +5,7 @@ import { updateOutdoorFoliageMaterial } from './OutdoorFoliageMaterialRuntime.js
 export const OUTDOOR_LIGHTING_PROFILES = Object.freeze({
   noon: { sky: 0xb9d5ef, ground: 0x706b55, hemi: 0.9, key: 0xffe8be, keyIntensity: 1.12, moon: 0x9eb9df, moonIntensity: 0, fog: 0xb5c7cd, fogNear: 105, fogFar: 470, exposure: 1.0, elevation: 0.82 },
   dusk: { sky: 0xb06e62, ground: 0x4b3c36, hemi: 0.55, key: 0xffa06b, keyIntensity: 0.7, moon: 0xa9c8ed, moonIntensity: 0.08, fog: 0x9a6c62, fogNear: 90, fogFar: 410, exposure: 0.94, elevation: 0.22 },
-  night: { sky: 0x344861, ground: 0x242a2d, hemi: 0.34, key: 0x9dbce5, keyIntensity: 0.02, moon: 0xa9c9f0, moonIntensity: 0.48, fog: 0x344652, fogNear: 86, fogFar: 390, exposure: 1.04, elevation: -0.18 },
+  night: { sky: 0x081018, ground: 0x000000, hemi: 0.025, key: 0x6f829b, keyIntensity: 0, moon: 0x8da8c8, moonIntensity: 0.085, fog: 0x000102, fogNear: 2.5, fogFar: 32, exposure: 0.92, elevation: -0.18 },
   dawn: { sky: 0x9c7774, ground: 0x4b403a, hemi: 0.52, key: 0xffb77c, keyIntensity: 0.62, moon: 0xa9c8ed, moonIntensity: 0.12, fog: 0x927875, fogNear: 92, fogFar: 415, exposure: 0.97, elevation: 0.18 },
 });
 
