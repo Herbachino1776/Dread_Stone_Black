@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { findOutdoorScene, getOutdoorLightSourceRegistry, OUTDOOR_LIGHT_OWNER } from '../world-scene/OutdoorLightSourceRegistry.js';
 
 export const KEEPERS_LANTERN_ITEM_ID = 'keepers_lantern';
 export const KEEPERS_LANTERN_VIEWMODEL_LAYER = 1;
@@ -9,9 +10,12 @@ export const KEEPERS_LANTERN_EMITTER = Object.freeze({
 });
 
 export const KEEPERS_LANTERN_LIGHTING = Object.freeze({
-  point: Object.freeze({ color: 0xc8d1c8, intensity: 5.2, distance: 22, decay: 1.45 }),
-  wash: Object.freeze({ color: 0xd8ddd4, intensity: 6.6, distance: 34, angle: 0.82, penumbra: 0.88, decay: 1.35 }),
+  point: Object.freeze({ color: 0xffb866, intensity: 24, distance: 7, decay: 2 }),
 });
+
+export function resolveKeepersLanternLightActive({ ownsLantern, equippedOffhandId, lit }) {
+  return ownsLantern === true && equippedOffhandId === KEEPERS_LANTERN_ITEM_ID && lit === true;
+}
 
 const REST_POSITION = Object.freeze({ x: -0.48, y: -0.38, z: -1.08 });
 const MAX_SWAY_X = THREE.MathUtils.degToRad(7);
@@ -48,6 +52,7 @@ export class KeepersLanternViewmodel {
     this.equipmentRuntime = equipmentRuntime;
     this.player = player;
     this.elapsed = 0;
+    this.lit = true;
     this.walkAmount = 0;
     this.sway = new THREE.Euler(0, 0, 0, 'YXZ');
     this.previousCameraPosition = new THREE.Vector3();
@@ -83,17 +88,18 @@ export class KeepersLanternViewmodel {
     this.buildProceduralLantern();
     markViewmodel(this.root);
 
-    // The meshes remain an overlay, while both shadowless lights illuminate the
-    // world layer. Glyph visibility is still gated separately by the reveal runtime.
-    this.coldLight.layers.set(0);
-    this.coldRevealSpotLight.layers.set(0);
+    // The model remains an overlay while its single bounded light affects the world.
+    // Glyph visibility is gated separately by the reveal runtime.
+    this.lanternLight.layers.set(0);
+    this.lightRegistry = getOutdoorLightSourceRegistry(findOutdoorScene(this.camera));
+    this.lightRegistry?.register(this.lanternLight, { name: this.lanternLight.name, owner: OUTDOOR_LIGHT_OWNER.PLAYER, source: KEEPERS_LANTERN_ITEM_ID, global: false });
     this.camera?.add?.(this.root);
   }
 
   buildProceduralLantern() {
     const darkMetal = material(0x252b2c, 0.72, 0.58);
     const wornMetal = material(0x465153, 0.78, 0.38);
-    const glass = material(0xa9ccca, 0.32, 0.08, 0x8fc7c5, 1.5);
+    const glass = material(0xd4b887, 0.32, 0.08, 0xff9a42, 1.2);
 
     const handle = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.018, 6, 14, Math.PI), darkMetal);
     handle.name = 'keepers-lantern-short-handle';
@@ -124,28 +130,15 @@ export class KeepersLanternViewmodel {
     this.emitterTransform.rotation.y = Math.PI;
     this.hangingBody.add(this.emitterTransform);
 
-    this.coldLight = new THREE.PointLight(
+    this.lanternLight = new THREE.PointLight(
       KEEPERS_LANTERN_LIGHTING.point.color,
       KEEPERS_LANTERN_LIGHTING.point.intensity,
       KEEPERS_LANTERN_LIGHTING.point.distance,
       KEEPERS_LANTERN_LIGHTING.point.decay,
     );
-    this.coldLight.name = 'keepers-lantern-cold-pale-light';
-    this.coldLight.castShadow = false;
-    this.emitterTransform.add(this.coldLight);
-
-    this.coldRevealSpotLight = new THREE.SpotLight(
-      KEEPERS_LANTERN_LIGHTING.wash.color,
-      KEEPERS_LANTERN_LIGHTING.wash.intensity,
-      KEEPERS_LANTERN_LIGHTING.wash.distance,
-      KEEPERS_LANTERN_LIGHTING.wash.angle,
-      KEEPERS_LANTERN_LIGHTING.wash.penumbra,
-      KEEPERS_LANTERN_LIGHTING.wash.decay,
-    );
-    this.coldRevealSpotLight.name = 'keepers-lantern-focused-reveal-light';
-    this.coldRevealSpotLight.castShadow = false;
-    this.coldRevealSpotLight.target.position.set(0, 0, 2);
-    this.emitterTransform.add(this.coldRevealSpotLight, this.coldRevealSpotLight.target);
+    this.lanternLight.name = 'keepers-lantern-warm-bounded-light';
+    this.lanternLight.castShadow = false;
+    this.emitterTransform.add(this.lanternLight);
   }
 
   rebind({ camera = this.camera, player = this.player } = {}) {
@@ -155,11 +148,27 @@ export class KeepersLanternViewmodel {
       this.camera?.add?.(this.root);
       this.hasPreviousPose = false;
     }
+    const nextRegistry = getOutdoorLightSourceRegistry(findOutdoorScene(this.camera));
+    if (nextRegistry !== this.lightRegistry) {
+      this.lightRegistry?.unregister(this.lanternLight);
+      this.lightRegistry = nextRegistry;
+      this.lightRegistry?.register(this.lanternLight, { name: this.lanternLight.name, owner: OUTDOOR_LIGHT_OWNER.PLAYER, source: KEEPERS_LANTERN_ITEM_ID, global: false });
+    }
     this.player = player;
   }
 
   isActive() {
-    return this.equipmentRuntime?.getEquippedOffhandId?.() === KEEPERS_LANTERN_ITEM_ID;
+    const equippedOffhandId = this.equipmentRuntime?.getEquippedOffhandId?.() ?? null;
+    const ownsLantern = this.equipmentRuntime?.hasItem ? this.equipmentRuntime.hasItem(KEEPERS_LANTERN_ITEM_ID) : equippedOffhandId === KEEPERS_LANTERN_ITEM_ID;
+    return resolveKeepersLanternLightActive({ ownsLantern, equippedOffhandId, lit: this.lit });
+  }
+
+  setLit(lit) {
+    this.lit = lit === true;
+    if (!this.lit) {
+      this.root.visible = false;
+      this.lanternLight.intensity = 0;
+    }
   }
 
   setAimState(state = {}) {
@@ -170,6 +179,7 @@ export class KeepersLanternViewmodel {
   update(deltaSeconds) {
     const active = this.isActive();
     this.root.visible = active;
+    this.lanternLight.intensity = active ? KEEPERS_LANTERN_LIGHTING.point.intensity : 0;
     if (!active || !this.camera) {
       this.hasPreviousPose = false;
       return;
@@ -251,6 +261,7 @@ export class KeepersLanternViewmodel {
   }
 
   dispose() {
+    this.lightRegistry?.unregister(this.lanternLight);
     this.camera?.remove?.(this.root);
     this.root.traverse((child) => {
       child.geometry?.dispose?.();

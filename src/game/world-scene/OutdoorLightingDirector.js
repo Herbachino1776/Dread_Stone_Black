@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import { resolveOutdoorSkyWeights, resolveOutdoorTimeOfDay } from './OutdoorWorldClock.js';
 import { updateOutdoorWaterMaterial } from './OutdoorWaterMaterialRuntime.js';
 import { updateOutdoorFoliageMaterial } from './OutdoorFoliageMaterialRuntime.js';
+import { getOutdoorLightSourceRegistry, OUTDOOR_LIGHT_OWNER } from './OutdoorLightSourceRegistry.js';
 
 export const OUTDOOR_LIGHTING_PROFILES = Object.freeze({
   noon: { sky: 0xb9d5ef, ground: 0x706b55, hemi: 0.9, key: 0xffe8be, keyIntensity: 1.12, moon: 0x9eb9df, moonIntensity: 0, fog: 0xb5c7cd, fogNear: 105, fogFar: 470, exposure: 1, elevation: 0.82 },
   dusk: { sky: 0x3b2021, ground: 0x080302, hemi: 0.18, key: 0xff8a55, keyIntensity: 0.22, moon: 0x8fa8c4, moonIntensity: 0.005, fog: 0x170b0c, fogNear: 8, fogFar: 55, exposure: 0.86, elevation: 0.04 },
-  night: { sky: 0x02060a, ground: 0x000000, hemi: 0.006, key: 0x000000, keyIntensity: 0, moon: 0x71869e, moonIntensity: 0.005, fog: 0x000001, fogNear: 1.25, fogFar: 11, exposure: 0.78, elevation: -0.18 },
+  night: { sky: 0x02060a, ground: 0x000000, hemi: 0, key: 0x000000, keyIntensity: 0, moon: 0x000000, moonIntensity: 0, fog: 0x000000, fogNear: 115, fogFar: 470, exposure: 0.72, elevation: -0.18 },
   dawn: { sky: 0x332426, ground: 0x090504, hemi: 0.16, key: 0xffa76a, keyIntensity: 0.18, moon: 0x8fa8c4, moonIntensity: 0.004, fog: 0x160f11, fogNear: 9, fogFar: 58, exposure: 0.86, elevation: 0.035 },
 });
 
@@ -67,6 +68,10 @@ export function resolveOutdoorPresentationState(snapshotOrPhase) {
     ordinaryEmissiveScale: 1 - torchNeedLevel,
     sunCastsShadow,
     moonCastsShadow: false,
+    environmentIntensity: timeOfDay.name === 'night' ? 0 : 1,
+    playerNaturalLightIntensity: 0,
+    cameraNaturalLightIntensity: 0,
+    fallbackExplorationLightEnabled: false,
   };
 }
 
@@ -83,6 +88,7 @@ export class OutdoorLightingDirector {
     this.moon = new THREE.DirectionalLight();
     this.moon.name = 'outdoor-cycle-moon-fill';
     this.moon.castShadow = false;
+    this.lightRegistry = getOutdoorLightSourceRegistry(scene);
     const high = qualityTier === 'desktop-high';
     this.shadowMapSize = high ? 2048 : 1024;
     this.shadowRadius = high ? 72 : 52;
@@ -93,6 +99,9 @@ export class OutdoorLightingDirector {
     this.key.shadow.normalBias = 0.035;
     this.key.shadow.radius = 1.5;
     scene.add(this.hemisphere, this.key, this.key.target, this.moon, this.moon.target);
+    this.lightRegistry.register(this.hemisphere, { name: this.hemisphere.name, owner: OUTDOOR_LIGHT_OWNER.WORLD, source: 'outdoor-day-night-cycle', global: true });
+    this.lightRegistry.register(this.key, { name: this.key.name, owner: OUTDOOR_LIGHT_OWNER.WORLD, source: 'outdoor-sun-cycle', global: true });
+    this.lightRegistry.register(this.moon, { name: this.moon.name, owner: OUTDOOR_LIGHT_OWNER.WORLD, source: 'outdoor-moon-cycle', global: true });
     if (!(scene.fog instanceof THREE.Fog)) scene.fog = new THREE.Fog(0xb5c7cd, 105, 470);
     scene.userData.outdoorLightingDirector = { qualityTier, shadowMapSize: this.shadowMapSize, primaryShadowCasters: 1 };
     this.waterMaterials = [];
@@ -116,7 +125,8 @@ export class OutdoorLightingDirector {
         if (material.userData?.outdoorWater) water.add(material);
         if (material.userData?.outdoorFoliage) foliage.add(material);
         if (material.userData?.outdoorFoliageContact) contacts.add(material);
-        if (material.userData?.ordinaryOutdoorMaterial) {
+        if (material.userData?.ordinaryOutdoorMaterial || ((material.isMeshStandardMaterial || material.isMeshLambertMaterial || material.isMeshPhongMaterial) && !material.userData?.authoredLuminousMaterial)) {
+          material.userData.ordinaryOutdoorMaterial = true;
           material.userData.baseOutdoorEmissiveIntensity ??= material.emissiveIntensity ?? 0;
           ordinary.add(material);
         }
@@ -138,6 +148,7 @@ export class OutdoorLightingDirector {
     if (!shadowWasEnabled && this.key.castShadow) this.key.shadow.needsUpdate = true;
     this.moon.color.copy(state.moon); this.moon.intensity = state.moonIntensity; this.moon.castShadow = false;
     this.scene.fog.color.copy(state.fog); this.scene.fog.near = state.fogNear; this.scene.fog.far = state.fogFar; this.scene.background = state.fog.clone();
+    this.scene.environmentIntensity = state.environmentIntensity;
     const angle = clockState.skyRotation + state.phase * Math.PI * 2;
     const center = player?.position ?? { x: 0, y: 0, z: 0 };
     const texel = (this.shadowRadius * 2) / this.shadowMapSize;
@@ -156,10 +167,17 @@ export class OutdoorLightingDirector {
     this.contactMaterials.forEach((material) => { material.uniforms.intensity.value = state.sunCastsShadow ? 0.035 + 0.105 * state.sunIntensity : 0; });
     this.ordinaryMaterials.forEach((material) => { material.emissiveIntensity = material.userData.baseOutdoorEmissiveIntensity * state.ordinaryEmissiveScale; });
     this.exposure = state.outdoorExposure;
+    const anonymousCameraLightsDisabled = state.name === 'night' ? this.lightRegistry.disableAnonymousCameraLights(player?.camera) : [];
+    const unregisteredWorldLightsDisabled = state.name === 'night' ? this.lightRegistry.disableUnregisteredWorldLights() : [];
+    const activeLights = this.lightRegistry.getActiveDiagnostics();
+    this.scene.userData.outdoorActiveLightDiagnostics = activeLights;
     const torch = this.torchDebug;
     const activeShadowCasters = Number(this.key.castShadow) + Number(Boolean(torch.castShadow));
-    this.debug = { ...clockState, ...state, exposure: state.outdoorExposure, shadowMapSize: this.shadowMapSize, shadowRadius: this.shadowRadius, texelSize: texel, snappedCenter: { x: cx, z: cz }, activeShadowCasters, torch };
-    if (this.debugPanel) this.debugPanel.textContent = `OUTDOOR ${state.name.toUpperCase()} phase ${state.phase.toFixed(4)}\nweights day/dusk/night/dawn ${state.dayWeight.toFixed(2)} ${state.duskWeight.toFixed(2)} ${state.nightWeight.toFixed(2)} ${state.dawnWeight.toFixed(2)}\nsun elev ${state.sunElevation.toFixed(3)} intensity ${state.sunIntensity.toFixed(3)} shadow ${this.key.castShadow}\nmoon ${state.moonIntensity.toFixed(3)} shadow false hemi ${state.hemi.toFixed(3)}\nfog #${state.fog.getHexString()} ${state.fogNear.toFixed(2)}-${state.fogFar.toFixed(2)} exposure ${state.outdoorExposure.toFixed(2)} emissive ${state.ordinaryEmissiveScale.toFixed(2)}\ntorch owned ${Boolean(torch.owned)} equipped ${Boolean(torch.equipped)} lit ${Boolean(torch.lit)}\ntorch intensity ${(torch.intensity ?? 0).toFixed(2)} range ${(torch.range ?? 0).toFixed(1)} shadow ${Boolean(torch.castShadow)}\nshadow lights ${activeShadowCasters} map ${this.shadowMapSize}px radius ${this.shadowRadius} texel ${texel.toFixed(3)}`;
+    this.debug = { ...clockState, ...state, exposure: state.outdoorExposure, shadowMapSize: this.shadowMapSize, shadowRadius: this.shadowRadius, texelSize: texel, snappedCenter: { x: cx, z: cz }, activeShadowCasters, torch, activeLights, anonymousCameraLightsDisabled, unregisteredWorldLightsDisabled };
+    if (this.debugPanel) {
+      const lightLines = this.lightRegistry.getDiagnostics().map((light) => `${light.active ? '*' : '-'} ${light.name} ${light.type} owner=${light.owner} source=${light.source} intensity=${light.intensity.toFixed(3)} range=${light.range.toFixed(2)} pos=${light.position.x.toFixed(1)},${light.position.y.toFixed(1)},${light.position.z.toFixed(1)} shadow=${light.castShadow} ${light.global ? 'global' : 'local'}`);
+      this.debugPanel.textContent = `OUTDOOR ${state.name.toUpperCase()} phase ${state.phase.toFixed(4)}\nweights day/dusk/night/dawn ${state.dayWeight.toFixed(2)} ${state.duskWeight.toFixed(2)} ${state.nightWeight.toFixed(2)} ${state.dawnWeight.toFixed(2)}\nsun elev ${state.sunElevation.toFixed(3)} intensity ${state.sunIntensity.toFixed(3)} shadow ${this.key.castShadow}\nmoon ${state.moonIntensity.toFixed(3)} shadow false hemi ${state.hemi.toFixed(3)} environment ${state.environmentIntensity.toFixed(3)}\nfog #${state.fog.getHexString()} ${state.fogNear.toFixed(2)}-${state.fogFar.toFixed(2)} exposure ${state.outdoorExposure.toFixed(2)} emissive ${state.ordinaryEmissiveScale.toFixed(2)}\ntorch owned ${Boolean(torch.owned)} equipped ${Boolean(torch.equipped)} lit ${Boolean(torch.lit)}\ntorch intensity ${(torch.intensity ?? 0).toFixed(2)} range ${(torch.range ?? 0).toFixed(1)} shadow ${Boolean(torch.castShadow)}\nshadow lights ${activeShadowCasters} map ${this.shadowMapSize}px radius ${this.shadowRadius} texel ${texel.toFixed(3)}\nACTIVE/AUTHORED LIGHT SOURCES\n${lightLines.join('\n') || '(none)'}`;
+    }
     return this.debug;
   }
 }

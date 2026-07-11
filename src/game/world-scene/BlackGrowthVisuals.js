@@ -43,7 +43,7 @@ export function loadWrappedBlackGrowthTexture(textureLoader, path, repeat = [1.1
 }
 
 export function createBlackGrowthPlaneMaterial(map, { opacity = 1, color = 0x756f63 } = {}) {
-  return new THREE.MeshBasicMaterial({
+  return new THREE.MeshLambertMaterial({
     map,
     color,
     transparent: true,

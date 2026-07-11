@@ -71,7 +71,7 @@ export class RendererHost {
 
   applySceneExposure(dungeon) {
     const target = dungeon?.outdoorLightingDirector?.exposure ?? this.defaultToneMappingExposure;
-    this.renderer.toneMappingExposure += (target - this.renderer.toneMappingExposure) * 0.08;
+    this.renderer.toneMappingExposure = target;
   }
 
   renderViewmodelOverlay(scene, camera, layer = 1) {

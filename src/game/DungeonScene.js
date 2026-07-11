@@ -29,6 +29,7 @@ import { NorthRoadRouteRuntime } from './world-scene/NorthRoadRouteRuntime.js';
 import { getOutdoorWorldClock } from './world-scene/OutdoorWorldClock.js';
 import { OutdoorSkyCycleRuntime } from './world-scene/OutdoorSkyCycleRuntime.js';
 import { OutdoorLightingDirector } from './world-scene/OutdoorLightingDirector.js';
+import { getOutdoorLightSourceRegistry, OUTDOOR_LIGHT_OWNER } from './world-scene/OutdoorLightSourceRegistry.js';
 import { FolsomNorthGateRuntime } from './world-scene/FolsomNorthGateRuntime.js';
 
 const WALL_HEIGHT = 3.2;
@@ -645,6 +646,7 @@ export class DungeonScene {
     if (!definition?.terrain) throw new Error(`Missing outdoor field terrain for compiled runtime location: ${locationId}`);
 
     const runtime = this.compileLocationRuntime(locationId);
+    if (['folsom', 'north-road'].includes(locationId)) this.stripCycleDrivenOutdoorCompilerLights(runtime);
 
     const [sizeX = FIELD_SIZE, sizeZ = FIELD_SIZE] = Array.isArray(definition.terrain.size) ? definition.terrain.size : [];
     const walkableRect = {
@@ -687,6 +689,17 @@ export class DungeonScene {
     const exit = runtime.exits.find((candidate) => candidate.toLocation === 'reliquary-field') ?? runtime.exits[0];
     this.indoorExitTarget = exit?.position?.clone() ?? this.indoorExitTarget;
     return runtime;
+  }
+
+  stripCycleDrivenOutdoorCompilerLights(runtime) {
+    const removed = [];
+    runtime?.group?.traverse?.((object) => {
+      if (object.isLight) removed.push(object);
+    });
+    removed.forEach((light) => light.parent?.remove?.(light));
+    runtime.lights = [];
+    runtime.pointLights = [];
+    runtime.outdoorCompilerLightsRemoved = removed.map((light) => light.name || light.type);
   }
 
   configureBlackGrassTempleRuntime() {
@@ -1162,6 +1175,12 @@ export class DungeonScene {
         point.name = light.id ?? `${definition.id}-outdoor-point-light`;
         point.position.copy(this.toVector3(light.position, 2));
         this.scene.add(point);
+        getOutdoorLightSourceRegistry(this.scene).register(point, {
+          name: point.name,
+          owner: OUTDOOR_LIGHT_OWNER.WORLD,
+          source: light.source ?? light.fixtureId ?? light.id,
+          global: false,
+        });
       }
     });
     if (!hasAmbient) this.addOutdoorLights();
@@ -2587,7 +2606,7 @@ export class DungeonScene {
 
   addFieldCampfire(position, id = null) {
     const campfireId = id ?? `field_survival_campfire_${this.fieldSurvivalObjects.size}`;
-    const group = this.createFieldCampfireGroup();
+    const group = this.createFieldCampfireGroup(campfireId);
     group.name = `${campfireId}-visual`;
     const groundY = this.resolveOutdoorVisibleSurfaceY(position.x, position.z, { fallbackY: position.y ?? 0 }).y;
     group.position.set(position.x, groundY, position.z);
@@ -2611,7 +2630,7 @@ export class DungeonScene {
     return this.area === 'field' || this.isCompiledOutdoorFieldArea();
   }
 
-  createFieldCampfireGroup() {
+  createFieldCampfireGroup(sourceId = 'field-campfire') {
     const group = new THREE.Group();
     group.userData = { objectCategory: 'fieldCampfire', futureExpansion: ['cooking rack', 'fish cooking visual', 'campfire audio', 'ember polish'] };
     const logMat = this.makeTexturedMaterial({
@@ -2651,6 +2670,12 @@ export class DungeonScene {
     light.name = 'field-campfire-subtle-warm-flame-glow';
     light.position.set(0, 0.62, 0);
     group.add(light);
+    getOutdoorLightSourceRegistry(this.scene).register(light, {
+      name: light.name,
+      owner: OUTDOOR_LIGHT_OWNER.WORLD,
+      source: sourceId,
+      global: false,
+    });
     return group;
   }
 

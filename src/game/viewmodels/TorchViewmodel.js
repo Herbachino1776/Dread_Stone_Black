@@ -1,12 +1,11 @@
 import * as THREE from 'three';
 import { KEEPERS_LANTERN_VIEWMODEL_LAYER } from './KeepersLanternViewmodel.js';
+import { findOutdoorScene, getOutdoorLightSourceRegistry, OUTDOOR_LIGHT_OWNER } from '../world-scene/OutdoorLightSourceRegistry.js';
 
 export const TORCH_ITEM_ID = 'torch';
 
 export const TORCH_LIGHTING = Object.freeze({
-  point: Object.freeze({ color: 0xff8a24, intensity: 7.2, distance: 7.5, decay: 2 }),
-  nearFill: Object.freeze({ color: 0xff9332, intensity: 2.4, distance: 3.6, decay: 2, projectionOffset: 0.72 }),
-  wash: Object.freeze({ color: 0xff9b3d, intensity: 6.2, distance: 10, angle: 0.78, penumbra: 0.88, decay: 2, projectionOffset: 0.72, shadowMapSize: 512 }),
+  point: Object.freeze({ color: 0xff8a24, intensity: 28, distance: 8, decay: 2 }),
 });
 
 export function resolveTorchLightActive({ ownsTorch, equippedOffhandId, lit }) {
@@ -64,8 +63,8 @@ export class TorchViewmodel {
     this.buildProceduralTorch();
     markViewmodel(this.root);
     this.pointLight.layers.set(0);
-    this.nearFillLight.layers.set(0);
-    this.warmSpotLight.layers.set(0);
+    this.lightRegistry = getOutdoorLightSourceRegistry(findOutdoorScene(this.camera));
+    this.lightRegistry?.register(this.pointLight, { name: this.pointLight.name, owner: OUTDOOR_LIGHT_OWNER.PLAYER, source: TORCH_ITEM_ID, global: false });
     this.camera?.add?.(this.root);
   }
 
@@ -159,24 +158,7 @@ export class TorchViewmodel {
     this.pointLight = new THREE.PointLight(TORCH_LIGHTING.point.color, TORCH_LIGHTING.point.intensity, TORCH_LIGHTING.point.distance, TORCH_LIGHTING.point.decay);
     this.pointLight.name = 'torch-head-warm-point-light';
     this.pointLight.castShadow = false;
-    // Viewmodel geometry can extend through a wall before the player collider reaches it.
-    // Keep the physical light on the flame, but project a low, broad fill from a point
-    // closer to the camera so nearby surfaces cannot fall behind every light source.
-    this.nearFillLight = new THREE.PointLight(TORCH_LIGHTING.nearFill.color, TORCH_LIGHTING.nearFill.intensity, TORCH_LIGHTING.nearFill.distance, TORCH_LIGHTING.nearFill.decay);
-    this.nearFillLight.name = 'torch-head-near-surface-fill';
-    this.nearFillLight.position.z = TORCH_LIGHTING.nearFill.projectionOffset;
-    this.nearFillLight.castShadow = false;
-    this.warmSpotLight = new THREE.SpotLight(TORCH_LIGHTING.wash.color, TORCH_LIGHTING.wash.intensity, TORCH_LIGHTING.wash.distance, TORCH_LIGHTING.wash.angle, TORCH_LIGHTING.wash.penumbra, TORCH_LIGHTING.wash.decay);
-    this.warmSpotLight.name = 'torch-head-forward-wash';
-    this.warmSpotLight.position.z = TORCH_LIGHTING.wash.projectionOffset;
-    this.warmSpotLight.castShadow = true;
-    this.warmSpotLight.shadow.mapSize.set(TORCH_LIGHTING.wash.shadowMapSize, TORCH_LIGHTING.wash.shadowMapSize);
-    this.warmSpotLight.shadow.camera.near = 0.2;
-    this.warmSpotLight.shadow.camera.far = TORCH_LIGHTING.wash.distance + 0.5;
-    this.warmSpotLight.shadow.bias = -0.00025;
-    this.warmSpotLight.shadow.normalBias = 0.045;
-    this.warmSpotLight.target.position.set(0, 0.2, -6);
-    this.emitterTransform.add(this.pointLight, this.nearFillLight, this.warmSpotLight, this.warmSpotLight.target);
+    this.emitterTransform.add(this.pointLight);
     this.aimHitAnchor = this.emitterTransform;
   }
 
@@ -189,14 +171,17 @@ export class TorchViewmodel {
 
   setLit(lit) {
     this.lit = lit === true;
-    if (!this.lit) this.root.visible = false;
+    if (!this.lit) {
+      this.root.visible = false;
+      this.pointLight.intensity = 0;
+    }
   }
 
   getLightingState() {
     const equippedOffhandId = this.equipmentRuntime?.getEquippedOffhandId?.() ?? null;
     const owned = this.equipmentRuntime?.hasItem ? this.equipmentRuntime.hasItem(TORCH_ITEM_ID) : equippedOffhandId === TORCH_ITEM_ID;
     const active = this.isActive();
-    return { owned, equipped: equippedOffhandId === TORCH_ITEM_ID, lit: this.lit, active, intensity: active ? this.warmSpotLight.intensity : 0, range: TORCH_LIGHTING.wash.distance, castShadow: active && this.warmSpotLight.castShadow, shadowMapSize: TORCH_LIGHTING.wash.shadowMapSize, debugOverride: this.debugTorchOverride };
+    return { owned, equipped: equippedOffhandId === TORCH_ITEM_ID, lit: this.lit, active, intensity: active ? this.pointLight.intensity : 0, range: TORCH_LIGHTING.point.distance, decay: TORCH_LIGHTING.point.decay, castShadow: false, debugOverride: this.debugTorchOverride };
   }
 
   setAimState(state = {}) {
@@ -207,6 +192,7 @@ export class TorchViewmodel {
   update(deltaSeconds) {
     const active = this.isActive();
     this.root.visible = active;
+    this.pointLight.intensity = active ? TORCH_LIGHTING.point.intensity : 0;
     if (!active) return;
     const dt = THREE.MathUtils.clamp(deltaSeconds, 0.001, 0.05);
     this.elapsed += dt;
@@ -222,8 +208,6 @@ export class TorchViewmodel {
     });
     const flicker = 0.97 + Math.sin(this.elapsed * 6.7) * 0.02 + Math.sin(this.elapsed * 11.3) * 0.012;
     this.pointLight.intensity = TORCH_LIGHTING.point.intensity * flicker;
-    this.nearFillLight.intensity = TORCH_LIGHTING.nearFill.intensity * (0.99 + (flicker - 0.97) * 0.3);
-    this.warmSpotLight.intensity = TORCH_LIGHTING.wash.intensity * (0.985 + (flicker - 0.97) * 0.55);
   }
 
   projectAimHit(clientX, clientY, viewport) {
@@ -239,13 +223,21 @@ export class TorchViewmodel {
   }
 
   rebind({ camera = this.camera } = {}) {
-    if (camera === this.camera) return;
-    this.camera?.remove?.(this.root);
-    this.camera = camera;
-    this.camera?.add?.(this.root);
+    if (camera !== this.camera) {
+      this.camera?.remove?.(this.root);
+      this.camera = camera;
+      this.camera?.add?.(this.root);
+    }
+    const nextRegistry = getOutdoorLightSourceRegistry(findOutdoorScene(this.camera));
+    if (nextRegistry !== this.lightRegistry) {
+      this.lightRegistry?.unregister(this.pointLight);
+      this.lightRegistry = nextRegistry;
+      this.lightRegistry?.register(this.pointLight, { name: this.pointLight.name, owner: OUTDOOR_LIGHT_OWNER.PLAYER, source: TORCH_ITEM_ID, global: false });
+    }
   }
 
   dispose() {
+    this.lightRegistry?.unregister(this.pointLight);
     this.camera?.remove?.(this.root);
     this.root.traverse((child) => {
       child.geometry?.dispose?.();
