@@ -1,4 +1,43 @@
 import * as THREE from 'three';
-export function createOutdoorFoliageMaterial(map,{alphaTest=.48,name='outdoor-foliage'}={}){const customUniforms={map:{value:map},alphaCutoff:{value:alphaTest},skyColor:{value:new THREE.Color(0xb9d5ef)},keyColor:{value:new THREE.Color(0xffe8be)},ambientIntensity:{value:.9},keyIntensity:{value:1}};const uniforms={...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),...customUniforms};const material=new THREE.ShaderMaterial({name,uniforms,side:THREE.DoubleSide,transparent:false,depthTest:true,depthWrite:true,fog:true,toneMapped:true,vertexShader:`varying vec2 vUv;varying float vHeight;#include <fog_pars_vertex> void main(){vUv=uv;vHeight=uv.y;vec4 mvPosition=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mvPosition;#include <fog_vertex>}`,fragmentShader:`uniform sampler2D map;uniform float alphaCutoff;uniform vec3 skyColor;uniform vec3 keyColor;uniform float ambientIntensity;uniform float keyIntensity;varying vec2 vUv;varying float vHeight;#include <fog_pars_fragment> void main(){vec4 texel=texture2D(map,vUv);if(texel.a<alphaCutoff)discard;float vertical=mix(.78,1.04,smoothstep(0.,1.,vHeight));vec3 fill=mix(vec3(.72),skyColor,.18)*ambientIntensity;vec3 key=keyColor*(.08*keyIntensity);gl_FragColor=vec4(texel.rgb*(fill+key)*vertical,1.0);#include <tonemapping_fragment>#include <colorspace_fragment>#include <fog_fragment>}`});material.userData={outdoorFoliage:{uniforms:material.uniforms},authoredFoliageAlphaCutout:true,occludesTransparentWater:true};return material;}
-export function updateOutdoorFoliageMaterial(material,lighting){const u=material?.userData?.outdoorFoliage?.uniforms;if(!u)return;u.skyColor.value.copy(lighting.sky);u.keyColor.value.copy(lighting.key);u.ambientIntensity.value=Math.max(.34,lighting.hemi);u.keyIntensity.value=lighting.keyIntensity;}
-export function createFoliageContactMaterial(){const material=new THREE.ShaderMaterial({name:'outdoor-pooled-root-contact-material',transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,uniforms:{intensity:{value:.12}},vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,fragmentShader:`uniform float intensity;varying vec2 vUv;void main(){float d=length(vUv-.5)*2.;float a=smoothstep(1.,.12,d)*intensity;gl_FragColor=vec4(.035,.028,.022,a);}`});material.userData={outdoorFoliageContact:true};return material;}
+
+export function createOutdoorFoliageMaterial(map, { alphaTest = 0.48, name = 'outdoor-foliage' } = {}) {
+  const material = new THREE.MeshBasicMaterial({
+    name,
+    map,
+    color: 0xffffff,
+    alphaTest,
+    side: THREE.DoubleSide,
+    transparent: false,
+    depthTest: true,
+    depthWrite: true,
+    fog: true,
+    toneMapped: true,
+  });
+  material.userData = {
+    outdoorFoliage: { baseColor: new THREE.Color(0xffffff) },
+    authoredFoliageAlphaCutout: true,
+    occludesTransparentWater: true,
+  };
+  return material;
+}
+
+export function updateOutdoorFoliageMaterial(material, lighting) {
+  if (!material?.userData?.outdoorFoliage) return;
+  const brightness = THREE.MathUtils.clamp(0.78 + lighting.hemi * 0.24 + lighting.keyIntensity * 0.035, 0.82, 1.04);
+  material.color.setRGB(brightness, brightness, brightness).lerp(lighting.sky, 0.08);
+}
+
+export function createFoliageContactMaterial() {
+  const material = new THREE.ShaderMaterial({
+    name: 'outdoor-pooled-root-contact-material',
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    uniforms: { intensity: { value: 0.12 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader: 'uniform float intensity; varying vec2 vUv; void main(){ float d=length(vUv-.5)*2.; float a=smoothstep(1.,.12,d)*intensity; gl_FragColor=vec4(.035,.028,.022,a); }',
+  });
+  material.userData = { outdoorFoliageContact: true };
+  return material;
+}

@@ -1,13 +1,37 @@
 import * as THREE from 'three';
 
-export function createOutdoorWaterMaterial(profile={}, { mode='pond', name='outdoor-water' }={}){
-  const material=new THREE.MeshStandardMaterial({color:profile.color??0x58746c,roughness:Math.max(.62,profile.roughness??.84),metalness:0,transparent:true,opacity:profile.opacity??.64,depthWrite:false,side:THREE.DoubleSide,map:profile.map??null});
-  material.name=name;material.toneMapped=true;material.fog=true;
-  material.userData.outdoorWater={mode,phase:0,skyColor:new THREE.Color(0xb9d5ef),keyColor:new THREE.Color(0xffe8be),moonColor:new THREE.Color(0xa9c9f0),keyIntensity:1,moonIntensity:0,flowSpeed:mode==='flow'?.018:.006,rippleScale:mode==='pond'?.7:1.25};
-  material.onBeforeCompile=(shader)=>{const u=material.userData.outdoorWater;shader.uniforms.waterSkyColor={value:u.skyColor};shader.uniforms.waterKeyColor={value:u.keyColor};shader.uniforms.waterMoonColor={value:u.moonColor};shader.uniforms.waterKeyIntensity={value:u.keyIntensity};shader.uniforms.waterMoonIntensity={value:u.moonIntensity};shader.uniforms.waterPhase={value:u.phase};
-    shader.vertexShader=`attribute float edgeDistance01; attribute float waterDepth01; attribute float flowDistance; varying float vWaterEdge; varying float vWaterDepth; varying float vFlowDistance;\n${shader.vertexShader}`.replace('#include <begin_vertex>','#include <begin_vertex>\nvWaterEdge=edgeDistance01;vWaterDepth=waterDepth01;vFlowDistance=flowDistance;');
-    shader.fragmentShader=`uniform vec3 waterSkyColor;uniform vec3 waterKeyColor;uniform vec3 waterMoonColor;uniform float waterKeyIntensity;uniform float waterMoonIntensity;uniform float waterPhase;varying float vWaterEdge;varying float vWaterDepth;varying float vFlowDistance;\n${shader.fragmentShader}`.replace('#include <opaque_fragment>',`float waterFresnel=pow(1.0-abs(dot(normalize(normal),normalize(vViewPosition))),3.0);float ripple=sin(vFlowDistance*0.7+waterPhase*6.28318)*0.018;vec3 shallowTint=mix(vec3(0.34,0.47,0.42),waterSkyColor,0.22);vec3 deepTint=mix(vec3(0.10,0.20,0.20),waterSkyColor,0.12);outgoingLight=mix(shallowTint,deepTint,clamp(vWaterDepth,0.0,1.0))*0.34+outgoingLight*0.72+waterSkyColor*(waterFresnel*0.16+ripple)+waterKeyColor*waterKeyIntensity*waterFresnel*0.055+waterMoonColor*waterMoonIntensity*waterFresnel*0.09;diffuseColor.a*=mix(0.7,1.0,clamp(vWaterEdge,0.0,1.0));#include <opaque_fragment>`);material.userData.outdoorWater.shader=shader;};
-  material.customProgramCacheKey=()=>`dsb-outdoor-water-v1-${mode}`;return material;
+export function createOutdoorWaterMaterial(profile = {}, { mode = 'pond', name = 'outdoor-water' } = {}) {
+  const baseColor = new THREE.Color(profile.color ?? 0x58746c);
+  const material = new THREE.MeshStandardMaterial({
+    name,
+    map: profile.map ?? null,
+    color: baseColor,
+    roughness: Math.max(0.62, profile.roughness ?? 0.84),
+    metalness: 0,
+    transparent: true,
+    opacity: profile.opacity ?? 0.64,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    fog: true,
+    toneMapped: true,
+    emissive: 0x000000,
+    emissiveIntensity: 0.08,
+  });
+  material.userData.outdoorWater = {
+    mode,
+    phase: 0,
+    baseColor,
+    flowSpeed: mode === 'flow' ? 0.018 : 0.006,
+    rippleScale: mode === 'pond' ? 0.7 : 1.25,
+  };
+  return material;
 }
 
-export function updateOutdoorWaterMaterial(material,lighting,clockState){const data=material?.userData?.outdoorWater;if(!data)return;data.phase=clockState?.phase??0;data.skyColor.copy(lighting.sky);data.keyColor.copy(lighting.key);data.moonColor.copy(lighting.moon);data.keyIntensity=lighting.keyIntensity;data.moonIntensity=lighting.moonIntensity;const uniforms=data.shader?.uniforms;if(uniforms){uniforms.waterPhase.value=data.phase;uniforms.waterKeyIntensity.value=data.keyIntensity;uniforms.waterMoonIntensity.value=data.moonIntensity;}}
+export function updateOutdoorWaterMaterial(material, lighting, clockState) {
+  const data = material?.userData?.outdoorWater;
+  if (!data) return;
+  data.phase = clockState?.phase ?? 0;
+  material.color.copy(data.baseColor).lerp(lighting.sky, 0.11);
+  material.emissive.copy(lighting.sky).multiplyScalar(0.025 + lighting.moonIntensity * 0.035);
+  material.emissiveIntensity = 0.08;
+}

@@ -1,6 +1,6 @@
 export const OUTDOOR_CLOCK_STORAGE_KEY = 'dreadStoneBlack.outdoorWorldClock.v1';
 export const OUTDOOR_CYCLE_DURATION_MS = 20 * 60 * 1000;
-export const OUTDOOR_SKY_ROTATION_DURATION_MS = 80 * 60 * 1000;
+export const OUTDOOR_SKY_ROTATION_DURATION_MS = 40 * 60 * 1000;
 
 const PHASES = Object.freeze({ noon: 0, dusk: 7 / 20, night: 12 / 20, dawn: 17 / 20 });
 const smooth = (value) => { const t = Math.max(0, Math.min(1, value)); return t * t * (3 - 2 * t); };
