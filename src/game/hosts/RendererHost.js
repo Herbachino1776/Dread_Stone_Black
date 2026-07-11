@@ -14,6 +14,8 @@ export class RendererHost {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.outdoorQualityTier = this.renderer.capabilities.maxTextureSize >= 8192 && this.getViewportSize().width >= 900 ? 'desktop-high' : 'mobile-balanced';
+    this.defaultToneMappingExposure = this.renderer.toneMappingExposure;
     this.resizeCallbacks = new Set();
     this.resize = this.resize.bind(this);
     this.handleOrientationChange = this.handleOrientationChange.bind(this);
@@ -65,6 +67,11 @@ export class RendererHost {
     }
 
     this.renderViewmodelOverlay(scene, camera, viewmodelLayer);
+  }
+
+  applySceneExposure(dungeon) {
+    const target = dungeon?.outdoorLightingDirector?.exposure ?? this.defaultToneMappingExposure;
+    this.renderer.toneMappingExposure += (target - this.renderer.toneMappingExposure) * 0.08;
   }
 
   renderViewmodelOverlay(scene, camera, layer = 1) {

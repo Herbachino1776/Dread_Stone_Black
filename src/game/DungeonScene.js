@@ -28,6 +28,7 @@ import { PHYSICAL_TOOL_PROFILES } from './physical-tools/PhysicalToolProfiles.js
 import { NorthRoadRouteRuntime } from './world-scene/NorthRoadRouteRuntime.js';
 import { getOutdoorWorldClock } from './world-scene/OutdoorWorldClock.js';
 import { OutdoorSkyCycleRuntime } from './world-scene/OutdoorSkyCycleRuntime.js';
+import { OutdoorLightingDirector } from './world-scene/OutdoorLightingDirector.js';
 import { FolsomNorthGateRuntime } from './world-scene/FolsomNorthGateRuntime.js';
 
 const WALL_HEIGHT = 3.2;
@@ -307,12 +308,13 @@ export const FIELD_SURVIVAL_PLACEMENTS = Object.freeze({
 });
 
 export class DungeonScene {
-  constructor({ area = 'field', fieldSpawn = 'start', spawnId = null, gameState = null, audioRuntime = null } = {}) {
+  constructor({ area = 'field', fieldSpawn = 'start', spawnId = null, gameState = null, audioRuntime = null, outdoorQualityTier = 'mobile-balanced' } = {}) {
     this.area = area;
     this.fieldSpawn = fieldSpawn;
     this.spawnId = spawnId;
     this.gameState = gameState;
     this.audioRuntime = audioRuntime;
+    this.outdoorQualityTier = outdoorQualityTier;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(INDOOR_BACKGROUND_COLOR);
     this.scene.fog = new THREE.Fog(INDOOR_FOG_COLOR, INDOOR_FOG_NEAR, INDOOR_FOG_FAR);
@@ -328,6 +330,7 @@ export class DungeonScene {
     this.fieldFoliageBillboards = [];
     this.compiledSkyDomes = [];
     this.outdoorSkyCycleRuntime = null;
+    this.outdoorLightingDirector = null;
     this.fieldRedwoodHarvestables = [];
     this.fieldSurvivalObjects = new Map();
     this.folsomConnectedGrowthRuntime = null;
@@ -939,7 +942,10 @@ export class DungeonScene {
       definition.fog?.near ?? OUTDOOR_FOG_NEAR,
       definition.fog?.far ?? OUTDOOR_FOG_FAR,
     );
-    this.addCompiledOutdoorLights(definition);
+    if (['folsom', 'north-road'].includes(definition.id)) {
+      this.addCompiledOutdoorLights(definition, { localOnly: true });
+      this.outdoorLightingDirector = new OutdoorLightingDirector({ scene: this.scene, clock: getOutdoorWorldClock({ development: import.meta.env.DEV }), qualityTier: this.outdoorQualityTier });
+    } else this.addCompiledOutdoorLights(definition);
     if (['folsom', 'north-road'].includes(definition.id)) {
       this.outdoorSkyCycleRuntime = new OutdoorSkyCycleRuntime({ scene: this.scene, textureLoader: this.textureLoader, clock: getOutdoorWorldClock({ development: import.meta.env.DEV }) });
       this.compiledSkyDomes.push(this.outdoorSkyCycleRuntime.mesh);
@@ -1124,9 +1130,10 @@ export class DungeonScene {
     this.scene.add(dome);
   }
 
-  addCompiledOutdoorLights(definition) {
+  addCompiledOutdoorLights(definition, { localOnly = false } = {}) {
     let hasAmbient = false;
     (definition.lights ?? []).forEach((light) => {
+      if (localOnly && ['ambient', 'directional'].includes(light.kind)) return;
       if (light.kind === 'ambient') {
         hasAmbient = true;
         this.scene.add(new THREE.HemisphereLight(light.skyColor ?? 0xded49d, light.groundColor ?? 0x4c4a32, light.intensity ?? 0.7));
@@ -1188,7 +1195,7 @@ export class DungeonScene {
     }
 
     this.updateTorchFlicker(deltaSeconds);
-    this.updateCompiledSkyDomes(player);
+    this.updateOutdoorPresentation(player);
     this.updateOutdoorFoliageBillboards(player);
     this.fishingWorldRuntime?.update(deltaSeconds);
     this.updateCookedFishPickups(deltaSeconds);
@@ -1210,7 +1217,6 @@ export class DungeonScene {
   }
 
   updateCompiledSkyDomes(player = null) {
-    this.outdoorSkyCycleRuntime?.update(player);
     if (!player?.position || !this.compiledSkyDomes.length) return;
 
     this.compiledSkyDomes.forEach((dome) => {
@@ -3362,6 +3368,12 @@ export class DungeonScene {
       prop.material.emissiveIntensity = 0.08;
     }
     return true;
+  }
+
+  updateOutdoorPresentation(player = null) {
+    this.outdoorSkyCycleRuntime?.update(player);
+    this.outdoorLightingDirector?.update(player);
+    this.updateCompiledSkyDomes(player);
   }
 
   getPhysicalToolTargets() {

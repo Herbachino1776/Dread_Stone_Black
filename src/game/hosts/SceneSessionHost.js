@@ -42,7 +42,7 @@ export class SceneSessionHost {
 
   createSession({ area, fieldSpawn = 'start', spawnId = null } = {}) {
     this.disposeCurrentSession();
-    this.dungeon = new DungeonScene({ area, fieldSpawn, spawnId, gameState: this.gameState, audioRuntime: this.audioRuntime });
+    this.dungeon = new DungeonScene({ area, fieldSpawn, spawnId, gameState: this.gameState, audioRuntime: this.audioRuntime, outdoorQualityTier: this.rendererHost.outdoorQualityTier });
     this.scene = this.dungeon.build();
     this.dungeon.setLanternRevealEmitterProvider?.(this.lanternRevealEmitterProvider);
     this.scene.add(this.camera);
@@ -109,6 +109,8 @@ export class SceneSessionHost {
     }
     if (!isPaused && !isPlayerDead) this.player?.update(deltaSeconds, controls);
     if (!isPaused) this.dungeon?.update(deltaSeconds, this.player);
+    else this.dungeon?.updateOutdoorPresentation?.(this.player);
+    this.rendererHost.applySceneExposure?.(this.dungeon);
   }
 
   render() {
