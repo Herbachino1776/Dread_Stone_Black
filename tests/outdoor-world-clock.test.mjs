@@ -15,5 +15,5 @@ for (let i=0;i<=100;i+=1) { const w=resolveOutdoorSkyWeights(i/100); assert.ok(O
 const before = storage.getItem(OUTDOOR_CLOCK_STORAGE_KEY);
 const debug = new OutdoorWorldClock({ storage, now: () => now, query: new URLSearchParams('timeOfDay=dawn&dayCycleSpeed=10'), development: true });
 assert.equal(debug.getSnapshot().name, 'dawn'); assert.equal(storage.getItem(OUTDOOR_CLOCK_STORAGE_KEY), before);
-const rotationStart=reload.getSnapshot(100000).skyRotation;const rotationAfterMinute=reload.getSnapshot(160000).skyRotation;assert.ok(rotationAfterMinute>rotationStart);assert.ok(Math.abs(rotationAfterMinute-rotationStart-(Math.PI*2*60000/OUTDOOR_SKY_ROTATION_DURATION_MS))<1e-9);assert.equal(OUTDOOR_SKY_ROTATION_DURATION_MS,40*60*1000);
+const rotationStart=reload.getSnapshot(100000).skyRotation;const rotationAfterMinute=reload.getSnapshot(160000).skyRotation;assert.ok(rotationAfterMinute>rotationStart);assert.ok(Math.abs(rotationAfterMinute-rotationStart-(Math.PI*2*60000/OUTDOOR_SKY_ROTATION_DURATION_MS))<1e-9);assert.equal(OUTDOOR_SKY_ROTATION_DURATION_MS,20*60*1000);
 console.log('Outdoor world clock: 14 focused contracts PASS');
