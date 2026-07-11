@@ -162,6 +162,7 @@ const splineTrails = Object.freeze([
 const foliageAvoidZones = [
   ...splineTrails.map((path) => ({ id: `${path.id}_foliage_clearance`, kind: 'corridor', points: path.points, width: path.width + ((path.crossSection?.shoulderWidth ?? 0) + (path.crossSection?.terrainBlendWidth ?? 0) + 1.2) * 2 })),
   ...waterways.map((waterway) => ({ id: `${waterway.id}_water_clearance`, kind: 'corridor', points: waterway.points, width: Math.max(...waterway.channel.width) + (waterway.banks.submergedShelfWidth + waterway.banks.innerWetBankWidth + waterway.banks.outerWetBankWidth + 1.2) * 2 })),
+  ...waterways.flatMap((waterway) => (waterway.fishing?.zones ?? []).filter((zone) => zone.noFoliageLane).map((zone) => ({ id: `${zone.id}_lane_clearance`, ...zone.noFoliageLane }))),
   ...pondSystem.waterBodies.map((body) => ({ id: `${body.id}_water_and_bank_clearance`, center: body.center, radiusX: body.radius[0] + body.shoreWidth + 2, radiusZ: body.radius[1] + body.shoreWidth + 2 })),
   ...pondSystem.waterBodies.flatMap((body) => body.fishingBanks.map((bank) => ({ id: `${bank.id}_lane_clearance`, center: bank.position, radius: bank.noFoliageRadius }))),
   { id: 'hunter_camp_clearing', center: [-78, -300], radius: 24 }, { id: 'church_camp_clearing', center: [-52, -42], radius: 23 }, { id: 'scout_camp_clearing', center: [64, 130], radius: 21 },

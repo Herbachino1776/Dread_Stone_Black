@@ -20,7 +20,7 @@
     "validate:waterways": "node tests/outdoor-waterway.test.mjs",
     "validate:water-bodies": "node tests/outdoor-water-body.test.mjs",
     "validate:north-road-route": "node tests/north-road-route-state.test.mjs",
-    "validate:outdoors": "node tests/outdoor-terrain-composition.test.mjs && npm run validate:path-corridors && npm run validate:waterways && npm run validate:water-bodies && npm run validate:north-road-route && npm run validate:north-road",
+    "validate:outdoors": "node tests/outdoor-terrain-composition.test.mjs && node tests/outdoor-forest-stamp.test.mjs && npm run validate:path-corridors && npm run validate:waterways && npm run validate:water-bodies && npm run validate:north-road-route && npm run validate:north-road",
     "audit:outdoor-assets": "node scripts/audit-outdoor-assets.mjs",
     "validate:objectives": "node scripts/validate-objective-runtime.mjs",
     "validate:reliquary-startup": "node scripts/validate-reliquary-field-startup.mjs",

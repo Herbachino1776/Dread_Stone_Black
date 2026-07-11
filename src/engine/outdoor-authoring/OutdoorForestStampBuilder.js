@@ -1,0 +1,16 @@
+function hash(value){let state=2166136261;for(const char of String(value)){state^=char.charCodeAt(0);state=Math.imul(state,16777619);}return state>>>0;}
+export function createForestStampRandom(seed){let state=hash(seed);return()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};}
+const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
+function ellipsePoint(shape,random,edgeBias=0){const angle=random()*Math.PI*2;const radial=Math.pow(random(),edgeBias>0?.32:.58);const irregular=1+(random()-.5)*.18+Math.sin(angle*3+hash(shape.center.join(':')))*.055;return{x:shape.center[0]+Math.cos(angle)*shape.radiusX*radial*irregular,z:shape.center[1]+Math.sin(angle)*shape.radiusZ*radial*irregular};}
+export function buildOutdoorForestStamp(stamp,{isExcluded=()=>false,isTerrainValid=()=>true}={}){
+  const random=createForestStampRandom(stamp.seed??stamp.id),shape=stamp.shape,canopyCount=stamp.canopy?.count??0,understoryCount=stamp.understory?.count??0,total=canopyCount+understoryCount;
+  const clusterCount=Math.max(2,stamp.canopy?.clusterCount??Math.round(Math.sqrt(Math.max(1,canopyCount))/2));
+  const clusters=Array.from({length:clusterCount},()=>ellipsePoint(shape,random));
+  const clearingCount=stamp.composition?.clearingCount??Math.max(1,Math.round(total/90));
+  const glades=Array.from({length:clearingCount},(_,index)=>({...ellipsePoint(shape,random),radius:(stamp.composition?.clearingRadius??8)*(0.75+random()*.5),id:`${stamp.id}_glade_${index+1}`}));
+  const accepted=[],rejected=[];let attempts=0;
+  const addLayer=(layer,count,minimumSpacing)=>{let layerCount=0;while(layerCount<count&&attempts<total*180){attempts+=1;const clustered=random()<(layer==='canopy'?.76:.84);let point;if(clustered){const center=clusters[Math.floor(random()*clusters.length)],radius=(stamp.canopy?.clusterRadius??Math.min(shape.radiusX,shape.radiusZ)*.34)*Math.sqrt(random()),angle=random()*Math.PI*2;point={x:center.x+Math.cos(angle)*radius,z:center.z+Math.sin(angle)*radius};}else point=ellipsePoint(shape,random,layer==='understory'?1:0);
+      const normalized=((point.x-shape.center[0])**2)/(shape.radiusX**2)+((point.z-shape.center[1])**2)/(shape.radiusZ**2);let reason=null;if(normalized>1.08)reason='shape';else if(glades.some(g=>distance(point,g)<g.radius))reason='glade';else if(isExcluded(point.x,point.z))reason='exclusion';else if(!isTerrainValid(point.x,point.z,stamp.terrain))reason='terrain';else if(accepted.some(other=>distance(point,other)<minimumSpacing*(layer===other.layer?1:.72)))reason='spacing';if(reason){if(rejected.length<300)rejected.push({...point,reason});continue;}accepted.push({...point,layer,clusterIndex:clusters.reduce((best,c,i)=>distance(point,c)<distance(point,clusters[best])?i:best,0)});layerCount+=1;}};
+  addLayer('canopy',canopyCount,stamp.canopy?.minimumSpacing??2.4);addLayer('understory',understoryCount,stamp.understory?.minimumSpacing??1.15);
+  return{placements:accepted.map((p,index)=>({...p,id:`${stamp.id}_${String(index+1).padStart(3,'0')}`})),debug:{id:stamp.id,preset:stamp.preset,requested:total,accepted:accepted.length,attempts,clusters,glades,rejected,shape,layers:{canopy:accepted.filter(p=>p.layer==='canopy').length,understory:accepted.filter(p=>p.layer==='understory').length}}};
+}
