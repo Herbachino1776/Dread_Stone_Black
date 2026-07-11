@@ -13,6 +13,7 @@
     "validate:oarb-terrain": "node scripts/validate-oarb-terrain-sampling.mjs && node scripts/validate-folsom.mjs",
     "validate:path-corridors": "node tests/outdoor-path-corridor.test.mjs",
     "validate:folsom": "node scripts/validate-folsom.mjs",
+    "validate:day-night": "node tests/outdoor-world-clock.test.mjs && node scripts/validate-outdoor-day-night.mjs",
     "validate:north-road": "node scripts/validate-north-road.mjs",
     "validate:waterways": "node tests/outdoor-waterway.test.mjs",
     "validate:water-bodies": "node tests/outdoor-water-body.test.mjs",

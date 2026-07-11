@@ -26,6 +26,8 @@ import { BeneathFolsomLowerShrineHatchRuntime } from './world-scene/BeneathFolso
 import { BeneathFolsomWhiteScabRuntime, UnderShrineLabyrinthEndHatchRuntime } from './world-scene/Chapter3LeadInRuntime.js';
 import { PHYSICAL_TOOL_PROFILES } from './physical-tools/PhysicalToolProfiles.js';
 import { NorthRoadRouteRuntime } from './world-scene/NorthRoadRouteRuntime.js';
+import { getOutdoorWorldClock } from './world-scene/OutdoorWorldClock.js';
+import { OutdoorSkyCycleRuntime } from './world-scene/OutdoorSkyCycleRuntime.js';
 import { FolsomNorthGateRuntime } from './world-scene/FolsomNorthGateRuntime.js';
 
 const WALL_HEIGHT = 3.2;
@@ -325,6 +327,7 @@ export class DungeonScene {
     this.fieldFoliageGroup = null;
     this.fieldFoliageBillboards = [];
     this.compiledSkyDomes = [];
+    this.outdoorSkyCycleRuntime = null;
     this.fieldRedwoodHarvestables = [];
     this.fieldSurvivalObjects = new Map();
     this.folsomConnectedGrowthRuntime = null;
@@ -937,7 +940,10 @@ export class DungeonScene {
       definition.fog?.far ?? OUTDOOR_FOG_FAR,
     );
     this.addCompiledOutdoorLights(definition);
-    this.addCompiledOutdoorSkyDome(definition);
+    if (['folsom', 'north-road'].includes(definition.id)) {
+      this.outdoorSkyCycleRuntime = new OutdoorSkyCycleRuntime({ scene: this.scene, textureLoader: this.textureLoader, clock: getOutdoorWorldClock({ development: import.meta.env.DEV }) });
+      this.compiledSkyDomes.push(this.outdoorSkyCycleRuntime.mesh);
+    } else this.addCompiledOutdoorSkyDome(definition);
     this.addOutdoorTerrain(definition.terrain, definition.textures, definition);
     if (this.compiledLocationRuntime?.group) {
       this.scene.add(this.compiledLocationRuntime.group);
@@ -1204,6 +1210,7 @@ export class DungeonScene {
   }
 
   updateCompiledSkyDomes(player = null) {
+    this.outdoorSkyCycleRuntime?.update(player);
     if (!player?.position || !this.compiledSkyDomes.length) return;
 
     this.compiledSkyDomes.forEach((dome) => {

@@ -84,6 +84,7 @@ export class GameState {
       storage.removeItem(UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY);
       storage.removeItem(BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY);
       storage.removeItem(PHYSICAL_TOOL_ACTION_MIGRATION_KEY);
+      storage.removeItem('dreadStoneBlack.outdoorWorldClock.v1');
       storage.removeItem('road_warden_proof_accepted');
       Object.values(FOLSOM_GROWTH_WORLD_KEYS).forEach((key) => storage.removeItem(key));
       Object.values(NORTH_ROAD_WORLD_KEYS).forEach((key) => storage.removeItem(key));
