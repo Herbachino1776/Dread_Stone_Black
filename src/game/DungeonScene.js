@@ -969,6 +969,7 @@ export class DungeonScene {
     }
     if (definition.id === 'north-road') this.addNorthRoadRouteFoundation();
     this.addCompiledOutdoorExitCues(definition);
+    this.outdoorLightingDirector?.bindSceneMaterials();
   }
 
   addFolsomGrowthFoundation(definition) {

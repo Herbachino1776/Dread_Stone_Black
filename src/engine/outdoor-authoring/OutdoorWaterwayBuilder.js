@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createOutdoorWaterMaterial } from '../../game/world-scene/OutdoorWaterMaterialRuntime.js';
 
 const MAX_CENTER_SAMPLES = 1024;
 const MAX_VERTICES_PER_WATERWAY = 12288;
@@ -217,13 +218,14 @@ function stripGeometry(rows, lateralFractions, yResolver) {
 }
 
 function stripGeometryBands(rows, lateralBands, yResolver) {
-  const vertices = []; const uvs = []; const indices = [];
+  const vertices = []; const uvs = []; const indices = []; const edge=[];const depth=[];const flow=[];const flowDirection=[];
   lateralBands.forEach((lateralFractions) => {
     const baseVertex = vertices.length / 3;
     rows.forEach((sample) => lateralFractions.forEach((fraction) => {
       const lateral = fraction * sample.width * 0.5;
       vertices.push(sample.x + sample.normal.x * lateral, yResolver(sample, fraction), sample.z + sample.normal.z * lateral);
       uvs.push(sample.distance / 6, fraction * 0.5 + 0.5);
+      edge.push(Math.max(0,1-Math.abs(fraction)));depth.push(Math.max(0,1-Math.abs(fraction)));flow.push(sample.distance);flowDirection.push(sample.tangent.x,sample.tangent.z);
     }));
     const stride = lateralFractions.length;
     for (let row = 0; row < rows.length - 1; row += 1) for (let column = 0; column < stride - 1; column += 1) {
@@ -232,7 +234,7 @@ function stripGeometryBands(rows, lateralBands, yResolver) {
     }
   });
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)); geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); geometry.setIndex(indices); geometry.computeVertexNormals();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)); geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));geometry.setAttribute('edgeDistance01',new THREE.Float32BufferAttribute(edge,1));geometry.setAttribute('waterDepth01',new THREE.Float32BufferAttribute(depth,1));geometry.setAttribute('flowDistance',new THREE.Float32BufferAttribute(flow,1));geometry.setAttribute('flowDirection',new THREE.Float32BufferAttribute(flowDirection,2)); geometry.setIndex(indices); geometry.computeVertexNormals();
   if (geometry.attributes.position.count > MAX_VERTICES_PER_WATERWAY) throw new Error('Waterway geometry exceeds its mobile vertex budget.');
   return geometry;
 }
@@ -253,8 +255,7 @@ export function createOutdoorWaterwayMeshes(runtime, { textures = {}, makeMateri
     const profile = textures[waterway.water.material] ?? { color: 0x5b746d, roughness: 0.86, metalness: 0, transparent: true, opacity: waterway.water.opacity, animatedFrames: DEFAULT_WATER_FRAMES };
     let waterMaterial = sharedWaterMaterials.get(waterway.water.material);
     if (!waterMaterial) {
-      waterMaterial = new THREE.MeshStandardMaterial({ color: profile.color ?? 0x5b746d, roughness: profile.roughness ?? 0.86, metalness: 0, transparent: true, opacity: profile.opacity ?? waterway.water.opacity, emissive: profile.emissive ?? 0x071311, emissiveIntensity: profile.emissiveIntensity ?? 0.05, depthWrite: false, side: THREE.DoubleSide });
-      waterMaterial.name = `OARB-shared-waterway-material-${waterway.water.material}`;
+      waterMaterial = createOutdoorWaterMaterial({...profile,opacity:profile.opacity??waterway.water.opacity},{mode:'flow',name:`OARB-shared-waterway-material-${waterway.water.material}`});
       if (Array.isArray(profile.animatedFrames)) registerAnimatedTextureFlipbook?.(waterMaterial, profile);
       sharedWaterMaterials.set(waterway.water.material, waterMaterial);
     }

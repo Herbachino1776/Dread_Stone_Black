@@ -15,6 +15,7 @@ import { createOutdoorCrossingGroups } from '../world-kits/structures/OutdoorCro
 import { createOutdoorWildernessStructureGroups } from '../world-kits/structures/OutdoorWildernessStructureKit.js';
 import { createOutdoorWorldDebugGroup, resolveOutdoorDebugFlags } from './OutdoorWorldDebug.js';
 import { createOutdoorMaterialGallery } from './OutdoorMaterialGallery.js';
+import { createOutdoorWaterMaterial } from './OutdoorWaterMaterialRuntime.js';
 
 export { createOutdoorTerrainMesh } from '../../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
 export { createOutdoorTerrainSampler } from '../../engine/outdoor-authoring/OutdoorTerrainBuilder.js';
@@ -227,8 +228,7 @@ export function buildOutdoorPonds({ waterBodies = [], textureProfiles = {}, make
     const shore = new THREE.Mesh(composite?.wetShore?.geometry ?? (mudBedOutline?.length >= 3 && outerShoreOutline?.length >= 3 ? createPondOutlineRingGeometry(mudBedOutline, outerShoreOutline, [cx, cz]) : createOrganicPondRingGeometry(88, wobble, Math.min(0.98, Math.max(0.05, rx / outerShoreRx)), Math.min(0.98, Math.max(0.05, rz / outerShoreRz)))), shoreMaterial);
     shore.name = `OARB-water-shore-${body.id}`; shore.position.set(...(composite?.wetShore?.position ?? [cx, y + 0.018, cz])); if (!(mudBedOutline?.length >= 3 && outerShoreOutline?.length >= 3)) shore.scale.set(outerShoreRx, 1, outerShoreRz); shore.receiveShadow = true; shore.renderOrder = 10; shore.userData = { id: body.id, kind: 'pondShore', materialKey: body.shoreMaterial, geometrySource: composite?.wetShore?.source, coordinateBasis: composite?.coordinateBasis, collision: 'visual-only muddy shoreline' }; meshes.push(shore);
     const profile = textureProfiles[body.material] ?? { color: 0x2d7f92, roughness: 0.5, metalness: 0, transparent: true, opacity: 0.78, emissive: 0x0b4858, emissiveIntensity: 0.34 };
-    const waterMat = new THREE.MeshStandardMaterial({ color: profile.color ?? 0x2d7f92, roughness: profile.roughness ?? 0.5, metalness: profile.metalness ?? 0, transparent: profile.transparent ?? true, opacity: profile.opacity ?? 0.78, emissive: profile.emissive ?? 0x0b4858, emissiveIntensity: profile.emissiveIntensity ?? 0.34, depthWrite: false });
-    waterMat.name = `OARB-water-material-${body.material ?? 'pondWater'}`; waterMat.side = THREE.DoubleSide; if (Array.isArray(profile.animatedFrames)) registerAnimatedTextureFlipbook?.(waterMat, profile);
+    const waterMat = createOutdoorWaterMaterial(profile,{mode:'pond',name:`OARB-water-material-${body.material ?? 'pondWater'}`}); if (Array.isArray(profile.animatedFrames)) registerAnimatedTextureFlipbook?.(waterMat, profile);
     const water = new THREE.Mesh(composite?.water.geometry ?? (waterOutline?.length >= 3 ? createPondOutlineDiscGeometry(waterOutline, [cx, cz]) : createOrganicPondDiscGeometry(88, 0.075)), waterMat);
     water.name = `OARB-water-body-${body.id}`; water.position.set(...(composite?.water.position ?? [cx, y + 0.035, cz])); if (!waterOutline?.length) water.scale.set(rx, 1, rz); water.renderOrder = 12; water.userData = { id: body.id, kind: body.kind, tags: body.tags ?? [], fishable: Boolean(body.fishable), footprintRecipe: footprint.recipe, geometrySource: composite?.water.source, coordinateBasis: composite?.coordinateBasis, materialKey: body.material, collision: 'visual-only pond water; shore remains walkable' }; meshes.push(water);
     if (body.userData?.pondExpoId) createPondLabel?.(body, cx, composite?.water.position[1] ?? y, cz);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { updateOutdoorWaterMaterial } from './OutdoorWaterMaterialRuntime.js';
 
 export const OUTDOOR_LIGHTING_PROFILES = Object.freeze({
   noon: { sky: 0xb9d5ef, ground: 0x706b55, hemi: 0.9, key: 0xffe8be, keyIntensity: 1.12, moon: 0x9eb9df, moonIntensity: 0, fog: 0xb5c7cd, fogNear: 105, fogFar: 470, exposure: 1.0, elevation: 0.82 },
@@ -33,7 +34,9 @@ export class OutdoorLightingDirector {
     scene.add(this.hemisphere,this.key,this.key.target,this.moon,this.moon.target);
     if (!(scene.fog instanceof THREE.Fog)) scene.fog=new THREE.Fog(0xb5c7cd,105,470);
     scene.userData.outdoorLightingDirector={ qualityTier, shadowMapSize:this.shadowMapSize, primaryShadowCasters:1 };
+    this.waterMaterials=[];
   }
+  bindSceneMaterials(){const found=new Set();this.scene.traverse(object=>{const materials=Array.isArray(object.material)?object.material:[object.material];materials.filter(Boolean).forEach(material=>{if(material.userData?.outdoorWater)found.add(material);});});this.waterMaterials=[...found];this.scene.userData.outdoorLightingDirector.waterMaterialCount=this.waterMaterials.length;}
   update(player=null) {
     const state=this.clock.getSnapshot(); const p=resolveOutdoorLightingProfile(state.phase);
     this.hemisphere.color.copy(p.sky); this.hemisphere.groundColor.copy(p.ground); this.hemisphere.intensity=p.hemi;
@@ -45,6 +48,7 @@ export class OutdoorLightingDirector {
     this.key.target.position.set(cx,center.y??0,cz); this.moon.position.set(cx-Math.sin(angle)*80,65,cz-Math.cos(angle)*80); this.moon.target.position.copy(this.key.target.position);
     const camera=this.key.shadow.camera; camera.left=camera.bottom=-this.shadowRadius; camera.right=camera.top=this.shadowRadius; camera.updateProjectionMatrix();
     this.key.target.updateMatrixWorld(); this.moon.target.updateMatrixWorld();
-    this.exposure=p.exposure; this.debug={...state, exposure:p.exposure, fogNear:p.fogNear, fogFar:p.fogFar, shadowMapSize:this.shadowMapSize, shadowRadius:this.shadowRadius, texelSize:texel, snappedCenter:{x:cx,z:cz}}; return this.debug;
+    this.waterMaterials.forEach(material=>updateOutdoorWaterMaterial(material,p,state));
+    this.exposure=p.exposure; this.debug={...state, exposure:p.exposure, fogNear:p.fogNear, fogFar:p.fogFar, shadowMapSize:this.shadowMapSize, shadowRadius:this.shadowRadius, texelSize:texel, snappedCenter:{x:cx,z:cz},waterMaterialCount:this.waterMaterials.length}; return this.debug;
   }
 }

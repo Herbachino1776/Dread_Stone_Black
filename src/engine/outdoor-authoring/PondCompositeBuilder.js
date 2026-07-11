@@ -60,6 +60,7 @@ export function createPondOutlineDiscGeometry(outline = [], center = [0, 0]) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  const radii=contour.map(({x,y})=>Math.hypot(x,y));const maxRadius=Math.max(.001,...radii);geometry.setAttribute('edgeDistance01',new THREE.Float32BufferAttribute(radii.map(radius=>Math.max(0,1-radius/maxRadius)),1));geometry.setAttribute('waterDepth01',new THREE.Float32BufferAttribute(radii.map(radius=>Math.max(.15,1-radius/maxRadius)),1));geometry.setAttribute('flowDistance',new THREE.Float32BufferAttribute(radii,1));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.userData = { pondGeometryKind: 'outlineDisc', outlineVertexCount: outline.length, coordinateBasis: [...center] };
