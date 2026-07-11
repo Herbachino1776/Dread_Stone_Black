@@ -18,6 +18,7 @@ import { Interactions } from './Interactions.js';
 import { PerfDebugPanel } from './PerfDebugPanel.js';
 import { reloadToNewGameStartupRoute } from './startupRoute.js';
 import { GameAudioRuntime } from './audio/GameAudioRuntime.js';
+import { resolveOutdoorTorchWarning } from './world-scene/OutdoorTorchRequirement.js';
 
 export class Game {
   constructor(app) {
@@ -41,6 +42,7 @@ export class Game {
     this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
     this.perfDebugEnabled = query.get('perf') === '1';
     this.isPaused = false;
+    this.outdoorTorchWarningArmed = true;
     this.resetConfirmTimer = null;
     this.wasKeyboardInteractHeld = false;
     this.resetConfirmExpiresAt = 0;
@@ -253,6 +255,7 @@ export class Game {
       paused: this.isPaused,
     });
     this.viewmodelHost?.update(deltaSeconds);
+    this.updateOutdoorTorchRequirement();
     this.survivalHost?.update(deltaSeconds, {
       paused: this.isPaused,
       equipmentPanelOpen: this.equipmentPanel?.isOpen,
@@ -275,6 +278,24 @@ export class Game {
     this.feedback.update(deltaSeconds);
     this.sceneSessionHost.render();
     this.perfDebugPanel?.render();
+  }
+
+  updateOutdoorTorchRequirement() {
+    const director = this.dungeon?.outdoorLightingDirector;
+    if (!director) return;
+    const torchState = this.viewmodelHost?.getTorchLightingState?.() ?? {};
+    director.setTorchDebugState?.(torchState);
+    const torchNeedLevel = director.debug?.torchNeedLevel ?? 0;
+    if (torchNeedLevel < 0.08) this.outdoorTorchWarningArmed = true;
+    const equippedOffhandId = this.equipmentRuntime?.getEquippedOffhandId?.() ?? null;
+    const message = resolveOutdoorTorchWarning({
+      torchNeedLevel,
+      warningArmed: this.outdoorTorchWarningArmed,
+      ownsTorch: this.equipmentRuntime?.hasItem?.('torch') === true,
+      equippedOffhandId,
+    });
+    if (torchNeedLevel >= 0.25) this.outdoorTorchWarningArmed = false;
+    if (message) this.hud?.showMessage?.(message);
   }
 
   handleRuntimeError(error) {

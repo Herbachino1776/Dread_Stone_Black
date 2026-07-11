@@ -6,8 +6,11 @@ export function sampleFoliageRootFootprint({terrainSampler,x,z,height,width,meta
   const centerGroundY=samples[0].y,rootSampleMinY=Math.min(...samples.map(s=>s.y)),rootSampleMaxY=Math.max(...samples.map(s=>s.y));
   const localGroundVariance=rootSampleMaxY-rootSampleMinY,localSlope=localGroundVariance/(radius*2);
   const limit=metadata.maximumPlacementSlope??.45;const status=localSlope>limit*1.25?'rejected':localSlope>limit?'slope-warning':localGroundVariance>.08?'adjusted':'valid';
-  const appliedBurial=(metadata.sinkIntoGround??.1)+(status==='adjusted'?Math.min(.08,localGroundVariance*.18):0);
-  const appliedPaddingOffset=height*(metadata.bottomTransparentPaddingRatio??0),appliedRootOffset=(metadata.groundOffset??0)+(metadata.rootOffsetY??0);
+  const appliedRootOffset=(metadata.groundOffset??0)+(metadata.rootOffsetY??0);
+  const maximumBurial=metadata.placementCategory?.includes('bush') ? .18 : .35;
+  const requestedBurial=(metadata.sinkIntoGround??.1)+(status==='adjusted'?Math.min(.05,localGroundVariance*.18):0);
+  const appliedBurial=Math.max(0,Math.min(requestedBurial,maximumBurial+appliedRootOffset));
+  const appliedPaddingOffset=height*(metadata.bottomTransparentPaddingRatio??0);
   const positionY=rootSampleMinY+appliedRootOffset-appliedBurial-appliedPaddingOffset;
   return{centerGroundY,rootSampleMinY,rootSampleMaxY,localGroundVariance,localSlope,appliedRootOffset,appliedPaddingOffset,appliedBurial,positionY,radius,samples,status};
 }

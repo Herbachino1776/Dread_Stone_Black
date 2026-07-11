@@ -15,7 +15,7 @@ export function createOutdoorWaterMaterial(profile = {}, { mode = 'pond', name =
     fog: true,
     toneMapped: true,
     emissive: 0x000000,
-    emissiveIntensity: 0.08,
+    emissiveIntensity: 0,
   });
   material.userData.outdoorWater = {
     mode,
@@ -31,7 +31,8 @@ export function updateOutdoorWaterMaterial(material, lighting, clockState) {
   const data = material?.userData?.outdoorWater;
   if (!data) return;
   data.phase = clockState?.phase ?? 0;
-  material.color.copy(data.baseColor).lerp(lighting.sky, 0.11);
-  material.emissive.copy(lighting.sky).multiplyScalar(0.025 + lighting.moonIntensity * 0.035);
-  material.emissiveIntensity = 0.08;
+  const nightDarkening = 1 - (lighting.nightWeight ?? 0) * 0.82;
+  material.color.copy(data.baseColor).multiplyScalar(nightDarkening).lerp(lighting.sky, 0.035 * nightDarkening);
+  material.emissive.setHex(0x000000);
+  material.emissiveIntensity = 0;
 }

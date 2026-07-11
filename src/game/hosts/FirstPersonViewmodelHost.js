@@ -116,6 +116,10 @@ export class FirstPersonViewmodelHost {
     };
   }
 
+  getTorchLightingState() {
+    return this.torchViewmodel?.getLightingState?.() ?? { owned: false, equipped: false, lit: false, active: false, intensity: 0, range: 0, castShadow: false };
+  }
+
   createRodViewmodelLights() {
     if (!this.camera || this.rodViewmodelLights) return;
     this.rodViewmodelLights = new THREE.Group();

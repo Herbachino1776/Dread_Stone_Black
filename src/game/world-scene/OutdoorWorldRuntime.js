@@ -71,7 +71,7 @@ function createOrganicPondRingGeometry(segments = 80, wobble = 0.08, innerScaleX
 function makeRuntimeMaterial(makeTexturedMaterial, marker) {
   return (profile, metadata) => {
     const material = makeTexturedMaterial(profile);
-    material.userData = { ...(material.userData ?? {}), [marker]: true, materialKey: metadata.materialKey, materialFallbackUsed: metadata.usedFallback, sourceProfile: metadata.profile };
+    material.userData = { ...(material.userData ?? {}), [marker]: true, ordinaryOutdoorMaterial: true, materialKey: metadata.materialKey, materialFallbackUsed: metadata.usedFallback, sourceProfile: metadata.profile, baseOutdoorEmissiveIntensity: material.emissiveIntensity ?? 0 };
     return material;
   };
 }

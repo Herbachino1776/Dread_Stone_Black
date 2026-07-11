@@ -39,8 +39,9 @@ export class OutdoorSkyCycleRuntime {
     const state = this.clock.getSnapshot();
     this.uniforms.skyWeights.value.set(state.dayWeight, state.redWeight, state.nightWeight);
     this.uniforms.rotationOffset.value = state.skyRotation; this.uniforms.redOrientation.value = state.redOrientation;
-    const brightness = state.dayWeight + state.redWeight * 0.72 + state.nightWeight * 0.36;
-    this.material.color.setScalar(THREE.MathUtils.clamp(brightness, 0.34, 1));
+    // The panorama remains readable independently of terrain illumination.
+    const brightness = state.dayWeight + state.redWeight * 0.76 + state.nightWeight * 0.62;
+    this.material.color.setScalar(THREE.MathUtils.clamp(brightness, 0.6, 1));
     if (player?.position) this.mesh.position.set(player.position.x, 0, player.position.z);
     this.mesh.userData.clockState = state; return state;
   }

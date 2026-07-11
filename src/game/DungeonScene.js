@@ -735,6 +735,7 @@ export class DungeonScene {
         ...profile,
         baseEmissiveIntensity: profile.emissiveIntensity ?? 0,
       };
+      if (['folsom', 'north-road'].includes(this.area)) Object.assign(material.userData, { ordinaryOutdoorMaterial: true, baseOutdoorEmissiveIntensity: profile.emissiveIntensity ?? 0 });
       return material;
     }
 
@@ -749,6 +750,7 @@ export class DungeonScene {
       ...profile,
       baseEmissiveIntensity: profile.emissiveIntensity ?? 0,
     };
+    if (['folsom', 'north-road'].includes(this.area)) Object.assign(material.userData, { ordinaryOutdoorMaterial: true, baseOutdoorEmissiveIntensity: profile.emissiveIntensity ?? 0 });
     return material;
   }
 

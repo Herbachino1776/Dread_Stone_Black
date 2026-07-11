@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import { OUTDOOR_FOLIAGE_SPRITES } from '../src/engine/outdoor-authoring/OutdoorFoliageRegistry.js';
+import { sampleFoliageRootFootprint } from '../src/engine/outdoor-authoring/OutdoorFoliageGrounding.js';
+import { createOutdoorTerrainSampler } from '../src/engine/outdoor-authoring/OutdoorTerrainBuilder.js';
+import { northRoadDefinition } from '../src/game/locations/northRoad.definition.js';
 const fields=['groundOffset','rootOffsetY','bottomTransparentPaddingRatio','sinkIntoGround','rootFootprintRadius','maximumPlacementSlope','placementCategory'];
 OUTDOOR_FOLIAGE_SPRITES.forEach(sprite=>fields.forEach(field=>assert.ok(sprite[field]!==undefined,`${sprite.id} missing ${field}`)));
+OUTDOOR_FOLIAGE_SPRITES.forEach(sprite=>assert.equal(sprite.alphaBaselineAudited,true,`${sprite.id} lacks an audited alpha baseline`));
+OUTDOOR_FOLIAGE_SPRITES.filter(sprite=>sprite.type==='redwood').forEach(sprite=>assert.ok(Math.abs(sprite.bottomTransparentPaddingRatio-.0508)<=.0001,`${sprite.id} redwood baseline drifted from its source alpha`));
+['billboard_tree_pale_ashen_willow_01','billboard_tree_thorn_crowned_01'].forEach(id=>assert.ok(OUTDOOR_FOLIAGE_SPRITES.find(sprite=>sprite.id===id)?.bottomTransparentPaddingRatio>.05,`${id} must not fall back to a zero baseline`));
 assert.ok(OUTDOOR_FOLIAGE_SPRITES.filter(s=>s.type==='redwood').every(s=>s.rootFootprintRadius>=.16));
-console.log(`Foliage grounding validation PASS: ${OUTDOOR_FOLIAGE_SPRITES.length} registry sprites have complete calibrated metadata.`);
+const tallestNorthRoadRedwood=27;const worstPreventedGap=Math.max(...OUTDOOR_FOLIAGE_SPRITES.filter(s=>s.type==='redwood').map(s=>s.bottomTransparentPaddingRatio*tallestNorthRoadRedwood));
+assert.ok(worstPreventedGap>=1.37&&worstPreventedGap<1.38,'validator must retain the measured large-redwood baseline correction');
+const terrainSampler=createOutdoorTerrainSampler(northRoadDefinition.terrain,{pathCorridors:northRoadDefinition.splineTrails,waterways:northRoadDefinition.waterways});let rejected=0;let worstGap=-Infinity;let worstBurial=-Infinity;
+northRoadDefinition.foliageBillboards.forEach(placement=>{const grounding=sampleFoliageRootFootprint({terrainSampler,x:placement.position[0],z:placement.position[2],height:placement.height,width:placement.width,metadata:placement});assert.ok(Number.isFinite(grounding.positionY),`${placement.id} has non-finite grounding`);if(grounding.status==='rejected')rejected+=1;const visibleRootY=grounding.positionY+placement.height*placement.bottomTransparentPaddingRatio;const gap=visibleRootY-grounding.rootSampleMinY;const burial=grounding.rootSampleMinY-visibleRootY;worstGap=Math.max(worstGap,gap);worstBurial=Math.max(worstBurial,burial);assert.ok(gap<=.0801,`${placement.id} floats ${gap.toFixed(3)}m`);assert.ok(burial<=.3501,`${placement.id} is buried ${burial.toFixed(3)}m`);});
+assert.ok(rejected<=8,`North Road has ${rejected} steep placements; expected at most 8 deterministically rejected trees`);
+console.log(`Foliage grounding validation PASS: ${OUTDOOR_FOLIAGE_SPRITES.length} audited sprites, ${northRoadDefinition.foliageBillboards.length} North Road placements, worst gap ${worstGap.toFixed(3)}m, worst burial ${worstBurial.toFixed(3)}m, ${rejected} steep placements rejected.`);

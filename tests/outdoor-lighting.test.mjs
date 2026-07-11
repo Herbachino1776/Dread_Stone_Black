@@ -1,9 +1,53 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { resolveOutdoorLightingProfile, OUTDOOR_LIGHTING_PROFILES } from '../src/game/world-scene/OutdoorLightingDirector.js';
-import { TORCH_LIGHTING } from '../src/game/viewmodels/TorchViewmodel.js';
-for (const phase of [0,0.3,0.4,0.5,0.8,0.9,0.999]) { const p=resolveOutdoorLightingProfile(phase); assert.ok(p.fogNear<p.fogFar); assert.ok(p.exposure>=0.9&&p.exposure<=1.1); assert.ok(p.keyIntensity>=0&&p.moonIntensity>=0); ['sky','ground','key','moon','fog'].forEach((key)=>assert.ok(p[key] instanceof THREE.Color)); }
-assert.ok(OUTDOOR_LIGHTING_PROFILES.night.hemi<=0.03); assert.ok(OUTDOOR_LIGHTING_PROFILES.night.moonIntensity>0&&OUTDOOR_LIGHTING_PROFILES.night.moonIntensity<=0.1);
-assert.ok(OUTDOOR_LIGHTING_PROFILES.night.fogNear<=3&&OUTDOOR_LIGHTING_PROFILES.night.fogFar<=32);assert.ok(new THREE.Color(OUTDOOR_LIGHTING_PROFILES.night.fog).getHex()<=0x000202);assert.ok(TORCH_LIGHTING.point.distance>=OUTDOOR_LIGHTING_PROFILES.night.fogFar);assert.ok(TORCH_LIGHTING.wash.distance>OUTDOOR_LIGHTING_PROFILES.night.fogFar);
-const before=resolveOutdoorLightingProfile(0.39999); const after=resolveOutdoorLightingProfile(0.40001); assert.ok(Math.hypot(before.fog.r-after.fog.r,before.fog.g-after.fog.g,before.fog.b-after.fog.b)<0.01);
-console.log('Outdoor lighting: profiles, black night fog, minimal moonlight, torch range, continuity and exposure PASS');
+import { OutdoorLightingDirector, resolveOutdoorLightingProfile, resolveOutdoorPresentationState, OUTDOOR_LIGHTING_PROFILES } from '../src/game/world-scene/OutdoorLightingDirector.js';
+import { TORCH_LIGHTING, resolveTorchLightActive } from '../src/game/viewmodels/TorchViewmodel.js';
+import { resolveOutdoorTorchWarning } from '../src/game/world-scene/OutdoorTorchRequirement.js';
+
+for (const phase of [0, 0.3, 0.35, 0.39999, 0.4, 0.5, 0.8, 0.85, 0.9, 0.999]) {
+  const profile = resolveOutdoorLightingProfile(phase);
+  assert.ok(profile.fogNear < profile.fogFar);
+  assert.ok(profile.exposure >= 0.75 && profile.exposure <= 1);
+  assert.ok(profile.keyIntensity >= 0 && profile.moonIntensity >= 0);
+  ['sky', 'ground', 'key', 'moon', 'fog'].forEach((key) => assert.ok(profile[key] instanceof THREE.Color));
+}
+
+const noon = resolveOutdoorPresentationState(0);
+const night = resolveOutdoorPresentationState(0.5);
+assert.equal(night.sunIntensity, 0);
+assert.equal(night.sunCastsShadow, false);
+assert.equal(night.moonCastsShadow, false);
+assert.ok(night.naturalAmbientIntensity / noon.naturalAmbientIntensity <= 0.015);
+assert.equal(night.ordinaryEmissiveScale, 0);
+assert.ok(night.fogNear <= 1.5 && night.fogFar <= 12);
+assert.ok(night.fog.getHex() <= 0x000101);
+assert.ok(night.outdoorExposure <= noon.outdoorExposure);
+assert.equal(resolveOutdoorPresentationState(0.4).sunIntensity, 0, 'full night sky and zero sunlight begin at the same phase');
+
+const scene = new THREE.Scene();
+const ordinary = new THREE.MeshStandardMaterial({ emissive: 0x332211, emissiveIntensity: 0.4 });
+ordinary.userData = { ordinaryOutdoorMaterial: true };
+scene.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), ordinary));
+const director = new OutdoorLightingDirector({ scene, clock: { getSnapshot: () => ({ phase: 0.5, name: 'night', progress: 0.25, dayWeight: 0, redWeight: 0, nightWeight: 1, skyRotation: 0 }) } });
+director.bindSceneMaterials();
+const debug = director.update();
+assert.equal(director.key.intensity, 0);
+assert.equal(director.key.castShadow, false);
+assert.equal(director.moon.castShadow, false);
+assert.equal(ordinary.emissiveIntensity, 0);
+assert.equal(debug.activeShadowCasters, 0);
+
+assert.ok(TORCH_LIGHTING.point.distance <= 8);
+assert.equal(TORCH_LIGHTING.wash.distance, 10);
+assert.equal(TORCH_LIGHTING.wash.shadowMapSize, 512);
+assert.equal(resolveTorchLightActive({ ownsTorch: true, equippedOffhandId: 'torch', lit: true }), true);
+assert.equal(resolveTorchLightActive({ ownsTorch: true, equippedOffhandId: null, lit: true }), false);
+assert.equal(resolveTorchLightActive({ ownsTorch: true, equippedOffhandId: 'torch', lit: false }), false);
+assert.equal(resolveTorchLightActive({ ownsTorch: false, equippedOffhandId: 'torch', lit: true }), false);
+assert.equal(resolveOutdoorTorchWarning({ torchNeedLevel: 0.5, warningArmed: true, ownsTorch: true, equippedOffhandId: null }), 'Night is coming. Equip a torch in your offhand.');
+assert.equal(resolveOutdoorTorchWarning({ torchNeedLevel: 0.5, warningArmed: true, ownsTorch: true, equippedOffhandId: 'keepers_lantern' }), 'Night is coming. Equip a torch in your offhand.');
+assert.equal(resolveOutdoorTorchWarning({ torchNeedLevel: 0.5, warningArmed: true, ownsTorch: true, equippedOffhandId: 'torch' }), null);
+
+const before = resolveOutdoorLightingProfile(0.39999); const after = resolveOutdoorLightingProfile(0.40001);
+assert.ok(Math.hypot(before.fog.r - after.fog.r, before.fog.g - after.fog.g, before.fog.b - after.fog.b) < 0.01);
+console.log('Outdoor lighting: synchronized true night, sunset shadows, black fog, emissive cutoff and torch dependency PASS');
