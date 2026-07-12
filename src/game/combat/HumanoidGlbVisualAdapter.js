@@ -13,6 +13,23 @@ const cachedAssetPromises = new Map();
 let assetLoadCount = 0;
 const unitScale = new THREE.Vector3(1, 1, 1);
 const decomposedBoneScale = new THREE.Vector3();
+const proxyUp = new THREE.Vector3(0, 1, 0);
+
+export function measureVisibleSkinnedBounds(root) {
+  root.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().makeEmpty();
+  const vertex = new THREE.Vector3();
+  root.traverse((object) => {
+    if (!object.isSkinnedMesh || !object.geometry?.attributes?.position) return;
+    object.skeleton?.update?.();
+    for (let index = 0; index < object.geometry.attributes.position.count; index += 1) {
+      object.getVertexPosition(index, vertex);
+      object.localToWorld(vertex);
+      bounds.expandByPoint(vertex);
+    }
+  });
+  return bounds;
+}
 
 function hierarchyDepth(object) {
   let depth = 0;
@@ -73,9 +90,18 @@ export class HumanoidGlbVisualAdapter {
     this.parent = parent;
     this.profile = profile;
     this.scene = null;
+    this.presentationRoot = null;
     this.skinnedMeshes = [];
     this.skeletons = [];
+    this.bones = new Map();
     this.bindings = [];
+    this.mixer = null;
+    this.idleAction = null;
+    this.rawVisibleBounds = null;
+    this.normalizedVisibleBounds = null;
+    this.uniformScale = null;
+    this.basePresentationPosition = new THREE.Vector3();
+    this.basePresentationYaw = 0;
     this.disposed = false;
     this.ready = this.load();
   }
@@ -85,11 +111,8 @@ export class HumanoidGlbVisualAdapter {
     if (this.disposed) return;
     this.scene = clone(asset.scene);
     this.scene.name = 'humanoid-combat-glb-visual';
-    this.scene.position.fromArray(this.profile.rootOffset);
-    this.scene.rotation.y = this.profile.rootYaw;
-    this.scene.scale.setScalar(getHumanoidProfileScale(this.profile));
-    this.scene.updateMatrixWorld(true);
     this.scene.traverse((object) => {
+      if (object.isBone) this.bones.set(object.name, object);
       if (!object.isSkinnedMesh) return;
       this.skinnedMeshes.push(object);
       if (object.skeleton && !this.skeletons.includes(object.skeleton)) this.skeletons.push(object.skeleton);
@@ -114,9 +137,51 @@ export class HumanoidGlbVisualAdapter {
       });
     });
     if (!this.skinnedMeshes.length || !this.skeletons.length) throw new Error(`Humanoid GLB has no SkinnedMesh/skeleton: ${this.profile.assetPath}`);
+    if (this.profile.animationAuthoritative) {
+      this.initializeAnimationAuthoritative(asset.animations ?? []);
+      return;
+    }
+    this.scene.position.fromArray(this.profile.rootOffset);
+    this.scene.rotation.y = this.profile.rootYaw;
+    this.scene.scale.setScalar(getHumanoidProfileScale(this.profile));
+    this.scene.updateMatrixWorld(true);
     this.parent.add(this.scene);
     this.captureBindings();
     this.update(1);
+  }
+
+  initializeAnimationAuthoritative(clips) {
+    this.presentationRoot = new THREE.Group();
+    this.presentationRoot.name = 'model-idle-animation-authoritative-root';
+    this.presentationRoot.add(this.scene);
+    this.parent.add(this.presentationRoot);
+    const idleClip = clips.find((clip) => clip.name === this.profile.idleClipName && clip.tracks.length > 0)
+      ?? clips.find((clip) => /idle/i.test(clip.name) && clip.tracks.length > 0)
+      ?? clips.find((clip) => clip.tracks.length > 0);
+    if (!idleClip) throw new Error(`Humanoid GLB profile ${this.profile.name} has no valid idle animation`);
+    this.mixer = new THREE.AnimationMixer(this.scene);
+    this.idleAction = this.mixer.clipAction(idleClip);
+    this.idleAction.setLoop(THREE.LoopRepeat, Infinity).play();
+    this.mixer.update(0);
+    this.scene.updateMatrixWorld(true);
+    this.skeletons.forEach((skeleton) => skeleton.update());
+    this.rawVisibleBounds = measureVisibleSkinnedBounds(this.scene);
+    const measuredHeight = this.rawVisibleBounds.getSize(new THREE.Vector3()).y;
+    if (!(measuredHeight > 0)) throw new Error(`Humanoid GLB profile ${this.profile.name} has empty skinned bounds`);
+    this.uniformScale = this.profile.targetHeight / measuredHeight;
+    this.scene.scale.setScalar(this.uniformScale);
+    this.scene.updateMatrixWorld(true);
+    this.skeletons.forEach((skeleton) => skeleton.update());
+    const scaledBounds = measureVisibleSkinnedBounds(this.scene);
+    this.scene.position.y = this.profile.groundClearance - scaledBounds.min.y;
+    this.basePresentationPosition.copy(this.actor.visualRootPosition);
+    this.basePresentationYaw = this.actor.spawnYaw + this.profile.rootYaw;
+    this.presentationRoot.position.copy(this.basePresentationPosition);
+    this.presentationRoot.rotation.y = this.basePresentationYaw;
+    this.presentationRoot.updateMatrixWorld(true);
+    this.skeletons.forEach((skeleton) => skeleton.update());
+    this.normalizedVisibleBounds = measureVisibleSkinnedBounds(this.scene);
+    this.actor.setAnimationAuthorityReady(this);
   }
 
   captureBindings() {
@@ -133,6 +198,7 @@ export class HumanoidGlbVisualAdapter {
   }
 
   update() {
+    if (this.profile.animationAuthoritative) return;
     if (!this.scene || !this.bindings.length) return;
     this.parent.updateMatrixWorld(true);
     const modelRootWorld = this.scene.matrixWorld.clone();
@@ -148,19 +214,80 @@ export class HumanoidGlbVisualAdapter {
     this.skeletons.forEach((skeleton) => skeleton.update());
   }
 
+  updateAnimationAuthority(deltaSeconds) {
+    if (!this.mixer || !this.presentationRoot) return;
+    this.mixer.update(Math.max(0, deltaSeconds));
+    const reaction = this.actor.reflex?.intensity ?? 0;
+    const reactionDirection = this.actor.reflex?.direction ?? new THREE.Vector3();
+    this.presentationRoot.position.copy(this.basePresentationPosition).addScaledVector(reactionDirection, -Math.min(0.045, reaction * 0.045));
+    this.presentationRoot.position.y += Math.min(0.018, reaction * 0.018);
+    this.presentationRoot.rotation.set(
+      THREE.MathUtils.clamp(reactionDirection.z * reaction * 0.035, -0.035, 0.035),
+      this.basePresentationYaw,
+      THREE.MathUtils.clamp(-reactionDirection.x * reaction * 0.045, -0.045, 0.045),
+      'YXZ',
+    );
+    this.presentationRoot.updateMatrixWorld(true);
+    this.skeletons.forEach((skeleton) => skeleton.update());
+    this.actor.syncAnimationProxyBodies(this);
+  }
+
+  getProxyPose(bodyId) {
+    const fit = this.profile.proxyFit?.[bodyId];
+    if (!fit) return null;
+    if (fit.start && fit.end) {
+      const startBone = this.bones.get(fit.start);
+      const endBone = this.bones.get(fit.end);
+      if (!startBone || !endBone) return null;
+      const start = startBone.getWorldPosition(new THREE.Vector3());
+      const end = endBone.getWorldPosition(new THREE.Vector3());
+      const direction = end.clone().sub(start);
+      const quaternion = direction.lengthSq() > 1e-8
+        ? new THREE.Quaternion().setFromUnitVectors(proxyUp, direction.normalize())
+        : startBone.getWorldQuaternion(new THREE.Quaternion());
+      return { position: start.add(end).multiplyScalar(0.5), quaternion };
+    }
+    const bone = this.bones.get(fit.bone);
+    if (!bone) return null;
+    const quaternion = bone.getWorldQuaternion(new THREE.Quaternion());
+    const position = bone.getWorldPosition(new THREE.Vector3());
+    if (fit.offset) position.add(new THREE.Vector3().fromArray(fit.offset).applyQuaternion(quaternion));
+    return { position, quaternion };
+  }
+
   reset() {
+    if (this.profile.animationAuthoritative) {
+      this.idleAction?.reset().play();
+      this.mixer?.setTime(0);
+      this.presentationRoot?.position.copy(this.basePresentationPosition);
+      if (this.presentationRoot) this.presentationRoot.rotation.set(0, this.basePresentationYaw, 0);
+      this.presentationRoot?.updateMatrixWorld(true);
+      this.skeletons.forEach((skeleton) => skeleton.update());
+      this.actor.syncAnimationProxyBodies(this);
+      return;
+    }
     this.update();
   }
 
   getDiagnostics() {
-    return { path: this.profile.assetPath, profileName: this.profile.name, loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, height: this.profile.targetHeight, scale: getHumanoidProfileScale(this.profile) };
+    const rawSize = this.rawVisibleBounds?.getSize(new THREE.Vector3());
+    const normalizedSize = this.normalizedVisibleBounds?.getSize(new THREE.Vector3());
+    return { path: this.profile.assetPath, profileName: this.profile.name, animationAuthoritative: this.profile.animationAuthoritative === true, loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, mixerCount: this.mixer ? 1 : 0, idleClip: this.idleAction?.getClip?.().name ?? null, rawMeasuredVisibleHeight: rawSize?.y ?? null, normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight, normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null, groundY: this.actor.visualRootPosition.y, groundClearance: this.profile.groundClearance ?? null, height: this.profile.targetHeight, scale: this.uniformScale ?? getHumanoidProfileScale(this.profile) };
   }
 
   dispose() {
     this.disposed = true;
+    this.idleAction?.stop();
+    this.mixer?.stopAllAction();
+    if (this.scene && this.mixer) this.mixer.uncacheRoot(this.scene);
+    this.presentationRoot?.removeFromParent();
     this.scene?.removeFromParent();
     this.scene = null;
+    this.presentationRoot = null;
+    this.mixer = null;
+    this.idleAction = null;
     this.bindings = [];
+    this.bones.clear();
     this.skinnedMeshes = [];
     this.skeletons = [];
   }

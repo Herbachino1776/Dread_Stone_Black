@@ -58,6 +58,7 @@ export class HumanoidCombatActor {
     this.eventSink = eventSink;
     this.mortalityMode = mortalityMode;
     this.visualProfile = visualProfile;
+    this.animationAuthorityReady = false;
     this.reactiveCollapseElapsed = 0;
     this.wounds = [];
     this.regionState = new Map();
@@ -79,6 +80,8 @@ export class HumanoidCombatActor {
     this.finalSettleEmitted = false;
     this.createMaterials();
     this.createPhysicalBody();
+    const pelvisRest = this.bodies.get('pelvis')?.restPosition ?? new THREE.Vector3();
+    this.visualRootPosition = new THREE.Vector3(pelvisRest.x, this.spawnOffset.y, pelvisRest.z);
     this.visualAdapter = typeof window !== 'undefined' ? new HumanoidGlbVisualAdapter({ actor: this, parent: this.root, profile: this.visualProfile }) : null;
     this.woundSystem = new CombatWoundSystem({ actor: this, scene: this.scene });
     this.wounds = this.woundSystem.wounds;
@@ -92,6 +95,34 @@ export class HumanoidCombatActor {
     if (this.isImmortalReactive() && ['dying', 'dead'].includes(this.lifeState)) this.recoverReactivePosture(true);
   }
   isImmortalReactive() { return this.mortalityMode === COMBAT_MORTALITY_MODES.immortalReactive; }
+  setAnimationAuthorityReady(adapter) {
+    if (adapter !== this.visualAdapter && this.visualAdapter) return;
+    this.animationAuthorityReady = this.visualProfile.animationAuthoritative === true;
+    this.syncAnimationProxyBodies(adapter);
+  }
+
+  prepareFrame(deltaSeconds) {
+    if (this.visualProfile.animationAuthoritative) this.visualAdapter?.updateAnimationAuthority?.(deltaSeconds);
+  }
+
+  syncAnimationProxyBodies(adapter = this.visualAdapter) {
+    if (!this.animationAuthorityReady || !adapter) return;
+    this.bodies.forEach((entry, bodyId) => {
+      const pose = adapter.getProxyPose(bodyId);
+      if (!pose) return;
+      entry.body.setTranslation(pose.position, true);
+      entry.body.setRotation(pose.quaternion, true);
+      entry.body.setLinvel({ x: 0, y: 0, z: 0 }, false);
+      entry.body.setAngvel({ x: 0, y: 0, z: 0 }, false);
+      entry.visual.position.copy(pose.position);
+      entry.visual.quaternion.copy(pose.quaternion);
+      entry.debug.position.copy(pose.position);
+      entry.debug.quaternion.copy(pose.quaternion);
+      entry.previousPosition.copy(pose.position);
+      entry.previousQuaternion.copy(pose.quaternion);
+    });
+    this.physics.world.propagateModifiedBodyPositionsToColliders();
+  }
 
   createMaterials() {
     this.materials = {
@@ -121,11 +152,12 @@ export class HumanoidCombatActor {
   }
 
   createBody(config) {
+    const proxyFit = this.visualProfile.animationAuthoritative ? this.visualProfile.proxyFit?.[config.id] : null;
     const position = new THREE.Vector3(config.position[0] * HUMANOID_PHYSICAL_SCALE, config.position[1] * HUMANOID_PHYSICAL_SCALE, (config.position[2] + 3.55) * HUMANOID_PHYSICAL_SCALE)
       .applyQuaternion(this.spawnRotation)
       .add(new THREE.Vector3(this.spawnOffset.x, this.spawnOffset.y, this.spawnOffset.z - 3.55));
     const quaternion = this.spawnRotation.clone().multiply(bodyQuaternion(config.rotation));
-    const descriptor = RAPIER.RigidBodyDesc.dynamic()
+    const descriptor = (proxyFit ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.dynamic())
       .setTranslation(position.x, position.y, position.z)
       .setRotation(quaternion)
       .setLinearDamping(3.4)
@@ -133,9 +165,13 @@ export class HumanoidCombatActor {
       .setCanSleep(true);
     const body = this.physics.world.createRigidBody(descriptor);
     body.userData = { combatActor: this, bodyId: config.id, regionId: config.regionId };
-    const colliderDescriptor = config.shape === 'capsule'
-      ? RAPIER.ColliderDesc.capsule(config.halfHeight * HUMANOID_PHYSICAL_SCALE, config.radius * HUMANOID_PHYSICAL_SCALE)
-      : RAPIER.ColliderDesc.cuboid(config.size[0] * HUMANOID_PHYSICAL_SCALE, config.size[1] * HUMANOID_PHYSICAL_SCALE, config.size[2] * HUMANOID_PHYSICAL_SCALE);
+    const colliderDescriptor = proxyFit?.shape === 'capsule'
+      ? RAPIER.ColliderDesc.capsule(proxyFit.halfHeight, proxyFit.radius)
+      : proxyFit?.shape === 'box'
+        ? RAPIER.ColliderDesc.cuboid(...proxyFit.halfExtents)
+        : config.shape === 'capsule'
+          ? RAPIER.ColliderDesc.capsule(config.halfHeight * HUMANOID_PHYSICAL_SCALE, config.radius * HUMANOID_PHYSICAL_SCALE)
+          : RAPIER.ColliderDesc.cuboid(config.size[0] * HUMANOID_PHYSICAL_SCALE, config.size[1] * HUMANOID_PHYSICAL_SCALE, config.size[2] * HUMANOID_PHYSICAL_SCALE);
     colliderDescriptor
       .setMass(config.mass)
       .setFriction(config.id.includes('foot') ? 1.35 : 0.72)
@@ -177,9 +213,14 @@ export class HumanoidCombatActor {
   }
 
   createDebugBody(config) {
-    const geometry = config.shape === 'capsule'
-      ? new THREE.CapsuleGeometry(config.radius * HUMANOID_PHYSICAL_SCALE, config.halfHeight * 2 * HUMANOID_PHYSICAL_SCALE, 4, 8)
-      : new THREE.BoxGeometry(config.size[0] * 2 * HUMANOID_PHYSICAL_SCALE, config.size[1] * 2 * HUMANOID_PHYSICAL_SCALE, config.size[2] * 2 * HUMANOID_PHYSICAL_SCALE);
+    const proxyFit = this.visualProfile.animationAuthoritative ? this.visualProfile.proxyFit?.[config.id] : null;
+    const geometry = proxyFit?.shape === 'capsule'
+      ? new THREE.CapsuleGeometry(proxyFit.radius, proxyFit.halfHeight * 2, 4, 8)
+      : proxyFit?.shape === 'box'
+        ? new THREE.BoxGeometry(proxyFit.halfExtents[0] * 2, proxyFit.halfExtents[1] * 2, proxyFit.halfExtents[2] * 2)
+        : config.shape === 'capsule'
+          ? new THREE.CapsuleGeometry(config.radius * HUMANOID_PHYSICAL_SCALE, config.halfHeight * 2 * HUMANOID_PHYSICAL_SCALE, 4, 8)
+          : new THREE.BoxGeometry(config.size[0] * 2 * HUMANOID_PHYSICAL_SCALE, config.size[1] * 2 * HUMANOID_PHYSICAL_SCALE, config.size[2] * 2 * HUMANOID_PHYSICAL_SCALE);
     const result = mesh(geometry, this.materials.debug, `anatomy-debug-${config.regionId}`);
     result.userData.regionId = config.regionId;
     return result;
@@ -352,7 +393,7 @@ export class HumanoidCombatActor {
     else if (this.lifeState === 'dying') this.motorStrength = Math.max(0.015, this.motorStrength - dt * releaseRate * 1.35);
     else if (this.lifeState === 'dead') this.motorStrength = Math.max(0, this.motorStrength - dt * Math.max(1.8, releaseRate * 2));
     else this.motorStrength = Math.min(1, this.motorStrength + dt * 0.25);
-    this.bodies.forEach((entry, bodyId) => this.applyBodyMotor(entry, bodyId, dt, playerPosition));
+    if (!this.animationAuthorityReady) this.bodies.forEach((entry, bodyId) => this.applyBodyMotor(entry, bodyId, dt, playerPosition));
   }
 
   updateImmortalReactiveRecovery(dt) {
@@ -444,7 +485,7 @@ export class HumanoidCombatActor {
   }
 
   afterPhysics(alpha = 1) {
-    this.bodies.forEach((entry) => {
+    if (!this.animationAuthorityReady) this.bodies.forEach((entry) => {
       const translation = entry.body.translation();
       const rotation = entry.body.rotation();
       tmpPosition.set(translation.x, translation.y, translation.z);
@@ -457,7 +498,7 @@ export class HumanoidCombatActor {
       entry.previousQuaternion.copy(tmpQuaternion);
     });
     this.updateVesselDebug();
-    this.visualAdapter?.update();
+    if (!this.visualProfile.animationAuthoritative) this.visualAdapter?.update();
     this.woundSystem.update(1 / 60);
     this.updateBodyImpactFeedback();
     const speeds = [...this.bodies.values()].map((entry) => { const v = entry.body.linvel(); return Math.hypot(v.x, v.y, v.z); });

@@ -30,6 +30,15 @@ export const WOUND_CONFIG = Object.freeze({
   reopenResistanceFactor: 0.58,
 });
 
+export const BLOOD_COLOR_PALETTE = Object.freeze({
+  fresh: 0x981218,
+  spray: 0xb31b22,
+  arterial: 0xc3242b,
+  deep: 0x68080d,
+  pooled: 0x4a070a,
+  dried: 0x2b0305,
+});
+
 export const VESSEL_ZONES = Object.freeze([
   Object.freeze({ id: 'neck_carotid_left', regionId: 'neck', surfaceCenter: Object.freeze([-0.055, 0]), surfaceRadius: 0.034, minimumDepth: 0.052, vesselType: 'arterial', rate: 0.155, consciousnessRate: 0.24 }),
   Object.freeze({ id: 'neck_carotid_right', regionId: 'neck', surfaceCenter: Object.freeze([0.055, 0]), surfaceRadius: 0.034, minimumDepth: 0.052, vesselType: 'arterial', rate: 0.155, consciousnessRate: 0.24 }),

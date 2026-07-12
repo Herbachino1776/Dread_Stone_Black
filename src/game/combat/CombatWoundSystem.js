@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { VESSEL_ZONES, WOUND_CONFIG } from './CombatStage2Config.js';
+import { BLOOD_COLOR_PALETTE, VESSEL_ZONES, WOUND_CONFIG } from './CombatStage2Config.js';
 
 const tmpPosition = new THREE.Vector3();
 const tmpQuaternion = new THREE.Quaternion();
@@ -31,10 +31,10 @@ export class CombatWoundSystem {
     this.nextWoundId = 1;
     this.visualSlots = [];
     this.materials = {
-      puncture: new THREE.MeshStandardMaterial({ color: 0x260405, roughness: 0.92, metalness: 0, side: THREE.DoubleSide }),
-      cut: new THREE.MeshStandardMaterial({ color: 0x3b0708, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
-      deep: new THREE.MeshStandardMaterial({ color: 0x200204, roughness: 0.95, metalness: 0, side: THREE.DoubleSide }),
-      arterial: new THREE.MeshStandardMaterial({ color: 0x4a0809, roughness: 0.86, metalness: 0, side: THREE.DoubleSide }),
+      puncture: new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.fresh, roughness: 0.92, metalness: 0, side: THREE.DoubleSide }),
+      cut: new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.fresh, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
+      deep: new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.deep, roughness: 0.95, metalness: 0, side: THREE.DoubleSide }),
+      arterial: new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.arterial, roughness: 0.86, metalness: 0, side: THREE.DoubleSide }),
       blunt: new THREE.MeshStandardMaterial({ color: 0x372229, roughness: 0.96, transparent: true, opacity: 0.72, side: THREE.DoubleSide }),
     };
     this.createVisualPool();

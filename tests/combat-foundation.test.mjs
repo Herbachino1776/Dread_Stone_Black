@@ -7,15 +7,12 @@ import { CombatPhysicsWorld, initializeCombatPhysics } from '../src/game/combat/
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
-import { resolveFolsomModelDiagnosticMode } from '../src/game/combat/FolsomCombatEncounter.js';
-import { FolsomModelIdleRawReference } from '../src/game/combat/FolsomModelIdleRawReference.js';
 import { CURRENT_HUMANOID_PROFILE, MODEL_IDLE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
-import { getNewGameStartupUrl } from '../src/game/startupRoute.js';
-import { SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
+import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
 import { WorldKnifeCombatController } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
-import { applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
+import { applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 
 async function createActor() {
   await initializeCombatPhysics();
@@ -207,6 +204,10 @@ test('stage 2 tuning validates all vessel owners and bounded effect pools', () =
   assert.equal(result.vesselCount, VESSEL_ZONES.length);
   assert.equal(result.woundLimit, 24);
   assert.ok(result.particleLimit > result.decalLimit);
+  assert.equal(BLOOD_EFFECT_CONFIG.maximumParticles, 72);
+  assert.equal(BLOOD_EFFECT_CONFIG.maximumDecals, 24);
+  assert.ok(new THREE.Color(BLOOD_COLOR_PALETTE.arterial).getHSL({}).l > new THREE.Color(BLOOD_COLOR_PALETTE.dried).getHSL({}).l);
+  assert.ok(new THREE.Color(BLOOD_COLOR_PALETTE.spray).getHSL({}).l > new THREE.Color(BLOOD_COLOR_PALETTE.pooled).getHSL({}).l);
 });
 
 test('penetration advances gradually, respects bone and extracts', () => {
@@ -368,32 +369,29 @@ test('combat feedback guards unsupported haptics, cooldowns contact audio, and h
   feedback.dispose();
 });
 
-test('Folsom encounter places the physical actor four meters ahead of new-game spawn and cleans up', async () => {
+test('Folsom promotes one model_idle combat actor exactly ten meters from spawn and cleans up', async () => {
   const scene = new THREE.Scene();
-  const dungeon = { scene, collision: { sampleWalkableY: () => ({ y: 0.16 }) } };
+  const dungeon = { scene, collision: { sampleWalkableY: () => ({ y: 0.16 }), canStandAtFloorPosition: () => true, getIntersectingBlockers: () => [] } };
   const encounter = await FolsomCombatEncounter.create({ dungeon });
   const pelvis = encounter.actor.getBodyWorldPosition('pelvis');
   const playerSpawn = new THREE.Vector3(-2, 1.71, -4);
-  assert.ok(pelvis.distanceTo(playerSpawn) < 4.5);
-  const headRotation = encounter.actor.bodies.get('head').body.rotation();
-  const facing = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(headRotation.x, headRotation.y, headRotation.z, headRotation.w));
-  assert.ok(facing.z < -0.9, 'the angry face is oriented toward the arriving player');
-  assert.ok(scene.getObjectByName('folsom-starter-humanoid-combat-subject'));
+  assert.equal(Math.hypot(encounter.spawnPosition.x - playerSpawn.x, encounter.spawnPosition.z - playerSpawn.z), 10);
+  assert.equal(encounter.actor.visualProfile, MODEL_IDLE_COMBAT_PROFILE);
+  assert.ok(scene.getObjectByName('folsom-model-idle-combat-subject'));
+  assert.equal(scene.children.filter((child) => child.name.includes('combat-subject')).length, 1);
+  assert.equal(scene.getObjectByName('folsom-model-idle-raw-reference'), undefined);
+  assert.ok(pelvis.x > 7 && pelvis.z < -3);
   assert.equal(encounter.physics.world.bodies.len(), 19);
-  const rawReferenceSentinel = {};
-  encounter.rawModelReference = rawReferenceSentinel;
   encounter.reset();
   assert.equal(encounter.physics.world.bodies.len(), 19);
-  assert.equal(encounter.rawModelReference, rawReferenceSentinel, 'combat reset neither reloads nor duplicates the raw reference');
+  assert.equal(scene.children.filter((child) => child.name.includes('combat-subject')).length, 1);
   encounter.dispose();
-  assert.equal(scene.getObjectByName('folsom-starter-humanoid-combat-subject'), undefined);
+  assert.equal(scene.getObjectByName('folsom-model-idle-combat-subject'), undefined);
 });
 
-test('raw model_idle reference is root-only, animated, non-physical, grounded, and disposable', async () => {
-  const scene = new THREE.Scene();
-  const assetScene = new THREE.Group();
+test('skinned-vertex bounds produce one uniform 1.82 meter model_idle scale', () => {
+  const root = new THREE.Group();
   const bone = new THREE.Bone();
-  bone.name = 'diagnostic_bone';
   const geometry = new THREE.BoxGeometry(1, 2, 0.5);
   const positionCount = geometry.attributes.position.count;
   geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(positionCount * 4), 4));
@@ -402,46 +400,40 @@ test('raw model_idle reference is root-only, animated, non-physical, grounded, a
   geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
   const material = new THREE.MeshStandardMaterial();
   const skinned = new THREE.SkinnedMesh(geometry, material);
-  skinned.name = 'diagnostic_skinned_mesh';
   skinned.add(bone);
   skinned.bind(new THREE.Skeleton([bone]));
-  assetScene.add(skinned);
-  const clip = new THREE.AnimationClip('idle', 1, [new THREE.NumberKeyframeTrack('diagnostic_bone.position[x]', [0, 1], [0, 0.01])]);
-  let loads = 0;
-  const reference = await FolsomModelIdleRawReference.create({ scene, groundY: 0.16, assetLoader: async () => { loads += 1; return { scene: assetScene, animations: [clip] }; } });
-  assert.equal(loads, 1);
-  assert.equal(reference.root.name, 'folsom-model-idle-raw-reference');
-  assert.equal(scene.getObjectByName('folsom-model-idle-raw-reference'), reference.root);
-  assert.ok(Math.abs(reference.root.scale.x - reference.root.scale.y) < 1e-12 && Math.abs(reference.root.scale.y - reference.root.scale.z) < 1e-12);
-  assert.equal(reference.getDiagnostics().horizontalDistanceFromPlayerSpawn, 10);
-  assert.equal(reference.getDiagnostics().selectedIdleClip, 'idle');
-  assert.equal(reference.getDiagnostics().physicsDriven, false);
-  reference.update(1 / 60);
-  reference.dispose();
-  assert.equal(scene.getObjectByName('folsom-model-idle-raw-reference'), undefined);
-  assert.equal(reference.mixer, null);
+  root.add(skinned);
+  const rawHeight = measureVisibleSkinnedBounds(root).getSize(new THREE.Vector3()).y;
+  const uniformScale = MODEL_IDLE_COMBAT_PROFILE.targetHeight / rawHeight;
+  root.scale.setScalar(uniformScale);
+  const normalized = measureVisibleSkinnedBounds(root);
+  assert.ok(Math.abs(normalized.getSize(new THREE.Vector3()).y - 1.82) < 1e-6);
+  assert.deepEqual(root.scale.toArray(), [uniformScale, uniformScale, uniformScale]);
+  assert.equal(MODEL_IDLE_COMBAT_PROFILE.animationAuthoritative, true);
+  assert.ok(MODEL_IDLE_COMBAT_PROFILE.rawHeight > 84.12 && MODEL_IDLE_COMBAT_PROFILE.rawHeight < 84.14);
+  assert.equal(Object.keys(MODEL_IDLE_COMBAT_PROFILE.proxyFit).length, 18);
   geometry.dispose();
   material.dispose();
 });
 
-test('model idle query selects one independent adapted combat profile without changing normal Folsom', async () => {
-  assert.equal(resolveFolsomModelDiagnosticMode(''), 'raw-reference');
-  assert.equal(resolveFolsomModelDiagnosticMode('?modelIdleCombatTest=1'), 'adapted-model-idle');
+test('model_idle authoritative profile is independent and disables physics-to-bone binding', () => {
   assert.notEqual(CURRENT_HUMANOID_PROFILE.assetPath, MODEL_IDLE_COMBAT_PROFILE.assetPath);
   assert.notEqual(CURRENT_HUMANOID_PROFILE.boneMap, MODEL_IDLE_COMBAT_PROFILE.boneMap);
-  assert.equal(getNewGameStartupUrl({ pathname: '/Dread_Stone_Black/', search: '?modelIdleCombatTest=1&unrelated=discarded' }), '/Dread_Stone_Black/?modelIdleCombatTest=1');
-  assert.equal(getNewGameStartupUrl({ pathname: '/Dread_Stone_Black/', search: '?unrelated=discarded' }), '/Dread_Stone_Black/');
-  const scene = new THREE.Scene();
-  const collision = { sampleWalkableY: () => ({ y: 0.16 }), canStandAtFloorPosition: () => true, getIntersectingBlockers: () => [] };
-  const encounter = await FolsomCombatEncounter.create({ dungeon: { scene, collision }, modelIdleCombatTest: true });
-  assert.equal(encounter.actor.visualProfile.name, 'model_idle_combat_diagnostic');
-  assert.equal(encounter.actor.root.name, 'folsom-model-idle-adapted-combat-subject');
-  assert.equal(scene.getObjectByName('folsom-starter-humanoid-combat-subject'), undefined);
-  assert.equal(scene.children.filter((child) => child.name.includes('combat-subject')).length, 1);
-  assert.equal(encounter.rawModelReference, null);
-  assert.equal(encounter.physics.world.bodies.len(), 19);
-  assert.equal(encounter.physics.world.impulseJoints.len(), 17);
-  encounter.dispose();
+  assert.equal(MODEL_IDLE_COMBAT_PROFILE.assetPath, './assets/models/npc/human/model_idle.glb');
+  assert.equal(MODEL_IDLE_COMBAT_PROFILE.name, 'model_idle_animation_authoritative');
+});
+
+test('fresh wound materials use the brighter non-emissive blood palette', async () => {
+  const { actor, physics } = await createActor();
+  assert.equal(actor.woundSystem.materials.puncture.color.getHex(), BLOOD_COLOR_PALETTE.fresh);
+  assert.equal(actor.woundSystem.materials.cut.color.getHex(), BLOOD_COLOR_PALETTE.fresh);
+  assert.equal(actor.woundSystem.materials.deep.color.getHex(), BLOOD_COLOR_PALETTE.deep);
+  assert.equal(actor.woundSystem.materials.arterial.color.getHex(), BLOOD_COLOR_PALETTE.arterial);
+  Object.values(actor.woundSystem.materials).forEach((material) => {
+    assert.equal(material.emissive.getHex(), 0, `${material.type} remains fully lighting-responsive`);
+  });
+  actor.dispose();
+  physics.dispose();
 });
 
 test('one authoritative knife root keeps identity, scale, pose, ownership, and safe return', async () => {

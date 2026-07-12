@@ -1,7 +1,5 @@
 export function getNewGameStartupUrl(location = window.location) {
-  const pathname = location?.pathname || '/';
-  const query = new URLSearchParams(location?.search ?? '');
-  return query.get('modelIdleCombatTest') === '1' ? `${pathname}?modelIdleCombatTest=1` : pathname;
+  return location?.pathname || '/';
 }
 
 export function replaceWithNewGameStartupRoute({

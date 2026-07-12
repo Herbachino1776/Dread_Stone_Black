@@ -27,15 +27,37 @@ export const CURRENT_HUMANOID_PROFILE = Object.freeze({
 });
 
 export const MODEL_IDLE_COMBAT_PROFILE = Object.freeze({
-  name: 'model_idle_combat_diagnostic',
+  name: 'model_idle_animation_authoritative',
   assetPath: './assets/models/npc/human/model_idle.glb',
-  rawHeight: 84.1329999069915,
+  rawHeight: 84.13298431508957,
   targetHeight: 1.82,
+  animationAuthoritative: true,
+  groundClearance: 0.02,
   rootYaw: 0,
   rootOffset: Object.freeze([0, 0, 0]),
   boneMap: MODEL_IDLE_BONE_MAP,
   idleClipName: 'rig|rig|idle|rig|idle',
-  colliderFitNotes: 'Diagnostic-only profile. Uses the unchanged canonical anatomy proxies, which are taller than this 1.82 m visual and are intentionally not refit in the A/B pass.',
+  proxyFit: Object.freeze({
+    pelvis: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.17, 0.11, 0.11]), bone: 'body' }),
+    abdomen: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.16, 0.09, 0.11]), start: 'body', end: 'body_top0' }),
+    lower_chest: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.21, 0.09, 0.12]), start: 'body_top0', end: 'body_top1' }),
+    upper_chest: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.25, 0.11, 0.13]), start: 'body_top1', end: 'body_top2' }),
+    neck: Object.freeze({ shape: 'capsule', radius: 0.065, halfHeight: 0.02, start: 'neck', end: 'head' }),
+    head: Object.freeze({ shape: 'capsule', radius: 0.105, halfHeight: 0.035, bone: 'head', offset: Object.freeze([0, 0.065, 0]) }),
+    left_upper_arm: Object.freeze({ shape: 'capsule', radius: 0.07, halfHeight: 0.045, start: 'arm_left_top', end: 'arm_left_bot' }),
+    left_forearm: Object.freeze({ shape: 'capsule', radius: 0.058, halfHeight: 0.09, start: 'arm_left_bot', end: 'arm_left_hand' }),
+    left_hand: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.055, 0.085, 0.04]), bone: 'arm_left_hand', offset: Object.freeze([0, 0.055, 0]) }),
+    right_upper_arm: Object.freeze({ shape: 'capsule', radius: 0.07, halfHeight: 0.045, start: 'arm_right_top', end: 'arm_right_bot' }),
+    right_forearm: Object.freeze({ shape: 'capsule', radius: 0.058, halfHeight: 0.09, start: 'arm_right_bot', end: 'arm_right_hand' }),
+    right_hand: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.055, 0.085, 0.04]), bone: 'arm_right_hand', offset: Object.freeze([0, 0.055, 0]) }),
+    left_thigh: Object.freeze({ shape: 'capsule', radius: 0.09, halfHeight: 0.075, start: 'leg_left_top', end: 'leg_left_bot' }),
+    left_lower_leg: Object.freeze({ shape: 'capsule', radius: 0.07, halfHeight: 0.145, start: 'leg_left_bot', end: 'leg_left_foot' }),
+    left_foot: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.075, 0.055, 0.13]), bone: 'leg_left_foot', offset: Object.freeze([0, 0.08, 0]) }),
+    right_thigh: Object.freeze({ shape: 'capsule', radius: 0.09, halfHeight: 0.075, start: 'leg_right_top', end: 'leg_right_bot' }),
+    right_lower_leg: Object.freeze({ shape: 'capsule', radius: 0.07, halfHeight: 0.145, start: 'leg_right_bot', end: 'leg_right_foot' }),
+    right_foot: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.075, 0.055, 0.13]), bone: 'leg_right_foot', offset: Object.freeze([0, 0.08, 0]) }),
+  }),
+  colliderFitNotes: 'Animation-authoritative 1.82 m visual with bone-following semantic capsules/boxes; GLB bones are never driven from Rapier.',
 });
 
 export function getHumanoidProfileScale(profile) {

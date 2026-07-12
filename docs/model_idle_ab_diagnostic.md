@@ -1,12 +1,7 @@
-# model_idle.glb A/B diagnostic
+# model_idle.glb combat presentation
 
-Normal Folsom retains the canonical combat dummy and adds a non-combat raw `model_idle.glb` reference ten horizontal meters from the authored player spawn. The raw reference uses only a uniform root scale, world position, yaw, and one ground-height correction. Its exported idle animation plays without manual bone writes.
+The A/B diagnostic established that `model_idle.glb` is a usable skinned and animated asset. The earlier deformation was introduced when per-body Rapier transforms overwrote the GLB skeleton.
 
-Launch Folsom with `?modelIdleCombatTest=1` to omit the raw reference and select `model_idle_combat_diagnostic` as the sole combat actor profile. This mode is session-only and does not write canonical save state.
+`model_idle.glb` is now the sole visible combat subject in Folsom and the combat laboratory. Its exported idle animation is authoritative. Invisible semantic combat proxies follow the animated reference bones for hit detection, wounds, trauma, and blood; Rapier transforms never drive the GLB bones.
 
-Interpret the comparison as follows:
-
-- Case 1 — Raw reference looks correct, but adapted combat mode looks distorted: the GLB/export is usable. The physics-to-skeleton adapter, bind offsets, bone mapping, or collider/rest-pose relationship is responsible.
-- Case 2 — Raw reference is already distorted, twisted, scaled incorrectly, or animated incorrectly: the problem exists in the GLB/export, animation, hierarchy, skin, or authored transforms before combat adaptation.
-- Case 3 — Raw reference is correct and adapted mode is also correct: the new GLB profile is compatible, and the prior asset/profile combination is the likely source of the earlier failure.
-- Case 4 — Raw reference loads but adapted mode reports missing bones: the new GLB is valid, but its rig naming or hierarchy needs a dedicated map before it can become a combat actor.
+This lean presentation supports restrained whole-root recoil and repeatable immortal-reactive testing. Full skinned ragdoll and final death posing remain intentionally deferred.

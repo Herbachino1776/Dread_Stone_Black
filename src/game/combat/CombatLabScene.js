@@ -5,6 +5,7 @@ import { HumanoidCombatActor } from './HumanoidCombatActor.js';
 import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
 import { resolveCombatMortalityMode } from './CombatMortality.js';
+import { MODEL_IDLE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 
 export class CombatLabScene {
   static async create(options = {}) {
@@ -38,7 +39,7 @@ export class CombatLabScene {
     this.lightingMode = 'day';
     this.disposed = false;
     this.buildEnvironment();
-    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, mortalityMode: resolveCombatMortalityMode(), eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, visualProfile: MODEL_IDLE_COMBAT_PROFILE, mortalityMode: resolveCombatMortalityMode(), eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
     this.actor.setEnvironmentContactHints({ groundY: 0, wallX: -2.65 });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: 0, wallX: -2.65, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
   }
@@ -107,6 +108,7 @@ export class CombatLabScene {
   update(deltaSeconds, player = this.player) {
     if (this.disposed) return;
     this.player = player ?? this.player;
+    this.actor.prepareFrame(deltaSeconds);
     this.physics.step(
       deltaSeconds,
       (dt) => {
@@ -152,6 +154,7 @@ export class CombatLabScene {
   }
 
   stepPhysics() {
+    this.actor.prepareFrame(1 / 60);
     this.physics.stepSingle((dt) => { this.feedbackSystem.update(dt); this.weaponController?.beforePhysics?.(dt); this.actor.beforePhysics(dt, this.player?.position); }, (dt) => { this.weaponController?.afterPhysicsStep?.(dt); this.bloodEffects.update(dt); });
     this.actor.afterPhysics(0);
     this.weaponController?.afterPhysics?.(0);
