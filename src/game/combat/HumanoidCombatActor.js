@@ -6,6 +6,7 @@ import { CombatPhysiology } from './CombatPhysiology.js';
 import { COLLAPSE_CONFIG, HUMANOID_DURABILITY_CONFIG, VESSEL_ZONES } from './CombatStage2Config.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG } from './CombatMortality.js';
 import { HumanoidGlbVisualAdapter } from './HumanoidGlbVisualAdapter.js';
+import { CURRENT_HUMANOID_PROFILE } from './HumanoidModelProfiles.js';
 
 const BODY_COLLISION_GROUPS = 0x00020001;
 const tmpPosition = new THREE.Vector3();
@@ -35,7 +36,7 @@ function bodyQuaternion(rotation = [0, 0, 0]) {
 }
 
 export class HumanoidCombatActor {
-  constructor({ physics, scene, spawnOffset = new THREE.Vector3(), spawnYaw = 0, eventSink = null, mortalityMode = COMBAT_MORTALITY_MODES.normal } = {}) {
+  constructor({ physics, scene, spawnOffset = new THREE.Vector3(), spawnYaw = 0, eventSink = null, mortalityMode = COMBAT_MORTALITY_MODES.normal, visualProfile = CURRENT_HUMANOID_PROFILE } = {}) {
     this.physics = physics;
     this.scene = scene;
     this.spawnOffset = spawnOffset.clone();
@@ -56,6 +57,7 @@ export class HumanoidCombatActor {
     this.vesselDebug = [];
     this.eventSink = eventSink;
     this.mortalityMode = mortalityMode;
+    this.visualProfile = visualProfile;
     this.reactiveCollapseElapsed = 0;
     this.wounds = [];
     this.regionState = new Map();
@@ -77,7 +79,7 @@ export class HumanoidCombatActor {
     this.finalSettleEmitted = false;
     this.createMaterials();
     this.createPhysicalBody();
-    this.visualAdapter = typeof window !== 'undefined' ? new HumanoidGlbVisualAdapter({ actor: this, parent: this.root }) : null;
+    this.visualAdapter = typeof window !== 'undefined' ? new HumanoidGlbVisualAdapter({ actor: this, parent: this.root, profile: this.visualProfile }) : null;
     this.woundSystem = new CombatWoundSystem({ actor: this, scene: this.scene });
     this.wounds = this.woundSystem.wounds;
     this.physiology = new CombatPhysiology({ actor: this, woundSystem: this.woundSystem, eventSink: this.eventSink });
@@ -535,6 +537,8 @@ export class HumanoidCombatActor {
       regionalTrauma: Object.fromEntries([...this.regionState.entries()].filter(([, value]) => value.trauma > 0.001).map(([id, value]) => [id, Number(value.trauma.toFixed(3))])),
       lastReaction: this.lastReaction ? { regionId: this.lastReaction.regionId, severity: this.lastReaction.severity, hardContact: this.lastReaction.hardContact } : null,
       bodyPositions,
+      visualProfile: this.visualProfile.name,
+      visualAdapter: this.visualAdapter?.getDiagnostics?.() ?? null,
     };
   }
 

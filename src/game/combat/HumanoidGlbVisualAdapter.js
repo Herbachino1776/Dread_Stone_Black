@@ -1,21 +1,15 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
+import { CURRENT_HUMANOID_BONE_MAP, CURRENT_HUMANOID_PROFILE, getHumanoidProfileScale } from './HumanoidModelProfiles.js';
 
-export const HUMANOID_GLB_PATH = './assets/models/npc/human/human_retro_256.glb';
-export const HUMANOID_GLB_AUTHORED_HEIGHT = 84.771304;
-export const HUMANOID_GLB_TARGET_HEIGHT = 2.06;
-export const HUMANOID_GLB_SCALE = HUMANOID_GLB_TARGET_HEIGHT / HUMANOID_GLB_AUTHORED_HEIGHT;
+export const HUMANOID_GLB_PATH = CURRENT_HUMANOID_PROFILE.assetPath;
+export const HUMANOID_GLB_AUTHORED_HEIGHT = CURRENT_HUMANOID_PROFILE.rawHeight;
+export const HUMANOID_GLB_TARGET_HEIGHT = CURRENT_HUMANOID_PROFILE.targetHeight;
+export const HUMANOID_GLB_SCALE = getHumanoidProfileScale(CURRENT_HUMANOID_PROFILE);
+export const HUMANOID_GLB_BONE_MAP = CURRENT_HUMANOID_BONE_MAP;
 
-export const HUMANOID_GLB_BONE_MAP = Object.freeze({
-  pelvis: 'body', abdomen: 'body_top0', lower_chest: 'body_top1', upper_chest: 'body_top2', neck: 'neck', head: 'head',
-  left_upper_arm: 'arm_left_top', left_forearm: 'arm_left_bot', left_hand: 'arm_left_hand',
-  right_upper_arm: 'arm_right_top', right_forearm: 'arm_right_bot', right_hand: 'arm_right_hand',
-  left_thigh: 'leg_left_top', left_lower_leg: 'leg_left_bot', left_foot: 'leg_left_foot',
-  right_thigh: 'leg_right_top', right_lower_leg: 'leg_right_bot', right_foot: 'leg_right_foot',
-});
-
-let cachedAssetPromise = null;
+const cachedAssetPromises = new Map();
 let assetLoadCount = 0;
 const unitScale = new THREE.Vector3(1, 1, 1);
 const decomposedBoneScale = new THREE.Vector3();
@@ -46,21 +40,38 @@ export function applySolvedBoneLocalTransform(bone, localMatrix, bindLocalScale)
   bone.scale.copy(bindLocalScale);
 }
 
-function loadCachedAsset() {
-  if (!cachedAssetPromise) {
+export function resolveRequiredBoneMappings({ bones, bodies, boneMap, profileName }) {
+  const missing = [];
+  const resolved = Object.entries(boneMap).map(([bodyId, boneName]) => {
+    const bone = bones.get(boneName);
+    const bodyEntry = bodies.get(bodyId);
+    if (!bone || !bodyEntry) {
+      missing.push(`${bodyId} -> ${boneName}`);
+      return null;
+    }
+    return { bodyId, boneName, bone, bodyEntry };
+  }).filter(Boolean);
+  if (missing.length) throw new Error(`Humanoid GLB profile ${profileName} is missing required mappings: ${missing.join(', ')}`);
+  return resolved;
+}
+
+function loadCachedAsset(assetPath) {
+  if (!cachedAssetPromises.has(assetPath)) {
     assetLoadCount += 1;
-    cachedAssetPromise = new GLTFLoader().loadAsync(HUMANOID_GLB_PATH).catch((error) => {
-      cachedAssetPromise = null;
+    const promise = new GLTFLoader().loadAsync(assetPath).catch((error) => {
+      cachedAssetPromises.delete(assetPath);
       throw error;
     });
+    cachedAssetPromises.set(assetPath, promise);
   }
-  return cachedAssetPromise;
+  return cachedAssetPromises.get(assetPath);
 }
 
 export class HumanoidGlbVisualAdapter {
-  constructor({ actor, parent }) {
+  constructor({ actor, parent, profile = CURRENT_HUMANOID_PROFILE }) {
     this.actor = actor;
     this.parent = parent;
+    this.profile = profile;
     this.scene = null;
     this.skinnedMeshes = [];
     this.skeletons = [];
@@ -70,11 +81,13 @@ export class HumanoidGlbVisualAdapter {
   }
 
   async load() {
-    const asset = await loadCachedAsset();
+    const asset = await loadCachedAsset(this.profile.assetPath);
     if (this.disposed) return;
     this.scene = clone(asset.scene);
     this.scene.name = 'humanoid-combat-glb-visual';
-    this.scene.scale.setScalar(HUMANOID_GLB_SCALE);
+    this.scene.position.fromArray(this.profile.rootOffset);
+    this.scene.rotation.y = this.profile.rootYaw;
+    this.scene.scale.setScalar(getHumanoidProfileScale(this.profile));
     this.scene.updateMatrixWorld(true);
     this.scene.traverse((object) => {
       if (!object.isSkinnedMesh) return;
@@ -100,7 +113,7 @@ export class HumanoidGlbVisualAdapter {
         material.needsUpdate = true;
       });
     });
-    if (!this.skinnedMeshes.length || !this.skeletons.length) throw new Error(`Humanoid GLB has no SkinnedMesh/skeleton: ${HUMANOID_GLB_PATH}`);
+    if (!this.skinnedMeshes.length || !this.skeletons.length) throw new Error(`Humanoid GLB has no SkinnedMesh/skeleton: ${this.profile.assetPath}`);
     this.parent.add(this.scene);
     this.captureBindings();
     this.update(1);
@@ -111,10 +124,7 @@ export class HumanoidGlbVisualAdapter {
     const modelRootWorld = this.scene.matrixWorld.clone();
     const bones = new Map();
     this.scene.traverse((object) => { if (object.isBone) bones.set(object.name, object); });
-    this.bindings = Object.entries(HUMANOID_GLB_BONE_MAP).map(([bodyId, boneName]) => {
-      const bone = bones.get(boneName);
-      const bodyEntry = this.actor.bodies.get(bodyId);
-      if (!bone || !bodyEntry) throw new Error(`Humanoid GLB required mapping missing: ${bodyId} -> ${boneName}`);
+    this.bindings = resolveRequiredBoneMappings({ bones, bodies: this.actor.bodies, boneMap: this.profile.boneMap, profileName: this.profile.name }).map(({ bodyId, boneName, bone, bodyEntry }) => {
       const bodyBindWorld = new THREE.Matrix4().compose(bodyEntry.restPosition, bodyEntry.restQuaternion, unitScale);
       const offset = captureModelSpaceBoneBinding({ modelRootWorld, bodyBindWorld, boneBindWorld: bone.matrixWorld });
       return { bodyId, boneName, bone, offset, bindLocalScale: bone.scale.clone() };
@@ -143,7 +153,7 @@ export class HumanoidGlbVisualAdapter {
   }
 
   getDiagnostics() {
-    return { path: HUMANOID_GLB_PATH, loadCount: assetLoadCount, skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.bindings.length, height: HUMANOID_GLB_TARGET_HEIGHT, scale: HUMANOID_GLB_SCALE };
+    return { path: this.profile.assetPath, profileName: this.profile.name, loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, height: this.profile.targetHeight, scale: getHumanoidProfileScale(this.profile) };
   }
 
   dispose() {

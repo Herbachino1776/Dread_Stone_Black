@@ -10,7 +10,7 @@ assert.equal(result.bodyCount, 18);
 assert.equal(result.jointCount, 17);
 assert.ok(result.regionCount >= 20);
 
-const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmodelSource, actorSource, adapterSource, woundSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, packageSource, docsSource, glbBuffer] = await Promise.all([
+const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmodelSource, actorSource, adapterSource, profileSource, rawReferenceSource, startupRouteSource, woundSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, packageSource, docsSource, diagnosticDocsSource, glbBuffer, modelIdleGlbBuffer] = await Promise.all([
   readFile(new URL('../src/game/Game.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/SceneSessionHost.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/FirstPersonViewmodelHost.js', import.meta.url), 'utf8'),
@@ -18,6 +18,9 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmod
   readFile(new URL('../src/game/physical-tools/PhysicalToolViewmodel.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/HumanoidCombatActor.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/HumanoidGlbVisualAdapter.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/HumanoidModelProfiles.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/FolsomModelIdleRawReference.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/startupRoute.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatWoundSystem.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatPhysiology.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatBloodEffects.js', import.meta.url), 'utf8'),
@@ -30,8 +33,24 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmod
   readFile(new URL('../src/game/combat/CombatConfig.js', import.meta.url), 'utf8'),
   readFile(new URL('../package.json', import.meta.url), 'utf8'),
   readFile(new URL('../docs/architecture/PHYSICAL_HUMANOID_COMBAT_FOUNDATION.md', import.meta.url), 'utf8').catch(() => ''),
+  readFile(new URL('../docs/model_idle_ab_diagnostic.md', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/models/npc/human/human_retro_256.glb', import.meta.url)),
+  readFile(new URL('../public/assets/models/npc/human/model_idle.glb', import.meta.url)),
 ]);
+
+function parseGlbJson(buffer) {
+  assert.equal(buffer.subarray(0, 4).toString(), 'glTF', 'asset is a valid binary glTF');
+  let offset = 12;
+  let json = null;
+  while (offset < buffer.length) {
+    const length = buffer.readUInt32LE(offset);
+    const type = buffer.readUInt32LE(offset + 4);
+    if (type === 0x4e4f534a) json = JSON.parse(buffer.subarray(offset + 8, offset + 8 + length).toString());
+    offset += 8 + length;
+  }
+  assert.ok(json, 'GLB JSON chunk loads');
+  return json;
+}
 
 assert.equal(glbBuffer.subarray(0, 4).toString(), 'glTF', 'humanoid asset is a valid binary glTF');
 let glbOffset = 12;
@@ -49,6 +68,12 @@ assert.ok(glbJson.skins?.[0]?.joints?.length >= 18, 'humanoid GLB contains a coh
 assert.ok(glbJson.images?.every((image) => image.bufferView != null), 'humanoid textures are embedded');
 const nodeNames = new Set(glbJson.nodes.map((node) => node.name));
 ['body', 'body_top0', 'body_top1', 'body_top2', 'neck', 'head', 'arm_left_top', 'arm_left_bot', 'arm_left_hand', 'arm_right_top', 'arm_right_bot', 'arm_right_hand', 'leg_left_top', 'leg_left_bot', 'leg_left_foot', 'leg_right_top', 'leg_right_bot', 'leg_right_foot'].forEach((name) => assert.ok(nodeNames.has(name), `required mapped GLB bone exists: ${name}`));
+const modelIdleGlbJson = parseGlbJson(modelIdleGlbBuffer);
+assert.ok(modelIdleGlbJson.meshes?.length >= 1, 'model_idle.glb contains a mesh');
+assert.ok(modelIdleGlbJson.skins?.length >= 1, 'model_idle.glb contains a skin');
+assert.ok(modelIdleGlbJson.meshes.flatMap((mesh) => mesh.primitives).some((primitive) => primitive.attributes.JOINTS_0 != null && primitive.attributes.WEIGHTS_0 != null), 'model_idle.glb contains a SkinnedMesh primitive');
+assert.ok(modelIdleGlbJson.animations?.some((animation) => animation.channels.length > 0), 'model_idle.glb animation metadata is inspected');
+assert.ok(modelIdleGlbJson.images?.every((image) => image.bufferView != null), 'model_idle.glb textures are embedded');
 
 assert.match(sceneHostSource, /combatLab/);
 assert.match(sceneHostSource, /FolsomCombatEncounter/);
@@ -90,6 +115,19 @@ assert.match(adapterSource, /SkeletonUtils/);
 assert.match(adapterSource, /HUMANOID_GLB_BONE_MAP/);
 assert.match(adapterSource, /LinearMipmapLinearFilter/);
 assert.match(adapterSource, /NearestFilter/);
+assert.match(adapterSource, /cachedAssetPromises = new Map/);
+assert.match(adapterSource, /loadCachedAsset\(this\.profile\.assetPath\)/);
+assert.match(profileSource, /model_idle_combat_diagnostic/);
+assert.match(profileSource, /\.\/assets\/models\/npc\/human\/model_idle\.glb/);
+assert.doesNotMatch(rawReferenceSource, /HumanoidGlbVisualAdapter|RAPIER|createRigidBody|createCollider/);
+assert.doesNotMatch(rawReferenceSource, /\.isBone[^\n]*(position|quaternion|scale)|bone\.(position|quaternion|scale)/);
+assert.match(rawReferenceSource, /root\.scale\.setScalar\(uniformScale\)/);
+assert.match(rawReferenceSource, /root\.position\.set/);
+assert.match(rawReferenceSource, /root\.rotation\.y = yaw/);
+assert.match(rawReferenceSource, /AnimationMixer/);
+assert.match(rawReferenceSource, /stopAllAction/);
+assert.match(rawReferenceSource, /uncacheRoot/);
+assert.match(rawReferenceSource, /folsom-model-idle-raw-reference/);
 assert.doesNotMatch(actorSource, /weathered-angry-male-head|patched-wool-tunic|square-toed-boot|rough-moustache|short-unkempt-beard/);
 assert.match(actorSource, /chest_fold|neck_failure|neurological|leg_failure|blood_loss/);
 assert.match(woundSource, /vesselInvolvement/);
@@ -103,6 +141,15 @@ assert.match(feedbackSource, /maximumVoices/);
 assert.match(folsomEncounterSource, /folsom-starter-humanoid-combat-subject/);
 assert.match(folsomEncounterSource, /new THREE\.Vector3\(-2, 0, 0\)/);
 assert.match(folsomEncounterSource, /resolveCombatMortalityMode/);
+assert.match(folsomEncounterSource, /modelIdleCombatTest/);
+assert.match(folsomEncounterSource, /MODEL_IDLE_COMBAT_PROFILE/);
+assert.match(folsomEncounterSource, /FolsomModelIdleRawReference/);
+assert.match(sceneHostSource, /this\.query\.get\('modelIdleCombatTest'\) === '1'/);
+assert.match(startupRouteSource, /modelIdleCombatTest/);
+assert.match(diagnosticDocsSource, /Case 1/);
+assert.match(diagnosticDocsSource, /Case 2/);
+assert.match(diagnosticDocsSource, /Case 3/);
+assert.match(diagnosticDocsSource, /Case 4/);
 assert.match(combatLabSource, /resolveCombatMortalityMode/);
 assert.match(combatLabSource, /toggleMortalityMode/);
 assert.match(combatLabPanelSource, /MORTALITY X/);

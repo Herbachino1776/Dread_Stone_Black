@@ -7,11 +7,15 @@ import { CombatPhysicsWorld, initializeCombatPhysics } from '../src/game/combat/
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
+import { resolveFolsomModelDiagnosticMode } from '../src/game/combat/FolsomCombatEncounter.js';
+import { FolsomModelIdleRawReference } from '../src/game/combat/FolsomModelIdleRawReference.js';
+import { CURRENT_HUMANOID_PROFILE, MODEL_IDLE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
+import { getNewGameStartupUrl } from '../src/game/startupRoute.js';
 import { SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
 import { WorldKnifeCombatController } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
-import { applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
+import { applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 
 async function createActor() {
   await initializeCombatPhysics();
@@ -165,6 +169,15 @@ test('GLB physics binding preserves bind pose and authored bone scale under mode
   const scaleContaminatedLocal = solvedLocal.clone().scale(new THREE.Vector3(1.000001, 0.999999, 1.000002));
   for (let frame = 0; frame < 600; frame += 1) applySolvedBoneLocalTransform(bone, scaleContaminatedLocal, authoredScale);
   assert.deepEqual(bone.scale.toArray(), authoredScale.toArray(), 'per-frame matrix decomposition cannot accumulate scale drift into the skin');
+});
+
+test('diagnostic GLB profiles fail clearly when a required mapped bone is missing', () => {
+  const bodies = new Map([['pelvis', {}], ['head', {}]]);
+  const bones = new Map([['body', new THREE.Bone()]]);
+  assert.throws(
+    () => resolveRequiredBoneMappings({ bones, bodies, boneMap: { pelvis: 'body', head: 'missing_head' }, profileName: 'diagnostic-test-profile' }),
+    /diagnostic-test-profile is missing required mappings: head -> missing_head/,
+  );
 });
 
 test('contact classifier distinguishes blunt, edge, glance, tip, failure, and puncture', () => {
@@ -367,10 +380,68 @@ test('Folsom encounter places the physical actor four meters ahead of new-game s
   assert.ok(facing.z < -0.9, 'the angry face is oriented toward the arriving player');
   assert.ok(scene.getObjectByName('folsom-starter-humanoid-combat-subject'));
   assert.equal(encounter.physics.world.bodies.len(), 19);
+  const rawReferenceSentinel = {};
+  encounter.rawModelReference = rawReferenceSentinel;
   encounter.reset();
   assert.equal(encounter.physics.world.bodies.len(), 19);
+  assert.equal(encounter.rawModelReference, rawReferenceSentinel, 'combat reset neither reloads nor duplicates the raw reference');
   encounter.dispose();
   assert.equal(scene.getObjectByName('folsom-starter-humanoid-combat-subject'), undefined);
+});
+
+test('raw model_idle reference is root-only, animated, non-physical, grounded, and disposable', async () => {
+  const scene = new THREE.Scene();
+  const assetScene = new THREE.Group();
+  const bone = new THREE.Bone();
+  bone.name = 'diagnostic_bone';
+  const geometry = new THREE.BoxGeometry(1, 2, 0.5);
+  const positionCount = geometry.attributes.position.count;
+  geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(positionCount * 4), 4));
+  const weights = new Float32Array(positionCount * 4);
+  for (let index = 0; index < positionCount; index += 1) weights[index * 4] = 1;
+  geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
+  const material = new THREE.MeshStandardMaterial();
+  const skinned = new THREE.SkinnedMesh(geometry, material);
+  skinned.name = 'diagnostic_skinned_mesh';
+  skinned.add(bone);
+  skinned.bind(new THREE.Skeleton([bone]));
+  assetScene.add(skinned);
+  const clip = new THREE.AnimationClip('idle', 1, [new THREE.NumberKeyframeTrack('diagnostic_bone.position[x]', [0, 1], [0, 0.01])]);
+  let loads = 0;
+  const reference = await FolsomModelIdleRawReference.create({ scene, groundY: 0.16, assetLoader: async () => { loads += 1; return { scene: assetScene, animations: [clip] }; } });
+  assert.equal(loads, 1);
+  assert.equal(reference.root.name, 'folsom-model-idle-raw-reference');
+  assert.equal(scene.getObjectByName('folsom-model-idle-raw-reference'), reference.root);
+  assert.ok(Math.abs(reference.root.scale.x - reference.root.scale.y) < 1e-12 && Math.abs(reference.root.scale.y - reference.root.scale.z) < 1e-12);
+  assert.equal(reference.getDiagnostics().horizontalDistanceFromPlayerSpawn, 10);
+  assert.equal(reference.getDiagnostics().selectedIdleClip, 'idle');
+  assert.equal(reference.getDiagnostics().physicsDriven, false);
+  reference.update(1 / 60);
+  reference.dispose();
+  assert.equal(scene.getObjectByName('folsom-model-idle-raw-reference'), undefined);
+  assert.equal(reference.mixer, null);
+  geometry.dispose();
+  material.dispose();
+});
+
+test('model idle query selects one independent adapted combat profile without changing normal Folsom', async () => {
+  assert.equal(resolveFolsomModelDiagnosticMode(''), 'raw-reference');
+  assert.equal(resolveFolsomModelDiagnosticMode('?modelIdleCombatTest=1'), 'adapted-model-idle');
+  assert.notEqual(CURRENT_HUMANOID_PROFILE.assetPath, MODEL_IDLE_COMBAT_PROFILE.assetPath);
+  assert.notEqual(CURRENT_HUMANOID_PROFILE.boneMap, MODEL_IDLE_COMBAT_PROFILE.boneMap);
+  assert.equal(getNewGameStartupUrl({ pathname: '/Dread_Stone_Black/', search: '?modelIdleCombatTest=1&unrelated=discarded' }), '/Dread_Stone_Black/?modelIdleCombatTest=1');
+  assert.equal(getNewGameStartupUrl({ pathname: '/Dread_Stone_Black/', search: '?unrelated=discarded' }), '/Dread_Stone_Black/');
+  const scene = new THREE.Scene();
+  const collision = { sampleWalkableY: () => ({ y: 0.16 }), canStandAtFloorPosition: () => true, getIntersectingBlockers: () => [] };
+  const encounter = await FolsomCombatEncounter.create({ dungeon: { scene, collision }, modelIdleCombatTest: true });
+  assert.equal(encounter.actor.visualProfile.name, 'model_idle_combat_diagnostic');
+  assert.equal(encounter.actor.root.name, 'folsom-model-idle-adapted-combat-subject');
+  assert.equal(scene.getObjectByName('folsom-starter-humanoid-combat-subject'), undefined);
+  assert.equal(scene.children.filter((child) => child.name.includes('combat-subject')).length, 1);
+  assert.equal(encounter.rawModelReference, null);
+  assert.equal(encounter.physics.world.bodies.len(), 19);
+  assert.equal(encounter.physics.world.impulseJoints.len(), 17);
+  encounter.dispose();
 });
 
 test('one authoritative knife root keeps identity, scale, pose, ownership, and safe return', async () => {
