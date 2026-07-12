@@ -4,6 +4,7 @@ export class CombatLabDebugPanel {
     this.dungeon = dungeon;
     this.equipmentRuntime = equipmentRuntime;
     this.debugVisible = false;
+    this.woundAnchorsVisible = false;
     this.slow = false;
     this.frozen = false;
     this.lightingMode = 0;
@@ -28,6 +29,7 @@ export class CombatLabDebugPanel {
       ['RESET R', () => this.reset()],
       ['KNIFE K', () => this.restoreKnife()],
       ['DEBUG B', () => this.toggleDebug()],
+      ['ANCHORS A', () => this.toggleWoundAnchors()],
       ['FREEZE P', () => this.toggleFreeze()],
       ['SLOW O', () => this.toggleSlow()],
       ['DAY/NIGHT N', () => this.toggleNight()],
@@ -73,6 +75,7 @@ export class CombatLabDebugPanel {
       if (event.code === 'KeyR') this.reset();
       if (event.code === 'KeyK') this.restoreKnife();
       if (event.code === 'KeyB') this.toggleDebug();
+      if (event.code === 'KeyA') this.toggleWoundAnchors();
       if (event.code === 'KeyP') this.toggleFreeze();
       if (event.code === 'KeyO') this.toggleSlow();
       if (event.code === 'KeyN') this.toggleNight();
@@ -111,6 +114,10 @@ export class CombatLabDebugPanel {
     this.dungeon?.actor?.setDebugVisible?.(this.debugVisible);
     this.dungeon?.weaponController?.setDebugVisible?.(this.debugVisible);
   }
+  toggleWoundAnchors() {
+    this.woundAnchorsVisible = !this.woundAnchorsVisible;
+    this.dungeon?.actor?.setWoundSurfaceDebugVisible?.(this.woundAnchorsVisible);
+  }
   toggleFreeze() { this.frozen = !this.frozen; this.dungeon?.setPhysicsPaused?.(this.frozen); }
   toggleSlow() { this.slow = !this.slow; this.dungeon?.setPhysicsSlow?.(this.slow); }
   toggleNight() {
@@ -145,6 +152,7 @@ export class CombatLabDebugPanel {
     const feedback = diagnostics.feedback ?? {};
     const physiology = actor.physiology ?? {};
     const wounds = actor.wounds ?? {};
+    const reaction = actor.visualAdapter?.reaction ?? {};
     this.readout.textContent = [
       `frame ${frameTimeMs.toFixed?.(2) ?? frameTimeMs}ms  physics ${(physics.physicsStepMs ?? 0).toFixed(2)}ms x${physics.substeps ?? 0}`,
       `bodies ${physics.rigidBodies ?? 0}  constraints ${physics.constraints ?? 0}  contacts ${physics.activeContacts ?? 0}  sweeps ${physics.weaponSweeps ?? 0}`,
@@ -155,6 +163,12 @@ export class CombatLabDebugPanel {
       `blood ${(physiology.bloodReserve ?? 1).toFixed(3)}  loss/s ${(physiology.bloodLossRate ?? 0).toFixed(4)}  shock ${(physiology.shock ?? 0).toFixed(2)}  conscious ${(physiology.consciousness ?? 1).toFixed(2)}`,
       `breathing ${physiology.breathingState ?? '-'}  collapse ${actor.collapseFamily ?? '-'}  sleep ${actor.corpseSleeping ? 'YES' : 'NO'}`,
       `wound ${JSON.stringify(wounds.selected ?? null)}`,
+      `reaction ${reaction.region ?? '-'}  severity ${(reaction.severity ?? 0).toFixed(2)}  phase ${reaction.phase ?? 'idle'}  remaining ${(reaction.timeRemaining ?? 0).toFixed(3)}s`,
+      `reaction bones ${JSON.stringify(reaction.affectedBones ?? [])}`,
+      `additive deg ${JSON.stringify(reaction.additiveAngles ?? {})}`,
+      `binding ${wounds.selected?.surfaceBindingStatus ?? '-'}  mesh ${wounds.selected?.meshName ?? '-'}  tri ${JSON.stringify(wounds.selected?.triangleIndices ?? null)}`,
+      `bary ${JSON.stringify(wounds.selected?.barycentric ?? null)}  surface ${(wounds.selected?.surfaceDistance ?? 0).toFixed(4)}m  slash samples ${wounds.selected?.slashSampleCount ?? 0}`,
+      `projection failures ${wounds.failedProjectionCount ?? 0}  fallback ${wounds.fallbackAnchorUsage ?? 0}  anchors ${this.woundAnchorsVisible ? 'ON' : 'OFF'}`,
       `blood fx ${blood.particles ?? 0}/${blood.particleLimit ?? 0}  decals ${blood.decals ?? 0}/${blood.decalLimit ?? 0}`,
       `audio ${feedback.activeVoices ?? 0} voices  haptic ${feedback.activeHapticEvents ?? 0}  event ${feedback.lastEvent ?? '-'}  mute ${feedback.muted ? 'YES' : 'NO'}`,
       `trauma ${JSON.stringify(actor.regionalTrauma ?? {})}`,

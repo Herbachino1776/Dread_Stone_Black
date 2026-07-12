@@ -246,6 +246,7 @@ export class HumanoidCombatActor {
     if (state) state.wounds = (state.wounds ?? 0) + 1;
     this.physiology.onWoundCreated(wound);
     this.eventSink?.('puncture', { position: entryPoint, severity: wound.severity, wound });
+    this.triggerReflex(hit.regionId, Math.max(0.2, wound.severity), direction, { point: entryPoint, depth, force: 0.25, source: 'new_puncture' });
     return wound;
   }
 
@@ -264,20 +265,29 @@ export class HumanoidCombatActor {
     const impulse = direction.clone().multiplyScalar(Math.min(1.4, 0.09 + force * 0.04 + severity * 0.35));
     hit.body.applyImpulseAtPoint(impulse, entryPoint, true);
     this.lastReaction = { regionId: hit.regionId, severity, point: entryPoint.clone(), direction: direction.clone(), hardContact };
-    if (woundId) this.woundSystem.extendPuncture(woundId, { depth, hardStructureContact: hardContact });
+    const wound = woundId ? this.woundSystem.extendPuncture(woundId, { depth, hardStructureContact: hardContact }) : null;
     this.physiology.onTrauma({ hit, severity, depth, deltaDepth, hardContact });
-    this.triggerReflex(hit.regionId, severity, direction);
+    this.visualAdapter?.setEmbeddedTension?.({ regionId: hit.regionId, depth, worldDirection: direction });
+    if (wound && depth >= 0.045 && !wound.depthReactionTriggered) {
+      wound.depthReactionTriggered = true;
+      this.visualAdapter?.triggerPainReaction?.({ regionId: hit.regionId, severity: Math.min(0.72, 0.24 + depth * 4), worldDirection: direction, depth, impactForce: force * 0.35, hitWorldPosition: entryPoint, actorState: this.lifeState, source: 'throttled_depth_escalation' });
+    }
+    if (hardContact && wound && !wound.hardReactionTriggered) {
+      wound.hardReactionTriggered = true;
+      this.triggerReflex(hit.regionId, Math.max(0.36, severity), direction, { point: entryPoint, depth, force, source: 'new_hard_contact' });
+    }
     this.evaluateLifeState();
     return severity;
   }
 
   applySlashWound({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, woundId = null } = {}) {
     let wound = woundId ? this.woundSystem.getWound(woundId) : null;
+    const isNewWound = !wound;
     if (wound) {
       const rotation = hit.body.rotation();
       const inverse = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).invert();
       const localEnd = hit.localPoint.clone().add(endPoint.clone().sub(startPoint).applyQuaternion(inverse));
-      wound = this.woundSystem.extendSlash(wound.id, { localEnd, addedTravel: cutLength, depth, severity });
+      wound = this.woundSystem.extendSlash(wound.id, { localEnd, worldEnd: endPoint, surfaceNormal, addedTravel: cutLength, depth, severity });
     } else {
       wound = this.woundSystem.createSlash({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, createdTime: this.elapsed });
       const state = this.regionState.get(hit.regionId);
@@ -295,7 +305,7 @@ export class HumanoidCombatActor {
     this.balanceImpairment += traumaSeverity * hit.region.balanceImpact;
     hit.body.applyImpulseAtPoint(cutDirection.clone().multiplyScalar(Math.min(0.22, severity * 0.08)), endPoint, true);
     this.physiology.onTrauma({ hit, severity: traumaSeverity, depth, deltaDepth: depth * 0.2, hardContact: false });
-    this.triggerReflex(hit.regionId, traumaSeverity, cutDirection);
+    if (isNewWound) this.triggerReflex(hit.regionId, Math.max(0.16, traumaSeverity), cutDirection, { point: endPoint, depth, slashSeverity: severity, force: severity, source: 'new_slash' });
     this.evaluateLifeState();
     return wound;
   }
@@ -303,13 +313,16 @@ export class HumanoidCombatActor {
   applyBluntContact({ hit, point, direction, severity = 0.1 } = {}) {
     const wound = this.woundSystem.createBluntMarker({ hit, severity, createdTime: this.elapsed });
     hit.body.applyImpulseAtPoint(direction.clone().multiplyScalar(Math.min(0.16, severity * 0.12)), point, true);
-    this.triggerReflex(hit.regionId, severity * 0.35, direction);
+    this.triggerReflex(hit.regionId, severity * 0.35, direction, { point, force: severity, source: 'new_blunt_contact' });
     return wound;
   }
 
   onWeaponExtracted(woundId, { releaseSeverity = 0, direction = null } = {}) {
     const wound = this.woundSystem.markExtracted(woundId, { releaseSeverity, direction });
-    if (wound) this.physiology.onWoundCreated(wound);
+    if (wound) {
+      this.physiology.onWoundCreated(wound);
+      this.visualAdapter?.releaseEmbeddedReaction?.({ regionId: wound.regionId, severity: releaseSeverity, worldDirection: direction, actorState: this.lifeState });
+    }
     return wound;
   }
 
@@ -359,11 +372,12 @@ export class HumanoidCombatActor {
     return translation ? new THREE.Vector3(translation.x, translation.y, translation.z) : new THREE.Vector3();
   }
 
-  triggerReflex(regionId, intensity, direction) {
+  triggerReflex(regionId, intensity, direction, details = {}) {
     this.reflex.regionId = regionId;
     this.reflex.intensity = THREE.MathUtils.clamp(Math.max(this.reflex.intensity, intensity * 1.8), 0, 1);
     this.reflex.time = 0.38 + this.reflex.intensity * 0.42;
     this.reflex.direction.copy(direction ?? new THREE.Vector3());
+    this.visualAdapter?.triggerPainReaction?.({ regionId, severity: intensity, worldDirection: direction, depth: details.depth ?? 0, slashSeverity: details.slashSeverity ?? 0, impactForce: details.force ?? 0, hitWorldPosition: details.point ?? null, actorState: this.lifeState, source: details.source ?? 'combat_contact' });
     if (intensity > 0.08 && this.lifeState !== 'dead') this.eventSink?.('pain_vocal', { position: this.getBodyWorldPosition('head'), severity: intensity });
   }
 
@@ -585,6 +599,10 @@ export class HumanoidCombatActor {
 
   setDebugVisible(visible) {
     this.debugRoot.visible = visible;
+  }
+
+  setWoundSurfaceDebugVisible(visible) {
+    this.woundSystem.setDebugVisible(visible);
   }
 
   disposePhysicalBody() {

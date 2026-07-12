@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BLOOD_COLOR_PALETTE, VESSEL_ZONES, WOUND_CONFIG } from './CombatStage2Config.js';
+import { MAX_SLASH_SURFACE_SAMPLES, MIN_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 
 const tmpPosition = new THREE.Vector3();
 const tmpQuaternion = new THREE.Quaternion();
@@ -9,10 +10,45 @@ const tmpSide = new THREE.Vector3();
 
 function makeSlashGeometry() {
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Array(12).fill(0), 3));
-  geometry.setIndex([0, 1, 2, 2, 1, 3]);
-  geometry.computeVertexNormals();
+  const maximumSegments = MAX_SLASH_SURFACE_SAMPLES - 1;
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(maximumSegments * 12), 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(maximumSegments * 12), 3));
+  const uvs = new Float32Array(maximumSegments * 8);
+  for (let segment = 0; segment < maximumSegments; segment += 1) uvs.set([0, 0, 1, 0, 0, 1, 1, 1], segment * 8);
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(Array.from({ length: maximumSegments }, (_, segment) => {
+    const offset = segment * 4;
+    return [offset, offset + 1, offset + 2, offset + 2, offset + 1, offset + 3];
+  }).flat());
+  geometry.setDrawRange(0, 0);
   return geometry;
+}
+
+function makeWoundTexture(kind) {
+  const size = 32;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y += 1) for (let x = 0; x < size; x += 1) {
+    const nx = (x + 0.5) / size * 2 - 1;
+    const ny = (y + 0.5) / size * 2 - 1;
+    const irregularity = 0.08 * Math.sin(x * 1.73 + y * 0.41) + 0.045 * Math.sin(y * 2.11 - x * 0.27);
+    const distance = kind === 'slash' ? Math.abs(nx) * (0.9 + Math.abs(ny) * 0.28) : Math.hypot(nx * 0.93, ny * 1.08);
+    const edge = kind === 'slash' ? 0.62 + irregularity : 0.79 + irregularity;
+    const alpha = THREE.MathUtils.clamp((edge - distance) * 9, 0, 1);
+    const center = kind === 'slash' ? THREE.MathUtils.clamp(1 - Math.abs(nx) * 5.2, 0, 1) : THREE.MathUtils.clamp(1 - distance * 3.2, 0, 1);
+    const wetEdge = THREE.MathUtils.clamp((distance - edge * 0.42) * 3.8, 0, 1);
+    const offset = (y * size + x) * 4;
+    data[offset] = Math.round(THREE.MathUtils.lerp(54, 225, wetEdge) * (1 - center * 0.58));
+    data[offset + 1] = Math.round(THREE.MathUtils.lerp(4, 28, wetEdge) * (1 - center * 0.7));
+    data[offset + 2] = Math.round(THREE.MathUtils.lerp(7, 31, wetEdge) * (1 - center * 0.68));
+    data[offset + 3] = Math.round(alpha * 255);
+  }
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  texture.name = `combat-${kind}-irregular-alpha`;
+  return texture;
 }
 
 function distancePointToSegment2D(px, py, ax, ay, bx, by) {
@@ -30,19 +66,29 @@ export class CombatWoundSystem {
     this.wounds = [];
     this.nextWoundId = 1;
     this.visualSlots = [];
+    this.punctureTexture = makeWoundTexture('puncture');
+    this.slashTexture = makeWoundTexture('slash');
+    const materialOptions = { roughness: 0.88, metalness: 0, side: THREE.DoubleSide, transparent: true, alphaTest: 0.08, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
     this.materials = {
-      puncture: new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.fresh, roughness: 0.92, metalness: 0, side: THREE.DoubleSide }),
-      cut: new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.fresh, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }),
-      deep: new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.deep, roughness: 0.95, metalness: 0, side: THREE.DoubleSide }),
-      arterial: new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.arterial, roughness: 0.86, metalness: 0, side: THREE.DoubleSide }),
-      blunt: new THREE.MeshStandardMaterial({ color: 0x372229, roughness: 0.96, transparent: true, opacity: 0.72, side: THREE.DoubleSide }),
+      puncture: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.fresh, map: this.punctureTexture }),
+      cut: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.fresh, map: this.slashTexture }),
+      deep: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.deep, map: this.punctureTexture }),
+      deepCut: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.deep, map: this.slashTexture }),
+      arterial: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.arterial, map: this.punctureTexture }),
+      arterialCut: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.arterial, map: this.slashTexture }),
+      blunt: new THREE.MeshStandardMaterial({ ...materialOptions, color: 0x372229, map: this.punctureTexture, opacity: 0.72 }),
     };
+    this.failedProjectionCount = 0;
+    this.fallbackUsageCount = 0;
+    this.bindingFailureLogged = false;
+    this.debugVisible = false;
     this.createVisualPool();
+    this.createSurfaceDebug();
   }
 
   createVisualPool() {
     for (let index = 0; index < this.maximumWounds; index += 1) {
-      const puncture = new THREE.Mesh(new THREE.CircleGeometry(1, 10), this.materials.puncture);
+      const puncture = new THREE.Mesh(new THREE.CircleGeometry(1, 16), this.materials.puncture);
       puncture.name = `combat-wound-puncture-visual-${index}`;
       puncture.visible = false;
       puncture.castShadow = false;
@@ -57,6 +103,30 @@ export class CombatWoundSystem {
     }
   }
 
+  createSurfaceDebug() {
+    this.surfaceDebugRoot = new THREE.Group();
+    this.surfaceDebugRoot.name = 'combat-wound-surface-binding-debug';
+    this.surfaceDebugRoot.visible = false;
+    const pointMaterial = (color) => new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false });
+    this.debugAnchor = new THREE.Mesh(new THREE.SphereGeometry(0.009, 6, 4), pointMaterial(0x5dff72));
+    this.debugProxy = new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 4), pointMaterial(0x55d9ff));
+    const makeLine = (name, color, points) => {
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, depthTest: false, depthWrite: false }));
+      line.name = name;
+      return line;
+    };
+    this.debugNormal = makeLine('wound-surface-normal', 0xffe563, [new THREE.Vector3(), new THREE.Vector3()]);
+    this.debugTriangle = makeLine('wound-bound-triangle', 0xff62dd, [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]);
+    this.surfaceDebugRoot.add(this.debugAnchor, this.debugProxy, this.debugNormal, this.debugTriangle);
+    this.scene.add(this.surfaceDebugRoot);
+  }
+
+  setDebugVisible(visible) {
+    this.debugVisible = Boolean(visible);
+    if (this.surfaceDebugRoot) this.surfaceDebugRoot.visible = this.debugVisible;
+  }
+
   allocateVisual(woundId) {
     let slot = this.visualSlots.find((entry) => entry.woundId == null);
     if (!slot) {
@@ -67,6 +137,64 @@ export class CombatWoundSystem {
     if (!slot) return null;
     slot.woundId = woundId;
     return slot;
+  }
+
+  bindSurfacePoint(wound, worldPoint, referenceNormal = null) {
+    const adapter = this.actor.visualAdapter;
+    const binding = adapter?.bindVisibleSurface?.(worldPoint, { regionId: wound.regionId, bodyId: wound.bodyId, referenceNormal });
+    if (binding && validateSurfaceBinding(binding)) return binding;
+    this.failedProjectionCount += 1;
+    if (adapter?.scene && !this.bindingFailureLogged) {
+      this.bindingFailureLogged = true;
+      console.warn('[combat] Visible skinned-surface wound binding failed; using bounded mapped-bone fallback.');
+    }
+    return null;
+  }
+
+  attachPunctureSurface(wound, worldPoint, referenceNormal) {
+    wound.surfaceBinding = this.bindSurfacePoint(wound, worldPoint, referenceNormal);
+    wound.surfaceBindingStatus = wound.surfaceBinding ? 'skinned_triangle' : 'fallback_anchor';
+    wound.fallbackAnchorUsage = !wound.surfaceBinding;
+    wound.surfaceBindingAttempted = true;
+    if (wound.fallbackAnchorUsage) this.fallbackUsageCount += 1;
+  }
+
+  attachSlashSamples(wound, startPoint, endPoint, referenceNormal) {
+    const length = startPoint.distanceTo(endPoint);
+    const desiredCount = THREE.MathUtils.clamp(Math.ceil(length / 0.045) + 1, MIN_SLASH_SURFACE_SAMPLES, 8);
+    let breakBefore = false;
+    wound.slashSamples = sampleSlashPath(startPoint, endPoint, desiredCount).map((worldPoint) => {
+      const binding = this.bindSurfacePoint(wound, worldPoint, referenceNormal);
+      const sample = { sourcePoint: worldPoint.clone(), binding, fallbackAnchorUsage: !binding, breakBefore };
+      if (!binding) {
+        breakBefore = true;
+        wound.failedProjectionCount += 1;
+      } else {
+        if (breakBefore) sample.breakBefore = true;
+        breakBefore = false;
+      }
+      return sample;
+    }).filter((sample) => sample.binding);
+    wound.surfaceBindingStatus = wound.slashSamples.length >= 2 ? 'segmented_skinned_surface' : 'fallback_anchor';
+    wound.fallbackAnchorUsage = wound.slashSamples.length < 2;
+    if (wound.fallbackAnchorUsage) this.fallbackUsageCount += 1;
+  }
+
+  appendSlashSurfaceSample(wound, worldPoint, referenceNormal) {
+    if (!worldPoint || wound.slashSamples.length >= MAX_SLASH_SURFACE_SAMPLES) return;
+    const previous = wound.slashSamples.at(-1);
+    if (previous?.sourcePoint.distanceTo(worldPoint) < 0.025) return;
+    const binding = this.bindSurfacePoint(wound, worldPoint, referenceNormal);
+    if (!binding) {
+      wound.failedProjectionCount += 1;
+      wound.nextSampleBreak = true;
+      return;
+    }
+    const reconstructed = reconstructSkinnedSurface(binding);
+    const previousSurface = previous?.binding ? reconstructSkinnedSurface(previous.binding) : null;
+    const wouldBridge = !previousSurface || previous.binding.mesh !== binding.mesh || reconstructed.point.distanceTo(previousSurface.point) > 0.14;
+    wound.slashSamples.push({ sourcePoint: worldPoint.clone(), binding, fallbackAnchorUsage: false, breakBefore: wound.nextSampleBreak || wouldBridge });
+    wound.nextSampleBreak = false;
   }
 
   createPuncture({ hit, entryPoint, axis, depth = 0.004, hardStructureContact = false, embeddedWeaponId = null, createdTime = 0 } = {}) {
@@ -103,6 +231,7 @@ export class CombatWoundSystem {
       createdTime,
     });
     this.resolveBleedingProfile(wound);
+    this.attachPunctureSurface(wound, entryPoint, axis.clone().negate());
     this.updateWoundVisual(wound);
     return wound;
   }
@@ -130,6 +259,9 @@ export class CombatWoundSystem {
     }
     const woundType = classification === 'deep_slash' ? 'deep_slash' : 'shallow_cut';
     const wound = this.createWound({ actor: this.actor, regionId: hit.regionId, bodyId: hit.bodyId, woundType, localEntryPoint: localStart.clone(), localSurfaceNormal: localNormal, localPenetrationAxis: localNormal.clone().negate(), currentDepth: depth, maximumDepth: depth, cutLength: Math.min(cutLength, WOUND_CONFIG.maximumCutLength), localCutStart: localStart, localCutEnd: localEnd, localCutDirection: localDirection, severity, tissueClass: hit.region?.vital ?? 'none', hardStructureContact: false, embeddedWeaponId: null, createdTime });
+    wound.failedProjectionCount = 0;
+    wound.nextSampleBreak = false;
+    this.attachSlashSamples(wound, startPoint, endPoint, surfaceNormal);
     this.resolveBleedingProfile(wound);
     this.updateWoundVisual(wound);
     return wound;
@@ -149,7 +281,7 @@ export class CombatWoundSystem {
     }
     const id = `wound_${this.nextWoundId++}`;
     const visualSlot = this.allocateVisual(id);
-    const wound = { id, ...data, vesselInvolvement: null, bleedingProfile: { kind: 'capillary', baseRate: 0.002 }, bleedingRate: 0, bloodEmitted: 0, withdrawalBoostRemaining: 0, pulsePhase: 0, active: true, closed: false, reopenedCount: 0, visualSlot, visualOwner: visualSlot ? 'pooled-region-visual' : null };
+    const wound = { id, ...data, vesselInvolvement: null, bleedingProfile: { kind: 'capillary', baseRate: 0.002 }, bleedingRate: 0, bloodEmitted: 0, withdrawalBoostRemaining: 0, pulsePhase: 0, active: true, closed: false, reopenedCount: 0, visualSlot, visualOwner: visualSlot ? 'pooled-skinned-surface-visual' : null, surfaceBinding: null, surfaceBindingStatus: 'pending', surfaceBindingAttempted: false, fallbackAnchorUsage: false, surfaceDistance: null, slashSamples: [], failedProjectionCount: 0 };
     this.wounds.push(wound);
     return wound;
   }
@@ -167,7 +299,7 @@ export class CombatWoundSystem {
     return wound;
   }
 
-  extendSlash(woundId, { localEnd, addedTravel, depth, severity } = {}) {
+  extendSlash(woundId, { localEnd, worldEnd = null, surfaceNormal = null, addedTravel, depth, severity } = {}) {
     const wound = this.getWound(woundId);
     if (!wound) return null;
     const physicalTravel = Math.max(0, addedTravel);
@@ -176,6 +308,7 @@ export class CombatWoundSystem {
     wound.currentDepth = Math.max(wound.currentDepth, depth);
     wound.maximumDepth = Math.max(wound.maximumDepth, depth);
     wound.severity = Math.min(2, Math.max(wound.severity, severity) + physicalTravel * 0.35);
+    this.appendSlashSurfaceSample(wound, worldEnd, surfaceNormal);
     if (wound.maximumDepth >= 0.05 || wound.severity >= WOUND_CONFIG.seriousSeverity) wound.woundType = 'deep_slash';
     this.resolveBleedingProfile(wound);
     this.updateWoundVisual(wound);
@@ -263,44 +396,126 @@ export class CombatWoundSystem {
       wound.withdrawalBoostRemaining = Math.max(0, wound.withdrawalBoostRemaining - dt);
       this.updateWoundVisual(wound);
     });
+    this.updateSurfaceDebug(this.wounds.at(-1));
+  }
+
+  getAttachedSurfacePose(wound) {
+    if (validateSurfaceBinding(wound.surfaceBinding)) {
+      const reconstructed = this.actor.visualAdapter?.reconstructVisibleSurface?.(wound.surfaceBinding) ?? reconstructSkinnedSurface(wound.surfaceBinding);
+      if (reconstructed) {
+        wound.surfaceBindingStatus = 'skinned_triangle';
+        wound.fallbackAnchorUsage = false;
+        return reconstructed;
+      }
+    }
+    const semantic = this.getWorldPose(wound);
+    if (!semantic) return null;
+    if (!wound.surfaceRetryAttempted && this.actor.visualAdapter?.scene) {
+      wound.surfaceRetryAttempted = true;
+      this.attachPunctureSurface(wound, semantic.point, semantic.normal);
+      if (wound.surfaceBinding) return this.getAttachedSurfacePose(wound);
+    }
+    wound.surfaceBindingStatus = 'fallback_anchor';
+    wound.fallbackAnchorUsage = true;
+    return this.actor.visualAdapter?.getFallbackWoundAnchor?.(wound.bodyId, semantic.point, semantic.normal) ?? semantic;
+  }
+
+  getWoundMaterial(wound, isSlash) {
+    if (wound.vesselInvolvement?.vesselType?.includes('arterial')) return isSlash ? this.materials.arterialCut : this.materials.arterial;
+    if (wound.severity >= WOUND_CONFIG.seriousSeverity) return isSlash ? this.materials.deepCut : this.materials.deep;
+    if (wound.woundType === 'blunt_trauma_marker') return this.materials.blunt;
+    return isSlash ? this.materials.cut : this.materials.puncture;
   }
 
   updateWoundVisual(wound) {
     const slot = wound?.visualSlot;
-    const pose = this.getWorldPose(wound);
-    if (!slot || !pose) return;
+    if (!slot) return;
     const isSlash = wound.cutLength > 0.001 || ['shallow_cut', 'deep_slash'].includes(wound.woundType);
-    slot.puncture.visible = !isSlash;
-    slot.slash.visible = isSlash;
-    const material = wound.vesselInvolvement?.vesselType?.includes('arterial') ? this.materials.arterial : wound.severity >= WOUND_CONFIG.seriousSeverity ? this.materials.deep : isSlash ? this.materials.cut : wound.woundType === 'blunt_trauma_marker' ? this.materials.blunt : this.materials.puncture;
-    if (!isSlash) {
+    const validSlashSamples = wound.slashSamples?.filter((sample) => validateSurfaceBinding(sample.binding)) ?? [];
+    const useSlashVisual = isSlash && validSlashSamples.length >= 2;
+    slot.puncture.visible = !useSlashVisual;
+    slot.slash.visible = useSlashVisual;
+    const material = this.getWoundMaterial(wound, useSlashVisual);
+    if (!useSlashVisual) {
+      const pose = this.getAttachedSurfacePose(wound);
+      if (!pose) return;
       slot.puncture.material = material;
-      slot.puncture.position.copy(pose.point).addScaledVector(pose.normal, WOUND_CONFIG.visualNormalOffset);
+      slot.puncture.position.copy(pose.point).addScaledVector(pose.normal, WOUND_SURFACE_BIAS);
       slot.puncture.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), pose.normal);
-      const radius = wound.woundType === 'blunt_trauma_marker' ? 0.04 + wound.severity * 0.035 : 0.015 + wound.severity * 0.025;
-      slot.puncture.scale.set(radius * (wound.woundType === 'deep_puncture' ? 0.72 : 1), radius, 1);
+      slot.puncture.rotateZ(((Number(wound.id.split('_')[1]) * 2.399) % (Math.PI * 2)) - Math.PI);
+      const radius = wound.woundType === 'blunt_trauma_marker' ? 0.025 + wound.severity * 0.018 : 0.009 + THREE.MathUtils.clamp(wound.severity, 0, 1.5) * 0.012;
+      slot.puncture.scale.set(radius * (wound.woundType === 'deep_puncture' ? 0.76 : 0.92), radius, 1);
+      wound.surfaceDistance = WOUND_SURFACE_BIAS;
       return;
     }
     slot.slash.material = material;
-    slot.slash.position.copy(pose.translation);
-    slot.slash.quaternion.copy(pose.bodyQuaternion);
-    const start = wound.localCutStart;
-    const end = wound.localCutEnd;
-    tmpDirection.copy(end).sub(start);
-    if (tmpDirection.lengthSq() < 1e-8) tmpDirection.set(0, 1, 0);
-    tmpNormal.copy(wound.localSurfaceNormal).normalize();
-    tmpSide.copy(tmpDirection).cross(tmpNormal).normalize();
-    const width = 0.006 + THREE.MathUtils.clamp(wound.severity, 0, 1.5) * 0.009;
-    const offset = tmpNormal.multiplyScalar(WOUND_CONFIG.visualNormalOffset);
-    const a = start.clone().addScaledVector(tmpSide, width).add(offset);
-    const b = start.clone().addScaledVector(tmpSide, -width).add(offset);
-    const c = end.clone().addScaledVector(tmpSide, width).add(offset);
-    const d = end.clone().addScaledVector(tmpSide, -width).add(offset);
-    const array = slot.slash.geometry.attributes.position.array;
-    [a, b, c, d].forEach((point, index) => { array[index * 3] = point.x; array[index * 3 + 1] = point.y; array[index * 3 + 2] = point.z; });
+    slot.slash.position.set(0, 0, 0);
+    slot.slash.quaternion.identity();
+    slot.slash.scale.set(1, 1, 1);
+    const reconstructed = wound.slashSamples.map((sample) => validateSurfaceBinding(sample.binding) ? reconstructSkinnedSurface(sample.binding) : null);
+    const positions = slot.slash.geometry.attributes.position.array;
+    const normals = slot.slash.geometry.attributes.normal.array;
+    let segmentCount = 0;
+    const baseWidth = 0.0035 + THREE.MathUtils.clamp(wound.severity, 0, 1.5) * 0.0045;
+    for (let index = 0; index < reconstructed.length - 1 && segmentCount < MAX_SLASH_SURFACE_SAMPLES - 1; index += 1) {
+      const start = reconstructed[index];
+      const end = reconstructed[index + 1];
+      const endSample = wound.slashSamples[index + 1];
+      if (!start || !end || endSample.breakBefore || end.point.distanceTo(start.point) > 0.14) continue;
+      tmpDirection.subVectors(end.point, start.point);
+      if (tmpDirection.lengthSq() < 1e-8) continue;
+      tmpDirection.normalize();
+      tmpNormal.copy(start.normal).add(end.normal).normalize();
+      tmpSide.copy(tmpDirection).cross(tmpNormal).normalize();
+      if (tmpSide.lengthSq() < 1e-8) tmpSide.set(1, 0, 0).cross(tmpNormal).normalize();
+      const startTaper = Math.max(0.28, Math.sin(Math.PI * index / Math.max(1, reconstructed.length - 1)));
+      const endTaper = Math.max(0.28, Math.sin(Math.PI * (index + 1) / Math.max(1, reconstructed.length - 1)));
+      const startWidth = baseWidth * startTaper * (0.92 + 0.08 * Math.sin(index * 3.1));
+      const endWidth = baseWidth * endTaper * (0.94 + 0.06 * Math.sin(index * 4.7 + 1));
+      const vertices = [
+        start.point.clone().addScaledVector(tmpSide, startWidth).addScaledVector(start.normal, WOUND_SURFACE_BIAS),
+        start.point.clone().addScaledVector(tmpSide, -startWidth).addScaledVector(start.normal, WOUND_SURFACE_BIAS),
+        end.point.clone().addScaledVector(tmpSide, endWidth).addScaledVector(end.normal, WOUND_SURFACE_BIAS),
+        end.point.clone().addScaledVector(tmpSide, -endWidth).addScaledVector(end.normal, WOUND_SURFACE_BIAS),
+      ];
+      vertices.forEach((point, vertexIndex) => {
+        const offset = segmentCount * 12 + vertexIndex * 3;
+        positions[offset] = point.x; positions[offset + 1] = point.y; positions[offset + 2] = point.z;
+        const normal = vertexIndex < 2 ? start.normal : end.normal;
+        normals[offset] = normal.x; normals[offset + 1] = normal.y; normals[offset + 2] = normal.z;
+      });
+      segmentCount += 1;
+    }
+    slot.slash.geometry.setDrawRange(0, segmentCount * 6);
     slot.slash.geometry.attributes.position.needsUpdate = true;
-    slot.slash.geometry.computeVertexNormals();
+    slot.slash.geometry.attributes.normal.needsUpdate = true;
     slot.slash.geometry.computeBoundingSphere();
+    slot.slash.visible = segmentCount > 0;
+    slot.puncture.visible = segmentCount === 0;
+    wound.surfaceDistance = WOUND_SURFACE_BIAS;
+    wound.renderedSegmentCount = segmentCount;
+  }
+
+  updateSurfaceDebug(wound) {
+    if (!this.debugVisible || !wound) return;
+    this.surfaceDebugRoot.visible = true;
+    const semantic = this.getWorldPose(wound);
+    const binding = wound.surfaceBinding ?? wound.slashSamples?.at(-1)?.binding;
+    const surface = validateSurfaceBinding(binding) ? reconstructSkinnedSurface(binding) : this.getAttachedSurfacePose(wound);
+    if (!semantic || !surface) return;
+    this.debugAnchor.position.copy(surface.point);
+    this.debugProxy.position.copy(semantic.point);
+    const normalPositions = this.debugNormal.geometry.attributes.position;
+    normalPositions.setXYZ(0, surface.point.x, surface.point.y, surface.point.z);
+    const normalEnd = surface.point.clone().addScaledVector(surface.normal, 0.08);
+    normalPositions.setXYZ(1, normalEnd.x, normalEnd.y, normalEnd.z);
+    normalPositions.needsUpdate = true;
+    if (surface.vertices) {
+      const trianglePositions = this.debugTriangle.geometry.attributes.position;
+      [...surface.vertices, surface.vertices[0]].forEach((point, index) => trianglePositions.setXYZ(index, point.x, point.y, point.z));
+      trianglePositions.needsUpdate = true;
+      this.debugTriangle.visible = true;
+    } else this.debugTriangle.visible = false;
   }
 
   removeWound(id) {
@@ -312,21 +527,32 @@ export class CombatWoundSystem {
       wound.visualSlot.slash.visible = false;
       wound.visualSlot.woundId = null;
     }
+    wound.surfaceBinding = null;
+    wound.slashSamples.length = 0;
   }
 
   clear() {
     [...this.wounds].forEach((wound) => this.removeWound(wound.id));
     this.nextWoundId = 1;
+    this.failedProjectionCount = 0;
+    this.fallbackUsageCount = 0;
+    this.surfaceDebugRoot.visible = false;
   }
 
   getDiagnostics() {
-    return { count: this.wounds.length, active: this.getActiveWounds().length, arterial: this.wounds.filter((wound) => wound.bleedingProfile.kind.includes('arterial')).length, selected: this.wounds.at(-1) ? { id: this.wounds.at(-1).id, regionId: this.wounds.at(-1).regionId, type: this.wounds.at(-1).woundType, depth: Number(this.wounds.at(-1).maximumDepth.toFixed(3)), length: Number(this.wounds.at(-1).cutLength.toFixed(3)), severity: Number(this.wounds.at(-1).severity.toFixed(3)), vessel: this.wounds.at(-1).vesselInvolvement?.id ?? null, bleedingRate: Number(this.wounds.at(-1).bleedingRate.toFixed(4)) } : null };
+    const wound = this.wounds.at(-1);
+    const binding = wound?.surfaceBinding ?? wound?.slashSamples?.at(-1)?.binding;
+    return { count: this.wounds.length, active: this.getActiveWounds().length, arterial: this.wounds.filter((entry) => entry.bleedingProfile.kind.includes('arterial')).length, failedProjectionCount: this.failedProjectionCount, fallbackAnchorUsage: this.fallbackUsageCount, selected: wound ? { id: wound.id, regionId: wound.regionId, type: wound.woundType, depth: Number(wound.maximumDepth.toFixed(3)), length: Number(wound.cutLength.toFixed(3)), severity: Number(wound.severity.toFixed(3)), vessel: wound.vesselInvolvement?.id ?? null, bleedingRate: Number(wound.bleedingRate.toFixed(4)), surfaceBindingStatus: wound.surfaceBindingStatus, meshName: binding?.meshName ?? null, triangleIndices: binding?.triangleIndices ?? null, barycentric: binding?.barycentric?.toArray?.().map((value) => Number(value.toFixed(4))) ?? null, surfaceDistance: wound.surfaceDistance, slashSampleCount: wound.slashSamples?.length ?? 0, renderedSegmentCount: wound.renderedSegmentCount ?? 0, failedProjectionCount: wound.failedProjectionCount ?? 0, fallbackAnchorUsage: wound.fallbackAnchorUsage } : null };
   }
 
   dispose() {
     this.clear();
     this.visualSlots.forEach((slot) => { slot.puncture.geometry.dispose(); slot.slash.geometry.dispose(); slot.puncture.removeFromParent(); slot.slash.removeFromParent(); });
     Object.values(this.materials).forEach((material) => material.dispose());
+    this.punctureTexture.dispose();
+    this.slashTexture.dispose();
+    this.surfaceDebugRoot.traverse((object) => { object.geometry?.dispose?.(); object.material?.dispose?.(); });
+    this.surfaceDebugRoot.removeFromParent();
     this.visualSlots = [];
   }
 }

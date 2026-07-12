@@ -13,6 +13,8 @@ import { WorldKnifeCombatController } from '../src/game/combat/WorldKnifeCombatC
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
 import { applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
+import { PAIN_REACTION_LIMITS, ProceduralPainReactionController, buildReactionPose, getReactionFamily, resolveReactionTiming } from '../src/game/combat/ProceduralPainReaction.js';
+import { MAX_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, findClosestSkinnedSurface, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
 
 async function createActor() {
   await initializeCombatPhysics();
@@ -175,6 +177,140 @@ test('diagnostic GLB profiles fail clearly when a required mapped bone is missin
     () => resolveRequiredBoneMappings({ bones, bodies, boneMap: { pelvis: 'body', head: 'missing_head' }, profileName: 'diagnostic-test-profile' }),
     /diagnostic-test-profile is missing required mappings: head -> missing_head/,
   );
+});
+
+function createReactionRig() {
+  const root = new THREE.Group();
+  const bones = new Map(Object.keys(MODEL_IDLE_COMBAT_PROFILE.boneMap).map((id) => {
+    const bone = new THREE.Bone();
+    bone.name = id;
+    bone.scale.set(1, 1, 1);
+    root.add(bone);
+    return [id, bone];
+  }));
+  const controller = new ProceduralPainReactionController({ bones, presentationRoot: root, basePosition: new THREE.Vector3(), baseYaw: 0 });
+  return { root, bones, controller };
+}
+
+function createSkinnedSurfaceFixture() {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, -0.5, 0.5, 0, 0.5, 0.5, 0], 3));
+  geometry.setIndex([0, 1, 2, 2, 1, 3]);
+  geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(16), 4));
+  const weights = new Float32Array(16);
+  for (let index = 0; index < 4; index += 1) weights[index * 4] = 1;
+  geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
+  const bone = new THREE.Bone();
+  const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshStandardMaterial());
+  mesh.name = 'test-visible-skinned-surface';
+  mesh.add(bone);
+  mesh.bind(new THREE.Skeleton([bone]));
+  const root = new THREE.Group();
+  root.add(mesh);
+  root.updateMatrixWorld(true);
+  mesh.skeleton.update();
+  return { root, mesh, bone, geometry };
+}
+
+test('procedural reactions are region-specific, direction-aware, severity-scaled, and time-bounded', () => {
+  assert.equal(getReactionFamily('upper_chest'), 'torso');
+  assert.equal(getReactionFamily('neck'), 'neck');
+  assert.equal(getReactionFamily('left_forearm'), 'arm');
+  assert.equal(getReactionFamily('right_thigh'), 'leg');
+  const shallow = buildReactionPose({ regionId: 'upper_chest', severity: 0.2, depth: 0.01, localDirection: new THREE.Vector3(-0.7, 0, -0.7).normalize() });
+  const deep = buildReactionPose({ regionId: 'upper_chest', severity: 0.9, depth: 0.12, localDirection: new THREE.Vector3(-0.7, 0, -0.7).normalize() });
+  const opposite = buildReactionPose({ regionId: 'upper_chest', severity: 0.9, depth: 0.12, localDirection: new THREE.Vector3(0.7, 0, -0.7).normalize() });
+  assert.ok(deep.rotations.get('lower_chest').length() > shallow.rotations.get('lower_chest').length());
+  assert.equal(Math.sign(deep.rotations.get('lower_chest').z), -Math.sign(opposite.rotations.get('lower_chest').z));
+  assert.ok(deep.rootRecoil.dot(new THREE.Vector3(-0.7, 0, -0.7).normalize()) > 0, 'whole-root recoil follows blade travel away from the attacker');
+  assert.ok([...deep.rotations.values()].every((rotation) => rotation.length() <= PAIN_REACTION_LIMITS.maximumBoneAngle + 1e-8));
+  assert.deepEqual([...buildReactionPose({ regionId: 'neck', severity: 0.8 }).rotations.keys()].includes('head'), true);
+  assert.deepEqual([...buildReactionPose({ regionId: 'left_forearm', severity: 0.8 }).rotations.keys()].filter((id) => id.includes('arm')), ['left_upper_arm', 'left_forearm']);
+  assert.ok(buildReactionPose({ regionId: 'right_thigh', severity: 0.8 }).rotations.has('pelvis'));
+  const neckTiming = resolveReactionTiming('neck', 0.8);
+  const legTiming = resolveReactionTiming('right_thigh', 0.8);
+  assert.ok(neckTiming.impact >= 0.05 && neckTiming.impact <= 0.09);
+  assert.ok(legTiming.recovery > neckTiming.recovery);
+});
+
+test('reaction controller preserves mixer-authored scales, clamps repeated hits, resets, and cannot accumulate pose drift', () => {
+  const { root, bones, controller } = createReactionRig();
+  const authoredScales = new Map([...bones].map(([id, bone]) => [id, bone.scale.clone()]));
+  for (let hit = 0; hit < 40; hit += 1) controller.trigger({ regionId: hit % 2 ? 'neck' : 'upper_chest', severity: 1.4, depth: 0.16, worldDirection: new THREE.Vector3(hit % 2 ? 1 : -1, 0, -1).normalize(), actorState: 'alive' });
+  for (let frame = 0; frame < 90; frame += 1) {
+    bones.forEach((bone) => bone.quaternion.identity()); // stand-in for the fresh AnimationMixer-authored local pose
+    controller.applyAfterMixer(1 / 60);
+    assert.ok([...controller.currentRotations.values()].every((rotation) => rotation.length() <= PAIN_REACTION_LIMITS.maximumBoneAngle + 1e-8));
+  }
+  assert.equal(controller.getDiagnostics().phase, 'idle');
+  bones.forEach((bone, id) => {
+    assert.ok(1 - Math.abs(bone.quaternion.w) < 1e-8, `${id} returns to the fresh authored pose`);
+    assert.deepEqual(bone.scale.toArray(), authoredScales.get(id).toArray(), `${id} scale remains mixer-authored`);
+  });
+  controller.trigger({ regionId: 'left_forearm', severity: 0.7, worldDirection: new THREE.Vector3(0, 0, -1), actorState: 'alive' });
+  controller.reset();
+  assert.equal(controller.getDiagnostics().phase, 'idle');
+  assert.deepEqual(root.position.toArray(), [0, 0, 0]);
+});
+
+test('puncture bindings store valid barycentrics and follow animated and procedural skinned movement', () => {
+  const { root, mesh, bone, geometry } = createSkinnedSurfaceFixture();
+  const hitPoint = new THREE.Vector3(0.12, 0.08, 0.03);
+  const binding = findClosestSkinnedSurface([mesh], hitPoint, { regionId: 'upper_chest', bodyId: 'upper_chest' });
+  assert.ok(validateSurfaceBinding(binding));
+  assert.equal(binding.mesh, mesh);
+  assert.ok(binding.triangleIndices.every((index) => index >= 0 && index < geometry.attributes.position.count));
+  assert.ok(Math.abs(binding.barycentric.x + binding.barycentric.y + binding.barycentric.z - 1) < 1e-6);
+  const initial = reconstructSkinnedSurface(binding);
+  assert.ok(hitPoint.distanceTo(initial.point) < 0.05);
+  assert.ok(WOUND_SURFACE_BIAS <= 0.003);
+  bone.position.x = 0.18;
+  root.updateMatrixWorld(true); mesh.skeleton.update();
+  const animated = reconstructSkinnedSurface(binding);
+  assert.ok(animated.point.distanceTo(initial.point) > 0.17, 'binding follows animated bone translation');
+  bone.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.16);
+  root.updateMatrixWorld(true); mesh.skeleton.update();
+  const flinched = reconstructSkinnedSurface(binding);
+  assert.ok(flinched.point.distanceTo(animated.point) > 0.001, 'binding follows additive procedural bone rotation');
+  geometry.dispose(); mesh.material.dispose();
+});
+
+test('slash paths use bounded multi-sample surface bindings and never require one rigid quad', () => {
+  const { mesh, geometry } = createSkinnedSurfaceFixture();
+  const points = sampleSlashPath(new THREE.Vector3(-0.3, -0.2, 0.02), new THREE.Vector3(0.3, 0.25, 0.02), 8);
+  const bindings = points.map((point) => findClosestSkinnedSurface([mesh], point, { regionId: 'upper_chest', bodyId: 'upper_chest' }));
+  assert.ok(points.length >= 3 && points.length <= MAX_SLASH_SURFACE_SAMPLES);
+  assert.ok(bindings.every(validateSurfaceBinding));
+  assert.ok(bindings.every((binding) => reconstructSkinnedSurface(binding).point.distanceTo(binding.sourcePoint) < 0.05));
+  const failed = findClosestSkinnedSurface([mesh], new THREE.Vector3(4, 4, 4));
+  assert.equal(failed, null, 'failed projection can split the ribbon instead of bridging open space');
+  geometry.dispose(); mesh.material.dispose();
+});
+
+test('wound and reaction lifecycle keeps one bounded pool and disposes generated resources', async () => {
+  const { actor, physics } = await createActor();
+  const geometryIds = actor.woundSystem.visualSlots.flatMap((slot) => [slot.puncture.geometry.uuid, slot.slash.geometry.uuid]);
+  const punctureTexture = actor.woundSystem.punctureTexture;
+  const slashTexture = actor.woundSystem.slashTexture;
+  let disposedTextures = 0;
+  punctureTexture.addEventListener('dispose', () => { disposedTextures += 1; });
+  slashTexture.addEventListener('dispose', () => { disposedTextures += 1; });
+  for (let cycle = 0; cycle < 4; cycle += 1) {
+    const { hit, worldPoint } = makeHit(actor, cycle % 2 ? 'left_forearm' : 'upper_chest');
+    const wound = actor.beginPunctureWound({ hit, entryPoint: worldPoint, direction: new THREE.Vector3(0, 0, -1), depth: 0.02 });
+    actor.applyPenetration({ hit, entryPoint: worldPoint, direction: new THREE.Vector3(0, 0, -1), deltaDepth: 0.04, depth: 0.06, force: 1.2, woundId: wound.id });
+    actor.reset();
+    assert.equal(actor.woundSystem.wounds.length, 0);
+    assert.equal(wound.surfaceBinding, null);
+    assert.equal(wound.slashSamples.length, 0);
+    assert.ok(actor.woundSystem.visualSlots.every((slot) => slot.woundId == null && !slot.puncture.visible && !slot.slash.visible));
+    assert.deepEqual(actor.woundSystem.visualSlots.flatMap((slot) => [slot.puncture.geometry.uuid, slot.slash.geometry.uuid]), geometryIds, 'reset reuses the bounded geometry pool');
+  }
+  assert.equal(actor.visualAdapter, null, 'headless actor creates no duplicate mixer or reaction adapter');
+  actor.dispose();
+  assert.equal(disposedTextures, 2, 'generated alpha-mask textures are disposed exactly once');
+  assert.equal(actor.woundSystem.visualSlots.length, 0);
+  physics.dispose();
 });
 
 test('contact classifier distinguishes blunt, edge, glance, tip, failure, and puncture', () => {

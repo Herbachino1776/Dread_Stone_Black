@@ -10,7 +10,7 @@ assert.equal(result.bodyCount, 18);
 assert.equal(result.jointCount, 17);
 assert.ok(result.regionCount >= 20);
 
-const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, packageSource, docsSource, diagnosticDocsSource, glbBuffer, modelIdleGlbBuffer] = await Promise.all([
+const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, reactionSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, packageSource, docsSource, diagnosticDocsSource, glbBuffer, modelIdleGlbBuffer] = await Promise.all([
   readFile(new URL('../src/game/Game.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/SceneSessionHost.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/FirstPersonViewmodelHost.js', import.meta.url), 'utf8'),
@@ -20,6 +20,8 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmod
   readFile(new URL('../src/game/combat/HumanoidGlbVisualAdapter.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/HumanoidModelProfiles.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatWoundSystem.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/ProceduralPainReaction.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/SkinnedSurfaceBinding.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatPhysiology.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatBloodEffects.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatFeedbackSystem.js', import.meta.url), 'utf8'),
@@ -123,6 +125,16 @@ assert.match(profileSource, /targetHeight: 1\.82/);
 assert.match(profileSource, /proxyFit/);
 assert.match(adapterSource, /measureVisibleSkinnedBounds/);
 assert.match(adapterSource, /AnimationMixer/);
+assert.ok(adapterSource.indexOf('this.mixer.update(dt)') < adapterSource.indexOf('this.reactionController?.applyAfterMixer(dt)'), 'AnimationMixer writes the fresh authored pose before additive pain reactions');
+assert.ok(adapterSource.indexOf('this.reactionController?.applyAfterMixer(dt)') < adapterSource.indexOf('this.actor.syncAnimationProxyBodies(this)'), 'semantic proxies sync after additive reaction bones and skeleton update');
+assert.match(adapterSource, /this\.mixerAuthoredScales/);
+assert.doesNotMatch(reactionSource, /\.scale\.(set|copy)|inverseBindMatrices|boneInverses/);
+assert.doesNotMatch(reactionSource, /Rapier|RigidBody|translation\(\)|rotation\(\)/);
+assert.match(reactionSource, /impact/);
+assert.match(reactionSource, /pain_hold/);
+assert.match(reactionSource, /recovery/);
+assert.match(reactionSource, /maximumBoneAngle/);
+assert.match(reactionSource, /embeddedTension/);
 assert.match(adapterSource, /if \(this\.profile\.animationAuthoritative\) \{/);
 assert.match(adapterSource, /this\.initializeAnimationAuthoritative/);
 assert.match(adapterSource, /this\.actor\.syncAnimationProxyBodies/);
@@ -131,6 +143,15 @@ assert.doesNotMatch(actorSource, /weathered-angry-male-head|patched-wool-tunic|s
 assert.match(actorSource, /chest_fold|neck_failure|neurological|leg_failure|blood_loss/);
 assert.match(woundSource, /vesselInvolvement/);
 assert.match(woundSource, /maximumWounds/);
+assert.match(woundSource, /pooled-skinned-surface-visual/);
+assert.match(woundSource, /slashSamples/);
+assert.match(woundSource, /MAX_SLASH_SURFACE_SAMPLES/);
+assert.doesNotMatch(woundSource, /new THREE\.PlaneGeometry/);
+assert.match(surfaceBindingSource, /getVertexPosition/);
+assert.match(surfaceBindingSource, /barycentric/);
+assert.match(surfaceBindingSource, /triangleIndices/);
+assert.match(surfaceBindingSource, /WOUND_SURFACE_BIAS = 0\.002/);
+assert.match(combatLabPanelSource, /ANCHORS A/);
 assert.match(physiologySource, /bloodReserve/);
 assert.match(physiologySource, /consciousness/);
 assert.match(bloodSource, /InstancedMesh/);

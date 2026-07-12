@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { CURRENT_HUMANOID_BONE_MAP, CURRENT_HUMANOID_PROFILE, getHumanoidProfileScale } from './HumanoidModelProfiles.js';
+import { ProceduralPainReactionController } from './ProceduralPainReaction.js';
+import { findClosestSkinnedSurface, reconstructSkinnedSurface, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 
 export const HUMANOID_GLB_PATH = CURRENT_HUMANOID_PROFILE.assetPath;
 export const HUMANOID_GLB_AUTHORED_HEIGHT = CURRENT_HUMANOID_PROFILE.rawHeight;
@@ -97,6 +99,9 @@ export class HumanoidGlbVisualAdapter {
     this.bindings = [];
     this.mixer = null;
     this.idleAction = null;
+    this.reactionController = null;
+    this.reactionBones = new Map();
+    this.mixerAuthoredScales = new Map();
     this.rawVisibleBounds = null;
     this.normalizedVisibleBounds = null;
     this.uniformScale = null;
@@ -181,7 +186,20 @@ export class HumanoidGlbVisualAdapter {
     this.presentationRoot.updateMatrixWorld(true);
     this.skeletons.forEach((skeleton) => skeleton.update());
     this.normalizedVisibleBounds = measureVisibleSkinnedBounds(this.scene);
+    this.resolveReactionBones();
+    this.reactionController = new ProceduralPainReactionController({ bones: this.reactionBones, presentationRoot: this.presentationRoot, basePosition: this.basePresentationPosition, baseYaw: this.basePresentationYaw });
     this.actor.setAnimationAuthorityReady(this);
+  }
+
+  resolveReactionBones() {
+    this.reactionBones.clear();
+    const missing = [];
+    Object.entries(this.profile.boneMap).forEach(([semanticId, boneName]) => {
+      const bone = this.bones.get(boneName);
+      if (bone) this.reactionBones.set(semanticId, bone);
+      else missing.push(`${semanticId} -> ${boneName}`);
+    });
+    if (missing.length) throw new Error(`Humanoid reaction profile ${this.profile.name} is missing mapped bones: ${missing.join(', ')}`);
   }
 
   captureBindings() {
@@ -216,20 +234,48 @@ export class HumanoidGlbVisualAdapter {
 
   updateAnimationAuthority(deltaSeconds) {
     if (!this.mixer || !this.presentationRoot) return;
-    this.mixer.update(Math.max(0, deltaSeconds));
-    const reaction = this.actor.reflex?.intensity ?? 0;
-    const reactionDirection = this.actor.reflex?.direction ?? new THREE.Vector3();
-    this.presentationRoot.position.copy(this.basePresentationPosition).addScaledVector(reactionDirection, -Math.min(0.045, reaction * 0.045));
-    this.presentationRoot.position.y += Math.min(0.018, reaction * 0.018);
-    this.presentationRoot.rotation.set(
-      THREE.MathUtils.clamp(reactionDirection.z * reaction * 0.035, -0.035, 0.035),
-      this.basePresentationYaw,
-      THREE.MathUtils.clamp(-reactionDirection.x * reaction * 0.045, -0.045, 0.045),
-      'YXZ',
-    );
+    const dt = Math.max(0, deltaSeconds);
+    const diagnostics = this.reactionController?.getDiagnostics?.();
+    this.mixer.timeScale = diagnostics?.phase === 'impact' && diagnostics.severity > 0.65 ? 0.62 : diagnostics?.phase === 'pain_hold' ? 0.78 : 1;
+    this.mixer.update(dt);
+    this.mixerAuthoredScales.clear();
+    this.reactionBones.forEach((bone, id) => this.mixerAuthoredScales.set(id, bone.scale.clone()));
+    this.reactionController?.applyAfterMixer(dt);
     this.presentationRoot.updateMatrixWorld(true);
     this.skeletons.forEach((skeleton) => skeleton.update());
     this.actor.syncAnimationProxyBodies(this);
+  }
+
+  triggerPainReaction(contact) {
+    return this.reactionController?.trigger?.(contact) ?? false;
+  }
+
+  setEmbeddedTension(contact) {
+    this.reactionController?.setEmbeddedTension?.(contact);
+  }
+
+  releaseEmbeddedReaction(contact) {
+    return this.reactionController?.releaseEmbedded?.(contact) ?? false;
+  }
+
+  bindVisibleSurface(worldPoint, options = {}) {
+    if (!this.scene || !this.skinnedMeshes.length) return null;
+    this.presentationRoot?.updateMatrixWorld(true);
+    this.skeletons.forEach((skeleton) => skeleton.update());
+    return findClosestSkinnedSurface(this.skinnedMeshes, worldPoint, options);
+  }
+
+  reconstructVisibleSurface(binding, target) {
+    return validateSurfaceBinding(binding) ? reconstructSkinnedSurface(binding, target) : null;
+  }
+
+  getFallbackWoundAnchor(bodyId, sourcePoint, sourceNormal = new THREE.Vector3(0, 0, 1)) {
+    const pose = this.getProxyPose(bodyId);
+    if (!pose) return { point: sourcePoint.clone(), normal: sourceNormal.clone().normalize(), fallback: true };
+    const towardHit = sourcePoint.clone().sub(pose.position);
+    if (towardHit.lengthSq() < 1e-8) towardHit.copy(sourceNormal);
+    towardHit.normalize();
+    return { point: pose.position.clone().addScaledVector(towardHit, 0.012), normal: towardHit, fallback: true };
   }
 
   getProxyPose(bodyId) {
@@ -257,6 +303,7 @@ export class HumanoidGlbVisualAdapter {
 
   reset() {
     if (this.profile.animationAuthoritative) {
+      this.reactionController?.reset?.();
       this.idleAction?.reset().play();
       this.mixer?.setTime(0);
       this.presentationRoot?.position.copy(this.basePresentationPosition);
@@ -272,7 +319,8 @@ export class HumanoidGlbVisualAdapter {
   getDiagnostics() {
     const rawSize = this.rawVisibleBounds?.getSize(new THREE.Vector3());
     const normalizedSize = this.normalizedVisibleBounds?.getSize(new THREE.Vector3());
-    return { path: this.profile.assetPath, profileName: this.profile.name, animationAuthoritative: this.profile.animationAuthoritative === true, loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, mixerCount: this.mixer ? 1 : 0, idleClip: this.idleAction?.getClip?.().name ?? null, rawMeasuredVisibleHeight: rawSize?.y ?? null, normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight, normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null, groundY: this.actor.visualRootPosition.y, groundClearance: this.profile.groundClearance ?? null, height: this.profile.targetHeight, scale: this.uniformScale ?? getHumanoidProfileScale(this.profile) };
+    const scaleChangedBones = [...this.mixerAuthoredScales].filter(([id, scale]) => scale.distanceTo(this.reactionBones.get(id)?.scale ?? scale) > 1e-8).map(([id]) => id);
+    return { path: this.profile.assetPath, profileName: this.profile.name, animationAuthoritative: this.profile.animationAuthoritative === true, loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, mixerCount: this.mixer ? 1 : 0, reactionControllerCount: this.reactionController ? 1 : 0, idleClip: this.idleAction?.getClip?.().name ?? null, rawMeasuredVisibleHeight: rawSize?.y ?? null, normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight, normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null, groundY: this.actor.visualRootPosition.y, groundClearance: this.profile.groundClearance ?? null, height: this.profile.targetHeight, scale: this.uniformScale ?? getHumanoidProfileScale(this.profile), scaleChangedBones, reaction: this.reactionController?.getDiagnostics?.() ?? null };
   }
 
   dispose() {
@@ -286,6 +334,10 @@ export class HumanoidGlbVisualAdapter {
     this.presentationRoot = null;
     this.mixer = null;
     this.idleAction = null;
+    this.reactionController?.reset?.();
+    this.reactionController = null;
+    this.reactionBones.clear();
+    this.mixerAuthoredScales.clear();
     this.bindings = [];
     this.bones.clear();
     this.skinnedMeshes = [];
