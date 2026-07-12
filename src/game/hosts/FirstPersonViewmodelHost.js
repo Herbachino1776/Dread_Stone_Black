@@ -59,21 +59,7 @@ export class FirstPersonViewmodelHost {
       controls: this.controls,
       audioRuntime: this.audioRuntime,
     });
-    if (this.dungeon?.isCombatLab) {
-      this.physicalToolViewmodel.setCombatKnifeActive(true);
-      this.combatKnifeController = new WorldKnifeCombatController({
-        app: this.app,
-        scene: this.dungeon.scene,
-        camera: this.camera,
-        player: this.player,
-        actor: this.dungeon.actor,
-        physics: this.dungeon.physics,
-        equipmentRuntime: this.equipmentRuntime,
-        controls: this.controls,
-        feedback: this.feedback,
-      });
-      this.dungeon.attachWeaponController(this.combatKnifeController);
-    }
+    this.initializeCombatKnifeRuntime();
 
     this.disposers.push(this.equipmentRuntime?.on?.(EQUIPMENT_EVENTS.equippedChanged, (equipmentState) => this.handleEquipmentChanged(equipmentState)));
     this.syncEquipmentVisuals();
@@ -85,14 +71,31 @@ export class FirstPersonViewmodelHost {
     this.camera = session?.camera;
     this.player = session?.player;
     this.dungeon = session?.dungeon;
+    this.combatKnifeController?.dispose?.();
+    this.combatKnifeController = null;
+    this.combatRuntime = null;
+    this.combatActivationProvider = null;
     if (this.fishingRodView) this.fishingRodView.dungeon = this.dungeon;
     this.keepersLanternViewmodel?.rebind?.({ camera: this.camera, player: this.player });
     this.torchViewmodel?.rebind?.({ camera: this.camera });
     this.physicalToolViewmodel?.rebind?.({ camera: this.camera });
     this.physicalToolActionController?.rebindSession?.({ camera: this.camera, player: this.player, dungeon: this.dungeon });
     this.castingController?.rebindSession?.({ player: this.player, dungeon: this.dungeon });
+    this.initializeCombatKnifeRuntime();
     this.syncEquipmentVisuals();
     return this.getDebugSummary();
+  }
+
+  initializeCombatKnifeRuntime() {
+    const combatRuntime = this.dungeon?.isCombatLab ? this.dungeon : this.dungeon?.combatEncounter;
+    this.physicalToolViewmodel?.setCombatKnifeActive?.(false);
+    if (!combatRuntime) return;
+    const activationProvider = this.dungeon?.isCombatLab ? () => true : () => combatRuntime.isPlayerInCombatRange(this.player);
+    this.physicalToolViewmodel?.setCombatKnifeActive?.(activationProvider());
+    this.combatKnifeController = new WorldKnifeCombatController({ app: this.app, scene: combatRuntime.scene, camera: this.camera, player: this.player, actor: combatRuntime.actor, physics: combatRuntime.physics, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime.feedbackSystem, bloodEffects: combatRuntime.bloodEffects, activationProvider });
+    combatRuntime.attachWeaponController(this.combatKnifeController);
+    this.combatRuntime = combatRuntime;
+    this.combatActivationProvider = activationProvider;
   }
 
   syncEquipmentVisuals() {
@@ -109,6 +112,7 @@ export class FirstPersonViewmodelHost {
     this.offhandAimController?.update(deltaSeconds);
     this.keepersLanternViewmodel?.update(deltaSeconds);
     this.torchViewmodel?.update(deltaSeconds);
+    this.physicalToolViewmodel?.setCombatKnifeActive?.(this.combatActivationProvider?.() ?? false);
     this.physicalToolViewmodel?.update(deltaSeconds);
     this.physicalToolActionController?.update(deltaSeconds);
     this.castingController?.update(deltaSeconds);
@@ -190,6 +194,8 @@ export class FirstPersonViewmodelHost {
     this.torchViewmodel = null;
     this.physicalToolActionController = null;
     this.combatKnifeController = null;
+    this.combatRuntime = null;
+    this.combatActivationProvider = null;
     this.physicalToolViewmodel = null;
     this.keepersLanternViewmodel = null;
     this.session = null;

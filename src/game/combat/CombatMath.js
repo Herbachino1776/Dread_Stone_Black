@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SLASH_CONFIG } from './CombatStage2Config.js';
 
 export function normalizedBladeForward(quaternion, target = new THREE.Vector3()) {
   return target.set(0, 0, -1).applyQuaternion(quaternion).normalize();
@@ -41,4 +42,24 @@ export function advancePenetrationDepth({ currentDepth, targetDepth, dt, tissueR
 
 export function visibleCollisionTransformsWithinTolerance(visiblePosition, collisionPosition, visibleQuaternion, collisionQuaternion, tolerance) {
   return visiblePosition.distanceTo(collisionPosition) <= tolerance && visibleQuaternion.angleTo(collisionQuaternion) <= tolerance * 4;
+}
+
+export function classifySlashContact({ part = 'edge', edgeSpeed = 0, edgeAlignment = 0, pressure = 0, contactDuration = 0, travel = 0, tissueResistance = 0.5, clothingResistance = 0 } = {}) {
+  const physicalTravel = THREE.MathUtils.clamp(travel, 0, SLASH_CONFIG.maximumWoundLength);
+  if (part === 'grip' || part === 'pommel') return { state: 'blunt_contact', cuts: false, depth: 0, severity: 0, physicalTravel };
+  if (part === 'flat') return { state: pressure > 0.2 ? 'blade_flat_contact' : 'glancing_contact', cuts: false, depth: 0, severity: pressure * 0.08, physicalTravel };
+  if (part === 'spine') return { state: 'spine_contact', cuts: false, depth: 0, severity: pressure * 0.1, physicalTravel };
+  if (edgeAlignment < SLASH_CONFIG.minimumEdgeAlignment) return { state: 'scraping_contact', cuts: false, depth: 0, severity: edgeSpeed * pressure * 0.06, physicalTravel };
+  if (edgeSpeed < SLASH_CONFIG.minimumEdgeSpeed || pressure < SLASH_CONFIG.minimumPressure || contactDuration < SLASH_CONFIG.minimumContactSeconds || physicalTravel < SLASH_CONFIG.minimumCutTravel) return { state: 'edge_touch_no_cut', cuts: false, depth: 0, severity: edgeSpeed * pressure * 0.08, physicalTravel };
+  const resistance = Math.max(0.2, tissueResistance + clothingResistance);
+  const cuttingEnergy = edgeSpeed * edgeAlignment * pressure / resistance;
+  const depth = THREE.MathUtils.clamp(SLASH_CONFIG.shallowDepth + cuttingEnergy * 0.025, SLASH_CONFIG.shallowDepth, SLASH_CONFIG.deepSlashDepth);
+  const severity = THREE.MathUtils.clamp(cuttingEnergy * 0.36 + physicalTravel * 1.25, 0.08, 1.5);
+  if (cuttingEnergy >= 1.35 && edgeSpeed >= SLASH_CONFIG.deepSlashSpeed && pressure >= SLASH_CONFIG.deepPressure) return { state: 'deep_slash', cuts: true, depth, severity, physicalTravel };
+  if (edgeSpeed >= SLASH_CONFIG.drawCutSpeed && physicalTravel >= 0.06) return { state: 'draw_cut', cuts: true, depth, severity, physicalTravel };
+  return { state: 'shallow_cut', cuts: true, depth: Math.min(depth, SLASH_CONFIG.drawCutDepth), severity, physicalTravel };
+}
+
+export function extendSlashLength(currentLength, edgeTravel) {
+  return Math.min(SLASH_CONFIG.maximumWoundLength, Math.max(0, currentLength) + THREE.MathUtils.clamp(edgeTravel, 0, SLASH_CONFIG.maximumStepLength));
 }

@@ -4,6 +4,7 @@ import { PlayerController } from '../PlayerController.js';
 import { resolveLocationIdForArea, resolveLocationReturnSpawn, resolveStartupArea } from '../locationRouting.js';
 import { getLoadedLocationDefinitionIds, getLocationDefinition, getLocationRegistryDebugSummary, loadLocationDefinition } from '../locations/locationRegistry.js';
 import { CombatLabScene } from '../combat/CombatLabScene.js';
+import { FolsomCombatEncounter } from '../combat/FolsomCombatEncounter.js';
 
 export class SceneSessionHost {
   constructor({ rendererHost, gameState, query = new URLSearchParams(window.location.search), audioRuntime = null, onSessionChanged = null } = {}) {
@@ -39,7 +40,14 @@ export class SceneSessionHost {
 
     await this.preloadLocationForArea(area);
     this.createSession({ area, fieldSpawn, spawnId });
+    await this.attachFolsomCombatEncounter();
     return this.getSessionSummary();
+  }
+
+  async attachFolsomCombatEncounter() {
+    if (this.locationId !== 'folsom' || !this.dungeon?.scene || this.dungeon.combatEncounter) return null;
+    this.dungeon.combatEncounter = await FolsomCombatEncounter.create({ dungeon: this.dungeon, audioRuntime: this.audioRuntime });
+    return this.dungeon.combatEncounter;
   }
 
   createSession({ area, fieldSpawn = 'start', spawnId = null } = {}) {
@@ -68,7 +76,7 @@ export class SceneSessionHost {
 
   async createCombatLabSession() {
     this.disposeCurrentSession();
-    this.dungeon = await CombatLabScene.create({ root: this.rendererHost.root });
+    this.dungeon = await CombatLabScene.create({ root: this.rendererHost.root, audioRuntime: this.audioRuntime });
     this.scene = this.dungeon.build();
     this.scene.add(this.camera);
     this.locationId = 'combat-lab';
@@ -106,11 +114,13 @@ export class SceneSessionHost {
     const fieldSpawn = destinationArea === 'field'
       ? await resolveLocationReturnSpawn(fromArea)
       : 'start';
-    const summary = this.createSession({
+    this.createSession({
       area: destinationArea,
       fieldSpawn,
       spawnId: destinationArea === 'field' ? null : destinationSpawnId,
     });
+    await this.attachFolsomCombatEncounter();
+    const summary = this.getSessionSummary();
     this.audioRuntime?.handleLocationTransition?.(locationId);
 
     const params = new URLSearchParams({ area: destinationArea });
@@ -129,6 +139,7 @@ export class SceneSessionHost {
     if (!isPaused && !isPlayerDead) this.player?.update(deltaSeconds, controls);
     if (!isPaused) this.dungeon?.update(deltaSeconds, this.player);
     else this.dungeon?.updateOutdoorPresentation?.(this.player);
+    if (!isPaused) this.dungeon?.combatEncounter?.update?.(deltaSeconds, this.player);
     this.rendererHost.applySceneExposure?.(this.dungeon);
   }
 
@@ -235,6 +246,7 @@ export class SceneSessionHost {
     this.dungeon?.lanternConeRevealRuntime?.dispose?.();
     this.dungeon?.beneathFolsomHiddenGrowthGateRuntime?.dispose?.();
     this.dungeon?.beneathFolsomLowerShrineHatchRuntime?.dispose?.();
+    this.dungeon?.combatEncounter?.dispose?.();
     this.scene.remove(this.camera);
     this.dungeon?.dispose?.();
     this.scene.traverse((child) => {

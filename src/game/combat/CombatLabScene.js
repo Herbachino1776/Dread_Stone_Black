@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { CollisionWorld } from '../Collision.js';
 import { CombatPhysicsWorld, initializeCombatPhysics } from './CombatPhysicsWorld.js';
 import { HumanoidCombatActor } from './HumanoidCombatActor.js';
+import { CombatBloodEffects } from './CombatBloodEffects.js';
+import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
 
 export class CombatLabScene {
   static async create(options = {}) {
@@ -9,7 +11,7 @@ export class CombatLabScene {
     return new CombatLabScene(options);
   }
 
-  constructor({ root = null } = {}) {
+  constructor({ root = null, audioRuntime = null } = {}) {
     this.root = root;
     this.area = 'combat-lab';
     this.locationId = 'combat-lab';
@@ -28,13 +30,21 @@ export class CombatLabScene {
       sourceLocationId: 'combat-lab',
     });
     this.physics = new CombatPhysicsWorld();
+    this.feedbackSystem = new CombatFeedbackSystem({ audioRuntime });
     this.weaponController = null;
     this.player = null;
     this.night = false;
     this.lightingMode = 'day';
     this.disposed = false;
     this.buildEnvironment();
-    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene });
+    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+    this.actor.setEnvironmentContactHints({ groundY: 0, wallX: -2.65 });
+    this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: 0, wallX: -2.65, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+  }
+
+  handleCombatEvent(event, payload = {}) {
+    if (event === 'final_exhale') this.feedbackSystem.stopOwnerVocal('combat-actor');
+    this.feedbackSystem.emit(event, { ...payload, owner: 'combat-actor' });
   }
 
   build() {
@@ -81,6 +91,10 @@ export class CombatLabScene {
     this.torch.position.set(1.5, 2, -1.8);
     this.torch.castShadow = false;
     this.scene.add(this.torch);
+    this.lantern = new THREE.PointLight(0x9cc9ff, 0, 7.2, 1.75);
+    this.lantern.position.set(1.1, 1.8, -2.1);
+    this.lantern.castShadow = false;
+    this.scene.add(this.lantern);
   }
 
   attachWeaponController(controller) {
@@ -95,10 +109,14 @@ export class CombatLabScene {
     this.physics.step(
       deltaSeconds,
       (dt) => {
+        this.feedbackSystem.update(dt);
         this.weaponController?.beforePhysics?.(dt);
         this.actor.beforePhysics(dt, this.player?.position);
       },
-      (dt) => this.weaponController?.afterPhysicsStep?.(dt),
+      (dt) => {
+        this.weaponController?.afterPhysicsStep?.(dt);
+        this.bloodEffects.update(dt);
+      },
     );
     this.actor.afterPhysics(this.physics.interpolationAlpha);
     this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha);
@@ -120,15 +138,26 @@ export class CombatLabScene {
   }
 
   setLightingMode(mode = 'day') {
-    this.lightingMode = ['day', 'night-dark', 'night-local'].includes(mode) ? mode : 'day';
-    const night = this.lightingMode !== 'day';
+    this.lightingMode = ['day', 'dusk', 'night-dark', 'night-torch', 'night-lantern'].includes(mode) ? mode : 'day';
+    const night = this.lightingMode.startsWith('night');
     this.night = night;
-    this.scene.background.set(night ? 0x010204 : 0x879098);
+    this.scene.background.set(night ? 0x010204 : this.lightingMode === 'dusk' ? 0x332b32 : 0x879098);
     this.scene.fog.color.copy(this.scene.background);
-    this.hemisphere.intensity = night ? 0.005 : 1.65;
-    this.sun.intensity = night ? 0 : 2.6;
-    this.torch.intensity = this.lightingMode === 'night-local' ? 5.2 : 0;
+    this.hemisphere.intensity = night ? 0.005 : this.lightingMode === 'dusk' ? 0.34 : 1.65;
+    this.sun.intensity = night ? 0 : this.lightingMode === 'dusk' ? 0.48 : 2.6;
+    this.sun.color.set(this.lightingMode === 'dusk' ? 0xd17b64 : 0xffe0bd);
+    this.torch.intensity = this.lightingMode === 'night-torch' ? 5.2 : 0;
+    this.lantern.intensity = this.lightingMode === 'night-lantern' ? 4.4 : 0;
   }
+
+  stepPhysics() {
+    this.physics.stepSingle((dt) => { this.feedbackSystem.update(dt); this.weaponController?.beforePhysics?.(dt); this.actor.beforePhysics(dt, this.player?.position); }, (dt) => { this.weaponController?.afterPhysicsStep?.(dt); this.bloodEffects.update(dt); });
+    this.actor.afterPhysics(0);
+    this.weaponController?.afterPhysics?.(0);
+  }
+
+  clearWounds() { this.actor.woundSystem.clear(); }
+  clearBlood() { this.bloodEffects.clear(); }
 
   setPhysicsPaused(paused) {
     this.physics.paused = Boolean(paused);
@@ -141,17 +170,21 @@ export class CombatLabScene {
   resetActor() {
     this.weaponController?.cancel?.('lab-reset');
     this.actor.reset();
+    this.bloodEffects.clear();
+    this.feedbackSystem.reset();
     this.weaponController?.reset?.();
   }
 
   getDiagnostics() {
-    return { physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null };
+    return { physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics() };
   }
 
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
     this.weaponController?.cancel?.('scene-dispose');
+    this.bloodEffects.dispose();
+    this.feedbackSystem.dispose();
     this.actor.dispose();
     this.physics.dispose();
   }

@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { HUMANOID_ANATOMY_REGIONS, HUMANOID_BODY_CONFIG, HUMANOID_JOINT_CONFIG } from './CombatConfig.js';
 import { RAPIER } from './CombatPhysicsWorld.js';
+import { CombatWoundSystem } from './CombatWoundSystem.js';
+import { CombatPhysiology } from './CombatPhysiology.js';
+import { COLLAPSE_CONFIG, HUMANOID_DURABILITY_CONFIG, VESSEL_ZONES } from './CombatStage2Config.js';
 
 const BODY_COLLISION_GROUPS = 0x00020001;
 const tmpPosition = new THREE.Vector3();
@@ -30,10 +33,12 @@ function bodyQuaternion(rotation = [0, 0, 0]) {
 }
 
 export class HumanoidCombatActor {
-  constructor({ physics, scene, spawnOffset = new THREE.Vector3() } = {}) {
+  constructor({ physics, scene, spawnOffset = new THREE.Vector3(), spawnYaw = 0, eventSink = null } = {}) {
     this.physics = physics;
     this.scene = scene;
     this.spawnOffset = spawnOffset.clone();
+    this.spawnYaw = Number.isFinite(spawnYaw) ? spawnYaw : 0;
+    this.spawnRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.spawnYaw);
     this.root = new THREE.Group();
     this.root.name = 'humanoid-combat-actor-visual';
     this.debugRoot = new THREE.Group();
@@ -46,6 +51,8 @@ export class HumanoidCombatActor {
     this.colliderRegions = new Map();
     this.visuals = new Map();
     this.joints = [];
+    this.vesselDebug = [];
+    this.eventSink = eventSink;
     this.wounds = [];
     this.regionState = new Map();
     this.elapsed = 0;
@@ -57,10 +64,23 @@ export class HumanoidCombatActor {
     this.lastReaction = null;
     this.settledSeconds = 0;
     this.dyingElapsed = 0;
+    this.collapseFamily = null;
+    this.collapseReason = null;
+    this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
+    this.faceRig = null;
+    this.environmentContactHints = { groundY: this.spawnOffset.y, wallX: null };
+    this.impactCooldowns = new Map();
+    this.corpseSleeping = false;
+    this.finalSettleEmitted = false;
     this.createMaterials();
     this.createPhysicalBody();
-    this.createWoundPool();
+    this.woundSystem = new CombatWoundSystem({ actor: this, scene: this.scene });
+    this.wounds = this.woundSystem.wounds;
+    this.physiology = new CombatPhysiology({ actor: this, woundSystem: this.woundSystem, eventSink: this.eventSink });
   }
+
+  setEventSink(eventSink) { this.eventSink = eventSink; this.physiology?.setEventSink?.(eventSink); }
+  setEnvironmentContactHints(hints = {}) { Object.assign(this.environmentContactHints, hints); }
 
   createMaterials() {
     this.materials = {
@@ -85,11 +105,28 @@ export class HumanoidCombatActor {
   createPhysicalBody() {
     HUMANOID_BODY_CONFIG.forEach((config) => this.createBody(config));
     HUMANOID_JOINT_CONFIG.forEach((config) => this.createJoint(config));
+    this.createVesselDebug();
+  }
+
+  createVesselDebug() {
+    VESSEL_ZONES.forEach((zone) => {
+      const region = HUMANOID_ANATOMY_REGIONS.find((entry) => entry.id === zone.regionId);
+      if (!region || !this.bodies.has(region.bodyId)) return;
+      const geometry = new THREE.SphereGeometry(zone.surfaceRadius, 8, 6);
+      const mat = new THREE.MeshBasicMaterial({ color: zone.vesselType.includes('arterial') ? 0xff3040 : 0x4e70ff, wireframe: true, transparent: true, opacity: 0.65, depthTest: false });
+      const marker = new THREE.Mesh(geometry, mat);
+      marker.name = `vessel-zone-${zone.id}`;
+      marker.renderOrder = 20001;
+      this.debugRoot.add(marker);
+      this.vesselDebug.push({ zone, bodyId: region.bodyId, localPoint: new THREE.Vector3(zone.surfaceCenter[0], zone.surfaceCenter[1], region.bodyId === 'neck' ? 0.08 : region.bodyId.includes('thigh') ? 0.1 : 0.075), marker });
+    });
   }
 
   createBody(config) {
-    const position = new THREE.Vector3(config.position[0] * HUMANOID_PHYSICAL_SCALE, config.position[1] * HUMANOID_PHYSICAL_SCALE, -3.55 + (config.position[2] + 3.55) * HUMANOID_PHYSICAL_SCALE).add(this.spawnOffset);
-    const quaternion = bodyQuaternion(config.rotation);
+    const position = new THREE.Vector3(config.position[0] * HUMANOID_PHYSICAL_SCALE, config.position[1] * HUMANOID_PHYSICAL_SCALE, (config.position[2] + 3.55) * HUMANOID_PHYSICAL_SCALE)
+      .applyQuaternion(this.spawnRotation)
+      .add(new THREE.Vector3(this.spawnOffset.x, this.spawnOffset.y, this.spawnOffset.z - 3.55));
+    const quaternion = this.spawnRotation.clone().multiply(bodyQuaternion(config.rotation));
     const descriptor = RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(position.x, position.y, position.z)
       .setRotation(quaternion)
@@ -206,6 +243,7 @@ export class HumanoidCombatActor {
   }
 
   createHeadVisual(group) {
+    const faceRig = { eyes: [], pupils: [], brows: [], mouth: null, moustache: null, beard: null };
     const head = mesh(new THREE.SphereGeometry(0.19, 16, 12), this.materials.skin, 'weathered-angry-male-head', [0, 0, 0], [0.88, 1.22, 0.94]);
     group.add(head);
     [-1, 1].forEach((side) => group.add(mesh(new THREE.SphereGeometry(0.045, 8, 6), this.materials.skinShadow, `ear-${side}`, [side * 0.174, -0.005, 0])));
@@ -216,17 +254,26 @@ export class HumanoidCombatActor {
       const eye = mesh(new THREE.SphereGeometry(0.032, 8, 6), this.materials.eye, `angry-eye-white-${side}`, [side * 0.062, 0.048, 0.174], [1.12, 0.48, 0.38]);
       eye.rotation.z = side * -0.11;
       group.add(eye);
-      group.add(mesh(new THREE.SphereGeometry(0.012, 7, 5), this.materials.iris, `angry-eye-pupil-${side}`, [side * 0.056, 0.047, 0.199]));
+      faceRig.eyes.push(eye);
+      const pupil = mesh(new THREE.SphereGeometry(0.012, 7, 5), this.materials.iris, `angry-eye-pupil-${side}`, [side * 0.056, 0.047, 0.199]);
+      group.add(pupil);
+      faceRig.pupils.push(pupil);
       const brow = mesh(new THREE.BoxGeometry(0.118, 0.028, 0.03), this.materials.hair, `severe-lowered-brow-${side}`, [side * 0.061, 0.074, 0.184]);
       brow.rotation.z = side * 0.22;
       group.add(brow);
+      faceRig.brows.push(brow);
       group.add(mesh(new THREE.BoxGeometry(0.026, 0.09, 0.018), this.materials.skinShadow, `weather-line-${side}`, [side * 0.118, -0.005, 0.172]));
     });
     const mouth = mesh(new THREE.BoxGeometry(0.12, 0.018, 0.018), this.materials.hair, 'clenched-tense-mouth', [0, -0.09, 0.185]);
     mouth.rotation.z = -0.035;
     group.add(mouth);
-    group.add(mesh(new THREE.BoxGeometry(0.15, 0.055, 0.035), this.materials.hairGray, 'rough-moustache', [0, -0.062, 0.17]));
-    group.add(mesh(new THREE.ConeGeometry(0.12, 0.19, 8), this.materials.hair, 'short-unkempt-beard', [0, -0.15, 0.12]));
+    faceRig.mouth = mouth;
+    const moustache = mesh(new THREE.BoxGeometry(0.15, 0.055, 0.035), this.materials.hairGray, 'rough-moustache', [0, -0.062, 0.17]);
+    group.add(moustache);
+    faceRig.moustache = moustache;
+    const beard = mesh(new THREE.ConeGeometry(0.12, 0.19, 8), this.materials.hair, 'short-unkempt-beard', [0, -0.15, 0.12]);
+    group.add(beard);
+    faceRig.beard = beard;
     const hairCap = mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.58), this.materials.hair, 'rough-dark-graying-hair', [0, 0.085, -0.01], [0.95, 1, 1]);
     group.add(hairCap);
     for (let i = -3; i <= 3; i += 1) {
@@ -236,17 +283,8 @@ export class HumanoidCombatActor {
     }
     group.add(mesh(new THREE.BoxGeometry(0.018, 0.13, 0.012), this.materials.skinShadow, 'old-face-scar', [0.105, 0.008, 0.19]));
     group.children.at(-1).rotation.z = -0.27;
+    this.faceRig = faceRig;
     return group;
-  }
-
-  createWoundPool() {
-    for (let index = 0; index < 12; index += 1) {
-      const wound = mesh(new THREE.SphereGeometry(0.025, 7, 5), this.materials.wound, `pooled-puncture-wound-${index}`);
-      wound.visible = false;
-      wound.castShadow = false;
-      this.scene.add(wound);
-      this.wounds.push({ mesh: wound, active: false, bodyId: null, localPoint: new THREE.Vector3(), severity: 0 });
-    }
   }
 
   resolveHit(collider, worldPoint) {
@@ -263,10 +301,19 @@ export class HumanoidCombatActor {
     return { regionId, region: HUMANOID_ANATOMY_REGIONS.find((entry) => entry.id === regionId), bodyId, body: bodyEntry.body, collider, localPoint: local };
   }
 
-  applyPenetration({ hit, entryPoint, direction, deltaDepth, depth, force, hardContact = false } = {}) {
+  beginPunctureWound({ hit, entryPoint, direction, depth = 0.004, hardContact = false, weaponId = 'old_work_knife' } = {}) {
+    const wound = this.woundSystem.createPuncture({ hit, entryPoint, axis: direction, depth, hardStructureContact: hardContact, embeddedWeaponId: weaponId, createdTime: this.elapsed });
+    const state = this.regionState.get(hit.regionId);
+    if (state) state.wounds = (state.wounds ?? 0) + 1;
+    this.physiology.onWoundCreated(wound);
+    this.eventSink?.('puncture', { position: entryPoint, severity: wound.severity, wound });
+    return wound;
+  }
+
+  applyPenetration({ hit, entryPoint, direction, deltaDepth, depth, force, hardContact = false, woundId = null } = {}) {
     if (!hit?.region || this.lifeState === 'dead' && deltaDepth <= 0) return;
     const state = this.regionState.get(hit.regionId) ?? { trauma: 0, pain: 0, structural: 0, motorWeakness: 0, maximumDepth: 0, wounds: 0 };
-    const severity = Math.max(0, deltaDepth) * (3.1 + hit.region.structuralImportance * 2.2) + Math.max(0, force) * 0.006 + (hardContact ? 0.005 : 0);
+    const severity = (Math.max(0, deltaDepth) * (3.1 + hit.region.structuralImportance * 2.2) + Math.max(0, force) * 0.006 + (hardContact ? 0.005 : 0)) * HUMANOID_DURABILITY_CONFIG.traumaScale;
     state.trauma += severity;
     state.pain += severity * hit.region.painResponse;
     state.structural += severity * hit.region.structuralImportance;
@@ -274,32 +321,109 @@ export class HumanoidCombatActor {
     state.maximumDepth = Math.max(state.maximumDepth, depth);
     this.regionState.set(hit.regionId, state);
     this.balanceImpairment += severity * hit.region.balanceImpact;
-    this.consciousnessImpairment += severity * hit.region.consciousnessImpact;
+    this.consciousnessImpairment = Math.max(this.consciousnessImpairment, severity * hit.region.consciousnessImpact);
     const impulse = direction.clone().multiplyScalar(Math.min(1.4, 0.09 + force * 0.04 + severity * 0.35));
     hit.body.applyImpulseAtPoint(impulse, entryPoint, true);
     this.lastReaction = { regionId: hit.regionId, severity, point: entryPoint.clone(), direction: direction.clone(), hardContact };
-    if (state.wounds === 0 || deltaDepth > 0.025) this.showWound(hit, entryPoint, severity);
+    if (woundId) this.woundSystem.extendPuncture(woundId, { depth, hardStructureContact: hardContact });
+    this.physiology.onTrauma({ hit, severity, depth, deltaDepth, hardContact });
+    this.triggerReflex(hit.regionId, severity, direction);
     this.evaluateLifeState();
+    return severity;
   }
 
-  showWound(hit, worldPoint, severity) {
-    const wound = this.wounds.find((entry) => !entry.active) ?? this.wounds.reduce((oldest, entry) => entry.severity < oldest.severity ? entry : oldest, this.wounds[0]);
-    wound.active = true;
-    wound.bodyId = hit.bodyId;
-    wound.localPoint.copy(hit.localPoint);
-    wound.severity = severity;
-    wound.mesh.visible = true;
-    wound.mesh.scale.setScalar(THREE.MathUtils.clamp(0.75 + severity * 1.3, 0.75, 1.8));
-    const state = this.regionState.get(hit.regionId);
-    state.wounds += 1;
+  applySlashWound({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, woundId = null } = {}) {
+    let wound = woundId ? this.woundSystem.getWound(woundId) : null;
+    if (wound) {
+      const rotation = hit.body.rotation();
+      const inverse = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).invert();
+      const localEnd = hit.localPoint.clone().add(endPoint.clone().sub(startPoint).applyQuaternion(inverse));
+      wound = this.woundSystem.extendSlash(wound.id, { localEnd, addedTravel: cutLength, depth, severity });
+    } else {
+      wound = this.woundSystem.createSlash({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, createdTime: this.elapsed });
+      const state = this.regionState.get(hit.regionId);
+      if (state) state.wounds = (state.wounds ?? 0) + 1;
+      this.physiology.onWoundCreated(wound);
+    }
+    const traumaSeverity = severity * (0.18 + depth * 2.8) * HUMANOID_DURABILITY_CONFIG.traumaScale;
+    const state = this.regionState.get(hit.regionId) ?? { trauma: 0, pain: 0, structural: 0, motorWeakness: 0, maximumDepth: 0, wounds: 1 };
+    state.trauma += traumaSeverity;
+    state.pain += traumaSeverity * hit.region.painResponse;
+    state.structural += traumaSeverity * hit.region.structuralImportance;
+    state.motorWeakness = Math.min(0.94, state.motorWeakness + traumaSeverity * 0.22);
+    state.maximumDepth = Math.max(state.maximumDepth, depth);
+    this.regionState.set(hit.regionId, state);
+    this.balanceImpairment += traumaSeverity * hit.region.balanceImpact;
+    hit.body.applyImpulseAtPoint(cutDirection.clone().multiplyScalar(Math.min(0.22, severity * 0.08)), endPoint, true);
+    this.physiology.onTrauma({ hit, severity: traumaSeverity, depth, deltaDepth: depth * 0.2, hardContact: false });
+    this.triggerReflex(hit.regionId, traumaSeverity, cutDirection);
+    this.evaluateLifeState();
+    return wound;
+  }
+
+  applyBluntContact({ hit, point, direction, severity = 0.1 } = {}) {
+    const wound = this.woundSystem.createBluntMarker({ hit, severity, createdTime: this.elapsed });
+    hit.body.applyImpulseAtPoint(direction.clone().multiplyScalar(Math.min(0.16, severity * 0.12)), point, true);
+    this.triggerReflex(hit.regionId, severity * 0.35, direction);
+    return wound;
+  }
+
+  onWeaponExtracted(woundId, { releaseSeverity = 0, direction = null } = {}) {
+    const wound = this.woundSystem.markExtracted(woundId, { releaseSeverity, direction });
+    if (wound) this.physiology.onWoundCreated(wound);
+    return wound;
   }
 
   evaluateLifeState() {
     const totalTrauma = [...this.regionState.values()].reduce((sum, state) => sum + state.trauma, 0);
     const criticalTrauma = Math.max(...['head', 'face', 'skull', 'neck', 'upper_chest', 'lower_chest'].map((id) => this.regionState.get(id)?.trauma ?? 0));
-    if (this.lifeState === 'alive' && (this.balanceImpairment > 0.86 || this.consciousnessImpairment > 0.72 || totalTrauma > 1.9)) this.lifeState = 'incapacitated';
-    if (this.lifeState !== 'dead' && (criticalTrauma > 1.22 || this.consciousnessImpairment > 1.55 || totalTrauma > 3.7)) this.lifeState = 'dying';
-    if (this.lifeState === 'dying' && (criticalTrauma > 1.55 || totalTrauma > 4.5)) this.lifeState = 'dead';
+    if (this.lifeState === 'alive' && (this.balanceImpairment > HUMANOID_DURABILITY_CONFIG.balanceCollapseThreshold || totalTrauma > HUMANOID_DURABILITY_CONFIG.accumulatedCollapseThreshold)) this.requestCollapse(this.resolveTraumaCollapseFamily(), { immediate: false, lethal: false });
+    if (this.lifeState !== 'dead' && (criticalTrauma > HUMANOID_DURABILITY_CONFIG.criticalDyingThreshold || totalTrauma > HUMANOID_DURABILITY_CONFIG.accumulatedDyingThreshold)) this.transitionLifeState('dying', 'overwhelming-regional-trauma');
+  }
+
+  resolveTraumaCollapseFamily() {
+    const worst = [...this.regionState.entries()].sort((a, b) => b[1].trauma - a[1].trauma)[0]?.[0] ?? '';
+    if (['upper_chest', 'lower_chest', 'abdomen'].includes(worst)) return 'chest_fold';
+    if (worst === 'neck') return 'neck_failure';
+    if (['head', 'face', 'skull'].includes(worst)) return 'neurological';
+    if (worst.includes('thigh') || worst.includes('leg') || worst.includes('foot')) return 'leg_failure';
+    return 'general_trauma';
+  }
+
+  requestCollapse(family = 'general_trauma', { immediate = false, lethal = false, regionId = null } = {}) {
+    if (!COLLAPSE_CONFIG.families.includes(family) || this.lifeState === 'dead') return;
+    this.collapseFamily ??= family;
+    this.collapseReason ??= regionId ? `${family}:${regionId}` : family;
+    if (lethal) this.transitionLifeState('dying', this.collapseReason);
+    else this.transitionLifeState('incapacitated', this.collapseReason);
+    if (immediate) this.motorStrength = Math.min(this.motorStrength, family === 'neurological' ? 0.02 : 0.16);
+  }
+
+  transitionLifeState(nextState, reason = 'trauma') {
+    const order = { alive: 0, incapacitated: 1, dying: 2, dead: 3 };
+    if (!(nextState in order) || order[nextState] <= order[this.lifeState]) return false;
+    this.lifeState = nextState;
+    this.collapseReason ??= reason;
+    if (nextState === 'incapacitated') this.eventSink?.('unconscious', { position: this.getBodyWorldPosition('head'), severity: 0.6 });
+    if (nextState === 'dying') this.eventSink?.('shock_gasp', { position: this.getBodyWorldPosition('head'), severity: 0.9 });
+    if (nextState === 'dead') {
+      this.eventSink?.('final_exhale', { position: this.getBodyWorldPosition('head'), severity: 1, final: true });
+      this.activeEmbeddedWeapon?.state && (this.activeEmbeddedWeapon.reason = 'embedded-in-corpse');
+    }
+    return true;
+  }
+
+  getBodyWorldPosition(bodyId) {
+    const translation = this.bodies.get(bodyId)?.body?.translation?.();
+    return translation ? new THREE.Vector3(translation.x, translation.y, translation.z) : new THREE.Vector3();
+  }
+
+  triggerReflex(regionId, intensity, direction) {
+    this.reflex.regionId = regionId;
+    this.reflex.intensity = THREE.MathUtils.clamp(Math.max(this.reflex.intensity, intensity * 1.8), 0, 1);
+    this.reflex.time = 0.38 + this.reflex.intensity * 0.42;
+    this.reflex.direction.copy(direction ?? new THREE.Vector3());
+    if (intensity > 0.08 && this.lifeState !== 'dead') this.eventSink?.('pain_vocal', { position: this.getBodyWorldPosition('head'), severity: intensity });
   }
 
   setEmbeddedWeapon(weapon) {
@@ -308,14 +432,21 @@ export class HumanoidCombatActor {
 
   beforePhysics(dt, playerPosition = null) {
     this.elapsed += dt;
+    this.physiology.update(dt);
+    this.consciousnessImpairment = 1 - this.physiology.consciousness;
+    this.reflex.time = Math.max(0, this.reflex.time - dt);
+    if (this.reflex.time <= 0) this.reflex.intensity = Math.max(0, this.reflex.intensity - dt * 3);
     if (this.lifeState === 'dying') {
       this.dyingElapsed += dt;
-      if (this.dyingElapsed >= 1.6) this.lifeState = 'dead';
+      const deathDelay = this.collapseFamily === 'neurological' ? 0.22 : this.collapseFamily === 'neck_failure' ? 0.85 : 1.6;
+      if (this.dyingElapsed >= deathDelay) this.transitionLifeState('dead', this.collapseReason ?? 'mortal-trauma');
     }
-    if (this.lifeState === 'incapacitated') this.motorStrength = Math.max(0.12, this.motorStrength - dt * 0.48);
-    else if (this.lifeState === 'dying') this.motorStrength = Math.max(0.025, this.motorStrength - dt * 0.9);
-    else if (this.lifeState === 'dead') this.motorStrength = Math.max(0, this.motorStrength - dt * 1.8);
+    const releaseRate = COLLAPSE_CONFIG.motorReleaseRates[this.collapseFamily] ?? COLLAPSE_CONFIG.motorReleaseRates.general_trauma;
+    if (this.lifeState === 'incapacitated') this.motorStrength = Math.max(this.collapseFamily === 'leg_failure' ? 0.09 : 0.04, this.motorStrength - dt * releaseRate);
+    else if (this.lifeState === 'dying') this.motorStrength = Math.max(0.015, this.motorStrength - dt * releaseRate * 1.35);
+    else if (this.lifeState === 'dead') this.motorStrength = Math.max(0, this.motorStrength - dt * Math.max(1.8, releaseRate * 2));
     else this.motorStrength = Math.min(1, this.motorStrength + dt * 0.25);
+    this.updateFacialPresentation();
     this.bodies.forEach((entry, bodyId) => this.applyBodyMotor(entry, bodyId, dt, playerPosition));
   }
 
@@ -325,12 +456,15 @@ export class HumanoidCombatActor {
     const regionWeakness = this.regionState.get(config.regionId)?.motorWeakness ?? 0;
     let strength = config.motor * this.motorStrength * (1 - regionWeakness);
     if (bodyId.includes('foot') && this.lifeState === 'alive') strength *= 1.55 * Math.max(0.2, 1 - this.balanceImpairment * 0.65);
+    if (this.collapseFamily === 'leg_failure' && this.reflex.regionId?.includes(bodyId.includes('left') ? 'left' : 'right') && (bodyId.includes('thigh') || bodyId.includes('leg') || bodyId.includes('foot'))) strength *= 0.16;
     if (strength <= 0.005) return;
     const translation = body.translation();
     const velocity = body.linvel();
     tmpTarget.copy(restPosition);
     if (['upper_chest', 'lower_chest', 'abdomen'].includes(bodyId)) tmpTarget.y += Math.sin(this.elapsed * 1.65) * 0.006;
     if (this.lifeState === 'alive') tmpTarget.x += Math.sin(this.elapsed * 0.72) * 0.006 * (bodyId.includes('left') ? -1 : 1);
+    this.applyReflexTarget(bodyId, tmpTarget);
+    if (this.physiology.shock > 0.35 && this.lifeState !== 'dead') tmpTarget.x += Math.sin(this.elapsed * 22 + config.mass) * 0.006 * this.physiology.shock;
     tmpDirection.set(tmpTarget.x - translation.x, tmpTarget.y - translation.y, tmpTarget.z - translation.z);
     const positionalGain = bodyId.includes('foot') ? 42 : bodyId === 'pelvis' ? 30 : 24;
     const impulse = tmpDirection.multiplyScalar(config.mass * positionalGain * strength * dt);
@@ -364,6 +498,48 @@ export class HumanoidCombatActor {
     body.applyTorqueImpulse(torque, true);
   }
 
+  applyReflexTarget(bodyId, target) {
+    const intensity = this.reflex.intensity * THREE.MathUtils.clamp(this.reflex.time / 0.35, 0, 1);
+    if (intensity <= 0) return;
+    const region = this.reflex.regionId ?? '';
+    if (['upper_chest', 'lower_chest', 'abdomen'].includes(region) && ['upper_chest', 'lower_chest', 'abdomen', 'head'].includes(bodyId)) {
+      target.y -= 0.055 * intensity;
+      target.z += 0.045 * intensity;
+    }
+    if (region === 'neck' && ['neck', 'head', 'upper_chest'].includes(bodyId)) {
+      target.y -= bodyId === 'head' ? 0.07 * intensity : 0.025 * intensity;
+      target.x += this.reflex.direction.x * 0.035 * intensity;
+    }
+    if (['head', 'face', 'skull'].includes(region) && bodyId === 'head') target.addScaledVector(this.reflex.direction, 0.065 * intensity);
+    const side = region.startsWith('left_') ? 'left' : region.startsWith('right_') ? 'right' : null;
+    if (side && region.includes('arm') && bodyId.startsWith(side) && (bodyId.includes('arm') || bodyId.includes('forearm'))) target.x += (side === 'left' ? 0.06 : -0.06) * intensity;
+    if (side && (region.includes('thigh') || region.includes('leg') || region.includes('foot')) && bodyId === 'pelvis') target.x += (side === 'left' ? 0.075 : -0.075) * intensity;
+  }
+
+  updateFacialPresentation() {
+    if (!this.faceRig) return;
+    const pain = THREE.MathUtils.clamp(this.physiology?.painLoad ?? 0, 0, 1);
+    const shock = THREE.MathUtils.clamp(this.physiology?.shock ?? 0, 0, 1);
+    const consciousness = this.physiology?.consciousness ?? 1;
+    const dead = this.lifeState === 'dead';
+    const blinkPhase = this.elapsed % 4.35;
+    const blinking = !dead && blinkPhase > 4.19;
+    const eyelidScale = dead ? 0.06 : blinking ? 0.08 : THREE.MathUtils.lerp(1, 0.58, pain * 0.62 + (1 - consciousness) * 0.3);
+    this.faceRig.eyes.forEach((eye) => { eye.scale.y = 0.48 * eyelidScale; });
+    this.faceRig.pupils.forEach((pupil, index) => {
+      pupil.visible = !dead && consciousness > 0.08;
+      pupil.position.y = 0.047 - (1 - consciousness) * 0.012;
+      pupil.position.x = (index === 0 ? -0.056 : 0.056) + Math.sin(this.elapsed * 0.38) * 0.002 * consciousness;
+    });
+    this.faceRig.brows.forEach((brow, index) => {
+      brow.position.y = 0.074 - pain * 0.012;
+      brow.rotation.z = (index === 0 ? -1 : 1) * (0.22 + pain * 0.12);
+    });
+    this.faceRig.mouth.scale.y = dead ? 0.7 : 1 + pain * 0.7 + shock * 0.45;
+    this.faceRig.mouth.position.y = -0.09 - shock * 0.012;
+    this.faceRig.beard.rotation.x = dead ? 0.08 : shock * 0.035;
+  }
+
   afterPhysics(alpha = 1) {
     this.bodies.forEach((entry) => {
       const translation = entry.body.translation();
@@ -377,21 +553,56 @@ export class HumanoidCombatActor {
       entry.previousPosition.copy(tmpPosition);
       entry.previousQuaternion.copy(tmpQuaternion);
     });
-    this.updateWounds();
-    const speed = [...this.bodies.values()].reduce((sum, entry) => { const v = entry.body.linvel(); return sum + Math.hypot(v.x, v.y, v.z); }, 0);
-    if (this.lifeState === 'dead' && speed < 0.25) this.settledSeconds += 1 / 60;
+    this.updateVesselDebug();
+    this.woundSystem.update(1 / 60);
+    this.updateBodyImpactFeedback();
+    const speeds = [...this.bodies.values()].map((entry) => { const v = entry.body.linvel(); return Math.hypot(v.x, v.y, v.z); });
+    const speed = speeds.length ? speeds.reduce((sum, value) => sum + value, 0) / speeds.length : 0;
+    if (this.lifeState === 'dead' && speed < COLLAPSE_CONFIG.corpseSettleSpeed) this.settledSeconds += 1 / 60;
     else this.settledSeconds = 0;
+    if (this.lifeState === 'dead' && this.settledSeconds >= COLLAPSE_CONFIG.corpseSettleSeconds) {
+      if (!this.finalSettleEmitted) {
+        this.finalSettleEmitted = true;
+        this.eventSink?.('body_settle', { position: this.getBodyWorldPosition('pelvis'), severity: 0.5 });
+      }
+      if (!this.activeEmbeddedWeapon && speed < COLLAPSE_CONFIG.corpseSleepSpeed) {
+        this.bodies.forEach(({ body }) => { if (!body.isSleeping()) body.sleep(); });
+        this.corpseSleeping = true;
+      }
+    }
   }
 
-  updateWounds() {
-    this.wounds.forEach((wound) => {
-      if (!wound.active) return;
-      const entry = this.bodies.get(wound.bodyId);
-      if (!entry) { wound.mesh.visible = false; wound.active = false; return; }
-      const translation = entry.body.translation();
-      const rotation = entry.body.rotation();
-      wound.mesh.position.copy(wound.localPoint).applyQuaternion(tmpQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w)).add(tmpPosition.set(translation.x, translation.y, translation.z));
-      wound.mesh.quaternion.copy(tmpQuaternion);
+  updateVesselDebug() {
+    this.vesselDebug.forEach((entry) => {
+      const body = this.bodies.get(entry.bodyId)?.body;
+      if (!body) return;
+      const translation = body.translation();
+      const rotation = body.rotation();
+      const q = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
+      entry.marker.position.copy(entry.localPoint).applyQuaternion(q).add(new THREE.Vector3(translation.x, translation.y, translation.z));
+      entry.marker.quaternion.copy(q);
+      const active = this.woundSystem?.wounds?.some((wound) => wound.vesselInvolvement?.id === entry.zone.id);
+      entry.marker.material.color.set(active ? 0xffe45c : entry.zone.vesselType.includes('arterial') ? 0xff3040 : 0x4e70ff);
+    });
+  }
+
+  updateBodyImpactFeedback() {
+    this.impactCooldowns.forEach((value, key) => { const next = value - 1 / 60; if (next <= 0) this.impactCooldowns.delete(key); else this.impactCooldowns.set(key, next); });
+    const groundY = this.environmentContactHints.groundY ?? 0;
+    const wallX = this.environmentContactHints.wallX;
+    this.bodies.forEach((entry, bodyId) => {
+      const position = entry.body.translation();
+      const velocity = entry.body.linvel();
+      const speed = Math.hypot(velocity.x, velocity.y, velocity.z);
+      if (position.y <= groundY + (bodyId === 'head' ? 0.24 : 0.18) && speed > 0.75 && !this.impactCooldowns.has(`ground:${bodyId}`)) {
+        const event = ['pelvis', 'upper_chest', 'lower_chest', 'head'].includes(bodyId) ? 'body_ground' : 'limb_impact';
+        this.eventSink?.(event, { position: new THREE.Vector3(position.x, position.y, position.z), severity: Math.min(1.4, speed / 3) });
+        this.impactCooldowns.set(`ground:${bodyId}`, 0.38);
+      }
+      if (wallX != null && position.x <= wallX + 0.22 && velocity.x < -0.6 && !this.impactCooldowns.has(`wall:${bodyId}`)) {
+        this.eventSink?.('body_wall', { position: new THREE.Vector3(position.x, position.y, position.z), severity: Math.min(1.4, speed / 3) });
+        this.impactCooldowns.set(`wall:${bodyId}`, 0.4);
+      }
     });
   }
 
@@ -409,9 +620,15 @@ export class HumanoidCombatActor {
       motorStrength: this.motorStrength,
       balanceImpairment: this.balanceImpairment,
       consciousnessImpairment: this.consciousnessImpairment,
-      activeWounds: this.wounds.filter((wound) => wound.active).length,
+      activeWounds: this.woundSystem.getActiveWounds().length,
       embeddedWeapon: this.activeEmbeddedWeapon?.state ?? null,
       settledSeconds: this.settledSeconds,
+      collapseFamily: this.collapseFamily,
+      collapseReason: this.collapseReason,
+      corpseSleeping: this.corpseSleeping,
+      physiology: this.physiology.getDiagnostics(),
+      wounds: this.woundSystem.getDiagnostics(),
+      reflex: { regionId: this.reflex.regionId, intensity: this.reflex.intensity, time: this.reflex.time },
       regionalTrauma: Object.fromEntries([...this.regionState.entries()].filter(([, value]) => value.trauma > 0.001).map(([id, value]) => [id, Number(value.trauma.toFixed(3))])),
       lastReaction: this.lastReaction ? { regionId: this.lastReaction.regionId, severity: this.lastReaction.severity, hardContact: this.lastReaction.hardContact } : null,
       bodyPositions,
@@ -436,11 +653,13 @@ export class HumanoidCombatActor {
     });
     this.visuals.clear();
     this.debugRoot.children.slice().forEach((debug) => { debug.geometry?.dispose?.(); debug.removeFromParent(); });
+    this.vesselDebug.forEach((entry) => entry.marker.material?.dispose?.());
+    this.vesselDebug = [];
   }
 
   reset() {
+    this.woundSystem.clear();
     this.disposePhysicalBody();
-    this.wounds.forEach((wound) => { wound.active = false; wound.mesh.visible = false; wound.severity = 0; });
     this.regionState.clear();
     this.balanceImpairment = 0;
     this.consciousnessImpairment = 0;
@@ -449,13 +668,20 @@ export class HumanoidCombatActor {
     this.lastReaction = null;
     this.settledSeconds = 0;
     this.dyingElapsed = 0;
+    this.collapseFamily = null;
+    this.collapseReason = null;
+    this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
+    this.corpseSleeping = false;
+    this.finalSettleEmitted = false;
+    this.impactCooldowns.clear();
+    this.physiology.reset();
     this.physics.resetCount += 1;
     this.createPhysicalBody();
   }
 
   dispose() {
+    this.woundSystem.dispose();
     this.disposePhysicalBody();
-    this.wounds.forEach((wound) => { wound.mesh.geometry?.dispose?.(); wound.mesh.removeFromParent(); });
     Object.values(this.materials).forEach((entry) => entry.dispose?.());
     this.root.removeFromParent();
   }

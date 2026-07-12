@@ -71,6 +71,21 @@ export class CombatPhysicsWorld {
     return substeps;
   }
 
+  stepSingle(beforeStep = null, afterStep = null) {
+    if (this.disposed) return 0;
+    const started = performance.now();
+    beforeStep?.(this.config.fixedStep);
+    this.contactCount = 0;
+    this.world.step(this.eventQueue);
+    this.eventQueue.drainCollisionEvents(() => { this.contactCount += 1; });
+    this.clampDynamicBodies();
+    afterStep?.(this.config.fixedStep);
+    this.stepDurationMs = performance.now() - started;
+    this.lastSubsteps = 1;
+    this.interpolationAlpha = 0;
+    return 1;
+  }
+
   clampDynamicBodies() {
     this.world.bodies.forEach((body) => {
       if (!body.isDynamic()) return;

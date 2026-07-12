@@ -7,6 +7,8 @@ export class CombatLabDebugPanel {
     this.slow = false;
     this.frozen = false;
     this.lightingMode = 0;
+    this.consciousnessMode = 0;
+    this.bloodMode = 0;
     this.lastTextUpdate = 0;
     this.disposers = [];
     this.build();
@@ -32,6 +34,22 @@ export class CombatLabDebugPanel {
       ['PANEL M', () => this.togglePanel()],
       ['PUSH I', () => this.dungeon?.weaponController?.nudgeExtension?.(0.1)],
       ['PULL U', () => this.dungeon?.weaponController?.nudgeExtension?.(-0.1)],
+      ['SLASH <', () => this.dungeon?.weaponController?.nudgeAim?.(-0.22, 0)],
+      ['SLASH >', () => this.dungeon?.weaponController?.nudgeAim?.(0.22, 0)],
+      ['STEP .', () => this.dungeon?.stepPhysics?.()],
+      ['WOUNDS C', () => this.dungeon?.clearWounds?.()],
+      ['BLOOD V', () => this.dungeon?.clearBlood?.()],
+      ['HAPTIC H', () => this.toggleHaptics()],
+      ['MUTE Q', () => this.toggleMute()],
+      ['CONSC Y', () => this.cycleConsciousness()],
+      ['RESERVE G', () => this.cycleBloodReserve()],
+      ['CHEST 1', () => this.triggerCollapse('chest_fold', false)],
+      ['NECK 2', () => this.triggerCollapse('neck_failure', true)],
+      ['HEAD 3', () => this.triggerCollapse('neurological', true)],
+      ['LEG 4', () => this.triggerCollapse('leg_failure', false)],
+      ['LOSS 5', () => this.triggerCollapse('blood_loss', true)],
+      ['TORCH T', () => this.equipLight('torch')],
+      ['LANTERN L', () => this.equipLight('keepers_lantern')],
     ];
     definitions.forEach(([label, action]) => {
       const button = document.createElement('button');
@@ -60,6 +78,22 @@ export class CombatLabDebugPanel {
       if (event.code === 'KeyM') this.togglePanel();
       if (event.code === 'KeyI') this.dungeon?.weaponController?.nudgeExtension?.(0.1);
       if (event.code === 'KeyU') this.dungeon?.weaponController?.nudgeExtension?.(-0.1);
+      if (event.code === 'KeyJ') this.dungeon?.weaponController?.nudgeAim?.(-0.22, 0);
+      if (event.code === 'Semicolon') this.dungeon?.weaponController?.nudgeAim?.(0.22, 0);
+      if (event.code === 'Period') this.dungeon?.stepPhysics?.();
+      if (event.code === 'KeyC') this.dungeon?.clearWounds?.();
+      if (event.code === 'KeyV') this.dungeon?.clearBlood?.();
+      if (event.code === 'KeyH') this.toggleHaptics();
+      if (event.code === 'KeyQ') this.toggleMute();
+      if (event.code === 'KeyY') this.cycleConsciousness();
+      if (event.code === 'KeyG') this.cycleBloodReserve();
+      if (event.code === 'Digit1') this.triggerCollapse('chest_fold', false);
+      if (event.code === 'Digit2') this.triggerCollapse('neck_failure', true);
+      if (event.code === 'Digit3') this.triggerCollapse('neurological', true);
+      if (event.code === 'Digit4') this.triggerCollapse('leg_failure', false);
+      if (event.code === 'Digit5') this.triggerCollapse('blood_loss', true);
+      if (event.code === 'KeyT') this.equipLight('torch');
+      if (event.code === 'KeyL') this.equipLight('keepers_lantern');
     };
     window.addEventListener('keydown', keydown);
     this.disposers.push(() => window.removeEventListener('keydown', keydown));
@@ -78,8 +112,19 @@ export class CombatLabDebugPanel {
   toggleFreeze() { this.frozen = !this.frozen; this.dungeon?.setPhysicsPaused?.(this.frozen); }
   toggleSlow() { this.slow = !this.slow; this.dungeon?.setPhysicsSlow?.(this.slow); }
   toggleNight() {
-    this.lightingMode = (this.lightingMode + 1) % 3;
-    this.dungeon?.setLightingMode?.(['day', 'night-dark', 'night-local'][this.lightingMode]);
+    this.lightingMode = (this.lightingMode + 1) % 5;
+    this.dungeon?.setLightingMode?.(['day', 'dusk', 'night-dark', 'night-torch', 'night-lantern'][this.lightingMode]);
+  }
+  toggleHaptics() { this.dungeon.feedbackSystem.setHapticsEnabled(!this.dungeon.feedbackSystem.hapticsEnabled); }
+  toggleMute() { this.dungeon.feedbackSystem.setMuted(!this.dungeon.feedbackSystem.muted); }
+  cycleConsciousness() { const values = [1, 0.5, 0.15]; this.consciousnessMode = (this.consciousnessMode + 1) % values.length; this.dungeon.actor.physiology.setConsciousness(values[this.consciousnessMode]); }
+  cycleBloodReserve() { const values = [1, 0.45, 0.12]; this.bloodMode = (this.bloodMode + 1) % values.length; this.dungeon.actor.physiology.setBloodReserve(values[this.bloodMode]); }
+  triggerCollapse(family, lethal) { this.dungeon.actor.requestCollapse(family, { immediate: family === 'neurological' || family === 'neck_failure', lethal }); }
+  equipLight(itemId) {
+    if (!this.equipmentRuntime.hasItem(itemId)) this.equipmentRuntime.acquireItem(itemId, { source: 'combat_lab_ephemeral' });
+    this.equipmentRuntime.equip('offhand', itemId);
+    this.lightingMode = itemId === 'torch' ? 3 : 4;
+    this.dungeon.setLightingMode(itemId === 'torch' ? 'night-torch' : 'night-lantern');
   }
   togglePanel() {
     this.readout.hidden = !this.readout.hidden;
@@ -93,13 +138,22 @@ export class CombatLabDebugPanel {
     const physics = diagnostics.physics ?? {};
     const actor = diagnostics.actor ?? {};
     const weapon = diagnostics.weapon ?? {};
+    const blood = diagnostics.blood ?? {};
+    const feedback = diagnostics.feedback ?? {};
+    const physiology = actor.physiology ?? {};
+    const wounds = actor.wounds ?? {};
     this.readout.textContent = [
       `frame ${frameTimeMs.toFixed?.(2) ?? frameTimeMs}ms  physics ${(physics.physicsStepMs ?? 0).toFixed(2)}ms x${physics.substeps ?? 0}`,
       `bodies ${physics.rigidBodies ?? 0}  constraints ${physics.constraints ?? 0}  contacts ${physics.activeContacts ?? 0}  sweeps ${physics.weaponSweeps ?? 0}`,
-      `time ${this.frozen ? 'FROZEN' : this.slow ? '20%' : '100%'}  light ${['DAY', 'NIGHT-DARK', 'NIGHT+LOCAL'][this.lightingMode]}  resets ${physics.resetCount ?? 0}`,
+      `time ${this.frozen ? 'FROZEN' : this.slow ? '20%' : '100%'}  light ${['DAY', 'DUSK', 'NIGHT-DARK', 'TORCH', 'LANTERN'][this.lightingMode]}  resets ${physics.resetCount ?? 0}`,
       '',
       `actor ${actor.state ?? 'unknown'}  motor ${(actor.motorStrength ?? 0).toFixed(2)}`,
       `balance ${(actor.balanceImpairment ?? 0).toFixed(2)}  consciousness ${(actor.consciousnessImpairment ?? 0).toFixed(2)}  wounds ${actor.activeWounds ?? 0}`,
+      `blood ${(physiology.bloodReserve ?? 1).toFixed(3)}  loss/s ${(physiology.bloodLossRate ?? 0).toFixed(4)}  shock ${(physiology.shock ?? 0).toFixed(2)}  conscious ${(physiology.consciousness ?? 1).toFixed(2)}`,
+      `breathing ${physiology.breathingState ?? '-'}  collapse ${actor.collapseFamily ?? '-'}  sleep ${actor.corpseSleeping ? 'YES' : 'NO'}`,
+      `wound ${JSON.stringify(wounds.selected ?? null)}`,
+      `blood fx ${blood.particles ?? 0}/${blood.particleLimit ?? 0}  decals ${blood.decals ?? 0}/${blood.decalLimit ?? 0}`,
+      `audio ${feedback.activeVoices ?? 0} voices  haptic ${feedback.activeHapticEvents ?? 0}  event ${feedback.lastEvent ?? '-'}  mute ${feedback.muted ? 'YES' : 'NO'}`,
       `trauma ${JSON.stringify(actor.regionalTrauma ?? {})}`,
       `pose ${JSON.stringify(actor.bodyPositions ?? {})}`,
       '',
@@ -112,6 +166,7 @@ export class CombatLabDebugPanel {
       `actual ${JSON.stringify(weapon.actualHand ?? [])}`,
       `depth ${(weapon.penetrationDepth ?? 0).toFixed(3)}m  speed ${(weapon.forwardVelocity ?? 0).toFixed(2)}m/s`,
       `visual/collision error ${(weapon.visibleCollisionError ?? 0).toFixed(5)}m`,
+      `part ${weapon.contactPart ?? '-'}  wound ${weapon.activeWoundId ?? '-'}  slash ${JSON.stringify(weapon.activeSlash ?? null)}`,
       '',
       'Grip-drag: hand aim | ATTACK drag up/down: insert/extract',
       'Desktop: Space advance | Shift withdraw | B debug',

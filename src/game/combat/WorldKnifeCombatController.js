@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
-import { advancePenetrationDepth, clampWorkspacePoint, classifyKnifeContact, deriveBladeTip, normalizedBladeForward } from './CombatMath.js';
+import { advancePenetrationDepth, clampWorkspacePoint, classifyKnifeContact, classifySlashContact, deriveBladeTip, normalizedBladeForward } from './CombatMath.js';
+import { SLASH_CONFIG } from './CombatStage2Config.js';
 
 const forwardLocal = new THREE.Vector3(0, 0, -1);
 const edgeLocalA = new THREE.Vector3(-KNIFE_COMBAT_CONFIG.bladeWidth * 0.5, 0, -0.05);
@@ -18,7 +19,7 @@ function setLine(line, start, end) {
 }
 
 export class WorldKnifeCombatController {
-  constructor({ app, scene, camera, player, actor, physics, equipmentRuntime, controls, feedback = null } = {}) {
+  constructor({ app, scene, camera, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, bloodEffects = null, activationProvider = null } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.scene = scene;
@@ -29,6 +30,9 @@ export class WorldKnifeCombatController {
     this.equipmentRuntime = equipmentRuntime;
     this.controls = controls;
     this.feedback = feedback;
+    this.feedbackSystem = feedbackSystem;
+    this.bloodEffects = bloodEffects;
+    this.activationProvider = activationProvider;
     this.config = KNIFE_COMBAT_CONFIG;
     this.state = 'no_contact';
     this.reason = 'ready';
@@ -56,6 +60,9 @@ export class WorldKnifeCombatController {
     this.previousEdgeStart = new THREE.Vector3();
     this.previousEdgeEnd = new THREE.Vector3();
     this.entry = null;
+    this.activeSlash = null;
+    this.lastContactPart = 'none';
+    this.slashCount = 0;
     this.penetrationDepth = 0;
     this.maximumDepthReached = 0;
     this.contactNormal = new THREE.Vector3();
@@ -220,7 +227,7 @@ export class WorldKnifeCombatController {
   }
 
   isEquipped() {
-    return this.equipmentRuntime?.getEquippedToolId?.() === this.config.itemId && this.equipmentRuntime?.hasItem?.(this.config.itemId);
+    return this.equipmentRuntime?.getEquippedToolId?.() === this.config.itemId && this.equipmentRuntime?.hasItem?.(this.config.itemId) && (this.activationProvider?.() ?? true);
   }
 
   updateInput(dt) {
@@ -286,13 +293,18 @@ export class WorldKnifeCombatController {
     const travel = prospectiveTip.distanceTo(this.previousTip);
     this.lastFrameVelocity = travel / Math.max(dt, 1e-5);
     this.lastSweep = { from: this.previousTip.clone(), to: prospectiveTip.clone() };
-    if (travel <= 1e-5) return;
+    if (travel <= 1e-5) { this.releaseSlashContact(dt, false); return; }
     const forward = normalizedBladeForward(this.actualQuaternion, new THREE.Vector3());
     const movementDirection = prospectiveTip.clone().sub(this.previousTip).normalize();
-    if (movementDirection.dot(forward) <= 0.05) {
-      this.resolveSweptEdgeContact();
+    const forwardMotion = movementDirection.dot(forward);
+    const tangentialRatio = Math.sqrt(Math.max(0, 1 - forwardMotion * forwardMotion));
+    // A physical draw cut can include inward pressure. Give the swept edge first
+    // ownership only for a substantially tangential tip path; straight thrusts
+    // remain tip-authoritative.
+    if (tangentialRatio >= 0.52 && this.resolveSweptEdgeContact(dt)) {
       return;
     }
+    this.releaseSlashContact(dt, false);
     const hit = this.physics.castWeaponTip(this.previousTip, prospectiveTip, this.config.tipRadius, (collider) => this.actor.colliderRegions.has(collider.handle));
     if (!hit?.collider) return;
     const toi = THREE.MathUtils.clamp(hit.time_of_impact ?? 0, 0, 1);
@@ -302,42 +314,110 @@ export class WorldKnifeCombatController {
     if (!semanticHit) return;
     const alignment = movementDirection.dot(forward);
     this.contactNormal.copy(contactNormal);
+    this.lastContactPart = 'tip';
     const classification = classifyKnifeContact({ speed: this.lastFrameVelocity, alignment, part: Math.abs(alignment) < 0.24 ? 'edge' : 'tip', minimumSpeed: this.config.minimumPunctureSpeed, minimumAlignment: this.config.minimumPunctureAlignment, failedAlignment: this.config.failedPenetrationAlignment });
     if (classification.state === 'edge_contact' || classification.state === 'glancing_contact') {
       this.state = classification.state;
       this.reason = classification.reason;
       this.actualGrip.add(contactNormal.multiplyScalar(Math.min(0.035, travel)));
       semanticHit.body.applyImpulseAtPoint(movementDirection.multiplyScalar(0.035), contactPoint, true);
+      this.feedbackSystem?.emit(classification.state === 'glancing_contact' ? 'blade_scrape' : 'clothing_contact', { position: contactPoint, severity: 0.2 });
       return;
     }
     if (!classification.penetrates) {
       this.state = classification.state;
       this.reason = classification.reason;
       this.actualGrip.add(contactNormal.multiplyScalar(Math.min(0.025, travel)));
+      this.feedbackSystem?.emit('failed_tip', { position: contactPoint, severity: this.lastFrameVelocity * 0.2 });
       return;
     }
     this.beginPenetration(semanticHit, contactPoint, forward, alignment);
   }
 
-  resolveSweptEdgeContact() {
+  resolveSweptEdgeContact(dt) {
     const prospectiveStart = edgeLocalA.clone().applyQuaternion(this.actualQuaternion).add(this.actualGrip);
     const prospectiveEnd = edgeLocalB.clone().applyQuaternion(this.actualQuaternion).add(this.actualGrip);
     const previousMidpoint = this.previousEdgeStart.clone().add(this.previousEdgeEnd).multiplyScalar(0.5);
     const currentMidpoint = prospectiveStart.clone().add(prospectiveEnd).multiplyScalar(0.5);
     const edgeMotion = currentMidpoint.clone().sub(previousMidpoint);
-    if (edgeMotion.lengthSq() < 1e-8) return;
+    if (edgeMotion.lengthSq() < 1e-8) { this.releaseSlashContact(dt, true); return false; }
     const hit = this.physics.castWeaponTip(previousMidpoint, currentMidpoint, this.config.bladeWidth * 0.32, (collider) => this.actor.colliderRegions.has(collider.handle));
-    if (!hit?.collider) return;
+    if (!hit?.collider) { this.releaseSlashContact(dt, false); return false; }
     const point = hit.witness1 ? new THREE.Vector3(hit.witness1.x, hit.witness1.y, hit.witness1.z) : currentMidpoint;
     const semanticHit = this.actor.resolveHit(hit.collider, point);
-    if (!semanticHit) return;
-    this.state = 'edge_contact';
-    this.reason = 'actual-cutting-edge-sweep';
-    const direction = edgeMotion.normalize();
-    semanticHit.body.applyImpulseAtPoint(direction.multiplyScalar(Math.min(0.06, this.lastFrameVelocity * 0.012)), point, true);
+    if (!semanticHit) return false;
+    const normal = hit.normal1 ? new THREE.Vector3(hit.normal1.x, hit.normal1.y, hit.normal1.z).normalize() : point.clone().sub(this.getBodyCenter(semanticHit.body)).normalize();
+    const direction = edgeMotion.clone().normalize();
+    const localMotion = direction.clone().applyQuaternion(this.actualQuaternion.clone().invert());
+    const lateralLead = Math.abs(localMotion.x);
+    const flatLead = Math.abs(localMotion.y);
+    // The authored cutting edge occupies local -X. The leading blade part is
+    // therefore determined from real local travel, not arbitrary mesh names or
+    // a reticle ray. Reverse travel correctly presents the spine.
+    const part = flatLead > lateralLead * 0.72 ? 'flat' : localMotion.x < -0.18 ? 'edge' : localMotion.x > 0.18 ? 'spine' : 'flat';
+    const surfacePressure = Math.max(0, -direction.dot(normal));
+    const forwardPressure = Math.max(0, -localMotion.z) * 0.65;
+    const pressure = Math.max(surfacePressure, forwardPressure);
+    const edgeAlignment = part === 'edge' ? THREE.MathUtils.clamp(-localMotion.x, 0, 1) : part === 'spine' ? THREE.MathUtils.clamp(localMotion.x, 0, 1) : 0;
+    const stepTravel = Math.min(SLASH_CONFIG.maximumStepLength, edgeMotion.length());
+    const speed = edgeMotion.length() / Math.max(dt, 1e-5);
+    const sameOwner = this.activeSlash?.bodyId === semanticHit.bodyId && this.activeSlash?.regionId === semanticHit.regionId && this.activeSlash?.part === part;
+    if (!sameOwner) {
+      this.finishActiveSlash(true);
+      this.activeSlash = { bodyId: semanticHit.bodyId, regionId: semanticHit.regionId, part, hit: semanticHit, startPoint: point.clone(), lastPoint: point.clone(), surfaceNormal: normal.clone(), direction: direction.clone(), duration: 0, travel: 0, pressure: 0, woundId: null, missedTime: 0, bloodEmitted: false };
+    }
+    const slash = this.activeSlash;
+    slash.duration += dt;
+    slash.travel = Math.min(SLASH_CONFIG.maximumWoundLength, slash.travel + stepTravel);
+    slash.pressure = THREE.MathUtils.lerp(slash.pressure, pressure, 0.4);
+    slash.direction.lerp(direction, 0.35).normalize();
+    slash.lastPoint.copy(point);
+    slash.surfaceNormal.copy(normal);
+    slash.missedTime = 0;
+    const regionKey = semanticHit.regionId.includes('arm') ? 'arm' : semanticHit.regionId.includes('leg') || semanticHit.regionId.includes('thigh') ? 'leg' : semanticHit.regionId.includes('hand') ? 'hand' : semanticHit.regionId.includes('foot') ? 'foot' : semanticHit.regionId;
+    const classification = classifySlashContact({ part, edgeSpeed: speed, edgeAlignment, pressure: slash.pressure, contactDuration: slash.duration, travel: slash.travel, tissueResistance: semanticHit.region.softTissueResistance, clothingResistance: SLASH_CONFIG.clothingResistance[regionKey] ?? 0.2 });
+    this.state = classification.state;
+    this.reason = `${part}:${classification.state}`;
+    this.lastContactPart = part;
+    if (classification.cuts) {
+      const wound = this.actor.applySlashWound({ hit: semanticHit, startPoint: slash.startPoint, endPoint: point, surfaceNormal: normal, cutDirection: slash.direction, depth: classification.depth, cutLength: slash.woundId ? stepTravel : classification.physicalTravel, severity: classification.severity, classification: classification.state, woundId: slash.woundId });
+      if (wound && !slash.woundId) {
+        slash.woundId = wound.id;
+        this.slashCount += 1;
+        this.feedbackSystem?.emit(classification.state === 'deep_slash' ? 'deep_slash' : 'shallow_slash', { position: point, severity: classification.severity });
+        this.bloodEffects?.emitSlash(wound, slash.direction);
+        slash.bloodEmitted = true;
+      }
+    } else if (part === 'flat' || part === 'spine') {
+      semanticHit.body.applyImpulseAtPoint(direction.clone().multiplyScalar(Math.min(0.045, speed * 0.008)), point, true);
+      this.feedbackSystem?.emit(part === 'spine' ? 'blunt_contact' : 'clothing_contact', { position: point, severity: pressure * speed * 0.1 });
+    } else if (classification.state === 'scraping_contact') this.feedbackSystem?.emit('blade_scrape', { position: point, severity: speed * 0.1 });
+    return true;
+  }
+
+  getBodyCenter(body) {
+    const translation = body.translation();
+    return new THREE.Vector3(translation.x, translation.y, translation.z);
+  }
+
+  releaseSlashContact(dt, interrupted) {
+    if (!this.activeSlash) return;
+    this.activeSlash.missedTime += dt;
+    if (this.activeSlash.missedTime >= SLASH_CONFIG.contactReleaseSeconds) this.finishActiveSlash(interrupted);
+  }
+
+  finishActiveSlash(interrupted = false) {
+    if (!this.activeSlash) return;
+    if (this.activeSlash.woundId) this.actor.woundSystem.finishSlash(this.activeSlash.woundId, interrupted);
+    if (!this.activeSlash.woundId && this.activeSlash.duration > 0) {
+      this.state = interrupted ? 'interrupted_cut' : this.state;
+      this.reason = interrupted ? 'edge-path-interrupted-before-cut' : this.reason;
+    }
+    this.activeSlash = null;
   }
 
   beginPenetration(hit, entryPoint, axis, alignment) {
+    const wound = this.actor.beginPunctureWound({ hit, entryPoint, direction: axis, depth: 0.004, weaponId: this.config.itemId });
     this.entry = {
       hit,
       bodyId: hit.bodyId,
@@ -345,15 +425,19 @@ export class WorldKnifeCombatController {
       localAxis: axis.clone().applyQuaternion(new THREE.Quaternion(hit.body.rotation().x, hit.body.rotation().y, hit.body.rotation().z, hit.body.rotation().w).invert()),
       initialAlignment: alignment,
       hardDepth: this.resolveHardStructureDepth(hit),
+      woundId: wound?.id ?? null,
+      softFeedback: false,
+      deepFeedback: false,
+      hardFeedback: false,
     };
     this.penetrationDepth = 0.004;
     this.maximumDepthReached = 0.004;
     this.state = 'surface_puncture';
     this.reason = 'aligned-tip-punctured-surface';
     this.actor.setEmbeddedWeapon(this);
-    this.actor.applyPenetration({ hit, entryPoint, direction: axis, deltaDepth: 0.004, depth: this.penetrationDepth, force: this.lastFrameVelocity });
+    this.actor.applyPenetration({ hit, entryPoint, direction: axis, deltaDepth: 0.004, depth: this.penetrationDepth, force: this.lastFrameVelocity, woundId: this.entry.woundId });
+    this.bloodEffects?.emitEntry(wound, wound?.severity ?? 0.1);
     this.feedback?.shake?.({ durationMs: 75, intensity: 0.018 });
-    navigator.vibrate?.(7);
   }
 
   resolveHardStructureDepth(hit) {
@@ -393,6 +477,11 @@ export class WorldKnifeCombatController {
     if (hardContact) {
       this.state = 'bone_contact';
       this.reason = 'hard-structure-resistance';
+      if (!this.entry.hardFeedback) {
+        this.entry.hardFeedback = true;
+        this.feedbackSystem?.emit('bone_contact', { position: worldEntry.point, severity: 0.85 });
+        this.feedback?.shake?.({ durationMs: 85, intensity: 0.022 });
+      }
     }
     const resistance = this.entry.hit.region.softTissueResistance + (hardContact ? this.entry.hit.region.hardStructureResistance : 0);
     const previousDepth = this.penetrationDepth;
@@ -403,24 +492,34 @@ export class WorldKnifeCombatController {
     const lateralDistance = desiredLateral.length();
     const force = Math.min(1.2, lateralDistance * this.config.forceTransfer);
     if (lateralDistance > 0.002) this.entry.hit.body.applyImpulseAtPoint(desiredLateral.normalize().multiplyScalar(force * dt), worldEntry.point, true);
+    if (lateralDistance > this.config.lateralBindDistance) this.feedbackSystem?.emit('blade_bind', { position: worldEntry.point, severity: lateralDistance / this.config.forcedExtractionDistance });
     if (lateralDistance > this.config.forcedExtractionDistance && targetDepth < this.penetrationDepth * 0.35) { this.extract('forced-lateral-release'); return; }
     this.actualQuaternion.setFromUnitVectors(forwardLocal, worldEntry.axis);
     this.actualGrip.copy(constrainedTip).addScaledVector(worldEntry.axis, -this.config.bladeLength);
     const deltaDepth = Math.max(0, this.penetrationDepth - previousDepth);
     const withdrawal = this.penetrationDepth < previousDepth - 0.001;
     this.maximumDepthReached = Math.max(this.maximumDepthReached, this.penetrationDepth);
-    if (deltaDepth > 0) this.actor.applyPenetration({ hit: this.entry.hit, entryPoint: worldEntry.point, direction: worldEntry.axis, deltaDepth, depth: this.penetrationDepth, force: resistance + force, hardContact });
+    if (deltaDepth > 0) {
+      this.actor.applyPenetration({ hit: this.entry.hit, entryPoint: worldEntry.point, direction: worldEntry.axis, deltaDepth, depth: this.penetrationDepth, force: resistance + force, hardContact, woundId: this.entry.woundId });
+      if (this.penetrationDepth >= 0.025 && !this.entry.softFeedback) { this.entry.softFeedback = true; this.feedbackSystem?.emit('soft_penetration', { position: worldEntry.point, severity: 0.4 }); }
+      if (this.penetrationDepth >= 0.075 && !this.entry.deepFeedback) { this.entry.deepFeedback = true; this.feedbackSystem?.emit('deep_penetration', { position: worldEntry.point, severity: 0.85 }); }
+      else if (this.penetrationDepth > 0.025) this.feedbackSystem?.emit('embedded_move', { position: worldEntry.point, severity: deltaDepth * 8 });
+    }
     if (!hardContact) this.state = withdrawal ? 'withdrawal' : this.penetrationDepth > 0.018 ? 'embedded' : 'active_penetration';
     if (!hardContact) this.reason = withdrawal ? 'controlled-extraction' : 'player-controlled-depth';
   }
 
   extract(reason = 'fully-extracted') {
+    const entry = this.entry;
+    const worldEntry = entry ? this.getEntryWorldPose() : null;
+    const wound = entry?.woundId ? this.actor.onWeaponExtracted(entry.woundId, { releaseSeverity: this.maximumDepthReached, direction: worldEntry?.axis?.clone?.().negate?.() }) : null;
     this.state = 'fully_extracted';
     this.reason = reason;
     this.entry = null;
     this.penetrationDepth = 0;
     this.actor.setEmbeddedWeapon(null);
-    navigator.vibrate?.(5);
+    if (wound) this.bloodEffects?.emitWithdrawal(wound, wound.withdrawalDirection);
+    this.feedbackSystem?.emit('extraction', { position: worldEntry?.point ?? this.currentTip, severity: this.maximumDepthReached / this.config.maximumPenetrationDepth });
   }
 
   updateDerivedPose(initial = false) {
@@ -487,8 +586,17 @@ export class WorldKnifeCombatController {
     }
   }
 
+  nudgeAim(deltaX = 0, deltaY = 0) {
+    this.aimX = THREE.MathUtils.clamp(this.aimX + deltaX, -1, 1);
+    this.aimY = THREE.MathUtils.clamp(this.aimY + deltaY, -1, 1);
+  }
+
   cancel(reason = 'cancelled') {
-    if (this.entry) this.actor.setEmbeddedWeapon(null);
+    if (this.entry) {
+      if (this.entry.woundId) this.actor.onWeaponExtracted(this.entry.woundId, { releaseSeverity: 0, direction: null });
+      this.actor.setEmbeddedWeapon(null);
+    }
+    this.finishActiveSlash(true);
     this.entry = null;
     this.penetrationDepth = 0;
     this.desiredExtension = 0;
@@ -525,6 +633,10 @@ export class WorldKnifeCombatController {
       forwardVelocity: Number(this.lastFrameVelocity.toFixed(3)),
       visibleCollisionError: Number(this.visibleCollisionError.toFixed(5)),
       gripPointerActive: this.gripPointerId != null,
+      contactPart: this.lastContactPart,
+      activeWoundId: this.entry?.woundId ?? this.activeSlash?.woundId ?? null,
+      activeSlash: this.activeSlash ? { regionId: this.activeSlash.regionId, part: this.activeSlash.part, duration: Number(this.activeSlash.duration.toFixed(3)), travel: Number(this.activeSlash.travel.toFixed(3)), woundId: this.activeSlash.woundId } : null,
+      slashCount: this.slashCount,
     };
   }
 
