@@ -37,9 +37,12 @@ function makeWoundTexture(kind) {
     const center = kind === 'slash' ? THREE.MathUtils.clamp(1 - Math.abs(nx) * 5.2, 0, 1) : THREE.MathUtils.clamp(1 - distance * 3.2, 0, 1);
     const wetEdge = THREE.MathUtils.clamp((distance - edge * 0.42) * 3.8, 0, 1);
     const offset = (y * size + x) * 4;
-    data[offset] = Math.round(THREE.MathUtils.lerp(54, 225, wetEdge) * (1 - center * 0.58));
-    data[offset + 1] = Math.round(THREE.MathUtils.lerp(4, 28, wetEdge) * (1 - center * 0.7));
-    data[offset + 2] = Math.round(THREE.MathUtils.lerp(7, 31, wetEdge) * (1 - center * 0.68));
+    const minimumBrightness = kind === 'slash' ? 215 : 96;
+    const centerDarkening = kind === 'slash' ? 0.18 : 0.58;
+    const brightness = Math.round(THREE.MathUtils.lerp(minimumBrightness, 255, wetEdge) * (1 - center * centerDarkening));
+    data[offset] = brightness;
+    data[offset + 1] = brightness;
+    data[offset + 2] = brightness;
     data[offset + 3] = Math.round(alpha * 255);
   }
   const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
@@ -71,11 +74,11 @@ export class CombatWoundSystem {
     const materialOptions = { roughness: 0.88, metalness: 0, side: THREE.DoubleSide, transparent: true, alphaTest: 0.08, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
     this.materials = {
       puncture: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.fresh, map: this.punctureTexture }),
-      cut: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.fresh, map: this.slashTexture }),
+      cut: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.slashArterial, map: this.slashTexture }),
       deep: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.deep, map: this.punctureTexture }),
-      deepCut: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.deep, map: this.slashTexture }),
+      deepCut: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.slashArterial, map: this.slashTexture }),
       arterial: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.arterial, map: this.punctureTexture }),
-      arterialCut: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.arterial, map: this.slashTexture }),
+      arterialCut: new THREE.MeshStandardMaterial({ ...materialOptions, color: BLOOD_COLOR_PALETTE.slashArterial, map: this.slashTexture }),
       blunt: new THREE.MeshStandardMaterial({ ...materialOptions, color: 0x372229, map: this.punctureTexture, opacity: 0.72 }),
     };
     this.failedProjectionCount = 0;
@@ -443,7 +446,7 @@ export class CombatWoundSystem {
       slot.puncture.position.copy(pose.point).addScaledVector(pose.normal, WOUND_SURFACE_BIAS);
       slot.puncture.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), pose.normal);
       slot.puncture.rotateZ(((Number(wound.id.split('_')[1]) * 2.399) % (Math.PI * 2)) - Math.PI);
-      const radius = wound.woundType === 'blunt_trauma_marker' ? 0.025 + wound.severity * 0.018 : 0.009 + THREE.MathUtils.clamp(wound.severity, 0, 1.5) * 0.012;
+      const radius = wound.woundType === 'blunt_trauma_marker' ? 0.028 + wound.severity * 0.02 : 0.013 + THREE.MathUtils.clamp(wound.severity, 0, 1.5) * 0.014;
       slot.puncture.scale.set(radius * (wound.woundType === 'deep_puncture' ? 0.76 : 0.92), radius, 1);
       wound.surfaceDistance = WOUND_SURFACE_BIAS;
       return;
@@ -456,7 +459,7 @@ export class CombatWoundSystem {
     const positions = slot.slash.geometry.attributes.position.array;
     const normals = slot.slash.geometry.attributes.normal.array;
     let segmentCount = 0;
-    const baseWidth = 0.0035 + THREE.MathUtils.clamp(wound.severity, 0, 1.5) * 0.0045;
+    const baseWidth = 0.0048 + THREE.MathUtils.clamp(wound.severity, 0, 1.5) * 0.0052;
     for (let index = 0; index < reconstructed.length - 1 && segmentCount < MAX_SLASH_SURFACE_SAMPLES - 1; index += 1) {
       const start = reconstructed[index];
       const end = reconstructed[index + 1];

@@ -59,6 +59,8 @@ export class HumanoidCombatActor {
     this.mortalityMode = mortalityMode;
     this.visualProfile = visualProfile;
     this.animationAuthorityReady = false;
+    this.ragdollActive = false;
+    this.ragdollForced = false;
     this.reactiveCollapseElapsed = 0;
     this.wounds = [];
     this.regionState = new Map();
@@ -102,11 +104,12 @@ export class HumanoidCombatActor {
   }
 
   prepareFrame(deltaSeconds) {
-    if (this.visualProfile.animationAuthoritative) this.visualAdapter?.updateAnimationAuthority?.(deltaSeconds);
+    if (this.visualProfile.animationAuthoritative && !this.ragdollActive) this.visualAdapter?.updateAnimationAuthority?.(deltaSeconds);
+    if (!this.ragdollActive && this.lifeState !== 'alive' && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll({ forced: this.ragdollForced });
   }
 
   syncAnimationProxyBodies(adapter = this.visualAdapter) {
-    if (!this.animationAuthorityReady || !adapter) return;
+    if (!this.animationAuthorityReady || !adapter || this.ragdollActive) return;
     this.bodies.forEach((entry, bodyId) => {
       const pose = adapter.getProxyPose(bodyId);
       if (!pose) return;
@@ -265,17 +268,9 @@ export class HumanoidCombatActor {
     const impulse = direction.clone().multiplyScalar(Math.min(1.4, 0.09 + force * 0.04 + severity * 0.35));
     hit.body.applyImpulseAtPoint(impulse, entryPoint, true);
     this.lastReaction = { regionId: hit.regionId, severity, point: entryPoint.clone(), direction: direction.clone(), hardContact };
-    const wound = woundId ? this.woundSystem.extendPuncture(woundId, { depth, hardStructureContact: hardContact }) : null;
+    if (woundId) this.woundSystem.extendPuncture(woundId, { depth, hardStructureContact: hardContact });
     this.physiology.onTrauma({ hit, severity, depth, deltaDepth, hardContact });
     this.visualAdapter?.setEmbeddedTension?.({ regionId: hit.regionId, depth, worldDirection: direction });
-    if (wound && depth >= 0.045 && !wound.depthReactionTriggered) {
-      wound.depthReactionTriggered = true;
-      this.visualAdapter?.triggerPainReaction?.({ regionId: hit.regionId, severity: Math.min(0.72, 0.24 + depth * 4), worldDirection: direction, depth, impactForce: force * 0.35, hitWorldPosition: entryPoint, actorState: this.lifeState, source: 'throttled_depth_escalation' });
-    }
-    if (hardContact && wound && !wound.hardReactionTriggered) {
-      wound.hardReactionTriggered = true;
-      this.triggerReflex(hit.regionId, Math.max(0.36, severity), direction, { point: entryPoint, depth, force, source: 'new_hard_contact' });
-    }
     this.evaluateLifeState();
     return severity;
   }
@@ -358,6 +353,7 @@ export class HumanoidCombatActor {
     if (!(nextState in order) || order[nextState] <= order[this.lifeState]) return false;
     this.lifeState = nextState;
     this.collapseReason ??= reason;
+    if (['incapacitated', 'dying', 'dead'].includes(nextState) && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll();
     if (nextState === 'incapacitated') this.eventSink?.('unconscious', { position: this.getBodyWorldPosition('head'), severity: 0.6 });
     if (nextState === 'dying') this.eventSink?.('shock_gasp', { position: this.getBodyWorldPosition('head'), severity: 0.9 });
     if (nextState === 'dead') {
@@ -367,9 +363,51 @@ export class HumanoidCombatActor {
     return true;
   }
 
+  activateRagdoll({ forced = false } = {}) {
+    if (this.ragdollActive || !this.animationAuthorityReady || !this.visualAdapter?.beginRagdoll?.()) return false;
+    this.ragdollForced ||= forced;
+    this.ragdollActive = true;
+    this.bodies.forEach(({ body }) => {
+      body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+      body.setGravityScale(1, true);
+      body.wakeUp();
+    });
+    if (this.lastReaction?.direction) {
+      const entry = this.bodies.get(HUMANOID_ANATOMY_REGIONS.find((region) => region.id === this.lastReaction.regionId)?.bodyId ?? this.lastReaction.regionId);
+      entry?.body.applyImpulseAtPoint(this.lastReaction.direction.clone().multiplyScalar(Math.min(1.1, 0.24 + this.lastReaction.severity * 0.5)), this.lastReaction.point, true);
+    }
+    return true;
+  }
+
+  forceRagdoll() {
+    this.ragdollForced = true;
+    this.collapseFamily ??= 'general_trauma';
+    this.collapseReason ??= 'combat-lab-forced-ragdoll';
+    if (this.lifeState === 'alive') this.lifeState = 'incapacitated';
+    return this.activateRagdoll({ forced: true });
+  }
+
   getBodyWorldPosition(bodyId) {
     const translation = this.bodies.get(bodyId)?.body?.translation?.();
     return translation ? new THREE.Vector3(translation.x, translation.y, translation.z) : new THREE.Vector3();
+  }
+
+  updatePlayerCollisionBlocker(blocker = {}) {
+    const pelvis = this.getBodyWorldPosition('pelvis');
+    const upper = this.getBodyWorldPosition(this.ragdollActive ? 'head' : 'upper_chest');
+    blocker.id ??= 'combat-humanoid-player-blocker';
+    blocker.type = 'combatActor';
+    blocker.blockerShape = 'capsule';
+    blocker.from ??= { x: pelvis.x, z: pelvis.z };
+    blocker.to ??= { x: upper.x, z: upper.z };
+    blocker.from.x = pelvis.x;
+    blocker.from.z = pelvis.z;
+    blocker.to.x = upper.x;
+    blocker.to.z = upper.z;
+    blocker.radius = this.ragdollActive ? 0.2 : 0.29;
+    blocker.height = this.ragdollActive ? 0.5 : 1.82;
+    blocker.userData = { actor: this, dynamic: true, ragdoll: this.ragdollActive };
+    return blocker;
   }
 
   triggerReflex(regionId, intensity, direction, details = {}) {
@@ -422,6 +460,7 @@ export class HumanoidCombatActor {
   }
 
   recoverReactivePosture(immediate = false) {
+    if (this.ragdollActive) return;
     this.lifeState = 'alive';
     this.collapseFamily = null;
     this.collapseReason = null;
@@ -499,7 +538,7 @@ export class HumanoidCombatActor {
   }
 
   afterPhysics(alpha = 1) {
-    if (!this.animationAuthorityReady) this.bodies.forEach((entry) => {
+    if (!this.animationAuthorityReady || this.ragdollActive) this.bodies.forEach((entry) => {
       const translation = entry.body.translation();
       const rotation = entry.body.rotation();
       tmpPosition.set(translation.x, translation.y, translation.z);
@@ -512,7 +551,8 @@ export class HumanoidCombatActor {
       entry.previousQuaternion.copy(tmpQuaternion);
     });
     this.updateVesselDebug();
-    if (!this.visualProfile.animationAuthoritative) this.visualAdapter?.update();
+    if (this.ragdollActive) this.visualAdapter?.updateRagdoll?.();
+    else if (!this.visualProfile.animationAuthoritative) this.visualAdapter?.update();
     this.woundSystem.update(1 / 60);
     this.updateBodyImpactFeedback();
     const speeds = [...this.bodies.values()].map((entry) => { const v = entry.body.linvel(); return Math.hypot(v.x, v.y, v.z); });
@@ -586,6 +626,8 @@ export class HumanoidCombatActor {
       collapseFamily: this.collapseFamily,
       collapseReason: this.collapseReason,
       corpseSleeping: this.corpseSleeping,
+      ragdollActive: this.ragdollActive,
+      ragdollForced: this.ragdollForced,
       physiology: this.physiology.getDiagnostics(),
       wounds: this.woundSystem.getDiagnostics(),
       reflex: { regionId: this.reflex.regionId, intensity: this.reflex.intensity, time: this.reflex.time },
@@ -631,6 +673,8 @@ export class HumanoidCombatActor {
     this.consciousnessImpairment = 0;
     this.motorStrength = 1;
     this.lifeState = 'alive';
+    this.ragdollActive = false;
+    this.ragdollForced = false;
     this.lastReaction = null;
     this.settledSeconds = 0;
     this.dyingElapsed = 0;

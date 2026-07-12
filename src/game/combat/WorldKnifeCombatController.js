@@ -11,6 +11,17 @@ const tmpVector = new THREE.Vector3();
 const tmpVectorB = new THREE.Vector3();
 const tmpQuaternion = new THREE.Quaternion();
 
+export function resolveSlashLeadingPart(localMotion) {
+  const lateralLead = Math.abs(localMotion.x);
+  const flatLead = Math.abs(localMotion.y);
+  return flatLead > lateralLead * 0.92 ? 'flat' : lateralLead > 0.12 ? 'edge' : 'flat';
+}
+
+export function computeBladeSurfaceCorrection(edgeMotion, normal, maximumCorrection = 0.06) {
+  const inwardTravel = Math.max(0, -edgeMotion.dot(normal));
+  return inwardTravel > 0 ? normal.clone().multiplyScalar(Math.min(maximumCorrection, inwardTravel + 0.004)) : new THREE.Vector3();
+}
+
 function setLine(line, start, end) {
   const array = line.geometry.attributes.position.array;
   array[0] = start.x; array[1] = start.y; array[2] = start.z;
@@ -472,15 +483,13 @@ export class WorldKnifeCombatController {
     const direction = this.offensiveVelocity.lengthSq() > 1e-8 ? this.offensiveVelocity.clone().normalize() : edgeMotion.clone().normalize();
     const localMotion = direction.clone().applyQuaternion(this.actualQuaternion.clone().invert());
     const lateralLead = Math.abs(localMotion.x);
-    const flatLead = Math.abs(localMotion.y);
-    // The authored cutting edge occupies local -X. The leading blade part is
-    // therefore determined from real local travel, not arbitrary mesh names or
-    // a reticle ray. Reverse travel correctly presents the spine.
-    const part = flatLead > lateralLead * 0.72 ? 'flat' : localMotion.x < -0.18 ? 'edge' : localMotion.x > 0.18 ? 'spine' : 'flat';
+    // Both lateral draw directions are accepted at mobile gesture scale. Flat-led
+    // motion still binds instead of cutting, so camera motion cannot fake a slash.
+    const part = resolveSlashLeadingPart(localMotion);
     const surfacePressure = Math.max(0, -direction.dot(normal));
     const forwardPressure = Math.max(0, -localMotion.z) * 0.65;
-    const pressure = Math.max(surfacePressure, forwardPressure);
-    const edgeAlignment = part === 'edge' ? THREE.MathUtils.clamp(-localMotion.x, 0, 1) : part === 'spine' ? THREE.MathUtils.clamp(localMotion.x, 0, 1) : 0;
+    const pressure = Math.max(surfacePressure, forwardPressure, part === 'edge' ? lateralLead * 0.16 : 0);
+    const edgeAlignment = part === 'edge' ? THREE.MathUtils.clamp(lateralLead, 0, 1) : 0;
     const stepTravel = Math.min(SLASH_CONFIG.maximumStepLength, edgeMotion.length());
     const speed = this.offensiveVelocity.length();
     const sameOwner = this.activeSlash?.bodyId === semanticHit.bodyId && this.activeSlash?.regionId === semanticHit.regionId && this.activeSlash?.part === part;
@@ -503,6 +512,7 @@ export class WorldKnifeCombatController {
     this.reason = `${part}:${classification.state}`;
     this.lastContactPart = part;
     if (classification.cuts) {
+      this.actualGrip.add(computeBladeSurfaceCorrection(edgeMotion, normal));
       const wound = this.actor.applySlashWound({ hit: semanticHit, startPoint: slash.startPoint, endPoint: point, surfaceNormal: normal, cutDirection: slash.direction, depth: classification.depth, cutLength: slash.woundId ? stepTravel : classification.physicalTravel, severity: classification.severity, classification: classification.state, woundId: slash.woundId });
       if (wound && !slash.woundId) {
         slash.woundId = wound.id;

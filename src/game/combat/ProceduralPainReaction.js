@@ -119,8 +119,10 @@ export class ProceduralPainReactionController {
     this.currentRotations = new Map();
     this.affectedBones = [];
     this.embeddedTension = 0;
+    this.embeddedTensionTarget = 0;
     this.embeddedRegion = null;
     this.embeddedDirection = new THREE.Vector3();
+    this.embeddedDirectionTarget = new THREE.Vector3();
     this.tmpQuaternion = new THREE.Quaternion();
     this.tmpEuler = new THREE.Euler(0, 0, 0, 'XYZ');
     this.rootYawQuaternion = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), baseYaw);
@@ -147,13 +149,14 @@ export class ProceduralPainReactionController {
 
   setEmbeddedTension({ regionId, depth = 0, worldDirection } = {}) {
     this.embeddedRegion = regionId ?? null;
-    this.embeddedTension = THREE.MathUtils.clamp(depth / 0.16, 0, 1);
-    if (worldDirection) this.embeddedDirection.copy(worldDirection).applyQuaternion(this.rootYawQuaternion.clone().invert()).normalize();
+    this.embeddedTensionTarget = THREE.MathUtils.clamp(depth / 0.16, 0, 1);
+    if (worldDirection) this.embeddedDirectionTarget.copy(worldDirection).applyQuaternion(this.rootYawQuaternion.clone().invert()).normalize();
   }
 
   releaseEmbedded({ regionId, severity = 0.2, worldDirection, actorState } = {}) {
-    const shouldReact = this.embeddedTension > 0.12;
+    const shouldReact = Math.max(this.embeddedTension, this.embeddedTensionTarget) > 0.12;
     this.embeddedTension = 0;
+    this.embeddedTensionTarget = 0;
     this.embeddedRegion = null;
     return shouldReact ? this.trigger({ regionId, severity: Math.min(0.55, severity * 0.45), worldDirection, actorState }) : false;
   }
@@ -188,6 +191,9 @@ export class ProceduralPainReactionController {
   }
 
   applyAfterMixer(dt) {
+    const tensionResponse = 1 - Math.exp(-Math.max(0, dt) * 9);
+    this.embeddedTension = THREE.MathUtils.lerp(this.embeddedTension, this.embeddedTensionTarget, tensionResponse);
+    if (this.embeddedDirectionTarget.lengthSq() > 1e-8) this.embeddedDirection.lerp(this.embeddedDirectionTarget, tensionResponse).normalize();
     const sample = this.sample(dt);
     this.currentRotations.clear();
     const activePose = this.active?.pose;
@@ -237,7 +243,10 @@ export class ProceduralPainReactionController {
     this.currentRotations.clear();
     this.affectedBones = [];
     this.embeddedTension = 0;
+    this.embeddedTensionTarget = 0;
     this.embeddedRegion = null;
+    this.embeddedDirection.set(0, 0, 0);
+    this.embeddedDirectionTarget.set(0, 0, 0);
     this.presentationRoot?.position.copy(this.basePosition);
     if (this.presentationRoot) this.presentationRoot.rotation.set(0, this.baseYaw, 0);
   }

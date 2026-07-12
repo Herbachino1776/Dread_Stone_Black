@@ -4,12 +4,13 @@ import * as THREE from 'three';
 import { COMBAT_REQUIRED_REGION_IDS, HUMANOID_ANATOMY_REGIONS, HUMANOID_BODY_CONFIG, HUMANOID_JOINT_CONFIG, KNIFE_COMBAT_CONFIG, validateCombatConfiguration } from '../src/game/combat/CombatConfig.js';
 import { advancePenetrationDepth, clampWorkspacePoint, classifyKnifeContact, classifySlashContact, computeWorldThrust, deriveBladeTip, extendSlashLength, normalizedBladeForward, visibleCollisionTransformsWithinTolerance } from '../src/game/combat/CombatMath.js';
 import { CombatPhysicsWorld, initializeCombatPhysics } from '../src/game/combat/CombatPhysicsWorld.js';
+import { CollisionWorld } from '../src/game/Collision.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { CURRENT_HUMANOID_PROFILE, MODEL_IDLE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
-import { WorldKnifeCombatController } from '../src/game/combat/WorldKnifeCombatController.js';
+import { WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveSlashLeadingPart } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
 import { applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
@@ -251,6 +252,14 @@ test('reaction controller preserves mixer-authored scales, clamps repeated hits,
   controller.reset();
   assert.equal(controller.getDiagnostics().phase, 'idle');
   assert.deepEqual(root.position.toArray(), [0, 0, 0]);
+  controller.setEmbeddedTension({ regionId: 'upper_chest', depth: 0.12, worldDirection: new THREE.Vector3(0, 0, -1) });
+  bones.forEach((bone) => bone.quaternion.identity());
+  controller.applyAfterMixer(1 / 60);
+  const firstTension = controller.embeddedTension;
+  assert.ok(firstTension > 0 && firstTension < controller.embeddedTensionTarget, 'embedded depth eases into a bounded hold instead of snapping');
+  bones.forEach((bone) => bone.quaternion.identity());
+  controller.applyAfterMixer(1 / 60);
+  assert.ok(controller.embeddedTension > firstTension && controller.embeddedTension < controller.embeddedTensionTarget);
 });
 
 test('puncture bindings store valid barycentrics and follow animated and procedural skinned movement', () => {
@@ -313,6 +322,41 @@ test('wound and reaction lifecycle keeps one bounded pool and disposes generated
   physics.dispose();
 });
 
+test('animation-authoritative bodies become dynamic only for bounded ragdoll collapse and reset to kinematic', async () => {
+  await initializeCombatPhysics();
+  const physics = new CombatPhysicsWorld();
+  const actor = new HumanoidCombatActor({ physics, scene: new THREE.Scene(), visualProfile: MODEL_IDLE_COMBAT_PROFILE });
+  actor.animationAuthorityReady = true;
+  actor.visualAdapter = { beginRagdoll: () => true, updateRagdoll() {}, reset() {}, dispose() {} };
+  assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 2));
+  assert.equal(actor.activateRagdoll({ forced: true }), true);
+  assert.equal(actor.ragdollActive, true);
+  assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 0));
+  actor.reset();
+  assert.equal(actor.ragdollActive, false);
+  assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 2));
+  actor.dispose();
+  physics.dispose();
+});
+
+test('dynamic humanoid blocker prevents player pass-through and follows collapsed body footprint', async () => {
+  const collision = new CollisionWorld({ walkableRects: [{ minX: -5, maxX: 5, minZ: -5, maxZ: 5 }], blockerRects: [], playerRadius: 0.35 });
+  const blocker = { id: 'test-humanoid', type: 'combatActor', blockerShape: 'capsule', from: { x: 0, z: 0 }, to: { x: 0, z: 0 }, radius: 0.29 };
+  collision.addBlocker(blocker);
+  const start = new THREE.Vector3(0, 1.55, 1);
+  const stopped = collision.moveWithCollision(start, new THREE.Vector3(0, 0, -1.4));
+  assert.ok(stopped.z > 0.5, 'axis-separated substeps stop the player before entering the humanoid capsule');
+  blocker.from.x = 2;
+  blocker.to.x = 2.8;
+  blocker.from.z = 0;
+  blocker.to.z = 0;
+  blocker.radius = 0.2;
+  const clear = collision.moveWithCollision(start, new THREE.Vector3(0, 0, -1.4));
+  assert.ok(clear.z < 0, 'moving ragdoll footprint does not leave an invisible standing blocker');
+  collision.removeBlocker(blocker);
+  assert.equal(collision.blockerRects.length, 0);
+});
+
 test('contact classifier distinguishes blunt, edge, glance, tip, failure, and puncture', () => {
   assert.equal(classifyKnifeContact({ part: 'pommel', speed: 2, alignment: 1 }).state, 'blunt_contact');
   assert.equal(classifyKnifeContact({ part: 'edge', speed: 2, alignment: 0 }).state, 'edge_contact');
@@ -332,6 +376,17 @@ test('edge-aware slash classification rejects the flat, spine, jitter, and low p
   assert.equal(classifySlashContact({ ...valid, part: 'edge', edgeAlignment: 0.1 }).state, 'scraping_contact');
   assert.equal(extendSlashLength(0.1, 2), 0.1 + SLASH_CONFIG.maximumStepLength);
   assert.ok(extendSlashLength(WOUND_CONFIG.maximumCutLength, 1) <= WOUND_CONFIG.maximumCutLength);
+});
+
+test('mobile slash gestures accept either lateral direction and stop inward blade tunneling', () => {
+  assert.equal(resolveSlashLeadingPart(new THREE.Vector3(-1, 0.1, 0)), 'edge');
+  assert.equal(resolveSlashLeadingPart(new THREE.Vector3(1, 0.1, 0)), 'edge');
+  assert.equal(resolveSlashLeadingPart(new THREE.Vector3(0.08, 1, 0)), 'flat');
+  assert.ok(SLASH_CONFIG.minimumContactSeconds <= 1 / 60);
+  assert.ok(SLASH_CONFIG.minimumCutTravel <= 0.012);
+  const correction = computeBladeSurfaceCorrection(new THREE.Vector3(0, 0, -0.08), new THREE.Vector3(0, 0, 1));
+  assert.ok(correction.z > 0 && correction.length() <= 0.060001, 'inward edge travel is projected back toward the contacted skin');
+  assert.equal(computeBladeSurfaceCorrection(new THREE.Vector3(0, 0, 0.08), new THREE.Vector3(0, 0, 1)).length(), 0, 'motion away from skin is unrestricted');
 });
 
 test('stage 2 tuning validates all vessel owners and bounded effect pools', () => {
@@ -562,7 +617,9 @@ test('model_idle authoritative profile is independent and disables physics-to-bo
 test('fresh wound materials use the brighter non-emissive blood palette', async () => {
   const { actor, physics } = await createActor();
   assert.equal(actor.woundSystem.materials.puncture.color.getHex(), BLOOD_COLOR_PALETTE.fresh);
-  assert.equal(actor.woundSystem.materials.cut.color.getHex(), BLOOD_COLOR_PALETTE.fresh);
+  assert.equal(actor.woundSystem.materials.cut.color.getHex(), BLOOD_COLOR_PALETTE.slashArterial);
+  assert.equal(actor.woundSystem.materials.deepCut.color.getHex(), BLOOD_COLOR_PALETTE.slashArterial);
+  assert.equal(actor.woundSystem.materials.arterialCut.color.getHex(), BLOOD_COLOR_PALETTE.slashArterial);
   assert.equal(actor.woundSystem.materials.deep.color.getHex(), BLOOD_COLOR_PALETTE.deep);
   assert.equal(actor.woundSystem.materials.arterial.color.getHex(), BLOOD_COLOR_PALETTE.arterial);
   Object.values(actor.woundSystem.materials).forEach((material) => {

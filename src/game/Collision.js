@@ -41,6 +41,11 @@ function circleIntersectsCircle(point, radius, blocker) {
 }
 
 function circleIntersectsCapsule(point, radius, blocker) {
+  if (blocker.from && blocker.to) {
+    const dx = blocker.to.x - blocker.from.x;
+    const dz = blocker.to.z - blocker.from.z;
+    if (dx * dx + dz * dz <= 0.0001) return circleIntersectsCircle(point, radius, { center: blocker.from, radius: blocker.radius });
+  }
   return circleIntersectsSegment(point, radius, { ...blocker, thickness: (blocker.radius ?? 0) * 2 });
 }
 
@@ -106,6 +111,11 @@ export class CollisionWorld {
 
   removeBlocker(blockerRect) {
     this.blockerRects = this.blockerRects.filter((rect) => rect !== blockerRect);
+  }
+
+  addBlocker(blockerRect) {
+    if (blockerRect && !this.blockerRects.includes(blockerRect)) this.blockerRects = [...this.blockerRects, blockerRect];
+    return blockerRect;
   }
 
   sampleWalkableY(x, z, fallbackY = this.defaultFloorY) {

@@ -10,7 +10,7 @@ assert.equal(result.bodyCount, 18);
 assert.equal(result.jointCount, 17);
 assert.ok(result.regionCount >= 20);
 
-const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, reactionSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, packageSource, docsSource, diagnosticDocsSource, glbBuffer, modelIdleGlbBuffer] = await Promise.all([
+const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, reactionSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, diagnosticDocsSource, glbBuffer, modelIdleGlbBuffer] = await Promise.all([
   readFile(new URL('../src/game/Game.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/SceneSessionHost.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/FirstPersonViewmodelHost.js', import.meta.url), 'utf8'),
@@ -32,6 +32,7 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmod
   readFile(new URL('../src/game/combat/KnifeControlState.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatConfig.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatStage2Config.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/Collision.js', import.meta.url), 'utf8'),
   readFile(new URL('../package.json', import.meta.url), 'utf8'),
   readFile(new URL('../docs/architecture/PHYSICAL_HUMANOID_COMBAT_FOUNDATION.md', import.meta.url), 'utf8').catch(() => ''),
   readFile(new URL('../docs/model_idle_ab_diagnostic.md', import.meta.url), 'utf8'),
@@ -135,6 +136,16 @@ assert.match(reactionSource, /pain_hold/);
 assert.match(reactionSource, /recovery/);
 assert.match(reactionSource, /maximumBoneAngle/);
 assert.match(reactionSource, /embeddedTension/);
+assert.match(reactionSource, /embeddedTensionTarget/);
+assert.doesNotMatch(actorSource, /throttled_depth_escalation|hardReactionTriggered/);
+assert.match(adapterSource, /beginRagdoll/);
+assert.match(adapterSource, /updateRagdoll/);
+assert.match(actorSource, /setBodyType\(RAPIER\.RigidBodyType\.Dynamic/);
+assert.match(actorSource, /!this\.ragdollActive\) this\.visualAdapter\?\.updateAnimationAuthority/);
+assert.match(knifeSource, /resolveSlashLeadingPart/);
+assert.match(knifeSource, /computeBladeSurfaceCorrection/);
+assert.match(collisionSource, /addBlocker/);
+assert.match(collisionSource, /circleIntersectsCapsule/);
 assert.match(adapterSource, /if \(this\.profile\.animationAuthoritative\) \{/);
 assert.match(adapterSource, /this\.initializeAnimationAuthoritative/);
 assert.match(adapterSource, /this\.actor\.syncAnimationProxyBodies/);
@@ -159,6 +170,10 @@ assert.match(bloodSource, /maximumDecals/);
 assert.match(stage2ConfigSource, /fresh: 0x981218/);
 assert.match(stage2ConfigSource, /spray: 0xb31b22/);
 assert.match(stage2ConfigSource, /arterial: 0xc3242b/);
+assert.match(stage2ConfigSource, /slashArterial: 0xff4050/);
+assert.match(folsomEncounterSource, /folsom-model-idle-combat-player-blocker/);
+assert.match(combatLabPanelSource, /RAGDOLL Z/);
+assert.match(combatLabPanelSource, /CUT TEST 6/);
 assert.match(stage2ConfigSource, /dried: 0x2b0305/);
 assert.doesNotMatch(woundSource, /emissive\s*:/);
 assert.doesNotMatch(bloodSource, /emissive\s*:/);

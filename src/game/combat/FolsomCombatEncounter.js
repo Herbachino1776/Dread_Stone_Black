@@ -32,6 +32,8 @@ export class FolsomCombatEncounter {
     this.physics.createFixedBox({ position: { x: this.spawnPosition.x, y: this.groundY - 0.1, z: this.spawnPosition.z }, halfExtents: { x: 7, y: 0.1, z: 7 }, userData: { type: 'folsom-combat-courtyard-ground' } });
     this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw, visualProfile: this.modelProfile, mortalityMode: resolveCombatMortalityMode(), eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
     this.actor.root.name = 'folsom-model-idle-combat-subject';
+    this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: 'folsom-model-idle-combat-player-blocker' });
+    this.dungeon.collision?.addBlocker?.(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: this.groundY, wallX: null });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: this.groundY, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
   }
@@ -78,12 +80,14 @@ export class FolsomCombatEncounter {
       this.bloodEffects.update(dt);
     });
     this.actor.afterPhysics(this.physics.interpolationAlpha);
+    this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha);
   }
 
   reset() {
     this.weaponController?.cancel?.('encounter-reset');
     this.actor.reset();
+    this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.bloodEffects.clear();
     this.feedbackSystem.reset();
     this.weaponController?.reset?.();
@@ -97,6 +101,7 @@ export class FolsomCombatEncounter {
     if (this.disposed) return;
     this.disposed = true;
     this.weaponController?.cancel?.('encounter-dispose');
+    this.dungeon.collision?.removeBlocker?.(this.playerBlocker);
     this.bloodEffects.dispose();
     this.feedbackSystem.dispose();
     this.actor.dispose();

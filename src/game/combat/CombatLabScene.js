@@ -24,7 +24,7 @@ export class CombatLabScene {
     this.scene.name = 'physical-humanoid-combat-laboratory';
     this.scene.background = new THREE.Color(0x879098);
     this.scene.fog = new THREE.Fog(0x879098, 18, 48);
-    this.playerSpawn = { spawnPosition: new THREE.Vector3(0, 1.55, -1.98), spawnYaw: Math.PI };
+    this.playerSpawn = { spawnPosition: new THREE.Vector3(0, 1.55, -2.45), spawnYaw: Math.PI };
     this.collision = new CollisionWorld({
       walkableRects: [{ minX: -7.8, maxX: 7.8, minZ: -9.8, maxZ: 5.8 }],
       blockerRects: [{ minX: -3.05, maxX: -2.65, minZ: -6.7, maxZ: -1.1, type: 'combatLabWall' }],
@@ -40,6 +40,8 @@ export class CombatLabScene {
     this.disposed = false;
     this.buildEnvironment();
     this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, visualProfile: MODEL_IDLE_COMBAT_PROFILE, mortalityMode: resolveCombatMortalityMode(), eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+    this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: 'combat-lab-humanoid-player-blocker' });
+    this.collision.addBlocker(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: 0, wallX: -2.65 });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: 0, wallX: -2.65, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
   }
@@ -122,6 +124,7 @@ export class CombatLabScene {
       },
     );
     this.actor.afterPhysics(this.physics.interpolationAlpha);
+    this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha);
   }
 
@@ -157,10 +160,28 @@ export class CombatLabScene {
     this.actor.prepareFrame(1 / 60);
     this.physics.stepSingle((dt) => { this.feedbackSystem.update(dt); this.weaponController?.beforePhysics?.(dt); this.actor.beforePhysics(dt, this.player?.position); }, (dt) => { this.weaponController?.afterPhysicsStep?.(dt); this.bloodEffects.update(dt); });
     this.actor.afterPhysics(0);
+    this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.weaponController?.afterPhysics?.(0);
   }
 
   clearWounds() { this.actor.woundSystem.clear(); }
+  createDebugSlash() {
+    const bodyId = 'upper_chest';
+    const body = this.actor.bodies.get(bodyId)?.body;
+    const collider = this.actor.colliders.get(bodyId);
+    if (!body || !collider) return null;
+    const center = this.actor.getBodyWorldPosition(bodyId);
+    const towardPlayer = (this.player?.position?.clone?.() ?? new THREE.Vector3(0, 1.4, -2.2)).sub(center);
+    towardPlayer.y = 0;
+    if (towardPlayer.lengthSq() < 1e-8) towardPlayer.set(0, 0, 1);
+    towardPlayer.normalize();
+    const midpoint = center.clone().addScaledVector(towardPlayer, 0.13);
+    const startPoint = midpoint.clone().add(new THREE.Vector3(-0.1, 0.025, 0));
+    const endPoint = midpoint.clone().add(new THREE.Vector3(0.1, -0.025, 0));
+    const hit = this.actor.resolveHit(collider, midpoint);
+    if (!hit) return null;
+    return this.actor.applySlashWound({ hit, startPoint, endPoint, surfaceNormal: towardPlayer, cutDirection: endPoint.clone().sub(startPoint).normalize(), depth: 0.035, cutLength: startPoint.distanceTo(endPoint), severity: 0.78, classification: 'deep_slash' });
+  }
   clearBlood() { this.bloodEffects.clear(); }
   toggleMortalityMode() {
     const next = this.actor.mortalityMode === 'normal' ? 'immortal_reactive' : 'normal';
@@ -179,6 +200,7 @@ export class CombatLabScene {
   resetActor() {
     this.weaponController?.cancel?.('lab-reset');
     this.actor.reset();
+    this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.bloodEffects.clear();
     this.feedbackSystem.reset();
     this.weaponController?.reset?.();
@@ -192,6 +214,7 @@ export class CombatLabScene {
     if (this.disposed) return;
     this.disposed = true;
     this.weaponController?.cancel?.('scene-dispose');
+    this.collision.removeBlocker(this.playerBlocker);
     this.bloodEffects.dispose();
     this.feedbackSystem.dispose();
     this.actor.dispose();

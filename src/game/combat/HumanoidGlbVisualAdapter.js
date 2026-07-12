@@ -97,8 +97,10 @@ export class HumanoidGlbVisualAdapter {
     this.skeletons = [];
     this.bones = new Map();
     this.bindings = [];
+    this.ragdollBindings = [];
     this.mixer = null;
     this.idleAction = null;
+    this.idlePlaybackScale = 1;
     this.reactionController = null;
     this.reactionBones = new Map();
     this.mixerAuthoredScales = new Map();
@@ -236,7 +238,9 @@ export class HumanoidGlbVisualAdapter {
     if (!this.mixer || !this.presentationRoot) return;
     const dt = Math.max(0, deltaSeconds);
     const diagnostics = this.reactionController?.getDiagnostics?.();
-    this.mixer.timeScale = diagnostics?.phase === 'impact' && diagnostics.severity > 0.65 ? 0.62 : diagnostics?.phase === 'pain_hold' ? 0.78 : 1;
+    const targetPlaybackScale = diagnostics?.phase === 'impact' && diagnostics.severity > 0.65 ? 0.7 : diagnostics?.phase === 'pain_hold' ? 0.84 : 1;
+    this.idlePlaybackScale = THREE.MathUtils.lerp(this.idlePlaybackScale, targetPlaybackScale, 1 - Math.exp(-dt * 10));
+    this.mixer.timeScale = this.idlePlaybackScale;
     this.mixer.update(dt);
     this.mixerAuthoredScales.clear();
     this.reactionBones.forEach((bone, id) => this.mixerAuthoredScales.set(id, bone.scale.clone()));
@@ -244,6 +248,54 @@ export class HumanoidGlbVisualAdapter {
     this.presentationRoot.updateMatrixWorld(true);
     this.skeletons.forEach((skeleton) => skeleton.update());
     this.actor.syncAnimationProxyBodies(this);
+  }
+
+  beginRagdoll() {
+    // Ordinary hits never enter this path. The mixer remains authoritative until
+    // the actor has explicitly transitioned into a terminal/collapse state.
+    if (!this.scene || !this.presentationRoot || this.ragdollBindings.length) return this.ragdollBindings.length > 0;
+    this.reactionController?.reset?.();
+    this.mixer.timeScale = 0;
+    this.presentationRoot.position.copy(this.basePresentationPosition);
+    this.presentationRoot.rotation.set(0, this.basePresentationYaw, 0);
+    this.presentationRoot.updateMatrixWorld(true);
+    this.scene.updateMatrixWorld(true);
+    const modelRootWorld = this.scene.matrixWorld.clone();
+    this.ragdollBindings = [...this.reactionBones].map(([bodyId, bone]) => {
+      const bodyEntry = this.actor.bodies.get(bodyId);
+      if (!bodyEntry) return null;
+      const translation = bodyEntry.body.translation();
+      const rotation = bodyEntry.body.rotation();
+      const bodyWorld = new THREE.Matrix4().compose(
+        new THREE.Vector3(translation.x, translation.y, translation.z),
+        new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w),
+        unitScale,
+      );
+      const offset = captureModelSpaceBoneBinding({ modelRootWorld, bodyBindWorld: bodyWorld, boneBindWorld: bone.matrixWorld });
+      return { bodyId, bone, bodyEntry, offset, bindLocalScale: bone.scale.clone() };
+    }).filter(Boolean).sort((a, b) => hierarchyDepth(a.bone) - hierarchyDepth(b.bone));
+    return this.ragdollBindings.length > 0;
+  }
+
+  updateRagdoll() {
+    if (!this.ragdollBindings.length || !this.scene) return;
+    this.parent.updateMatrixWorld(true);
+    const modelRootWorld = this.scene.matrixWorld.clone();
+    for (const binding of this.ragdollBindings) {
+      const translation = binding.bodyEntry.body.translation();
+      const rotation = binding.bodyEntry.body.rotation();
+      const bodyWorld = new THREE.Matrix4().compose(
+        new THREE.Vector3(translation.x, translation.y, translation.z),
+        new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w),
+        unitScale,
+      );
+      binding.bone.parent?.updateMatrixWorld(true);
+      const local = solveModelSpaceBoneLocal({ modelRootWorld, parentWorld: binding.bone.parent?.matrixWorld ?? modelRootWorld, bodyWorld, bindOffset: binding.offset });
+      applySolvedBoneLocalTransform(binding.bone, local, binding.bindLocalScale);
+      binding.bone.updateMatrixWorld(true);
+    }
+    this.scene.updateMatrixWorld(true);
+    this.skeletons.forEach((skeleton) => skeleton.update());
   }
 
   triggerPainReaction(contact) {
@@ -304,6 +356,8 @@ export class HumanoidGlbVisualAdapter {
   reset() {
     if (this.profile.animationAuthoritative) {
       this.reactionController?.reset?.();
+      this.ragdollBindings = [];
+      this.idlePlaybackScale = 1;
       this.idleAction?.reset().play();
       this.mixer?.setTime(0);
       this.presentationRoot?.position.copy(this.basePresentationPosition);
@@ -320,7 +374,8 @@ export class HumanoidGlbVisualAdapter {
     const rawSize = this.rawVisibleBounds?.getSize(new THREE.Vector3());
     const normalizedSize = this.normalizedVisibleBounds?.getSize(new THREE.Vector3());
     const scaleChangedBones = [...this.mixerAuthoredScales].filter(([id, scale]) => scale.distanceTo(this.reactionBones.get(id)?.scale ?? scale) > 1e-8).map(([id]) => id);
-    return { path: this.profile.assetPath, profileName: this.profile.name, animationAuthoritative: this.profile.animationAuthoritative === true, loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, mixerCount: this.mixer ? 1 : 0, reactionControllerCount: this.reactionController ? 1 : 0, idleClip: this.idleAction?.getClip?.().name ?? null, rawMeasuredVisibleHeight: rawSize?.y ?? null, normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight, normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null, groundY: this.actor.visualRootPosition.y, groundClearance: this.profile.groundClearance ?? null, height: this.profile.targetHeight, scale: this.uniformScale ?? getHumanoidProfileScale(this.profile), scaleChangedBones, reaction: this.reactionController?.getDiagnostics?.() ?? null };
+    const ragdollBonePositions = Object.fromEntries(['pelvis', 'upper_chest', 'head'].map((id) => [id, this.reactionBones.get(id)?.getWorldPosition(new THREE.Vector3()).toArray().map((value) => Number(value.toFixed(2))) ?? null]));
+    return { path: this.profile.assetPath, profileName: this.profile.name, animationAuthoritative: this.profile.animationAuthoritative === true, loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, ragdollBindingCount: this.ragdollBindings.length, ragdollBonePositions, mixerCount: this.mixer ? 1 : 0, reactionControllerCount: this.reactionController ? 1 : 0, idleClip: this.idleAction?.getClip?.().name ?? null, rawMeasuredVisibleHeight: rawSize?.y ?? null, normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight, normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null, groundY: this.actor.visualRootPosition.y, groundClearance: this.profile.groundClearance ?? null, height: this.profile.targetHeight, scale: this.uniformScale ?? getHumanoidProfileScale(this.profile), scaleChangedBones, reaction: this.reactionController?.getDiagnostics?.() ?? null };
   }
 
   dispose() {
@@ -334,11 +389,13 @@ export class HumanoidGlbVisualAdapter {
     this.presentationRoot = null;
     this.mixer = null;
     this.idleAction = null;
+    this.idlePlaybackScale = 1;
     this.reactionController?.reset?.();
     this.reactionController = null;
     this.reactionBones.clear();
     this.mixerAuthoredScales.clear();
     this.bindings = [];
+    this.ragdollBindings = [];
     this.bones.clear();
     this.skinnedMeshes = [];
     this.skeletons = [];
