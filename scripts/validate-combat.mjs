@@ -20,6 +20,7 @@ assert.match(sceneHostSource, /combatLab/);
 assert.match(gameSource, /combatLabEnabled/);
 assert.match(gameSource, /if \(this\.combatLabEnabled\) return;/);
 assert.match(knifeSource, /castWeaponTip/);
+assert.match(knifeSource, /resolveSweptEdgeContact/);
 assert.match(knifeSource, /desiredGrip/);
 assert.match(knifeSource, /actualGrip/);
 assert.match(knifeSource, /penetrationDepth/);

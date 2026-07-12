@@ -53,6 +53,8 @@ export class WorldKnifeCombatController {
     this.desiredTip = new THREE.Vector3();
     this.edgeStart = new THREE.Vector3();
     this.edgeEnd = new THREE.Vector3();
+    this.previousEdgeStart = new THREE.Vector3();
+    this.previousEdgeEnd = new THREE.Vector3();
     this.entry = null;
     this.penetrationDepth = 0;
     this.maximumDepthReached = 0;
@@ -266,6 +268,8 @@ export class WorldKnifeCombatController {
     this.previousGrip.copy(this.actualGrip);
     this.previousQuaternion.copy(this.actualQuaternion);
     this.previousTip.copy(this.currentTip);
+    this.previousEdgeStart.copy(this.edgeStart);
+    this.previousEdgeEnd.copy(this.edgeEnd);
     if (this.entry) this.solveEmbeddedPose(dt);
     else this.solveFreePose(dt);
     this.updateDerivedPose();
@@ -285,7 +289,10 @@ export class WorldKnifeCombatController {
     if (travel <= 1e-5) return;
     const forward = normalizedBladeForward(this.actualQuaternion, new THREE.Vector3());
     const movementDirection = prospectiveTip.clone().sub(this.previousTip).normalize();
-    if (movementDirection.dot(forward) <= 0.05) return;
+    if (movementDirection.dot(forward) <= 0.05) {
+      this.resolveSweptEdgeContact();
+      return;
+    }
     const hit = this.physics.castWeaponTip(this.previousTip, prospectiveTip, this.config.tipRadius, (collider) => this.actor.colliderRegions.has(collider.handle));
     if (!hit?.collider) return;
     const toi = THREE.MathUtils.clamp(hit.time_of_impact ?? 0, 0, 1);
@@ -310,6 +317,24 @@ export class WorldKnifeCombatController {
       return;
     }
     this.beginPenetration(semanticHit, contactPoint, forward, alignment);
+  }
+
+  resolveSweptEdgeContact() {
+    const prospectiveStart = edgeLocalA.clone().applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+    const prospectiveEnd = edgeLocalB.clone().applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+    const previousMidpoint = this.previousEdgeStart.clone().add(this.previousEdgeEnd).multiplyScalar(0.5);
+    const currentMidpoint = prospectiveStart.clone().add(prospectiveEnd).multiplyScalar(0.5);
+    const edgeMotion = currentMidpoint.clone().sub(previousMidpoint);
+    if (edgeMotion.lengthSq() < 1e-8) return;
+    const hit = this.physics.castWeaponTip(previousMidpoint, currentMidpoint, this.config.bladeWidth * 0.32, (collider) => this.actor.colliderRegions.has(collider.handle));
+    if (!hit?.collider) return;
+    const point = hit.witness1 ? new THREE.Vector3(hit.witness1.x, hit.witness1.y, hit.witness1.z) : currentMidpoint;
+    const semanticHit = this.actor.resolveHit(hit.collider, point);
+    if (!semanticHit) return;
+    this.state = 'edge_contact';
+    this.reason = 'actual-cutting-edge-sweep';
+    const direction = edgeMotion.normalize();
+    semanticHit.body.applyImpulseAtPoint(direction.multiplyScalar(Math.min(0.06, this.lastFrameVelocity * 0.012)), point, true);
   }
 
   beginPenetration(hit, entryPoint, axis, alignment) {
@@ -404,6 +429,10 @@ export class WorldKnifeCombatController {
     this.edgeStart.copy(edgeLocalA).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
     this.edgeEnd.copy(edgeLocalB).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
     if (initial) this.previousTip.copy(this.currentTip);
+    if (initial) {
+      this.previousEdgeStart.copy(this.edgeStart);
+      this.previousEdgeEnd.copy(this.edgeEnd);
+    }
   }
 
   afterPhysics() {

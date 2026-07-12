@@ -60,7 +60,7 @@ The desired hand pose follows the camera, input, and workspace. The achievable p
 
 ## Contact and penetration flow
 
-Rapier sphere shape-casting sweeps the previous tip to the proposed current tip to prevent tunneling. Queries are active only while the existing knife item is owned and equipped. Actor collider handles resolve semantic anatomy. One active entry owns the penetration state, preventing duplicate penetration-start events.
+Rapier sphere shape-casting sweeps the previous tip to the proposed current tip to prevent tunneling. Lateral/non-forward motion separately sweeps the authored cutting-edge midpoint, so edge contact is sourced from the physical edge path rather than inferred from the reticle or tip alone. Queries are active only while the existing knife item is owned and equipped. Actor collider handles resolve semantic anatomy. One active entry owns the penetration state, preventing duplicate penetration-start events.
 
 The state vocabulary is `no_contact`, `blunt_contact`, `edge_contact`, `glancing_contact`, `tip_contact`, `failed_penetration`, `surface_puncture`, `active_penetration`, `embedded`, `bone_contact`, `withdrawal`, and `fully_extracted`. Classification considers the contacting weapon part, actual tip velocity, motion/blade alignment, regional tissue resistance, current depth, region thickness, hard depth, and prior entry ownership.
 
