@@ -5,7 +5,7 @@ import { findOutdoorScene, getOutdoorLightSourceRegistry, OUTDOOR_LIGHT_OWNER } 
 export const TORCH_ITEM_ID = 'torch';
 
 export const TORCH_LIGHTING = Object.freeze({
-  point: Object.freeze({ color: 0xff8a24, intensity: 28, distance: 8, decay: 2 }),
+  point: Object.freeze({ color: 0xffc58f, kelvin: 3200, intensity: 28, distance: 8, decay: 2 }),
 });
 
 export function resolveTorchLightActive({ ownsTorch, equippedOffhandId, lit }) {

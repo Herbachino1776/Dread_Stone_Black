@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { resolveOutdoorSkyWeights, resolveOutdoorTimeOfDay } from './OutdoorWorldClock.js';
+import { OUTDOOR_CYCLE_DURATION_MS, resolveOutdoorSkyWeights, resolveOutdoorTimeOfDay } from './OutdoorWorldClock.js';
 import { updateOutdoorWaterMaterial } from './OutdoorWaterMaterialRuntime.js';
 import { findUnlitOutdoorFoliageMaterials, updateOutdoorFoliageMaterial } from './OutdoorFoliageMaterialRuntime.js';
 import { getOutdoorLightSourceRegistry, OUTDOOR_LIGHT_OWNER } from './OutdoorLightSourceRegistry.js';
@@ -13,6 +13,13 @@ export const OUTDOOR_LIGHTING_PROFILES = Object.freeze({
 
 const smooth = (value) => { const t = THREE.MathUtils.clamp(value, 0, 1); return t * t * (3 - 2 * t); };
 const wrapPhase = (phase) => ((phase % 1) + 1) % 1;
+export const FINAL_DUSK_BLACKOUT_DURATION_SECONDS = 12;
+const FULL_NIGHT_PHASE = 0.4;
+const FINAL_DUSK_BLACKOUT_PHASE_WIDTH = FINAL_DUSK_BLACKOUT_DURATION_SECONDS * 1000 / OUTDOOR_CYCLE_DURATION_MS;
+
+function resolveFinalDuskBlackout(phase) {
+  return smooth((phase - (FULL_NIGHT_PHASE - FINAL_DUSK_BLACKOUT_PHASE_WIDTH)) / FINAL_DUSK_BLACKOUT_PHASE_WIDTH);
+}
 
 function blendProfile(a, b, amount) {
   const result = {};
@@ -44,6 +51,7 @@ export function resolveOutdoorPresentationState(snapshotOrPhase) {
   const timeOfDay = snapshot?.name ? snapshot : { ...snapshot, ...resolveOutdoorTimeOfDay(phase) };
   const skyWeights = Number.isFinite(snapshot?.dayWeight) ? snapshot : resolveOutdoorSkyWeights(phase);
   const profile = resolveOutdoorLightingProfile(phase);
+  const finalDuskBlackout = resolveFinalDuskBlackout(phase);
   const duskWeight = timeOfDay.name === 'dusk' ? Math.sin(Math.PI * timeOfDay.progress) : 0;
   const dawnWeight = timeOfDay.name === 'dawn' ? Math.sin(Math.PI * timeOfDay.progress) : 0;
   const torchNeedLevel = timeOfDay.name === 'night' ? 1
@@ -68,7 +76,8 @@ export function resolveOutdoorPresentationState(snapshotOrPhase) {
     ordinaryEmissiveScale: 1 - torchNeedLevel,
     sunCastsShadow,
     moonCastsShadow: false,
-    environmentIntensity: timeOfDay.name === 'night' ? 0 : 1,
+    finalDuskBlackout,
+    environmentIntensity: 1 - finalDuskBlackout,
     playerNaturalLightIntensity: 0,
     cameraNaturalLightIntensity: 0,
     fallbackExplorationLightEnabled: false,

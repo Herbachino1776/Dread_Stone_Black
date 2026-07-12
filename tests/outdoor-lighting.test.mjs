@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { OutdoorLightingDirector, resolveOutdoorLightingProfile, resolveOutdoorPresentationState, OUTDOOR_LIGHTING_PROFILES } from '../src/game/world-scene/OutdoorLightingDirector.js';
+import { FINAL_DUSK_BLACKOUT_DURATION_SECONDS, OutdoorLightingDirector, resolveOutdoorLightingProfile, resolveOutdoorPresentationState, OUTDOOR_LIGHTING_PROFILES } from '../src/game/world-scene/OutdoorLightingDirector.js';
 import { TORCH_LIGHTING, resolveTorchLightActive } from '../src/game/viewmodels/TorchViewmodel.js';
 import { KEEPERS_LANTERN_LIGHTING, resolveKeepersLanternLightActive } from '../src/game/viewmodels/KeepersLanternViewmodel.js';
 import { resolveOutdoorTorchWarning } from '../src/game/world-scene/OutdoorTorchRequirement.js';
@@ -29,6 +29,11 @@ assert.ok(night.fogNear >= 100 && night.fogFar >= 400);
 assert.ok(night.fog.getHex() <= 0x000101);
 assert.ok(night.outdoorExposure <= noon.outdoorExposure);
 assert.equal(resolveOutdoorPresentationState(0.4).sunIntensity, 0, 'full night sky and zero sunlight begin at the same phase');
+assert.equal(FINAL_DUSK_BLACKOUT_DURATION_SECONDS, 12);
+assert.equal(resolveOutdoorPresentationState(0.3899).environmentIntensity, 1, 'environment remains intact before the final dusk blackout');
+const lateDuskEnvironment = resolveOutdoorPresentationState(0.395).environmentIntensity;
+assert.ok(lateDuskEnvironment > 0 && lateDuskEnvironment < 1, 'environment eases down during the final dusk blackout');
+assert.equal(resolveOutdoorPresentationState(0.4).environmentIntensity, 0, 'environment reaches zero exactly at full night');
 
 const scene = new THREE.Scene();
 const ordinary = new THREE.MeshStandardMaterial({ emissive: 0x332211, emissiveIntensity: 0.4 });
@@ -45,8 +50,10 @@ assert.equal(debug.activeShadowCasters, 0);
 
 assert.equal(TORCH_LIGHTING.point.distance, 8);
 assert.equal(TORCH_LIGHTING.point.decay, 2);
+assert.equal(TORCH_LIGHTING.point.kelvin, 3200);
 assert.equal(KEEPERS_LANTERN_LIGHTING.point.distance, 7);
 assert.equal(KEEPERS_LANTERN_LIGHTING.point.decay, 2);
+assert.equal(KEEPERS_LANTERN_LIGHTING.point.kelvin, 8000);
 assert.equal(resolveTorchLightActive({ ownsTorch: true, equippedOffhandId: 'torch', lit: true }), true);
 assert.equal(resolveTorchLightActive({ ownsTorch: true, equippedOffhandId: null, lit: true }), false);
 assert.equal(resolveTorchLightActive({ ownsTorch: true, equippedOffhandId: 'torch', lit: false }), false);

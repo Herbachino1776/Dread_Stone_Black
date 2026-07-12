@@ -10,7 +10,7 @@ export const KEEPERS_LANTERN_EMITTER = Object.freeze({
 });
 
 export const KEEPERS_LANTERN_LIGHTING = Object.freeze({
-  point: Object.freeze({ color: 0xffb866, intensity: 24, distance: 7, decay: 2 }),
+  point: Object.freeze({ color: 0xbfd8ff, kelvin: 8000, intensity: 24, distance: 7, decay: 2 }),
 });
 
 export function resolveKeepersLanternLightActive({ ownsLantern, equippedOffhandId, lit }) {
@@ -99,7 +99,7 @@ export class KeepersLanternViewmodel {
   buildProceduralLantern() {
     const darkMetal = material(0x252b2c, 0.72, 0.58);
     const wornMetal = material(0x465153, 0.78, 0.38);
-    const glass = material(0xd4b887, 0.32, 0.08, 0xff9a42, 1.2);
+    const glass = material(0xc7d8e8, 0.32, 0.08, KEEPERS_LANTERN_LIGHTING.point.color, 1.2);
 
     const handle = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.018, 6, 14, Math.PI), darkMetal);
     handle.name = 'keepers-lantern-short-handle';
@@ -136,7 +136,7 @@ export class KeepersLanternViewmodel {
       KEEPERS_LANTERN_LIGHTING.point.distance,
       KEEPERS_LANTERN_LIGHTING.point.decay,
     );
-    this.lanternLight.name = 'keepers-lantern-warm-bounded-light';
+    this.lanternLight.name = 'keepers-lantern-cool-bounded-light';
     this.lanternLight.castShadow = false;
     this.emitterTransform.add(this.lanternLight);
   }

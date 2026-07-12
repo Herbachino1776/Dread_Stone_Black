@@ -567,7 +567,8 @@ assert.equal(KEEPERS_LANTERN_LIGHTING.point.decay, 2, 'Keeper lantern uses inver
 assert.ok(KEEPERS_LANTERN_LIGHTING.point.intensity >= 20, 'Keeper lantern remains useful inside its restrained local sphere.');
 assert.equal(Object.hasOwn(KEEPERS_LANTERN_LIGHTING, 'wash'), false, 'Keeper lantern has no additive long-range navigation wash.');
 const lanternLightColor = new THREE.Color(KEEPERS_LANTERN_LIGHTING.point.color);
-assert.ok(lanternLightColor.r > lanternLightColor.b && lanternLightColor.g > lanternLightColor.b, 'Keeper lantern illumination is warm-neutral flame light rather than cyan fill.');
+assert.equal(KEEPERS_LANTERN_LIGHTING.point.kelvin, 8000, 'Keeper lantern targets a believable cool-blue color temperature.');
+assert.ok(lanternLightColor.b > lanternLightColor.g && lanternLightColor.g > lanternLightColor.r, 'Keeper lantern illumination is distinctly cool-blue rather than torch-orange.');
 const lanternCamera = new THREE.PerspectiveCamera();
 lanternCamera.position.set(4, 2, -3);
 lanternCamera.rotation.set(0.08, 0.45, 0, 'YXZ');
