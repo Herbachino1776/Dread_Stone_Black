@@ -113,11 +113,16 @@ export class PhysicalToolViewmodel {
   }
 
   getActiveToolId() {
+    if (this.combatKnifeActive && this.equipmentRuntime?.getEquippedToolId?.() === 'old_work_knife') return null;
     const weaponId = this.equipmentRuntime?.getEquippedWeaponProfile?.()?.id;
     if (weaponId === 'fishing_rod') return null;
     if (weaponId === 'wood_axe') return 'wood_axe';
     const toolId = this.equipmentRuntime?.getEquippedToolId?.();
     return ['old_work_knife', 'iron_drain_bar'].includes(toolId) ? toolId : null;
+  }
+
+  setCombatKnifeActive(active) {
+    this.combatKnifeActive = active === true;
   }
 
   setGestureState(gesture) {

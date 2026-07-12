@@ -19,6 +19,7 @@ import { PerfDebugPanel } from './PerfDebugPanel.js';
 import { reloadToNewGameStartupRoute } from './startupRoute.js';
 import { GameAudioRuntime } from './audio/GameAudioRuntime.js';
 import { resolveOutdoorTorchWarning } from './world-scene/OutdoorTorchRequirement.js';
+import { CombatLabDebugPanel } from './combat/CombatLabDebugPanel.js';
 
 export class Game {
   constructor(app) {
@@ -39,6 +40,7 @@ export class Game {
 
   async startUnsafe() {
     const query = new URLSearchParams(window.location.search);
+    this.combatLabEnabled = import.meta.env.DEV && query.get('combatLab') === '1';
     this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
     this.perfDebugEnabled = query.get('perf') === '1';
     this.isPaused = false;
@@ -61,13 +63,13 @@ export class Game {
     this.saveHost = new SaveHost();
     this.gameState = this.saveHost.loadInitialState();
     const savedEquipment = this.gameState.getEquipmentSnapshot() ?? startingEquipment;
-    const developmentLoadoutEnabled = import.meta.env.DEV && query.get('area') === 'north-road' && query.get('devLoadout') === '1';
+    const developmentLoadoutEnabled = import.meta.env.DEV && ((query.get('area') === 'north-road' && query.get('devLoadout') === '1') || this.combatLabEnabled);
     const developmentItems = ['old_work_knife', 'wood_axe', 'fishing_rod', 'torch', 'keepers_lantern'];
     this.devEphemeralEquipmentIds = new Set(developmentLoadoutEnabled ? developmentItems.filter((itemId) => !(savedEquipment.acquiredItemIds ?? []).includes(itemId)) : []);
     const runtimeStartingEquipment = developmentLoadoutEnabled ? {
       ...savedEquipment,
       acquiredItemIds: [...new Set([...(savedEquipment.acquiredItemIds ?? ['unarmed']), ...developmentItems])],
-      equipped: { ...(savedEquipment.equipped ?? {}), weapon: 'wood_axe', tool: 'old_work_knife', offhand: 'keepers_lantern' },
+      equipped: { ...(savedEquipment.equipped ?? {}), weapon: this.combatLabEnabled ? 'unarmed' : 'wood_axe', tool: 'old_work_knife', offhand: this.combatLabEnabled ? null : 'keepers_lantern' },
     } : savedEquipment;
     this.equipmentRuntime = new EquipmentRuntime({
       weaponProfiles: equipmentRegistry.weapons,
@@ -124,6 +126,7 @@ export class Game {
       audioRuntime: this.audioRuntime,
     });
     this.viewmodelHost.initializeForSession(this.sceneSessionHost);
+    if (this.combatLabEnabled) this.combatLabDebugPanel = new CombatLabDebugPanel({ app: this.app, dungeon: this.dungeon, equipmentRuntime: this.equipmentRuntime });
     this.interactions = new Interactions({
       player: this.player,
       dungeon: this.dungeon,
@@ -192,6 +195,7 @@ export class Game {
 
 
   saveEquipmentState() {
+    if (this.combatLabEnabled) return;
     if (!this.devEphemeralEquipmentIds?.size) {
       this.saveHost.saveEquipmentState(this.gameState, this.equipmentRuntime);
       return;
@@ -262,7 +266,7 @@ export class Game {
       isPlayerDead: this.isPlayerDead,
     });
     this.progressionHost.update(deltaSeconds);
-    if (this.controls.consumeAttack()) this.interactions.attack?.();
+    if (this.controls.consumeAttack() && !this.combatLabEnabled) this.interactions.attack?.();
     this.interactions.updateHint();
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
     const keyboardInteractPressed = keyboardInteractHeld && !this.wasKeyboardInteractHeld;
@@ -275,6 +279,7 @@ export class Game {
     this.wasKeyboardInteractHeld = keyboardInteractHeld;
 
     this.viewmodelHost?.updateDebugHud(this.player);
+    this.combatLabDebugPanel?.update?.(performance.now(), deltaSeconds * 1000);
     this.feedback.update(deltaSeconds);
     this.sceneSessionHost.render();
     this.perfDebugPanel?.render();
@@ -416,6 +421,7 @@ export class Game {
     this.disposers?.forEach((dispose) => dispose?.());
     this.disposers = [];
     this.viewmodelHost?.dispose?.();
+    this.combatLabDebugPanel?.dispose?.();
     this.survivalHost?.dispose?.();
     this.progressionHost?.dispose?.();
     this.inputHost?.dispose?.();

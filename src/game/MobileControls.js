@@ -5,6 +5,11 @@ export class MobileControls {
     this.look = { x: 0, y: 0 };
     this.interactPressed = false;
     this.attackPressed = false;
+    this.attackHeld = false;
+    this.attackPointerId = null;
+    this.attackStartY = 0;
+    this.attackTravel = 0;
+    this.attackSequence = 0;
     this.interactHeld = false;
     this.lookVerticalDeadzone = 0.24;
 
@@ -47,8 +52,27 @@ export class MobileControls {
 
     this.attackButton.addEventListener('pointerdown', (event) => {
       event.preventDefault();
+      this.attackPointerId = event.pointerId;
+      this.attackStartY = event.clientY;
+      this.attackTravel = 0;
+      this.attackSequence += 1;
+      this.attackHeld = true;
+      this.attackButton.setPointerCapture?.(event.pointerId);
       this.queueAttack();
     });
+    this.attackButton.addEventListener('pointermove', (event) => {
+      if (event.pointerId !== this.attackPointerId) return;
+      event.preventDefault();
+      this.attackTravel = this.attackStartY - event.clientY;
+    });
+    const endAttack = (event) => {
+      if (event.pointerId !== this.attackPointerId) return;
+      event.preventDefault();
+      this.attackHeld = false;
+      this.attackPointerId = null;
+    };
+    this.attackButton.addEventListener('pointerup', endAttack);
+    this.attackButton.addEventListener('pointercancel', endAttack);
   }
 
   startMove(event) {
@@ -145,6 +169,10 @@ export class MobileControls {
 
   queueAttack() {
     this.attackPressed = true;
+  }
+
+  getAttackControlState() {
+    return { held: this.attackHeld, travel: this.attackTravel, pointerId: this.attackPointerId, sequence: this.attackSequence };
   }
 
   hasAttackQueued() {

@@ -26,9 +26,11 @@
     "validate:reliquary-startup": "node scripts/validate-reliquary-field-startup.mjs",
     "validate:no-player-arms": "node scripts/validate-no-player-arms.mjs",
     "audit:campfire-flame-alpha": "node scripts/audit-campfire-flame-alpha.mjs",
-    "validate:player-fish-baseline": "node scripts/validate-player-fish-baseline.mjs"
+    "validate:player-fish-baseline": "node scripts/validate-player-fish-baseline.mjs",
+    "validate:combat": "node --test tests/combat-foundation.test.mjs && node scripts/validate-combat.mjs"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.19.3",
     "three": "^0.184.0",
     "vite": "^8.0.14"
   },

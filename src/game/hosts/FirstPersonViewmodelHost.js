@@ -7,6 +7,7 @@ import { OffhandAimController } from '../viewmodels/OffhandAimController.js';
 import { TorchViewmodel } from '../viewmodels/TorchViewmodel.js';
 import { PhysicalToolActionController } from '../physical-tools/PhysicalToolActionController.js';
 import { PhysicalToolViewmodel } from '../physical-tools/PhysicalToolViewmodel.js';
+import { WorldKnifeCombatController } from '../combat/WorldKnifeCombatController.js';
 
 const ROD_VIEWMODEL_LIGHTING = Object.freeze({
   skyColor: 0xffe2b8,
@@ -47,7 +48,7 @@ export class FirstPersonViewmodelHost {
     this.offhandAimController = new OffhandAimController({ app: this.app, viewmodels: [this.torchViewmodel, this.keepersLanternViewmodel] });
     this.sceneSessionHost?.setLanternRevealEmitterProvider?.(() => this.getKeeperLanternEmitter());
     this.castingController = new CastingController({ app: this.app, camera: this.camera, player: this.player, dungeon: this.dungeon, hud: this.hud, rodView: this.fishingRodView, equipmentRuntime: this.equipmentRuntime, feedback: this.feedback });
-    this.physicalToolActionController = new PhysicalToolActionController({
+    this.physicalToolActionController = this.dungeon?.isCombatLab ? null : new PhysicalToolActionController({
       app: this.app,
       camera: this.camera,
       player: this.player,
@@ -58,6 +59,21 @@ export class FirstPersonViewmodelHost {
       controls: this.controls,
       audioRuntime: this.audioRuntime,
     });
+    if (this.dungeon?.isCombatLab) {
+      this.physicalToolViewmodel.setCombatKnifeActive(true);
+      this.combatKnifeController = new WorldKnifeCombatController({
+        app: this.app,
+        scene: this.dungeon.scene,
+        camera: this.camera,
+        player: this.player,
+        actor: this.dungeon.actor,
+        physics: this.dungeon.physics,
+        equipmentRuntime: this.equipmentRuntime,
+        controls: this.controls,
+        feedback: this.feedback,
+      });
+      this.dungeon.attachWeaponController(this.combatKnifeController);
+    }
 
     this.disposers.push(this.equipmentRuntime?.on?.(EQUIPMENT_EVENTS.equippedChanged, (equipmentState) => this.handleEquipmentChanged(equipmentState)));
     this.syncEquipmentVisuals();
@@ -152,6 +168,7 @@ export class FirstPersonViewmodelHost {
       keepersLanternActive: this.keepersLanternViewmodel?.isActive?.() === true,
       fishing: this.castingController?.debug ?? null,
       physicalToolId: this.physicalToolViewmodel?.getActiveToolId?.() ?? null,
+      combatKnife: this.combatKnifeController?.getDiagnostics?.() ?? null,
     };
   }
 
@@ -162,6 +179,7 @@ export class FirstPersonViewmodelHost {
     this.offhandAimController?.dispose?.();
     this.torchViewmodel?.dispose?.();
     this.physicalToolActionController?.dispose?.();
+    this.combatKnifeController?.dispose?.();
     this.physicalToolViewmodel?.dispose?.();
     this.keepersLanternViewmodel?.dispose?.();
     this.sceneSessionHost?.setLanternRevealEmitterProvider?.(null);
@@ -171,6 +189,7 @@ export class FirstPersonViewmodelHost {
     this.offhandAimController = null;
     this.torchViewmodel = null;
     this.physicalToolActionController = null;
+    this.combatKnifeController = null;
     this.physicalToolViewmodel = null;
     this.keepersLanternViewmodel = null;
     this.session = null;

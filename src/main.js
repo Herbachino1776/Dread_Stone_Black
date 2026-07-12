@@ -13,7 +13,8 @@ try {
     import('./game/startupRoute.js'),
   ]);
   const titleScreen = new TitleScreen();
-  const selection = await titleScreen.waitForSelection();
+  const combatLabLaunch = import.meta.env.DEV && new URLSearchParams(window.location.search).get('combatLab') === '1';
+  const selection = combatLabLaunch ? { action: 'continue' } : await titleScreen.waitForSelection();
 
   if (selection.action === 'new') {
     new SaveHost().resetAllProgress();
