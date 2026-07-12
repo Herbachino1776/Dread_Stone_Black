@@ -183,6 +183,7 @@ export class WorldKnifeCombatController {
 
   initializePose() {
     this.camera.updateMatrixWorld(true);
+    this.lastCameraWorldMatrix = this.camera.matrixWorld.clone();
     const local = new THREE.Vector3(...this.config.workspace.ready);
     this.actualGrip.copy(local);
     this.camera.localToWorld(this.actualGrip);
@@ -192,6 +193,28 @@ export class WorldKnifeCombatController {
     this.previousQuaternion.copy(this.actualQuaternion);
     this.desiredQuaternion.copy(this.actualQuaternion);
     this.updateDerivedPose(true);
+  }
+
+  rebaseFreeWeaponToCamera() {
+    this.camera.updateMatrixWorld(true);
+    if (!this.lastCameraWorldMatrix) {
+      this.lastCameraWorldMatrix = this.camera.matrixWorld.clone();
+      return;
+    }
+    const delta = this.camera.matrixWorld.clone().multiply(this.lastCameraWorldMatrix.clone().invert());
+    this.lastCameraWorldMatrix.copy(this.camera.matrixWorld);
+    if (this.entry) return;
+    const rotationDelta = new THREE.Quaternion().setFromRotationMatrix(delta);
+    const rebasePoint = (point) => point.applyMatrix4(delta);
+    [this.actualGrip, this.previousGrip, this.desiredGrip, this.currentTip, this.previousTip, this.desiredTip,
+      this.edgeStart, this.edgeEnd, this.previousEdgeStart, this.previousEdgeEnd].forEach(rebasePoint);
+    this.actualQuaternion.premultiply(rotationDelta).normalize();
+    this.previousQuaternion.premultiply(rotationDelta).normalize();
+    this.desiredQuaternion.premultiply(rotationDelta).normalize();
+    if (this.lastSweep) {
+      rebasePoint(this.lastSweep.from);
+      rebasePoint(this.lastSweep.to);
+    }
   }
 
   bindInput() {
@@ -339,6 +362,7 @@ export class WorldKnifeCombatController {
     const combatContactActive = this.contactActivationProvider?.() ?? true;
     if (this.wasCombatContactActive && !combatContactActive && this.gripPointerId != null) this.releaseGrip('combat-range-exit');
     this.wasCombatContactActive = combatContactActive;
+    this.rebaseFreeWeaponToCamera();
     this.updateInput(dt);
     this.computeDesiredPose();
     this.previousGrip.copy(this.actualGrip);

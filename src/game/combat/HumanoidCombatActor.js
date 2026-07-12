@@ -5,6 +5,7 @@ import { CombatWoundSystem } from './CombatWoundSystem.js';
 import { CombatPhysiology } from './CombatPhysiology.js';
 import { COLLAPSE_CONFIG, HUMANOID_DURABILITY_CONFIG, VESSEL_ZONES } from './CombatStage2Config.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG } from './CombatMortality.js';
+import { HumanoidGlbVisualAdapter } from './HumanoidGlbVisualAdapter.js';
 
 const BODY_COLLISION_GROUPS = 0x00020001;
 const tmpPosition = new THREE.Vector3();
@@ -70,13 +71,13 @@ export class HumanoidCombatActor {
     this.collapseFamily = null;
     this.collapseReason = null;
     this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
-    this.faceRig = null;
     this.environmentContactHints = { groundY: this.spawnOffset.y, wallX: null };
     this.impactCooldowns = new Map();
     this.corpseSleeping = false;
     this.finalSettleEmitted = false;
     this.createMaterials();
     this.createPhysicalBody();
+    this.visualAdapter = typeof window !== 'undefined' ? new HumanoidGlbVisualAdapter({ actor: this, parent: this.root }) : null;
     this.woundSystem = new CombatWoundSystem({ actor: this, scene: this.scene });
     this.wounds = this.woundSystem.wounds;
     this.physiology = new CombatPhysiology({ actor: this, woundSystem: this.woundSystem, eventSink: this.eventSink });
@@ -92,19 +93,6 @@ export class HumanoidCombatActor {
 
   createMaterials() {
     this.materials = {
-      skin: material(0x9f7666, 0.92),
-      skinShadow: material(0x694c45, 0.96),
-      eye: material(0xb8aaa0, 0.7),
-      iris: material(0x28251d, 0.55),
-      hair: material(0x211d1b, 1),
-      hairGray: material(0x4b4540, 1),
-      tunic: material(0x26272a, 0.98),
-      tunicEdge: material(0x121315, 1),
-      leather: material(0x35261e, 0.92),
-      leatherLight: material(0x584031, 0.88),
-      iron: material(0x3a3b3c, 0.7, 0.45),
-      cloth: material(0x1d1c1f, 1),
-      boot: material(0x171311, 0.95),
       wound: material(0x320909, 0.88),
       debug: new THREE.MeshBasicMaterial({ color: 0x58d6ff, wireframe: true, transparent: true, opacity: 0.32, depthWrite: false }),
     };
@@ -154,8 +142,8 @@ export class HumanoidCombatActor {
       .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
     const collider = this.physics.world.createCollider(colliderDescriptor, body);
     collider.userData = body.userData;
-    const visual = this.createBodyVisual(config);
-    visual.scale.setScalar(HUMANOID_PHYSICAL_SCALE);
+    const visual = new THREE.Group();
+    visual.name = `combat-body-transform-${config.id}`;
     const debug = this.createDebugBody(config);
     this.root.add(visual);
     this.debugRoot.add(debug);
@@ -191,108 +179,6 @@ export class HumanoidCombatActor {
     const result = mesh(geometry, this.materials.debug, `anatomy-debug-${config.regionId}`);
     result.userData.regionId = config.regionId;
     return result;
-  }
-
-  createBodyVisual(config) {
-    const group = new THREE.Group();
-    group.name = `combat-visual-${config.id}`;
-    if (config.id === 'head') return this.createHeadVisual(group);
-    if (config.id === 'neck') {
-      group.add(mesh(new THREE.CapsuleGeometry(0.115, 0.13, 5, 10), this.materials.skinShadow, 'weathered-neck'));
-      group.add(mesh(new THREE.TorusGeometry(0.125, 0.025, 6, 12), this.materials.leather, 'rough-neck-cord', [0, 0.02, 0]));
-      return group;
-    }
-    if (['upper_chest', 'lower_chest', 'abdomen', 'pelvis'].includes(config.id)) return this.createTorsoVisual(group, config);
-    if (config.id.includes('hand')) {
-      group.add(mesh(new THREE.BoxGeometry(0.19, 0.27, 0.12, 2, 2, 2), this.materials.skin, `${config.id}-weathered-hand`));
-      for (let i = 0; i < 4; i += 1) group.add(mesh(new THREE.CapsuleGeometry(0.018, 0.08, 3, 6), this.materials.skinShadow, `${config.id}-finger-${i}`, [-0.057 + i * 0.038, -0.15, 0.018]));
-      return group;
-    }
-    if (config.id.includes('foot')) {
-      group.add(mesh(new THREE.BoxGeometry(0.28, 0.17, 0.52, 2, 2, 2), this.materials.boot, `${config.id}-square-toed-boot`, [0, 0, 0.02]));
-      group.add(mesh(new THREE.BoxGeometry(0.3, 0.055, 0.56), this.materials.leather, `${config.id}-boot-sole`, [0, -0.105, 0.02]));
-      return group;
-    }
-    const isArm = config.id.includes('arm') || config.id.includes('forearm');
-    const isUpper = config.id.includes('upper') || config.id.includes('thigh');
-    const radius = config.radius * (isUpper ? 1.09 : 1.04);
-    const length = config.halfHeight * 2;
-    const mat = isArm ? (isUpper ? this.materials.tunic : this.materials.leather) : (isUpper ? this.materials.cloth : this.materials.boot);
-    group.add(mesh(new THREE.CapsuleGeometry(radius, length, 5, 9), mat, `${config.id}-clothed-limb`));
-    if (isArm) {
-      group.add(mesh(new THREE.TorusGeometry(radius * 1.04, 0.018, 5, 10), this.materials.tunicEdge, `${config.id}-binding-upper`, [0, length * 0.38, 0]));
-      group.add(mesh(new THREE.TorusGeometry(radius * 1.04, 0.015, 5, 10), this.materials.leatherLight, `${config.id}-binding-lower`, [0, -length * 0.34, 0]));
-    } else {
-      group.add(mesh(new THREE.TorusGeometry(radius * 1.05, 0.022, 5, 10), this.materials.leather, `${config.id}-leg-wrap`, [0, -length * 0.22, 0]));
-    }
-    return group;
-  }
-
-  createTorsoVisual(group, config) {
-    if (config.id === 'pelvis') {
-      group.add(mesh(new THREE.BoxGeometry(0.76, 0.4, 0.39, 3, 2, 2), this.materials.cloth, 'combat-pelvis-dark-trousers'));
-      group.add(mesh(new THREE.BoxGeometry(0.86, 0.12, 0.43), this.materials.leather, 'combat-pelvis-cracked-belt', [0, 0.14, 0]));
-      group.add(mesh(new THREE.BoxGeometry(0.12, 0.16, 0.045), this.materials.iron, 'combat-pelvis-belt-buckle', [0, 0.14, 0.235]));
-      return group;
-    }
-    const widths = { abdomen: 0.49, lower_chest: 0.72, upper_chest: 0.9 };
-    const heights = { abdomen: 0.39, lower_chest: 0.42, upper_chest: 0.48 };
-    const depths = { abdomen: 0.39, lower_chest: 0.42, upper_chest: 0.45 };
-    group.add(mesh(new THREE.BoxGeometry(widths[config.id], heights[config.id], depths[config.id], 4, 3, 2), this.materials.tunic, `${config.id}-patched-wool-tunic`));
-    group.add(mesh(new THREE.BoxGeometry(widths[config.id] * 0.92, 0.04, depths[config.id] * 1.04), this.materials.tunicEdge, `${config.id}-tunic-seam`, [0, -heights[config.id] * 0.2, 0]));
-    if (config.id === 'upper_chest') {
-      group.add(mesh(new THREE.BoxGeometry(0.33, 0.36, 0.055), this.materials.leather, 'chest-crossed-leather-scrap-left', [-0.19, 0, 0.245]));
-      group.children.at(-1).rotation.z = -0.45;
-      group.add(mesh(new THREE.BoxGeometry(0.28, 0.34, 0.045), this.materials.leatherLight, 'chest-crossed-leather-scrap-right', [0.17, -0.02, 0.24]));
-      group.children.at(-1).rotation.z = 0.38;
-      [-0.36, 0.36].forEach((x) => group.add(mesh(new THREE.SphereGeometry(0.09, 8, 6), this.materials.tunicEdge, 'tense-shoulder', [x, 0.13, 0])));
-    }
-    return group;
-  }
-
-  createHeadVisual(group) {
-    const faceRig = { eyes: [], pupils: [], brows: [], mouth: null, moustache: null, beard: null };
-    const head = mesh(new THREE.SphereGeometry(0.19, 16, 12), this.materials.skin, 'weathered-angry-male-head', [0, 0, 0], [0.88, 1.22, 0.94]);
-    group.add(head);
-    [-1, 1].forEach((side) => group.add(mesh(new THREE.SphereGeometry(0.045, 8, 6), this.materials.skinShadow, `ear-${side}`, [side * 0.174, -0.005, 0])));
-    const nose = mesh(new THREE.ConeGeometry(0.045, 0.12, 5), this.materials.skinShadow, 'broken-angular-nose', [0, 0.005, 0.205]);
-    nose.rotation.x = Math.PI / 2;
-    group.add(nose);
-    [-1, 1].forEach((side) => {
-      const eye = mesh(new THREE.SphereGeometry(0.032, 8, 6), this.materials.eye, `angry-eye-white-${side}`, [side * 0.062, 0.048, 0.174], [1.12, 0.48, 0.38]);
-      eye.rotation.z = side * -0.11;
-      group.add(eye);
-      faceRig.eyes.push(eye);
-      const pupil = mesh(new THREE.SphereGeometry(0.012, 7, 5), this.materials.iris, `angry-eye-pupil-${side}`, [side * 0.056, 0.047, 0.199]);
-      group.add(pupil);
-      faceRig.pupils.push(pupil);
-      const brow = mesh(new THREE.BoxGeometry(0.118, 0.028, 0.03), this.materials.hair, `severe-lowered-brow-${side}`, [side * 0.061, 0.074, 0.184]);
-      brow.rotation.z = side * 0.22;
-      group.add(brow);
-      faceRig.brows.push(brow);
-      group.add(mesh(new THREE.BoxGeometry(0.026, 0.09, 0.018), this.materials.skinShadow, `weather-line-${side}`, [side * 0.118, -0.005, 0.172]));
-    });
-    const mouth = mesh(new THREE.BoxGeometry(0.12, 0.018, 0.018), this.materials.hair, 'clenched-tense-mouth', [0, -0.09, 0.185]);
-    mouth.rotation.z = -0.035;
-    group.add(mouth);
-    faceRig.mouth = mouth;
-    const moustache = mesh(new THREE.BoxGeometry(0.15, 0.055, 0.035), this.materials.hairGray, 'rough-moustache', [0, -0.062, 0.17]);
-    group.add(moustache);
-    faceRig.moustache = moustache;
-    const beard = mesh(new THREE.ConeGeometry(0.12, 0.19, 8), this.materials.hair, 'short-unkempt-beard', [0, -0.15, 0.12]);
-    group.add(beard);
-    faceRig.beard = beard;
-    const hairCap = mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.58), this.materials.hair, 'rough-dark-graying-hair', [0, 0.085, -0.01], [0.95, 1, 1]);
-    group.add(hairCap);
-    for (let i = -3; i <= 3; i += 1) {
-      const lock = mesh(new THREE.ConeGeometry(0.025, 0.11 + Math.abs(i % 2) * 0.035, 5), i % 2 ? this.materials.hairGray : this.materials.hair, `matted-hair-lock-${i}`, [i * 0.045, 0.17 - Math.abs(i) * 0.008, 0.08]);
-      lock.rotation.x = Math.PI;
-      group.add(lock);
-    }
-    group.add(mesh(new THREE.BoxGeometry(0.018, 0.13, 0.012), this.materials.skinShadow, 'old-face-scar', [0.105, 0.008, 0.19]));
-    group.children.at(-1).rotation.z = -0.27;
-    this.faceRig = faceRig;
-    return group;
   }
 
   resolveHit(collider, worldPoint) {
@@ -462,7 +348,6 @@ export class HumanoidCombatActor {
     else if (this.lifeState === 'dying') this.motorStrength = Math.max(0.015, this.motorStrength - dt * releaseRate * 1.35);
     else if (this.lifeState === 'dead') this.motorStrength = Math.max(0, this.motorStrength - dt * Math.max(1.8, releaseRate * 2));
     else this.motorStrength = Math.min(1, this.motorStrength + dt * 0.25);
-    this.updateFacialPresentation();
     this.bodies.forEach((entry, bodyId) => this.applyBodyMotor(entry, bodyId, dt, playerPosition));
   }
 
@@ -554,30 +439,6 @@ export class HumanoidCombatActor {
     if (side && (region.includes('thigh') || region.includes('leg') || region.includes('foot')) && bodyId === 'pelvis') target.x += (side === 'left' ? 0.075 : -0.075) * intensity;
   }
 
-  updateFacialPresentation() {
-    if (!this.faceRig) return;
-    const pain = THREE.MathUtils.clamp(this.physiology?.painLoad ?? 0, 0, 1);
-    const shock = THREE.MathUtils.clamp(this.physiology?.shock ?? 0, 0, 1);
-    const consciousness = this.physiology?.consciousness ?? 1;
-    const dead = this.lifeState === 'dead';
-    const blinkPhase = this.elapsed % 4.35;
-    const blinking = !dead && blinkPhase > 4.19;
-    const eyelidScale = dead ? 0.06 : blinking ? 0.08 : THREE.MathUtils.lerp(1, 0.58, pain * 0.62 + (1 - consciousness) * 0.3);
-    this.faceRig.eyes.forEach((eye) => { eye.scale.y = 0.48 * eyelidScale; });
-    this.faceRig.pupils.forEach((pupil, index) => {
-      pupil.visible = !dead && consciousness > 0.08;
-      pupil.position.y = 0.047 - (1 - consciousness) * 0.012;
-      pupil.position.x = (index === 0 ? -0.056 : 0.056) + Math.sin(this.elapsed * 0.38) * 0.002 * consciousness;
-    });
-    this.faceRig.brows.forEach((brow, index) => {
-      brow.position.y = 0.074 - pain * 0.012;
-      brow.rotation.z = (index === 0 ? -1 : 1) * (0.22 + pain * 0.12);
-    });
-    this.faceRig.mouth.scale.y = dead ? 0.7 : 1 + pain * 0.7 + shock * 0.45;
-    this.faceRig.mouth.position.y = -0.09 - shock * 0.012;
-    this.faceRig.beard.rotation.x = dead ? 0.08 : shock * 0.035;
-  }
-
   afterPhysics(alpha = 1) {
     this.bodies.forEach((entry) => {
       const translation = entry.body.translation();
@@ -592,6 +453,7 @@ export class HumanoidCombatActor {
       entry.previousQuaternion.copy(tmpQuaternion);
     });
     this.updateVesselDebug();
+    this.visualAdapter?.update();
     this.woundSystem.update(1 / 60);
     this.updateBodyImpactFeedback();
     const speeds = [...this.bodies.values()].map((entry) => { const v = entry.body.linvel(); return Math.hypot(v.x, v.y, v.z); });
@@ -717,10 +579,12 @@ export class HumanoidCombatActor {
     this.physiology.reset();
     this.physics.resetCount += 1;
     this.createPhysicalBody();
+    this.visualAdapter?.reset();
   }
 
   dispose() {
     this.woundSystem.dispose();
+    this.visualAdapter?.dispose();
     this.disposePhysicalBody();
     Object.values(this.materials).forEach((entry) => entry.dispose?.());
     this.root.removeFromParent();
