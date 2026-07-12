@@ -10,12 +10,14 @@ export const COMBAT_PHYSICS_CONFIG = Object.freeze({
 
 export const KNIFE_COMBAT_CONFIG = Object.freeze({
   itemId: 'old_work_knife',
-  bladeLength: 0.52,
-  bladeWidth: 0.09,
-  bladeThickness: 0.018,
-  handleLength: 0.34,
+  visualImplementation: 'world-knife-combat-controller',
+  bladeLength: 0.24,
+  bladeWidth: 0.052,
+  bladeThickness: 0.012,
+  handleLength: 0.13,
+  overallLength: 0.37,
   tipRadius: 0.018,
-  maximumPenetrationDepth: 0.46,
+  maximumPenetrationDepth: 0.225,
   minimumPunctureSpeed: 0.34,
   minimumPunctureAlignment: 0.72,
   failedPenetrationAlignment: 0.48,
@@ -27,18 +29,26 @@ export const KNIFE_COMBAT_CONFIG = Object.freeze({
   lateralBindDistance: 0.08,
   forcedExtractionDistance: 0.24,
   forceTransfer: 5.5,
+  gripZone: Object.freeze({ viewportRatio: 0.16, minimumRadiusPx: 58, maximumRadiusPx: 86 }),
+  return: Object.freeze({
+    freeSeconds: 0.15,
+    failedContactSeconds: 0.19,
+    embeddedMinimumSeconds: 0.25,
+    embeddedMaximumSeconds: 0.4,
+  }),
   workspace: Object.freeze({
-    relaxed: Object.freeze([0.28, -0.25, -0.52]),
-    ready: Object.freeze([0.22, -0.16, -0.62]),
-    min: Object.freeze([-0.38, -0.45, -1.12]),
-    max: Object.freeze([0.48, 0.34, -0.34]),
-    lateralReach: 0.34,
-    verticalReach: 0.29,
-    thrustDistance: 0.55,
-    positionFollow: 24,
-    rotationFollow: 20,
-    aimSensitivity: 0.0027,
-    thrustSensitivity: 1 / 120,
+    relaxed: Object.freeze([0.08, -0.15, -0.48]),
+    ready: Object.freeze([0.08, -0.15, -0.48]),
+    min: Object.freeze([-0.16, -0.31, -0.84]),
+    max: Object.freeze([0.3, 0.03, -0.42]),
+    lateralReach: 0.22,
+    verticalReach: 0.09,
+    thrustDistance: 0.34,
+    positionFollow: 38,
+    rotationFollow: 32,
+    lateralSensitivity: 1 / 150,
+    verticalSensitivity: 1 / 360,
+    thrustSensitivity: 1 / 190,
   }),
 });
 
@@ -141,6 +151,9 @@ export function validateCombatConfiguration() {
   const totalMass = HUMANOID_BODY_CONFIG.reduce((sum, body) => sum + body.mass, 0);
   if (totalMass < 55 || totalMass > 105) errors.push(`implausible total mass ${totalMass}`);
   if (KNIFE_COMBAT_CONFIG.maximumPenetrationDepth > KNIFE_COMBAT_CONFIG.bladeLength) errors.push('knife penetration exceeds blade length');
+  if (Math.abs(KNIFE_COMBAT_CONFIG.overallLength - KNIFE_COMBAT_CONFIG.bladeLength - KNIFE_COMBAT_CONFIG.handleLength) > 1e-6) errors.push('knife overall length does not match blade and handle');
+  if (KNIFE_COMBAT_CONFIG.bladeLength < 0.22 || KNIFE_COMBAT_CONFIG.bladeLength > 0.26) errors.push('knife blade is outside work-knife range');
+  if (KNIFE_COMBAT_CONFIG.handleLength < 0.11 || KNIFE_COMBAT_CONFIG.handleLength > 0.14) errors.push('knife handle is outside work-knife range');
   if (KNIFE_COMBAT_CONFIG.bladeLength <= 0 || KNIFE_COMBAT_CONFIG.bladeWidth <= 0) errors.push('invalid knife dimensions');
   const { min, max } = KNIFE_COMBAT_CONFIG.workspace;
   if (min.some((value, index) => value >= max[index])) errors.push('invalid hand workspace bounds');

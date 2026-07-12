@@ -43,6 +43,7 @@ export class CombatLabDebugPanel {
       ['MUTE Q', () => this.toggleMute()],
       ['CONSC Y', () => this.cycleConsciousness()],
       ['RESERVE G', () => this.cycleBloodReserve()],
+      ['MORTALITY X', () => this.toggleMortality()],
       ['CHEST 1', () => this.triggerCollapse('chest_fold', false)],
       ['NECK 2', () => this.triggerCollapse('neck_failure', true)],
       ['HEAD 3', () => this.triggerCollapse('neurological', true)],
@@ -87,6 +88,7 @@ export class CombatLabDebugPanel {
       if (event.code === 'KeyQ') this.toggleMute();
       if (event.code === 'KeyY') this.cycleConsciousness();
       if (event.code === 'KeyG') this.cycleBloodReserve();
+      if (event.code === 'KeyX') this.toggleMortality();
       if (event.code === 'Digit1') this.triggerCollapse('chest_fold', false);
       if (event.code === 'Digit2') this.triggerCollapse('neck_failure', true);
       if (event.code === 'Digit3') this.triggerCollapse('neurological', true);
@@ -119,6 +121,7 @@ export class CombatLabDebugPanel {
   toggleMute() { this.dungeon.feedbackSystem.setMuted(!this.dungeon.feedbackSystem.muted); }
   cycleConsciousness() { const values = [1, 0.5, 0.15]; this.consciousnessMode = (this.consciousnessMode + 1) % values.length; this.dungeon.actor.physiology.setConsciousness(values[this.consciousnessMode]); }
   cycleBloodReserve() { const values = [1, 0.45, 0.12]; this.bloodMode = (this.bloodMode + 1) % values.length; this.dungeon.actor.physiology.setBloodReserve(values[this.bloodMode]); }
+  toggleMortality() { this.dungeon?.toggleMortalityMode?.(); }
   triggerCollapse(family, lethal) { this.dungeon.actor.requestCollapse(family, { immediate: family === 'neurological' || family === 'neck_failure', lethal }); }
   equipLight(itemId) {
     if (!this.equipmentRuntime.hasItem(itemId)) this.equipmentRuntime.acquireItem(itemId, { source: 'combat_lab_ephemeral' });
@@ -147,7 +150,7 @@ export class CombatLabDebugPanel {
       `bodies ${physics.rigidBodies ?? 0}  constraints ${physics.constraints ?? 0}  contacts ${physics.activeContacts ?? 0}  sweeps ${physics.weaponSweeps ?? 0}`,
       `time ${this.frozen ? 'FROZEN' : this.slow ? '20%' : '100%'}  light ${['DAY', 'DUSK', 'NIGHT-DARK', 'TORCH', 'LANTERN'][this.lightingMode]}  resets ${physics.resetCount ?? 0}`,
       '',
-      `actor ${actor.state ?? 'unknown'}  motor ${(actor.motorStrength ?? 0).toFixed(2)}`,
+      `actor ${actor.state ?? 'unknown'}  mortality ${actor.mortalityMode ?? 'unknown'}  motor ${(actor.motorStrength ?? 0).toFixed(2)}`,
       `balance ${(actor.balanceImpairment ?? 0).toFixed(2)}  consciousness ${(actor.consciousnessImpairment ?? 0).toFixed(2)}  wounds ${actor.activeWounds ?? 0}`,
       `blood ${(physiology.bloodReserve ?? 1).toFixed(3)}  loss/s ${(physiology.bloodLossRate ?? 0).toFixed(4)}  shock ${(physiology.shock ?? 0).toFixed(2)}  conscious ${(physiology.consciousness ?? 1).toFixed(2)}`,
       `breathing ${physiology.breathingState ?? '-'}  collapse ${actor.collapseFamily ?? '-'}  sleep ${actor.corpseSleeping ? 'YES' : 'NO'}`,
@@ -164,12 +167,14 @@ export class CombatLabDebugPanel {
       `forward ${JSON.stringify(weapon.bladeForward ?? [])}`,
       `desired ${JSON.stringify(weapon.desiredHand ?? [])}`,
       `actual ${JSON.stringify(weapon.actualHand ?? [])}`,
-      `depth ${(weapon.penetrationDepth ?? 0).toFixed(3)}m  speed ${(weapon.forwardVelocity ?? 0).toFixed(2)}m/s`,
+      `depth ${(weapon.penetrationDepth ?? 0).toFixed(3)}m  deliberate ${JSON.stringify(weapon.deliberateInputVelocity ?? [])}`,
+      `total world ${JSON.stringify(weapon.totalWorldVelocity ?? [])}  offensive ${JSON.stringify(weapon.offensiveVelocity ?? [])}`,
+      `owner ${weapon.gripPointerOwner ?? '-'}  attack ${weapon.attackEnabled ? 'ENABLED' : 'SAFE'}  ${weapon.contactDamageReason ?? '-'}`,
       `visual/collision error ${(weapon.visibleCollisionError ?? 0).toFixed(5)}m`,
       `part ${weapon.contactPart ?? '-'}  wound ${weapon.activeWoundId ?? '-'}  slash ${JSON.stringify(weapon.activeSlash ?? null)}`,
       '',
-      'Grip-drag: hand aim | ATTACK drag up/down: insert/extract',
-      'Desktop: Space advance | Shift withdraw | B debug',
+      'Grip handle, then up: thrust | down: withdraw | side: slash',
+      'Release: safe spring return | X mortality | B debug',
     ].join('\n');
   }
 

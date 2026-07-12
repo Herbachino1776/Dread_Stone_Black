@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PHYSIOLOGY_CONFIG } from './CombatStage2Config.js';
+import { IMMORTAL_REACTIVE_CONFIG } from './CombatMortality.js';
 
 export class CombatPhysiology {
   constructor({ actor, woundSystem, eventSink = null } = {}) {
@@ -67,7 +68,8 @@ export class CombatPhysiology {
       const clotFactor = age > PHYSIOLOGY_CONFIG.clottingDelaySeconds && !profile.kind.includes('arterial')
         ? Math.max(0.18, 1 - (age - PHYSIOLOGY_CONFIG.clottingDelaySeconds) * PHYSIOLOGY_CONFIG.clottingPerSecond)
         : 1;
-      const rate = profile.baseRate * embeddedFactor * withdrawalFactor * clotFactor * this.circulation;
+      const immortalDecay = this.actor.isImmortalReactive?.() ? Math.exp(-age / 4.5) : 1;
+      const rate = profile.baseRate * embeddedFactor * withdrawalFactor * clotFactor * immortalDecay * this.circulation;
       wound.bleedingRate = Math.max(0, rate);
       bloodLossRate += wound.bleedingRate;
       vesselConsciousnessDrain += (wound.vesselInvolvement?.consciousnessRate ?? 0) * embeddedFactor * this.circulation;
@@ -82,10 +84,32 @@ export class CombatPhysiology {
     const shockTarget = THREE.MathUtils.clamp((1 - this.bloodReserve) * 1.12 + this.painLoad * 0.18 + (1 - this.breathingIntegrity) * 0.28, 0, 1);
     this.shock = shockTarget > this.shock ? THREE.MathUtils.lerp(this.shock, shockTarget, 1 - Math.exp(-1.5 * dt)) : Math.max(shockTarget, this.shock - PHYSIOLOGY_CONFIG.shockRecoveryPerSecond * dt);
     const consciousnessTarget = THREE.MathUtils.clamp(this.neurologicalIntegrity * (1 - this.shock * 0.82) * (0.55 + this.bloodReserve * 0.45) * (0.7 + this.breathingIntegrity * 0.3), 0, 1);
-    this.consciousness = Math.max(0, Math.min(this.consciousness, consciousnessTarget) - vesselConsciousnessDrain * dt);
-    if (this.consciousnessTargetCanRecover()) this.consciousness = Math.min(consciousnessTarget, this.consciousness + dt * 0.025);
+    if (this.actor.isImmortalReactive?.()) {
+      const reactiveTarget = Math.max(IMMORTAL_REACTIVE_CONFIG.consciousnessFloor, consciousnessTarget);
+      this.consciousness = THREE.MathUtils.lerp(this.consciousness, reactiveTarget, 1 - Math.exp(-1.8 * dt)) - vesselConsciousnessDrain * dt;
+    } else {
+      this.consciousness = Math.max(0, Math.min(this.consciousness, consciousnessTarget) - vesselConsciousnessDrain * dt);
+      if (this.consciousnessTargetCanRecover()) this.consciousness = Math.min(consciousnessTarget, this.consciousness + dt * 0.025);
+    }
+    if (this.actor.isImmortalReactive?.()) this.applyImmortalReactiveFloorAndRecovery(dt);
     this.updateBreathing();
     this.updateActorState(dt);
+  }
+
+  applyImmortalReactiveFloorAndRecovery(dt) {
+    const config = IMMORTAL_REACTIVE_CONFIG;
+    this.mortalInjury = false;
+    this.timeSinceMortalInjury = 0;
+    this.bloodReserve = Math.max(config.bloodReserveFloor, this.bloodReserve);
+    this.neurologicalIntegrity = Math.max(config.neurologicalIntegrityFloor, this.neurologicalIntegrity);
+    this.breathingIntegrity = Math.max(config.breathingIntegrityFloor, this.breathingIntegrity);
+    this.consciousness = Math.max(config.consciousnessFloor, this.consciousness);
+    const recovery = config.physiologyRecoveryPerSecond * dt;
+    this.bloodReserve = Math.min(1, this.bloodReserve + recovery * 0.45);
+    this.neurologicalIntegrity = Math.min(1, this.neurologicalIntegrity + recovery * 0.38);
+    this.breathingIntegrity = Math.min(1, this.breathingIntegrity + recovery * 0.62);
+    this.consciousness = Math.min(1, this.consciousness + recovery * 0.75);
+    this.shock = Math.max(0, this.shock - recovery * 0.8);
   }
 
   consciousnessTargetCanRecover() {
@@ -103,6 +127,11 @@ export class CombatPhysiology {
   updateActorState(dt) {
     if (this.mortalInjury) this.timeSinceMortalInjury += dt;
     if (this.actor.lifeState === 'dead') return;
+    if (this.actor.isImmortalReactive?.()) {
+      if (this.neurologicalIntegrity <= IMMORTAL_REACTIVE_CONFIG.neurologicalIntegrityFloor + 0.01) this.actor.requestCollapse?.('neurological', { immediate: true, lethal: false });
+      else if (this.consciousness <= 0.2 || this.bloodReserve <= IMMORTAL_REACTIVE_CONFIG.bloodReserveFloor + 0.02) this.actor.requestCollapse?.('blood_loss', { immediate: false, lethal: false });
+      return;
+    }
     if (this.neurologicalIntegrity <= 0.1) {
       this.actor.requestCollapse?.('neurological', { immediate: true, lethal: true });
       return;

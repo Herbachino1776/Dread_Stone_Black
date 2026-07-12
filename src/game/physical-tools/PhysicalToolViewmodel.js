@@ -59,21 +59,6 @@ export class PhysicalToolViewmodel {
     const darkRust = makeMaterial(0x392f2a, 0.78, 0.56);
     const wood = makeMaterial(0x62452d, 0.96, 0.02);
 
-    const knife = new THREE.Group();
-    knife.name = 'old-work-knife-held';
-    const knifeHandle = cylinderBetween(knife, 0.055, 0.38, wood, 'old-work-knife-worn-wood-handle');
-    knifeHandle.position.y = -0.18;
-    const knifeBlade = new THREE.Mesh(new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-0.055, 0, 0), new THREE.Vector3(0.055, 0, 0), new THREE.Vector3(0.042, 0.42, 0),
-      new THREE.Vector3(0, 0.52, 0), new THREE.Vector3(-0.045, 0.42, 0),
-    ]), rust);
-    knifeBlade.geometry.setIndex([0, 1, 2, 0, 2, 4, 4, 2, 3]);
-    knifeBlade.geometry.computeVertexNormals();
-    knifeBlade.name = 'old-work-knife-short-rusted-blade';
-    knifeBlade.position.y = 0.02;
-    knife.add(knifeBlade);
-    this.addTool('old_work_knife', knife);
-
     const axe = new THREE.Group();
     axe.name = 'wood-axe-held';
     const axeHandle = cylinderBetween(axe, 0.047, 0.92, wood, 'wood-axe-worn-handle');
@@ -113,16 +98,11 @@ export class PhysicalToolViewmodel {
   }
 
   getActiveToolId() {
-    if (this.combatKnifeActive && this.equipmentRuntime?.getEquippedToolId?.() === 'old_work_knife') return null;
     const weaponId = this.equipmentRuntime?.getEquippedWeaponProfile?.()?.id;
     if (weaponId === 'fishing_rod') return null;
     if (weaponId === 'wood_axe') return 'wood_axe';
     const toolId = this.equipmentRuntime?.getEquippedToolId?.();
-    return ['old_work_knife', 'iron_drain_bar'].includes(toolId) ? toolId : null;
-  }
-
-  setCombatKnifeActive(active) {
-    this.combatKnifeActive = active === true;
+    return toolId === 'iron_drain_bar' ? toolId : null;
   }
 
   setGestureState(gesture) {

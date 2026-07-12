@@ -3,6 +3,7 @@ import { CombatPhysicsWorld, initializeCombatPhysics } from './CombatPhysicsWorl
 import { HumanoidCombatActor } from './HumanoidCombatActor.js';
 import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
+import { resolveCombatMortalityMode } from './CombatMortality.js';
 
 export class FolsomCombatEncounter {
   static async create(options = {}) {
@@ -22,7 +23,7 @@ export class FolsomCombatEncounter {
     this.groundY = Number.isFinite(sampledGround?.y) ? sampledGround.y : 0.16;
     const spawnOffset = new THREE.Vector3(this.spawnPosition.x, this.groundY, this.spawnPosition.z + 3.55);
     this.physics.createFixedBox({ position: { x: this.spawnPosition.x, y: this.groundY - 0.1, z: this.spawnPosition.z }, halfExtents: { x: 7, y: 0.1, z: 7 }, userData: { type: 'folsom-combat-courtyard-ground' } });
-    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw: Math.PI, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw: Math.PI, mortalityMode: resolveCombatMortalityMode(), eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
     this.actor.root.name = 'folsom-starter-humanoid-combat-subject';
     this.actor.setEnvironmentContactHints({ groundY: this.groundY, wallX: null });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: this.groundY, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });

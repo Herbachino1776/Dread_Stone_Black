@@ -26,6 +26,7 @@ import { evaluatePhysicalToolGesture, PHYSICAL_TOOL_PROFILES } from '../src/game
 import { PhysicalToolTargetRegistry } from '../src/game/physical-tools/PhysicalToolTargetRegistry.js';
 import { PhysicalToolViewmodel } from '../src/game/physical-tools/PhysicalToolViewmodel.js';
 import { PhysicalToolActionController } from '../src/game/physical-tools/PhysicalToolActionController.js';
+import { WorldKnifeCombatController } from '../src/game/combat/WorldKnifeCombatController.js';
 import { EquipmentPanel } from '../src/game/equipment/EquipmentPanel.js';
 import { getNewGameStartupUrl, reloadToNewGameStartupRoute, replaceWithNewGameStartupRoute } from '../src/game/startupRoute.js';
 
@@ -66,8 +67,30 @@ const toolEquipment = new EquipmentRuntime({
 });
 const toolCamera = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 100);
 const toolViewmodel = new PhysicalToolViewmodel({ camera: toolCamera, equipmentRuntime: toolEquipment });
+const controllerViewportRect = { left: 0, top: 0, width: 390, height: 702 };
+const controllerViewport = {
+  addEventListener() {}, removeEventListener() {}, setPointerCapture() {}, releasePointerCapture() {},
+  getBoundingClientRect: () => controllerViewportRect,
+  querySelector: () => null,
+};
+const knifeScene = new THREE.Scene();
+const knifeViewmodel = new WorldKnifeCombatController({
+  app: controllerViewport, scene: knifeScene, camera: toolCamera, equipmentRuntime: toolEquipment,
+  actor: { colliderRegions: new Map(), bodies: new Map(), setEmbeddedWeapon() {} },
+  physics: { castWeaponTip: () => null }, bindPointerInput: false, contactActivationProvider: () => false,
+});
+knifeViewmodel.afterPhysics();
+const unifiedToolViewmodel = {
+  getActiveToolId: () => knifeViewmodel.isEquipped() ? knifeViewmodel.getActiveToolId() : toolViewmodel.getActiveToolId(),
+  projectGrabHit: (...args) => (knifeViewmodel.isEquipped() ? knifeViewmodel : toolViewmodel).projectGrabHit(...args),
+  getProjectedGrabPoint: (...args) => (knifeViewmodel.isEquipped() ? knifeViewmodel : toolViewmodel).getProjectedGrabPoint(...args),
+  getProjectedActivePoint: (...args) => (knifeViewmodel.isEquipped() ? knifeViewmodel : toolViewmodel).getProjectedActivePoint(...args),
+  setGestureState: (...args) => (knifeViewmodel.isEquipped() ? knifeViewmodel : toolViewmodel).setGestureState(...args),
+  impact: (...args) => (knifeViewmodel.isEquipped() ? knifeViewmodel : toolViewmodel).impact(...args),
+};
 toolViewmodel.update(1 / 60);
-assert.ok(toolViewmodel.root.visible && toolViewmodel.toolGroups.get('old_work_knife').visible, 'Equipped Old Work Knife has a visible camera-local ready pose.');
+assert.ok(knifeViewmodel.visual.visible && knifeScene.getObjectByName('old-work-knife-authoritative-world-weapon'), 'Equipped Old Work Knife has one authoritative world-space ready pose.');
+assert.equal(toolViewmodel.toolGroups.has('old_work_knife'), false, 'The legacy physical-tool viewmodel no longer builds a duplicate Old Work Knife.');
 const projectedVisibleFraction = (minimum, maximum) => Math.max(0, Math.min(1, maximum) - Math.max(-1, minimum)) / Math.max(0.001, maximum - minimum);
 const assertPhysicalToolPlacement = (toolId, aspect, label) => {
   toolCamera.aspect = aspect;
@@ -80,7 +103,8 @@ const assertPhysicalToolPlacement = (toolId, aspect, label) => {
     toolEquipment.equip('tool', toolId);
   }
   toolViewmodel.update(1 / 60);
-  const bounds = toolViewmodel.getProjectedBounds(toolId);
+  knifeViewmodel.afterPhysics();
+  const bounds = toolId === 'old_work_knife' ? knifeViewmodel.getProjectedBounds() : toolViewmodel.getProjectedBounds(toolId);
   assert.ok(bounds && bounds.minDepth < 1 && bounds.maxDepth > -1, `${label} placement is in front of the viewmodel camera.`);
   assert.ok(projectedVisibleFraction(bounds.minX, bounds.maxX) >= 0.9, `${label} keeps at least 90% of its width inside the camera frustum.`);
   assert.ok(projectedVisibleFraction(bounds.minY, bounds.maxY) >= 0.9, `${label} keeps at least 90% of its height inside the camera frustum.`);
@@ -90,24 +114,19 @@ for (const [aspect, viewportLabel] of [[16 / 9, 'desktop'], [390 / 702, 'portrai
   assertPhysicalToolPlacement('wood_axe', aspect, `${viewportLabel} Wood Axe`);
   assertPhysicalToolPlacement('iron_drain_bar', aspect, `${viewportLabel} Drain Bar`);
 }
-const controllerViewportRect = { left: 0, top: 0, width: 390, height: 702 };
-const controllerViewport = {
-  addEventListener() {}, removeEventListener() {}, setPointerCapture() {},
-  getBoundingClientRect: () => controllerViewportRect,
-  querySelector: () => null,
-};
 toolCamera.aspect = controllerViewportRect.width / controllerViewportRect.height;
 toolCamera.updateProjectionMatrix();
 toolEquipment.equip('weapon', 'unarmed');
 toolEquipment.equip('tool', 'old_work_knife');
 toolViewmodel.update(1 / 60);
-const knifeGrab = toolViewmodel.getProjectedGrabPoint(controllerViewport);
-const knifeActivePart = toolViewmodel.getProjectedActivePoint(controllerViewport);
+knifeViewmodel.afterPhysics();
+const knifeGrab = knifeViewmodel.getProjectedGrabPoint(controllerViewport);
+const knifeActivePart = knifeViewmodel.getProjectedActivePoint(controllerViewport);
 assert.ok(knifeGrab, 'The portrait Work Knife exposes a visible grip input zone.');
 assert.equal(knifeGrab.kind, 'grip-input-capture', 'The Work Knife input zone is explicitly the grip, not its blade.');
 assert.equal(knifeActivePart.kind, 'knife-blade', 'The Work Knife exposes its blade as a separate physical contact surface.');
 assert.ok(knifeGrab.x > knifeActivePart.x && knifeGrab.y > knifeActivePart.y, 'The Work Knife grip is lower-right of its upward-angled blade.');
-assert.ok(Math.hypot(knifeGrab.x - knifeActivePart.x, knifeGrab.y - knifeActivePart.y) > knifeGrab.radius * 2, 'The Work Knife blade cannot overlap the grip input zone.');
+assert.ok(Math.hypot(knifeGrab.x - knifeActivePart.x, knifeGrab.y - knifeActivePart.y) > knifeGrab.radius, 'The Work Knife tip remains outside the forgiving handle grip zone.');
 let controllerShedHits = 0;
 let controllerContactEvent = null;
 const controllerTarget = {
@@ -118,7 +137,7 @@ const controllerTarget = {
 };
 const toolController = new PhysicalToolActionController({
   app: controllerViewport, camera: toolCamera, player: { position: new THREE.Vector3(0, 0, 0) },
-  dungeon: { getPhysicalToolTargets: () => [controllerTarget] }, equipmentRuntime: toolEquipment, viewmodel: toolViewmodel,
+  dungeon: { getPhysicalToolTargets: () => [controllerTarget] }, equipmentRuntime: toolEquipment, viewmodel: unifiedToolViewmodel,
 });
 let simulatedToolTime = performance.now();
 toolController.makeSample = (event) => ({ x: event.clientX, y: event.clientY, timeMs: (simulatedToolTime += 40) });

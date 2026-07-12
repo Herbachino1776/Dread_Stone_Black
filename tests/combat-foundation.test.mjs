@@ -8,6 +8,9 @@ import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
+import { WorldKnifeCombatController } from '../src/game/combat/WorldKnifeCombatController.js';
+import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
+import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
 
 async function createActor() {
   await initializeCombatPhysics();
@@ -47,6 +50,35 @@ test('tissue and hard structure depths remain physically bounded', () => {
     if (region.hardStructure) assert.ok(region.hardStructureDepth > 0 && region.hardStructureDepth <= region.maximumTissueDepth);
   });
   assert.ok(KNIFE_COMBAT_CONFIG.maximumPenetrationDepth <= KNIFE_COMBAT_CONFIG.bladeLength);
+  assert.ok(KNIFE_COMBAT_CONFIG.bladeLength >= 0.22 && KNIFE_COMBAT_CONFIG.bladeLength <= 0.26);
+  assert.ok(KNIFE_COMBAT_CONFIG.handleLength >= 0.11 && KNIFE_COMBAT_CONFIG.handleLength <= 0.14);
+  assert.equal(KNIFE_COMBAT_CONFIG.overallLength, KNIFE_COMBAT_CONFIG.bladeLength + KNIFE_COMBAT_CONFIG.handleLength);
+});
+
+test('thumb ownership and deliberate input are mandatory for offensive knife contact', () => {
+  const attack = { pointerOwnerId: 7, state: KNIFE_CONTROL_STATES.attacking, deliberateSpeed: 1.2, minimumSpeed: 0.1 };
+  assert.equal(canKnifeCreateOffensiveContact(attack), true, 'a grip-owned deliberate attack may damage');
+  assert.equal(canKnifeCreateOffensiveContact({ ...attack, pointerOwnerId: null }), false, 'walking or camera movement without an owner cannot puncture or slash');
+  assert.equal(canKnifeCreateOffensiveContact({ ...attack, deliberateSpeed: 0 }), false, 'idle sway and enemy motion cannot supply attack energy');
+  assert.equal(canKnifeCreateOffensiveContact({ ...attack, state: KNIFE_CONTROL_STATES.returning }), false, 'spring return cannot cut');
+  assert.equal(canKnifeCreateOffensiveContact({ ...attack, state: KNIFE_CONTROL_STATES.withdrawing }), false, 'assisted withdrawal cannot create a new wound');
+});
+
+test('knife release plans use bounded free, failed-contact, and embedded returns', () => {
+  const free = getKnifeReleasePlan({ config: KNIFE_COMBAT_CONFIG });
+  const failed = getKnifeReleasePlan({ failedContact: true, config: KNIFE_COMBAT_CONFIG });
+  const shallow = getKnifeReleasePlan({ embeddedDepth: 0.01, config: KNIFE_COMBAT_CONFIG });
+  const deep = getKnifeReleasePlan({ embeddedDepth: KNIFE_COMBAT_CONFIG.maximumPenetrationDepth, config: KNIFE_COMBAT_CONFIG });
+  assert.equal(free.state, KNIFE_CONTROL_STATES.returning);
+  assert.ok(free.durationSeconds >= 0.12 && free.durationSeconds <= 0.18);
+  assert.ok(failed.durationSeconds >= 0.16 && failed.durationSeconds <= 0.22);
+  assert.equal(shallow.state, KNIFE_CONTROL_STATES.withdrawing);
+  assert.ok(shallow.durationSeconds >= 0.25 && deep.durationSeconds <= 0.4);
+  assert.ok(deep.durationSeconds > shallow.durationSeconds);
+  const springSamples = [0, 0.03, 0.06, 0.09, 0.12, 0.15].map((time) => criticallyDampedReturnProgress(time, 0.15));
+  assert.equal(springSamples[0], 0);
+  assert.equal(springSamples.at(-1), 1);
+  assert.ok(springSamples.every((value, index) => index === 0 || value >= springSamples[index - 1]), 'critical return is monotonic and cannot oscillate');
 });
 
 test('knife tip and forward axis derive from one world transform', () => {
@@ -303,4 +335,95 @@ test('Folsom encounter places the physical actor four meters ahead of new-game s
   assert.equal(encounter.physics.world.bodies.len(), 19);
   encounter.dispose();
   assert.equal(scene.getObjectByName('folsom-starter-humanoid-combat-subject'), undefined);
+});
+
+test('one authoritative knife root keeps identity, scale, pose, ownership, and safe return', async () => {
+  await initializeCombatPhysics();
+  const physics = new CombatPhysicsWorld();
+  const scene = new THREE.Scene();
+  const actor = new HumanoidCombatActor({ physics, scene });
+  const camera = new THREE.PerspectiveCamera(70, 390 / 702, 0.1, 100);
+  camera.position.set(0, 1.5, -1.5);
+  const rect = { left: 0, top: 0, width: 390, height: 702 };
+  const viewport = { querySelector: () => null, getBoundingClientRect: () => rect, addEventListener() {}, removeEventListener() {}, setPointerCapture() {}, releasePointerCapture() {} };
+  const equipment = { getEquippedToolId: () => 'old_work_knife', hasItem: () => true };
+  let contactRange = false;
+  const knife = new WorldKnifeCombatController({ app: viewport, scene, camera, actor, physics, equipmentRuntime: equipment, bindPointerInput: false, contactActivationProvider: () => contactRange });
+  knife.afterPhysics();
+  const identity = knife.visual.id;
+  const scale = knife.visual.scale.clone();
+  const ready = knife.actualGrip.clone();
+  contactRange = true;
+  knife.beforePhysics(1 / 60); knife.afterPhysics();
+  contactRange = false;
+  knife.beforePhysics(1 / 60); knife.afterPhysics();
+  assert.equal(knife.visual.id, identity, 'combat proximity does not swap the knife mesh');
+  assert.deepEqual(knife.visual.scale.toArray(), scale.toArray(), 'combat proximity does not change knife scale');
+  assert.ok(knife.actualGrip.distanceTo(ready) < 0.001, 'combat proximity does not change the ready pose');
+  assert.equal(scene.children.filter((child) => child.name === 'old-work-knife-authoritative-world-weapon').length, 1);
+  assert.equal(knife.acquireGrip(11, 300, 530, 0), true);
+  assert.equal(knife.acquireGrip(12, 300, 530, 0), false, 'unrelated pointers cannot steal ownership');
+  knife.applyGripGesture(11, 80, -120, 380, 410, 50);
+  for (let index = 0; index < 4; index += 1) knife.beforePhysics(1 / 60);
+  assert.equal(knife.state, KNIFE_CONTROL_STATES.attacking);
+  knife.releaseGrip('test-release');
+  assert.equal(knife.state, KNIFE_CONTROL_STATES.returning);
+  assert.equal(knife.attackEnabled, false);
+  for (let index = 0; index < 11; index += 1) knife.beforePhysics(1 / 60);
+  assert.equal(knife.state, KNIFE_CONTROL_STATES.ready);
+  assert.equal(knife.desiredExtension, 0, 'release never leaves the previous extension requested');
+  assert.equal(actor.woundSystem.wounds.length, 0, 'return motion creates no wound');
+  const embeddedHit = makeHit(actor, 'upper_chest');
+  knife.acquireGrip(21, 300, 530, 500);
+  knife.beginPenetration(embeddedHit.hit, embeddedHit.worldPoint, new THREE.Vector3(0, 0, -1), 1);
+  const embeddedWounds = actor.woundSystem.wounds.length;
+  knife.releaseGrip('embedded-test-release');
+  assert.equal(knife.state, KNIFE_CONTROL_STATES.withdrawing);
+  for (let index = 0; index < 30; index += 1) knife.beforePhysics(1 / 60);
+  assert.equal(knife.entry, null, 'embedded release completes assisted extraction');
+  assert.ok([KNIFE_CONTROL_STATES.returning, KNIFE_CONTROL_STATES.ready].includes(knife.state));
+  assert.equal(actor.woundSystem.wounds.length, embeddedWounds, 'assisted withdrawal cannot create another wound');
+  knife.cancel('pointer-cancel-test');
+  assert.equal(knife.gripPointerId, null);
+  knife.dispose();
+  assert.equal(scene.getObjectByName('old-work-knife-authoritative-world-weapon'), undefined);
+  actor.dispose();
+  physics.dispose();
+});
+
+test('immortal reactive policy survives repeated severe attacks and recovers while normal mortality remains available', async () => {
+  assert.equal(resolveCombatMortalityMode(''), COMBAT_MORTALITY_MODES.immortalReactive);
+  assert.equal(resolveCombatMortalityMode('?combatMortality=normal'), COMBAT_MORTALITY_MODES.normal);
+  await initializeCombatPhysics();
+  const physics = new CombatPhysicsWorld();
+  const actor = new HumanoidCombatActor({ physics, scene: new THREE.Scene(), mortalityMode: COMBAT_MORTALITY_MODES.immortalReactive });
+  for (let index = 0; index < 100; index += 1) {
+    const bodyId = index % 2 ? 'upper_chest' : 'neck';
+    const { hit, worldPoint } = makeHit(actor, bodyId, new THREE.Vector3(index % 3 * 0.015 - 0.015, 0, 0.1));
+    const wound = actor.beginPunctureWound({ hit, entryPoint: worldPoint, direction: new THREE.Vector3(0, 0, -1), depth: Math.min(hit.region.maximumTissueDepth, 0.18) });
+    actor.applyPenetration({ hit, entryPoint: worldPoint, direction: new THREE.Vector3(0, 0, -1), deltaDepth: 0.14, depth: Math.min(hit.region.maximumTissueDepth, 0.18), force: 2.4, woundId: wound.id });
+    actor.onWeaponExtracted(wound.id, { releaseSeverity: 1, direction: new THREE.Vector3(0, 0, 1) });
+    actor.beforePhysics(1 / 60);
+    assert.notEqual(actor.lifeState, 'dying');
+    assert.notEqual(actor.lifeState, 'dead');
+  }
+  const skull = makeHit(actor, 'head', new THREE.Vector3(0, 0, 0.12), 'skull');
+  actor.physiology.onTrauma({ hit: skull.hit, severity: 2, depth: 0.12, deltaDepth: 0.12, hardContact: true });
+  actor.beforePhysics(1 / 60);
+  assert.equal(actor.lifeState, 'incapacitated', 'neurological lethality is converted into bounded reactive collapse');
+  assert.ok(actor.physiology.bloodReserve >= IMMORTAL_REACTIVE_CONFIG.bloodReserveFloor);
+  assert.ok(actor.physiology.consciousness >= IMMORTAL_REACTIVE_CONFIG.consciousnessFloor);
+  assert.ok(actor.woundSystem.wounds.length <= WOUND_CONFIG.maximumWounds, 'wound visuals recycle at the pool limit');
+  for (let index = 0; index < 1800; index += 1) actor.beforePhysics(1 / 60);
+  assert.equal(actor.lifeState, 'alive');
+  assert.ok(actor.physiology.consciousness > 0.4, 'consciousness recovers toward the testing baseline');
+  assert.ok(actor.motorStrength > 0.7, 'motor strength and posture recover');
+  assert.ok(actor.balanceImpairment < 0.1, 'balance impairment decays');
+  actor.setMortalityMode(COMBAT_MORTALITY_MODES.normal);
+  actor.physiology.neurologicalIntegrity = 0;
+  actor.physiology.update(1 / 60);
+  for (let index = 0; index < 120; index += 1) actor.beforePhysics(1 / 60);
+  assert.equal(actor.lifeState, 'dead', 'normal mortality restores ordinary terminal behavior');
+  actor.dispose();
+  physics.dispose();
 });

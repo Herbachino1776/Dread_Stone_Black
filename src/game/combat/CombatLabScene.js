@@ -4,6 +4,7 @@ import { CombatPhysicsWorld, initializeCombatPhysics } from './CombatPhysicsWorl
 import { HumanoidCombatActor } from './HumanoidCombatActor.js';
 import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
+import { resolveCombatMortalityMode } from './CombatMortality.js';
 
 export class CombatLabScene {
   static async create(options = {}) {
@@ -37,7 +38,7 @@ export class CombatLabScene {
     this.lightingMode = 'day';
     this.disposed = false;
     this.buildEnvironment();
-    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, mortalityMode: resolveCombatMortalityMode(), eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
     this.actor.setEnvironmentContactHints({ groundY: 0, wallX: -2.65 });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: 0, wallX: -2.65, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
   }
@@ -158,6 +159,11 @@ export class CombatLabScene {
 
   clearWounds() { this.actor.woundSystem.clear(); }
   clearBlood() { this.bloodEffects.clear(); }
+  toggleMortalityMode() {
+    const next = this.actor.mortalityMode === 'normal' ? 'immortal_reactive' : 'normal';
+    this.actor.setMortalityMode(next);
+    return next;
+  }
 
   setPhysicsPaused(paused) {
     this.physics.paused = Boolean(paused);

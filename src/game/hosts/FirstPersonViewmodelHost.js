@@ -45,6 +45,8 @@ export class FirstPersonViewmodelHost {
     this.keepersLanternViewmodel = new KeepersLanternViewmodel({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, player: this.player });
     this.torchViewmodel = new TorchViewmodel({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
     this.physicalToolViewmodel = new PhysicalToolViewmodel({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
+    this.initializeCombatKnifeRuntime();
+    this.toolInputViewmodel = this.createToolInputViewmodel();
     this.offhandAimController = new OffhandAimController({ app: this.app, viewmodels: [this.torchViewmodel, this.keepersLanternViewmodel] });
     this.sceneSessionHost?.setLanternRevealEmitterProvider?.(() => this.getKeeperLanternEmitter());
     this.castingController = new CastingController({ app: this.app, camera: this.camera, player: this.player, dungeon: this.dungeon, hud: this.hud, rodView: this.fishingRodView, equipmentRuntime: this.equipmentRuntime, feedback: this.feedback });
@@ -54,12 +56,11 @@ export class FirstPersonViewmodelHost {
       player: this.player,
       dungeon: this.dungeon,
       equipmentRuntime: this.equipmentRuntime,
-      viewmodel: this.physicalToolViewmodel,
+      viewmodel: this.toolInputViewmodel,
       feedback: this.feedback,
       controls: this.controls,
       audioRuntime: this.audioRuntime,
     });
-    this.initializeCombatKnifeRuntime();
 
     this.disposers.push(this.equipmentRuntime?.on?.(EQUIPMENT_EVENTS.equippedChanged, (equipmentState) => this.handleEquipmentChanged(equipmentState)));
     this.syncEquipmentVisuals();
@@ -88,14 +89,22 @@ export class FirstPersonViewmodelHost {
 
   initializeCombatKnifeRuntime() {
     const combatRuntime = this.dungeon?.isCombatLab ? this.dungeon : this.dungeon?.combatEncounter;
-    this.physicalToolViewmodel?.setCombatKnifeActive?.(false);
-    if (!combatRuntime) return;
-    const activationProvider = this.dungeon?.isCombatLab ? () => true : () => combatRuntime.isPlayerInCombatRange(this.player);
-    this.physicalToolViewmodel?.setCombatKnifeActive?.(activationProvider());
-    this.combatKnifeController = new WorldKnifeCombatController({ app: this.app, scene: combatRuntime.scene, camera: this.camera, player: this.player, actor: combatRuntime.actor, physics: combatRuntime.physics, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime.feedbackSystem, bloodEffects: combatRuntime.bloodEffects, activationProvider });
-    combatRuntime.attachWeaponController(this.combatKnifeController);
+    const contactActivationProvider = this.dungeon?.isCombatLab ? () => true : combatRuntime ? () => combatRuntime.isPlayerInCombatRange(this.player) : () => false;
+    this.combatKnifeController = new WorldKnifeCombatController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, bloodEffects: combatRuntime?.bloodEffects ?? null, contactActivationProvider, bindPointerInput: this.dungeon?.isCombatLab === true });
+    combatRuntime?.attachWeaponController?.(this.combatKnifeController);
     this.combatRuntime = combatRuntime;
-    this.combatActivationProvider = activationProvider;
+  }
+
+  createToolInputViewmodel() {
+    const active = () => this.combatKnifeController?.isEquipped?.() ? this.combatKnifeController : this.physicalToolViewmodel;
+    return {
+      getActiveToolId: () => active()?.getActiveToolId?.() ?? null,
+      projectGrabHit: (...args) => active()?.projectGrabHit?.(...args) ?? false,
+      getProjectedGrabPoint: (...args) => active()?.getProjectedGrabPoint?.(...args) ?? null,
+      getProjectedActivePoint: (...args) => active()?.getProjectedActivePoint?.(...args) ?? null,
+      setGestureState: (gesture) => active()?.setGestureState?.(gesture),
+      impact: (context) => active()?.impact?.(context),
+    };
   }
 
   syncEquipmentVisuals() {
@@ -112,9 +121,12 @@ export class FirstPersonViewmodelHost {
     this.offhandAimController?.update(deltaSeconds);
     this.keepersLanternViewmodel?.update(deltaSeconds);
     this.torchViewmodel?.update(deltaSeconds);
-    this.physicalToolViewmodel?.setCombatKnifeActive?.(this.combatActivationProvider?.() ?? false);
     this.physicalToolViewmodel?.update(deltaSeconds);
     this.physicalToolActionController?.update(deltaSeconds);
+    if (!this.combatRuntime) {
+      this.combatKnifeController?.beforePhysics?.(deltaSeconds);
+      this.combatKnifeController?.afterPhysics?.();
+    }
     this.castingController?.update(deltaSeconds);
     return this.getDebugSummary(context);
   }
@@ -171,7 +183,7 @@ export class FirstPersonViewmodelHost {
       torchVisible: this.torchViewmodel?.root?.visible === true,
       keepersLanternActive: this.keepersLanternViewmodel?.isActive?.() === true,
       fishing: this.castingController?.debug ?? null,
-      physicalToolId: this.physicalToolViewmodel?.getActiveToolId?.() ?? null,
+      physicalToolId: this.toolInputViewmodel?.getActiveToolId?.() ?? null,
       combatKnife: this.combatKnifeController?.getDiagnostics?.() ?? null,
     };
   }
@@ -195,7 +207,7 @@ export class FirstPersonViewmodelHost {
     this.physicalToolActionController = null;
     this.combatKnifeController = null;
     this.combatRuntime = null;
-    this.combatActivationProvider = null;
+    this.toolInputViewmodel = null;
     this.physicalToolViewmodel = null;
     this.keepersLanternViewmodel = null;
     this.session = null;

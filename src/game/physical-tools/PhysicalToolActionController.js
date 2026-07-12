@@ -36,10 +36,15 @@ export class PhysicalToolActionController {
     this.viewport?.addEventListener?.('pointermove', move, { passive: false, capture: true });
     this.viewport?.addEventListener?.('pointerup', end, { passive: false, capture: true });
     this.viewport?.addEventListener?.('pointercancel', end, { passive: false, capture: true });
+    const suspend = () => this.cancelGesture('app-suspended');
+    globalThis.document?.addEventListener?.('visibilitychange', suspend);
+    globalThis.window?.addEventListener?.('pagehide', suspend);
     this.disposers.push(() => this.viewport?.removeEventListener?.('pointerdown', down, { capture: true }));
     this.disposers.push(() => this.viewport?.removeEventListener?.('pointermove', move, { capture: true }));
     this.disposers.push(() => this.viewport?.removeEventListener?.('pointerup', end, { capture: true }));
     this.disposers.push(() => this.viewport?.removeEventListener?.('pointercancel', end, { capture: true }));
+    this.disposers.push(() => globalThis.document?.removeEventListener?.('visibilitychange', suspend));
+    this.disposers.push(() => globalThis.window?.removeEventListener?.('pagehide', suspend));
   }
 
   pointerDown(event) {
@@ -252,7 +257,7 @@ export class PhysicalToolActionController {
     return Boolean(event?.target?.closest?.('button, [data-equipment-panel], [data-pause-overlay], [data-control="move"]'));
   }
 
-  cancelGesture() {
+  cancelGesture(_reason = 'cancelled') {
     if (this.state.pointerId != null) this.viewport?.releasePointerCapture?.(this.state.pointerId);
     this.state = this.createIdleState();
     this.setControlsConstrained(false);
@@ -392,6 +397,7 @@ export class PhysicalToolActionController {
   }
 
   dispose() {
+    this.cancelGesture('disposed');
     this.disposers.forEach((dispose) => dispose?.());
     this.disposers = [];
     this.audioContext?.close?.();

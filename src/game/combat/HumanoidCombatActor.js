@@ -4,6 +4,7 @@ import { RAPIER } from './CombatPhysicsWorld.js';
 import { CombatWoundSystem } from './CombatWoundSystem.js';
 import { CombatPhysiology } from './CombatPhysiology.js';
 import { COLLAPSE_CONFIG, HUMANOID_DURABILITY_CONFIG, VESSEL_ZONES } from './CombatStage2Config.js';
+import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG } from './CombatMortality.js';
 
 const BODY_COLLISION_GROUPS = 0x00020001;
 const tmpPosition = new THREE.Vector3();
@@ -33,7 +34,7 @@ function bodyQuaternion(rotation = [0, 0, 0]) {
 }
 
 export class HumanoidCombatActor {
-  constructor({ physics, scene, spawnOffset = new THREE.Vector3(), spawnYaw = 0, eventSink = null } = {}) {
+  constructor({ physics, scene, spawnOffset = new THREE.Vector3(), spawnYaw = 0, eventSink = null, mortalityMode = COMBAT_MORTALITY_MODES.normal } = {}) {
     this.physics = physics;
     this.scene = scene;
     this.spawnOffset = spawnOffset.clone();
@@ -53,6 +54,8 @@ export class HumanoidCombatActor {
     this.joints = [];
     this.vesselDebug = [];
     this.eventSink = eventSink;
+    this.mortalityMode = mortalityMode;
+    this.reactiveCollapseElapsed = 0;
     this.wounds = [];
     this.regionState = new Map();
     this.elapsed = 0;
@@ -81,6 +84,11 @@ export class HumanoidCombatActor {
 
   setEventSink(eventSink) { this.eventSink = eventSink; this.physiology?.setEventSink?.(eventSink); }
   setEnvironmentContactHints(hints = {}) { Object.assign(this.environmentContactHints, hints); }
+  setMortalityMode(mode) {
+    this.mortalityMode = mode === COMBAT_MORTALITY_MODES.normal ? COMBAT_MORTALITY_MODES.normal : COMBAT_MORTALITY_MODES.immortalReactive;
+    if (this.isImmortalReactive() && ['dying', 'dead'].includes(this.lifeState)) this.recoverReactivePosture(true);
+  }
+  isImmortalReactive() { return this.mortalityMode === COMBAT_MORTALITY_MODES.immortalReactive; }
 
   createMaterials() {
     this.materials = {
@@ -378,7 +386,7 @@ export class HumanoidCombatActor {
     const totalTrauma = [...this.regionState.values()].reduce((sum, state) => sum + state.trauma, 0);
     const criticalTrauma = Math.max(...['head', 'face', 'skull', 'neck', 'upper_chest', 'lower_chest'].map((id) => this.regionState.get(id)?.trauma ?? 0));
     if (this.lifeState === 'alive' && (this.balanceImpairment > HUMANOID_DURABILITY_CONFIG.balanceCollapseThreshold || totalTrauma > HUMANOID_DURABILITY_CONFIG.accumulatedCollapseThreshold)) this.requestCollapse(this.resolveTraumaCollapseFamily(), { immediate: false, lethal: false });
-    if (this.lifeState !== 'dead' && (criticalTrauma > HUMANOID_DURABILITY_CONFIG.criticalDyingThreshold || totalTrauma > HUMANOID_DURABILITY_CONFIG.accumulatedDyingThreshold)) this.transitionLifeState('dying', 'overwhelming-regional-trauma');
+    if (this.lifeState !== 'dead' && (criticalTrauma > HUMANOID_DURABILITY_CONFIG.criticalDyingThreshold || totalTrauma > HUMANOID_DURABILITY_CONFIG.accumulatedDyingThreshold)) this.transitionLifeState(this.isImmortalReactive() ? 'incapacitated' : 'dying', 'overwhelming-regional-trauma');
   }
 
   resolveTraumaCollapseFamily() {
@@ -394,12 +402,14 @@ export class HumanoidCombatActor {
     if (!COLLAPSE_CONFIG.families.includes(family) || this.lifeState === 'dead') return;
     this.collapseFamily ??= family;
     this.collapseReason ??= regionId ? `${family}:${regionId}` : family;
-    if (lethal) this.transitionLifeState('dying', this.collapseReason);
+    if (lethal && !this.isImmortalReactive()) this.transitionLifeState('dying', this.collapseReason);
     else this.transitionLifeState('incapacitated', this.collapseReason);
+    if (this.isImmortalReactive()) this.reactiveCollapseElapsed = 0;
     if (immediate) this.motorStrength = Math.min(this.motorStrength, family === 'neurological' ? 0.02 : 0.16);
   }
 
   transitionLifeState(nextState, reason = 'trauma') {
+    if (this.isImmortalReactive() && (nextState === 'dying' || nextState === 'dead')) nextState = 'incapacitated';
     const order = { alive: 0, incapacitated: 1, dying: 2, dead: 3 };
     if (!(nextState in order) || order[nextState] <= order[this.lifeState]) return false;
     this.lifeState = nextState;
@@ -441,13 +451,41 @@ export class HumanoidCombatActor {
       const deathDelay = this.collapseFamily === 'neurological' ? 0.22 : this.collapseFamily === 'neck_failure' ? 0.85 : 1.6;
       if (this.dyingElapsed >= deathDelay) this.transitionLifeState('dead', this.collapseReason ?? 'mortal-trauma');
     }
+    if (this.isImmortalReactive()) this.updateImmortalReactiveRecovery(dt);
     const releaseRate = COLLAPSE_CONFIG.motorReleaseRates[this.collapseFamily] ?? COLLAPSE_CONFIG.motorReleaseRates.general_trauma;
-    if (this.lifeState === 'incapacitated') this.motorStrength = Math.max(this.collapseFamily === 'leg_failure' ? 0.09 : 0.04, this.motorStrength - dt * releaseRate);
+    if (this.lifeState === 'incapacitated' && this.isImmortalReactive()) {
+      const recoveryStarted = this.reactiveCollapseElapsed >= IMMORTAL_REACTIVE_CONFIG.recoveryDelaySeconds;
+      this.motorStrength = recoveryStarted ? Math.min(1, this.motorStrength + dt / IMMORTAL_REACTIVE_CONFIG.postureRecoverySeconds) : Math.max(0.08, this.motorStrength - dt * releaseRate);
+      if (recoveryStarted && this.motorStrength >= 0.72 && this.physiology.consciousness >= 0.42) this.recoverReactivePosture();
+    }
+    else if (this.lifeState === 'incapacitated') this.motorStrength = Math.max(this.collapseFamily === 'leg_failure' ? 0.09 : 0.04, this.motorStrength - dt * releaseRate);
     else if (this.lifeState === 'dying') this.motorStrength = Math.max(0.015, this.motorStrength - dt * releaseRate * 1.35);
     else if (this.lifeState === 'dead') this.motorStrength = Math.max(0, this.motorStrength - dt * Math.max(1.8, releaseRate * 2));
     else this.motorStrength = Math.min(1, this.motorStrength + dt * 0.25);
     this.updateFacialPresentation();
     this.bodies.forEach((entry, bodyId) => this.applyBodyMotor(entry, bodyId, dt, playerPosition));
+  }
+
+  updateImmortalReactiveRecovery(dt) {
+    this.reactiveCollapseElapsed += this.lifeState === 'incapacitated' ? dt : 0;
+    this.balanceImpairment = Math.max(0, Math.min(1.5, this.balanceImpairment) - IMMORTAL_REACTIVE_CONFIG.balanceRecoveryPerSecond * dt);
+    this.regionState.forEach((state) => {
+      state.trauma = Math.max(0, Math.min(1.5, state.trauma) - IMMORTAL_REACTIVE_CONFIG.traumaDecayPerSecond * dt);
+      state.pain = Math.max(0, state.pain - IMMORTAL_REACTIVE_CONFIG.traumaDecayPerSecond * dt * 1.5);
+      state.structural = Math.max(0, Math.min(1.5, state.structural) - IMMORTAL_REACTIVE_CONFIG.traumaDecayPerSecond * dt * 0.7);
+      state.motorWeakness = Math.max(0, state.motorWeakness - IMMORTAL_REACTIVE_CONFIG.motorWeaknessDecayPerSecond * dt);
+    });
+  }
+
+  recoverReactivePosture(immediate = false) {
+    this.lifeState = 'alive';
+    this.collapseFamily = null;
+    this.collapseReason = null;
+    this.dyingElapsed = 0;
+    this.reactiveCollapseElapsed = 0;
+    this.corpseSleeping = false;
+    this.finalSettleEmitted = false;
+    if (immediate) this.motorStrength = Math.max(this.motorStrength, 0.72);
   }
 
   applyBodyMotor(entry, bodyId, dt, playerPosition) {
@@ -617,6 +655,7 @@ export class HumanoidCombatActor {
     }));
     return {
       state: this.lifeState,
+      mortalityMode: this.mortalityMode,
       motorStrength: this.motorStrength,
       balanceImpairment: this.balanceImpairment,
       consciousnessImpairment: this.consciousnessImpairment,
@@ -668,6 +707,7 @@ export class HumanoidCombatActor {
     this.lastReaction = null;
     this.settledSeconds = 0;
     this.dyingElapsed = 0;
+    this.reactiveCollapseElapsed = 0;
     this.collapseFamily = null;
     this.collapseReason = null;
     this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
