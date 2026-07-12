@@ -144,6 +144,8 @@ export class HumanoidCombatActor {
     collider.userData = body.userData;
     const visual = new THREE.Group();
     visual.name = `combat-body-transform-${config.id}`;
+    visual.position.copy(position);
+    visual.quaternion.copy(quaternion);
     const debug = this.createDebugBody(config);
     this.root.add(visual);
     this.debugRoot.add(debug);

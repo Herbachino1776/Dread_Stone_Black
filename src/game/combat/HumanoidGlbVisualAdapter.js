@@ -17,6 +17,34 @@ export const HUMANOID_GLB_BONE_MAP = Object.freeze({
 
 let cachedAssetPromise = null;
 let assetLoadCount = 0;
+const unitScale = new THREE.Vector3(1, 1, 1);
+const decomposedBoneScale = new THREE.Vector3();
+
+function hierarchyDepth(object) {
+  let depth = 0;
+  for (let parent = object.parent; parent; parent = parent.parent) depth += 1;
+  return depth;
+}
+
+export function captureModelSpaceBoneBinding({ modelRootWorld, bodyBindWorld, boneBindWorld }) {
+  const worldToModel = modelRootWorld.clone().invert();
+  const bodyBindModel = worldToModel.clone().multiply(bodyBindWorld);
+  const boneBindModel = worldToModel.clone().multiply(boneBindWorld);
+  return bodyBindModel.invert().multiply(boneBindModel);
+}
+
+export function solveModelSpaceBoneLocal({ modelRootWorld, parentWorld, bodyWorld, bindOffset }) {
+  const worldToModel = modelRootWorld.clone().invert();
+  const bodyModel = worldToModel.clone().multiply(bodyWorld);
+  const desiredBoneModel = bodyModel.multiply(bindOffset);
+  const parentModel = worldToModel.multiply(parentWorld);
+  return parentModel.invert().multiply(desiredBoneModel);
+}
+
+export function applySolvedBoneLocalTransform(bone, localMatrix, bindLocalScale) {
+  localMatrix.decompose(bone.position, bone.quaternion, decomposedBoneScale);
+  bone.scale.copy(bindLocalScale);
+}
 
 function loadCachedAsset() {
   if (!cachedAssetPromise) {
@@ -80,31 +108,34 @@ export class HumanoidGlbVisualAdapter {
 
   captureBindings() {
     this.scene.updateMatrixWorld(true);
+    const modelRootWorld = this.scene.matrixWorld.clone();
     const bones = new Map();
     this.scene.traverse((object) => { if (object.isBone) bones.set(object.name, object); });
     this.bindings = Object.entries(HUMANOID_GLB_BONE_MAP).map(([bodyId, boneName]) => {
       const bone = bones.get(boneName);
       const bodyEntry = this.actor.bodies.get(bodyId);
       if (!bone || !bodyEntry) throw new Error(`Humanoid GLB required mapping missing: ${bodyId} -> ${boneName}`);
-      const bodyBind = new THREE.Matrix4().compose(bodyEntry.restPosition, bodyEntry.restQuaternion, new THREE.Vector3(1, 1, 1));
-      const offset = bodyBind.clone().invert().multiply(bone.matrixWorld);
-      return { bodyId, boneName, bone, offset };
+      const bodyBindWorld = new THREE.Matrix4().compose(bodyEntry.restPosition, bodyEntry.restQuaternion, unitScale);
+      const offset = captureModelSpaceBoneBinding({ modelRootWorld, bodyBindWorld, boneBindWorld: bone.matrixWorld });
+      return { bodyId, boneName, bone, offset, bindLocalScale: bone.scale.clone() };
     });
+    this.bindings.sort((a, b) => hierarchyDepth(a.bone) - hierarchyDepth(b.bone));
   }
 
   update() {
     if (!this.scene || !this.bindings.length) return;
     this.parent.updateMatrixWorld(true);
+    const modelRootWorld = this.scene.matrixWorld.clone();
     for (const binding of this.bindings) {
       const entry = this.actor.bodies.get(binding.bodyId);
       if (!entry) continue;
-      const bodyWorld = new THREE.Matrix4().compose(entry.visual.position, entry.visual.quaternion, new THREE.Vector3(1, 1, 1));
-      const desiredWorld = bodyWorld.multiply(binding.offset);
+      const bodyWorld = new THREE.Matrix4().compose(entry.visual.position, entry.visual.quaternion, unitScale);
       binding.bone.parent?.updateMatrixWorld(true);
-      const local = (binding.bone.parent?.matrixWorld.clone().invert() ?? new THREE.Matrix4()).multiply(desiredWorld);
-      local.decompose(binding.bone.position, binding.bone.quaternion, binding.bone.scale);
+      const local = solveModelSpaceBoneLocal({ modelRootWorld, parentWorld: binding.bone.parent?.matrixWorld ?? modelRootWorld, bodyWorld, bindOffset: binding.offset });
+      applySolvedBoneLocalTransform(binding.bone, local, binding.bindLocalScale);
       binding.bone.updateMatrixWorld(true);
     }
+    this.skeletons.forEach((skeleton) => skeleton.update());
   }
 
   reset() {

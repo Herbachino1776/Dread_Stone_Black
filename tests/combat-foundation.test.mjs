@@ -11,6 +11,7 @@ import { SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configura
 import { WorldKnifeCombatController } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
+import { applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 
 async function createActor() {
   await initializeCombatPhysics();
@@ -129,6 +130,41 @@ test('visible and collision weapon transforms share authored tolerance', () => {
   const quaternion = new THREE.Quaternion();
   assert.equal(visibleCollisionTransformsWithinTolerance(position, position.clone(), quaternion, quaternion.clone(), KNIFE_COMBAT_CONFIG.visibleCollisionTolerance), true);
   assert.equal(visibleCollisionTransformsWithinTolerance(position, position.clone().addScalar(0.2), quaternion, quaternion.clone(), KNIFE_COMBAT_CONFIG.visibleCollisionTolerance), false);
+});
+
+test('GLB physics binding preserves bind pose and authored bone scale under model normalization', () => {
+  const modelRoot = new THREE.Group();
+  modelRoot.position.set(3, 0.2, -5);
+  modelRoot.rotation.y = 0.6;
+  modelRoot.scale.setScalar(0.0243);
+  const parent = new THREE.Bone();
+  parent.position.set(0.4, 40, -0.3);
+  const bone = new THREE.Bone();
+  bone.position.set(0, 7.9, 0);
+  bone.quaternion.setFromEuler(new THREE.Euler(0.12, -0.18, 0.04));
+  bone.scale.set(1, 1, 1);
+  parent.add(bone);
+  modelRoot.add(parent);
+  modelRoot.updateMatrixWorld(true);
+  const authoredLocal = bone.matrix.clone();
+  const authoredScale = bone.scale.clone();
+  const bodyBindWorld = new THREE.Matrix4().compose(new THREE.Vector3(3.02, 1.55, -5.12), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.04, 0.65, -0.02)), new THREE.Vector3(1, 1, 1));
+  const bindOffset = captureModelSpaceBoneBinding({ modelRootWorld: modelRoot.matrixWorld, bodyBindWorld, boneBindWorld: bone.matrixWorld });
+  const solvedLocal = solveModelSpaceBoneLocal({ modelRootWorld: modelRoot.matrixWorld, parentWorld: parent.matrixWorld, bodyWorld: bodyBindWorld, bindOffset });
+  const solvedPosition = new THREE.Vector3();
+  const solvedRotation = new THREE.Quaternion();
+  const solvedScale = new THREE.Vector3();
+  solvedLocal.decompose(solvedPosition, solvedRotation, solvedScale);
+  const expectedPosition = new THREE.Vector3();
+  const expectedRotation = new THREE.Quaternion();
+  const expectedScale = new THREE.Vector3();
+  authoredLocal.decompose(expectedPosition, expectedRotation, expectedScale);
+  assert.ok(solvedPosition.distanceTo(expectedPosition) < 1e-5, 'bind solve retains authored local bone position');
+  assert.ok(1 - Math.abs(solvedRotation.dot(expectedRotation)) < 1e-6, 'bind solve retains authored local bone rotation');
+  assert.ok(solvedScale.distanceTo(authoredScale) < 1e-6, 'normalized model scale does not leak into local bone scale');
+  const scaleContaminatedLocal = solvedLocal.clone().scale(new THREE.Vector3(1.000001, 0.999999, 1.000002));
+  for (let frame = 0; frame < 600; frame += 1) applySolvedBoneLocalTransform(bone, scaleContaminatedLocal, authoredScale);
+  assert.deepEqual(bone.scale.toArray(), authoredScale.toArray(), 'per-frame matrix decomposition cannot accumulate scale drift into the skin');
 });
 
 test('contact classifier distinguishes blunt, edge, glance, tip, failure, and puncture', () => {
