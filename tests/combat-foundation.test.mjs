@@ -2,9 +2,33 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { COMBAT_REQUIRED_REGION_IDS, HUMANOID_ANATOMY_REGIONS, HUMANOID_BODY_CONFIG, HUMANOID_JOINT_CONFIG, KNIFE_COMBAT_CONFIG, validateCombatConfiguration } from '../src/game/combat/CombatConfig.js';
-import { advancePenetrationDepth, clampWorkspacePoint, classifyKnifeContact, computeWorldThrust, deriveBladeTip, normalizedBladeForward, visibleCollisionTransformsWithinTolerance } from '../src/game/combat/CombatMath.js';
+import { advancePenetrationDepth, clampWorkspacePoint, classifyKnifeContact, classifySlashContact, computeWorldThrust, deriveBladeTip, extendSlashLength, normalizedBladeForward, visibleCollisionTransformsWithinTolerance } from '../src/game/combat/CombatMath.js';
 import { CombatPhysicsWorld, initializeCombatPhysics } from '../src/game/combat/CombatPhysicsWorld.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
+import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
+import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
+import { SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
+
+async function createActor() {
+  await initializeCombatPhysics();
+  const physics = new CombatPhysicsWorld();
+  const scene = new THREE.Scene();
+  return { physics, scene, actor: new HumanoidCombatActor({ physics, scene }) };
+}
+
+function makeHit(actor, bodyId, localPoint = new THREE.Vector3(0, 0, 0.1), regionOverride = null) {
+  const entry = actor.bodies.get(bodyId);
+  const collider = actor.colliders.get(bodyId);
+  const translation = entry.body.translation();
+  const rotation = entry.body.rotation();
+  const worldPoint = localPoint.clone().applyQuaternion(new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w)).add(new THREE.Vector3(translation.x, translation.y, translation.z));
+  const hit = actor.resolveHit(collider, worldPoint);
+  if (regionOverride) {
+    hit.regionId = regionOverride;
+    hit.region = HUMANOID_ANATOMY_REGIONS.find((region) => region.id === regionOverride);
+  }
+  return { hit, worldPoint };
+}
 
 test('combat configuration has believable semantic anatomy and physical mass', () => {
   const result = validateCombatConfiguration();
@@ -84,6 +108,26 @@ test('contact classifier distinguishes blunt, edge, glance, tip, failure, and pu
   assert.equal(classifyKnifeContact({ speed: 2, alignment: 0.95 }).state, 'surface_puncture');
 });
 
+test('edge-aware slash classification rejects the flat, spine, jitter, and low pressure', () => {
+  const valid = { edgeSpeed: 1.6, edgeAlignment: 0.92, pressure: 0.62, contactDuration: 0.08, travel: 0.12, tissueResistance: 0.45, clothingResistance: 0.12 };
+  assert.equal(classifySlashContact({ ...valid, part: 'edge' }).state, 'deep_slash');
+  assert.equal(classifySlashContact({ ...valid, part: 'flat' }).cuts, false);
+  assert.equal(classifySlashContact({ ...valid, part: 'spine' }).cuts, false);
+  assert.equal(classifySlashContact({ ...valid, part: 'edge', travel: 0.003 }).state, 'edge_touch_no_cut');
+  assert.equal(classifySlashContact({ ...valid, part: 'edge', pressure: 0.02 }).cuts, false);
+  assert.equal(classifySlashContact({ ...valid, part: 'edge', edgeAlignment: 0.1 }).state, 'scraping_contact');
+  assert.equal(extendSlashLength(0.1, 2), 0.1 + SLASH_CONFIG.maximumStepLength);
+  assert.ok(extendSlashLength(WOUND_CONFIG.maximumCutLength, 1) <= WOUND_CONFIG.maximumCutLength);
+});
+
+test('stage 2 tuning validates all vessel owners and bounded effect pools', () => {
+  const result = validateCombatStage2Configuration(HUMANOID_ANATOMY_REGIONS.map((region) => region.id));
+  assert.equal(result.valid, true);
+  assert.equal(result.vesselCount, VESSEL_ZONES.length);
+  assert.equal(result.woundLimit, 24);
+  assert.ok(result.particleLimit > result.decalLimit);
+});
+
 test('penetration advances gradually, respects bone and extracts', () => {
   const base = { dt: 1 / 60, tissueResistance: 0.5, maximumDepth: 0.3, penetrationRate: 0.58, withdrawalRate: 0.72 };
   const shallow = advancePenetrationDepth({ ...base, currentDepth: 0, targetDepth: 0.2 });
@@ -152,10 +196,111 @@ test('regional trauma affects balance and severe vital trauma releases standing 
   const neckPoint = new THREE.Vector3(neckPosition.x, neckPosition.y, neckPosition.z);
   const neckHit = actor.resolveHit(neckCollider, neckPoint);
   for (let i = 0; i < 5; i += 1) actor.applyPenetration({ hit: neckHit, entryPoint: neckPoint, direction: new THREE.Vector3(0, 0, -1), deltaDepth: 0.1, depth: 0.1, force: 2 });
+  assert.equal(actor.lifeState, 'alive', 'high-durability actor survives a limited sequence without a vessel-owned wound');
+  for (let i = 0; i < 8; i += 1) actor.applyPenetration({ hit: neckHit, entryPoint: neckPoint, direction: new THREE.Vector3(0, 0, -1), deltaDepth: 0.1, depth: 0.1, force: 2 });
   assert.ok(['incapacitated', 'dying', 'dead'].includes(actor.lifeState));
   for (let i = 0; i < 120; i += 1) actor.beforePhysics(1 / 60);
   assert.ok(actor.motorStrength < 0.5);
   if (actor.lifeState === 'dying') assert.fail('dying state should complete within the authored transition');
   actor.dispose();
   physics.dispose();
+});
+
+test('persistent wounds are region-owned, body-local, severity-aware, pooled, and reset cleanly', async () => {
+  const { actor, physics } = await createActor();
+  const { hit, worldPoint } = makeHit(actor, 'left_forearm');
+  const shallow = actor.beginPunctureWound({ hit, entryPoint: worldPoint, direction: new THREE.Vector3(0, 0, -1), depth: 0.012 });
+  actor.onWeaponExtracted(shallow.id, { direction: new THREE.Vector3(0, 0, 1) });
+  const deepPoint = worldPoint.clone().add(new THREE.Vector3(0.12, 0, 0));
+  const slash = actor.applySlashWound({ hit, startPoint: worldPoint, endPoint: deepPoint, surfaceNormal: new THREE.Vector3(0, 0, 1), cutDirection: new THREE.Vector3(1, 0, 0), depth: 0.065, cutLength: 0.12, severity: 0.9, classification: 'deep_slash' });
+  assert.equal(shallow.regionId, 'left_forearm');
+  assert.equal(slash.regionId, 'left_forearm');
+  assert.ok(slash.severity > shallow.severity);
+  assert.ok(slash.cutLength <= deepPoint.distanceTo(worldPoint) + 1e-9);
+  const before = actor.woundSystem.getWorldPose(slash).point;
+  actor.bodies.get('left_forearm').body.setTranslation({ x: 0.2, y: 2, z: -3 }, true);
+  const after = actor.woundSystem.getWorldPose(slash).point;
+  assert.ok(after.distanceTo(before) > 0.1, 'wound follows its moving physical region');
+  for (let index = 0; index < WOUND_CONFIG.maximumWounds + 8; index += 1) {
+    const point = new THREE.Vector3(index * 0.2, 0, 0.1);
+    const synthetic = { ...hit, localPoint: point };
+    actor.woundSystem.createBluntMarker({ hit: synthetic, severity: 0.1, createdTime: index });
+  }
+  assert.ok(actor.woundSystem.wounds.length <= WOUND_CONFIG.maximumWounds);
+  actor.reset();
+  assert.equal(actor.woundSystem.wounds.length, 0);
+  assert.equal(actor.physiology.bloodReserve, 1);
+  actor.dispose();
+  physics.dispose();
+});
+
+test('neck vessels require authored depth and path; embedding obstructs and extraction releases flow', async () => {
+  const { actor, physics } = await createActor();
+  const shallowData = makeHit(actor, 'neck', new THREE.Vector3(-0.055, 0, 0.1), 'neck');
+  const shallow = actor.beginPunctureWound({ hit: shallowData.hit, entryPoint: shallowData.worldPoint, direction: new THREE.Vector3(0, 0, -1), depth: 0.018 });
+  assert.equal(shallow.vesselInvolvement, null);
+  actor.onWeaponExtracted(shallow.id, {});
+  const deepData = makeHit(actor, 'neck', new THREE.Vector3(0.055, 0, 0.1), 'neck');
+  const arterial = actor.beginPunctureWound({ hit: deepData.hit, entryPoint: deepData.worldPoint, direction: new THREE.Vector3(0, 0, -1), depth: 0.07 });
+  assert.equal(arterial.bleedingProfile.kind, 'arterial');
+  actor.physiology.update(1 / 60);
+  const obstructedRate = arterial.bleedingRate;
+  actor.onWeaponExtracted(arterial.id, { releaseSeverity: 1, direction: new THREE.Vector3(0, 0, 1) });
+  actor.physiology.update(1 / 60);
+  assert.ok(arterial.bleedingRate > obstructedRate);
+  actor.dispose();
+  physics.dispose();
+});
+
+test('physiology permits shallow limb injury but differentiates blood loss and neurological failure', async () => {
+  const { actor, physics } = await createActor();
+  const armData = makeHit(actor, 'left_forearm');
+  actor.beginPunctureWound({ hit: armData.hit, entryPoint: armData.worldPoint, direction: new THREE.Vector3(0, 0, -1), depth: 0.01 });
+  for (let index = 0; index < 120; index += 1) actor.beforePhysics(1 / 60);
+  assert.equal(actor.lifeState, 'alive');
+  assert.ok(actor.physiology.consciousness > 0.85);
+  actor.physiology.setBloodReserve(0.35);
+  actor.physiology.update(1 / 60);
+  assert.equal(actor.collapseFamily, 'blood_loss');
+  actor.reset();
+  const skullData = makeHit(actor, 'head', new THREE.Vector3(0, 0, 0.12), 'skull');
+  actor.physiology.onTrauma({ hit: skullData.hit, severity: 1.2, depth: 0.11, deltaDepth: 0.11, hardContact: true });
+  actor.physiology.update(1 / 60);
+  assert.equal(actor.collapseFamily, 'neurological');
+  assert.ok(['dying', 'dead'].includes(actor.lifeState));
+  actor.dispose();
+  physics.dispose();
+});
+
+test('combat feedback guards unsupported haptics, cooldowns contact audio, and honors disable', () => {
+  const feedback = new CombatFeedbackSystem();
+  assert.doesNotThrow(() => feedback.emitHaptic('penetration'));
+  assert.equal(feedback.emit('bone_contact', { owner: 'knife' }), true);
+  assert.equal(feedback.emit('bone_contact', { owner: 'knife' }), false);
+  feedback.setHapticsEnabled(false);
+  assert.equal(feedback.emitHaptic('penetration'), false);
+  feedback.setMuted(true);
+  assert.equal(feedback.emit('extraction', { owner: 'knife' }), true);
+  assert.equal(feedback.getDiagnostics().activeVoices, 0);
+  feedback.reset();
+  assert.deepEqual(feedback.getDiagnostics().eventCounts, {});
+  feedback.dispose();
+});
+
+test('Folsom encounter places the physical actor four meters ahead of new-game spawn and cleans up', async () => {
+  const scene = new THREE.Scene();
+  const dungeon = { scene, collision: { sampleWalkableY: () => ({ y: 0.16 }) } };
+  const encounter = await FolsomCombatEncounter.create({ dungeon });
+  const pelvis = encounter.actor.getBodyWorldPosition('pelvis');
+  const playerSpawn = new THREE.Vector3(-2, 1.71, -4);
+  assert.ok(pelvis.distanceTo(playerSpawn) < 4.5);
+  const headRotation = encounter.actor.bodies.get('head').body.rotation();
+  const facing = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(headRotation.x, headRotation.y, headRotation.z, headRotation.w));
+  assert.ok(facing.z < -0.9, 'the angry face is oriented toward the arriving player');
+  assert.ok(scene.getObjectByName('folsom-starter-humanoid-combat-subject'));
+  assert.equal(encounter.physics.world.bodies.len(), 19);
+  encounter.reset();
+  assert.equal(encounter.physics.world.bodies.len(), 19);
+  encounter.dispose();
+  assert.equal(scene.getObjectByName('folsom-starter-humanoid-combat-subject'), undefined);
 });

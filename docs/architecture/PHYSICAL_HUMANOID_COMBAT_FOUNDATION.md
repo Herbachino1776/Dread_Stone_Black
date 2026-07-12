@@ -2,7 +2,9 @@
 
 ## Launch and scope
 
-The development laboratory is available in development builds at `/?combatLab=1`. It bypasses the title selection, creates an isolated scene, grants and equips the existing `old_work_knife` item ephemerally, and never writes equipment or actor state to the canonical save. The lab has flat ground, a body-contact wall, daylight, a source-local night light, a safe player spawn, and one standing humanoid.
+The development laboratory is available in development builds at `/?combatLab=1`. It bypasses the title selection, creates an isolated scene, grants and equips the existing `old_work_knife` item ephemerally, and never writes equipment or actor state to the canonical save. The lab has flat ground, a body-contact wall, five authored lighting modes, a safe player spawn, and one standing humanoid.
+
+The production Folsom session also owns one `FolsomCombatEncounter`. Its actor is centered at `(-2, ground, 0)`, approximately four metres directly ahead of the authored new-game spawn `(-2, eye height, -4)`. This fixes the Prompt 1 visibility problem: the actor had previously existed only behind the lab query. The Folsom encounter uses no save keys and is destroyed with the session, so the combat subject is nearby and visible without contaminating canonical progression. Knife combat activates within 6.5 metres; farther away the established Old Work Knife shed-growth interaction remains authoritative.
 
 This stage deliberately contains no combat AI, navigation, attacks, blocking, loot, dismemberment, or medical simulation.
 
@@ -66,7 +68,33 @@ The state vocabulary is `no_contact`, `blunt_contact`, `edge_contact`, `glancing
 
 After entry, the wound point and penetration axis are stored in the struck body's local frame. Every physics step reconstructs them from body motion. Forward input requests greater depth; backward input requests less. Tissue resistance rate-limits both. Hard structure raises resistance and clamps depth. The constrained tip remains on the wound path, while lateral desired/actual error applies bounded impulse at the entry point. Large lateral withdrawal can force a safe extraction rather than permit impossible clipping or infinite energy accumulation.
 
-First-pass feedback uses pooled dark puncture marks, localized physical impulses, restrained shake, and short haptics. There are no large blood clouds or unbounded decals.
+Feedback uses persistent pooled region-local wounds, bounded blood, localized physical impulses, spatial synthesized audio, restrained hand resistance, and capability-guarded short haptics. There are no large blood clouds or unbounded decals.
+
+## Slash and wound completion
+
+Slashing is a separate edge-led contact path, not stab damage rotated sideways. The controller sweeps the real cutting-edge midpoint from the previous to current authoritative weapon pose. A continuous slash owner accumulates contact duration and actual edge travel with release hysteresis. Classification considers the contacting part (`tip`, sharp edge, flat, spine, grip/pommel), tangent speed, edge alignment, inward pressure, duration, clothing resistance, tissue resistance, and bounded travel. Results are `edge_touch_no_cut`, `scraping_contact`, `glancing_contact`, `shallow_cut`, `draw_cut`, `deep_slash`, `failed_cut`, or interrupted/reopened ownership. Straight forward motion remains tip-authoritative, and the handle, flat, and spine cannot create an edge wound.
+
+`CombatWoundSystem` owns at most 24 wounds. A wound retains its unique ID, actor/body/semantic-region owner, type, body-local entry and surface vectors, penetration axis, present/maximum depth, local cut endpoints/direction, physically measured length, severity, tissue class, hard contact, vessel intersection, bleeding profile, timestamps, embedded weapon, reopening state, and pooled visual slot. Wound types are puncture, deep puncture, shallow cut, deep slash, arterial wound, and blunt trauma marker. Re-entry near an existing path reopens it; one sweep cannot allocate a wound every frame. Reset and actor disposal release all slots.
+
+Wound presentation uses a fixed pool of lit `MeshStandardMaterial` overlays. Punctures are small dark region-local circles; slashes are narrow body-local geometry strips whose endpoints are the measured cut path. Each frame the overlay reconstructs its world pose from its physical body, so wounds follow stagger, collapse, sleeping corpses, and corpse manipulation. Materials are dark, non-emissive, depth-compatible, and share the same world lighting as the actor.
+
+## Vessels, blood loss, and physiology
+
+Eight authored vessel zones cover the bilateral carotid and jugular paths, brachial vessels, and femoral vessels. A vessel requires the correct semantic region, sufficient depth, a surface path inside the local vessel radius, and a viable penetration axis. A shallow neck scrape therefore remains capillary; it is never promoted merely because the region is `neck`. An embedded blade obstructs arterial or venous flow, and withdrawal temporarily raises release before non-arterial clotting reduces output.
+
+`CombatPhysiology` tracks normalized blood reserve and circulation, aggregate blood-loss rate, total loss, pain, shock, consciousness, neurological integrity, breathing integrity/state, mortal injury, and time since mortal injury. Shallow limb injury can remain survivable. Chest depth impairs breathing and posture; abdominal wounds produce pain and delayed venous deterioration; neck vessel or neurological damage can rapidly release upper-body control; skull paths strongly resist and decisive valid neurological trauma releases motors immediately; leg trauma preferentially removes balance. High general durability is intentional: normal regional trauma is scaled to 55%, with collapse/dying thresholds raised substantially, while anatomically decisive neurological and vessel injuries retain cause-specific consequences.
+
+`CombatBloodEffects` uses one 72-instance droplet mesh and 24 pooled world marks. Entry, insertion, withdrawal, shallow/deep slash, arterial pulse, venous drip, movement, and collapse impact events originate at the active wound pose. Direction combines surface normal, blade/withdrawal motion, target motion, and gravity. Pulse strength is multiplied by circulation and embedded obstruction; it weakens and ceases after physiological death. Ground/wall marks are bounded and reused. All blood uses dark, rough, non-emissive materials and therefore disappears into unlit night with the actor.
+
+## Audio, haptics, reactions, and death
+
+`CombatFeedbackSystem` is the project-owned event boundary for 25 distinct categories: knife movement, clothing, blunt, scrape, failed tip, puncture, soft/deep penetration, bone, embedded movement, binding, extraction, shallow/deep slash, spray/drop, stagger foot, body ground/wall/limb/settle, breathing, pain, shock, unconsciousness, and final exhalation. It applies owner/event cooldowns, an eight-voice ceiling, a two-vocal ceiling, distance panning through the existing audio runtime, and bounded pitch/volume variation. Current combat sounds are deliberately documented Web Audio synthesis placeholders because the audited repository has no suitable licensed flesh, bone, body-impact, or adult-male vocal source set. They provide mechanically distinct feedback but should later be replaced event-for-event with final mastered assets.
+
+Haptics distinguish surface, penetration, hard stop, resistance, extraction, deep slash, severe impact, and collapse. Calls are guarded through `navigator.vibrate`, limited to eight recent events with per-category cooldown, fail silently on unsupported iOS/browser paths, and can be disabled independently. They are supplementary; every state remains readable visually and mechanically.
+
+The actor changes local motor targets and stiffness instead of playing detached flinch clips. Chest wounds fold the torso; neck trauma destabilizes head/upper spine; arm reflexes contract the wounded side; leg wounds weaken their support; shock introduces restrained instability. The face has blink timing, pain/shock brow and jaw targets, weakening lids/gaze, breathing-linked jaw motion, and final stillness. Death hides focused pupils, stops living vocals and breathing, and never returns to hostile idle.
+
+Collapse families are `chest_fold`, `neck_failure`, `neurological`, `leg_failure`, `blood_loss`, and `general_trauma`. They select regional motor-release rates and impulses without teleporting or replacing the articulated body. Current momentum, embedded blade force, joints, ground, and wall determine the result. Neurological release is rapid; blood-loss and leg failure are progressive. Ground, wall, limb, and final-settle events are velocity/cooldown bounded. Once low-energy motion remains under the authored threshold, Rapier sleep suppresses corpse jitter. The collidable corpse, attached wounds, bounded residual blood, and a physically valid embedded knife remain until reset/session disposal.
 
 ## Debug controls and diagnostics
 
@@ -80,13 +108,20 @@ The lab panel is normal only in the lab. Controls are:
 - `N`: switch neutral day/source-local night;
 - `M`: collapse/expand the diagnostic readout.
 - `I` / `U`: deterministic debug-only 10 cm push/pull increments for frame-by-frame contact inspection (the normal ATTACK drag remains the production touch path).
+- `J` / `;`: deterministic left/right hand-workspace increments for inspecting edge travel;
+- `.`: advance one fixed physics step while paused;
+- `C` / `V`: clear wounds / clear blood and world marks;
+- `H` / `Q`: toggle haptics / combat audio mute;
+- `Y` / `G`: cycle consciousness / circulating blood reserve;
+- `1` through `5`: trigger chest, neck, neurological, leg, or blood-loss collapse families;
+- `T` / `L`: select source-local torch / lantern night tests.
 
 Debug drawing includes anatomy bodies, the camera-relative workspace, desired and actual hand markers, grip, tip, cutting edge, forward axis, previous/current swept tip segment, camera center ray for comparison, entry point, penetration axis/depth, and semantic body labels through object metadata. The panel reports frame/physics duration, bodies, constraints, contacts, sweeps, reset/resume counts, actor state, motor strength, balance, consciousness, wounds, regional trauma, representative body positions, knife state/reason, world transform, desired/actual hand, forward axis, depth, speed, and visible/collision divergence.
 
 ## Mobile budget
 
-The lab keeps one world, 20 total bodies including ground/wall, 17 constraints, bounded queries, 12 pooled wound marks, shared actor materials, no per-frame geometry/material construction, 1024px sun shadow, no self-collision, and no critical-mechanic quality downgrade on mobile. Rapier is loaded in the main game chunk today; code splitting is a later packaging optimization, not a mechanics change.
+The lab keeps one world, 20 total bodies including ground/wall, 17 constraints, bounded queries, 24 pooled wound overlays, 72 instanced droplets, 24 pooled world marks, eight audio voices, shared actor/effect materials, no per-frame geometry/material construction, 1024px sun shadow, no self-collision, and no critical-mechanic quality downgrade on mobile. A 390 x 844 browser smoke pass measured approximately 0.1–0.3 ms reported fixed-physics work with one healthy actor, zero transform divergence, 20 bodies, and 17 constraints. This is a development-machine diagnostic, not an iPhone hardware benchmark. Rapier is loaded in the main game chunk today; code splitting is a later packaging optimization, not a mechanics change.
 
-## Deferred to Prompt 2
+## Known limitations and deferred work
 
-Prompt 2 owns slash wound expansion, directional/arterial blood, richer wound persistence and decals, sound layers, final haptic tuning, more detailed death presentation, and audiovisual polish. Prompt 1 intentionally leaves the procedural body as the first production character technique rather than a GLB pipeline, and joint-limit debug arcs are represented by authored limits/data rather than rendered cones. Combat AI and enemy attacks remain out of scope.
+Combat audio is intentionally synthesized placeholder material pending licensed, mastered assets and device-level mix tuning. The procedural geometry actor has controlled face components rather than a full blend-shape facial rig. Blood uses pooled ballistic droplets and bounded impact marks rather than body-surface fluid simulation. Clothing resistance is data-driven but clothing is not destructible. Wall catches are physical collider interactions rather than authored wall-bracing intelligence. The system has deterministic lifecycle/configuration tests and a mobile-viewport browser smoke pass, but final Safari/iPhone thermal profiling, haptic characterization (Safari support varies), and a recorded human touch-play acceptance pass remain hardware QA tasks. Joint-limit debug arcs remain represented through authored limit data rather than rendered cones. AI, attacks, blocking, dismemberment, multiple weapons/archetypes, and full medical simulation remain explicitly out of scope.
