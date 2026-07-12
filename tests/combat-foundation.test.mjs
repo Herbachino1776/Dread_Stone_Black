@@ -391,6 +391,54 @@ test('one authoritative knife root keeps identity, scale, pose, ownership, and s
   physics.dispose();
 });
 
+test('a grip-owned deliberate world-space thrust punctures through the authoritative tip', async () => {
+  await initializeCombatPhysics();
+  const physics = new CombatPhysicsWorld();
+  const scene = new THREE.Scene();
+  const actor = new HumanoidCombatActor({ physics, scene, mortalityMode: COMBAT_MORTALITY_MODES.immortalReactive });
+  const camera = new THREE.PerspectiveCamera(70, 390 / 702, 0.1, 100);
+  camera.position.set(0, 1.81, -2.5);
+  camera.updateMatrixWorld(true);
+  const viewport = { querySelector: () => null, getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 702 }) };
+  const equipment = { getEquippedToolId: () => 'old_work_knife', hasItem: () => true };
+  const knife = new WorldKnifeCombatController({ app: viewport, scene, camera, actor, physics, equipmentRuntime: equipment, bindPointerInput: false, contactActivationProvider: () => true });
+  knife.acquireGrip(31, 280, 470, 0);
+  for (let step = 1; step <= 12 && !knife.entry; step += 1) {
+    knife.applyGripGesture(31, 0, -step * 5, 280, 470 - step * 5, step * 16);
+    physics.stepSingle((dt) => { knife.beforePhysics(dt); actor.beforePhysics(dt); }, () => {});
+    knife.afterPhysics();
+  }
+  assert.equal(knife.state, KNIFE_CONTROL_STATES.embedded);
+  assert.equal(knife.contactState, 'surface_puncture');
+  assert.equal(knife.contactDamageReason, 'damaging:grip-owned-deliberate-motion');
+  assert.equal(actor.woundSystem.wounds.length, 1);
+  knife.dispose(); actor.dispose(); physics.dispose();
+});
+
+test('a grip-owned deliberate lateral sweep creates an edge-led slash', async () => {
+  await initializeCombatPhysics();
+  const physics = new CombatPhysicsWorld();
+  const scene = new THREE.Scene();
+  const actor = new HumanoidCombatActor({ physics, scene, mortalityMode: COMBAT_MORTALITY_MODES.immortalReactive });
+  const camera = new THREE.PerspectiveCamera(70, 390 / 702, 0.1, 100);
+  camera.position.set(0, 1.74, -2.77);
+  camera.updateMatrixWorld(true);
+  const viewport = { querySelector: () => null, getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 702 }) };
+  const equipment = { getEquippedToolId: () => 'old_work_knife', hasItem: () => true };
+  const knife = new WorldKnifeCombatController({ app: viewport, scene, camera, actor, physics, equipmentRuntime: equipment, bindPointerInput: false, contactActivationProvider: () => true });
+  knife.acquireGrip(32, 280, 470, 0);
+  for (let step = 1; step <= 20; step += 1) {
+    knife.applyGripGesture(32, -step * 5, 0, 280 - step * 5, 470, step * 16);
+    physics.stepSingle((dt) => { knife.beforePhysics(dt); actor.beforePhysics(dt); }, () => {});
+    knife.afterPhysics();
+  }
+  assert.equal(knife.activeSlash?.part, 'edge');
+  assert.ok(['shallow_cut', 'deep_slash'].includes(knife.contactState));
+  assert.equal(knife.slashCount, 1);
+  assert.equal(actor.woundSystem.wounds.length, 1);
+  knife.dispose(); actor.dispose(); physics.dispose();
+});
+
 test('immortal reactive policy survives repeated severe attacks and recovers while normal mortality remains available', async () => {
   assert.equal(resolveCombatMortalityMode(''), COMBAT_MORTALITY_MODES.immortalReactive);
   assert.equal(resolveCombatMortalityMode('?combatMortality=normal'), COMBAT_MORTALITY_MODES.normal);
