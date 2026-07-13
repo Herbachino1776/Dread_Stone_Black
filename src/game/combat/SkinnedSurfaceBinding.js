@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export const WOUND_SURFACE_BIAS = 0.002;
-export const MAX_SLASH_SURFACE_SAMPLES = 12;
+export const MAX_SLASH_SURFACE_SAMPLES = 48;
 export const MIN_SLASH_SURFACE_SAMPLES = 3;
 export const MAX_SURFACE_PROJECTION_DISTANCE = 0.12;
 
@@ -23,17 +23,20 @@ export function reconstructSkinnedSurface(binding, target = {}) {
   const mesh = binding?.mesh;
   const indices = binding?.triangleIndices;
   if (!mesh?.isSkinnedMesh || !mesh.parent || !indices || indices.some((index) => index < 0 || index >= mesh.geometry.attributes.position.count)) return null;
-  const va = mesh.getVertexPosition(indices[0], new THREE.Vector3());
-  const vb = mesh.getVertexPosition(indices[1], new THREE.Vector3());
-  const vc = mesh.getVertexPosition(indices[2], new THREE.Vector3());
+  const vertices = target.vertices ?? [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const va = mesh.getVertexPosition(indices[0], vertices[0]);
+  const vb = mesh.getVertexPosition(indices[1], vertices[1]);
+  const vc = mesh.getVertexPosition(indices[2], vertices[2]);
   mesh.localToWorld(va); mesh.localToWorld(vb); mesh.localToWorld(vc);
   const barycentric = binding.barycentric;
   const point = target.point ?? new THREE.Vector3();
   point.set(0, 0, 0).addScaledVector(va, barycentric.x).addScaledVector(vb, barycentric.y).addScaledVector(vc, barycentric.z);
   const normal = target.normal ?? new THREE.Vector3();
-  normal.subVectors(vb, va).cross(new THREE.Vector3().subVectors(vc, va)).normalize();
+  const abx = vb.x - va.x; const aby = vb.y - va.y; const abz = vb.z - va.z;
+  const acx = vc.x - va.x; const acy = vc.y - va.y; const acz = vc.z - va.z;
+  normal.set(aby * acz - abz * acy, abz * acx - abx * acz, abx * acy - aby * acx).normalize();
   if (normal.dot(binding.referenceNormal) < 0) normal.negate();
-  return { point, normal, vertices: [va, vb, vc] };
+  return { point, normal, vertices };
 }
 
 export function findClosestSkinnedSurface(skinnedMeshes, worldPoint, { regionId = null, bodyId = null, referenceNormal = null, maximumDistance = MAX_SURFACE_PROJECTION_DISTANCE } = {}) {

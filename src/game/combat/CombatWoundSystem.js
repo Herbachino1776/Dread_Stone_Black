@@ -4,6 +4,7 @@ import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { getAlphaBoundUv, getKnifeWoundPhysicalCategory } from './KnifeWoundDecalLibrary.js';
 import { MAX_SLASH_SURFACE_SAMPLES, MIN_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
+import { appendSlashVisualPathPoint, createSlashVisualWorkspace, deriveSlashFragmentMetrics, makeSlashFragmentGeometry, resetSlashVisualPath, updateSlashFragmentGeometry } from './SlashWoundVisual.js';
 
 const tmpPosition = new THREE.Vector3();
 const tmpQuaternion = new THREE.Quaternion();
@@ -21,6 +22,8 @@ export const PUNCTURE_VISUAL_LIMITS = Object.freeze({
   severe: Object.freeze({ major: [0.02, 0.055], minor: [0.007, 0.022] }),
 });
 
+export const PUNCTURE_DECAL_SCALE = 1.3;
+
 export const SLASH_VISUAL_WIDTH_LIMITS = Object.freeze({ shallow: [0.004, 0.01], deep: [0.008, 0.02], severeMaximum: 0.03 });
 
 function makePunctureGeometry() {
@@ -33,22 +36,6 @@ function makePunctureGeometry() {
   ], 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(8), 2));
   geometry.setIndex([0, 1, 2, 2, 1, 3]);
-  return geometry;
-}
-
-function makeSlashGeometry() {
-  const geometry = new THREE.BufferGeometry();
-  const maximumSegments = MAX_SLASH_SURFACE_SAMPLES - 1;
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(maximumSegments * 12), 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(maximumSegments * 12), 3));
-  const uvs = new Float32Array(maximumSegments * 8);
-  for (let segment = 0; segment < maximumSegments; segment += 1) uvs.set([0, 0, 1, 0, 0, 1, 1, 1], segment * 8);
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(Array.from({ length: maximumSegments }, (_, segment) => {
-    const offset = segment * 4;
-    return [offset, offset + 1, offset + 2, offset + 2, offset + 1, offset + 3];
-  }).flat());
-  geometry.setDrawRange(0, 0);
   return geometry;
 }
 
@@ -127,14 +114,15 @@ export class CombatWoundSystem {
       puncture.castShadow = false;
       puncture.receiveShadow = false;
       enableCombatReadabilityLightLayer(puncture);
-      const slash = new THREE.Mesh(makeSlashGeometry(), this.bluntMaterial);
+      const slash = new THREE.Mesh(makeSlashFragmentGeometry(), this.bluntMaterial);
       slash.name = `combat-wound-slash-visual-${index}`;
       slash.visible = false;
       slash.castShadow = false;
       slash.receiveShadow = false;
+      slash.frustumCulled = false;
       enableCombatReadabilityLightLayer(slash);
       this.scene.add(puncture, slash);
-      this.visualSlots.push({ puncture, slash, woundId: null });
+      this.visualSlots.push({ puncture, slash, slashWorkspace: createSlashVisualWorkspace(), woundId: null });
     }
   }
 
@@ -222,9 +210,7 @@ export class CombatWoundSystem {
   appendSlashSurfaceSample(wound, worldPoint, referenceNormal) {
     if (!worldPoint) return;
     this.appendSlashPathPoint(wound, worldPoint);
-    if (wound.slashSamples.length >= MAX_SLASH_SURFACE_SAMPLES) return;
     const previous = wound.slashSamples.at(-1);
-    if (previous?.sourcePoint.distanceTo(worldPoint) < 0.025) return;
     const binding = this.bindSurfacePoint(wound, worldPoint, referenceNormal);
     if (!binding) {
       wound.failedProjectionCount += 1;
@@ -234,7 +220,18 @@ export class CombatWoundSystem {
     const reconstructed = reconstructSkinnedSurface(binding);
     const previousSurface = previous?.binding ? reconstructSkinnedSurface(previous.binding) : null;
     const wouldBridge = !previousSurface || previous.binding.mesh !== binding.mesh || reconstructed.point.distanceTo(previousSurface.point) > 0.14;
-    wound.slashSamples.push({ sourcePoint: worldPoint.clone(), binding, fallbackAnchorUsage: false, breakBefore: wound.nextSampleBreak || wouldBridge });
+    const beforePrevious = wound.slashSamples.at(-2);
+    const canMoveLiveEndpoint = previous && beforePrevious
+      && !wound.nextSampleBreak
+      && !wouldBridge
+      && beforePrevious.binding.mesh === binding.mesh
+      && beforePrevious.sourcePoint.distanceTo(worldPoint) < 0.018;
+    if (canMoveLiveEndpoint || wound.slashSamples.length >= MAX_SLASH_SURFACE_SAMPLES) {
+      previous.sourcePoint.copy(worldPoint);
+      previous.binding = binding;
+      previous.fallbackAnchorUsage = false;
+      previous.breakBefore ||= wound.nextSampleBreak || wouldBridge;
+    } else wound.slashSamples.push({ sourcePoint: worldPoint.clone(), binding, fallbackAnchorUsage: false, breakBefore: wound.nextSampleBreak || wouldBridge });
     wound.nextSampleBreak = false;
   }
 
@@ -287,6 +284,9 @@ export class CombatWoundSystem {
 
   updateSlashDimensions(wound) {
     Object.assign(wound, deriveSlashPhysicalDimensions({ cutLength: wound.cutLength, maximumDepth: wound.maximumDepth, edgeAlignment: wound.edgeAlignment, severity: wound.severity, reopeningCount: wound.reopenedCount, lateralTearingMeters: wound.lateralTearingMeters }));
+    const fragmentMetrics = deriveSlashFragmentMetrics({ bladeWidth: wound.bladeWidth ?? KNIFE_COMBAT_CONFIG.bladeWidth, maximumDepth: wound.maximumDepth, severity: wound.severity, pathCurvature: wound.pathCurvature, reopeningCount: wound.reopenedCount });
+    wound.slashFragmentMajorMeters = Math.max(wound.slashFragmentMajorMeters ?? 0, fragmentMetrics.majorLength);
+    wound.slashFragmentCenterSpacing ??= fragmentMetrics.maximumCenterSpacing;
     wound.visualRevision = (wound.visualRevision ?? 0) + 1;
   }
 
@@ -331,6 +331,25 @@ export class CombatWoundSystem {
   updateDecalSelection(wound, family, { lock = false } = {}) {
     if (family === 'blunt' || wound.decalSelectionLocked) return false;
     const properties = this.getDecalSelectionProperties(wound, family);
+    if (family === 'slash') {
+      if (wound.decalVariantId) {
+        if (lock) { wound.decalSelectionLocked = true; wound.decalSelectionState = 'locked'; }
+        return false;
+      }
+      const selection = this.decalLibrary.selectSlashFragment(properties);
+      wound.decalVariantId = selection.variant.id;
+      wound.decalFamily = family;
+      wound.decalPhysicalCategory = selection.category;
+      wound.decalEligibleCandidateIds = selection.eligibleCandidateIds;
+      wound.deterministicSeed = selection.deterministicSeed;
+      wound.mirroredX = false;
+      wound.decalRotationVariation = 0;
+      wound.selectedAtSeverity = selection.selectedAtSeverity;
+      wound.decalSelectionState = lock ? 'locked' : 'provisional';
+      wound.decalSelectionLocked = lock;
+      this.recordVariantSelection(family, wound.id, wound.decalVariantId);
+      return true;
+    }
     const category = getKnifeWoundPhysicalCategory(properties);
     const punctureRank = { slit: 0, split: 1, double: 2, burst: 3 };
     const categoryChanged = wound.decalPhysicalCategory !== category;
@@ -587,14 +606,6 @@ export class CombatWoundSystem {
     };
   }
 
-  getWorldSlashPose(wound) {
-    const pose = this.getWorldPose(wound);
-    if (!pose) return null;
-    const localMidpoint = wound.localCutStart.clone().lerp(wound.localCutEnd, 0.5);
-    pose.point.copy(localMidpoint).applyQuaternion(pose.bodyQuaternion).add(pose.translation);
-    return pose;
-  }
-
   update(dt) {
     this.wounds.forEach((wound) => {
       wound.withdrawalBoostRemaining = Math.max(0, wound.withdrawalBoostRemaining - dt);
@@ -666,128 +677,128 @@ export class CombatWoundSystem {
     return tmpTangent.normalize();
   }
 
-  updateWoundVisual(wound) {
-    const slot = wound?.visualSlot;
-    if (!slot) return;
-    const isSlash = wound.cutLength > 0.001 || ['shallow_cut', 'deep_slash'].includes(wound.woundType);
-    const validSlashSamples = wound.slashSamples?.filter((sample) => validateSurfaceBinding(sample.binding)) ?? [];
-    const useSlashVisual = isSlash && validSlashSamples.length >= 2;
-    if (useSlashVisual) {
-      wound.slashFallbackUsage = false;
-      wound.fallbackReason = null;
-      wound.surfaceBindingStatus = 'segmented_skinned_surface';
+  populateBoundSlashVisualPath(wound, slot) {
+    const workspace = slot.slashWorkspace;
+    resetSlashVisualPath(workspace);
+    let previousPose = null;
+    let previousMesh = null;
+    let hasContinuousSection = false;
+    for (let sampleIndex = 0; sampleIndex < wound.slashSamples.length && workspace.pathPointCount < workspace.pathPoints.length; sampleIndex += 1) {
+      const sample = wound.slashSamples[sampleIndex];
+      if (!validateSurfaceBinding(sample.binding)) continue;
+      const target = workspace.pathPoints[workspace.pathPointCount];
+      const reconstructed = this.actor.visualAdapter?.reconstructVisibleSurface?.(sample.binding, target)
+        ?? reconstructSkinnedSurface(sample.binding, target);
+      if (!reconstructed) continue;
+      const disconnected = Boolean(previousPose) && (sample.breakBefore || previousMesh !== sample.binding.mesh || reconstructed.point.distanceTo(previousPose.point) > 0.14);
+      appendSlashVisualPathPoint(workspace, reconstructed.point, reconstructed.normal, disconnected, sampleIndex);
+      if (previousPose && !disconnected && reconstructed.point.distanceTo(previousPose.point) > 1e-8) hasContinuousSection = true;
+      previousPose = workspace.pathPoints[workspace.pathPointCount - 1];
+      previousMesh = sample.binding.mesh;
     }
-    slot.puncture.visible = !useSlashVisual;
-    slot.slash.visible = useSlashVisual;
-    const material = this.getWoundMaterial(wound);
-    if (!useSlashVisual) {
-      const semantic = isSlash ? this.getWorldSlashPose(wound) : this.getWorldPose(wound);
-      const pose = this.getAttachedSurfacePose(wound, semantic);
-      if (!pose) return;
-      if (isSlash) {
-        wound.fallbackReason = 'insufficient_slash_surface_samples';
-        wound.slashFallbackUsage = true;
-        wound.surfaceBindingStatus = pose.fallback ? 'slash_fallback_anchor' : 'slash_fallback_skinned_triangle';
-      }
-      if (slot.puncture.material !== material) slot.puncture.material = material;
-      slot.puncture.position.copy(pose.point).addScaledVector(pose.normal, WOUND_SURFACE_BIAS);
-      if (wound.woundType === 'blunt_trauma_marker') {
-        slot.puncture.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), pose.normal);
-        const diameter = 0.028 + wound.severity * 0.02;
-        slot.puncture.scale.set(diameter, diameter, 1);
-      } else {
-        let tangent;
-        if (isSlash) {
-          tmpTangent.copy(semantic.direction);
-          tmpTangent.addScaledVector(pose.normal, -tmpTangent.dot(pose.normal)).normalize();
-          tangent = tmpTangent;
-        } else tangent = this.resolvePunctureTangent(wound, pose);
-        if (tangent.lengthSq() < 1e-8) tangent.set(1, 0, 0).addScaledVector(pose.normal, -pose.normal.x).normalize();
-        tmpSide.crossVectors(pose.normal, tangent).normalize();
-        tmpMatrix.makeBasis(tangent, tmpSide, pose.normal);
-        slot.puncture.quaternion.setFromRotationMatrix(tmpMatrix);
-        slot.puncture.rotateZ(wound.decalRotationVariation ?? 0);
-        const signature = `${isSlash ? 'slash-fallback' : 'puncture'}:${wound.decalVariantId}:${wound.mirroredX}:${wound.visualRevision}`;
-        if (slot.puncture.userData.visualSignature !== signature) {
-          this.applyPunctureUv(slot, wound);
-          slot.puncture.scale.set(
-            isSlash ? THREE.MathUtils.clamp(wound.visualLengthMeters ?? wound.cutLength, 0.02, WOUND_CONFIG.maximumCutLength) : wound.visualMajorMeters,
-            isSlash ? THREE.MathUtils.clamp(wound.visualWidthMeters ?? 0.006, SLASH_VISUAL_WIDTH_LIMITS.shallow[0], SLASH_VISUAL_WIDTH_LIMITS.severeMaximum) : wound.visualMinorMeters,
-            1,
-          );
-          slot.puncture.userData.visualSignature = signature;
-        }
-      }
-      wound.surfaceDistance = WOUND_SURFACE_BIAS;
-      wound.renderedSegmentCount = isSlash ? 1 : 0;
-      return;
-    }
+    return hasContinuousSection;
+  }
+
+  populateFallbackSlashVisualPath(wound, slot) {
+    const workspace = slot.slashWorkspace;
+    resetSlashVisualPath(workspace);
+    const entry = this.actor.bodies.get(wound.bodyId);
+    if (!entry) return false;
+    const translation = entry.body.translation();
+    const rotation = entry.body.rotation();
+    tmpQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+    tmpPosition.set(translation.x, translation.y, translation.z);
+    tmpNormal.copy(wound.localSurfaceNormal).applyQuaternion(tmpQuaternion).normalize();
+    const startPose = workspace.pathPoints[0];
+    const endPose = workspace.pathPoints[1];
+    startPose.point.copy(wound.localCutStart).applyQuaternion(tmpQuaternion).add(tmpPosition);
+    endPose.point.copy(wound.localCutEnd).applyQuaternion(tmpQuaternion).add(tmpPosition);
+    tmpDirection.subVectors(endPose.point, startPose.point);
+    const physicalLength = THREE.MathUtils.clamp(wound.visualLengthMeters ?? wound.cutLength, 0.012, WOUND_CONFIG.maximumCutLength);
+    if (tmpDirection.lengthSq() < 1e-8) tmpDirection.copy(wound.localCutDirection).applyQuaternion(tmpQuaternion);
+    tmpDirection.addScaledVector(tmpNormal, -tmpDirection.dot(tmpNormal));
+    if (tmpDirection.lengthSq() < 1e-8) tmpDirection.set(1, 0, 0).addScaledVector(tmpNormal, -tmpNormal.x);
+    tmpDirection.normalize();
+    endPose.point.copy(startPose.point).addScaledVector(tmpDirection, physicalLength);
+    const startAnchor = this.actor.visualAdapter?.getFallbackWoundAnchor?.(wound.bodyId, startPose.point, tmpNormal);
+    if (startAnchor) { startPose.point.copy(startAnchor.point); startPose.normal.copy(startAnchor.normal); }
+    else startPose.normal.copy(tmpNormal);
+    const endAnchor = this.actor.visualAdapter?.getFallbackWoundAnchor?.(wound.bodyId, endPose.point, tmpNormal);
+    if (endAnchor) { endPose.point.copy(endAnchor.point); endPose.normal.copy(endAnchor.normal); }
+    else endPose.normal.copy(tmpNormal);
+    appendSlashVisualPathPoint(workspace, startPose.point, startPose.normal, false, -1);
+    appendSlashVisualPathPoint(workspace, endPose.point, endPose.normal, false, -1);
+    return startPose.point.distanceTo(endPose.point) > 1e-8;
+  }
+
+  updateSlashVisual(wound, slot, material) {
+    let fallbackUsage = !this.populateBoundSlashVisualPath(wound, slot);
+    if (fallbackUsage) this.populateFallbackSlashVisualPath(wound, slot);
+    wound.slashFallbackUsage = fallbackUsage;
+    wound.fallbackAnchorUsage = fallbackUsage;
+    wound.fallbackReason = fallbackUsage ? 'insufficient_slash_surface_samples' : null;
+    wound.surfaceBindingStatus = fallbackUsage ? 'slash_fallback_anchor' : 'continuous_slit_chain_skinned_surface';
     slot.slash.material = material;
     slot.slash.position.set(0, 0, 0);
     slot.slash.quaternion.identity();
     slot.slash.scale.set(1, 1, 1);
-    const reconstructed = wound.slashSamples.map((sample) => validateSurfaceBinding(sample.binding) ? reconstructSkinnedSurface(sample.binding) : null);
-    const positions = slot.slash.geometry.attributes.position.array;
-    const normals = slot.slash.geometry.attributes.normal.array;
-    let segmentCount = 0;
-    const halfWidth = wound.visualWidthMeters * 0.5;
     const variant = this.decalLibrary.getVariant(wound.decalVariantId);
-    const croppedUv = variant ? getAlphaBoundUv(variant, wound.mirroredX) : { u0: 0, u1: 1, v0: 0, v1: 1 };
-    const uvs = slot.slash.geometry.attributes.uv.array;
-    const sourceLengths = [];
-    let totalSourceLength = 0;
-    for (let index = 0; index < wound.slashSamples.length - 1; index += 1) {
-      const length = wound.slashSamples[index + 1].breakBefore ? 0 : wound.slashSamples[index].sourcePoint.distanceTo(wound.slashSamples[index + 1].sourcePoint);
-      sourceLengths[index] = length;
-      totalSourceLength += length;
-    }
-    let consumedSourceLength = 0;
-    const updateUv = slot.slash.userData.uvRevision !== wound.visualRevision;
-    for (let index = 0; index < reconstructed.length - 1 && segmentCount < MAX_SLASH_SURFACE_SAMPLES - 1; index += 1) {
-      const start = reconstructed[index];
-      const end = reconstructed[index + 1];
-      const endSample = wound.slashSamples[index + 1];
-      const sourceLength = sourceLengths[index] ?? 0;
-      if (!start || !end || endSample.breakBefore || end.point.distanceTo(start.point) > 0.14) { consumedSourceLength += sourceLength; continue; }
-      tmpDirection.subVectors(end.point, start.point);
-      if (tmpDirection.lengthSq() < 1e-8) continue;
-      tmpDirection.normalize();
-      tmpNormal.copy(start.normal).add(end.normal).normalize();
-      tmpSide.copy(tmpDirection).cross(tmpNormal).normalize();
-      if (tmpSide.lengthSq() < 1e-8) tmpSide.set(1, 0, 0).cross(tmpNormal).normalize();
-      const vertices = [
-        start.point.clone().addScaledVector(tmpSide, halfWidth).addScaledVector(start.normal, WOUND_SURFACE_BIAS),
-        start.point.clone().addScaledVector(tmpSide, -halfWidth).addScaledVector(start.normal, WOUND_SURFACE_BIAS),
-        end.point.clone().addScaledVector(tmpSide, halfWidth).addScaledVector(end.normal, WOUND_SURFACE_BIAS),
-        end.point.clone().addScaledVector(tmpSide, -halfWidth).addScaledVector(end.normal, WOUND_SURFACE_BIAS),
-      ];
-      vertices.forEach((point, vertexIndex) => {
-        const offset = segmentCount * 12 + vertexIndex * 3;
-        positions[offset] = point.x; positions[offset + 1] = point.y; positions[offset + 2] = point.z;
-        const normal = vertexIndex < 2 ? start.normal : end.normal;
-        normals[offset] = normal.x; normals[offset + 1] = normal.y; normals[offset + 2] = normal.z;
-      });
-      if (updateUv) {
-        const startFraction = totalSourceLength > 1e-8 ? consumedSourceLength / totalSourceLength : 0;
-        const endFraction = totalSourceLength > 1e-8 ? (consumedSourceLength + sourceLength) / totalSourceLength : 1;
-        const startU = THREE.MathUtils.lerp(croppedUv.u0, croppedUv.u1, startFraction);
-        const endU = THREE.MathUtils.lerp(croppedUv.u0, croppedUv.u1, endFraction);
-        const uvOffset = segmentCount * 8;
-        uvs.set([startU, croppedUv.v1, startU, croppedUv.v0, endU, croppedUv.v1, endU, croppedUv.v0], uvOffset);
-      }
-      consumedSourceLength += sourceLength;
-      segmentCount += 1;
-    }
-    slot.slash.geometry.setDrawRange(0, segmentCount * 6);
-    slot.slash.geometry.attributes.position.needsUpdate = true;
-    slot.slash.geometry.attributes.normal.needsUpdate = true;
-    if (updateUv) { slot.slash.geometry.attributes.uv.needsUpdate = true; slot.slash.userData.uvRevision = wound.visualRevision; }
-    slot.slash.geometry.computeBoundingSphere();
-    slot.slash.visible = segmentCount > 0;
-    slot.puncture.visible = segmentCount === 0;
+    const diagnostics = updateSlashFragmentGeometry({
+      geometry: slot.slash.geometry,
+      workspace: slot.slashWorkspace,
+      variant,
+      deterministicSeed: wound.deterministicSeed,
+      physicalCutLength: wound.cutLength,
+      fragmentMajorLength: wound.slashFragmentMajorMeters,
+      fragmentWidth: wound.visualWidthMeters,
+      centerSpacing: wound.slashFragmentCenterSpacing,
+      fallbackUsage,
+      layoutRevision: wound.visualRevision,
+    });
+    wound.slashVisualDiagnostics = diagnostics;
+    wound.renderedSegmentCount = diagnostics.fragmentCount;
+    wound.renderedPathLength = diagnostics.renderedPathLength;
     wound.surfaceDistance = WOUND_SURFACE_BIAS;
-    wound.renderedSegmentCount = segmentCount;
-    wound.visualLengthMeters = Math.min(wound.cutLength, totalSourceLength || wound.cutLength);
+    slot.slash.visible = diagnostics.fragmentCount > 0;
+    slot.puncture.visible = false;
+  }
+
+  updateWoundVisual(wound) {
+    const slot = wound?.visualSlot;
+    if (!slot) return;
+    const isSlash = wound.cutLength > 0.001 || ['shallow_cut', 'deep_slash'].includes(wound.woundType);
+    const material = this.getWoundMaterial(wound);
+    if (isSlash) {
+      this.updateSlashVisual(wound, slot, material);
+      return;
+    }
+    slot.puncture.visible = true;
+    slot.slash.visible = false;
+    const semantic = this.getWorldPose(wound);
+    const pose = this.getAttachedSurfacePose(wound, semantic);
+    if (!pose) return;
+    if (slot.puncture.material !== material) slot.puncture.material = material;
+    slot.puncture.position.copy(pose.point).addScaledVector(pose.normal, WOUND_SURFACE_BIAS);
+    if (wound.woundType === 'blunt_trauma_marker') {
+      slot.puncture.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), pose.normal);
+      const diameter = 0.028 + wound.severity * 0.02;
+      slot.puncture.scale.set(diameter, diameter, 1);
+    } else {
+      const tangent = this.resolvePunctureTangent(wound, pose);
+      if (tangent.lengthSq() < 1e-8) tangent.set(1, 0, 0).addScaledVector(pose.normal, -pose.normal.x).normalize();
+      tmpSide.crossVectors(pose.normal, tangent).normalize();
+      tmpMatrix.makeBasis(tangent, tmpSide, pose.normal);
+      slot.puncture.quaternion.setFromRotationMatrix(tmpMatrix);
+      slot.puncture.rotateZ(wound.decalRotationVariation ?? 0);
+      const signature = `puncture:${wound.decalVariantId}:${wound.mirroredX}:${wound.visualRevision}:${wound.visualMajorMeters}:${wound.visualMinorMeters}`;
+      if (slot.puncture.userData.visualSignature !== signature) {
+        this.applyPunctureUv(slot, wound);
+        slot.puncture.scale.set(wound.visualMajorMeters * PUNCTURE_DECAL_SCALE, wound.visualMinorMeters * PUNCTURE_DECAL_SCALE, 1);
+        slot.puncture.userData.visualSignature = signature;
+      }
+    }
+    wound.surfaceDistance = WOUND_SURFACE_BIAS;
+    wound.renderedSegmentCount = 0;
   }
 
   updateSurfaceDebug(wound) {
@@ -819,12 +830,17 @@ export class CombatWoundSystem {
     if (wound.visualSlot) {
       wound.visualSlot.puncture.visible = false;
       wound.visualSlot.slash.visible = false;
+      wound.visualSlot.puncture.userData.visualSignature = null;
+      wound.visualSlot.slash.geometry.setDrawRange(0, 0);
+      resetSlashVisualPath(wound.visualSlot.slashWorkspace);
+      wound.visualSlot.slashWorkspace.fragmentCount = 0;
       wound.visualSlot.woundId = null;
     }
     wound.surfaceBinding = null;
     wound.slashSamples.length = 0;
     wound.slashPathPoints.length = 0;
     wound.slashFallbackUsage = false;
+    wound.slashVisualDiagnostics = null;
     wound.fallbackReason = null;
   }
 
@@ -842,7 +858,61 @@ export class CombatWoundSystem {
   getDiagnostics() {
     const wound = this.wounds.at(-1);
     const binding = wound?.surfaceBinding ?? wound?.slashSamples?.at(-1)?.binding;
-    return { count: this.wounds.length, active: this.getActiveWounds().length, arterial: this.wounds.filter((entry) => entry.bleedingProfile.kind.includes('arterial')).length, materialCloneCount: this.materialCloneCount, failedProjectionCount: this.failedProjectionCount, fallbackAnchorUsage: this.fallbackUsageCount, decalLibrary: this.decalLibrary.getDiagnostics(), recentVariantHistory: { puncture: this.recentVariantHistory.puncture.map((entry) => entry.variantId), slash: this.recentVariantHistory.slash.map((entry) => entry.variantId) }, selected: wound ? { id: wound.id, regionId: wound.regionId, type: wound.woundType, depth: Number(wound.maximumDepth.toFixed(3)), length: Number(wound.cutLength.toFixed(3)), severity: Number(wound.severity.toFixed(3)), decalVariantId: wound.decalVariantId, decalFamily: wound.decalFamily, decalPhysicalCategory: wound.decalPhysicalCategory, decalSelectionState: wound.decalSelectionState, decalEligibleCandidateIds: wound.decalEligibleCandidateIds, decalSelectionRevisionCount: wound.decalSelectionRevisionCount, recentSameFamilyVariantHistory: this.getRecentVariantIds(wound.decalFamily, wound.id), mirroredX: wound.mirroredX, entryMajorMeters: wound.entryMajorMeters ?? null, entryMinorMeters: wound.entryMinorMeters ?? null, visualMajorMeters: wound.visualMajorMeters ?? null, visualMinorMeters: wound.visualMinorMeters ?? null, visualLengthMeters: wound.visualLengthMeters ?? null, visualWidthMeters: wound.visualWidthMeters ?? null, pathCurvature: wound.pathCurvature ?? 0, interrupted: wound.lastContactInterrupted ?? false, vessel: wound.vesselInvolvement?.id ?? null, bleedingRate: Number(wound.bleedingRate.toFixed(4)), surfaceBindingStatus: wound.surfaceBindingStatus, fallbackReason: wound.fallbackReason, semanticAnchorDistance: wound.semanticAnchorDistance, meshName: binding?.meshName ?? null, triangleIndices: binding?.triangleIndices ?? null, barycentric: binding?.barycentric?.toArray?.().map((value) => Number(value.toFixed(4))) ?? null, surfaceDistance: wound.surfaceDistance, slashSampleCount: wound.slashSamples?.length ?? 0, renderedSegmentCount: wound.renderedSegmentCount ?? 0, failedProjectionCount: wound.failedProjectionCount ?? 0, fallbackAnchorUsage: wound.fallbackAnchorUsage, slashFallbackUsage: wound.slashFallbackUsage ?? false, materialAvailable: wound.materialAvailable } : null };
+    const latestSlash = this.wounds.filter((entry) => entry.cutLength > 0.001 || ['shallow_cut', 'deep_slash'].includes(entry.woundType)).at(-1);
+    return {
+      count: this.wounds.length,
+      active: this.getActiveWounds().length,
+      arterial: this.wounds.filter((entry) => entry.bleedingProfile.kind.includes('arterial')).length,
+      materialCloneCount: this.materialCloneCount,
+      failedProjectionCount: this.failedProjectionCount,
+      fallbackAnchorUsage: this.fallbackUsageCount,
+      decalLibrary: this.decalLibrary.getDiagnostics(),
+      recentVariantHistory: {
+        puncture: this.recentVariantHistory.puncture.map((entry) => entry.variantId),
+        slash: this.recentVariantHistory.slash.map((entry) => entry.variantId),
+      },
+      latestSlash: latestSlash?.slashVisualDiagnostics ? { woundId: latestSlash.id, ...latestSlash.slashVisualDiagnostics } : null,
+      selected: wound ? {
+        id: wound.id,
+        regionId: wound.regionId,
+        type: wound.woundType,
+        depth: Number(wound.maximumDepth.toFixed(3)),
+        length: Number(wound.cutLength.toFixed(3)),
+        severity: Number(wound.severity.toFixed(3)),
+        decalVariantId: wound.decalVariantId,
+        decalFamily: wound.decalFamily,
+        decalPhysicalCategory: wound.decalPhysicalCategory,
+        decalSelectionState: wound.decalSelectionState,
+        decalEligibleCandidateIds: wound.decalEligibleCandidateIds,
+        decalSelectionRevisionCount: wound.decalSelectionRevisionCount,
+        recentSameFamilyVariantHistory: this.getRecentVariantIds(wound.decalFamily, wound.id),
+        mirroredX: wound.mirroredX,
+        entryMajorMeters: wound.entryMajorMeters ?? null,
+        entryMinorMeters: wound.entryMinorMeters ?? null,
+        visualMajorMeters: wound.visualMajorMeters ?? null,
+        visualMinorMeters: wound.visualMinorMeters ?? null,
+        visualLengthMeters: wound.visualLengthMeters ?? null,
+        visualWidthMeters: wound.visualWidthMeters ?? null,
+        pathCurvature: wound.pathCurvature ?? 0,
+        interrupted: wound.lastContactInterrupted ?? false,
+        vessel: wound.vesselInvolvement?.id ?? null,
+        bleedingRate: Number(wound.bleedingRate.toFixed(4)),
+        surfaceBindingStatus: wound.surfaceBindingStatus,
+        fallbackReason: wound.fallbackReason,
+        semanticAnchorDistance: wound.semanticAnchorDistance,
+        meshName: binding?.meshName ?? null,
+        triangleIndices: binding?.triangleIndices ?? null,
+        barycentric: binding?.barycentric?.toArray?.().map((value) => Number(value.toFixed(4))) ?? null,
+        surfaceDistance: wound.surfaceDistance,
+        slashSampleCount: wound.slashSamples?.length ?? 0,
+        renderedSegmentCount: wound.renderedSegmentCount ?? 0,
+        failedProjectionCount: wound.failedProjectionCount ?? 0,
+        fallbackAnchorUsage: wound.fallbackAnchorUsage,
+        slashFallbackUsage: wound.slashFallbackUsage ?? false,
+        materialAvailable: wound.materialAvailable,
+        ...(wound.slashVisualDiagnostics ?? {}),
+      } : null,
+    };
   }
 
   get materialCloneCount() { return this.ownedMaterials.size; }

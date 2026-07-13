@@ -128,6 +128,34 @@ export function selectKnifeWoundVariant(manifest, properties) {
   return { variant: selected, category, eligibleCandidateIds, deterministicSeed, mirroredX, rotationVariationRadians, selectedAtSeverity: severity };
 }
 
+export function selectKnifeSlashFragmentVariant(manifest, properties) {
+  const surfaceDisruption = THREE.MathUtils.clamp(properties.surfaceDisruption ?? 0, 0, 1);
+  const maximumDepth = Math.max(0, properties.maximumDepth ?? 0);
+  const severity = THREE.MathUtils.clamp(properties.selectionSeverity ?? properties.severity ?? 0, 0, 1);
+  const stronglyDisruptive = maximumDepth >= 0.055 && surfaceDisruption >= 0.72 && severity >= 0.78;
+  const baseVariantId = stronglyDisruptive
+    ? 'knife_puncture_split_01'
+    : maximumDepth >= 0.028 || surfaceDisruption >= 0.44 || severity >= 0.5
+      ? 'knife_puncture_slit_02'
+      : 'knife_puncture_slit_01';
+  const permittedIds = stronglyDisruptive
+    ? ['knife_puncture_split_01']
+    : ['knife_puncture_slit_01', 'knife_puncture_slit_02'];
+  const variant = manifest.variants.find((entry) => entry.id === baseVariantId)
+    ?? manifest.variants.find((entry) => permittedIds.includes(entry.id));
+  if (!variant) throw new Error('Authored slit-class puncture decals are required for slash fragment chains');
+  const deterministicSeed = hashString(`${properties.woundId}:slash-fragment-chain:${variant.id}`);
+  return {
+    variant,
+    category: variant.id.includes('_split_') ? 'split' : 'slit',
+    eligibleCandidateIds: permittedIds.filter((id) => manifest.variants.some((entry) => entry.id === id)),
+    deterministicSeed,
+    mirroredX: false,
+    rotationVariationRadians: 0,
+    selectedAtSeverity: severity,
+  };
+}
+
 export class KnifeWoundDecalLibrary {
   constructor({ manifestUrl = KNIFE_WOUND_MANIFEST_URL } = {}) {
     this.manifestUrl = manifestUrl;
@@ -175,6 +203,11 @@ export class KnifeWoundDecalLibrary {
 
   select(properties) {
     const selection = selectKnifeWoundVariant(this.manifest, properties);
+    return { ...selection, material: this.materialsById.get(selection.variant.id) };
+  }
+
+  selectSlashFragment(properties) {
+    const selection = selectKnifeSlashFragmentVariant(this.manifest, properties);
     return { ...selection, material: this.materialsById.get(selection.variant.id) };
   }
 

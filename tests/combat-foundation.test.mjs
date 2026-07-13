@@ -517,7 +517,7 @@ test('semantic fallback anchors preserve torso contact and follow proxy-body mot
   actor.dispose(); physics.dispose();
 });
 
-test('failed slash projection renders a bounded authored slash fallback and reset releases it', async () => {
+test('failed slash projection renders a bounded authored slit-chain fallback and reset releases it', async () => {
   const { actor, physics } = await createActor();
   const { hit, worldPoint } = makeHit(actor, 'upper_chest', new THREE.Vector3(-0.08, 0, 0.1));
   const endPoint = worldPoint.clone().add(new THREE.Vector3(0.18, 0.035, 0));
@@ -525,11 +525,12 @@ test('failed slash projection renders a bounded authored slash fallback and rese
   const wound = actor.applySlashWound({ hit, startPoint: worldPoint, endPoint, surfaceNormal: new THREE.Vector3(0, 0, 1), cutDirection: endPoint.clone().sub(worldPoint).normalize(), depth: 0.018, cutLength: worldPoint.distanceTo(endPoint), severity: 0.32, classification: 'shallow_cut' });
   assert.equal(wound.surfaceBindingStatus, 'slash_fallback_anchor');
   assert.equal(wound.fallbackReason, 'insufficient_slash_surface_samples');
-  assert.equal(wound.renderedSegmentCount, 1);
-  assert.equal(wound.visualSlot.puncture.visible, true);
-  assert.equal(wound.visualSlot.slash.visible, false);
-  assert.equal(wound.visualSlot.puncture.material.userData.authoredKnifeWoundVariantId, wound.decalVariantId);
-  assert.ok(wound.visualSlot.puncture.scale.x <= WOUND_CONFIG.maximumCutLength);
+  assert.ok(wound.renderedSegmentCount > 1);
+  assert.equal(wound.visualSlot.puncture.visible, false);
+  assert.equal(wound.visualSlot.slash.visible, true);
+  assert.equal(wound.visualSlot.slash.material.userData.authoredKnifeWoundVariantId, wound.decalVariantId);
+  assert.match(wound.decalVariantId, /knife_puncture_(?:slit|split)_/);
+  assert.ok(wound.slashVisualDiagnostics.maximumUncoveredGap <= wound.slashVisualDiagnostics.continuityTolerance);
   assert.equal(actor.woundSystem.decalLibrary.materialsById.size, materialCount, 'fallback creates no material or texture');
   actor.reset();
   assert.ok(actor.woundSystem.visualSlots.every((slot) => slot.woundId == null && !slot.puncture.visible && !slot.slash.visible));
@@ -572,7 +573,7 @@ test('wound visuals reselect only on material category changes, remain bounded, 
   const curvedEnd = slashEnd.clone().add(new THREE.Vector3(0, 0.1, 0));
   actor.woundSystem.extendSlash(slash.id, { localEnd: slash.localCutEnd.clone().add(new THREE.Vector3(0, 0.1, 0)), worldEnd: curvedEnd, surfaceNormal: new THREE.Vector3(0, 0, 1), addedTravel: 0.1, depth: 0.03, severity: 0.52, edgeAlignment: 0.8 });
   assert.ok(slash.pathCurvature >= 0.32, 'curvature derives from the sampled physical path');
-  assert.equal(slash.decalPhysicalCategory, 'crescent');
+  assert.match(slash.decalVariantId, /knife_puncture_(?:slit|split)_/);
   actor.woundSystem.finishSlash(slash.id, true);
   assert.equal(slash.lastContactInterrupted, true);
   assert.equal(slash.decalSelectionState, 'locked');
