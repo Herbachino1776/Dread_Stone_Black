@@ -46,9 +46,9 @@ const isInsideBounds = (position, bounds, margin = 0) => Boolean(position
 
 export function isFolsomCombatActorRelevant(actor, walkerController = null, stationaryDeathController = null) {
   if (!actor || actor.disposed) return false;
-  if (actor === stationaryDeathController?.actor && stationaryDeathController.state === WALKER_STATES.grounded) return false;
+  if (actor === stationaryDeathController?.actor && [WALKER_STATES.losingConsciousness, WALKER_STATES.grounded].includes(stationaryDeathController.state)) return false;
   if (actor !== walkerController?.actor) return true;
-  return ![WALKER_STATES.grounded, WALKER_STATES.disposed, WALKER_STATES.respawning].includes(walkerController.state);
+  return ![WALKER_STATES.losingConsciousness, WALKER_STATES.grounded, WALKER_STATES.disposed, WALKER_STATES.respawning].includes(walkerController.state);
 }
 
 export class FolsomCombatEncounter {
@@ -87,11 +87,11 @@ export class FolsomCombatEncounter {
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: this.groundY, eventSink: (event, payload) => this.handleStationaryCombatEvent(event, payload) });
     this.combatDirector = new CombatDirector({ actor: this.actor, bloodEffects: this.bloodEffects, feedbackSystem: this.feedbackSystem });
     this.combatRouter.register(this.actor, this.combatDirector);
-    this.stationaryCollisionDisabled = false;
+    this.stationaryDeathCollisionReleased = false;
     this.stationaryDeathController = new AuthoredHumanoidDeathController({
       actor: this.actor,
       groundY: this.groundY,
-      onGrounded: (actor) => this.disableStationaryGroundedCollisionOwnership(actor),
+      onDeathStarted: (actor) => this.releaseStationaryDeathCollisionOwnership(actor),
     });
 
     this.walkerController = new CombatLabWalkerController({
@@ -218,10 +218,10 @@ export class FolsomCombatEncounter {
     return [this.actor, this.walkerController?.actor].filter((actor) => isFolsomCombatActorRelevant(actor, this.walkerController, this.stationaryDeathController));
   }
 
-  disableStationaryGroundedCollisionOwnership(actor = this.actor) {
-    if (!actor || actor !== this.actor || this.stationaryCollisionDisabled) return false;
-    this.stationaryCollisionDisabled = true;
-    this.weaponController?.cancelTarget?.(actor, 'folsom-stationary-grounded-collision-disable');
+  releaseStationaryDeathCollisionOwnership(actor = this.actor) {
+    if (!actor || actor !== this.actor || this.stationaryDeathCollisionReleased) return false;
+    this.stationaryDeathCollisionReleased = true;
+    this.weaponController?.cancelTarget?.(actor, 'folsom-stationary-death-collision-release');
     this.combatRouter.unregister(actor);
     actor.colliders?.forEach?.((collider) => collider.setEnabled?.(false));
     this.dungeon.collision?.removeBlocker?.(this.playerBlocker);
@@ -276,7 +276,7 @@ export class FolsomCombatEncounter {
     });
     this.actor.afterPhysics(this.physics.interpolationAlpha);
     this.walkerController?.afterPhysics(this.physics.interpolationAlpha);
-    if (!this.stationaryCollisionDisabled) this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
+    if (!this.stationaryDeathCollisionReleased) this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.priorityCombatActor = this.getPriorityCombatActor(this.player);
     const combatShadowTarget = this.priorityCombatActor?.getBodyWorldPosition?.('upper_chest');
     if (combatShadowTarget) this.scene.userData.activeCombatShadowTarget = combatShadowTarget;
@@ -293,7 +293,7 @@ export class FolsomCombatEncounter {
     this.combatRouter.register(this.actor, this.combatDirector);
     this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.dungeon.collision?.addBlocker?.(this.playerBlocker);
-    this.stationaryCollisionDisabled = false;
+    this.stationaryDeathCollisionReleased = false;
     this.bloodEffects.clear();
     this.combatDirector.reset();
     this.walkerController?.reset(this.player);
@@ -308,6 +308,7 @@ export class FolsomCombatEncounter {
     return {
       modelProfileName: this.modelProfile.name,
       stationaryActorId: this.actor?.instanceId ?? null,
+      stationaryDeathCollisionReleased: this.stationaryDeathCollisionReleased,
       walkerActorId: this.walkerController?.actor?.instanceId ?? null,
       routerActorCount: routing.actorCount,
       routerColliderCount: routing.colliderCount,

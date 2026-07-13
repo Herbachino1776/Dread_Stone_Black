@@ -185,6 +185,11 @@ test('authored Folsom spawn completes its death state without procedural collaps
   controller.forceQualifyingStab('upper_chest');
   controller.forceQualifyingStab('abdomen');
   assert.equal(controller.state, WALKER_STATES.losingConsciousness);
+  assert.equal(encounter.stationaryDeathCollisionReleased, true);
+  assert.equal(encounter.combatRouter.getDirector(actor), null);
+  assert.equal(encounter.getActiveCombatActors().includes(actor), false);
+  assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);
+  assert.equal(collision.blockerRects.includes(encounter.playerBlocker), false);
 
   for (let frame = 0; frame < 120; frame += 1) controller.prepareFrame(0.05);
   actor.prepareFrame(0.05);
@@ -194,7 +199,7 @@ test('authored Folsom spawn completes its death state without procedural collaps
   assert.equal(actor.ragdollActive, false);
   assert.equal(actor.getDiagnostics().ragdollHandoff.activationCount, 0);
   assert.equal(actor.visualAdapter?.ragdollDiagnostics.activationCount ?? 0, 0);
-  assert.equal(encounter.stationaryCollisionDisabled, true);
+  assert.equal(encounter.stationaryDeathCollisionReleased, true);
   assert.equal(encounter.combatRouter.getDirector(actor), null);
   assert.equal(encounter.getActiveCombatActors().includes(actor), false);
   assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);
@@ -202,10 +207,29 @@ test('authored Folsom spawn completes its death state without procedural collaps
 
   encounter.reset(player);
   assert.equal(controller.state, WALKER_STATES.nearPlayer);
-  assert.equal(encounter.stationaryCollisionDisabled, false);
+  assert.equal(encounter.stationaryDeathCollisionReleased, false);
   assert.equal(encounter.combatRouter.getDirector(actor), encounter.combatDirector);
   assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled()), true);
   assert.equal(collision.blockerRects.includes(encounter.playerBlocker), true);
+  encounter.dispose();
+});
+
+test('dying Folsom walker releases player and combat collision immediately', async () => {
+  const { encounter, collision } = await createEncounter();
+  const controller = encounter.walkerController;
+  const actor = controller.actor;
+  const blocker = controller.playerBlocker;
+  assert.equal(collision.blockerRects.includes(blocker), true);
+
+  controller.forceQualifyingStab();
+  controller.forceQualifyingStab();
+
+  assert.equal(controller.state, WALKER_STATES.losingConsciousness);
+  assert.equal(controller.deathCollisionReleased, true);
+  assert.equal(encounter.combatRouter.getDirector(actor), null);
+  assert.equal(encounter.getActiveCombatActors().includes(actor), false);
+  assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);
+  assert.equal(collision.blockerRects.includes(blocker), false);
   encounter.dispose();
 });
 

@@ -3,10 +3,10 @@ import { COMBAT_LAB_WALKER_CONFIG, WALKER_STATES, WalkerVitalStabPolicy } from '
 const LIVING_STATE = WALKER_STATES.nearPlayer;
 
 export class AuthoredHumanoidDeathController {
-  constructor({ actor, config = COMBAT_LAB_WALKER_CONFIG, onGrounded = null } = {}) {
+  constructor({ actor, config = COMBAT_LAB_WALKER_CONFIG, onDeathStarted = null } = {}) {
     this.actor = actor;
     this.config = config;
-    this.onGrounded = onGrounded;
+    this.onDeathStarted = onDeathStarted;
     this.state = LIVING_STATE;
     this.stateElapsed = 0;
     this.deathDurationSeconds = config.deathCollapseSeconds;
@@ -40,6 +40,7 @@ export class AuthoredHumanoidDeathController {
     this.deathDurationSeconds = result?.durationSeconds ?? this.config.deathCollapseSeconds;
     this.state = WALKER_STATES.losingConsciousness;
     this.stateElapsed = 0;
+    this.onDeathStarted?.(this.actor);
   }
 
   forceQualifyingStab(regionId = 'upper_chest') {
@@ -51,7 +52,6 @@ export class AuthoredHumanoidDeathController {
   holdGroundedPose() {
     if (this.state !== WALKER_STATES.losingConsciousness) return false;
     this.state = WALKER_STATES.grounded;
-    this.onGrounded?.(this.actor);
     return true;
   }
 

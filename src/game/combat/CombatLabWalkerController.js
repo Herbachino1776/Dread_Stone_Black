@@ -175,7 +175,7 @@ export class CombatLabWalkerController {
     this.maximumSpeed = this.baseMaximumSpeed;
     this.lethality = new WalkerVitalStabPolicy();
     this.reactionResumeState = WALKER_STATES.approaching;
-    this.collisionDisabledForGroundedPose = false;
+    this.deathCollisionReleased = false;
     this.collapseDirection = 1;
     this.deathInitialSpeed = 0;
     this.deathDurationSeconds = config.deathCollapseSeconds;
@@ -318,7 +318,7 @@ export class CombatLabWalkerController {
     this.currentSpeed = 0;
     this.desiredSpeed = 0;
     this.velocity.set(0, 0, 0);
-    this.collisionDisabledForGroundedPose = false;
+    this.deathCollisionReleased = false;
     this.collapseDirection = 1;
     this.deathInitialSpeed = 0;
     this.deathDurationSeconds = this.config.deathCollapseSeconds;
@@ -453,7 +453,7 @@ export class CombatLabWalkerController {
   afterPhysics(alpha = 1) {
     if (!this.actor) return;
     this.actor.afterPhysics(alpha);
-    if (this.playerBlocker && !this.collisionDisabledForGroundedPose) this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
+    if (this.playerBlocker && !this.deathCollisionReleased) this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
   }
 
   evaluateQualifyingWounds() {
@@ -479,6 +479,7 @@ export class CombatLabWalkerController {
       this.deathDurationSeconds = death?.durationSeconds ?? this.config.deathCollapseSeconds;
       this.selectedDeathName = death?.name ?? null;
       this.setState(WALKER_STATES.losingConsciousness);
+      this.releaseDeathCollisionOwnership();
     }
   }
 
@@ -494,7 +495,7 @@ export class CombatLabWalkerController {
     this.desiredSpeed = 0;
     this.velocity.set(0, 0, 0);
     this.setState(WALKER_STATES.grounded);
-    this.disableGroundedCollisionOwnership();
+    this.releaseDeathCollisionOwnership();
     return true;
   }
 
@@ -502,10 +503,10 @@ export class CombatLabWalkerController {
     return this.state === WALKER_STATES.grounded;
   }
 
-  disableGroundedCollisionOwnership() {
-    if (!this.actor || this.collisionDisabledForGroundedPose) return;
-    this.collisionDisabledForGroundedPose = true;
-    this.beforeActorDisposal?.(this.actor, 'walker-grounded-collision-disable');
+  releaseDeathCollisionOwnership() {
+    if (!this.actor || this.deathCollisionReleased) return;
+    this.deathCollisionReleased = true;
+    this.beforeActorDisposal?.(this.actor, 'walker-death-collision-release');
     if (this.routingRegistered) this.combatRouter?.unregister?.(this.actor);
     this.routingRegistered = false;
     this.actor.colliders?.forEach?.((collider) => collider.setEnabled?.(false));
@@ -595,6 +596,7 @@ export class CombatLabWalkerController {
       deathAnimation: this.selectedDeathName,
       deathDurationSeconds: this.deathDurationSeconds,
       deathProgress: Number(deathProgress.toFixed(3)),
+      deathCollisionReleased: this.deathCollisionReleased,
       finalPoseHeld: this.state === WALKER_STATES.grounded && animation?.finalPoseHeld === true,
       ragdollActive: this.actor?.ragdollActive === true,
       actorInstanceId: this.actor?.instanceId ?? null,
