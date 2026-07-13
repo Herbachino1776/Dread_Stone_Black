@@ -1,0 +1,446 @@
+{
+  "schemaVersion": 1,
+  "packId": "dreadstone_knife_wound_decals_v1",
+  "displayName": "Dread Stone Black Knife Wound Decals",
+  "basePath": "./assets/textures/combat/wounds/knife/",
+  "textureFormat": "PNG RGBA",
+  "canvasSize": [
+    512,
+    512
+  ],
+  "selectionGuidance": {
+    "puncture": "Choose by woundType and severity, then weighted-randomize. Align the long axis to the blade-entry/tangent direction.",
+    "slash": "Choose by woundType and severity, weighted-randomize, then align to the physical cut tangent. Avoid arbitrary 90-degree rotations.",
+    "determinism": "Seed selection from wound ID so a wound keeps the same decal after reset/replay where state is preserved.",
+    "surfaceAttachment": "Use the existing skinned-surface binding; these textures replace only the generated visual shape, not hit logic or anchoring.",
+    "material": "Use alpha transparency, normal lighting, no emissive, depthWrite false, depthTest true, and a very small polygon offset/surface bias."
+  },
+  "variants": [
+    {
+      "id": "knife_puncture_slit_01",
+      "family": "puncture",
+      "woundTypes": [
+        "puncture",
+        "deep_puncture"
+      ],
+      "severity": [
+        0.05,
+        0.72
+      ],
+      "weight": 1.15,
+      "notes": "Primary narrow entry slit; good default puncture variation.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        114,
+        209,
+        397,
+        302
+      ],
+      "contentSize": [
+        283,
+        93
+      ],
+      "contentAspect": 3.043,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_puncture_slit_01.png"
+    },
+    {
+      "id": "knife_puncture_slit_02",
+      "family": "puncture",
+      "woundTypes": [
+        "puncture",
+        "deep_puncture"
+      ],
+      "severity": [
+        0.12,
+        0.9
+      ],
+      "weight": 1.0,
+      "notes": "Ragged slit; use for higher-force or withdrawn punctures.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        122,
+        178,
+        390,
+        333
+      ],
+      "contentSize": [
+        268,
+        155
+      ],
+      "contentAspect": 1.729,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_puncture_slit_02.png"
+    },
+    {
+      "id": "knife_puncture_split_01",
+      "family": "puncture",
+      "woundTypes": [
+        "deep_puncture",
+        "arterial_wound"
+      ],
+      "severity": [
+        0.45,
+        1.0
+      ],
+      "weight": 0.8,
+      "notes": "Long narrow split; suited to deeper aligned stabs.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        118,
+        181,
+        394,
+        330
+      ],
+      "contentSize": [
+        276,
+        149
+      ],
+      "contentAspect": 1.8523,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_puncture_split_01.png"
+    },
+    {
+      "id": "knife_puncture_double_01",
+      "family": "puncture",
+      "woundTypes": [
+        "deep_puncture",
+        "arterial_wound"
+      ],
+      "severity": [
+        0.55,
+        1.0
+      ],
+      "weight": 0.5,
+      "notes": "Complex double-lobed puncture; rare severe variation.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        123,
+        189,
+        389,
+        323
+      ],
+      "contentSize": [
+        266,
+        134
+      ],
+      "contentAspect": 1.9851,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_puncture_double_01.png"
+    },
+    {
+      "id": "knife_puncture_double_02",
+      "family": "puncture",
+      "woundTypes": [
+        "deep_puncture",
+        "arterial_wound"
+      ],
+      "severity": [
+        0.6,
+        1.0
+      ],
+      "weight": 0.4,
+      "notes": "Ragged double puncture; rare severe variation.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        107,
+        175,
+        405,
+        336
+      ],
+      "contentSize": [
+        298,
+        161
+      ],
+      "contentAspect": 1.8509,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_puncture_double_02.png"
+    },
+    {
+      "id": "knife_puncture_burst_01",
+      "family": "puncture",
+      "woundTypes": [
+        "deep_puncture",
+        "arterial_wound"
+      ],
+      "severity": [
+        0.72,
+        1.0
+      ],
+      "weight": 0.28,
+      "notes": "Forceful burst-like entry; reserve for high-energy severe punctures.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        140,
+        139,
+        372,
+        373
+      ],
+      "contentSize": [
+        232,
+        234
+      ],
+      "contentAspect": 0.9915,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_puncture_burst_01.png"
+    },
+    {
+      "id": "knife_puncture_burst_02",
+      "family": "puncture",
+      "woundTypes": [
+        "deep_puncture",
+        "arterial_wound"
+      ],
+      "severity": [
+        0.78,
+        1.0
+      ],
+      "weight": 0.22,
+      "notes": "Alternate forceful entry burst; very rare severe variation.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        151,
+        134,
+        360,
+        378
+      ],
+      "contentSize": [
+        209,
+        244
+      ],
+      "contentAspect": 0.8566,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_puncture_burst_02.png"
+    },
+    {
+      "id": "knife_slash_long_01",
+      "family": "slash",
+      "woundTypes": [
+        "shallow_cut",
+        "deep_slash"
+      ],
+      "severity": [
+        0.18,
+        0.86
+      ],
+      "weight": 1.0,
+      "notes": "Primary elongated slash variation.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        118,
+        147,
+        394,
+        364
+      ],
+      "contentSize": [
+        276,
+        217
+      ],
+      "contentAspect": 1.2719,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_slash_long_01.png"
+    },
+    {
+      "id": "knife_slash_long_02",
+      "family": "slash",
+      "woundTypes": [
+        "shallow_cut",
+        "deep_slash"
+      ],
+      "severity": [
+        0.22,
+        0.9
+      ],
+      "weight": 0.95,
+      "notes": "Alternate elongated slash variation.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        109,
+        172,
+        402,
+        340
+      ],
+      "contentSize": [
+        293,
+        168
+      ],
+      "contentAspect": 1.744,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_slash_long_02.png"
+    },
+    {
+      "id": "knife_slash_jagged_01",
+      "family": "slash",
+      "woundTypes": [
+        "deep_slash"
+      ],
+      "severity": [
+        0.52,
+        1.0
+      ],
+      "weight": 0.72,
+      "notes": "Jagged deeper slash; use at higher severity.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        111,
+        157,
+        400,
+        354
+      ],
+      "contentSize": [
+        289,
+        197
+      ],
+      "contentAspect": 1.467,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_slash_jagged_01.png"
+    },
+    {
+      "id": "knife_slash_wide_01",
+      "family": "slash",
+      "woundTypes": [
+        "deep_slash",
+        "arterial_wound"
+      ],
+      "severity": [
+        0.68,
+        1.0
+      ],
+      "weight": 0.48,
+      "notes": "Wide torn slash; rare severe variation.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        114,
+        165,
+        398,
+        346
+      ],
+      "contentSize": [
+        284,
+        181
+      ],
+      "contentAspect": 1.5691,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_slash_wide_01.png"
+    },
+    {
+      "id": "knife_slash_gouge_01",
+      "family": "slash",
+      "woundTypes": [
+        "deep_slash"
+      ],
+      "severity": [
+        0.58,
+        1.0
+      ],
+      "weight": 0.46,
+      "notes": "Ragged gouge for dragging or poorly aligned deep cuts.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        156,
+        132,
+        355,
+        379
+      ],
+      "contentSize": [
+        199,
+        247
+      ],
+      "contentAspect": 0.8057,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_slash_gouge_01.png"
+    },
+    {
+      "id": "knife_slash_crescent_01",
+      "family": "slash",
+      "woundTypes": [
+        "deep_slash"
+      ],
+      "severity": [
+        0.6,
+        1.0
+      ],
+      "weight": 0.32,
+      "notes": "Curved gouge; uncommon variation for arcing draw cuts.",
+      "canvas": [
+        512,
+        512
+      ],
+      "alphaBounds": [
+        163,
+        132,
+        349,
+        380
+      ],
+      "contentSize": [
+        186,
+        248
+      ],
+      "contentAspect": 0.75,
+      "allowMirrorX": true,
+      "allowMirrorY": false,
+      "rotationMode": "align_to_wound_tangent",
+      "file": "wound_knife_slash_crescent_01.png"
+    }
+  ]
+}
