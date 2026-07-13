@@ -200,7 +200,7 @@ export class CombatLabDebugPanel {
       `yaw ${(walker.currentYaw ?? 0).toFixed(2)} -> ${(walker.desiredYaw ?? 0).toFixed(2)}  error ${(walker.turnError ?? 0).toFixed(2)}  paused ${walker.paused ? 'YES' : 'NO'}`,
       `gait blend ${(walker.locomotionBlendWeight ?? 0).toFixed(2)}  phase ${(walker.gaitPhase ?? 0).toFixed(2)}/${(walker.oppositeGaitPhase ?? 0).toFixed(2)}  cadence ${(walker.cadence ?? 0).toFixed(2)}  stride ${(walker.strideLength ?? 0).toFixed(2)}  stance ${walker.stanceLeg ?? '-'}`,
       `vital stabs ${walker.criticalStabCount ?? 0}/2  impaired ${walker.firstStabImpaired ? 'YES' : 'NO'}  wounds ${JSON.stringify(walker.qualifyingWoundIds ?? [])}  last ${walker.lastQualifyingRegion ?? '-'} ${(walker.lastQualifyingDepth ?? 0).toFixed(3)}m`,
-      `corpse ragdoll ${walker.ragdollActive ? 'ACTIVE' : 'OFF'} ${(walker.ragdollElapsed ?? 0).toFixed(2)}s  fade ${(walker.fadeProgress ?? 0).toFixed(2)} opacity ${(walker.fadeOpacity ?? 1).toFixed(2)}`,
+      `death skeletal ${walker.ragdollActive ? 'RAGDOLL ERROR' : walker.finalPoseHeld ? 'GROUNDED HOLD' : 'AUTHORED'}  ground ${(walker.groundingProgress ?? 0).toFixed(2)} relax ${(walker.finalRelaxation ?? 0).toFixed(2)} chest/pelvis ${(walker.chestGroundHeight ?? 0).toFixed(2)}/${(walker.pelvisGroundHeight ?? 0).toFixed(2)}m`,
       `owned body/collider/joint ${walker.ownedRigidBodyCount ?? 0}/${walker.ownedColliderCount ?? 0}/${walker.ownedJointCount ?? 0}  materials ${walker.materialCloneCount ?? 0}  wounds ${walker.activeWoundCount ?? 0}  subscriptions ${walker.remainingEventSubscriptions ?? 0}`,
       `routing actors/colliders ${routing.actorCount ?? 0}/${routing.colliderCount ?? 0}  disposed ${JSON.stringify(walker.lastDisposalSummary ?? null)}`,
       '',

@@ -81,8 +81,8 @@ test('Folsom combat activation and readability priority use the nearest relevant
   player.position.copy(walker.getBodyWorldPosition('pelvis')).add(new THREE.Vector3(0, 0.7, 0.4));
   assert.equal(encounter.getPriorityCombatActor(player), walker);
   assert.equal(encounter.isPlayerInCombatRange(player), true);
-  encounter.walkerController.state = WALKER_STATES.fading;
-  assert.equal(encounter.getPriorityCombatActor(player), encounter.actor, 'fading walker cannot retain lighting or knife priority');
+  encounter.walkerController.state = WALKER_STATES.grounded;
+  assert.equal(encounter.getPriorityCombatActor(player), encounter.actor, 'grounded walker cannot retain lighting or knife priority');
   encounter.dispose();
 });
 

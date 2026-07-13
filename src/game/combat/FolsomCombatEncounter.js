@@ -46,7 +46,7 @@ const isInsideBounds = (position, bounds, margin = 0) => Boolean(position
 export function isFolsomCombatActorRelevant(actor, walkerController = null) {
   if (!actor || actor.disposed) return false;
   if (actor !== walkerController?.actor) return true;
-  return ![WALKER_STATES.fading, WALKER_STATES.disposed, WALKER_STATES.respawning].includes(walkerController.state);
+  return ![WALKER_STATES.grounded, WALKER_STATES.disposed, WALKER_STATES.respawning].includes(walkerController.state);
 }
 
 export class FolsomCombatEncounter {
@@ -243,7 +243,6 @@ export class FolsomCombatEncounter {
     if (!this.physics.paused) this.walkerController?.prepareFrame(deltaSeconds, this.player);
     this.actor.prepareFrame(deltaSeconds);
     this.walkerController?.actor?.prepareFrame(deltaSeconds);
-    this.walkerController?.afterAnimationFrame();
     this.physics.step(deltaSeconds, (dt) => {
       this.feedbackSystem.update(dt);
       this.weaponController?.beforePhysics?.(dt);

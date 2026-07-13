@@ -13,9 +13,8 @@ export const WALKER_STATES = Object.freeze({
   hitReacting: 'HIT_REACTING',
   losingConsciousness: 'LOSING_CONSCIOUSNESS',
   dying: 'LOSING_CONSCIOUSNESS',
-  ragdollHandoff: 'RAGDOLL_HANDOFF',
-  ragdoll: 'RAGDOLL',
-  fading: 'FADING',
+  settlingToGround: 'SETTLING_TO_GROUND',
+  grounded: 'GROUNDED',
   disposed: 'DISPOSED',
   respawning: 'RESPAWNING',
 });
@@ -37,9 +36,8 @@ export const COMBAT_LAB_WALKER_CONFIG = Object.freeze({
   idleToWalkSeconds: 0.82,
   walkToIdleSeconds: 0.96,
   consciousnessLossSeconds: 2.8,
+  groundCollapseSeconds: 2.35,
   dyingBlendSeconds: 2.55,
-  corpseHoldSeconds: 3,
-  fadeSeconds: 1,
   respawnDelaySeconds: 0.32,
   firstStabSpeedMultiplier: 0.78,
   torsoQualifyingDepth: 0.05,
@@ -69,10 +67,9 @@ const ALLOWED_TRANSITIONS = Object.freeze({
   [WALKER_STATES.blendingToIdle]: new Set([WALKER_STATES.nearPlayer, WALKER_STATES.blendingToWalk, WALKER_STATES.hitReacting, WALKER_STATES.dying, WALKER_STATES.disposed]),
   [WALKER_STATES.nearPlayer]: new Set([WALKER_STATES.blendingToWalk, WALKER_STATES.hitReacting, WALKER_STATES.dying, WALKER_STATES.disposed]),
   [WALKER_STATES.hitReacting]: new Set([WALKER_STATES.approaching, WALKER_STATES.blendingToIdle, WALKER_STATES.nearPlayer, WALKER_STATES.dying, WALKER_STATES.disposed]),
-  [WALKER_STATES.losingConsciousness]: new Set([WALKER_STATES.ragdollHandoff, WALKER_STATES.disposed]),
-  [WALKER_STATES.ragdollHandoff]: new Set([WALKER_STATES.ragdoll, WALKER_STATES.disposed]),
-  [WALKER_STATES.ragdoll]: new Set([WALKER_STATES.fading, WALKER_STATES.disposed]),
-  [WALKER_STATES.fading]: new Set([WALKER_STATES.disposed]),
+  [WALKER_STATES.losingConsciousness]: new Set([WALKER_STATES.settlingToGround, WALKER_STATES.disposed]),
+  [WALKER_STATES.settlingToGround]: new Set([WALKER_STATES.grounded, WALKER_STATES.disposed]),
+  [WALKER_STATES.grounded]: new Set([WALKER_STATES.disposed]),
   [WALKER_STATES.disposed]: new Set([WALKER_STATES.respawning]),
 });
 
@@ -315,6 +312,12 @@ export class ProceduralConsciousnessLossLayer {
     this.torsoPitch = 0;
     this.lateralImbalance = 0;
     this.locomotionWeight = 1;
+    this.groundingProgress = 0;
+    this.finalRelaxation = 0;
+    this.groundY = null;
+    this.pelvisGroundHeight = null;
+    this.chestGroundHeight = null;
+    this.torsoGroundSpan = null;
     this.tmpEuler = new THREE.Euler(0, 0, 0, 'XYZ');
     this.tmpQuaternion = new THREE.Quaternion();
     this.tmpWorldPosition = new THREE.Vector3();
@@ -337,6 +340,12 @@ export class ProceduralConsciousnessLossLayer {
     this.torsoPitch = 0;
     this.lateralImbalance = 0;
     this.locomotionWeight = 1;
+    this.groundingProgress = 0;
+    this.finalRelaxation = 0;
+    this.groundY = null;
+    this.pelvisGroundHeight = null;
+    this.chestGroundHeight = null;
+    this.torsoGroundSpan = null;
   }
 
   reset() {
@@ -349,6 +358,12 @@ export class ProceduralConsciousnessLossLayer {
     this.torsoPitch = 0;
     this.lateralImbalance = 0;
     this.locomotionWeight = 1;
+    this.groundingProgress = 0;
+    this.finalRelaxation = 0;
+    this.groundY = null;
+    this.pelvisGroundHeight = null;
+    this.chestGroundHeight = null;
+    this.torsoGroundSpan = null;
   }
 
   advance(elapsedSeconds, durationSeconds) {
@@ -363,6 +378,26 @@ export class ProceduralConsciousnessLossLayer {
     this.torsoPitch = THREE.MathUtils.degToRad(THREE.MathUtils.lerp(0, 31, smoothstep01((this.progress - 0.12) / 0.88)));
     this.lateralImbalance = this.direction * THREE.MathUtils.degToRad(THREE.MathUtils.lerp(0, 8.5, instability));
     return { shoulderRelease, lowerBodyRelease, instability };
+  }
+
+  advanceGroundCollapse(elapsedSeconds, durationSeconds) {
+    this.progress = 1;
+    this.locomotionWeight = 0;
+    this.groundingProgress = clamp01(elapsedSeconds / Math.max(0.001, durationSeconds));
+    this.finalRelaxation = smoothstep01((this.groundingProgress - 0.8) / 0.2);
+    return {
+      brace: smoothstep01(this.groundingProgress / 0.34),
+      bodyRelease: smoothstep01((this.groundingProgress - 0.18) / 0.66),
+      settle: smoothstep01((this.groundingProgress - 0.48) / 0.42),
+      relaxation: this.finalRelaxation,
+    };
+  }
+
+  holdGroundedPose() {
+    this.progress = 1;
+    this.locomotionWeight = 0;
+    this.groundingProgress = 1;
+    this.finalRelaxation = 1;
   }
 
   rotate(id, x = 0, y = 0, z = 0) {
@@ -408,6 +443,47 @@ export class ProceduralConsciousnessLossLayer {
     this.rotate('right_upper_arm', THREE.MathUtils.degToRad(7) * shoulderRelease, 0, THREE.MathUtils.degToRad(-4) * shoulderRelease);
     this.rotate('left_forearm', THREE.MathUtils.degToRad(-5) * shoulderRelease, 0, 0);
     this.rotate('right_forearm', THREE.MathUtils.degToRad(-5) * shoulderRelease, 0, 0);
+    if (this.groundingProgress > 0) {
+      const brace = smoothstep01(this.groundingProgress / 0.34);
+      const bodyRelease = smoothstep01((this.groundingProgress - 0.18) / 0.66);
+      const settle = smoothstep01((this.groundingProgress - 0.48) / 0.42);
+      const relaxation = this.finalRelaxation;
+      const weakSide = this.direction < 0 ? 'left' : 'right';
+      const strongSide = weakSide === 'left' ? 'right' : 'left';
+      const weakSign = weakSide === 'left' ? -1 : 1;
+      const strongSign = -weakSign;
+      const braceSide = strongSide;
+      const clutchSide = weakSide;
+      const braceSign = strongSign;
+      const clutchSign = weakSign;
+
+      // Continue from the authored kneel into a slow uneven chest/side fall.
+      this.rotate('pelvis', THREE.MathUtils.degToRad(33) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(32) * bodyRelease);
+      this.rotate('abdomen', THREE.MathUtils.degToRad(24) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(9) * bodyRelease);
+      this.rotate('lower_chest', THREE.MathUtils.degToRad(15) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(6) * bodyRelease);
+      this.rotate('upper_chest', THREE.MathUtils.degToRad(9) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(4) * bodyRelease);
+
+      // The falling side reaches for the floor; the other arm stays folded over
+      // the chest/abdomen before both lose their remaining tension.
+      this.rotate(`${braceSide}_upper_arm`, THREE.MathUtils.degToRad(118) * brace, 0, -braceSign * THREE.MathUtils.degToRad(23) * brace);
+      this.rotate(`${braceSide}_forearm`, THREE.MathUtils.degToRad(141) * brace - THREE.MathUtils.degToRad(9) * relaxation, 0, braceSign * THREE.MathUtils.degToRad(7) * settle);
+      this.rotate(`${braceSide}_hand`, THREE.MathUtils.degToRad(12) * brace + THREE.MathUtils.degToRad(8) * relaxation, 0, braceSign * THREE.MathUtils.degToRad(13) * (settle + relaxation * 0.35));
+      this.rotate(`${clutchSide}_upper_arm`, THREE.MathUtils.degToRad(34) * brace, 0, -clutchSign * THREE.MathUtils.degToRad(91) * brace);
+      this.rotate(`${clutchSide}_forearm`, THREE.MathUtils.degToRad(-96) * brace + THREE.MathUtils.degToRad(33) * relaxation, 0, clutchSign * THREE.MathUtils.degToRad(8) * settle);
+      this.rotate(`${clutchSide}_hand`, THREE.MathUtils.degToRad(-18) * brace + THREE.MathUtils.degToRad(11) * relaxation, 0, -clutchSign * THREE.MathUtils.degToRad(16) * brace);
+
+      this.rotate(`${weakSide}_thigh`, THREE.MathUtils.degToRad(72) * bodyRelease, 0, weakSign * THREE.MathUtils.degToRad(9) * settle);
+      this.rotate(`${weakSide}_lower_leg`, THREE.MathUtils.degToRad(-10) * bodyRelease, 0, weakSign * THREE.MathUtils.degToRad(5) * settle);
+      this.rotate(`${strongSide}_thigh`, THREE.MathUtils.degToRad(85) * bodyRelease, 0, strongSign * THREE.MathUtils.degToRad(5) * settle);
+      this.rotate(`${strongSide}_lower_leg`, THREE.MathUtils.degToRad(35) * bodyRelease, 0, strongSign * THREE.MathUtils.degToRad(3) * settle);
+      this.rotate(`${weakSide}_foot`, THREE.MathUtils.degToRad(8) * settle + THREE.MathUtils.degToRad(7) * relaxation, 0, weakSign * THREE.MathUtils.degToRad(11) * relaxation);
+      this.rotate(`${strongSide}_foot`, THREE.MathUtils.degToRad(12) * settle + THREE.MathUtils.degToRad(9) * relaxation, 0, strongSign * THREE.MathUtils.degToRad(13) * relaxation);
+
+      // The head tries to stay up through the brace, then drops and rolls after
+      // the shoulder and chest have made contact.
+      this.rotate('neck', THREE.MathUtils.degToRad(-30) * brace - THREE.MathUtils.degToRad(18) * settle + THREE.MathUtils.degToRad(4) * relaxation, 0, -this.direction * (THREE.MathUtils.degToRad(30) * settle + THREE.MathUtils.degToRad(5) * relaxation));
+      this.rotate('head', THREE.MathUtils.degToRad(-17) * brace + THREE.MathUtils.degToRad(16) * settle + THREE.MathUtils.degToRad(8) * relaxation, 0, this.direction * THREE.MathUtils.degToRad(11) * settle + this.direction * THREE.MathUtils.degToRad(7) * relaxation);
+    }
     this.bones.forEach((bone) => bone.quaternion.normalize());
   }
 
@@ -419,7 +495,8 @@ export class ProceduralConsciousnessLossLayer {
     if (!pelvis || !leftFoot || !rightFoot) return 0;
     pelvis.updateWorldMatrix?.(true, true);
     const minimumFootY = Math.min(leftFoot.getWorldPosition(new THREE.Vector3()).y, rightFoot.getWorldPosition(new THREE.Vector3()).y);
-    const requestedCorrection = THREE.MathUtils.clamp(groundY + minimumBoneClearance - minimumFootY, 0, this.pelvisDescent);
+    const grounding = smoothstep01((this.groundingProgress - 0.08) / 0.82);
+    const requestedCorrection = THREE.MathUtils.clamp(groundY + minimumBoneClearance - minimumFootY, 0, this.pelvisDescent) * (1 - grounding);
     const requestedDescent = this.pelvisDescent - requestedCorrection;
     const monotonicDescent = Math.max(this.maximumAppliedPelvisDescent, requestedDescent);
     const correction = Math.max(0, this.pelvisDescent - monotonicDescent);
@@ -430,6 +507,25 @@ export class ProceduralConsciousnessLossLayer {
     this.pelvisGroundCorrection = correction;
     this.appliedPelvisDescent = Math.max(0, this.pelvisDescent - correction);
     this.maximumAppliedPelvisDescent = this.appliedPelvisDescent;
+    if (grounding > 0) {
+      pelvis.updateWorldMatrix?.(true, true);
+      const torsoBones = ['pelvis', 'abdomen', 'lower_chest', 'upper_chest'].map((id) => this.bones.get(id)).filter(Boolean);
+      const torsoHeights = torsoBones.map((bone) => bone.getWorldPosition(new THREE.Vector3()).y);
+      if (torsoHeights.length) {
+        const torsoMinimum = Math.min(...torsoHeights);
+        const torsoMaximum = Math.max(...torsoHeights);
+        const torsoCenter = (torsoMinimum + torsoMaximum) * 0.5;
+        const targetCenter = groundY + 0.255;
+        this.translateWorld('pelvis', 0, (targetCenter - torsoCenter) * grounding, 0);
+        pelvis.updateWorldMatrix?.(true, true);
+      }
+    }
+    this.groundY = groundY;
+    this.pelvisGroundHeight = pelvis.getWorldPosition(new THREE.Vector3()).y - groundY;
+    const chestHeights = ['lower_chest', 'upper_chest'].map((id) => this.bones.get(id)?.getWorldPosition(new THREE.Vector3()).y).filter(Number.isFinite);
+    this.chestGroundHeight = chestHeights.length ? Math.max(...chestHeights) - groundY : null;
+    const finalTorsoHeights = ['pelvis', 'abdomen', 'lower_chest', 'upper_chest'].map((id) => this.bones.get(id)?.getWorldPosition(new THREE.Vector3()).y).filter(Number.isFinite);
+    this.torsoGroundSpan = finalTorsoHeights.length ? Math.max(...finalTorsoHeights) - Math.min(...finalTorsoHeights) : null;
     return correction;
   }
 
@@ -443,6 +539,11 @@ export class ProceduralConsciousnessLossLayer {
       pelvisGroundCorrection: this.pelvisGroundCorrection,
       torsoPitch: this.torsoPitch,
       lateralImbalance: this.lateralImbalance,
+      groundingProgress: this.groundingProgress,
+      finalRelaxation: this.finalRelaxation,
+      pelvisGroundHeight: this.pelvisGroundHeight,
+      chestGroundHeight: this.chestGroundHeight,
+      torsoGroundSpan: this.torsoGroundSpan,
     };
   }
 }
@@ -494,18 +595,11 @@ export class ProceduralWalkerController {
     this.consciousnessLoss = new ProceduralConsciousnessLossLayer();
     this.lethality = new WalkerVitalStabPolicy();
     this.reactionResumeState = WALKER_STATES.approaching;
-    this.ragdollElapsed = 0;
-    this.fadeProgress = 0;
-    this.fadeOpacity = 1;
-    this.collisionDisabledForFade = false;
-    this.collapsePending = false;
-    this.collapseRequested = false;
+    this.collisionDisabledForGroundedPose = false;
     this.collapseDirection = 1;
     this.deathInitialSpeed = 0;
-    this.ragdollActivationCount = 0;
     this.stateHistory = [this.state];
     this.lastDisposalSummary = null;
-    this.stationaryMaterialSnapshot = [];
     this.footprintActive = true;
     this.spawnGroundHeight = 0;
     this.spawnDiagnostics = null;
@@ -660,15 +754,9 @@ export class ProceduralWalkerController {
     this.currentSpeed = 0;
     this.desiredSpeed = 0;
     this.velocity.set(0, 0, 0);
-    this.ragdollElapsed = 0;
-    this.fadeProgress = 0;
-    this.fadeOpacity = 1;
-    this.collisionDisabledForFade = false;
-    this.collapsePending = false;
-    this.collapseRequested = false;
+    this.collisionDisabledForGroundedPose = false;
     this.collapseDirection = 1;
     this.deathInitialSpeed = 0;
-    this.ragdollActivationCount = 0;
     this.footprintActive = this.isInsideEncounter(playerPosition, 0);
     this.spawnDiagnostics = {
       point: spawnPosition.toArray(),
@@ -702,16 +790,10 @@ export class ProceduralWalkerController {
       return;
     }
     this.stateElapsed += dt;
-    if (this.state === WALKER_STATES.ragdoll) {
-      this.ragdollElapsed += dt;
-      if (this.ragdollElapsed >= this.config.corpseHoldSeconds) this.beginFade();
-      return;
-    }
-    if (this.state === WALKER_STATES.fading) {
-      this.fadeProgress = clamp01(this.stateElapsed / this.config.fadeSeconds);
-      this.applyFadeOpacity(1 - smoothstep01(this.fadeProgress));
-      if (!this.collisionDisabledForFade && this.fadeProgress >= 0.68) this.disableCollisionOwnership();
-      if (this.fadeProgress >= 1) this.disposeWalker({ respawn: true });
+    if (this.state === WALKER_STATES.grounded) {
+      this.currentSpeed = 0;
+      this.velocity.set(0, 0, 0);
+      this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
       return;
     }
     if (this.state === WALKER_STATES.losingConsciousness) {
@@ -733,16 +815,19 @@ export class ProceduralWalkerController {
       this.locomotion.advance(dt, { speed: this.currentSpeed, maximumSpeed: this.maximumSpeed, walking: this.currentSpeed > 0.025 || collapse.shoulderRelease < 0.98, impaired: true, dying: true, locomotionWeight: this.consciousnessLoss.locomotionWeight });
       this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
       if (this.stateElapsed >= this.config.consciousnessLossSeconds) {
-        this.collapsePending = true;
-        this.setState(WALKER_STATES.ragdollHandoff);
+        this.consciousnessLoss.advanceGroundCollapse(0, this.config.groundCollapseSeconds);
+        this.setState(WALKER_STATES.settlingToGround);
       }
       this.assertBoundedState();
       return;
     }
-    if (this.state === WALKER_STATES.ragdollHandoff) {
+    if (this.state === WALKER_STATES.settlingToGround) {
       this.currentSpeed = 0;
       this.velocity.set(0, 0, 0);
+      this.locomotion.advance(dt, { speed: 0, maximumSpeed: this.maximumSpeed, walking: false, impaired: true, dying: true, locomotionWeight: 0 });
+      this.consciousnessLoss.advanceGroundCollapse(this.stateElapsed, this.config.groundCollapseSeconds);
       this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
+      if (this.stateElapsed >= this.config.groundCollapseSeconds) this.holdGroundedPose();
       return;
     }
     const playerPosition = this.resolvePlayerPosition(player);
@@ -799,18 +884,9 @@ export class ProceduralWalkerController {
     this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
   }
 
-  afterAnimationFrame() {
-    if (!this.actor || this.state !== WALKER_STATES.ragdollHandoff || !this.collapsePending || this.collapseRequested || !this.actor.animationAuthorityReady) return false;
-    if (!this.actor.forceRagdoll()) return false;
-    this.collapseRequested = true;
-    this.ragdollActivationCount += 1;
-    this.ragdollElapsed = 0;
-    this.setState(WALKER_STATES.ragdoll);
-    return true;
-  }
-
   beforePhysics(dt, playerPosition = null) {
     if (!this.actor) return;
+    if (this.state === WALKER_STATES.grounded) return;
     this.director?.update?.(dt);
     this.evaluateQualifyingWounds();
     this.actor.beforePhysics(dt, playerPosition);
@@ -823,11 +899,11 @@ export class ProceduralWalkerController {
   afterPhysics(alpha = 1) {
     if (!this.actor) return;
     this.actor.afterPhysics(alpha);
-    if (this.playerBlocker && !this.collisionDisabledForFade) this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
+    if (this.playerBlocker && !this.collisionDisabledForGroundedPose) this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
   }
 
   evaluateQualifyingWounds() {
-    if (!this.actor || this.state === WALKER_STATES.dying || this.actor.ragdollActive) return [];
+    if (!this.actor || !LIVING_MOVEMENT_STATES.has(this.state) || this.actor.ragdollActive) return [];
     const newlyQualified = this.lethality.evaluate(this.actor.woundSystem?.wounds ?? []);
     if (newlyQualified.length) this.handleQualifyingStabChange();
     return newlyQualified;
@@ -856,31 +932,25 @@ export class ProceduralWalkerController {
     return wound;
   }
 
-  beginFade() {
-    if (!this.actor || this.state !== WALKER_STATES.ragdoll) return false;
-    this.stationaryMaterialSnapshot = this.stationaryActor?.visualAdapter?.getMaterialOpacitySnapshot?.() ?? [];
-    this.actor.visualAdapter?.beginFade?.();
-    this.actor.woundSystem?.beginFade?.();
-    this.bloodEffects?.beginFade?.();
-    this.fadeProgress = 0;
-    this.fadeOpacity = 1;
-    this.setState(WALKER_STATES.fading);
+  holdGroundedPose() {
+    if (!this.actor || this.state !== WALKER_STATES.settlingToGround) return false;
+    this.consciousnessLoss.holdGroundedPose();
+    this.currentSpeed = 0;
+    this.desiredSpeed = 0;
+    this.velocity.set(0, 0, 0);
+    this.setState(WALKER_STATES.grounded);
+    this.disableGroundedCollisionOwnership();
     return true;
   }
 
-  applyFadeOpacity(opacity) {
-    this.fadeOpacity = clamp01(Number.isFinite(opacity) ? opacity : 0);
-    this.actor?.visualAdapter?.setOpacity?.(this.fadeOpacity);
-    this.actor?.woundSystem?.setOpacity?.(this.fadeOpacity);
-    this.bloodEffects?.setOpacity?.(this.fadeOpacity);
-    const currentStationary = this.stationaryActor?.visualAdapter?.getMaterialOpacitySnapshot?.() ?? [];
-    if (this.stationaryMaterialSnapshot.some((value, index) => Math.abs(value - (currentStationary[index] ?? value)) > 1e-8)) throw new Error('Walker fade changed a stationary-target material.');
+  shouldHoldFinalPose() {
+    return this.state === WALKER_STATES.grounded;
   }
 
-  disableCollisionOwnership() {
-    if (!this.actor || this.collisionDisabledForFade) return;
-    this.collisionDisabledForFade = true;
-    this.beforeActorDisposal?.(this.actor, 'walker-fade-collision-disable');
+  disableGroundedCollisionOwnership() {
+    if (!this.actor || this.collisionDisabledForGroundedPose) return;
+    this.collisionDisabledForGroundedPose = true;
+    this.beforeActorDisposal?.(this.actor, 'walker-grounded-collision-disable');
     if (this.routingRegistered) this.combatRouter?.unregister?.(this.actor);
     this.routingRegistered = false;
     this.actor.colliders?.forEach?.((collider) => collider.setEnabled?.(false));
@@ -946,9 +1016,8 @@ export class ProceduralWalkerController {
   assertBoundedState() {
     if (this.actor && this.actor.disposed) throw new Error('Disposed walker remained active.');
     if (![this.position.x, this.position.y, this.position.z, this.currentSpeed, this.currentYaw, this.desiredYaw].every(Number.isFinite)) throw new Error('Walker movement became non-finite.');
-    if (!Number.isFinite(this.fadeOpacity) || this.fadeOpacity < 0 || this.fadeOpacity > 1) throw new Error('Walker fade opacity escaped its bounds.');
     if (!Number.isFinite(this.locomotion.blendWeight) || this.locomotion.blendWeight < 0 || this.locomotion.blendWeight > 1) throw new Error('Walker locomotion blend escaped its bounds.');
-    if (this.ragdollActivationCount > 1) throw new Error('Walker ragdoll activated more than once.');
+    if (this.actor?.ragdollActive && [WALKER_STATES.losingConsciousness, WALKER_STATES.settlingToGround, WALKER_STATES.grounded].includes(this.state)) throw new Error('Walker skeletal death entered ragdoll.');
     if (this.lethality.countedWoundIds.size !== this.lethality.criticalStabCount) throw new Error('Walker counted a puncture more than once.');
   }
 
@@ -956,8 +1025,6 @@ export class ProceduralWalkerController {
     const gait = this.locomotion.getDiagnostics();
     const lethality = this.lethality.getDiagnostics();
     const collapse = this.consciousnessLoss.getDiagnostics();
-    const handoff = this.actor?.ragdollHandoffDiagnostics ?? {};
-    const visualRagdoll = this.actor?.visualAdapter?.ragdollDiagnostics ?? {};
     return {
       enabled: this.enabled,
       state: this.state,
@@ -985,10 +1052,13 @@ export class ProceduralWalkerController {
       pelvisDescent: Number(collapse.pelvisDescent.toFixed(3)),
       torsoPitch: Number(collapse.torsoPitch.toFixed(3)),
       lateralImbalance: Number(collapse.lateralImbalance.toFixed(3)),
+      groundingProgress: Number(collapse.groundingProgress.toFixed(3)),
+      finalRelaxation: Number(collapse.finalRelaxation.toFixed(3)),
+      pelvisGroundHeight: Number.isFinite(collapse.pelvisGroundHeight) ? Number(collapse.pelvisGroundHeight.toFixed(3)) : null,
+      chestGroundHeight: Number.isFinite(collapse.chestGroundHeight) ? Number(collapse.chestGroundHeight.toFixed(3)) : null,
+      torsoGroundSpan: Number.isFinite(collapse.torsoGroundSpan) ? Number(collapse.torsoGroundSpan.toFixed(3)) : null,
+      finalPoseHeld: this.state === WALKER_STATES.grounded,
       ragdollActive: this.actor?.ragdollActive === true,
-      ragdollElapsed: Number(this.ragdollElapsed.toFixed(3)),
-      fadeProgress: Number(this.fadeProgress.toFixed(3)),
-      fadeOpacity: Number(this.fadeOpacity.toFixed(3)),
       actorInstanceId: this.actor?.instanceId ?? null,
       materialCloneCount: (this.actor?.visualAdapter?.materialCloneCount ?? 0) + (this.actor?.woundSystem?.materialCloneCount ?? 0),
       ownedRigidBodyCount: this.actor?.bodies?.size ?? 0,
@@ -1002,18 +1072,7 @@ export class ProceduralWalkerController {
       encounterFootprintActive: this.footprintActive,
       spawnPoint: this.spawnDiagnostics?.point ?? null,
       spawnGroundHeight: this.spawnDiagnostics?.groundHeight ?? null,
-      finalAnimatedPelvisPosition: handoff.finalAnimatedPelvisPosition ?? visualRagdoll.finalAnimatedPelvisPosition ?? null,
-      firstRagdollPelvisPosition: handoff.firstRagdollPelvisPosition ?? visualRagdoll.firstRagdollPelvisPosition ?? null,
-      maximumBodyPositionJump: handoff.maximumBodyPositionJump ?? 0,
-      maximumBodyRotationJump: handoff.maximumBodyRotationJump ?? 0,
-      maximumJointAnchorSeparation: handoff.maximumJointAnchorSeparation ?? 0,
-      maximumParentChildBoneLengthError: visualRagdoll.maximumParentChildBoneLengthError ?? 0,
-      maximumFirstFrameLinearVelocity: handoff.maximumFirstFrameLinearVelocity ?? 0,
-      maximumFirstFrameAngularVelocity: handoff.maximumFirstFrameAngularVelocity ?? 0,
-      nonFiniteTransformCount: (handoff.nonFiniteTransformCount ?? 0) + (visualRagdoll.nonFiniteTransformCount ?? 0),
-      changedBoneScaleCount: visualRagdoll.changedBoneScaleCount ?? 0,
-      ragdollBindingCount: this.actor?.visualAdapter?.ragdollBindings?.length ?? 0,
-      ragdollActivationCount: this.ragdollActivationCount,
+      ragdollActivationCount: this.actor?.ragdollHandoffDiagnostics?.activationCount ?? 0,
       stateHistory: [...this.stateHistory],
       lastDisposalSummary: this.lastDisposalSummary,
     };

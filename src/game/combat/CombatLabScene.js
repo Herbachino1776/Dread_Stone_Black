@@ -142,7 +142,6 @@ export class CombatLabScene {
     if (!this.physics.paused) this.walkerController?.prepareFrame(deltaSeconds, this.player);
     this.actor.prepareFrame(deltaSeconds);
     this.walkerController?.actor?.prepareFrame(deltaSeconds);
-    this.walkerController?.afterAnimationFrame();
     this.physics.step(
       deltaSeconds,
       (dt) => {
@@ -196,7 +195,6 @@ export class CombatLabScene {
     this.walkerController?.prepareFrame(1 / 60, this.player);
     this.actor.prepareFrame(1 / 60);
     this.walkerController?.actor?.prepareFrame(1 / 60);
-    this.walkerController?.afterAnimationFrame();
     this.physics.stepSingle((dt) => { this.feedbackSystem.update(dt); this.weaponController?.beforePhysics?.(dt); this.combatDirector.update(dt); this.actor.beforePhysics(dt, this.player?.position); this.walkerController?.beforePhysics(dt, this.player?.position); }, (dt) => { this.weaponController?.afterPhysicsStep?.(dt); this.bloodEffects.update(dt); this.walkerController?.afterPhysicsStep(dt); });
     this.actor.afterPhysics(0);
     this.walkerController?.afterPhysics(0);

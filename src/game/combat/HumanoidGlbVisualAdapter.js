@@ -386,20 +386,21 @@ export class HumanoidGlbVisualAdapter {
     // and consciousness loss -> additive pain -> matrices/skeleton -> skinned
     // wounds -> semantic proxies.
     const dt = Math.max(0, deltaSeconds);
+    const holdFinalPose = this.locomotionController?.shouldHoldFinalPose?.() === true;
     const reactionPlaybackScale = this.reactionController?.getPlaybackScale?.() ?? 1;
     const breathingPlaybackScale = 1 - (this.actor.physiology?.breathInterruption ?? 0) * 0.58;
     const targetPlaybackScale = Math.min(reactionPlaybackScale, breathingPlaybackScale);
-    this.idlePlaybackScale = THREE.MathUtils.lerp(this.idlePlaybackScale, targetPlaybackScale, 1 - Math.exp(-dt * 10));
+    this.idlePlaybackScale = holdFinalPose ? 0 : THREE.MathUtils.lerp(this.idlePlaybackScale, targetPlaybackScale, 1 - Math.exp(-dt * 10));
     this.mixer.timeScale = this.idlePlaybackScale;
     this.locomotionController?.restoreAuthoredPose?.();
-    this.mixer.update(dt);
+    this.mixer.update(holdFinalPose ? 0 : dt);
     this.reactionBones.forEach((bone, id) => {
       const scale = this.mixerAuthoredScales.get(id);
       if (scale) scale.copy(bone.scale);
       else this.mixerAuthoredScales.set(id, bone.scale.clone());
     });
     this.locomotionController?.applyAfterMixer?.(dt);
-    this.reactionController?.applyAfterMixer(dt);
+    if (!holdFinalPose) this.reactionController?.applyAfterMixer(dt);
     this.presentationRoot.updateMatrixWorld(true);
     this.skeletons.forEach((skeleton) => skeleton.update());
     this.actor.woundSystem?.update?.(dt);
