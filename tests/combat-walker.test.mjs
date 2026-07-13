@@ -240,7 +240,7 @@ test('procedural locomotion is additive, opposite-phased, bounded, and drift-fre
   assert.ok(Math.abs(layer.phase - idlePhase) < 1e-12, 'gait phase does not advance once fully idle');
 });
 
-test('consciousness loss progressively relaxes the full pose without accumulating or changing scale', () => {
+test('death collapse is one continuous authored motion with a correctly curled final pose', () => {
   const layer = new ProceduralConsciousnessLossLayer();
   const ids = ['pelvis', 'abdomen', 'lower_chest', 'upper_chest', 'neck', 'head', 'left_upper_arm', 'right_upper_arm', 'left_forearm', 'right_forearm', 'left_hand', 'right_hand', 'left_thigh', 'right_thigh', 'left_lower_leg', 'right_lower_leg', 'left_foot', 'right_foot'];
   const bones = new Map(ids.map((id) => [id, new THREE.Bone()]));
@@ -252,63 +252,49 @@ test('consciousness loss progressively relaxes the full pose without accumulatin
       bone.quaternion.identity();
       bone.scale.set(1, 1, 1);
     });
-    layer.advance(seconds, COMBAT_LAB_WALKER_CONFIG.consciousnessLossSeconds);
+    layer.advanceCollapse(seconds, COMBAT_LAB_WALKER_CONFIG.deathCollapseSeconds);
     layer.applyAfterLocomotion();
     return {
       diagnostics: layer.getDiagnostics(),
+      pelvis: bones.get('pelvis').quaternion.clone(),
+      headQuaternion: bones.get('head').quaternion.clone(),
+      handQuaternion: bones.get('left_hand').quaternion.clone(),
+      footQuaternion: bones.get('right_foot').quaternion.clone(),
       head: bones.get('head').quaternion.angleTo(new THREE.Quaternion()),
       shoulder: bones.get('left_upper_arm').quaternion.angleTo(new THREE.Quaternion()),
       arm: bones.get('left_forearm').quaternion.angleTo(new THREE.Quaternion()),
       torso: bones.get('upper_chest').quaternion.angleTo(new THREE.Quaternion()),
       weakKnee: bones.get('left_lower_leg').quaternion.angleTo(new THREE.Quaternion()),
       strongKnee: bones.get('right_lower_leg').quaternion.angleTo(new THREE.Quaternion()),
+      weakKneeFlexion: new THREE.Euler().setFromQuaternion(bones.get('left_lower_leg').quaternion, 'XYZ').x,
       pelvisY: bones.get('pelvis').position.y,
     };
   };
-  const early = sample(0.35);
-  const middle = sample(1.35);
-  const late = sample(2.8);
+  const early = sample(0.55);
+  const middle = sample(2.45);
   for (const key of ['head', 'shoulder', 'arm', 'torso', 'weakKnee', 'strongKnee']) {
     assert.ok(early[key] <= middle[key] + 1e-9, `${key} relaxes progressively at mid collapse`);
-    assert.ok(middle[key] <= late[key] + 1e-9, `${key} relaxes progressively at final collapse`);
   }
-  assert.ok(early.pelvisY >= middle.pelvisY && middle.pelvisY >= late.pelvisY, 'pelvis descends progressively');
-  assert.ok(late.weakKnee > late.strongKnee, 'one leg carries less weight instead of mirroring the other');
-  assert.equal(late.diagnostics.collapseDirection, 'left');
-  bones.forEach((bone) => assert.ok(bone.scale.equals(new THREE.Vector3(1, 1, 1))));
-  const repeat = sample(2.8);
-  assert.ok(Math.abs(repeat.pelvisY - late.pelvisY) < 1e-12, 'fresh-pose application does not accumulate pelvis translation');
-  assert.ok(Math.abs(repeat.head - late.head) < 1e-12, 'fresh-pose application does not accumulate bone rotation');
+  const beforeFormerHandoff = sample(2.75);
+  const afterFormerHandoff = sample(2.85);
+  assert.ok(beforeFormerHandoff.pelvis.angleTo(afterFormerHandoff.pelvis) > 0.015, 'pelvis keeps falling through the former phase boundary');
+  assert.ok(afterFormerHandoff.diagnostics.groundingProgress > beforeFormerHandoff.diagnostics.groundingProgress, 'the single grounding curve does not pause mid-fall');
 
-  const sampleGrounding = (seconds) => {
-    bones.forEach((bone) => {
-      bone.position.set(0, bone === bones.get('pelvis') ? 1 : 0, 0);
-      bone.quaternion.identity();
-      bone.scale.set(1, 1, 1);
-    });
-    layer.advanceGroundCollapse(seconds, COMBAT_LAB_WALKER_CONFIG.groundCollapseSeconds);
-    layer.applyAfterLocomotion();
-    return {
-      diagnostics: layer.getDiagnostics(),
-      pelvis: bones.get('pelvis').quaternion.clone(),
-      head: bones.get('head').quaternion.clone(),
-      hand: bones.get('left_hand').quaternion.clone(),
-      foot: bones.get('right_foot').quaternion.clone(),
-    };
-  };
-  const handoffStart = sampleGrounding(0);
-  const handoffNext = sampleGrounding(0.05);
-  assert.ok(handoffStart.pelvis.angleTo(handoffNext.pelvis) > 0.02, 'pelvis and torso continue falling immediately after the kneeling handoff');
-  const braced = sampleGrounding(1.45);
-  const grounded = sampleGrounding(COMBAT_LAB_WALKER_CONFIG.groundCollapseSeconds);
+  const braced = sample(4.2);
+  const grounded = sample(COMBAT_LAB_WALKER_CONFIG.deathCollapseSeconds);
+  assert.ok(early.pelvisY >= middle.pelvisY && middle.pelvisY >= grounded.pelvisY, 'pelvis descends progressively');
   assert.ok(braced.diagnostics.groundingProgress > 0.5 && braced.diagnostics.finalRelaxation === 0);
+  assert.equal(grounded.diagnostics.overallProgress, 1);
   assert.equal(grounded.diagnostics.groundingProgress, 1);
   assert.equal(grounded.diagnostics.finalRelaxation, 1);
-  assert.ok(braced.head.angleTo(grounded.head) > 0.04, 'head receives a distinct final relaxation');
-  assert.ok(braced.hand.angleTo(grounded.hand) > 0.04, 'hand releases after the brace');
-  assert.ok(braced.foot.angleTo(grounded.foot) > 0.04, 'foot relaxes after the body settles');
-  const groundedRepeat = sampleGrounding(COMBAT_LAB_WALKER_CONFIG.groundCollapseSeconds);
-  assert.ok(grounded.head.angleTo(groundedRepeat.head) < 1e-10, 'final skeletal pose is repeatable without drift');
+  assert.ok(grounded.weakKneeFlexion < THREE.MathUtils.degToRad(-60), 'the weak knee curls forward instead of bending backward');
+  assert.ok(braced.headQuaternion.angleTo(grounded.headQuaternion) > 0.04, 'head receives a distinct final relaxation');
+  assert.ok(braced.handQuaternion.angleTo(grounded.handQuaternion) > 0.04, 'hand releases after the brace');
+  assert.ok(braced.footQuaternion.angleTo(grounded.footQuaternion) > 0.04, 'foot relaxes after the body settles');
+  assert.equal(grounded.diagnostics.collapseDirection, 'left');
+  const groundedRepeat = sample(COMBAT_LAB_WALKER_CONFIG.deathCollapseSeconds);
+  assert.ok(grounded.headQuaternion.angleTo(groundedRepeat.headQuaternion) < 1e-10, 'final skeletal pose is repeatable without drift');
+  assert.ok(Math.abs(groundedRepeat.pelvisY - grounded.pelvisY) < 1e-12, 'fresh-pose application does not accumulate pelvis translation');
   bones.forEach((bone) => assert.ok(bone.scale.equals(new THREE.Vector3(1, 1, 1))));
 });
 
@@ -473,7 +459,7 @@ test('two stabs continue through authored collapse and hold one grounded corpse 
   assert.equal(walker.state, WALKER_STATES.grounded, 'grounded pose remains terminal');
   assert.equal(walker.actor, actor, 'corpse is neither faded nor respawned');
   assert.equal(actor.ragdollActive, false);
-  assert.deepEqual(walker.stateHistory.slice(-2), [WALKER_STATES.settlingToGround, WALKER_STATES.grounded]);
+  assert.deepEqual(walker.stateHistory.slice(-2), [WALKER_STATES.losingConsciousness, WALKER_STATES.grounded]);
   walker.dispose();
   stationaryDirector.dispose();
   stationary.dispose();
@@ -584,7 +570,7 @@ test('mid-stride pain pose completes a grounded skeletal collapse and remains fr
     samples.push({ ...walker.consciousnessLoss.getDiagnostics(), speed: walker.currentSpeed, gaitWeight: walker.locomotion.blendWeight });
   }
   assert.equal(walker.state, WALKER_STATES.grounded);
-  assert.ok(elapsed >= 4.8 && elapsed <= 5.6);
+  assert.ok(elapsed >= 5.3 && elapsed <= 5.55);
   assert.equal(walker.actor.ragdollActive, false);
   assert.ok(samples.every((sample, index) => index === 0 || sample.pelvisDescent + 1e-9 >= samples[index - 1].pelvisDescent));
   assert.ok(samples.every((sample, index) => index === 0 || sample.torsoPitch + 1e-9 >= samples[index - 1].torsoPitch));
@@ -620,6 +606,11 @@ test('mid-stride pain pose completes a grounded skeletal collapse and remains fr
   assert.ok(finalPose.get('pelvis').worldPosition.y <= preFatalPelvisY - 0.35, 'pelvis lowers fully from the standing pose');
   const groundedTorsoHorizontalSpan = finalPose.get('pelvis').worldPosition.distanceTo(finalPose.get('upper_chest').worldPosition.clone().setY(finalPose.get('pelvis').worldPosition.y));
   assert.ok(groundedTorsoHorizontalSpan >= 0.55, 'final torso lies across the floor instead of holding a folded bridge pose');
+  for (const side of ['left', 'right']) {
+    const footDistance = finalPose.get(`${side}_foot`).worldPosition.distanceTo(finalPose.get('pelvis').worldPosition);
+    const kneeDistance = finalPose.get(`${side}_lower_leg`).worldPosition.distanceTo(finalPose.get('pelvis').worldPosition);
+    assert.ok(footDistance < kneeDistance, `${side} foot curls back toward the body in the final fetal pose`);
+  }
   assert.equal(walker.actor.joints.filter((joint) => joint.userData?.handoffRebuilt).length, 0);
   assert.equal(synthetic.adapter.ragdollDiagnostics.activationCount, 0);
   assert.equal(synthetic.adapter.ragdollBindings.length, 0);

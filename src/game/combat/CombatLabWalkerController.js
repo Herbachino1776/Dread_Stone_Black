@@ -13,7 +13,6 @@ export const WALKER_STATES = Object.freeze({
   hitReacting: 'HIT_REACTING',
   losingConsciousness: 'LOSING_CONSCIOUSNESS',
   dying: 'LOSING_CONSCIOUSNESS',
-  settlingToGround: 'SETTLING_TO_GROUND',
   grounded: 'GROUNDED',
   disposed: 'DISPOSED',
   respawning: 'RESPAWNING',
@@ -35,8 +34,7 @@ export const COMBAT_LAB_WALKER_CONFIG = Object.freeze({
   slowDistance: 2.35,
   idleToWalkSeconds: 0.82,
   walkToIdleSeconds: 0.96,
-  consciousnessLossSeconds: 2.8,
-  groundCollapseSeconds: 2.35,
+  deathCollapseSeconds: 5.4,
   dyingBlendSeconds: 2.55,
   respawnDelaySeconds: 0.32,
   firstStabSpeedMultiplier: 0.78,
@@ -67,8 +65,7 @@ const ALLOWED_TRANSITIONS = Object.freeze({
   [WALKER_STATES.blendingToIdle]: new Set([WALKER_STATES.nearPlayer, WALKER_STATES.blendingToWalk, WALKER_STATES.hitReacting, WALKER_STATES.dying, WALKER_STATES.disposed]),
   [WALKER_STATES.nearPlayer]: new Set([WALKER_STATES.blendingToWalk, WALKER_STATES.hitReacting, WALKER_STATES.dying, WALKER_STATES.disposed]),
   [WALKER_STATES.hitReacting]: new Set([WALKER_STATES.approaching, WALKER_STATES.blendingToIdle, WALKER_STATES.nearPlayer, WALKER_STATES.dying, WALKER_STATES.disposed]),
-  [WALKER_STATES.losingConsciousness]: new Set([WALKER_STATES.settlingToGround, WALKER_STATES.disposed]),
-  [WALKER_STATES.settlingToGround]: new Set([WALKER_STATES.grounded, WALKER_STATES.disposed]),
+  [WALKER_STATES.losingConsciousness]: new Set([WALKER_STATES.grounded, WALKER_STATES.disposed]),
   [WALKER_STATES.grounded]: new Set([WALKER_STATES.disposed]),
   [WALKER_STATES.disposed]: new Set([WALKER_STATES.respawning]),
 });
@@ -315,6 +312,7 @@ export class ProceduralConsciousnessLossLayer {
   constructor() {
     this.bones = new Map();
     this.active = false;
+    this.overallProgress = 0;
     this.progress = 0;
     this.direction = 1;
     this.pelvisDescent = 0;
@@ -345,6 +343,7 @@ export class ProceduralConsciousnessLossLayer {
 
   begin(direction = 1) {
     this.active = true;
+    this.overallProgress = 0;
     this.progress = 0;
     this.direction = direction < 0 ? -1 : 1;
     this.pelvisDescent = 0;
@@ -366,6 +365,7 @@ export class ProceduralConsciousnessLossLayer {
 
   reset() {
     this.active = false;
+    this.overallProgress = 0;
     this.progress = 0;
     this.pelvisDescent = 0;
     this.pelvisGroundCorrection = 0;
@@ -384,8 +384,10 @@ export class ProceduralConsciousnessLossLayer {
     this.minimumLowerBodyGroundMargin = null;
   }
 
-  advance(elapsedSeconds, durationSeconds) {
-    this.progress = clamp01(elapsedSeconds / Math.max(0.001, durationSeconds));
+  advanceCollapse(elapsedSeconds, durationSeconds) {
+    const overallProgress = clamp01(elapsedSeconds / Math.max(0.001, durationSeconds));
+    this.overallProgress = overallProgress;
+    this.progress = clamp01(overallProgress / 0.72);
     const shoulderRelease = smoothstep01(this.progress / 0.46);
     const lowerBodyRelease = smoothstep01((this.progress - 0.14) / 0.72);
     const instability = smoothstep01((this.progress - 0.52) / 0.48);
@@ -395,15 +397,13 @@ export class ProceduralConsciousnessLossLayer {
     this.appliedPelvisDescent = this.pelvisDescent;
     this.torsoPitch = THREE.MathUtils.degToRad(THREE.MathUtils.lerp(0, 31, smoothstep01((this.progress - 0.12) / 0.88)));
     this.lateralImbalance = this.direction * THREE.MathUtils.degToRad(THREE.MathUtils.lerp(0, 8.5, instability));
-    return { shoulderRelease, lowerBodyRelease, instability };
-  }
-
-  advanceGroundCollapse(elapsedSeconds, durationSeconds) {
-    this.progress = 1;
-    this.locomotionWeight = 0;
-    this.groundingProgress = clamp01(elapsedSeconds / Math.max(0.001, durationSeconds));
-    this.finalRelaxation = smoothstep01((this.groundingProgress - 0.8) / 0.2);
+    this.groundingProgress = smoothstep01((overallProgress - 0.24) / 0.76);
+    this.finalRelaxation = smoothstep01((overallProgress - 0.82) / 0.18);
     return {
+      overallProgress,
+      shoulderRelease,
+      lowerBodyRelease,
+      instability,
       brace: smoothstep01(this.groundingProgress / 0.34),
       bodyRelease: groundBodyRelease(this.groundingProgress),
       settle: smoothstep01((this.groundingProgress - 0.48) / 0.42),
@@ -412,6 +412,7 @@ export class ProceduralConsciousnessLossLayer {
   }
 
   holdGroundedPose() {
+    this.overallProgress = 1;
     this.progress = 1;
     this.locomotionWeight = 0;
     this.groundingProgress = 1;
@@ -490,10 +491,10 @@ export class ProceduralConsciousnessLossLayer {
       this.rotate(`${clutchSide}_forearm`, THREE.MathUtils.degToRad(-70) * brace + THREE.MathUtils.degToRad(22) * relaxation, 0, clutchSign * THREE.MathUtils.degToRad(6) * settle);
       this.rotate(`${clutchSide}_hand`, THREE.MathUtils.degToRad(-12) * brace + THREE.MathUtils.degToRad(9) * relaxation, 0, -clutchSign * THREE.MathUtils.degToRad(11) * brace);
 
-      this.rotate(`${weakSide}_thigh`, THREE.MathUtils.degToRad(14) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(4) * settle);
-      this.rotate(`${weakSide}_lower_leg`, THREE.MathUtils.degToRad(84) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(7) * settle);
-      this.rotate(`${strongSide}_thigh`, THREE.MathUtils.degToRad(34) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(13) * settle);
-      this.rotate(`${strongSide}_lower_leg`, THREE.MathUtils.degToRad(79) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(10) * settle);
+      this.rotate(`${weakSide}_thigh`, THREE.MathUtils.degToRad(44) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(4) * settle);
+      this.rotate(`${weakSide}_lower_leg`, THREE.MathUtils.degToRad(-48) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(7) * settle);
+      this.rotate(`${strongSide}_thigh`, THREE.MathUtils.degToRad(54) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(13) * settle);
+      this.rotate(`${strongSide}_lower_leg`, THREE.MathUtils.degToRad(-56) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(10) * settle);
       this.rotate(`${weakSide}_foot`, THREE.MathUtils.degToRad(4) * (settle + relaxation), 0, this.direction * THREE.MathUtils.degToRad(1) * (settle + relaxation));
       this.rotate(`${strongSide}_foot`, THREE.MathUtils.degToRad(5) * settle + THREE.MathUtils.degToRad(4) * relaxation, 0, this.direction * (THREE.MathUtils.degToRad(5) * settle + THREE.MathUtils.degToRad(4) * relaxation));
 
@@ -564,6 +565,7 @@ export class ProceduralConsciousnessLossLayer {
 
   getDiagnostics() {
     return {
+      overallProgress: this.overallProgress,
       progress: this.progress,
       collapseDirection: this.direction < 0 ? 'left' : 'right',
       locomotionWeight: this.locomotionWeight,
@@ -832,7 +834,7 @@ export class ProceduralWalkerController {
       return;
     }
     if (this.state === WALKER_STATES.losingConsciousness) {
-      const collapse = this.consciousnessLoss.advance(this.stateElapsed, this.config.consciousnessLossSeconds);
+      const collapse = this.consciousnessLoss.advanceCollapse(this.stateElapsed, this.config.deathCollapseSeconds);
       const momentumWeight = 1 - smoothstep01(this.consciousnessLoss.progress / 0.78);
       const targetSpeed = this.deathInitialSpeed * momentumWeight;
       this.currentSpeed = moveToward(this.currentSpeed, targetSpeed, this.config.deceleration * 0.58 * dt);
@@ -849,20 +851,8 @@ export class ProceduralWalkerController {
       this.velocity.copy(this.forward).multiplyScalar(this.currentSpeed);
       this.locomotion.advance(dt, { speed: this.currentSpeed, maximumSpeed: this.maximumSpeed, walking: this.currentSpeed > 0.025 || collapse.shoulderRelease < 0.98, impaired: true, dying: true, locomotionWeight: this.consciousnessLoss.locomotionWeight });
       this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
-      if (this.stateElapsed >= this.config.consciousnessLossSeconds) {
-        this.consciousnessLoss.advanceGroundCollapse(0, this.config.groundCollapseSeconds);
-        this.setState(WALKER_STATES.settlingToGround);
-      }
+      if (this.stateElapsed >= this.config.deathCollapseSeconds) this.holdGroundedPose();
       this.assertBoundedState();
-      return;
-    }
-    if (this.state === WALKER_STATES.settlingToGround) {
-      this.currentSpeed = 0;
-      this.velocity.set(0, 0, 0);
-      this.locomotion.advance(dt, { speed: 0, maximumSpeed: this.maximumSpeed, walking: false, impaired: true, dying: true, locomotionWeight: 0 });
-      this.consciousnessLoss.advanceGroundCollapse(this.stateElapsed, this.config.groundCollapseSeconds);
-      this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
-      if (this.stateElapsed >= this.config.groundCollapseSeconds) this.holdGroundedPose();
       return;
     }
     const playerPosition = this.resolvePlayerPosition(player);
@@ -968,7 +958,7 @@ export class ProceduralWalkerController {
   }
 
   holdGroundedPose() {
-    if (!this.actor || this.state !== WALKER_STATES.settlingToGround) return false;
+    if (!this.actor || this.state !== WALKER_STATES.losingConsciousness) return false;
     this.consciousnessLoss.holdGroundedPose();
     this.currentSpeed = 0;
     this.desiredSpeed = 0;
@@ -1052,7 +1042,7 @@ export class ProceduralWalkerController {
     if (this.actor && this.actor.disposed) throw new Error('Disposed walker remained active.');
     if (![this.position.x, this.position.y, this.position.z, this.currentSpeed, this.currentYaw, this.desiredYaw].every(Number.isFinite)) throw new Error('Walker movement became non-finite.');
     if (!Number.isFinite(this.locomotion.blendWeight) || this.locomotion.blendWeight < 0 || this.locomotion.blendWeight > 1) throw new Error('Walker locomotion blend escaped its bounds.');
-    if (this.actor?.ragdollActive && [WALKER_STATES.losingConsciousness, WALKER_STATES.settlingToGround, WALKER_STATES.grounded].includes(this.state)) throw new Error('Walker skeletal death entered ragdoll.');
+    if (this.actor?.ragdollActive && [WALKER_STATES.losingConsciousness, WALKER_STATES.grounded].includes(this.state)) throw new Error('Walker skeletal death entered ragdoll.');
     if (this.lethality.countedWoundIds.size !== this.lethality.criticalStabCount) throw new Error('Walker counted a puncture more than once.');
   }
 
@@ -1080,6 +1070,7 @@ export class ProceduralWalkerController {
       firstStabImpaired: lethality.criticalStabCount === 1,
       ...lethality,
       deathState: this.state,
+      deathCollapseProgress: Number(collapse.overallProgress.toFixed(3)),
       consciousnessLossProgress: Number(collapse.progress.toFixed(3)),
       collapseDirection: collapse.collapseDirection,
       locomotionWeight: Number(gait.blendWeight.toFixed(3)),

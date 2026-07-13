@@ -44,19 +44,9 @@ export class AuthoredHumanoidDeathController {
     if (this.state === WALKER_STATES.grounded || this.state === LIVING_STATE) return;
     this.stateElapsed += dt;
     if (this.state === WALKER_STATES.losingConsciousness) {
-      this.consciousnessLoss.advance(this.stateElapsed, this.config.consciousnessLossSeconds);
+      this.consciousnessLoss.advanceCollapse(this.stateElapsed, this.config.deathCollapseSeconds);
       this.locomotion.advance(dt, { speed: 0, walking: false, impaired: true, dying: true, locomotionWeight: this.consciousnessLoss.locomotionWeight });
-      if (this.stateElapsed >= this.config.consciousnessLossSeconds) {
-        this.state = WALKER_STATES.settlingToGround;
-        this.stateElapsed = 0;
-        this.consciousnessLoss.advanceGroundCollapse(0, this.config.groundCollapseSeconds);
-      }
-      return;
-    }
-    if (this.state === WALKER_STATES.settlingToGround) {
-      this.locomotion.advance(dt, { speed: 0, walking: false, impaired: true, dying: true, locomotionWeight: 0 });
-      this.consciousnessLoss.advanceGroundCollapse(this.stateElapsed, this.config.groundCollapseSeconds);
-      if (this.stateElapsed >= this.config.groundCollapseSeconds) this.holdGroundedPose();
+      if (this.stateElapsed >= this.config.deathCollapseSeconds) this.holdGroundedPose();
     }
   }
 
@@ -94,7 +84,7 @@ export class AuthoredHumanoidDeathController {
   }
 
   holdGroundedPose() {
-    if (this.state !== WALKER_STATES.settlingToGround) return false;
+    if (this.state !== WALKER_STATES.losingConsciousness) return false;
     this.consciousnessLoss.holdGroundedPose();
     this.state = WALKER_STATES.grounded;
     this.stateElapsed = 0;
@@ -122,6 +112,7 @@ export class AuthoredHumanoidDeathController {
       finalPoseHeld: this.shouldHoldFinalPose(),
       ragdollActive: this.actor?.ragdollActive === true,
       ...this.lethality.getDiagnostics(),
+      deathCollapseProgress: Number(collapse.overallProgress.toFixed(3)),
       consciousnessLossProgress: Number(collapse.progress.toFixed(3)),
       collapseDirection: collapse.collapseDirection,
       groundingProgress: Number(collapse.groundingProgress.toFixed(3)),
