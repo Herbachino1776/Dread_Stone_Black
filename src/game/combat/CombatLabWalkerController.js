@@ -465,12 +465,12 @@ export class ProceduralConsciousnessLossLayer {
 
       // The falling side reaches for the floor; the other arm stays folded over
       // the chest/abdomen before both lose their remaining tension.
-      this.rotate(`${braceSide}_upper_arm`, THREE.MathUtils.degToRad(118) * brace, 0, -braceSign * THREE.MathUtils.degToRad(23) * brace);
-      this.rotate(`${braceSide}_forearm`, THREE.MathUtils.degToRad(141) * brace - THREE.MathUtils.degToRad(9) * relaxation, 0, braceSign * THREE.MathUtils.degToRad(7) * settle);
-      this.rotate(`${braceSide}_hand`, THREE.MathUtils.degToRad(12) * brace + THREE.MathUtils.degToRad(8) * relaxation, 0, braceSign * THREE.MathUtils.degToRad(13) * (settle + relaxation * 0.35));
-      this.rotate(`${clutchSide}_upper_arm`, THREE.MathUtils.degToRad(34) * brace, 0, -clutchSign * THREE.MathUtils.degToRad(91) * brace);
-      this.rotate(`${clutchSide}_forearm`, THREE.MathUtils.degToRad(-96) * brace + THREE.MathUtils.degToRad(33) * relaxation, 0, clutchSign * THREE.MathUtils.degToRad(8) * settle);
-      this.rotate(`${clutchSide}_hand`, THREE.MathUtils.degToRad(-18) * brace + THREE.MathUtils.degToRad(11) * relaxation, 0, -clutchSign * THREE.MathUtils.degToRad(16) * brace);
+      this.rotate(`${braceSide}_upper_arm`, THREE.MathUtils.degToRad(58) * brace, 0, -braceSign * THREE.MathUtils.degToRad(14) * brace);
+      this.rotate(`${braceSide}_forearm`, THREE.MathUtils.degToRad(78) * brace - THREE.MathUtils.degToRad(10) * relaxation, 0, braceSign * THREE.MathUtils.degToRad(5) * settle);
+      this.rotate(`${braceSide}_hand`, THREE.MathUtils.degToRad(8) * brace + THREE.MathUtils.degToRad(7) * relaxation, 0, braceSign * THREE.MathUtils.degToRad(9) * (settle + relaxation * 0.35));
+      this.rotate(`${clutchSide}_upper_arm`, THREE.MathUtils.degToRad(26) * brace, 0, -clutchSign * THREE.MathUtils.degToRad(47) * brace);
+      this.rotate(`${clutchSide}_forearm`, THREE.MathUtils.degToRad(-70) * brace + THREE.MathUtils.degToRad(22) * relaxation, 0, clutchSign * THREE.MathUtils.degToRad(6) * settle);
+      this.rotate(`${clutchSide}_hand`, THREE.MathUtils.degToRad(-12) * brace + THREE.MathUtils.degToRad(9) * relaxation, 0, -clutchSign * THREE.MathUtils.degToRad(11) * brace);
 
       this.rotate(`${weakSide}_thigh`, THREE.MathUtils.degToRad(72) * bodyRelease, 0, weakSign * THREE.MathUtils.degToRad(9) * settle);
       this.rotate(`${weakSide}_lower_leg`, THREE.MathUtils.degToRad(-10) * bodyRelease, 0, weakSign * THREE.MathUtils.degToRad(5) * settle);

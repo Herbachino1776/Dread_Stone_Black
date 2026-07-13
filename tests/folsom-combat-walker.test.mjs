@@ -177,6 +177,38 @@ test('Folsom reset leaves exactly two fresh active actors and no stale walker co
   encounter.dispose();
 });
 
+test('authored Folsom spawn uses the skeletal ground collapse and never hands off to ragdoll', async () => {
+  const { encounter, player, collision } = await createEncounter();
+  const actor = encounter.actor;
+  const controller = encounter.stationaryDeathController;
+  assert.equal(actor.automaticMortality, false);
+  controller.forceQualifyingStab('upper_chest');
+  controller.forceQualifyingStab('abdomen');
+  assert.equal(controller.state, WALKER_STATES.losingConsciousness);
+
+  for (let frame = 0; frame < 120; frame += 1) controller.prepareFrame(0.05);
+  actor.prepareFrame(0.05);
+
+  assert.equal(controller.state, WALKER_STATES.grounded);
+  assert.equal(controller.shouldHoldFinalPose(), true);
+  assert.equal(actor.ragdollActive, false);
+  assert.equal(actor.getDiagnostics().ragdollHandoff.activationCount, 0);
+  assert.equal(actor.visualAdapter?.ragdollDiagnostics.activationCount ?? 0, 0);
+  assert.equal(encounter.stationaryCollisionDisabled, true);
+  assert.equal(encounter.combatRouter.getDirector(actor), null);
+  assert.equal(encounter.getActiveCombatActors().includes(actor), false);
+  assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);
+  assert.equal(collision.blockerRects.includes(encounter.playerBlocker), false);
+
+  encounter.reset(player);
+  assert.equal(controller.state, WALKER_STATES.nearPlayer);
+  assert.equal(encounter.stationaryCollisionDisabled, false);
+  assert.equal(encounter.combatRouter.getDirector(actor), encounter.combatDirector);
+  assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled()), true);
+  assert.equal(collision.blockerRects.includes(encounter.playerBlocker), true);
+  encounter.dispose();
+});
+
 test('Folsom disposal is idempotent and removes actors, blockers, support, and routing', async () => {
   const { encounter, collision } = await createEncounter();
   const walkerController = encounter.walkerController;
