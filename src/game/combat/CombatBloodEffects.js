@@ -17,6 +17,7 @@ export class CombatBloodEffects {
     this.particles = Array.from({ length: BLOOD_EFFECT_CONFIG.maximumParticles }, () => ({ active: false, position: new THREE.Vector3(), velocity: new THREE.Vector3(), life: 0, lifetime: 0, woundId: null, kind: 'drop' }));
     this.decals = [];
     this.nextDecal = 0;
+    this.fadePrepared = false;
     this.material = new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.spray, roughness: 0.78, metalness: 0.02 });
     this.decalMaterial = new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.pooled, roughness: 0.93, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.86, depthWrite: false });
     this.particleMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(BLOOD_EFFECT_CONFIG.particleRadius, 5, 4), this.material, BLOOD_EFFECT_CONFIG.maximumParticles);
@@ -173,6 +174,24 @@ export class CombatBloodEffects {
     this.decals.forEach((decal) => { decal.active = false; decal.mesh.visible = false; });
     this.nextDecal = 0;
     this.updateInstances();
+  }
+
+  beginFade() {
+    if (this.fadePrepared) return;
+    this.fadePrepared = true;
+    this.material.transparent = true;
+    this.material.depthWrite = false;
+    this.material.needsUpdate = true;
+    this.decalMaterial.transparent = true;
+    this.decalMaterial.depthWrite = false;
+    this.decalMaterial.needsUpdate = true;
+  }
+
+  setOpacity(opacity) {
+    this.beginFade();
+    const value = THREE.MathUtils.clamp(Number(opacity) || 0, 0, 1);
+    this.material.opacity = value;
+    this.decalMaterial.opacity = value * 0.86;
   }
 
   getDiagnostics() {

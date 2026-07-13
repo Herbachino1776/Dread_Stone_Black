@@ -97,7 +97,7 @@ function distancePointToSegment2D(px, py, ax, ay, bx, by) {
 }
 
 export class CombatWoundSystem {
-  constructor({ actor, scene, decalLibrary, maximumWounds = WOUND_CONFIG.maximumWounds } = {}) {
+  constructor({ actor, scene, decalLibrary, maximumWounds = WOUND_CONFIG.maximumWounds, isolateMaterials = false } = {}) {
     this.actor = actor;
     this.scene = scene;
     this.maximumWounds = maximumWounds;
@@ -105,6 +105,9 @@ export class CombatWoundSystem {
     this.nextWoundId = 1;
     this.visualSlots = [];
     this.decalLibrary = decalLibrary;
+    this.isolateMaterials = isolateMaterials === true;
+    this.ownedMaterials = new Map();
+    this.fadePrepared = false;
     this.bluntMaterial = new THREE.MeshStandardMaterial({ color: 0x372229, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     this.failedProjectionCount = 0;
     this.fallbackUsageCount = 0;
@@ -629,13 +632,15 @@ export class CombatWoundSystem {
 
   getWoundMaterial(wound) {
     if (wound.woundType === 'blunt_trauma_marker') { wound.materialAvailable = true; return this.bluntMaterial; }
-    const material = this.decalLibrary.getMaterial(wound.decalVariantId);
-    wound.materialAvailable = Boolean(material);
-    if (!material && import.meta.env?.DEV && !this.missingMaterialWarnings.has(wound.decalVariantId)) {
+    const sourceMaterial = this.decalLibrary.getMaterial(wound.decalVariantId);
+    wound.materialAvailable = Boolean(sourceMaterial);
+    if (!sourceMaterial && import.meta.env?.DEV && !this.missingMaterialWarnings.has(wound.decalVariantId)) {
       this.missingMaterialWarnings.add(wound.decalVariantId);
       console.error(`[combat] Authored wound material unavailable for ${wound.decalVariantId ?? 'unselected variant'}; using visible diagnostic fallback material.`);
     }
-    return material ?? this.bluntMaterial;
+    if (!sourceMaterial || !this.isolateMaterials) return sourceMaterial ?? this.bluntMaterial;
+    if (!this.ownedMaterials.has(sourceMaterial)) this.ownedMaterials.set(sourceMaterial, sourceMaterial.clone());
+    return this.ownedMaterials.get(sourceMaterial);
   }
 
   applyPunctureUv(slot, wound) {
@@ -837,13 +842,35 @@ export class CombatWoundSystem {
   getDiagnostics() {
     const wound = this.wounds.at(-1);
     const binding = wound?.surfaceBinding ?? wound?.slashSamples?.at(-1)?.binding;
-    return { count: this.wounds.length, active: this.getActiveWounds().length, arterial: this.wounds.filter((entry) => entry.bleedingProfile.kind.includes('arterial')).length, failedProjectionCount: this.failedProjectionCount, fallbackAnchorUsage: this.fallbackUsageCount, decalLibrary: this.decalLibrary.getDiagnostics(), recentVariantHistory: { puncture: this.recentVariantHistory.puncture.map((entry) => entry.variantId), slash: this.recentVariantHistory.slash.map((entry) => entry.variantId) }, selected: wound ? { id: wound.id, regionId: wound.regionId, type: wound.woundType, depth: Number(wound.maximumDepth.toFixed(3)), length: Number(wound.cutLength.toFixed(3)), severity: Number(wound.severity.toFixed(3)), decalVariantId: wound.decalVariantId, decalFamily: wound.decalFamily, decalPhysicalCategory: wound.decalPhysicalCategory, decalSelectionState: wound.decalSelectionState, decalEligibleCandidateIds: wound.decalEligibleCandidateIds, decalSelectionRevisionCount: wound.decalSelectionRevisionCount, recentSameFamilyVariantHistory: this.getRecentVariantIds(wound.decalFamily, wound.id), mirroredX: wound.mirroredX, entryMajorMeters: wound.entryMajorMeters ?? null, entryMinorMeters: wound.entryMinorMeters ?? null, visualMajorMeters: wound.visualMajorMeters ?? null, visualMinorMeters: wound.visualMinorMeters ?? null, visualLengthMeters: wound.visualLengthMeters ?? null, visualWidthMeters: wound.visualWidthMeters ?? null, pathCurvature: wound.pathCurvature ?? 0, interrupted: wound.lastContactInterrupted ?? false, vessel: wound.vesselInvolvement?.id ?? null, bleedingRate: Number(wound.bleedingRate.toFixed(4)), surfaceBindingStatus: wound.surfaceBindingStatus, fallbackReason: wound.fallbackReason, semanticAnchorDistance: wound.semanticAnchorDistance, meshName: binding?.meshName ?? null, triangleIndices: binding?.triangleIndices ?? null, barycentric: binding?.barycentric?.toArray?.().map((value) => Number(value.toFixed(4))) ?? null, surfaceDistance: wound.surfaceDistance, slashSampleCount: wound.slashSamples?.length ?? 0, renderedSegmentCount: wound.renderedSegmentCount ?? 0, failedProjectionCount: wound.failedProjectionCount ?? 0, fallbackAnchorUsage: wound.fallbackAnchorUsage, slashFallbackUsage: wound.slashFallbackUsage ?? false, materialAvailable: wound.materialAvailable } : null };
+    return { count: this.wounds.length, active: this.getActiveWounds().length, arterial: this.wounds.filter((entry) => entry.bleedingProfile.kind.includes('arterial')).length, materialCloneCount: this.materialCloneCount, failedProjectionCount: this.failedProjectionCount, fallbackAnchorUsage: this.fallbackUsageCount, decalLibrary: this.decalLibrary.getDiagnostics(), recentVariantHistory: { puncture: this.recentVariantHistory.puncture.map((entry) => entry.variantId), slash: this.recentVariantHistory.slash.map((entry) => entry.variantId) }, selected: wound ? { id: wound.id, regionId: wound.regionId, type: wound.woundType, depth: Number(wound.maximumDepth.toFixed(3)), length: Number(wound.cutLength.toFixed(3)), severity: Number(wound.severity.toFixed(3)), decalVariantId: wound.decalVariantId, decalFamily: wound.decalFamily, decalPhysicalCategory: wound.decalPhysicalCategory, decalSelectionState: wound.decalSelectionState, decalEligibleCandidateIds: wound.decalEligibleCandidateIds, decalSelectionRevisionCount: wound.decalSelectionRevisionCount, recentSameFamilyVariantHistory: this.getRecentVariantIds(wound.decalFamily, wound.id), mirroredX: wound.mirroredX, entryMajorMeters: wound.entryMajorMeters ?? null, entryMinorMeters: wound.entryMinorMeters ?? null, visualMajorMeters: wound.visualMajorMeters ?? null, visualMinorMeters: wound.visualMinorMeters ?? null, visualLengthMeters: wound.visualLengthMeters ?? null, visualWidthMeters: wound.visualWidthMeters ?? null, pathCurvature: wound.pathCurvature ?? 0, interrupted: wound.lastContactInterrupted ?? false, vessel: wound.vesselInvolvement?.id ?? null, bleedingRate: Number(wound.bleedingRate.toFixed(4)), surfaceBindingStatus: wound.surfaceBindingStatus, fallbackReason: wound.fallbackReason, semanticAnchorDistance: wound.semanticAnchorDistance, meshName: binding?.meshName ?? null, triangleIndices: binding?.triangleIndices ?? null, barycentric: binding?.barycentric?.toArray?.().map((value) => Number(value.toFixed(4))) ?? null, surfaceDistance: wound.surfaceDistance, slashSampleCount: wound.slashSamples?.length ?? 0, renderedSegmentCount: wound.renderedSegmentCount ?? 0, failedProjectionCount: wound.failedProjectionCount ?? 0, fallbackAnchorUsage: wound.fallbackAnchorUsage, slashFallbackUsage: wound.slashFallbackUsage ?? false, materialAvailable: wound.materialAvailable } : null };
+  }
+
+  get materialCloneCount() { return this.ownedMaterials.size; }
+
+  beginFade() {
+    if (!this.isolateMaterials || this.fadePrepared) return;
+    this.fadePrepared = true;
+    [this.bluntMaterial, ...this.ownedMaterials.values()].forEach((material) => {
+      material.transparent = true;
+      material.depthWrite = false;
+      material.needsUpdate = true;
+    });
+  }
+
+  setOpacity(opacity) {
+    if (!this.isolateMaterials) return;
+    this.beginFade();
+    const value = THREE.MathUtils.clamp(Number(opacity) || 0, 0, 1);
+    this.bluntMaterial.opacity = value * 0.72;
+    this.ownedMaterials.forEach((material) => { material.opacity = value; });
   }
 
   dispose() {
     this.clear();
     this.visualSlots.forEach((slot) => { slot.puncture.geometry.dispose(); slot.slash.geometry.dispose(); slot.puncture.removeFromParent(); slot.slash.removeFromParent(); });
     this.bluntMaterial.dispose();
+    this.ownedMaterials.forEach((material) => material.dispose());
+    this.ownedMaterials.clear();
     this.surfaceDebugRoot.traverse((object) => { object.geometry?.dispose?.(); object.material?.dispose?.(); });
     this.surfaceDebugRoot.removeFromParent();
     this.visualSlots = [];

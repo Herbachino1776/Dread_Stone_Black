@@ -95,7 +95,7 @@ export class FirstPersonViewmodelHost {
   initializeCombatKnifeRuntime() {
     const combatRuntime = this.dungeon?.isCombatLab ? this.dungeon : this.dungeon?.combatEncounter;
     const contactActivationProvider = this.dungeon?.isCombatLab ? () => true : combatRuntime ? () => combatRuntime.isPlayerInCombatRange(this.player) : () => false;
-    this.combatKnifeController = new WorldKnifeCombatController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, bloodEffects: combatRuntime?.bloodEffects ?? null, combatDirector: combatRuntime?.combatDirector ?? null, contactActivationProvider, bindPointerInput: this.dungeon?.isCombatLab === true });
+    this.combatKnifeController = new WorldKnifeCombatController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, bloodEffects: combatRuntime?.bloodEffects ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, bindPointerInput: this.dungeon?.isCombatLab === true });
     combatRuntime?.attachWeaponController?.(this.combatKnifeController);
     this.combatRuntime = combatRuntime;
   }

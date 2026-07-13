@@ -44,10 +44,12 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSo
   readFile(new URL('../public/assets/models/npc/human/human_retro_256.glb', import.meta.url)),
   readFile(new URL('../public/assets/models/npc/human/model_idle.glb', import.meta.url)),
 ]);
-const [decalLibrarySource, outdoorLightingSource, woundManifestSource] = await Promise.all([
+const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSource, actorRouterSource] = await Promise.all([
   readFile(new URL('../src/game/combat/KnifeWoundDecalLibrary.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/world-scene/OutdoorLightingDirector.js', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/CombatLabWalkerController.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/CombatActorRouter.js', import.meta.url), 'utf8'),
 ]);
 const dungeonSceneSource = await readFile(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
 const woundManifest = JSON.parse(woundManifestSource);
@@ -117,10 +119,19 @@ assert.match(knifeSource, /assistedWithdrawalRate/);
 assert.match(knifeSource, /non-damaging:no-pointer-owner/);
 assert.match(knifeSource, /MeleeIntentWeapon/);
 assert.match(knifeSource, /weaponLayers/);
-assert.match(knifeSource, /combatDirector\.beginPuncture/);
-assert.match(knifeSource, /combatDirector\.beginSlash/);
-assert.match(knifeSource, /combatDirector\.advancePenetration/);
-assert.match(knifeSource, /combatDirector\.beginWithdrawal/);
+assert.match(knifeSource, /targetDirector\.beginPuncture/);
+assert.match(knifeSource, /slash\.director\.beginSlash/);
+assert.match(knifeSource, /entry\.director\.advancePenetration/);
+assert.match(knifeSource, /entry\.director\.beginWithdrawal/);
+assert.match(knifeSource, /combatRouter/);
+assert.match(actorRouterSource, /entriesByColliderHandle/);
+assert.match(actorRouterSource, /resolveCollider/);
+assert.match(actorRouterSource, /unregister/);
+['SPAWNING', 'BLENDING_TO_WALK', 'APPROACHING', 'BLENDING_TO_IDLE', 'NEAR_PLAYER', 'HIT_REACTING', 'DYING', 'RAGDOLL', 'FADING', 'DISPOSED', 'RESPAWNING'].forEach((state) => assert.match(walkerSource, new RegExp(state)));
+assert.doesNotMatch(walkerSource, /Math\.random/);
+assert.match(walkerSource, /corpseHoldSeconds: 3/);
+assert.match(walkerSource, /WalkerVitalStabPolicy/);
+assert.match(walkerSource, /ProceduralHumanoidLocomotionLayer/);
 assert.doesNotMatch(knifeSource, /this\.actor\.(beginPunctureWound|applyPenetration|applySlashWound|onWeaponExtracted)/);
 assert.doesNotMatch(knifeSource, /this\.feedbackSystem\?\.emit|this\.bloodEffects\?\.emit|this\.feedback\?\.shake/);
 assert.ok(knifeSource.indexOf('this.actualGrip.copy(this.desiredGrip)') >= 0, 'free collision pose follows the desired hand without artificial latency');
@@ -299,6 +310,7 @@ assert.match(configSource, /failedContactSeconds: 0\.19/);
 assert.match(configSource, /embeddedMinimumSeconds: 0\.25/);
 assert.match(configSource, /embeddedMaximumSeconds: 0\.4/);
 assert.match(packageSource, /@dimforge\/rapier3d-compat/);
+assert.match(packageSource, /tests\/combat-walker\.test\.mjs/);
 assert.match(docsSource, /\?combatLab=1/);
 assert.match(docsSource, /Folsom/);
 assert.match(docsSource, /Combat Director/);

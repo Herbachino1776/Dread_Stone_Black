@@ -11,6 +11,8 @@ import { MELEE_INTENTS } from './MeleeIntentWeapon.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { applyMeleeSpacingEnvelope } from './CombatPresentation.js';
 import { preloadKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
+import { CombatActorRouter } from './CombatActorRouter.js';
+import { CombatLabWalkerController } from './CombatLabWalkerController.js';
 
 export class CombatLabScene {
   static async create(options = {}) {
@@ -18,7 +20,7 @@ export class CombatLabScene {
     return new CombatLabScene(options);
   }
 
-  constructor({ root = null, audioRuntime = null } = {}) {
+  constructor({ root = null, audioRuntime = null, query = new URLSearchParams(globalThis.location?.search ?? '') } = {}) {
     this.root = root;
     this.area = 'combat-lab';
     this.locationId = 'combat-lab';
@@ -38,6 +40,7 @@ export class CombatLabScene {
     });
     this.physics = new CombatPhysicsWorld();
     this.feedbackSystem = new CombatFeedbackSystem({ audioRuntime });
+    this.query = query;
     this.weaponController = null;
     this.player = null;
     this.night = false;
@@ -51,6 +54,20 @@ export class CombatLabScene {
     this.actor.setEnvironmentContactHints({ groundY: 0, wallX: -2.65 });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: 0, wallX: -2.65, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
     this.combatDirector = new CombatDirector({ actor: this.actor, bloodEffects: this.bloodEffects, feedbackSystem: this.feedbackSystem });
+    this.combatRouter = new CombatActorRouter();
+    this.combatRouter.register(this.actor, this.combatDirector);
+    this.walkerController = new CombatLabWalkerController({
+      scene: this.scene,
+      physics: this.physics,
+      collision: this.collision,
+      combatRouter: this.combatRouter,
+      stationaryActor: this.actor,
+      feedbackSystem: this.feedbackSystem,
+      playerProvider: () => this.player,
+      enabled: this.query.get('walker') !== '0',
+      query: this.query,
+      beforeActorDisposal: (actor, reason) => this.weaponController?.cancelTarget?.(actor, reason),
+    });
   }
 
   handleCombatEvent(event, payload = {}) {
@@ -122,7 +139,10 @@ export class CombatLabScene {
     if (this.disposed) return;
     this.player = player ?? this.player;
     this.sun.castShadow = this.sun.intensity > 0 && this.scene.userData.characterLightingDisableDirectional !== true;
+    if (!this.physics.paused) this.walkerController?.prepareFrame(deltaSeconds, this.player);
     this.actor.prepareFrame(deltaSeconds);
+    this.walkerController?.actor?.prepareFrame(deltaSeconds);
+    this.walkerController?.afterAnimationFrame();
     this.physics.step(
       deltaSeconds,
       (dt) => {
@@ -130,13 +150,16 @@ export class CombatLabScene {
         this.weaponController?.beforePhysics?.(dt);
         this.combatDirector.update(dt);
         this.actor.beforePhysics(dt, this.player?.position);
+        this.walkerController?.beforePhysics(dt, this.player?.position);
       },
       (dt) => {
         this.weaponController?.afterPhysicsStep?.(dt);
         this.bloodEffects.update(dt);
+        this.walkerController?.afterPhysicsStep(dt);
       },
     );
     this.actor.afterPhysics(this.physics.interpolationAlpha);
+    this.walkerController?.afterPhysics(this.physics.interpolationAlpha);
     this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha);
   }
@@ -170,9 +193,13 @@ export class CombatLabScene {
   }
 
   stepPhysics() {
+    this.walkerController?.prepareFrame(1 / 60, this.player);
     this.actor.prepareFrame(1 / 60);
-    this.physics.stepSingle((dt) => { this.feedbackSystem.update(dt); this.weaponController?.beforePhysics?.(dt); this.combatDirector.update(dt); this.actor.beforePhysics(dt, this.player?.position); }, (dt) => { this.weaponController?.afterPhysicsStep?.(dt); this.bloodEffects.update(dt); });
+    this.walkerController?.actor?.prepareFrame(1 / 60);
+    this.walkerController?.afterAnimationFrame();
+    this.physics.stepSingle((dt) => { this.feedbackSystem.update(dt); this.weaponController?.beforePhysics?.(dt); this.combatDirector.update(dt); this.actor.beforePhysics(dt, this.player?.position); this.walkerController?.beforePhysics(dt, this.player?.position); }, (dt) => { this.weaponController?.afterPhysicsStep?.(dt); this.bloodEffects.update(dt); this.walkerController?.afterPhysicsStep(dt); });
     this.actor.afterPhysics(0);
+    this.walkerController?.afterPhysics(0);
     this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.weaponController?.afterPhysics?.(0);
   }
@@ -227,6 +254,7 @@ export class CombatLabScene {
   resetActor() {
     this.weaponController?.cancel?.('lab-reset');
     this.actor.reset();
+    this.combatRouter.refresh(this.actor);
     this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.bloodEffects.clear();
     this.combatDirector.reset();
@@ -235,14 +263,20 @@ export class CombatLabScene {
   }
 
   getDiagnostics() {
-    return { physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics(), meleeSpacing: this.meleeSpacing };
+    return { physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), walker: this.walkerController?.getDiagnostics?.() ?? null, combatRouting: this.combatRouter.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics(), meleeSpacing: this.meleeSpacing };
   }
+
+  forceWalkerRespawn() { this.walkerController?.forceRespawn?.(); }
+  forceWalkerQualifyingStab() { return this.walkerController?.forceQualifyingStab?.() ?? null; }
+  toggleWalkerLocomotion() { return this.walkerController?.toggleLocomotionPaused?.() ?? false; }
 
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
     this.weaponController?.cancel?.('scene-dispose');
     this.collision.removeBlocker(this.playerBlocker);
+    this.walkerController?.dispose?.();
+    this.combatRouter.dispose();
     this.combatDirector.dispose();
     this.bloodEffects.dispose();
     this.feedbackSystem.dispose();

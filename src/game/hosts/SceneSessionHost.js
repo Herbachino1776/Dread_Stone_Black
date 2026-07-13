@@ -76,7 +76,7 @@ export class SceneSessionHost {
 
   async createCombatLabSession() {
     this.disposeCurrentSession();
-    this.dungeon = await CombatLabScene.create({ root: this.rendererHost.root, audioRuntime: this.audioRuntime });
+    this.dungeon = await CombatLabScene.create({ root: this.rendererHost.root, audioRuntime: this.audioRuntime, query: this.query });
     this.scene = this.dungeon.build();
     this.scene.add(this.camera);
     this.locationId = 'combat-lab';

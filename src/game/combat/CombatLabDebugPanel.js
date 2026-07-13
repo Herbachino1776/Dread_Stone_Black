@@ -48,6 +48,9 @@ export class CombatLabDebugPanel {
       ['MORTALITY X', () => this.toggleMortality()],
       ['RAGDOLL Z', () => this.forceRagdoll()],
       ['CUT TEST 6', () => this.dungeon?.createDebugSlash?.()],
+      ['WALK PAUSE 7', () => this.dungeon?.toggleWalkerLocomotion?.()],
+      ['WALK STAB 8', () => this.dungeon?.forceWalkerQualifyingStab?.()],
+      ['WALK RESPAWN 9', () => this.dungeon?.forceWalkerRespawn?.()],
       ['CHEST 1', () => this.triggerCollapse('chest_fold', false)],
       ['NECK 2', () => this.triggerCollapse('neck_failure', true)],
       ['HEAD 3', () => this.triggerCollapse('neurological', true)],
@@ -96,6 +99,9 @@ export class CombatLabDebugPanel {
       if (event.code === 'KeyX') this.toggleMortality();
       if (event.code === 'KeyZ') this.forceRagdoll();
       if (event.code === 'Digit6') this.dungeon?.createDebugSlash?.();
+      if (event.code === 'Digit7') this.dungeon?.toggleWalkerLocomotion?.();
+      if (event.code === 'Digit8') this.dungeon?.forceWalkerQualifyingStab?.();
+      if (event.code === 'Digit9') this.dungeon?.forceWalkerRespawn?.();
       if (event.code === 'Digit1') this.triggerCollapse('chest_fold', false);
       if (event.code === 'Digit2') this.triggerCollapse('neck_failure', true);
       if (event.code === 'Digit3') this.triggerCollapse('neurological', true);
@@ -116,11 +122,13 @@ export class CombatLabDebugPanel {
   toggleDebug() {
     this.debugVisible = !this.debugVisible;
     this.dungeon?.actor?.setDebugVisible?.(this.debugVisible);
+    this.dungeon?.walkerController?.actor?.setDebugVisible?.(this.debugVisible);
     this.dungeon?.weaponController?.setDebugVisible?.(this.debugVisible);
   }
   toggleWoundAnchors() {
     this.woundAnchorsVisible = !this.woundAnchorsVisible;
     this.dungeon?.actor?.setWoundSurfaceDebugVisible?.(this.woundAnchorsVisible);
+    this.dungeon?.walkerController?.actor?.setWoundSurfaceDebugVisible?.(this.woundAnchorsVisible);
   }
   toggleFreeze() { this.frozen = !this.frozen; this.dungeon?.setPhysicsPaused?.(this.frozen); }
   toggleSlow() { this.slow = !this.slow; this.dungeon?.setPhysicsSlow?.(this.slow); }
@@ -152,6 +160,8 @@ export class CombatLabDebugPanel {
     const diagnostics = this.dungeon?.getDiagnostics?.() ?? {};
     const physics = diagnostics.physics ?? {};
     const actor = diagnostics.actor ?? {};
+    const walker = diagnostics.walker ?? {};
+    const routing = diagnostics.combatRouting ?? {};
     const weapon = diagnostics.weapon ?? {};
     const director = diagnostics.director ?? {};
     const spacing = diagnostics.meleeSpacing ?? {};
@@ -184,6 +194,15 @@ export class CombatLabDebugPanel {
       `trauma ${JSON.stringify(actor.regionalTrauma ?? {})}`,
       `pose ${JSON.stringify(actor.bodyPositions ?? {})}`,
       `ragdoll bones ${JSON.stringify(actor.visualAdapter?.ragdollBonePositions ?? {})}  bindings ${actor.visualAdapter?.ragdollBindingCount ?? 0}`,
+      '',
+      `walker ${walker.enabled ? walker.state ?? 'waiting' : 'DISABLED'}  id ${walker.actorInstanceId ?? '-'}  generation ${walker.respawnGeneration ?? 0}  live ${walker.liveWalkers ?? 0}`,
+      `walker pos ${JSON.stringify(walker.worldPosition ?? [])}  distance ${(walker.distanceToPlayer ?? 0).toFixed(2)}m  speed ${(walker.currentSpeed ?? 0).toFixed(2)}/${(walker.desiredSpeed ?? 0).toFixed(2)}/${(walker.maximumSpeed ?? 0).toFixed(2)}`,
+      `yaw ${(walker.currentYaw ?? 0).toFixed(2)} -> ${(walker.desiredYaw ?? 0).toFixed(2)}  error ${(walker.turnError ?? 0).toFixed(2)}  paused ${walker.paused ? 'YES' : 'NO'}`,
+      `gait blend ${(walker.locomotionBlendWeight ?? 0).toFixed(2)}  phase ${(walker.gaitPhase ?? 0).toFixed(2)}/${(walker.oppositeGaitPhase ?? 0).toFixed(2)}  cadence ${(walker.cadence ?? 0).toFixed(2)}  stride ${(walker.strideLength ?? 0).toFixed(2)}  stance ${walker.stanceLeg ?? '-'}`,
+      `vital stabs ${walker.criticalStabCount ?? 0}/2  impaired ${walker.firstStabImpaired ? 'YES' : 'NO'}  wounds ${JSON.stringify(walker.qualifyingWoundIds ?? [])}  last ${walker.lastQualifyingRegion ?? '-'} ${(walker.lastQualifyingDepth ?? 0).toFixed(3)}m`,
+      `corpse ragdoll ${walker.ragdollActive ? 'ACTIVE' : 'OFF'} ${(walker.ragdollElapsed ?? 0).toFixed(2)}s  fade ${(walker.fadeProgress ?? 0).toFixed(2)} opacity ${(walker.fadeOpacity ?? 1).toFixed(2)}`,
+      `owned body/collider/joint ${walker.ownedRigidBodyCount ?? 0}/${walker.ownedColliderCount ?? 0}/${walker.ownedJointCount ?? 0}  materials ${walker.materialCloneCount ?? 0}  wounds ${walker.activeWoundCount ?? 0}  subscriptions ${walker.remainingEventSubscriptions ?? 0}`,
+      `routing actors/colliders ${routing.actorCount ?? 0}/${routing.colliderCount ?? 0}  disposed ${JSON.stringify(walker.lastDisposalSummary ?? null)}`,
       '',
       `director ${(director.time ?? 0).toFixed(3)}s  active ${director.activeInteractions ?? 0}  queued ${director.queuedEvents ?? 0}  pool ${director.pooledEvents ?? 0}`,
       `impact memory ${JSON.stringify(director.impactMemory ?? {})}`,

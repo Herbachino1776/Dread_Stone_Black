@@ -411,7 +411,13 @@ export class CombatDirector {
     if (!this.actor) return;
     if (payload.action === 'create_puncture') {
       const wound = this.actor.beginPunctureWound({ hit: payload.hit, entryPoint: payload.entryPoint, direction: payload.direction, surfaceNormal: payload.surfaceNormal, entryTangent: payload.entryTangent, depth: payload.depth, impactSeverity: payload.impactSeverity, weaponProfile: payload.weaponProfile, weaponId: payload.weaponId, deferReaction: true, deferAudio: true });
-      if (wound) wound.directedBloodReady = false;
+      if (wound) {
+        wound.directedBloodReady = false;
+        wound.interactionKind = 'puncture';
+        wound.deliberateStab = interaction.intent?.intent === MELEE_INTENTS.stab && interaction.intent?.intentional === true && interaction.intent?.damaging === true;
+        wound.surfaceRuptured = true;
+        wound.punctureInteractionId ??= interaction.id;
+      }
       interaction.result.wound = wound;
       interaction.result.woundId = wound?.id ?? null;
       payload.onWoundCreated?.(wound, interaction);
@@ -487,7 +493,7 @@ export class CombatDirector {
   }
 
   getDiagnostics() {
-    return { time: this.time, queuedEvents: this.queue.length, pooledEvents: this.eventPool.length, interactions: this.interactions.size, activeInteractions: [...this.interactions.values()].filter((entry) => !entry.completed && !entry.cancelled).length, impactMemory: { ...this.impactMemory }, extractionReactionAttempted: this.extractionReactionAttempted, lastEvent: this.eventLog.at(-1) ?? null, eventLog: [...this.eventLog] };
+    return { time: this.time, queuedEvents: this.queue.length, pooledEvents: this.eventPool.length, interactions: this.interactions.size, activeInteractions: [...this.interactions.values()].filter((entry) => !entry.completed && !entry.cancelled).length, subscriberCount: [...this.subscribers.values()].reduce((sum, listeners) => sum + listeners.size, 0), impactMemory: { ...this.impactMemory }, extractionReactionAttempted: this.extractionReactionAttempted, lastEvent: this.eventLog.at(-1) ?? null, eventLog: [...this.eventLog] };
   }
 
   dispose() {

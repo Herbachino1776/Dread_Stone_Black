@@ -17,6 +17,7 @@ const tmpInverseQuaternion = new THREE.Quaternion();
 const tmpEuler = new THREE.Euler();
 const tmpDirection = new THREE.Vector3();
 const HUMANOID_PHYSICAL_SCALE = 0.82;
+let humanoidActorInstanceSerial = 0;
 
 function material(color, roughness = 0.9, metalness = 0) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
@@ -37,11 +38,17 @@ function bodyQuaternion(rotation = [0, 0, 0]) {
 }
 
 export class HumanoidCombatActor {
-  constructor({ physics, scene, spawnOffset = new THREE.Vector3(), spawnYaw = 0, eventSink = null, mortalityMode = COMBAT_MORTALITY_MODES.normal, visualProfile = CURRENT_HUMANOID_PROFILE } = {}) {
+  constructor({ physics, scene, spawnOffset = new THREE.Vector3(), spawnYaw = 0, eventSink = null, mortalityMode = COMBAT_MORTALITY_MODES.normal, visualProfile = CURRENT_HUMANOID_PROFILE, automaticMortality = true, isolateVisualMaterials = false, instanceId = null } = {}) {
     this.physics = physics;
     this.scene = scene;
+    this.instanceId = instanceId ?? `humanoid-${++humanoidActorInstanceSerial}`;
+    this.disposed = false;
     this.spawnOffset = spawnOffset.clone();
     this.spawnYaw = Number.isFinite(spawnYaw) ? spawnYaw : 0;
+    this.visualRootYaw = this.spawnYaw;
+    this.livingVelocity = new THREE.Vector3();
+    this.automaticMortality = automaticMortality !== false;
+    this.isolateVisualMaterials = isolateVisualMaterials === true;
     this.spawnRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.spawnYaw);
     this.root = new THREE.Group();
     this.root.name = 'humanoid-combat-actor-visual';
@@ -85,14 +92,23 @@ export class HumanoidCombatActor {
     this.createPhysicalBody();
     const pelvisRest = this.bodies.get('pelvis')?.restPosition ?? new THREE.Vector3();
     this.visualRootPosition = new THREE.Vector3(pelvisRest.x, this.spawnOffset.y, pelvisRest.z);
-    this.visualAdapter = typeof window !== 'undefined' ? new HumanoidGlbVisualAdapter({ actor: this, parent: this.root, profile: this.visualProfile }) : null;
-    this.woundSystem = new CombatWoundSystem({ actor: this, scene: this.scene, decalLibrary: getKnifeWoundDecalLibrary() });
+    this.visualAdapter = typeof window !== 'undefined' ? new HumanoidGlbVisualAdapter({ actor: this, parent: this.root, profile: this.visualProfile, isolateMaterials: this.isolateVisualMaterials }) : null;
+    this.woundSystem = new CombatWoundSystem({ actor: this, scene: this.scene, decalLibrary: getKnifeWoundDecalLibrary(), isolateMaterials: this.isolateVisualMaterials });
     this.wounds = this.woundSystem.wounds;
     this.physiology = new CombatPhysiology({ actor: this, woundSystem: this.woundSystem, eventSink: this.eventSink });
   }
 
   setEventSink(eventSink) { this.eventSink = eventSink; this.physiology?.setEventSink?.(eventSink); }
   setEnvironmentContactHints(hints = {}) { Object.assign(this.environmentContactHints, hints); }
+  setLivingRootTransform(position, yaw = this.visualRootYaw, velocity = null) {
+    if (this.ragdollActive || this.disposed || !position) return false;
+    this.visualRootPosition.copy(position);
+    this.visualRootYaw = Number.isFinite(yaw) ? yaw : this.visualRootYaw;
+    if (velocity) this.livingVelocity.copy(velocity);
+    else this.livingVelocity.set(0, 0, 0);
+    this.visualAdapter?.setAuthoritativeTransform?.(this.visualRootPosition, this.visualRootYaw);
+    return true;
+  }
   setMortalityMode(mode) {
     this.mortalityMode = mode === COMBAT_MORTALITY_MODES.normal ? COMBAT_MORTALITY_MODES.normal : COMBAT_MORTALITY_MODES.immortalReactive;
     if (this.isImmortalReactive() && ['dying', 'dead'].includes(this.lifeState)) this.recoverReactivePosture(true);
@@ -231,6 +247,7 @@ export class HumanoidCombatActor {
   }
 
   resolveHit(collider, worldPoint) {
+    if (this.disposed) return null;
     const baseRegionId = this.colliderRegions.get(collider?.handle);
     if (!baseRegionId) return null;
     const bodyId = collider.userData?.bodyId;
@@ -241,7 +258,7 @@ export class HumanoidCombatActor {
     const local = worldPoint.clone().sub(new THREE.Vector3(translation.x, translation.y, translation.z)).applyQuaternion(new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).invert());
     let regionId = baseRegionId;
     if (bodyId === 'head') regionId = local.z > 0.075 && local.y < 0.1 ? 'face' : 'skull';
-    return { regionId, region: HUMANOID_ANATOMY_REGIONS.find((entry) => entry.id === regionId), bodyId, body: bodyEntry.body, collider, localPoint: local };
+    return { actor: this, regionId, region: HUMANOID_ANATOMY_REGIONS.find((entry) => entry.id === regionId), bodyId, body: bodyEntry.body, collider, localPoint: local };
   }
 
   beginPunctureWound({ hit, entryPoint, direction, surfaceNormal = null, entryTangent = null, depth = 0.004, impactSeverity = 0, weaponProfile = null, hardContact = false, weaponId = 'old_work_knife', deferReaction = false, deferAudio = false } = {}) {
@@ -323,6 +340,7 @@ export class HumanoidCombatActor {
   }
 
   evaluateLifeState() {
+    if (!this.automaticMortality) return;
     const totalTrauma = [...this.regionState.values()].reduce((sum, state) => sum + state.trauma, 0);
     const criticalTrauma = Math.max(...['head', 'face', 'skull', 'neck', 'upper_chest', 'lower_chest'].map((id) => this.regionState.get(id)?.trauma ?? 0));
     if (this.lifeState === 'alive' && (this.balanceImpairment > HUMANOID_DURABILITY_CONFIG.balanceCollapseThreshold || totalTrauma > HUMANOID_DURABILITY_CONFIG.accumulatedCollapseThreshold)) this.requestCollapse(this.resolveTraumaCollapseFamily(), { immediate: false, lethal: false });
@@ -339,6 +357,7 @@ export class HumanoidCombatActor {
   }
 
   requestCollapse(family = 'general_trauma', { immediate = false, lethal = false, regionId = null } = {}) {
+    if (!this.automaticMortality) return false;
     if (!COLLAPSE_CONFIG.families.includes(family) || this.lifeState === 'dead') return;
     this.collapseFamily ??= family;
     this.collapseReason ??= regionId ? `${family}:${regionId}` : family;
@@ -349,6 +368,7 @@ export class HumanoidCombatActor {
   }
 
   transitionLifeState(nextState, reason = 'trauma') {
+    if (!this.automaticMortality) return false;
     if (this.isImmortalReactive() && (nextState === 'dying' || nextState === 'dead')) nextState = 'incapacitated';
     const order = { alive: 0, incapacitated: 1, dying: 2, dead: 3 };
     if (!(nextState in order) || order[nextState] <= order[this.lifeState]) return false;
@@ -554,7 +574,7 @@ export class HumanoidCombatActor {
     this.updateVesselDebug();
     if (this.ragdollActive) this.visualAdapter?.updateRagdoll?.();
     else if (!this.visualProfile.animationAuthoritative) this.visualAdapter?.update();
-    this.woundSystem.update(1 / 60);
+    if (!this.visualProfile.animationAuthoritative || this.ragdollActive) this.woundSystem.update(1 / 60);
     this.updateBodyImpactFeedback();
     const speeds = [...this.bodies.values()].map((entry) => { const v = entry.body.linvel(); return Math.hypot(v.x, v.y, v.z); });
     const speed = speeds.length ? speeds.reduce((sum, value) => sum + value, 0) / speeds.length : 0;
@@ -637,6 +657,8 @@ export class HumanoidCombatActor {
       bodyPositions,
       visualProfile: this.visualProfile.name,
       visualAdapter: this.visualAdapter?.getDiagnostics?.() ?? null,
+      instanceId: this.instanceId,
+      automaticMortality: this.automaticMortality,
     };
   }
 
@@ -667,6 +689,7 @@ export class HumanoidCombatActor {
   }
 
   reset() {
+    if (this.disposed) return;
     this.woundSystem.clear();
     this.disposePhysicalBody();
     this.regionState.clear();
@@ -693,6 +716,8 @@ export class HumanoidCombatActor {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     this.woundSystem.dispose();
     this.visualAdapter?.dispose();
     this.disposePhysicalBody();
