@@ -594,9 +594,10 @@ test('mid-stride pain pose completes a grounded skeletal collapse and remains fr
   assert.ok(samples.some((sample) => sample.groundingProgress > 0.4 && sample.groundingProgress < 0.6));
   assert.equal(samples.at(-1).groundingProgress, 1);
   assert.equal(samples.at(-1).finalRelaxation, 1);
-  assert.ok(samples.at(-1).pelvisGroundHeight >= 0.08 && samples.at(-1).pelvisGroundHeight <= 0.28);
+  assert.ok(samples.at(-1).pelvisGroundHeight >= 0.24 && samples.at(-1).pelvisGroundHeight <= 0.36);
   assert.ok(samples.at(-1).chestGroundHeight >= 0.18 && samples.at(-1).chestGroundHeight <= 0.42);
-  assert.ok(samples.at(-1).torsoGroundSpan <= 0.24, `torso grounded span ${samples.at(-1).torsoGroundSpan}`);
+  assert.ok(samples.at(-1).torsoGroundSpan <= 0.14, `torso grounded span ${samples.at(-1).torsoGroundSpan}`);
+  assert.ok(samples.at(-1).minimumLowerBodyGroundMargin >= -1e-6, `lower body ground margin ${samples.at(-1).minimumLowerBodyGroundMargin}`);
   assert.ok(samples.at(-1).pelvisDescentTarget >= 0.22 && samples.at(-1).pelvisDescentTarget <= 0.25);
   assert.ok(THREE.MathUtils.radToDeg(samples.at(-1).torsoPitch) >= 20 && THREE.MathUtils.radToDeg(samples.at(-1).torsoPitch) <= 35);
   assert.ok(Math.abs(THREE.MathUtils.radToDeg(samples.at(-1).lateralImbalance)) >= 4 && Math.abs(THREE.MathUtils.radToDeg(samples.at(-1).lateralImbalance)) <= 10);
@@ -617,6 +618,8 @@ test('mid-stride pain pose completes a grounded skeletal collapse and remains fr
     assert.ok(Math.abs(bone.quaternion.length() - 1) < 1e-6, `${bodyId} quaternion remains normalized`);
   });
   assert.ok(finalPose.get('pelvis').worldPosition.y <= preFatalPelvisY - 0.35, 'pelvis lowers fully from the standing pose');
+  const groundedTorsoHorizontalSpan = finalPose.get('pelvis').worldPosition.distanceTo(finalPose.get('upper_chest').worldPosition.clone().setY(finalPose.get('pelvis').worldPosition.y));
+  assert.ok(groundedTorsoHorizontalSpan >= 0.55, 'final torso lies across the floor instead of holding a folded bridge pose');
   assert.equal(walker.actor.joints.filter((joint) => joint.userData?.handoffRebuilt).length, 0);
   assert.equal(synthetic.adapter.ragdollDiagnostics.activationCount, 0);
   assert.equal(synthetic.adapter.ragdollBindings.length, 0);

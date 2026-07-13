@@ -129,6 +129,8 @@ export class AuthoredHumanoidDeathController {
       pelvisGroundHeight: Number.isFinite(collapse.pelvisGroundHeight) ? Number(collapse.pelvisGroundHeight.toFixed(3)) : null,
       chestGroundHeight: Number.isFinite(collapse.chestGroundHeight) ? Number(collapse.chestGroundHeight.toFixed(3)) : null,
       torsoGroundSpan: Number.isFinite(collapse.torsoGroundSpan) ? Number(collapse.torsoGroundSpan.toFixed(3)) : null,
+      lowerBodyGroundLift: Number(collapse.lowerBodyGroundLift.toFixed(3)),
+      minimumLowerBodyGroundMargin: Number.isFinite(collapse.minimumLowerBodyGroundMargin) ? Number(collapse.minimumLowerBodyGroundMargin.toFixed(3)) : null,
     };
   }
 

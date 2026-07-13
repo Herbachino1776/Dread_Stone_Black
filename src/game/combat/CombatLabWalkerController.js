@@ -82,6 +82,14 @@ const groundBodyRelease = (progress) => {
   const t = clamp01(progress / 0.82);
   return 1 - (1 - t) * (1 - t);
 };
+const GROUNDED_LOWER_BODY_CLEARANCE = Object.freeze({
+  left_thigh: 0.1,
+  right_thigh: 0.1,
+  left_lower_leg: 0.075,
+  right_lower_leg: 0.075,
+  left_foot: 0.055,
+  right_foot: 0.055,
+});
 const moveToward = (current, target, maximumDelta) => current < target ? Math.min(target, current + maximumDelta) : Math.max(target, current - maximumDelta);
 const wrapPhase = (phase) => ((phase % 1) + 1) % 1;
 const angleDelta = (from, to) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
@@ -322,6 +330,8 @@ export class ProceduralConsciousnessLossLayer {
     this.pelvisGroundHeight = null;
     this.chestGroundHeight = null;
     this.torsoGroundSpan = null;
+    this.lowerBodyGroundLift = 0;
+    this.minimumLowerBodyGroundMargin = null;
     this.tmpEuler = new THREE.Euler(0, 0, 0, 'XYZ');
     this.tmpQuaternion = new THREE.Quaternion();
     this.tmpWorldPosition = new THREE.Vector3();
@@ -350,6 +360,8 @@ export class ProceduralConsciousnessLossLayer {
     this.pelvisGroundHeight = null;
     this.chestGroundHeight = null;
     this.torsoGroundSpan = null;
+    this.lowerBodyGroundLift = 0;
+    this.minimumLowerBodyGroundMargin = null;
   }
 
   reset() {
@@ -368,6 +380,8 @@ export class ProceduralConsciousnessLossLayer {
     this.pelvisGroundHeight = null;
     this.chestGroundHeight = null;
     this.torsoGroundSpan = null;
+    this.lowerBodyGroundLift = 0;
+    this.minimumLowerBodyGroundMargin = null;
   }
 
   advance(elapsedSeconds, durationSeconds) {
@@ -462,10 +476,10 @@ export class ProceduralConsciousnessLossLayer {
       const clutchSign = weakSign;
 
       // Continue from the authored kneel into a slow uneven chest/side fall.
-      this.rotate('pelvis', THREE.MathUtils.degToRad(33) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(32) * bodyRelease);
-      this.rotate('abdomen', THREE.MathUtils.degToRad(24) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(9) * bodyRelease);
-      this.rotate('lower_chest', THREE.MathUtils.degToRad(15) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(6) * bodyRelease);
-      this.rotate('upper_chest', THREE.MathUtils.degToRad(9) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(4) * bodyRelease);
+      this.rotate('pelvis', THREE.MathUtils.degToRad(16) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(72) * bodyRelease);
+      this.rotate('abdomen', THREE.MathUtils.degToRad(-6) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(13) * bodyRelease);
+      this.rotate('lower_chest', THREE.MathUtils.degToRad(-11) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(8) * bodyRelease);
+      this.rotate('upper_chest', THREE.MathUtils.degToRad(-4) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(7) * bodyRelease);
 
       // The falling side reaches for the floor; the other arm stays folded over
       // the chest/abdomen before both lose their remaining tension.
@@ -476,12 +490,12 @@ export class ProceduralConsciousnessLossLayer {
       this.rotate(`${clutchSide}_forearm`, THREE.MathUtils.degToRad(-70) * brace + THREE.MathUtils.degToRad(22) * relaxation, 0, clutchSign * THREE.MathUtils.degToRad(6) * settle);
       this.rotate(`${clutchSide}_hand`, THREE.MathUtils.degToRad(-12) * brace + THREE.MathUtils.degToRad(9) * relaxation, 0, -clutchSign * THREE.MathUtils.degToRad(11) * brace);
 
-      this.rotate(`${weakSide}_thigh`, THREE.MathUtils.degToRad(72) * bodyRelease, 0, weakSign * THREE.MathUtils.degToRad(9) * settle);
-      this.rotate(`${weakSide}_lower_leg`, THREE.MathUtils.degToRad(-10) * bodyRelease, 0, weakSign * THREE.MathUtils.degToRad(5) * settle);
-      this.rotate(`${strongSide}_thigh`, THREE.MathUtils.degToRad(85) * bodyRelease, 0, strongSign * THREE.MathUtils.degToRad(5) * settle);
-      this.rotate(`${strongSide}_lower_leg`, THREE.MathUtils.degToRad(35) * bodyRelease, 0, strongSign * THREE.MathUtils.degToRad(3) * settle);
-      this.rotate(`${weakSide}_foot`, THREE.MathUtils.degToRad(8) * settle + THREE.MathUtils.degToRad(7) * relaxation, 0, weakSign * THREE.MathUtils.degToRad(11) * relaxation);
-      this.rotate(`${strongSide}_foot`, THREE.MathUtils.degToRad(12) * settle + THREE.MathUtils.degToRad(9) * relaxation, 0, strongSign * THREE.MathUtils.degToRad(13) * relaxation);
+      this.rotate(`${weakSide}_thigh`, THREE.MathUtils.degToRad(14) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(4) * settle);
+      this.rotate(`${weakSide}_lower_leg`, THREE.MathUtils.degToRad(84) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(7) * settle);
+      this.rotate(`${strongSide}_thigh`, THREE.MathUtils.degToRad(34) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(13) * settle);
+      this.rotate(`${strongSide}_lower_leg`, THREE.MathUtils.degToRad(79) * bodyRelease, 0, this.direction * THREE.MathUtils.degToRad(10) * settle);
+      this.rotate(`${weakSide}_foot`, THREE.MathUtils.degToRad(4) * (settle + relaxation), 0, this.direction * THREE.MathUtils.degToRad(1) * (settle + relaxation));
+      this.rotate(`${strongSide}_foot`, THREE.MathUtils.degToRad(5) * settle + THREE.MathUtils.degToRad(4) * relaxation, 0, this.direction * (THREE.MathUtils.degToRad(5) * settle + THREE.MathUtils.degToRad(4) * relaxation));
 
       // The head tries to stay up through the brace, then drops and rolls after
       // the shoulder and chest have made contact.
@@ -499,7 +513,7 @@ export class ProceduralConsciousnessLossLayer {
     if (!pelvis || !leftFoot || !rightFoot) return 0;
     pelvis.updateWorldMatrix?.(true, true);
     const minimumFootY = Math.min(leftFoot.getWorldPosition(new THREE.Vector3()).y, rightFoot.getWorldPosition(new THREE.Vector3()).y);
-    const grounding = smoothstep01((this.groundingProgress - 0.08) / 0.82);
+    const grounding = groundBodyRelease(this.groundingProgress);
     const requestedCorrection = THREE.MathUtils.clamp(groundY + minimumBoneClearance - minimumFootY, 0, this.pelvisDescent) * (1 - grounding);
     const requestedDescent = this.pelvisDescent - requestedCorrection;
     const monotonicDescent = Math.max(this.maximumAppliedPelvisDescent, requestedDescent);
@@ -519,8 +533,18 @@ export class ProceduralConsciousnessLossLayer {
         const torsoMinimum = Math.min(...torsoHeights);
         const torsoMaximum = Math.max(...torsoHeights);
         const torsoCenter = (torsoMinimum + torsoMaximum) * 0.5;
-        const targetCenter = groundY + 0.255;
+        const targetCenter = groundY + 0.2;
         this.translateWorld('pelvis', 0, (targetCenter - torsoCenter) * grounding, 0);
+        pelvis.updateWorldMatrix?.(true, true);
+      }
+      let requiredLowerBodyLift = 0;
+      Object.entries(GROUNDED_LOWER_BODY_CLEARANCE).forEach(([id, clearance]) => {
+        const boneY = this.bones.get(id)?.getWorldPosition(new THREE.Vector3()).y;
+        if (Number.isFinite(boneY)) requiredLowerBodyLift = Math.max(requiredLowerBodyLift, groundY + clearance - boneY);
+      });
+      this.lowerBodyGroundLift = Math.max(0, requiredLowerBodyLift) * grounding;
+      if (this.lowerBodyGroundLift > 0) {
+        this.translateWorld('pelvis', 0, this.lowerBodyGroundLift, 0);
         pelvis.updateWorldMatrix?.(true, true);
       }
     }
@@ -530,6 +554,11 @@ export class ProceduralConsciousnessLossLayer {
     this.chestGroundHeight = chestHeights.length ? Math.max(...chestHeights) - groundY : null;
     const finalTorsoHeights = ['pelvis', 'abdomen', 'lower_chest', 'upper_chest'].map((id) => this.bones.get(id)?.getWorldPosition(new THREE.Vector3()).y).filter(Number.isFinite);
     this.torsoGroundSpan = finalTorsoHeights.length ? Math.max(...finalTorsoHeights) - Math.min(...finalTorsoHeights) : null;
+    const lowerBodyMargins = Object.entries(GROUNDED_LOWER_BODY_CLEARANCE).map(([id, clearance]) => {
+      const boneY = this.bones.get(id)?.getWorldPosition(new THREE.Vector3()).y;
+      return Number.isFinite(boneY) ? boneY - groundY - clearance : null;
+    }).filter(Number.isFinite);
+    this.minimumLowerBodyGroundMargin = lowerBodyMargins.length ? Math.min(...lowerBodyMargins) : null;
     return correction;
   }
 
@@ -548,6 +577,8 @@ export class ProceduralConsciousnessLossLayer {
       pelvisGroundHeight: this.pelvisGroundHeight,
       chestGroundHeight: this.chestGroundHeight,
       torsoGroundSpan: this.torsoGroundSpan,
+      lowerBodyGroundLift: this.lowerBodyGroundLift,
+      minimumLowerBodyGroundMargin: this.minimumLowerBodyGroundMargin,
     };
   }
 }
@@ -1061,6 +1092,8 @@ export class ProceduralWalkerController {
       pelvisGroundHeight: Number.isFinite(collapse.pelvisGroundHeight) ? Number(collapse.pelvisGroundHeight.toFixed(3)) : null,
       chestGroundHeight: Number.isFinite(collapse.chestGroundHeight) ? Number(collapse.chestGroundHeight.toFixed(3)) : null,
       torsoGroundSpan: Number.isFinite(collapse.torsoGroundSpan) ? Number(collapse.torsoGroundSpan.toFixed(3)) : null,
+      lowerBodyGroundLift: Number(collapse.lowerBodyGroundLift.toFixed(3)),
+      minimumLowerBodyGroundMargin: Number.isFinite(collapse.minimumLowerBodyGroundMargin) ? Number(collapse.minimumLowerBodyGroundMargin.toFixed(3)) : null,
       finalPoseHeld: this.state === WALKER_STATES.grounded,
       ragdollActive: this.actor?.ragdollActive === true,
       actorInstanceId: this.actor?.instanceId ?? null,

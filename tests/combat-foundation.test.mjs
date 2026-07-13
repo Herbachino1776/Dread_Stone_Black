@@ -957,6 +957,8 @@ test('one authoritative knife root keeps identity, scale, pose, ownership, and s
   const scale = knife.visual.scale.clone();
   const ready = knife.actualGrip.clone();
   const readyLocal = camera.worldToLocal(ready.clone());
+  assert.deepEqual(readyLocal.toArray().map((value) => Number(value.toFixed(6))), KNIFE_COMBAT_CONFIG.workspace.ready, 'knife ready anchor uses the lower-right camera-local position');
+  assert.ok(readyLocal.x >= 0.095 && readyLocal.y <= -0.215, 'knife is visibly anchored lower and farther right');
   camera.position.add(new THREE.Vector3(7, 0.5, -4));
   camera.rotateY(1.1);
   camera.rotateX(-0.35);
@@ -1045,7 +1047,7 @@ test('a grip-owned deliberate lateral sweep creates an edge-led slash', async ()
   const scene = new THREE.Scene();
   const actor = new HumanoidCombatActor({ physics, scene, mortalityMode: COMBAT_MORTALITY_MODES.immortalReactive });
   const camera = new THREE.PerspectiveCamera(70, 390 / 702, 0.1, 100);
-  camera.position.set(0, 1.74, -2.77);
+  camera.position.set(-0.02, 1.81, -2.77);
   camera.updateMatrixWorld(true);
   const viewport = { querySelector: () => null, getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 702 }) };
   const equipment = { getEquippedToolId: () => 'old_work_knife', hasItem: () => true };
