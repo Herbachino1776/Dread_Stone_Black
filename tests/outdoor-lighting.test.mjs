@@ -4,6 +4,7 @@ import { FINAL_DUSK_BLACKOUT_DURATION_SECONDS, OutdoorLightingDirector, resolveO
 import { TORCH_LIGHTING, resolveTorchLightActive } from '../src/game/viewmodels/TorchViewmodel.js';
 import { KEEPERS_LANTERN_LIGHTING, resolveKeepersLanternLightActive } from '../src/game/viewmodels/KeepersLanternViewmodel.js';
 import { resolveOutdoorTorchWarning } from '../src/game/world-scene/OutdoorTorchRequirement.js';
+import { readFileSync } from 'node:fs';
 
 for (const phase of [0, 0.3, 0.35, 0.39999, 0.4, 0.5, 0.8, 0.85, 0.9, 0.999]) {
   const profile = resolveOutdoorLightingProfile(phase);
@@ -47,6 +48,35 @@ assert.equal(director.key.castShadow, false);
 assert.equal(director.moon.castShadow, false);
 assert.equal(ordinary.emissiveIntensity, 0);
 assert.equal(debug.activeShadowCasters, 0);
+
+const noonScene = new THREE.Scene();
+const noonClock = { getSnapshot: () => ({ phase: 0, name: 'noon', progress: 0.5, dayWeight: 1, redWeight: 0, nightWeight: 0, skyRotation: 0 }) };
+const focusedDirector = new OutdoorLightingDirector({ scene: noonScene, clock: noonClock, qualityTier: 'mobile-balanced' });
+const focusedPlayer = { position: new THREE.Vector3(0, 1.7, 0) };
+let shadowDebug = focusedDirector.update(focusedPlayer);
+assert.equal(focusedDirector.explorationShadowRadius, 52);
+assert.equal(focusedDirector.combatShadowRadius, 18);
+assert.equal(shadowDebug.combatShadowFocused, false);
+assert.ok(Math.abs(shadowDebug.texelSize - 104 / 1024) < 1e-12);
+noonScene.userData.activeCombatShadowTarget = new THREE.Vector3(8, 1.2, 0);
+for (let index = 0; index < 80; index += 1) shadowDebug = focusedDirector.update(focusedPlayer);
+assert.equal(shadowDebug.combatShadowFocused, true);
+assert.equal(shadowDebug.shadowRadius, 18);
+assert.ok(Math.abs(shadowDebug.texelSize - 36 / 1024) < 1e-12);
+assert.ok(shadowDebug.shadowBias >= -0.00018 && shadowDebug.shadowBias <= -0.00005);
+assert.ok(shadowDebug.shadowNormalBias >= 0.008 && shadowDebug.shadowNormalBias <= 0.034);
+assert.ok(Math.abs(shadowDebug.snappedCenter.x / shadowDebug.texelSize - Math.round(shadowDebug.snappedCenter.x / shadowDebug.texelSize)) < 1e-8, 'combat midpoint retains texel snapping');
+assert.equal(noonScene.children.filter((light) => light.isDirectionalLight && light.castShadow).length, 1);
+const dungeonSceneSource = readFileSync(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
+assert.match(dungeonSceneSource, /sunrise\.castShadow = false/);
+noonScene.userData.activeCombatShadowTarget.set(11, 1.2, 0);
+shadowDebug = focusedDirector.update(focusedPlayer);
+assert.equal(shadowDebug.combatShadowFocused, true, 'exit hysteresis retains combat focus beyond enter distance');
+noonScene.userData.activeCombatShadowTarget.set(14, 1.2, 0);
+shadowDebug = focusedDirector.update(focusedPlayer);
+assert.equal(shadowDebug.combatShadowFocused, false);
+for (let index = 0; index < 80; index += 1) shadowDebug = focusedDirector.update(focusedPlayer);
+assert.equal(shadowDebug.shadowRadius, 52);
 
 assert.equal(TORCH_LIGHTING.point.distance, 8);
 assert.equal(TORCH_LIGHTING.point.decay, 2);

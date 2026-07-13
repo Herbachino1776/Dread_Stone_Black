@@ -44,6 +44,13 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSo
   readFile(new URL('../public/assets/models/npc/human/human_retro_256.glb', import.meta.url)),
   readFile(new URL('../public/assets/models/npc/human/model_idle.glb', import.meta.url)),
 ]);
+const [decalLibrarySource, outdoorLightingSource, woundManifestSource] = await Promise.all([
+  readFile(new URL('../src/game/combat/KnifeWoundDecalLibrary.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/world-scene/OutdoorLightingDirector.js', import.meta.url), 'utf8'),
+  readFile(new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url), 'utf8'),
+]);
+const dungeonSceneSource = await readFile(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
+const woundManifest = JSON.parse(woundManifestSource);
 
 function parseGlbJson(buffer) {
   assert.equal(buffer.subarray(0, 4).toString(), 'glTF', 'asset is a valid binary glTF');
@@ -155,6 +162,15 @@ assert.match(adapterSource, /SkeletonUtils/);
 assert.match(adapterSource, /HUMANOID_GLB_BONE_MAP/);
 assert.match(adapterSource, /LinearMipmapLinearFilter/);
 assert.match(adapterSource, /NearestFilter/);
+assert.match(adapterSource, /material\.map\.magFilter = THREE\.NearestFilter/);
+assert.match(adapterSource, /material\.normalMap\.magFilter = THREE\.LinearFilter/);
+assert.match(adapterSource, /material\.normalMap\.colorSpace = THREE\.NoColorSpace/);
+assert.match(adapterSource, /normalSignX \* 0\.55/);
+assert.match(adapterSource, /normalSignY \* 0\.55/);
+assert.match(adapterSource, /material\.metalness = 0/);
+assert.match(adapterSource, /material\.roughness, 0\.9/);
+assert.doesNotMatch(adapterSource, /material\.normalMap\.magFilter = THREE\.NearestFilter/);
+assert.match(adapterSource, /no-cast-shadow|no-receive-shadow|no-normal-map|no-directional-shadow|tight-shadow-frustum/);
 assert.match(adapterSource, /cachedAssetPromises = new Map/);
 assert.match(adapterSource, /loadCachedAsset\(this\.profile\.assetPath\)/);
 assert.match(profileSource, /model_idle_animation_authoritative/);
@@ -198,6 +214,37 @@ assert.match(woundSource, /pooled-skinned-surface-visual/);
 assert.match(woundSource, /slashSamples/);
 assert.match(woundSource, /MAX_SLASH_SURFACE_SAMPLES/);
 assert.doesNotMatch(woundSource, /new THREE\.PlaneGeometry/);
+assert.doesNotMatch(woundSource, /makeWoundTexture|THREE\.DataTexture/);
+assert.match(woundSource, /entryMajorMeters/);
+assert.match(woundSource, /entryMinorMeters/);
+assert.match(woundSource, /entryAreaMetersSquared/);
+assert.match(woundSource, /entryTangent/);
+assert.match(woundSource, /entryObliqueness/);
+assert.match(woundSource, /visualMajorMeters/);
+assert.match(woundSource, /visualMinorMeters/);
+assert.match(woundSource, /getAlphaBoundUv/);
+assert.match(decalLibrarySource, /KNIFE_WOUND_MANIFEST_URL/);
+assert.match(decalLibrarySource, /texturesById = new Map/);
+assert.match(decalLibrarySource, /materialsById = new Map/);
+assert.match(decalLibrarySource, /LinearMipmapLinearFilter/);
+assert.match(decalLibrarySource, /ClampToEdgeWrapping/);
+assert.match(decalLibrarySource, /alphaTest: 0\.065/);
+assert.match(decalLibrarySource, /color: 0xffffff/);
+assert.equal(woundManifest.variants.length, 13);
+assert.equal(new Set(woundManifest.variants.map((variant) => variant.id)).size, 13);
+assert.ok(woundManifest.variants.some((variant) => variant.family === 'puncture'));
+assert.ok(woundManifest.variants.some((variant) => variant.family === 'slash'));
+assert.match(folsomEncounterSource, /preloadKnifeWoundDecalLibrary/);
+assert.match(combatLabSource, /preloadKnifeWoundDecalLibrary/);
+assert.match(outdoorLightingSource, /this\.explorationShadowRadius = high \? 72 : 52/);
+assert.match(outdoorLightingSource, /this\.combatShadowRadius = high \? 22 : 18/);
+assert.match(outdoorLightingSource, /combatFocusEnterDistance = 10/);
+assert.match(outdoorLightingSource, /combatFocusExitDistance = 13/);
+assert.match(outdoorLightingSource, /Math\.round\(center\.x \/ texel\) \* texel/);
+assert.match(outdoorLightingSource, /texel \* 0\.0016/);
+assert.match(outdoorLightingSource, /texel \* 0\.32/);
+assert.match(outdoorLightingSource, /this\.moon\.castShadow = false/);
+assert.match(dungeonSceneSource, /sunrise\.castShadow = false/);
 assert.match(surfaceBindingSource, /getVertexPosition/);
 assert.match(surfaceBindingSource, /barycentric/);
 assert.match(surfaceBindingSource, /triangleIndices/);

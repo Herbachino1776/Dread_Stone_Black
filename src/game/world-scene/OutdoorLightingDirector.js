@@ -100,13 +100,19 @@ export class OutdoorLightingDirector {
     this.lightRegistry = getOutdoorLightSourceRegistry(scene);
     const high = qualityTier === 'desktop-high';
     this.shadowMapSize = high ? 2048 : 1024;
-    this.shadowRadius = high ? 72 : 52;
+    this.explorationShadowRadius = high ? 72 : 52;
+    this.combatShadowRadius = high ? 22 : 18;
+    this.shadowRadius = this.explorationShadowRadius;
+    this.combatShadowFocused = false;
+    this.combatFocusEnterDistance = 10;
+    this.combatFocusExitDistance = 13;
+    this.shadowCenter = new THREE.Vector3();
     this.key.shadow.mapSize.set(this.shadowMapSize, this.shadowMapSize);
     this.key.shadow.camera.near = 3;
     this.key.shadow.camera.far = 210;
     this.key.shadow.bias = -0.00016;
-    this.key.shadow.normalBias = 0.035;
-    this.key.shadow.radius = 1.5;
+    this.key.shadow.normalBias = 0.0325;
+    this.key.shadow.radius = 1.25;
     scene.add(this.hemisphere, this.key, this.key.target, this.moon, this.moon.target);
     this.lightRegistry.register(this.hemisphere, { name: this.hemisphere.name, owner: OUTDOOR_LIGHT_OWNER.WORLD, source: 'outdoor-day-night-cycle', global: true });
     this.lightRegistry.register(this.key, { name: this.key.name, owner: OUTDOOR_LIGHT_OWNER.WORLD, source: 'outdoor-sun-cycle', global: true });
@@ -155,14 +161,26 @@ export class OutdoorLightingDirector {
     this.hemisphere.color.copy(state.sky); this.hemisphere.groundColor.copy(state.ground); this.hemisphere.intensity = state.hemi;
     this.key.color.copy(state.key); this.key.intensity = state.sunIntensity;
     const shadowWasEnabled = this.key.castShadow;
-    this.key.castShadow = state.sunCastsShadow;
+    this.key.castShadow = state.sunCastsShadow && this.scene.userData.characterLightingDisableDirectional !== true;
     if (!shadowWasEnabled && this.key.castShadow) this.key.shadow.needsUpdate = true;
     this.moon.color.copy(state.moon); this.moon.intensity = state.moonIntensity; this.moon.castShadow = false;
     this.scene.fog.color.copy(state.fog); this.scene.fog.near = state.fogNear; this.scene.fog.far = state.fogFar; this.scene.background = state.fog.clone();
     this.scene.environmentIntensity = state.environmentIntensity;
     const angle = clockState.skyRotation + state.phase * Math.PI * 2;
-    const center = player?.position ?? { x: 0, y: 0, z: 0 };
+    const playerPosition = player?.position ?? { x: 0, y: 0, z: 0 };
+    const combatTarget = this.scene.userData.activeCombatShadowTarget;
+    const combatDistance = combatTarget && player?.position ? player.position.distanceTo(combatTarget) : Infinity;
+    if (this.scene.userData.characterLightingForceTightFrustum === true) this.combatShadowFocused = true;
+    else if (this.combatShadowFocused ? combatDistance > this.combatFocusExitDistance : combatDistance < this.combatFocusEnterDistance) this.combatShadowFocused = !this.combatShadowFocused;
+    const targetRadius = this.combatShadowFocused ? this.combatShadowRadius : this.explorationShadowRadius;
+    this.shadowRadius = THREE.MathUtils.lerp(this.shadowRadius, targetRadius, 0.12);
+    if (Math.abs(this.shadowRadius - targetRadius) < 0.01) this.shadowRadius = targetRadius;
+    this.shadowCenter.set(playerPosition.x ?? 0, playerPosition.y ?? 0, playerPosition.z ?? 0);
+    if (this.combatShadowFocused && combatTarget) this.shadowCenter.lerp(combatTarget, 0.5);
+    const center = this.shadowCenter;
     const texel = (this.shadowRadius * 2) / this.shadowMapSize;
+    this.key.shadow.bias = -THREE.MathUtils.clamp(texel * 0.0016, 0.00005, 0.00018);
+    this.key.shadow.normalBias = THREE.MathUtils.clamp(texel * 0.32, 0.008, 0.034);
     const cx = Math.round(center.x / texel) * texel; const cz = Math.round(center.z / texel) * texel;
     const horizontal = 95 * Math.cos(state.sunElevation);
     this.key.position.set(cx + Math.sin(angle) * horizontal, 25 + Math.max(0, state.sunElevation) * 100, cz + Math.cos(angle) * horizontal);
@@ -184,10 +202,11 @@ export class OutdoorLightingDirector {
     this.scene.userData.outdoorActiveLightDiagnostics = activeLights;
     const torch = this.torchDebug;
     const activeShadowCasters = Number(this.key.castShadow) + Number(Boolean(torch.castShadow));
-    this.debug = { ...clockState, ...state, exposure: state.outdoorExposure, shadowMapSize: this.shadowMapSize, shadowRadius: this.shadowRadius, texelSize: texel, snappedCenter: { x: cx, z: cz }, activeShadowCasters, torch, activeLights, anonymousCameraLightsDisabled, unregisteredWorldLightsDisabled };
+    this.debug = { ...clockState, ...state, exposure: state.outdoorExposure, shadowMapSize: this.shadowMapSize, explorationShadowRadius: this.explorationShadowRadius, combatShadowRadius: this.combatShadowRadius, shadowRadius: this.shadowRadius, combatShadowFocused: this.combatShadowFocused, combatDistance, texelSize: texel, shadowBias: this.key.shadow.bias, shadowNormalBias: this.key.shadow.normalBias, shadowFilterRadius: this.key.shadow.radius, shadowFilter: 'PCFSoftShadowMap', snappedCenter: { x: cx, z: cz }, activeShadowCasters, torch, activeLights, anonymousCameraLightsDisabled, unregisteredWorldLightsDisabled };
+    Object.assign(this.scene.userData.outdoorLightingDirector, { activeRadius: this.shadowRadius, explorationShadowRadius: this.explorationShadowRadius, combatShadowRadius: this.combatShadowRadius, combatShadowFocused: this.combatShadowFocused, metersPerShadowTexel: texel, bias: this.key.shadow.bias, normalBias: this.key.shadow.normalBias, shadowFilterRadius: this.key.shadow.radius });
     if (this.debugPanel) {
       const lightLines = this.lightRegistry.getDiagnostics().map((light) => `${light.active ? '*' : '-'} ${light.name} ${light.type} owner=${light.owner} source=${light.source} intensity=${light.intensity.toFixed(3)} range=${light.range.toFixed(2)} pos=${light.position.x.toFixed(1)},${light.position.y.toFixed(1)},${light.position.z.toFixed(1)} shadow=${light.castShadow} ${light.global ? 'global' : 'local'}`);
-      this.debugPanel.textContent = `OUTDOOR ${state.name.toUpperCase()} phase ${state.phase.toFixed(4)}\nweights day/dusk/night/dawn ${state.dayWeight.toFixed(2)} ${state.duskWeight.toFixed(2)} ${state.nightWeight.toFixed(2)} ${state.dawnWeight.toFixed(2)}\nsun elev ${state.sunElevation.toFixed(3)} intensity ${state.sunIntensity.toFixed(3)} shadow ${this.key.castShadow}\nmoon ${state.moonIntensity.toFixed(3)} shadow false hemi ${state.hemi.toFixed(3)} environment ${state.environmentIntensity.toFixed(3)}\nfog #${state.fog.getHexString()} ${state.fogNear.toFixed(2)}-${state.fogFar.toFixed(2)} exposure ${state.outdoorExposure.toFixed(2)} emissive ${state.ordinaryEmissiveScale.toFixed(2)}\ntorch owned ${Boolean(torch.owned)} equipped ${Boolean(torch.equipped)} lit ${Boolean(torch.lit)}\ntorch intensity ${(torch.intensity ?? 0).toFixed(2)} range ${(torch.range ?? 0).toFixed(1)} shadow ${Boolean(torch.castShadow)}\nshadow lights ${activeShadowCasters} map ${this.shadowMapSize}px radius ${this.shadowRadius} texel ${texel.toFixed(3)}\nACTIVE/AUTHORED LIGHT SOURCES\n${lightLines.join('\n') || '(none)'}`;
+      this.debugPanel.textContent = `OUTDOOR ${state.name.toUpperCase()} phase ${state.phase.toFixed(4)}\nweights day/dusk/night/dawn ${state.dayWeight.toFixed(2)} ${state.duskWeight.toFixed(2)} ${state.nightWeight.toFixed(2)} ${state.dawnWeight.toFixed(2)}\nsun elev ${state.sunElevation.toFixed(3)} intensity ${state.sunIntensity.toFixed(3)} shadow ${this.key.castShadow}\nmoon ${state.moonIntensity.toFixed(3)} shadow false hemi ${state.hemi.toFixed(3)} environment ${state.environmentIntensity.toFixed(3)}\nfog #${state.fog.getHexString()} ${state.fogNear.toFixed(2)}-${state.fogFar.toFixed(2)} exposure ${state.outdoorExposure.toFixed(2)} emissive ${state.ordinaryEmissiveScale.toFixed(2)}\ntorch owned ${Boolean(torch.owned)} equipped ${Boolean(torch.equipped)} lit ${Boolean(torch.lit)}\ntorch intensity ${(torch.intensity ?? 0).toFixed(2)} range ${(torch.range ?? 0).toFixed(1)} shadow ${Boolean(torch.castShadow)}\nshadow lights ${activeShadowCasters} map ${this.shadowMapSize}px radius ${this.shadowRadius.toFixed(2)} (${this.combatShadowFocused ? 'combat' : 'exploration'}) texel ${texel.toFixed(4)}\nbias ${this.key.shadow.bias.toFixed(6)} normalBias ${this.key.shadow.normalBias.toFixed(4)} radius/filter ${this.key.shadow.radius}/PCFSoft\nACTIVE/AUTHORED LIGHT SOURCES\n${lightLines.join('\n') || '(none)'}`;
     }
     return this.debug;
   }

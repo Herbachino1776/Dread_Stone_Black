@@ -13,6 +13,14 @@ export const HUMANOID_GLB_BONE_MAP = CURRENT_HUMANOID_BONE_MAP;
 
 const cachedAssetPromises = new Map();
 let assetLoadCount = 0;
+const CHARACTER_LIGHTING_MODES = new Set(['normal', 'no-cast-shadow', 'no-receive-shadow', 'no-normal-map', 'no-directional-shadow', 'linear-normal-map', 'tight-shadow-frustum']);
+
+function filterName(filter) {
+  if (filter === THREE.NearestFilter) return 'NearestFilter';
+  if (filter === THREE.LinearFilter) return 'LinearFilter';
+  if (filter === THREE.LinearMipmapLinearFilter) return 'LinearMipmapLinearFilter';
+  return String(filter);
+}
 const unitScale = new THREE.Vector3(1, 1, 1);
 const decomposedBoneScale = new THREE.Vector3();
 const proxyUp = new THREE.Vector3(0, 1, 0);
@@ -110,6 +118,8 @@ export class HumanoidGlbVisualAdapter {
     this.basePresentationPosition = new THREE.Vector3();
     this.basePresentationYaw = 0;
     this.disposed = false;
+    const requestedLightingMode = globalThis.location ? new URLSearchParams(globalThis.location.search).get('characterLighting') : null;
+    this.characterLightingMode = import.meta.env?.DEV && CHARACTER_LIGHTING_MODES.has(requestedLightingMode) ? requestedLightingMode : 'normal';
     this.ready = this.load();
   }
 
@@ -136,13 +146,21 @@ export class HumanoidGlbVisualAdapter {
         }
         if (material.normalMap) {
           material.normalMap.colorSpace = THREE.NoColorSpace;
-          material.normalMap.magFilter = THREE.NearestFilter;
+          material.normalMap.magFilter = THREE.LinearFilter;
           material.normalMap.minFilter = THREE.LinearMipmapLinearFilter;
           material.normalMap.generateMipmaps = true;
+          const normalSignX = Math.sign(material.normalScale?.x ?? 1) || 1;
+          const normalSignY = Math.sign(material.normalScale?.y ?? 1) || 1;
+          material.normalScale.set(normalSignX * 0.55, normalSignY * 0.55);
+        }
+        if (material.isMeshStandardMaterial) {
+          material.metalness = 0;
+          material.roughness = Math.max(material.roughness, 0.9);
         }
         material.needsUpdate = true;
       });
     });
+    this.applyCharacterLightingDiagnostic();
     if (!this.skinnedMeshes.length || !this.skeletons.length) throw new Error(`Humanoid GLB has no SkinnedMesh/skeleton: ${this.profile.assetPath}`);
     if (this.profile.animationAuthoritative) {
       this.initializeAnimationAuthoritative(asset.animations ?? []);
@@ -155,6 +173,57 @@ export class HumanoidGlbVisualAdapter {
     this.parent.add(this.scene);
     this.captureBindings();
     this.update(1);
+  }
+
+  applyCharacterLightingDiagnostic() {
+    if (this.characterLightingMode === 'no-cast-shadow') this.skinnedMeshes.forEach((mesh) => { mesh.castShadow = false; });
+    if (this.characterLightingMode === 'no-receive-shadow') this.skinnedMeshes.forEach((mesh) => { mesh.receiveShadow = false; });
+    if (this.characterLightingMode === 'no-normal-map') this.skinnedMeshes.forEach((mesh) => {
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.filter(Boolean).forEach((material) => { material.userData.characterLightingNormalMap = material.normalMap; material.normalMap = null; material.needsUpdate = true; });
+    });
+    this.parent.userData.characterLightingMode = this.characterLightingMode;
+    const hostScene = this.parent.parent;
+    if (hostScene) {
+      hostScene.userData.characterLightingDisableDirectional = this.characterLightingMode === 'no-directional-shadow';
+      hostScene.userData.characterLightingForceTightFrustum = this.characterLightingMode === 'tight-shadow-frustum';
+    }
+    this.updateCharacterLightingDiagnostics();
+  }
+
+  updateCharacterLightingDiagnostics() {
+    const normalMaps = [];
+    this.skinnedMeshes.forEach((mesh) => {
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.filter(Boolean).forEach((material) => {
+        const normalMap = material.normalMap ?? material.userData.characterLightingNormalMap;
+        if (!normalMap) return;
+        normalMaps.push({ width: normalMap.image?.width ?? null, height: normalMap.image?.height ?? null, colorSpace: normalMap.colorSpace, magFilter: filterName(normalMap.magFilter), minFilter: filterName(normalMap.minFilter), normalScale: material.normalScale?.toArray?.() ?? null });
+      });
+    });
+    const hostScene = this.parent.parent;
+    const activeShadowCastingLights = [];
+    let primaryDirectional = null;
+    hostScene?.traverse?.((object) => {
+      if (object.isDirectionalLight && object.castShadow && !primaryDirectional) primaryDirectional = object;
+      if (object.isLight && object.castShadow && object.intensity > 0) activeShadowCastingLights.push({ name: object.name || object.type, type: object.type, intensity: object.intensity });
+    });
+    const shadowWidth = primaryDirectional ? primaryDirectional.shadow.camera.right - primaryDirectional.shadow.camera.left : null;
+    const shadowMapResolution = primaryDirectional?.shadow.mapSize?.x ?? null;
+    const directionalShadow = primaryDirectional ? { shadowMapResolution, radius: shadowWidth * 0.5, metersPerShadowTexel: shadowWidth / shadowMapResolution, bias: primaryDirectional.shadow.bias, normalBias: primaryDirectional.shadow.normalBias, filterRadius: primaryDirectional.shadow.radius } : null;
+    const diagnostics = { mode: this.characterLightingMode, npcCastShadow: this.skinnedMeshes.every((mesh) => mesh.castShadow), npcReceiveShadow: this.skinnedMeshes.every((mesh) => mesh.receiveShadow), normalMaps, directionalShadow, activeShadowCastingLights };
+    if (hostScene) hostScene.userData.characterLightingDiagnostics = diagnostics;
+    if (import.meta.env?.DEV && globalThis.document) {
+      const debugTokens = new Set((new URLSearchParams(globalThis.location?.search ?? '').get('debug') ?? '').split(','));
+      if (debugTokens.has('character-lighting')) {
+        this.characterLightingPanel ??= document.body.appendChild(document.createElement('pre'));
+        this.characterLightingPanel.dataset.characterLightingDiagnostic = 'true';
+        this.characterLightingPanel.style.cssText = 'position:fixed;right:8px;top:8px;z-index:9999;max-width:390px;padding:8px;background:#100d0ddd;color:#ffd7bd;font:11px/1.35 monospace;pointer-events:none;white-space:pre-wrap';
+        const normal = normalMaps[0] ?? {};
+        this.characterLightingPanel.textContent = `CHARACTER LIGHTING ${this.characterLightingMode}\nNPC cast ${diagnostics.npcCastShadow} receive ${diagnostics.npcReceiveShadow}\nnormal ${normal.width ?? '?'}x${normal.height ?? '?'} ${normal.magFilter ?? 'none'} / ${normal.minFilter ?? 'none'}\nnormal colorSpace ${normal.colorSpace ?? 'none'} scale ${normal.normalScale?.join(',') ?? 'none'}\nshadow map ${directionalShadow?.shadowMapResolution ?? 'none'} radius ${directionalShadow?.radius?.toFixed?.(2) ?? 'none'} texel ${directionalShadow?.metersPerShadowTexel?.toFixed?.(4) ?? 'none'}\nbias ${directionalShadow?.bias ?? 'none'} normalBias ${directionalShadow?.normalBias ?? 'none'} filter radius ${directionalShadow?.filterRadius ?? 'none'}\nshadow lights ${activeShadowCastingLights.map((light) => light.name).join(', ') || 'none'}`;
+      }
+    }
+    return diagnostics;
   }
 
   initializeAnimationAuthoritative(clips) {
@@ -249,6 +318,7 @@ export class HumanoidGlbVisualAdapter {
     this.presentationRoot.updateMatrixWorld(true);
     this.skeletons.forEach((skeleton) => skeleton.update());
     this.actor.syncAnimationProxyBodies(this);
+    if (this.characterLightingPanel) this.updateCharacterLightingDiagnostics();
   }
 
   beginRagdoll() {
@@ -380,7 +450,7 @@ export class HumanoidGlbVisualAdapter {
     const normalizedSize = this.normalizedVisibleBounds?.getSize(new THREE.Vector3());
     const scaleChangedBones = [...this.mixerAuthoredScales].filter(([id, scale]) => scale.distanceTo(this.reactionBones.get(id)?.scale ?? scale) > 1e-8).map(([id]) => id);
     const ragdollBonePositions = Object.fromEntries(['pelvis', 'upper_chest', 'head'].map((id) => [id, this.reactionBones.get(id)?.getWorldPosition(new THREE.Vector3()).toArray().map((value) => Number(value.toFixed(2))) ?? null]));
-    return { path: this.profile.assetPath, profileName: this.profile.name, animationAuthoritative: this.profile.animationAuthoritative === true, loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, ragdollBindingCount: this.ragdollBindings.length, ragdollBonePositions, mixerCount: this.mixer ? 1 : 0, reactionControllerCount: this.reactionController ? 1 : 0, idleClip: this.idleAction?.getClip?.().name ?? null, rawMeasuredVisibleHeight: rawSize?.y ?? null, normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight, normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null, groundY: this.actor.visualRootPosition.y, groundClearance: this.profile.groundClearance ?? null, height: this.profile.targetHeight, scale: this.uniformScale ?? getHumanoidProfileScale(this.profile), scaleChangedBones, reaction: this.reactionController?.getDiagnostics?.() ?? null };
+    return { path: this.profile.assetPath, profileName: this.profile.name, animationAuthoritative: this.profile.animationAuthoritative === true, loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, ragdollBindingCount: this.ragdollBindings.length, ragdollBonePositions, mixerCount: this.mixer ? 1 : 0, reactionControllerCount: this.reactionController ? 1 : 0, idleClip: this.idleAction?.getClip?.().name ?? null, rawMeasuredVisibleHeight: rawSize?.y ?? null, normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight, normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null, groundY: this.actor.visualRootPosition.y, groundClearance: this.profile.groundClearance ?? null, height: this.profile.targetHeight, scale: this.uniformScale ?? getHumanoidProfileScale(this.profile), scaleChangedBones, lighting: this.updateCharacterLightingDiagnostics(), reaction: this.reactionController?.getDiagnostics?.() ?? null };
   }
 
   dispose() {
@@ -404,5 +474,7 @@ export class HumanoidGlbVisualAdapter {
     this.bones.clear();
     this.skinnedMeshes = [];
     this.skeletons = [];
+    this.characterLightingPanel?.remove?.();
+    this.characterLightingPanel = null;
   }
 }

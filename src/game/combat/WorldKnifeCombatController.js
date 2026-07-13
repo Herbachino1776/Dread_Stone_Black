@@ -503,7 +503,7 @@ export class WorldKnifeCombatController {
       this.combatDirector.reportContact({ weapon: this.weaponDefinition, intent: this.intentState, hit: semanticHit, position: contactPoint, direction: movementDirection, cue: 'failed_tip', severity: this.lastFrameVelocity * 0.2, resistance: 'failed_tip_stop', weaponAdapter: this });
       return;
     }
-    this.beginPenetration(semanticHit, contactPoint, forward, alignment);
+    this.beginPenetration(semanticHit, contactPoint, forward, contactNormal, alignment);
   }
 
   resolveSweptEdgeContact(dt) {
@@ -569,6 +569,7 @@ export class WorldKnifeCombatController {
           cutLength: classification.physicalTravel,
           severity: classification.severity,
           classification: classification.state,
+          edgeAlignment,
           weaponAdapter: this,
           onWoundCreated: (wound, directedInteraction) => {
             if (this.activeSlash?.directorInteractionId === directedInteraction.id) this.activeSlash.woundId = wound?.id ?? null;
@@ -579,7 +580,7 @@ export class WorldKnifeCombatController {
           this.slashCount += 1;
         }
       } else {
-        this.combatDirector.extendSlash(slash.directorInteractionId, { hit: semanticHit, startPoint: slash.startPoint, endPoint: point, surfaceNormal: normal, cutDirection: slash.direction, depth: classification.depth, cutLength: stepTravel, severity: classification.severity, classification: classification.state });
+        this.combatDirector.extendSlash(slash.directorInteractionId, { hit: semanticHit, startPoint: slash.startPoint, endPoint: point, surfaceNormal: normal, cutDirection: slash.direction, depth: classification.depth, cutLength: stepTravel, severity: classification.severity, classification: classification.state, edgeAlignment });
       }
     } else if (part === 'flat' || part === 'spine') {
       semanticHit.body.applyImpulseAtPoint(direction.clone().multiplyScalar(Math.min(0.045, speed * 0.008)), point, true);
@@ -609,7 +610,7 @@ export class WorldKnifeCombatController {
     this.activeSlash = null;
   }
 
-  beginPenetration(hit, entryPoint, axis, alignment) {
+  beginPenetration(hit, entryPoint, axis, surfaceNormal, alignment) {
     this.intentState = this.intentWeapon.interpret({ ownerId: this.gripPointerId, controlState: this.state, localVelocity: this.deliberateInputVelocity, embedded: false });
     const interaction = this.combatDirector.beginPuncture({
       weapon: this.weaponDefinition,
@@ -617,6 +618,8 @@ export class WorldKnifeCombatController {
       hit,
       entryPoint,
       direction: axis,
+      surfaceNormal,
+      entryTangent: new THREE.Vector3(1, 0, 0).applyQuaternion(this.actualQuaternion).normalize(),
       depth: 0.004,
       force: this.offensiveVelocity.length(),
       weaponAdapter: this,
@@ -639,6 +642,7 @@ export class WorldKnifeCombatController {
       hardFeedback: false,
       withdrawalStarted: false,
       resistancePhase: 'skin',
+      reportedLateralMotion: 0,
     };
     this.penetrationDepth = 0.004;
     this.maximumDepthReached = 0.004;
@@ -720,8 +724,10 @@ export class WorldKnifeCombatController {
       }
     }
     this.maximumDepthReached = Math.max(this.maximumDepthReached, this.penetrationDepth);
-    if (deltaDepth > 0 && embeddedAttackEnabled) {
-      this.combatDirector.advancePenetration(this.entry.directorInteractionId, { hit: this.entry.hit, entryPoint: worldEntry.point, direction: worldEntry.axis, deltaDepth, depth: this.penetrationDepth, force: resistance + force, hardContact, resistanceProfile });
+    const reportLateralMotion = embeddedAttackEnabled && lateralDistance >= this.entry.reportedLateralMotion + 0.003;
+    if ((deltaDepth > 0 || reportLateralMotion) && embeddedAttackEnabled) {
+      if (reportLateralMotion) this.entry.reportedLateralMotion = lateralDistance;
+      this.combatDirector.advancePenetration(this.entry.directorInteractionId, { hit: this.entry.hit, entryPoint: worldEntry.point, direction: worldEntry.axis, deltaDepth, depth: this.penetrationDepth, force: resistance + force, lateralMotion: this.entry.reportedLateralMotion, hardContact, resistanceProfile });
       if (this.penetrationDepth >= 0.025) this.entry.softFeedback = true;
       if (this.penetrationDepth >= 0.075) this.entry.deepFeedback = true;
     }

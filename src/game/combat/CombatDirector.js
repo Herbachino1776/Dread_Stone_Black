@@ -131,15 +131,17 @@ export class CombatDirector {
     return interaction;
   }
 
-  beginPuncture({ weapon, intent, hit, entryPoint, direction, depth = 0.004, force = 0, weaponAdapter = null, onWoundCreated = null } = {}) {
+  beginPuncture({ weapon, intent, hit, entryPoint, direction, surfaceNormal = null, entryTangent = null, depth = 0.004, force = 0, weaponAdapter = null, onWoundCreated = null } = {}) {
     const interaction = this.createInteraction({ kind: 'puncture', weapon, intent, target: hit, weaponAdapter });
     if (!interaction) return null;
     const t = resolveMeleeTimeline('puncture', weapon);
     const directedPoint = cloneVector(entryPoint);
     const directedAxis = cloneVector(direction);
+    const directedNormal = cloneVector(surfaceNormal ?? direction?.clone?.().negate?.());
+    const directedTangent = cloneVector(entryTangent);
     interaction.readyAt = this.time + t.rupture;
     interaction.tissueReadyAt = this.time + t.tissue;
-    interaction.context = { hit, entryPoint: directedPoint, direction: directedAxis, depth, force, onWoundCreated };
+    interaction.context = { hit, entryPoint: directedPoint, direction: directedAxis, surfaceNormal: directedNormal, entryTangent: directedTangent, depth, force, onWoundCreated };
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.contact, { stage: PENETRATION_STAGES.surfaceContact });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.resistance, t.contact, { kind: 'surface_stop', intensity: Math.min(1, 0.18 + force * 0.1), depth: 0 });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.compression, { stage: PENETRATION_STAGES.surfaceCompression });
@@ -147,7 +149,7 @@ export class CombatDirector {
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.audio, t.surfaceAudio, { cue: 'clothing_contact', position: directedPoint, severity: 0.14 });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.rupture, { stage: PENETRATION_STAGES.surfaceRupture });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.resistance, t.rupture, { kind: 'surface_rupture', intensity: Math.min(1, 0.32 + force * 0.08), depth });
-    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.wound, t.rupture, { action: 'create_puncture', hit, entryPoint: directedPoint, direction: directedAxis, depth, weaponId: interaction.weapon.id, onWoundCreated });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.wound, t.rupture, { action: 'create_puncture', hit, entryPoint: directedPoint, direction: directedAxis, surfaceNormal: directedNormal, entryTangent: directedTangent, depth, impactSeverity: Math.max(0, Math.min(1, force / 1.5)), weaponProfile: interaction.weapon.profile, weaponId: interaction.weapon.id, onWoundCreated });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.audio, t.audio, { cue: 'puncture', position: directedPoint, severity: 0.25 });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.tissue, { stage: PENETRATION_STAGES.softTissue });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.tissue, t.tissue, { action: 'penetrate', hit, entryPoint: directedPoint, direction: directedAxis, deltaDepth: depth, depth, force, hardContact: false });
@@ -160,13 +162,13 @@ export class CombatDirector {
     return interaction;
   }
 
-  advancePenetration(interactionId, { hit, entryPoint, direction, deltaDepth, depth, force, hardContact = false, resistanceProfile = null } = {}) {
+  advancePenetration(interactionId, { hit, entryPoint, direction, deltaDepth, depth, force, lateralMotion = 0, hardContact = false, resistanceProfile = null } = {}) {
     const interaction = this.getActiveInteraction(interactionId);
     if (!interaction || deltaDepth < 0) return false;
     const directedPoint = cloneVector(entryPoint);
     const directedAxis = cloneVector(direction);
     const delay = Math.max(0.008, (interaction.readyAt ?? this.time) - this.time);
-    if (deltaDepth > 0) this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.tissue, delay, { action: 'penetrate', hit, entryPoint: directedPoint, direction: directedAxis, deltaDepth, depth, force, hardContact });
+    if (deltaDepth > 0 || lateralMotion > 0) this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.tissue, delay, { action: 'penetrate', hit, entryPoint: directedPoint, direction: directedAxis, deltaDepth, depth, force, lateralMotion, hardContact });
     const phase = resistanceProfile?.phase;
     if (phase && !interaction.flags.has(`resistance:${phase}`)) {
       interaction.flags.add(`resistance:${phase}`);
@@ -194,7 +196,7 @@ export class CombatDirector {
     return true;
   }
 
-  beginSlash({ weapon, intent, hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, weaponAdapter = null, onWoundCreated = null } = {}) {
+  beginSlash({ weapon, intent, hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, edgeAlignment = 1, weaponAdapter = null, onWoundCreated = null } = {}) {
     const interaction = this.createInteraction({ kind: 'slash', weapon, intent, target: hit, weaponAdapter });
     if (!interaction) return null;
     const t = resolveMeleeTimeline('slash', weapon);
@@ -211,7 +213,7 @@ export class CombatDirector {
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.audio, t.surfaceAudio, { cue: 'clothing_contact', position: directedEnd, severity: Math.min(0.3, severity * 0.22) });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.rupture, { stage: PENETRATION_STAGES.surfaceRupture });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.resistance, t.rupture, { kind: 'surface_rupture', intensity: severity * 0.4, depth });
-    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.wound, t.rupture, { action: 'create_slash', hit, startPoint: directedStart, endPoint: directedEnd, surfaceNormal: directedNormal, cutDirection: directedCut, depth, cutLength, severity, classification, onWoundCreated });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.wound, t.rupture, { action: 'create_slash', hit, startPoint: directedStart, endPoint: directedEnd, surfaceNormal: directedNormal, cutDirection: directedCut, depth, cutLength, severity, classification, edgeAlignment, onWoundCreated });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.audio, t.audio, { cue: classification === 'deep_slash' ? 'deep_slash' : 'shallow_slash', position: directedEnd, severity });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.tissue, { stage: PENETRATION_STAGES.softTissue });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.reaction, t.reaction, { hit, point: directedEnd, direction: directedCut, depth, force: severity, severity: Math.max(0.16, severity * 0.3), slashSeverity: severity, source: 'directed_slash' });
@@ -405,7 +407,7 @@ export class CombatDirector {
   applyWoundEvent({ interaction, payload }) {
     if (!this.actor) return;
     if (payload.action === 'create_puncture') {
-      const wound = this.actor.beginPunctureWound({ hit: payload.hit, entryPoint: payload.entryPoint, direction: payload.direction, depth: payload.depth, weaponId: payload.weaponId, deferReaction: true, deferAudio: true });
+      const wound = this.actor.beginPunctureWound({ hit: payload.hit, entryPoint: payload.entryPoint, direction: payload.direction, surfaceNormal: payload.surfaceNormal, entryTangent: payload.entryTangent, depth: payload.depth, impactSeverity: payload.impactSeverity, weaponProfile: payload.weaponProfile, weaponId: payload.weaponId, deferReaction: true, deferAudio: true });
       if (wound) wound.directedBloodReady = false;
       interaction.result.wound = wound;
       interaction.result.woundId = wound?.id ?? null;

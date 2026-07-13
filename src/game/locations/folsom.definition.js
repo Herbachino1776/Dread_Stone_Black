@@ -461,7 +461,7 @@ export const folsomDefinition = Object.freeze({
   }],
   lights: [
     { id: 'folsom_noon_ambient', kind: 'ambient', skyColor: 0xddeeff, groundColor: 0x8f866d, intensity: 0.92 },
-    { id: 'folsom_noon_sun', kind: 'directional', color: 0xfff2cf, intensity: 1.18, position: { x: 38, y: 92, z: -28 }, target: { x: 0, y: 0, z: 2 }, castShadow: true },
+    { id: 'folsom_noon_sun', kind: 'directional', color: 0xfff2cf, intensity: 1.18, position: { x: 38, y: 92, z: -28 }, target: { x: 0, y: 0, z: 2 }, castShadow: false },
   ],
   validation: { naturalBoulderMaterialPool: FOLSOM_NATURAL_BOULDER_MATERIAL_POOL, cityBorderWoodenWall: folsomCityBorderWoodenWall.validation },
   navigation: { roomGraph: { roomIds: ['folsom_bounds'], links: [] }, localAvoidanceHints: [], forbiddenZones: [], preferredPatrolRoutes: [] },

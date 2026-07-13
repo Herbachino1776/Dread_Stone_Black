@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { COMBAT_REQUIRED_REGION_IDS, HUMANOID_ANATOMY_REGIONS, HUMANOID_BODY_CONFIG, HUMANOID_JOINT_CONFIG, KNIFE_COMBAT_CONFIG, validateCombatConfiguration } from '../src/game/combat/CombatConfig.js';
 import { advancePenetrationDepth, clampWorkspacePoint, classifyKnifeContact, classifySlashContact, computeWorldThrust, deriveBladeTip, extendSlashLength, normalizedBladeForward, visibleCollisionTransformsWithinTolerance } from '../src/game/combat/CombatMath.js';
@@ -20,6 +21,9 @@ import { COMBAT_DIRECTOR_EVENTS, CombatDirector, PENETRATION_STAGES, resolveMele
 import { isDamageIntent, MELEE_INTENTS, MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
 import { Feedback } from '../src/game/Feedback.js';
 import { applyMeleeSpacingEnvelope, resolveMeleeSpacingEnvelope, resolveWeaponMicroResponse, sampleTissueResistanceCurve } from '../src/game/combat/CombatPresentation.js';
+import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
+
+installKnifeWoundManifestForHeadlessTests(JSON.parse(readFileSync(new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url), 'utf8')));
 
 async function createActor() {
   await initializeCombatPhysics();
@@ -414,14 +418,11 @@ test('slash paths use bounded multi-sample surface bindings and never require on
   geometry.dispose(); mesh.material.dispose();
 });
 
-test('wound and reaction lifecycle keeps one bounded pool and disposes generated resources', async () => {
+test('wound and reaction lifecycle keeps one bounded pool while retaining the session decal cache', async () => {
   const { actor, physics } = await createActor();
   const geometryIds = actor.woundSystem.visualSlots.flatMap((slot) => [slot.puncture.geometry.uuid, slot.slash.geometry.uuid]);
-  const punctureTexture = actor.woundSystem.punctureTexture;
-  const slashTexture = actor.woundSystem.slashTexture;
-  let disposedTextures = 0;
-  punctureTexture.addEventListener('dispose', () => { disposedTextures += 1; });
-  slashTexture.addEventListener('dispose', () => { disposedTextures += 1; });
+  const decalLibrary = actor.woundSystem.decalLibrary;
+  const cachedMaterialCount = decalLibrary.materialsById.size;
   for (let cycle = 0; cycle < 4; cycle += 1) {
     const { hit, worldPoint } = makeHit(actor, cycle % 2 ? 'left_forearm' : 'upper_chest');
     const wound = actor.beginPunctureWound({ hit, entryPoint: worldPoint, direction: new THREE.Vector3(0, 0, -1), depth: 0.02 });
@@ -435,7 +436,8 @@ test('wound and reaction lifecycle keeps one bounded pool and disposes generated
   }
   assert.equal(actor.visualAdapter, null, 'headless actor creates no duplicate mixer or reaction adapter');
   actor.dispose();
-  assert.equal(disposedTextures, 2, 'generated alpha-mask textures are disposed exactly once');
+  assert.equal(decalLibrary.loadCount, 1, 'reset and actor disposal do not reload the authored pack');
+  assert.equal(decalLibrary.materialsById.size, cachedMaterialCount, 'actor disposal retains session-owned authored materials');
   assert.equal(actor.woundSystem.visualSlots.length, 0);
   physics.dispose();
 });
@@ -762,15 +764,11 @@ test('model_idle authoritative profile is independent and disables physics-to-bo
   assert.equal(MODEL_IDLE_COMBAT_PROFILE.name, 'model_idle_animation_authoritative');
 });
 
-test('fresh wound materials use the brighter non-emissive blood palette', async () => {
+test('authored wound materials preserve authored color and remain lighting-responsive', async () => {
   const { actor, physics } = await createActor();
-  assert.equal(actor.woundSystem.materials.puncture.color.getHex(), BLOOD_COLOR_PALETTE.fresh);
-  assert.equal(actor.woundSystem.materials.cut.color.getHex(), BLOOD_COLOR_PALETTE.slashArterial);
-  assert.equal(actor.woundSystem.materials.deepCut.color.getHex(), BLOOD_COLOR_PALETTE.slashArterial);
-  assert.equal(actor.woundSystem.materials.arterialCut.color.getHex(), BLOOD_COLOR_PALETTE.slashArterial);
-  assert.equal(actor.woundSystem.materials.deep.color.getHex(), BLOOD_COLOR_PALETTE.deep);
-  assert.equal(actor.woundSystem.materials.arterial.color.getHex(), BLOOD_COLOR_PALETTE.arterial);
-  Object.values(actor.woundSystem.materials).forEach((material) => {
+  assert.equal(actor.woundSystem.decalLibrary.materialsById.size, 13);
+  actor.woundSystem.decalLibrary.materialsById.forEach((material, variantId) => {
+    assert.equal(material.color.getHex(), 0xffffff, `${variantId} is not multiplied by a destructive red tint`);
     assert.equal(material.emissive.getHex(), 0, `${material.type} remains fully lighting-responsive`);
   });
   actor.dispose();

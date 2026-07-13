@@ -7,6 +7,7 @@ import { COLLAPSE_CONFIG, HUMANOID_DURABILITY_CONFIG, VESSEL_ZONES } from './Com
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG } from './CombatMortality.js';
 import { HumanoidGlbVisualAdapter } from './HumanoidGlbVisualAdapter.js';
 import { CURRENT_HUMANOID_PROFILE } from './HumanoidModelProfiles.js';
+import { getKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
 
 const BODY_COLLISION_GROUPS = 0x00020001;
 const tmpPosition = new THREE.Vector3();
@@ -85,7 +86,7 @@ export class HumanoidCombatActor {
     const pelvisRest = this.bodies.get('pelvis')?.restPosition ?? new THREE.Vector3();
     this.visualRootPosition = new THREE.Vector3(pelvisRest.x, this.spawnOffset.y, pelvisRest.z);
     this.visualAdapter = typeof window !== 'undefined' ? new HumanoidGlbVisualAdapter({ actor: this, parent: this.root, profile: this.visualProfile }) : null;
-    this.woundSystem = new CombatWoundSystem({ actor: this, scene: this.scene });
+    this.woundSystem = new CombatWoundSystem({ actor: this, scene: this.scene, decalLibrary: getKnifeWoundDecalLibrary() });
     this.wounds = this.woundSystem.wounds;
     this.physiology = new CombatPhysiology({ actor: this, woundSystem: this.woundSystem, eventSink: this.eventSink });
   }
@@ -243,8 +244,8 @@ export class HumanoidCombatActor {
     return { regionId, region: HUMANOID_ANATOMY_REGIONS.find((entry) => entry.id === regionId), bodyId, body: bodyEntry.body, collider, localPoint: local };
   }
 
-  beginPunctureWound({ hit, entryPoint, direction, depth = 0.004, hardContact = false, weaponId = 'old_work_knife', deferReaction = false, deferAudio = false } = {}) {
-    const wound = this.woundSystem.createPuncture({ hit, entryPoint, axis: direction, depth, hardStructureContact: hardContact, embeddedWeaponId: weaponId, createdTime: this.elapsed });
+  beginPunctureWound({ hit, entryPoint, direction, surfaceNormal = null, entryTangent = null, depth = 0.004, impactSeverity = 0, weaponProfile = null, hardContact = false, weaponId = 'old_work_knife', deferReaction = false, deferAudio = false } = {}) {
+    const wound = this.woundSystem.createPuncture({ hit, entryPoint, axis: direction, surfaceNormal, entryTangent, depth, impactSeverity, weaponProfile, hardStructureContact: hardContact, embeddedWeaponId: weaponId, createdTime: this.elapsed });
     const state = this.regionState.get(hit.regionId);
     if (state) state.wounds = (state.wounds ?? 0) + 1;
     this.physiology.onWoundCreated(wound);
@@ -253,7 +254,7 @@ export class HumanoidCombatActor {
     return wound;
   }
 
-  applyPenetration({ hit, entryPoint, direction, deltaDepth, depth, force, hardContact = false, woundId = null } = {}) {
+  applyPenetration({ hit, entryPoint, direction, deltaDepth, depth, force, lateralMotion = 0, hardContact = false, woundId = null } = {}) {
     if (!hit?.region || this.lifeState === 'dead' && deltaDepth <= 0) return;
     const state = this.regionState.get(hit.regionId) ?? { trauma: 0, pain: 0, structural: 0, motorWeakness: 0, maximumDepth: 0, wounds: 0 };
     const severity = (Math.max(0, deltaDepth) * (3.1 + hit.region.structuralImportance * 2.2) + Math.max(0, force) * 0.006 + (hardContact ? 0.005 : 0)) * HUMANOID_DURABILITY_CONFIG.traumaScale;
@@ -268,23 +269,23 @@ export class HumanoidCombatActor {
     const impulse = direction.clone().multiplyScalar(Math.min(1.4, 0.09 + force * 0.04 + severity * 0.35));
     hit.body.applyImpulseAtPoint(impulse, entryPoint, true);
     this.lastReaction = { regionId: hit.regionId, severity, point: entryPoint.clone(), direction: direction.clone(), hardContact };
-    if (woundId) this.woundSystem.extendPuncture(woundId, { depth, hardStructureContact: hardContact });
+    if (woundId) this.woundSystem.extendPuncture(woundId, { depth, lateralMotion, hardStructureContact: hardContact });
     this.physiology.onTrauma({ hit, severity, depth, deltaDepth, hardContact });
     this.visualAdapter?.setEmbeddedTension?.({ regionId: hit.regionId, depth, worldDirection: direction });
     this.evaluateLifeState();
     return severity;
   }
 
-  applySlashWound({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, woundId = null, deferReaction = false } = {}) {
+  applySlashWound({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, edgeAlignment = 1, woundId = null, deferReaction = false } = {}) {
     let wound = woundId ? this.woundSystem.getWound(woundId) : null;
     const isNewWound = !wound;
     if (wound) {
       const rotation = hit.body.rotation();
       const inverse = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).invert();
       const localEnd = hit.localPoint.clone().add(endPoint.clone().sub(startPoint).applyQuaternion(inverse));
-      wound = this.woundSystem.extendSlash(wound.id, { localEnd, worldEnd: endPoint, surfaceNormal, addedTravel: cutLength, depth, severity });
+      wound = this.woundSystem.extendSlash(wound.id, { localEnd, worldEnd: endPoint, surfaceNormal, addedTravel: cutLength, depth, severity, edgeAlignment });
     } else {
-      wound = this.woundSystem.createSlash({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, createdTime: this.elapsed });
+      wound = this.woundSystem.createSlash({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, edgeAlignment, createdTime: this.elapsed });
       const state = this.regionState.get(hit.regionId);
       if (state) state.wounds = (state.wounds ?? 0) + 1;
       this.physiology.onWoundCreated(wound);

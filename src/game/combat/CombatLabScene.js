@@ -10,10 +10,11 @@ import { CombatDirector } from './CombatDirector.js';
 import { MELEE_INTENTS } from './MeleeIntentWeapon.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { applyMeleeSpacingEnvelope } from './CombatPresentation.js';
+import { preloadKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
 
 export class CombatLabScene {
   static async create(options = {}) {
-    await initializeCombatPhysics();
+    await Promise.all([initializeCombatPhysics(), preloadKnifeWoundDecalLibrary()]);
     return new CombatLabScene(options);
   }
 
@@ -96,6 +97,9 @@ export class CombatLabScene {
     this.sun.shadow.camera.right = 7;
     this.sun.shadow.camera.top = 7;
     this.sun.shadow.camera.bottom = -7;
+    this.sun.shadow.bias = -0.00005;
+    this.sun.shadow.normalBias = 0.008;
+    this.sun.shadow.radius = 1.25;
     this.sun.target.position.set(0, 1, -3.5);
     this.scene.add(this.hemisphere, this.sun, this.sun.target);
     this.torch = new THREE.PointLight(0xff8a3a, 0, 8, 1.7);
@@ -117,6 +121,7 @@ export class CombatLabScene {
   update(deltaSeconds, player = this.player) {
     if (this.disposed) return;
     this.player = player ?? this.player;
+    this.sun.castShadow = this.sun.intensity > 0 && this.scene.userData.characterLightingDisableDirectional !== true;
     this.actor.prepareFrame(deltaSeconds);
     this.physics.step(
       deltaSeconds,

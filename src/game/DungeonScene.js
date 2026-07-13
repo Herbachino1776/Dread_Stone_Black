@@ -1426,15 +1426,7 @@ export class DungeonScene {
     sunrise.name = 'outdoor-low-east-southeast-pale-gold-sunrise';
     sunrise.position.set(135, 28, 95);
     sunrise.target.position.set(-35, 0, -55);
-    sunrise.castShadow = true;
-    sunrise.shadow.mapSize.set(1024, 1024);
-    sunrise.shadow.camera.left = -120;
-    sunrise.shadow.camera.right = 120;
-    sunrise.shadow.camera.top = 120;
-    sunrise.shadow.camera.bottom = -120;
-    sunrise.shadow.camera.near = 10;
-    sunrise.shadow.camera.far = 260;
-    sunrise.shadow.bias = -0.00025;
+    sunrise.castShadow = false;
     this.scene.add(sunrise);
     this.scene.add(sunrise.target);
 

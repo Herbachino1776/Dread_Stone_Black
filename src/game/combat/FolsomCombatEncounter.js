@@ -8,13 +8,14 @@ import { MODEL_IDLE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 import { CombatDirector } from './CombatDirector.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { applyMeleeSpacingEnvelope } from './CombatPresentation.js';
+import { preloadKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
 
 const FOLSOM_AUTHORED_PLAYER_SPAWN = Object.freeze([-2, 1.71, -4]);
 const FOLSOM_MODEL_IDLE_SPAWN_XZ = Object.freeze([8, -4]);
 
 export class FolsomCombatEncounter {
   static async create(options = {}) {
-    await initializeCombatPhysics();
+    await Promise.all([initializeCombatPhysics(), preloadKnifeWoundDecalLibrary()]);
     return new FolsomCombatEncounter(options);
   }
 
@@ -88,6 +89,8 @@ export class FolsomCombatEncounter {
     });
     this.actor.afterPhysics(this.physics.interpolationAlpha);
     this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
+    const combatShadowTarget = this.actor.getBodyWorldPosition('upper_chest');
+    if (combatShadowTarget) this.scene.userData.activeCombatShadowTarget = combatShadowTarget;
     this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha);
   }
 
@@ -115,5 +118,6 @@ export class FolsomCombatEncounter {
     this.feedbackSystem.dispose();
     this.actor.dispose();
     this.physics.dispose();
+    delete this.scene.userData.activeCombatShadowTarget;
   }
 }
