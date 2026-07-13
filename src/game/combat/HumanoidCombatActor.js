@@ -19,6 +19,14 @@ const tmpDirection = new THREE.Vector3();
 const HUMANOID_PHYSICAL_SCALE = 0.82;
 let humanoidActorInstanceSerial = 0;
 
+export const RAGDOLL_HANDOFF_LIMITS = Object.freeze({
+  maximumInheritedLinearSpeed: 0.9,
+  maximumInheritedAngularSpeed: 1.25,
+  maximumBodyPositionJump: 0.035,
+  maximumBodyRotationJumpRadians: THREE.MathUtils.degToRad(7),
+  maximumJointAnchorSeparation: 0.008,
+});
+
 function material(color, roughness = 0.9, metalness = 0) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
 }
@@ -69,6 +77,10 @@ export class HumanoidCombatActor {
     this.animationAuthorityReady = false;
     this.ragdollActive = false;
     this.ragdollForced = false;
+    this.ragdollHandoffDiagnostics = this.createRagdollHandoffDiagnostics();
+    this.ragdollFinalBodyPose = new Map();
+    this.ragdollPhysicsFrames = 0;
+    this.ragdollStabilizationElapsed = 0;
     this.reactiveCollapseElapsed = 0;
     this.wounds = [];
     this.regionState = new Map();
@@ -96,6 +108,27 @@ export class HumanoidCombatActor {
     this.woundSystem = new CombatWoundSystem({ actor: this, scene: this.scene, decalLibrary: getKnifeWoundDecalLibrary(), isolateMaterials: this.isolateVisualMaterials });
     this.wounds = this.woundSystem.wounds;
     this.physiology = new CombatPhysiology({ actor: this, woundSystem: this.woundSystem, eventSink: this.eventSink });
+  }
+
+  createRagdollHandoffDiagnostics() {
+    return {
+      activationCount: 0,
+      jointsRebuilt: 0,
+      maximumBodyPositionJump: 0,
+      maximumBodyPositionJumpBodyId: null,
+      maximumBodyRotationJump: 0,
+      maximumBodyRotationJumpBodyId: null,
+      maximumJointAnchorSeparation: 0,
+      maximumFirstFrameLinearVelocity: 0,
+      maximumFirstFrameLinearVelocityBodyId: null,
+      maximumFirstFrameAngularVelocity: 0,
+      maximumFirstFrameAngularVelocityBodyId: null,
+      nonFiniteTransformCount: 0,
+      finalAnimatedPelvisPosition: null,
+      firstRagdollPelvisPosition: null,
+      finalAnimatedFootPositions: null,
+      firstRagdollFootPositions: null,
+    };
   }
 
   setEventSink(eventSink) { this.eventSink = eventSink; this.physiology?.setEventSink?.(eventSink); }
@@ -216,20 +249,91 @@ export class HumanoidCombatActor {
     this.regionState.set(config.regionId, { trauma: 0, pain: 0, structural: 0, motorWeakness: 0, maximumDepth: 0, wounds: 0 });
   }
 
-  createJoint(config) {
+  createJoint(config, anchors = null) {
     const parent = this.bodies.get(config.parentId)?.body;
     const child = this.bodies.get(config.childId)?.body;
     if (!parent || !child) throw new Error(`Combat joint references missing body: ${config.id}`);
-    const parentAnchor = { x: config.parentAnchor[0] * HUMANOID_PHYSICAL_SCALE, y: config.parentAnchor[1] * HUMANOID_PHYSICAL_SCALE, z: config.parentAnchor[2] * HUMANOID_PHYSICAL_SCALE };
-    const childAnchor = { x: config.childAnchor[0] * HUMANOID_PHYSICAL_SCALE, y: config.childAnchor[1] * HUMANOID_PHYSICAL_SCALE, z: config.childAnchor[2] * HUMANOID_PHYSICAL_SCALE };
+    const parentAnchor = anchors?.parentAnchor ?? { x: config.parentAnchor[0] * HUMANOID_PHYSICAL_SCALE, y: config.parentAnchor[1] * HUMANOID_PHYSICAL_SCALE, z: config.parentAnchor[2] * HUMANOID_PHYSICAL_SCALE };
+    const childAnchor = anchors?.childAnchor ?? { x: config.childAnchor[0] * HUMANOID_PHYSICAL_SCALE, y: config.childAnchor[1] * HUMANOID_PHYSICAL_SCALE, z: config.childAnchor[2] * HUMANOID_PHYSICAL_SCALE };
     const data = config.type === 'revolute'
-      ? RAPIER.JointData.revolute(parentAnchor, childAnchor, { x: 1, y: 0, z: 0 })
+      ? RAPIER.JointData.revolute(parentAnchor, childAnchor, anchors?.axis ?? { x: 1, y: 0, z: 0 })
       : RAPIER.JointData.spherical(parentAnchor, childAnchor);
     const joint = this.physics.world.createImpulseJoint(data, parent, child, true);
-    if (config.type === 'revolute') joint.setLimits(-config.limitRadians, config.childId.includes('foot') ? config.limitRadians : 0.15);
+    if (config.type === 'revolute') {
+      const limits = anchors?.limits ?? { min: -config.limitRadians, max: config.childId.includes('foot') ? config.limitRadians : 0.15 };
+      joint.setLimits(limits.min, limits.max);
+    }
     joint.setContactsEnabled(false);
-    joint.userData = config;
+    joint.userData = { ...config, parentAnchor: { ...parentAnchor }, childAnchor: { ...childAnchor }, axis: anchors?.axis ? { ...anchors.axis } : { x: 1, y: 0, z: 0 }, limits: anchors?.limits ?? null, handoffRebuilt: anchors != null };
     this.joints.push(joint);
+  }
+
+  removeJoints() {
+    this.joints.forEach((joint) => this.physics.world.removeImpulseJoint(joint, false));
+    this.joints = [];
+  }
+
+  worldPointToBodyLocal(body, worldPoint) {
+    const translation = body.translation();
+    const rotation = body.rotation();
+    return worldPoint.clone()
+      .sub(new THREE.Vector3(translation.x, translation.y, translation.z))
+      .applyQuaternion(new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).invert());
+  }
+
+  measureJointAnchorSeparation() {
+    let maximum = 0;
+    for (const joint of this.joints) {
+      const config = joint.userData;
+      const parent = this.bodies.get(config?.parentId)?.body;
+      const child = this.bodies.get(config?.childId)?.body;
+      if (!parent || !child || !config?.parentAnchor || !config?.childAnchor) continue;
+      const parentTranslation = parent.translation();
+      const parentRotation = parent.rotation();
+      const childTranslation = child.translation();
+      const childRotation = child.rotation();
+      const parentWorld = new THREE.Vector3(config.parentAnchor.x, config.parentAnchor.y, config.parentAnchor.z)
+        .applyQuaternion(new THREE.Quaternion(parentRotation.x, parentRotation.y, parentRotation.z, parentRotation.w))
+        .add(new THREE.Vector3(parentTranslation.x, parentTranslation.y, parentTranslation.z));
+      const childWorld = new THREE.Vector3(config.childAnchor.x, config.childAnchor.y, config.childAnchor.z)
+        .applyQuaternion(new THREE.Quaternion(childRotation.x, childRotation.y, childRotation.z, childRotation.w))
+        .add(new THREE.Vector3(childTranslation.x, childTranslation.y, childTranslation.z));
+      maximum = Math.max(maximum, parentWorld.distanceTo(childWorld));
+    }
+    return maximum;
+  }
+
+  rebuildJointsForCurrentAnimatedPose() {
+    const anchors = HUMANOID_JOINT_CONFIG.map((config) => {
+      const parent = this.bodies.get(config.parentId)?.body;
+      const child = this.bodies.get(config.childId)?.body;
+      const childPosition = child?.translation?.();
+      const worldAnchor = this.visualAdapter?.getProximalJointWorldPosition?.(config.childId, new THREE.Vector3())
+        ?? (childPosition ? new THREE.Vector3(childPosition.x, childPosition.y, childPosition.z) : null);
+      if (!parent || !child || !worldAnchor) return null;
+      const parentRotation = parent.rotation();
+      const childRotation = child.rotation();
+      const parentQuaternion = new THREE.Quaternion(parentRotation.x, parentRotation.y, parentRotation.z, parentRotation.w).normalize();
+      const childQuaternion = new THREE.Quaternion(childRotation.x, childRotation.y, childRotation.z, childRotation.w).normalize();
+      const relativeRotation = parentQuaternion.clone().invert().multiply(childQuaternion).normalize();
+      const relativeAxisLength = Math.hypot(relativeRotation.x, relativeRotation.y, relativeRotation.z);
+      const relativeAngle = 2 * Math.atan2(relativeAxisLength, Math.abs(relativeRotation.w));
+      const coherentAxis = relativeAxisLength > 1e-6
+        ? { x: relativeRotation.x / relativeAxisLength, y: relativeRotation.y / relativeAxisLength, z: relativeRotation.z / relativeAxisLength }
+        : { x: 1, y: 0, z: 0 };
+      return {
+        config,
+        parentAnchor: this.worldPointToBodyLocal(parent, worldAnchor),
+        childAnchor: this.worldPointToBodyLocal(child, worldAnchor),
+        axis: coherentAxis,
+        limits: { min: relativeAngle - config.limitRadians, max: relativeAngle + (config.childId.includes('foot') ? config.limitRadians : 0.15) },
+      };
+    });
+    this.removeJoints();
+    anchors.filter(Boolean).forEach(({ config, parentAnchor, childAnchor, axis, limits }) => this.createJoint(config, { parentAnchor, childAnchor, axis, limits }));
+    this.ragdollHandoffDiagnostics.jointsRebuilt = this.joints.length;
+    this.ragdollHandoffDiagnostics.maximumJointAnchorSeparation = this.measureJointAnchorSeparation();
+    return this.joints.length;
   }
 
   createDebugBody(config) {
@@ -385,19 +489,117 @@ export class HumanoidCombatActor {
   }
 
   activateRagdoll({ forced = false } = {}) {
-    if (this.ragdollActive || !this.animationAuthorityReady || !this.visualAdapter?.beginRagdoll?.()) return false;
+    if (this.ragdollActive || !this.animationAuthorityReady) return false;
+    if (typeof this.visualAdapter?.getProxyPose === 'function') this.syncAnimationProxyBodies(this.visualAdapter);
+    const finalPose = new Map();
+    this.bodies.forEach(({ body }, bodyId) => {
+      const position = body.translation();
+      const rotation = body.rotation();
+      finalPose.set(bodyId, {
+        position: new THREE.Vector3(position.x, position.y, position.z),
+        quaternion: new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).normalize(),
+      });
+    });
+    if (!this.visualAdapter?.beginRagdoll?.()) return false;
+    this.ragdollFinalBodyPose = finalPose;
+    this.ragdollPhysicsFrames = 0;
+    this.ragdollStabilizationElapsed = 0;
     this.ragdollForced ||= forced;
-    this.ragdollActive = true;
+    this.ragdollHandoffDiagnostics = this.createRagdollHandoffDiagnostics();
+    this.ragdollHandoffDiagnostics.activationCount = 1;
+    this.ragdollHandoffDiagnostics.finalAnimatedPelvisPosition = finalPose.get('pelvis')?.position.toArray() ?? null;
+    this.ragdollHandoffDiagnostics.finalAnimatedFootPositions = Object.fromEntries(['left_foot', 'right_foot'].map((bodyId) => [bodyId, finalPose.get(bodyId)?.position.toArray() ?? null]));
+    this.rebuildJointsForCurrentAnimatedPose();
+    this.physics.world.propagateModifiedBodyPositionsToColliders();
+    const inheritedVelocity = this.livingVelocity.clone();
+    if (inheritedVelocity.length() > RAGDOLL_HANDOFF_LIMITS.maximumInheritedLinearSpeed) inheritedVelocity.setLength(RAGDOLL_HANDOFF_LIMITS.maximumInheritedLinearSpeed);
     this.bodies.forEach(({ body }) => {
+      body.setLinvel(inheritedVelocity, false);
+      body.setAngvel({ x: 0, y: 0, z: 0 }, false);
       body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
       body.setGravityScale(1, true);
       body.wakeUp();
     });
-    if (this.lastReaction?.direction) {
+    this.ragdollActive = true;
+    this.bodies.forEach(({ body }, bodyId) => {
+      const expected = finalPose.get(bodyId);
+      const position = body.translation();
+      const rotation = body.rotation();
+      const actualPosition = new THREE.Vector3(position.x, position.y, position.z);
+      const actualQuaternion = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).normalize();
+      const linear = body.linvel();
+      const angular = body.angvel();
+      this.ragdollHandoffDiagnostics.maximumBodyPositionJump = Math.max(this.ragdollHandoffDiagnostics.maximumBodyPositionJump, expected?.position.distanceTo(actualPosition) ?? 0);
+      this.ragdollHandoffDiagnostics.maximumBodyRotationJump = Math.max(this.ragdollHandoffDiagnostics.maximumBodyRotationJump, expected ? 2 * Math.acos(THREE.MathUtils.clamp(Math.abs(expected.quaternion.dot(actualQuaternion)), -1, 1)) : 0);
+      this.ragdollHandoffDiagnostics.maximumFirstFrameLinearVelocity = Math.max(this.ragdollHandoffDiagnostics.maximumFirstFrameLinearVelocity, Math.hypot(linear.x, linear.y, linear.z));
+      this.ragdollHandoffDiagnostics.maximumFirstFrameAngularVelocity = Math.max(this.ragdollHandoffDiagnostics.maximumFirstFrameAngularVelocity, Math.hypot(angular.x, angular.y, angular.z));
+      if (![...actualPosition.toArray(), ...actualQuaternion.toArray(), linear.x, linear.y, linear.z, angular.x, angular.y, angular.z].every(Number.isFinite)) this.ragdollHandoffDiagnostics.nonFiniteTransformCount += 1;
+    });
+    this.ragdollHandoffDiagnostics.firstRagdollPelvisPosition = this.getBodyWorldPosition('pelvis').toArray();
+    this.ragdollHandoffDiagnostics.firstRagdollFootPositions = Object.fromEntries(['left_foot', 'right_foot'].map((bodyId) => [bodyId, this.getBodyWorldPosition(bodyId).toArray()]));
+    if (!forced && this.lastReaction?.direction) {
       const entry = this.bodies.get(HUMANOID_ANATOMY_REGIONS.find((region) => region.id === this.lastReaction.regionId)?.bodyId ?? this.lastReaction.regionId);
       entry?.body.applyImpulseAtPoint(this.lastReaction.direction.clone().multiplyScalar(Math.min(1.1, 0.24 + this.lastReaction.severity * 0.5)), this.lastReaction.point, true);
     }
     return true;
+  }
+
+  recordFirstRagdollPhysicsFrame() {
+    if (!this.ragdollActive || this.ragdollPhysicsFrames > 0) return;
+    this.bodies.forEach(({ body }, bodyId) => {
+      const expected = this.ragdollFinalBodyPose.get(bodyId);
+      const position = body.translation();
+      const rotation = body.rotation();
+      const actualPosition = new THREE.Vector3(position.x, position.y, position.z);
+      const actualQuaternion = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).normalize();
+      const linear = body.linvel();
+      const angular = body.angvel();
+      const positionJump = expected?.position.distanceTo(actualPosition) ?? 0;
+      const rotationJump = expected ? 2 * Math.acos(THREE.MathUtils.clamp(Math.abs(expected.quaternion.dot(actualQuaternion)), -1, 1)) : 0;
+      const linearSpeed = Math.hypot(linear.x, linear.y, linear.z);
+      const angularSpeed = Math.hypot(angular.x, angular.y, angular.z);
+      if (positionJump > this.ragdollHandoffDiagnostics.maximumBodyPositionJump) {
+        this.ragdollHandoffDiagnostics.maximumBodyPositionJump = positionJump;
+        this.ragdollHandoffDiagnostics.maximumBodyPositionJumpBodyId = bodyId;
+      }
+      if (rotationJump > this.ragdollHandoffDiagnostics.maximumBodyRotationJump) {
+        this.ragdollHandoffDiagnostics.maximumBodyRotationJump = rotationJump;
+        this.ragdollHandoffDiagnostics.maximumBodyRotationJumpBodyId = bodyId;
+      }
+      if (linearSpeed > this.ragdollHandoffDiagnostics.maximumFirstFrameLinearVelocity) {
+        this.ragdollHandoffDiagnostics.maximumFirstFrameLinearVelocity = linearSpeed;
+        this.ragdollHandoffDiagnostics.maximumFirstFrameLinearVelocityBodyId = bodyId;
+      }
+      if (angularSpeed > this.ragdollHandoffDiagnostics.maximumFirstFrameAngularVelocity) {
+        this.ragdollHandoffDiagnostics.maximumFirstFrameAngularVelocity = angularSpeed;
+        this.ragdollHandoffDiagnostics.maximumFirstFrameAngularVelocityBodyId = bodyId;
+      }
+      if (![...actualPosition.toArray(), ...actualQuaternion.toArray(), linear.x, linear.y, linear.z, angular.x, angular.y, angular.z].every(Number.isFinite)) this.ragdollHandoffDiagnostics.nonFiniteTransformCount += 1;
+    });
+    this.ragdollHandoffDiagnostics.firstRagdollPelvisPosition = this.getBodyWorldPosition('pelvis').toArray();
+    this.ragdollHandoffDiagnostics.firstRagdollFootPositions = Object.fromEntries(['left_foot', 'right_foot'].map((bodyId) => [bodyId, this.getBodyWorldPosition(bodyId).toArray()]));
+    this.ragdollPhysicsFrames = 1;
+  }
+
+  stabilizeRagdollEnergy() {
+    if (!this.ragdollActive || this.ragdollStabilizationElapsed > 0.55) return;
+    const progress = THREE.MathUtils.clamp((this.ragdollStabilizationElapsed - 1 / 60) / 0.55, 0, 1);
+    const maximumLinearSpeed = THREE.MathUtils.lerp(RAGDOLL_HANDOFF_LIMITS.maximumInheritedLinearSpeed + 0.35, 5, progress);
+    const maximumAngularSpeed = THREE.MathUtils.lerp(RAGDOLL_HANDOFF_LIMITS.maximumInheritedAngularSpeed, 6, progress);
+    this.bodies.forEach(({ body }) => {
+      const linear = body.linvel();
+      const linearVelocity = new THREE.Vector3(linear.x, linear.y, linear.z);
+      if (linearVelocity.length() > maximumLinearSpeed) {
+        linearVelocity.setLength(maximumLinearSpeed);
+        body.setLinvel(linearVelocity, false);
+      }
+      const angular = body.angvel();
+      const angularVelocity = new THREE.Vector3(angular.x, angular.y, angular.z);
+      if (angularVelocity.length() > maximumAngularSpeed) {
+        angularVelocity.setLength(maximumAngularSpeed);
+        body.setAngvel(angularVelocity, false);
+      }
+    });
   }
 
   forceRagdoll() {
@@ -446,6 +648,7 @@ export class HumanoidCombatActor {
 
   beforePhysics(dt, playerPosition = null) {
     this.elapsed += dt;
+    if (this.ragdollActive) this.ragdollStabilizationElapsed += dt;
     this.physiology.update(dt);
     this.consciousnessImpairment = 1 - this.physiology.consciousness;
     this.reflex.time = Math.max(0, this.reflex.time - dt);
@@ -559,6 +762,7 @@ export class HumanoidCombatActor {
   }
 
   afterPhysics(alpha = 1) {
+    this.stabilizeRagdollEnergy();
     if (!this.animationAuthorityReady || this.ragdollActive) this.bodies.forEach((entry) => {
       const translation = entry.body.translation();
       const rotation = entry.body.rotation();
@@ -571,6 +775,7 @@ export class HumanoidCombatActor {
       entry.previousPosition.copy(tmpPosition);
       entry.previousQuaternion.copy(tmpQuaternion);
     });
+    this.recordFirstRagdollPhysicsFrame();
     this.updateVesselDebug();
     if (this.ragdollActive) this.visualAdapter?.updateRagdoll?.();
     else if (!this.visualProfile.animationAuthoritative) this.visualAdapter?.update();
@@ -649,6 +854,7 @@ export class HumanoidCombatActor {
       corpseSleeping: this.corpseSleeping,
       ragdollActive: this.ragdollActive,
       ragdollForced: this.ragdollForced,
+      ragdollHandoff: { ...this.ragdollHandoffDiagnostics },
       physiology: this.physiology.getDiagnostics(),
       wounds: this.woundSystem.getDiagnostics(),
       reflex: { regionId: this.reflex.regionId, intensity: this.reflex.intensity, time: this.reflex.time },
@@ -672,8 +878,7 @@ export class HumanoidCombatActor {
 
   disposePhysicalBody() {
     this.activeEmbeddedWeapon = null;
-    this.joints.forEach((joint) => this.physics.world.removeImpulseJoint(joint, false));
-    this.joints = [];
+    this.removeJoints();
     this.bodies.forEach((entry) => this.physics.world.removeRigidBody(entry.body));
     this.bodies.clear();
     this.colliders.clear();
@@ -699,6 +904,10 @@ export class HumanoidCombatActor {
     this.lifeState = 'alive';
     this.ragdollActive = false;
     this.ragdollForced = false;
+    this.ragdollHandoffDiagnostics = this.createRagdollHandoffDiagnostics();
+    this.ragdollFinalBodyPose.clear();
+    this.ragdollPhysicsFrames = 0;
+    this.ragdollStabilizationElapsed = 0;
     this.lastReaction = null;
     this.settledSeconds = 0;
     this.dyingElapsed = 0;

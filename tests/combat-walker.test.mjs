@@ -6,9 +6,11 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { CombatActorRouter } from '../src/game/combat/CombatActorRouter.js';
 import { CombatDirector } from '../src/game/combat/CombatDirector.js';
 import { CombatPhysicsWorld, initializeCombatPhysics } from '../src/game/combat/CombatPhysicsWorld.js';
-import { CombatLabWalkerController, COMBAT_LAB_WALKER_CONFIG, ProceduralHumanoidLocomotionLayer, WALKER_STATES, WalkerVitalStabPolicy } from '../src/game/combat/CombatLabWalkerController.js';
+import { CombatLabWalkerController, COMBAT_LAB_WALKER_CONFIG, ProceduralConsciousnessLossLayer, ProceduralHumanoidLocomotionLayer, WALKER_STATES, WalkerVitalStabPolicy } from '../src/game/combat/CombatLabWalkerController.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
+import { RAGDOLL_HANDOFF_LIMITS } from '../src/game/combat/HumanoidCombatActor.js';
 import { HumanoidGlbVisualAdapter, isolateObjectMaterials } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
+import { HUMANOID_BODY_CONFIG } from '../src/game/combat/CombatConfig.js';
 import { MODEL_IDLE_BONE_MAP, MODEL_IDLE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import { MELEE_INTENTS } from '../src/game/combat/MeleeIntentWeapon.js';
@@ -64,6 +66,86 @@ function installHeadlessVisualStub(actor) {
   };
   actor.animationAuthorityReady = true;
   return actor.visualAdapter;
+}
+
+function installSyntheticAnimationAdapter(actor, { modelScale = 0.91, painQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.04, -0.06, 0.035)) } = {}) {
+  const presentationRoot = new THREE.Group();
+  const modelScene = new THREE.Group();
+  const bonesByBodyId = new Map();
+  const bonesByName = new Map();
+  const targetPositions = new Map(HUMANOID_BODY_CONFIG.map((config) => [config.id, new THREE.Vector3(config.position[0] * 0.82, config.position[1] * 0.82, (config.position[2] + 3.55) * 0.82)]));
+  const configurations = new Map(HUMANOID_BODY_CONFIG.map((config) => [config.id, config]));
+  HUMANOID_BODY_CONFIG.forEach((config) => {
+    const bone = new THREE.Bone();
+    bone.name = MODEL_IDLE_BONE_MAP[config.id];
+    const parentPosition = config.parentId ? targetPositions.get(config.parentId) : new THREE.Vector3();
+    bone.position.copy(targetPositions.get(config.id)).sub(parentPosition);
+    bonesByBodyId.set(config.id, bone);
+    bonesByName.set(bone.name, bone);
+  });
+  HUMANOID_BODY_CONFIG.forEach((config) => {
+    const bone = bonesByBodyId.get(config.id);
+    if (config.parentId) bonesByBodyId.get(config.parentId).add(bone);
+    else modelScene.add(bone);
+  });
+  modelScene.scale.setScalar(modelScale);
+  presentationRoot.add(modelScene);
+  actor.scene.add(presentationRoot);
+  const authoredPose = new Map([...bonesByBodyId].map(([id, bone]) => [id, { position: bone.position.clone(), quaternion: bone.quaternion.clone(), scale: bone.scale.clone() }]));
+  const adapter = Object.create(HumanoidGlbVisualAdapter.prototype);
+  const reactionController = {
+    baseYaw: 0,
+    rootYawQuaternion: new THREE.Quaternion(),
+    getPlaybackScale: () => 1,
+    applyAfterMixer() { bonesByBodyId.get('upper_chest').quaternion.multiply(painQuaternion).normalize(); },
+    reset() {},
+  };
+  Object.assign(adapter, {
+    actor,
+    parent: actor.root,
+    profile: MODEL_IDLE_COMBAT_PROFILE,
+    scene: modelScene,
+    presentationRoot,
+    skinnedMeshes: [],
+    skeletons: [],
+    bones: bonesByName,
+    bindings: [],
+    ragdollBindings: [],
+    ragdollDiagnostics: HumanoidGlbVisualAdapter.prototype.createRagdollDiagnostics.call({}),
+    mixer: {
+      timeScale: 1,
+      update() {
+        authoredPose.forEach((pose, id) => {
+          const bone = bonesByBodyId.get(id);
+          bone.position.copy(pose.position);
+          bone.quaternion.copy(pose.quaternion);
+          bone.scale.copy(pose.scale);
+        });
+      },
+      stopAllAction() {},
+      uncacheRoot() {},
+      setTime() {},
+    },
+    idleAction: { stop() {}, reset() { return this; }, play() { return this; } },
+    idlePlaybackScale: 1,
+    reactionController,
+    reactionBones: bonesByBodyId,
+    mixerAuthoredScales: new Map(),
+    locomotionController: null,
+    isolateMaterials: true,
+    ownedMaterials: new Map(),
+    fadePrepared: false,
+    basePresentationPosition: actor.visualRootPosition.clone(),
+    basePresentationYaw: actor.spawnYaw,
+    uniformScale: modelScale,
+    characterLightingPanel: null,
+    disposed: false,
+  });
+  actor.visualAdapter = adapter;
+  adapter.setAuthoritativeTransform(actor.visualRootPosition, actor.spawnYaw);
+  presentationRoot.updateMatrixWorld(true);
+  actor.setAnimationAuthorityReady(adapter);
+  return { adapter, bonesByBodyId, authoredPose, configurations };
 }
 
 test('collider routing keeps two humanoids actor-local and drops stale walkers', async () => {
@@ -154,6 +236,47 @@ test('procedural locomotion is additive, opposite-phased, bounded, and drift-fre
   const idlePhase = layer.phase;
   for (let frame = 0; frame < 120; frame += 1) layer.advance(1 / 120, { speed: 0, walking: false });
   assert.ok(Math.abs(layer.phase - idlePhase) < 1e-12, 'gait phase does not advance once fully idle');
+});
+
+test('consciousness loss progressively relaxes the full pose without accumulating or changing scale', () => {
+  const layer = new ProceduralConsciousnessLossLayer();
+  const ids = ['pelvis', 'abdomen', 'lower_chest', 'upper_chest', 'neck', 'head', 'left_upper_arm', 'right_upper_arm', 'left_forearm', 'right_forearm', 'left_thigh', 'right_thigh', 'left_lower_leg', 'right_lower_leg', 'left_foot', 'right_foot'];
+  const bones = new Map(ids.map((id) => [id, new THREE.Bone()]));
+  layer.bindBones(bones);
+  layer.begin(-1);
+  const sample = (seconds) => {
+    bones.forEach((bone) => {
+      bone.position.set(0, bone === bones.get('pelvis') ? 1 : 0, 0);
+      bone.quaternion.identity();
+      bone.scale.set(1, 1, 1);
+    });
+    layer.advance(seconds, COMBAT_LAB_WALKER_CONFIG.consciousnessLossSeconds);
+    layer.applyAfterLocomotion();
+    return {
+      diagnostics: layer.getDiagnostics(),
+      head: bones.get('head').quaternion.angleTo(new THREE.Quaternion()),
+      shoulder: bones.get('left_upper_arm').quaternion.angleTo(new THREE.Quaternion()),
+      arm: bones.get('left_forearm').quaternion.angleTo(new THREE.Quaternion()),
+      torso: bones.get('upper_chest').quaternion.angleTo(new THREE.Quaternion()),
+      weakKnee: bones.get('left_lower_leg').quaternion.angleTo(new THREE.Quaternion()),
+      strongKnee: bones.get('right_lower_leg').quaternion.angleTo(new THREE.Quaternion()),
+      pelvisY: bones.get('pelvis').position.y,
+    };
+  };
+  const early = sample(0.35);
+  const middle = sample(1.35);
+  const late = sample(2.8);
+  for (const key of ['head', 'shoulder', 'arm', 'torso', 'weakKnee', 'strongKnee']) {
+    assert.ok(early[key] <= middle[key] + 1e-9, `${key} relaxes progressively at mid collapse`);
+    assert.ok(middle[key] <= late[key] + 1e-9, `${key} relaxes progressively at final collapse`);
+  }
+  assert.ok(early.pelvisY >= middle.pelvisY && middle.pelvisY >= late.pelvisY, 'pelvis descends progressively');
+  assert.ok(late.weakKnee > late.strongKnee, 'one leg carries less weight instead of mirroring the other');
+  assert.equal(late.diagnostics.collapseDirection, 'left');
+  bones.forEach((bone) => assert.ok(bone.scale.equals(new THREE.Vector3(1, 1, 1))));
+  const repeat = sample(2.8);
+  assert.ok(Math.abs(repeat.pelvisY - late.pelvisY) < 1e-12, 'fresh-pose application does not accumulate pelvis translation');
+  assert.ok(Math.abs(repeat.head - late.head) < 1e-12, 'fresh-pose application does not accumulate bone rotation');
 });
 
 test('walker movement accelerates, turns within bounds, stops with hysteresis, and resumes', async () => {
@@ -293,21 +416,25 @@ test('two stabs hand off the final pose once, hold three seconds, fade, dispose,
     assert.ok(walker.maximumSpeed <= walker.baseMaximumSpeed * 0.79);
     assert.equal(walker.forceQualifyingStab() != null, true);
     assert.equal(walker.state, WALKER_STATES.dying);
-    for (let frame = 0; frame < 16; frame += 1) {
+    const collapseSamples = [];
+    for (let frame = 0; frame < 180; frame += 1) {
       walker.prepareFrame(1 / 60, player);
       actor.prepareFrame(1 / 60);
       walker.afterAnimationFrame();
+      collapseSamples.push(walker.consciousnessLoss.getDiagnostics());
     }
     assert.equal(walker.state, WALKER_STATES.ragdoll);
     assert.equal(walker.ragdollActivationCount, 1);
+    assert.ok(collapseSamples.some((sample) => sample.progress > 0.45 && sample.progress < 0.65));
+    assert.ok(collapseSamples.at(-1).pelvisDescent > 0.2);
     visual.captured.forEach((position, id) => {
       const current = actor.bodies.get(id).body.translation();
       assert.ok(Math.hypot(current.x - position.x, current.y - position.y, current.z - position.z) < 1e-9, `${id} has no ragdoll teleport`);
     });
-    for (let frame = 0; frame < 179; frame += 1) walker.prepareFrame(1 / 60, player);
+    while (walker.ragdollElapsed < COMBAT_LAB_WALKER_CONFIG.corpseHoldSeconds - 1 / 60 - 1e-6) walker.prepareFrame(1 / 60, player);
     assert.equal(walker.state, WALKER_STATES.ragdoll, 'corpse remains fully visible before three seconds');
     assert.equal(walker.fadeOpacity, 1);
-    walker.prepareFrame(1 / 60, player);
+    while (walker.state === WALKER_STATES.ragdoll) walker.prepareFrame(1 / 60, player);
     assert.equal(walker.state, WALKER_STATES.fading);
     for (let frame = 0; frame < 61; frame += 1) walker.prepareFrame(1 / 60, player);
     assert.equal(walker.actor, null);
@@ -373,4 +500,113 @@ test('semantic proxy synchronization observes the final locomotion-plus-pain pos
   assert.ok(calls.indexOf('locomotion') < calls.indexOf('pain'));
   assert.ok(calls.indexOf('pain') < calls.indexOf('wounds'));
   assert.ok(calls.indexOf('wounds') < calls.indexOf('proxies'));
+});
+
+test('mid-stride impaired pain pose completes gradual consciousness loss and the real ragdoll solver remains coherent', async () => {
+  await initializeCombatPhysics();
+  const physics = new CombatPhysicsWorld();
+  physics.createFixedBox({ position: { x: 0, y: -0.1, z: -2 }, halfExtents: { x: 8, y: 0.1, z: 8 } });
+  const scene = new THREE.Scene();
+  const collision = createCollision();
+  const stationary = new HumanoidCombatActor({ physics, scene, visualProfile: MODEL_IDLE_COMBAT_PROFILE });
+  const stationaryDirector = new CombatDirector({ actor: stationary });
+  const router = new CombatActorRouter();
+  router.register(stationary, stationaryDirector);
+  const player = { position: new THREE.Vector3(0, 1.55, -2.45), yaw: THREE.MathUtils.degToRad(41) };
+  let synthetic = null;
+  const walker = new CombatLabWalkerController({
+    scene,
+    physics,
+    collision,
+    combatRouter: router,
+    stationaryActor: stationary,
+    playerProvider: () => player,
+    actorFactory: (options) => {
+      const actor = new HumanoidCombatActor(options);
+      synthetic = installSyntheticAnimationAdapter(actor);
+      return actor;
+    },
+  });
+  const stepFrame = () => {
+    walker.prepareFrame(1 / 60, player);
+    walker.actor?.prepareFrame(1 / 60);
+    walker.afterAnimationFrame();
+    physics.stepSingle((dt) => walker.beforePhysics(dt, player.position), (dt) => walker.afterPhysicsStep(dt));
+    walker.afterPhysics(0);
+  };
+
+  walker.prepareFrame(0, player);
+  for (let frame = 0; frame < 85; frame += 1) stepFrame();
+  assert.ok(walker.currentSpeed > 0.1);
+  assert.ok(Math.abs(walker.currentYaw) > 0.05, 'handoff scenario uses nonzero world yaw');
+  assert.ok(walker.locomotion.phase > 0.03 && walker.locomotion.phase < 0.97, 'walker is in a live gait phase');
+  walker.forceQualifyingStab();
+  for (let frame = 0; frame < 8; frame += 1) stepFrame();
+  assert.equal(walker.lethality.criticalStabCount, 1);
+  assert.ok(walker.maximumSpeed < walker.baseMaximumSpeed);
+  walker.actor.reflex.regionId = 'upper_chest';
+  walker.actor.reflex.intensity = 0.62;
+  walker.actor.reflex.time = 0.55;
+  walker.actor.lastReaction = { regionId: 'upper_chest', direction: new THREE.Vector3(-0.4, 0.05, 0.2), point: walker.actor.getBodyWorldPosition('upper_chest'), severity: 0.8 };
+  const preFatalSpeed = walker.currentSpeed;
+  const preFatalPelvisY = walker.actor.getBodyWorldPosition('pelvis').y;
+  walker.forceQualifyingStab();
+  assert.equal(walker.state, WALKER_STATES.losingConsciousness);
+  stepFrame();
+  assert.ok(walker.currentSpeed > preFatalSpeed * 0.8, 'locomotion weakens rather than stopping in the fatal frame');
+
+  const samples = [];
+  let elapsed = 1 / 60;
+  while (walker.state !== WALKER_STATES.ragdoll && elapsed < 3.4) {
+    stepFrame();
+    elapsed += 1 / 60;
+    samples.push({ ...walker.consciousnessLoss.getDiagnostics(), speed: walker.currentSpeed, gaitWeight: walker.locomotion.blendWeight });
+  }
+  assert.equal(walker.state, WALKER_STATES.ragdoll);
+  assert.ok(elapsed >= 2.5 && elapsed <= 3.2);
+  assert.equal(walker.ragdollActivationCount, 1);
+  assert.ok(samples.every((sample, index) => index === 0 || sample.pelvisDescent + 1e-9 >= samples[index - 1].pelvisDescent));
+  assert.ok(samples.every((sample, index) => index === 0 || sample.torsoPitch + 1e-9 >= samples[index - 1].torsoPitch));
+  assert.ok(samples.every((sample, index) => index === 0 || sample.locomotionWeight <= samples[index - 1].locomotionWeight + 1e-9));
+  assert.ok(samples.every((sample, index) => index === 0 || sample.gaitWeight <= samples[index - 1].gaitWeight + 1e-9));
+  assert.ok(samples[0].gaitWeight > 0.8 && samples.at(-1).gaitWeight < 0.02, 'actual gait authority decays gradually across the collapse');
+  assert.ok(samples.at(-1).pelvisDescent >= 0.09 && samples.at(-1).pelvisDescent <= 0.18);
+  assert.ok(samples.at(-1).pelvisDescentTarget >= 0.22 && samples.at(-1).pelvisDescentTarget <= 0.25);
+  assert.ok(THREE.MathUtils.radToDeg(samples.at(-1).torsoPitch) >= 20 && THREE.MathUtils.radToDeg(samples.at(-1).torsoPitch) <= 35);
+  assert.ok(Math.abs(THREE.MathUtils.radToDeg(samples.at(-1).lateralImbalance)) >= 4 && Math.abs(THREE.MathUtils.radToDeg(samples.at(-1).lateralImbalance)) <= 10);
+
+  const capturedTranslations = new Map(synthetic.adapter.ragdollBindings.filter((binding) => !binding.isTranslationRoot).map((binding) => [binding.bodyId, binding.capturedLocalPosition.clone()]));
+  const capturedScales = new Map(synthetic.adapter.ragdollBindings.map((binding) => [binding.bodyId, binding.capturedLocalScale.clone()]));
+  for (let frame = 0; frame < 45; frame += 1) {
+    physics.stepSingle((dt) => walker.beforePhysics(dt, player.position), (dt) => walker.afterPhysicsStep(dt));
+    walker.afterPhysics(0);
+  }
+  capturedTranslations.forEach((position, bodyId) => assert.ok(position.distanceTo(synthetic.bonesByBodyId.get(bodyId).position) < 1e-9, `${bodyId} preserves captured local translation`));
+  capturedScales.forEach((scale, bodyId) => assert.ok(scale.distanceTo(synthetic.bonesByBodyId.get(bodyId).scale) < 1e-9, `${bodyId} preserves captured bone scale`));
+  synthetic.bonesByBodyId.forEach((bone, bodyId) => {
+    assert.ok(bone.position.toArray().every(Number.isFinite), `${bodyId} position remains finite`);
+    assert.ok(bone.quaternion.toArray().every(Number.isFinite), `${bodyId} quaternion remains finite`);
+    assert.ok(Math.abs(bone.quaternion.length() - 1) < 1e-6, `${bodyId} quaternion remains normalized`);
+  });
+  const handoff = walker.actor.ragdollHandoffDiagnostics;
+  const ragdoll = synthetic.adapter.ragdollDiagnostics;
+  assert.equal(handoff.jointsRebuilt, 17);
+  assert.ok(handoff.finalAnimatedPelvisPosition[1] <= preFatalPelvisY - 0.08, 'world-space pelvis position lowers materially before ragdoll');
+  assert.equal(walker.actor.joints.filter((joint) => joint.userData?.handoffRebuilt).length, 17);
+  assert.ok(handoff.maximumJointAnchorSeparation <= RAGDOLL_HANDOFF_LIMITS.maximumJointAnchorSeparation);
+  assert.ok(handoff.maximumBodyPositionJump <= RAGDOLL_HANDOFF_LIMITS.maximumBodyPositionJump, `handoff ${JSON.stringify(handoff)}`);
+  assert.ok(handoff.maximumBodyRotationJump <= RAGDOLL_HANDOFF_LIMITS.maximumBodyRotationJumpRadians, `rotation jump ${handoff.maximumBodyRotationJump}`);
+  assert.ok(handoff.maximumFirstFrameLinearVelocity <= RAGDOLL_HANDOFF_LIMITS.maximumInheritedLinearSpeed + 0.35);
+  assert.ok(handoff.maximumFirstFrameAngularVelocity <= RAGDOLL_HANDOFF_LIMITS.maximumInheritedAngularSpeed + 1e-5, `angular velocity ${handoff.maximumFirstFrameAngularVelocity}`);
+  assert.ok(ragdoll.maximumParentChildBoneLengthError < 1e-8);
+  assert.equal(ragdoll.nonFiniteTransformCount, 0);
+  assert.equal(ragdoll.changedBoneScaleCount, 0);
+  assert.equal(ragdoll.activationCount, 1);
+  assert.equal(synthetic.adapter.ragdollBindings.length, 18);
+
+  walker.dispose();
+  stationaryDirector.dispose();
+  stationary.dispose();
+  router.dispose();
+  physics.dispose();
 });

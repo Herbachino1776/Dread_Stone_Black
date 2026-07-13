@@ -11,7 +11,9 @@ export const WALKER_STATES = Object.freeze({
   blendingToIdle: 'BLENDING_TO_IDLE',
   nearPlayer: 'NEAR_PLAYER',
   hitReacting: 'HIT_REACTING',
-  dying: 'DYING',
+  losingConsciousness: 'LOSING_CONSCIOUSNESS',
+  dying: 'LOSING_CONSCIOUSNESS',
+  ragdollHandoff: 'RAGDOLL_HANDOFF',
   ragdoll: 'RAGDOLL',
   fading: 'FADING',
   disposed: 'DISPOSED',
@@ -34,7 +36,8 @@ export const COMBAT_LAB_WALKER_CONFIG = Object.freeze({
   slowDistance: 2.35,
   idleToWalkSeconds: 0.82,
   walkToIdleSeconds: 0.96,
-  dyingBlendSeconds: 0.24,
+  consciousnessLossSeconds: 2.8,
+  dyingBlendSeconds: 2.55,
   corpseHoldSeconds: 3,
   fadeSeconds: 1,
   respawnDelaySeconds: 0.32,
@@ -44,6 +47,9 @@ export const COMBAT_LAB_WALKER_CONFIG = Object.freeze({
   cadenceMinimum: 0.8,
   cadenceMaximum: 1.12,
   strideMaximum: 0.65,
+  maximumGroundStep: 0.14,
+  maximumGroundVariation: 0.16,
+  spawnCandidateCount: 12,
 });
 
 const VITAL_REGIONS = new Set(['upper_chest', 'lower_chest', 'abdomen', 'neck']);
@@ -63,7 +69,8 @@ const ALLOWED_TRANSITIONS = Object.freeze({
   [WALKER_STATES.blendingToIdle]: new Set([WALKER_STATES.nearPlayer, WALKER_STATES.blendingToWalk, WALKER_STATES.hitReacting, WALKER_STATES.dying, WALKER_STATES.disposed]),
   [WALKER_STATES.nearPlayer]: new Set([WALKER_STATES.blendingToWalk, WALKER_STATES.hitReacting, WALKER_STATES.dying, WALKER_STATES.disposed]),
   [WALKER_STATES.hitReacting]: new Set([WALKER_STATES.approaching, WALKER_STATES.blendingToIdle, WALKER_STATES.nearPlayer, WALKER_STATES.dying, WALKER_STATES.disposed]),
-  [WALKER_STATES.dying]: new Set([WALKER_STATES.ragdoll, WALKER_STATES.disposed]),
+  [WALKER_STATES.losingConsciousness]: new Set([WALKER_STATES.ragdollHandoff, WALKER_STATES.disposed]),
+  [WALKER_STATES.ragdollHandoff]: new Set([WALKER_STATES.ragdoll, WALKER_STATES.disposed]),
   [WALKER_STATES.ragdoll]: new Set([WALKER_STATES.fading, WALKER_STATES.disposed]),
   [WALKER_STATES.fading]: new Set([WALKER_STATES.disposed]),
   [WALKER_STATES.disposed]: new Set([WALKER_STATES.respawning]),
@@ -202,16 +209,16 @@ export class ProceduralHumanoidLocomotionLayer {
     });
   }
 
-  advance(dt, { speed = 0, maximumSpeed = this.config.baseWalkingSpeed, walking = false, reacting = false, impaired = false, dying = false } = {}) {
+  advance(dt, { speed = 0, maximumSpeed = this.config.baseWalkingSpeed, walking = false, reacting = false, impaired = false, dying = false, locomotionWeight = 1 } = {}) {
     const safeDt = Math.max(0, Math.min(0.05, Number(dt) || 0));
     const speedRatio = clamp01(speed / Math.max(0.001, maximumSpeed));
     this.reacting = reacting;
     this.impaired = impaired;
     this.dying = dying;
-    const targetBlend = walking && !dying ? 1 : 0;
+    const targetBlend = walking ? clamp01(locomotionWeight) : 0;
     const duration = targetBlend > this.blendWeight ? this.config.idleToWalkSeconds : dying ? this.config.dyingBlendSeconds : this.config.walkToIdleSeconds;
     this.blendWeight = moveToward(this.blendWeight, targetBlend, safeDt / Math.max(0.001, duration));
-    if (speed > 0.035 && this.blendWeight > 0.015 && !dying) {
+    if (speed > 0.035 && this.blendWeight > 0.015) {
       this.cadence = THREE.MathUtils.lerp(this.config.cadenceMinimum, this.config.cadenceMaximum, speedRatio);
       this.strideLength = Math.min(this.config.strideMaximum, speed / Math.max(0.001, this.cadence));
       this.phase = wrapPhase(this.phase + this.cadence * safeDt);
@@ -295,8 +302,153 @@ export class ProceduralHumanoidLocomotionLayer {
   }
 }
 
-export class CombatLabWalkerController {
-  constructor({ scene, physics, collision, combatRouter, stationaryActor, feedbackSystem = null, playerProvider = null, eventSink = null, beforeActorDisposal = null, enabled = true, query = null, actorFactory = null, config = COMBAT_LAB_WALKER_CONFIG } = {}) {
+export class ProceduralConsciousnessLossLayer {
+  constructor() {
+    this.bones = new Map();
+    this.active = false;
+    this.progress = 0;
+    this.direction = 1;
+    this.pelvisDescent = 0;
+    this.pelvisGroundCorrection = 0;
+    this.appliedPelvisDescent = 0;
+    this.maximumAppliedPelvisDescent = 0;
+    this.torsoPitch = 0;
+    this.lateralImbalance = 0;
+    this.locomotionWeight = 1;
+    this.tmpEuler = new THREE.Euler(0, 0, 0, 'XYZ');
+    this.tmpQuaternion = new THREE.Quaternion();
+    this.tmpWorldPosition = new THREE.Vector3();
+    this.tmpWorldTarget = new THREE.Vector3();
+  }
+
+  bindBones(bones) {
+    this.bones.clear();
+    bones?.forEach?.((bone, id) => this.bones.set(id, bone));
+  }
+
+  begin(direction = 1) {
+    this.active = true;
+    this.progress = 0;
+    this.direction = direction < 0 ? -1 : 1;
+    this.pelvisDescent = 0;
+    this.pelvisGroundCorrection = 0;
+    this.appliedPelvisDescent = 0;
+    this.maximumAppliedPelvisDescent = 0;
+    this.torsoPitch = 0;
+    this.lateralImbalance = 0;
+    this.locomotionWeight = 1;
+  }
+
+  reset() {
+    this.active = false;
+    this.progress = 0;
+    this.pelvisDescent = 0;
+    this.pelvisGroundCorrection = 0;
+    this.appliedPelvisDescent = 0;
+    this.maximumAppliedPelvisDescent = 0;
+    this.torsoPitch = 0;
+    this.lateralImbalance = 0;
+    this.locomotionWeight = 1;
+  }
+
+  advance(elapsedSeconds, durationSeconds) {
+    this.progress = clamp01(elapsedSeconds / Math.max(0.001, durationSeconds));
+    const shoulderRelease = smoothstep01(this.progress / 0.46);
+    const lowerBodyRelease = smoothstep01((this.progress - 0.14) / 0.72);
+    const instability = smoothstep01((this.progress - 0.52) / 0.48);
+    this.locomotionWeight = 1 - smoothstep01(this.progress / 0.9);
+    this.pelvisDescent = THREE.MathUtils.lerp(0, 0.235, lowerBodyRelease);
+    this.pelvisGroundCorrection = 0;
+    this.appliedPelvisDescent = this.pelvisDescent;
+    this.torsoPitch = THREE.MathUtils.degToRad(THREE.MathUtils.lerp(0, 31, smoothstep01((this.progress - 0.12) / 0.88)));
+    this.lateralImbalance = this.direction * THREE.MathUtils.degToRad(THREE.MathUtils.lerp(0, 8.5, instability));
+    return { shoulderRelease, lowerBodyRelease, instability };
+  }
+
+  rotate(id, x = 0, y = 0, z = 0) {
+    const bone = this.bones.get(id);
+    if (!bone) return;
+    this.tmpQuaternion.setFromEuler(this.tmpEuler.set(x, y, z));
+    bone.quaternion.multiply(this.tmpQuaternion).normalize();
+  }
+
+  translateWorld(id, x = 0, y = 0, z = 0) {
+    const bone = this.bones.get(id);
+    if (!bone) return false;
+    bone.parent?.updateMatrixWorld?.(true);
+    bone.getWorldPosition(this.tmpWorldPosition);
+    this.tmpWorldTarget.copy(this.tmpWorldPosition).add({ x, y, z });
+    if (bone.parent) bone.position.copy(bone.parent.worldToLocal(this.tmpWorldTarget));
+    else bone.position.copy(this.tmpWorldTarget);
+    bone.updateMatrixWorld(true);
+    return true;
+  }
+
+  applyAfterLocomotion() {
+    if (!this.active || this.progress <= 0) return;
+    const shoulderRelease = smoothstep01(this.progress / 0.46);
+    const lowerBodyRelease = smoothstep01((this.progress - 0.14) / 0.72);
+    const instability = smoothstep01((this.progress - 0.52) / 0.48);
+    this.translateWorld('pelvis', 0, -this.pelvisDescent, 0);
+    this.rotate('pelvis', THREE.MathUtils.degToRad(3) * lowerBodyRelease, 0, this.lateralImbalance * 0.42);
+    this.rotate('abdomen', this.torsoPitch * 0.34, 0, this.lateralImbalance * 0.28);
+    this.rotate('lower_chest', this.torsoPitch * 0.36, 0, this.lateralImbalance * 0.2);
+    this.rotate('upper_chest', this.torsoPitch * 0.3, 0, this.lateralImbalance * 0.1);
+    this.rotate('neck', this.torsoPitch * 0.18 + THREE.MathUtils.degToRad(7) * instability, 0, -this.lateralImbalance * 0.18);
+    this.rotate('head', THREE.MathUtils.degToRad(18) * smoothstep01((this.progress - 0.08) / 0.76), 0, -this.lateralImbalance * 0.24);
+    const weakSide = this.direction < 0 ? 'left' : 'right';
+    const strongSide = weakSide === 'left' ? 'right' : 'left';
+    this.rotate(`${weakSide}_thigh`, THREE.MathUtils.degToRad(-15) * lowerBodyRelease, 0, this.direction * THREE.MathUtils.degToRad(3.5) * instability);
+    this.rotate(`${strongSide}_thigh`, THREE.MathUtils.degToRad(-9) * lowerBodyRelease, 0, -this.direction * THREE.MathUtils.degToRad(1.5) * instability);
+    this.rotate(`${weakSide}_lower_leg`, THREE.MathUtils.degToRad(-31) * lowerBodyRelease, 0, 0);
+    this.rotate(`${strongSide}_lower_leg`, THREE.MathUtils.degToRad(-22) * lowerBodyRelease, 0, 0);
+    this.rotate(`${weakSide}_foot`, THREE.MathUtils.degToRad(-16) * lowerBodyRelease, 0, 0);
+    this.rotate(`${strongSide}_foot`, THREE.MathUtils.degToRad(-13) * lowerBodyRelease, 0, 0);
+    this.rotate('left_upper_arm', THREE.MathUtils.degToRad(7) * shoulderRelease, 0, THREE.MathUtils.degToRad(4) * shoulderRelease);
+    this.rotate('right_upper_arm', THREE.MathUtils.degToRad(7) * shoulderRelease, 0, THREE.MathUtils.degToRad(-4) * shoulderRelease);
+    this.rotate('left_forearm', THREE.MathUtils.degToRad(-5) * shoulderRelease, 0, 0);
+    this.rotate('right_forearm', THREE.MathUtils.degToRad(-5) * shoulderRelease, 0, 0);
+    this.bones.forEach((bone) => bone.quaternion.normalize());
+  }
+
+  preserveFootGroundClearance(groundY, minimumBoneClearance = 0.02) {
+    if (!this.active || !Number.isFinite(groundY)) return 0;
+    const pelvis = this.bones.get('pelvis');
+    const leftFoot = this.bones.get('left_foot');
+    const rightFoot = this.bones.get('right_foot');
+    if (!pelvis || !leftFoot || !rightFoot) return 0;
+    pelvis.updateWorldMatrix?.(true, true);
+    const minimumFootY = Math.min(leftFoot.getWorldPosition(new THREE.Vector3()).y, rightFoot.getWorldPosition(new THREE.Vector3()).y);
+    const requestedCorrection = THREE.MathUtils.clamp(groundY + minimumBoneClearance - minimumFootY, 0, this.pelvisDescent);
+    const requestedDescent = this.pelvisDescent - requestedCorrection;
+    const monotonicDescent = Math.max(this.maximumAppliedPelvisDescent, requestedDescent);
+    const correction = Math.max(0, this.pelvisDescent - monotonicDescent);
+    if (correction > 0) {
+      this.translateWorld('pelvis', 0, correction, 0);
+      pelvis.updateWorldMatrix?.(true, true);
+    }
+    this.pelvisGroundCorrection = correction;
+    this.appliedPelvisDescent = Math.max(0, this.pelvisDescent - correction);
+    this.maximumAppliedPelvisDescent = this.appliedPelvisDescent;
+    return correction;
+  }
+
+  getDiagnostics() {
+    return {
+      progress: this.progress,
+      collapseDirection: this.direction < 0 ? 'left' : 'right',
+      locomotionWeight: this.locomotionWeight,
+      pelvisDescent: this.appliedPelvisDescent,
+      pelvisDescentTarget: this.pelvisDescent,
+      pelvisGroundCorrection: this.pelvisGroundCorrection,
+      torsoPitch: this.torsoPitch,
+      lateralImbalance: this.lateralImbalance,
+    };
+  }
+}
+
+export class ProceduralWalkerController {
+  constructor({ scene, physics, collision, combatRouter, stationaryActor, feedbackSystem = null, playerProvider = null, eventSink = null, beforeActorDisposal = null, enabled = true, query = null, actorFactory = null, config = COMBAT_LAB_WALKER_CONFIG, environment = null } = {}) {
     this.scene = scene;
     this.physics = physics;
     this.collision = collision;
@@ -308,10 +460,13 @@ export class CombatLabWalkerController {
     this.beforeActorDisposal = beforeActorDisposal;
     this.actorFactory = actorFactory;
     this.config = config;
+    this.environment = environment ?? {};
     this.query = query ?? new URLSearchParams();
     this.enabled = Boolean(enabled);
-    this.pauseLocomotion = this.query.get?.('walkerPause') === '1';
-    const requestedSpeedValue = this.query.get?.('walkerSpeed');
+    const pauseQueryKey = this.environment.queryKeys?.pause ?? 'walkerPause';
+    const speedQueryKey = this.environment.queryKeys?.speed ?? 'walkerSpeed';
+    this.pauseLocomotion = this.query.get?.(pauseQueryKey) === '1';
+    const requestedSpeedValue = this.query.get?.(speedQueryKey);
     const requestedSpeed = requestedSpeedValue == null || requestedSpeedValue === '' ? NaN : Number(requestedSpeedValue);
     this.baseMaximumSpeed = Number.isFinite(requestedSpeed) ? THREE.MathUtils.clamp(requestedSpeed, config.minimumWalkingSpeed, config.maximumWalkingSpeed) : config.baseWalkingSpeed;
     this.state = this.enabled ? WALKER_STATES.respawning : WALKER_STATES.disposed;
@@ -336,6 +491,7 @@ export class CombatLabWalkerController {
     this.distanceToPlayer = Infinity;
     this.maximumSpeed = this.baseMaximumSpeed;
     this.locomotion = new ProceduralHumanoidLocomotionLayer({ config });
+    this.consciousnessLoss = new ProceduralConsciousnessLossLayer();
     this.lethality = new WalkerVitalStabPolicy();
     this.reactionResumeState = WALKER_STATES.approaching;
     this.ragdollElapsed = 0;
@@ -344,10 +500,15 @@ export class CombatLabWalkerController {
     this.collisionDisabledForFade = false;
     this.collapsePending = false;
     this.collapseRequested = false;
+    this.collapseDirection = 1;
+    this.deathInitialSpeed = 0;
     this.ragdollActivationCount = 0;
     this.stateHistory = [this.state];
     this.lastDisposalSummary = null;
     this.stationaryMaterialSnapshot = [];
+    this.footprintActive = true;
+    this.spawnGroundHeight = 0;
+    this.spawnDiagnostics = null;
   }
 
   setState(nextState) {
@@ -362,6 +523,7 @@ export class CombatLabWalkerController {
 
   bindBones(bones) {
     this.locomotion.bindBones(bones);
+    this.consciousnessLoss.bindBones(bones);
   }
 
   restoreAuthoredPose() {
@@ -370,46 +532,107 @@ export class CombatLabWalkerController {
 
   applyAfterMixer() {
     this.locomotion.applyAfterMixer();
+    this.consciousnessLoss.applyAfterLocomotion();
+    this.consciousnessLoss.preserveFootGroundClearance(this.position.y);
   }
 
-  chooseSpawnPosition(playerPosition) {
+  resolvePlayerPosition(player) {
+    return this.environment.getPlayerPosition?.(player) ?? player?.position ?? null;
+  }
+
+  resolvePlayerFacingYaw(player) {
+    const yaw = this.environment.getPlayerFacingYaw?.(player);
+    return Number.isFinite(yaw) ? yaw : Number.isFinite(player?.yaw) ? player.yaw : 0;
+  }
+
+  sampleGround(position) {
+    const sample = this.environment.sampleGround?.(position.x, position.z)
+      ?? this.collision?.sampleWalkableY?.(position.x, position.z, position.y ?? 0)
+      ?? { y: position.y ?? 0, kind: 'fallback' };
+    return Number.isFinite(sample?.y) ? sample : null;
+  }
+
+  chooseSpawnPosition(player) {
+    const playerPosition = this.resolvePlayerPosition(player);
+    if (!playerPosition || this.environment.canSpawnForPlayer?.(player, playerPosition) === false) return null;
+    const forwardCone = this.environment.spawnMode === 'forwardCone';
+    const facingYaw = this.resolvePlayerFacingYaw(player);
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      const angle = 0.58 + (this.respawnGeneration * 3 + attempt) * goldenAngle;
+    const side = this.respawnGeneration % 2 ? -1 : 1;
+    const forwardAngles = [18, 24, 12, 29, 21, 15].map((degrees) => THREE.MathUtils.degToRad(degrees));
+    for (let attempt = 0; attempt < this.config.spawnCandidateCount; attempt += 1) {
+      const angle = forwardCone
+        ? facingYaw + side * forwardAngles[attempt % forwardAngles.length] * (attempt % 2 ? -1 : 1)
+        : 0.58 + (this.respawnGeneration * 3 + attempt) * goldenAngle;
       const radiusT = ((this.respawnGeneration * 5 + attempt * 7) % 11) / 10;
       const radius = THREE.MathUtils.lerp(this.config.spawnRadiusMinimum + 0.15, this.config.spawnRadiusMaximum - 0.15, radiusT);
       this.spawnCandidate.set(playerPosition.x + Math.sin(angle) * radius, 0, playerPosition.z + Math.cos(angle) * radius);
-      if (this.isSpawnCandidateValid(this.spawnCandidate, playerPosition)) return this.spawnCandidate.clone();
+      const ground = this.sampleGround(this.spawnCandidate);
+      if (ground) this.spawnCandidate.y = ground.y;
+      if (this.isSpawnCandidateValid(this.spawnCandidate, playerPosition, player)) return this.spawnCandidate.clone();
     }
-    return new THREE.Vector3().fromArray(this.config.fallbackPosition);
+    const fallback = this.environment.getFallbackSpawn?.({ player, playerPosition, facingYaw, generation: this.respawnGeneration, side, controller: this })
+      ?? new THREE.Vector3().fromArray(this.config.fallbackPosition);
+    const fallbackGround = this.sampleGround(fallback);
+    if (fallbackGround) fallback.y = fallbackGround.y;
+    return this.isSpawnCandidateValid(fallback, playerPosition, player, { fallback: true }) ? fallback.clone() : null;
   }
 
-  isInsideLab(position, margin = 0.45) {
-    return position.x >= -7.8 + margin && position.x <= 7.8 - margin && position.z >= -9.8 + margin && position.z <= 5.8 - margin;
+  isInsideEncounter(position, margin = 0.45) {
+    return this.environment.isInsideEncounter?.(position, margin)
+      ?? (position.x >= -7.8 + margin && position.x <= 7.8 - margin && position.z >= -9.8 + margin && position.z <= 5.8 - margin);
   }
 
   getBlockingEntries(position, radius = 0.4) {
-    return (this.collision?.getIntersectingBlockers?.({ x: position.x, y: 1.55, z: position.z }, radius) ?? []).filter((blocker) => blocker !== this.playerBlocker);
+    const entries = this.environment.getBlockingEntries?.(position, radius, this)
+      ?? this.collision?.getIntersectingBlockers?.({ x: position.x, y: position.y + 1.55, z: position.z }, radius)
+      ?? [];
+    return entries.filter((blocker) => blocker !== this.playerBlocker);
   }
 
-  isSpawnCandidateValid(candidate, playerPosition) {
-    if (!this.isInsideLab(candidate) || candidate.distanceToSquared(new THREE.Vector3(playerPosition.x, 0, playerPosition.z)) < this.config.spawnRadiusMinimum ** 2) return false;
+  isGroundLocallyStable(candidate) {
+    const center = this.sampleGround(candidate);
+    if (!center) return false;
+    let minimum = center.y;
+    let maximum = center.y;
+    for (const [dx, dz] of [[0.42, 0], [-0.42, 0], [0, 0.42], [0, -0.42]]) {
+      const sample = this.sampleGround({ x: candidate.x + dx, y: center.y, z: candidate.z + dz });
+      if (!sample) return false;
+      minimum = Math.min(minimum, sample.y);
+      maximum = Math.max(maximum, sample.y);
+    }
+    return maximum - minimum <= this.config.maximumGroundVariation;
+  }
+
+  isSpawnCandidateValid(candidate, playerPosition, player = null, options = {}) {
+    const flatPlayer = new THREE.Vector3(playerPosition.x, 0, playerPosition.z);
+    const flatCandidate = new THREE.Vector3(candidate.x, 0, candidate.z);
+    const distance = flatCandidate.distanceTo(flatPlayer);
+    if (!this.isInsideEncounter(candidate) || distance < this.config.spawnRadiusMinimum || distance > this.config.spawnRadiusMaximum + 0.2) return false;
+    if (!this.isGroundLocallyStable(candidate) || this.environment.isInsideWater?.(candidate) === true) return false;
     if (this.getBlockingEntries(candidate, 0.48).length) return false;
     const stationary = this.stationaryActor?.getBodyWorldPosition?.('pelvis', this.toPlayer);
     if (stationary && Math.hypot(candidate.x - stationary.x, candidate.z - stationary.z) < 1.15) return false;
+    if (this.environment.validateSpawnCandidate?.(candidate, { player, playerPosition, fallback: options.fallback === true, controller: this }) === false) return false;
     for (let step = 1; step <= 8; step += 1) {
       const t = step / 9;
-      this.pathProbe.set(THREE.MathUtils.lerp(candidate.x, playerPosition.x, t), 0, THREE.MathUtils.lerp(candidate.z, playerPosition.z, t));
-      if (this.getBlockingEntries(this.pathProbe, 0.28).length) return false;
+      this.pathProbe.set(THREE.MathUtils.lerp(candidate.x, playerPosition.x, t), candidate.y, THREE.MathUtils.lerp(candidate.z, playerPosition.z, t));
+      const ground = this.sampleGround(this.pathProbe);
+      if (!ground || Math.abs(ground.y - candidate.y) > this.config.maximumGroundVariation || this.getBlockingEntries(this.pathProbe, 0.28).length || this.environment.isInsideWater?.(this.pathProbe) === true) return false;
     }
     return true;
   }
 
   spawn(player = this.playerProvider?.()) {
-    if (!this.enabled || this.actor || !player?.position) return false;
+    const playerPosition = this.resolvePlayerPosition(player);
+    if (!this.enabled || this.actor || !playerPosition) return false;
     this.respawnGeneration += 1;
-    const spawnPosition = this.chooseSpawnPosition(player.position);
-    this.toPlayer.set(player.position.x - spawnPosition.x, 0, player.position.z - spawnPosition.z);
+    const spawnPosition = this.chooseSpawnPosition(player);
+    if (!spawnPosition) {
+      this.respawnGeneration -= 1;
+      return false;
+    }
+    this.toPlayer.set(playerPosition.x - spawnPosition.x, 0, playerPosition.z - spawnPosition.z);
     const targetYaw = Math.atan2(this.toPlayer.x, this.toPlayer.z);
     const yawOffset = THREE.MathUtils.degToRad(this.respawnGeneration % 2 ? 10 : -12);
     this.currentYaw = targetYaw + yawOffset;
@@ -418,16 +641,21 @@ export class CombatLabWalkerController {
     const spawnOffset = new THREE.Vector3(spawnPosition.x, spawnPosition.y, spawnPosition.z + 3.55);
     const actorOptions = { physics: this.physics, scene: this.scene, spawnOffset, spawnYaw: this.currentYaw, visualProfile: MODEL_IDLE_COMBAT_PROFILE, automaticMortality: false, isolateVisualMaterials: true, eventSink: (event, payload) => this.handleActorEvent(event, payload) };
     this.actor = this.actorFactory ? this.actorFactory(actorOptions) : new HumanoidCombatActor(actorOptions);
+    this.actor.root.name = this.environment.getActorName?.(this.respawnGeneration) ?? `combat-lab-procedural-walker-${this.respawnGeneration}`;
     this.actor.setLivingRootTransform?.(this.position, this.currentYaw);
-    this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: 0, wallX: -2.65, eventSink: (event, payload) => this.handleActorEvent(event, payload) });
+    this.spawnGroundHeight = spawnPosition.y;
+    const bloodGroundY = this.environment.getBloodGroundHeight?.(spawnPosition) ?? spawnPosition.y;
+    const wallX = this.environment.getBloodWallX ? this.environment.getBloodWallX(spawnPosition) : -2.65;
+    this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: bloodGroundY, wallX, eventSink: (event, payload) => this.handleActorEvent(event, payload) });
     this.director = new CombatDirector({ actor: this.actor, bloodEffects: this.bloodEffects, feedbackSystem: this.feedbackSystem });
     this.combatRouter?.register?.(this.actor, this.director);
     this.routingRegistered = true;
-    this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: `combat-lab-walker-blocker-${this.respawnGeneration}` });
+    this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: this.environment.getBlockerName?.(this.respawnGeneration) ?? `combat-lab-walker-blocker-${this.respawnGeneration}` });
     this.collision?.addBlocker?.(this.playerBlocker);
-    this.actor.setEnvironmentContactHints({ groundY: 0, wallX: -2.65 });
+    this.actor.setEnvironmentContactHints({ groundY: spawnPosition.y, wallX });
     this.lethality = new WalkerVitalStabPolicy();
     this.locomotion = new ProceduralHumanoidLocomotionLayer({ phaseOffset: wrapPhase(this.respawnGeneration * 0.173), config: this.config });
+    this.consciousnessLoss = new ProceduralConsciousnessLossLayer();
     this.actor.visualAdapter?.setLocomotionController?.(this);
     this.currentSpeed = 0;
     this.desiredSpeed = 0;
@@ -438,7 +666,18 @@ export class CombatLabWalkerController {
     this.collisionDisabledForFade = false;
     this.collapsePending = false;
     this.collapseRequested = false;
+    this.collapseDirection = 1;
+    this.deathInitialSpeed = 0;
     this.ragdollActivationCount = 0;
+    this.footprintActive = this.isInsideEncounter(playerPosition, 0);
+    this.spawnDiagnostics = {
+      point: spawnPosition.toArray(),
+      groundHeight: spawnPosition.y,
+      playerYaw: this.resolvePlayerFacingYaw(player),
+      distance: Math.hypot(spawnPosition.x - playerPosition.x, spawnPosition.z - playerPosition.z),
+      support: this.environment.ensureRapierGroundSupport?.({ spawnPosition, playerPosition, controller: this }) ?? null,
+    };
+    this.environment.onWalkerSpawned?.({ actor: this.actor, director: this.director, bloodEffects: this.bloodEffects, blocker: this.playerBlocker, spawnPosition, generation: this.respawnGeneration, controller: this });
     this.setState(WALKER_STATES.spawning);
     this.assertBoundedState();
     return true;
@@ -446,7 +685,7 @@ export class CombatLabWalkerController {
 
   handleActorEvent(event, payload = {}) {
     if (!this.actor || this.actor.disposed) return;
-    const owner = `combat-lab-walker-${this.respawnGeneration}`;
+    const owner = this.environment.getFeedbackOwner?.(this.respawnGeneration) ?? `combat-lab-walker-${this.respawnGeneration}`;
     if (event === 'final_exhale') this.feedbackSystem?.stopOwnerVocal?.(owner);
     if (this.director) this.director.forwardFeedbackEvent(event, { ...payload, owner });
     else this.eventSink?.(event, { ...payload, owner });
@@ -475,22 +714,45 @@ export class CombatLabWalkerController {
       if (this.fadeProgress >= 1) this.disposeWalker({ respawn: true });
       return;
     }
-    if (this.state === WALKER_STATES.dying) {
-      this.currentSpeed = moveToward(this.currentSpeed, 0, this.config.deceleration * 1.4 * dt);
+    if (this.state === WALKER_STATES.losingConsciousness) {
+      const collapse = this.consciousnessLoss.advance(this.stateElapsed, this.config.consciousnessLossSeconds);
+      const momentumWeight = 1 - smoothstep01(this.consciousnessLoss.progress / 0.78);
+      const targetSpeed = this.deathInitialSpeed * momentumWeight;
+      this.currentSpeed = moveToward(this.currentSpeed, targetSpeed, this.config.deceleration * 0.58 * dt);
       this.desiredSpeed = 0;
-      this.velocity.set(0, 0, 0);
-      this.locomotion.advance(dt, { speed: this.currentSpeed, maximumSpeed: this.maximumSpeed, walking: false, impaired: true, dying: true });
-      this.actor.setLivingRootTransform?.(this.position, this.currentYaw);
-      if (this.stateElapsed >= this.config.dyingBlendSeconds) this.collapsePending = true;
+      this.forward.set(Math.sin(this.currentYaw), 0, Math.cos(this.currentYaw));
+      this.nextPosition.copy(this.position).addScaledVector(this.forward, this.currentSpeed * dt);
+      const ground = this.sampleGround(this.nextPosition);
+      if (ground && this.isInsideEncounter(this.nextPosition) && Math.abs(ground.y - this.position.y) <= this.config.maximumGroundStep && this.getBlockingEntries(this.nextPosition, 0.34).length === 0) {
+        this.nextPosition.y = ground.y;
+        this.position.copy(this.nextPosition);
+      } else {
+        this.currentSpeed = moveToward(this.currentSpeed, 0, this.config.deceleration * dt);
+      }
+      this.velocity.copy(this.forward).multiplyScalar(this.currentSpeed);
+      this.locomotion.advance(dt, { speed: this.currentSpeed, maximumSpeed: this.maximumSpeed, walking: this.currentSpeed > 0.025 || collapse.shoulderRelease < 0.98, impaired: true, dying: true, locomotionWeight: this.consciousnessLoss.locomotionWeight });
+      this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
+      if (this.stateElapsed >= this.config.consciousnessLossSeconds) {
+        this.collapsePending = true;
+        this.setState(WALKER_STATES.ragdollHandoff);
+      }
       this.assertBoundedState();
       return;
     }
-    if (!player?.position) return;
-    this.updateLivingState(dt, player.position);
+    if (this.state === WALKER_STATES.ragdollHandoff) {
+      this.currentSpeed = 0;
+      this.velocity.set(0, 0, 0);
+      this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
+      return;
+    }
+    const playerPosition = this.resolvePlayerPosition(player);
+    if (!playerPosition) return;
+    this.updateLivingState(dt, playerPosition);
     this.assertBoundedState();
   }
 
   updateLivingState(dt, playerPosition) {
+    this.footprintActive = this.isInsideEncounter(playerPosition, 0);
     this.toPlayer.set(playerPosition.x - this.position.x, 0, playerPosition.z - this.position.z);
     this.distanceToPlayer = this.toPlayer.length();
     if (this.distanceToPlayer > 1e-5) this.desiredYaw = Math.atan2(this.toPlayer.x, this.toPlayer.z);
@@ -502,14 +764,15 @@ export class CombatLabWalkerController {
       this.setState(this.distanceToPlayer <= this.config.stopEnterDistance ? WALKER_STATES.blendingToIdle : this.distanceToPlayer > this.config.resumeDistance ? WALKER_STATES.approaching : WALKER_STATES.nearPlayer);
     }
     if (this.state === WALKER_STATES.spawning && this.stateElapsed >= 0.45 && (this.actor.animationAuthorityReady || !this.actor.visualAdapter)) this.setState(WALKER_STATES.blendingToWalk);
+    if (!this.footprintActive && [WALKER_STATES.blendingToWalk, WALKER_STATES.approaching, WALKER_STATES.hitReacting].includes(this.state)) this.setState(WALKER_STATES.blendingToIdle);
     if (this.state === WALKER_STATES.blendingToWalk && this.distanceToPlayer <= this.config.stopEnterDistance) this.setState(WALKER_STATES.blendingToIdle);
     else if (this.state === WALKER_STATES.blendingToWalk && this.locomotion.blendWeight >= 0.98) this.setState(WALKER_STATES.approaching);
     if (this.state === WALKER_STATES.approaching && this.distanceToPlayer <= this.config.stopEnterDistance) this.setState(WALKER_STATES.blendingToIdle);
-    if (this.state === WALKER_STATES.blendingToIdle && this.distanceToPlayer > this.config.resumeDistance) this.setState(WALKER_STATES.blendingToWalk);
-    if (this.state === WALKER_STATES.nearPlayer && this.distanceToPlayer > this.config.resumeDistance) this.setState(WALKER_STATES.blendingToWalk);
+    if (this.footprintActive && this.state === WALKER_STATES.blendingToIdle && this.distanceToPlayer > this.config.resumeDistance) this.setState(WALKER_STATES.blendingToWalk);
+    if (this.footprintActive && this.state === WALKER_STATES.nearPlayer && this.distanceToPlayer > this.config.resumeDistance) this.setState(WALKER_STATES.blendingToWalk);
 
     this.maximumSpeed = this.baseMaximumSpeed * (this.lethality.criticalStabCount >= 1 ? this.config.firstStabSpeedMultiplier : 1);
-    const canApproach = [WALKER_STATES.blendingToWalk, WALKER_STATES.approaching, WALKER_STATES.hitReacting].includes(this.state) && !this.pauseLocomotion;
+    const canApproach = this.footprintActive && [WALKER_STATES.blendingToWalk, WALKER_STATES.approaching, WALKER_STATES.hitReacting].includes(this.state) && !this.pauseLocomotion;
     const distanceBlend = smoothstep01((this.distanceToPlayer - this.config.stopTargetDistance) / (this.config.slowDistance - this.config.stopTargetDistance));
     this.desiredSpeed = canApproach ? this.maximumSpeed * distanceBlend * (this.state === WALKER_STATES.hitReacting ? 0.62 : 1) : 0;
     const turnError = Math.abs(angleDelta(this.currentYaw, this.desiredYaw));
@@ -519,7 +782,12 @@ export class CombatLabWalkerController {
     this.currentYaw = moveAngleToward(this.currentYaw, this.desiredYaw, this.config.turnRateRadians * dt);
     this.forward.set(Math.sin(this.currentYaw), 0, Math.cos(this.currentYaw));
     this.nextPosition.copy(this.position).addScaledVector(this.forward, this.currentSpeed * dt);
-    if (this.currentSpeed > 0 && this.isInsideLab(this.nextPosition) && this.getBlockingEntries(this.nextPosition, 0.34).length === 0) this.position.copy(this.nextPosition);
+    const nextGround = this.sampleGround(this.nextPosition);
+    if (this.currentSpeed > 0 && nextGround && this.isInsideEncounter(this.nextPosition) && Math.abs(nextGround.y - this.position.y) <= this.config.maximumGroundStep && this.getBlockingEntries(this.nextPosition, 0.34).length === 0) {
+      this.nextPosition.y = nextGround.y;
+      this.position.copy(this.nextPosition);
+      this.actor.setEnvironmentContactHints({ groundY: nextGround.y });
+    }
     else if (this.currentSpeed > 0) {
       this.desiredSpeed = 0;
       this.currentSpeed = moveToward(this.currentSpeed, 0, this.config.deceleration * dt);
@@ -532,7 +800,7 @@ export class CombatLabWalkerController {
   }
 
   afterAnimationFrame() {
-    if (!this.actor || this.state !== WALKER_STATES.dying || !this.collapsePending || this.collapseRequested || !this.actor.animationAuthorityReady) return false;
+    if (!this.actor || this.state !== WALKER_STATES.ragdollHandoff || !this.collapsePending || this.collapseRequested || !this.actor.animationAuthorityReady) return false;
     if (!this.actor.forceRagdoll()) return false;
     this.collapseRequested = true;
     this.ragdollActivationCount += 1;
@@ -573,7 +841,12 @@ export class CombatLabWalkerController {
     }
     if (this.lethality.criticalStabCount >= 2 && LIVING_MOVEMENT_STATES.has(this.state)) {
       this.desiredSpeed = 0;
-      this.setState(WALKER_STATES.dying);
+      this.deathInitialSpeed = this.currentSpeed;
+      const region = this.lethality.lastQualifyingRegion ?? '';
+      const impactX = this.actor?.lastReaction?.direction?.x;
+      this.collapseDirection = region.startsWith('left_') ? -1 : region.startsWith('right_') ? 1 : Number.isFinite(impactX) && Math.abs(impactX) > 0.05 ? Math.sign(impactX) : this.respawnGeneration % 2 ? -1 : 1;
+      this.consciousnessLoss.begin(this.collapseDirection);
+      this.setState(WALKER_STATES.losingConsciousness);
     }
   }
 
@@ -641,6 +914,9 @@ export class CombatLabWalkerController {
     this.bloodEffects = null;
     this.playerBlocker = null;
     this.locomotion.bindBones(null);
+    this.consciousnessLoss.bindBones(null);
+    this.consciousnessLoss.reset();
+    this.environment.onWalkerDisposed?.({ actor, generation: this.respawnGeneration, summary: this.lastDisposalSummary });
     this.setState(WALKER_STATES.disposed);
     if (respawn && this.enabled) this.setState(WALKER_STATES.respawning);
     return true;
@@ -649,6 +925,17 @@ export class CombatLabWalkerController {
   forceRespawn() {
     if (this.actor) this.disposeWalker({ respawn: true });
     else if (this.enabled && this.state === WALKER_STATES.disposed) this.setState(WALKER_STATES.respawning);
+  }
+
+  reset(player = this.playerProvider?.()) {
+    if (this.actor) this.disposeWalker({ respawn: false });
+    this.stateElapsed = 0;
+    this.lethality = new WalkerVitalStabPolicy();
+    this.consciousnessLoss.reset();
+    if (!this.enabled) return false;
+    if (this.state === WALKER_STATES.disposed) this.setState(WALKER_STATES.respawning);
+    this.stateElapsed = this.config.respawnDelaySeconds;
+    return this.spawn(player);
   }
 
   toggleLocomotionPaused() {
@@ -668,6 +955,9 @@ export class CombatLabWalkerController {
   getDiagnostics() {
     const gait = this.locomotion.getDiagnostics();
     const lethality = this.lethality.getDiagnostics();
+    const collapse = this.consciousnessLoss.getDiagnostics();
+    const handoff = this.actor?.ragdollHandoffDiagnostics ?? {};
+    const visualRagdoll = this.actor?.visualAdapter?.ragdollDiagnostics ?? {};
     return {
       enabled: this.enabled,
       state: this.state,
@@ -687,6 +977,14 @@ export class CombatLabWalkerController {
       stanceLeg: gait.stanceLeg,
       firstStabImpaired: lethality.criticalStabCount === 1,
       ...lethality,
+      deathState: this.state,
+      consciousnessLossProgress: Number(collapse.progress.toFixed(3)),
+      collapseDirection: collapse.collapseDirection,
+      locomotionWeight: Number(gait.blendWeight.toFixed(3)),
+      collapseLocomotionWeight: Number(collapse.locomotionWeight.toFixed(3)),
+      pelvisDescent: Number(collapse.pelvisDescent.toFixed(3)),
+      torsoPitch: Number(collapse.torsoPitch.toFixed(3)),
+      lateralImbalance: Number(collapse.lateralImbalance.toFixed(3)),
       ragdollActive: this.actor?.ragdollActive === true,
       ragdollElapsed: Number(this.ragdollElapsed.toFixed(3)),
       fadeProgress: Number(this.fadeProgress.toFixed(3)),
@@ -701,6 +999,21 @@ export class CombatLabWalkerController {
       respawnGeneration: this.respawnGeneration,
       liveWalkers: this.actor ? 1 : 0,
       paused: this.pauseLocomotion,
+      encounterFootprintActive: this.footprintActive,
+      spawnPoint: this.spawnDiagnostics?.point ?? null,
+      spawnGroundHeight: this.spawnDiagnostics?.groundHeight ?? null,
+      finalAnimatedPelvisPosition: handoff.finalAnimatedPelvisPosition ?? visualRagdoll.finalAnimatedPelvisPosition ?? null,
+      firstRagdollPelvisPosition: handoff.firstRagdollPelvisPosition ?? visualRagdoll.firstRagdollPelvisPosition ?? null,
+      maximumBodyPositionJump: handoff.maximumBodyPositionJump ?? 0,
+      maximumBodyRotationJump: handoff.maximumBodyRotationJump ?? 0,
+      maximumJointAnchorSeparation: handoff.maximumJointAnchorSeparation ?? 0,
+      maximumParentChildBoneLengthError: visualRagdoll.maximumParentChildBoneLengthError ?? 0,
+      maximumFirstFrameLinearVelocity: handoff.maximumFirstFrameLinearVelocity ?? 0,
+      maximumFirstFrameAngularVelocity: handoff.maximumFirstFrameAngularVelocity ?? 0,
+      nonFiniteTransformCount: (handoff.nonFiniteTransformCount ?? 0) + (visualRagdoll.nonFiniteTransformCount ?? 0),
+      changedBoneScaleCount: visualRagdoll.changedBoneScaleCount ?? 0,
+      ragdollBindingCount: this.actor?.visualAdapter?.ragdollBindings?.length ?? 0,
+      ragdollActivationCount: this.ragdollActivationCount,
       stateHistory: [...this.stateHistory],
       lastDisposalSummary: this.lastDisposalSummary,
     };
@@ -712,3 +1025,5 @@ export class CombatLabWalkerController {
     else if (this.state !== WALKER_STATES.disposed) this.setState(WALKER_STATES.disposed);
   }
 }
+
+export const CombatLabWalkerController = ProceduralWalkerController;

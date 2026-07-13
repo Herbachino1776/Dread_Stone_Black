@@ -46,7 +46,7 @@ export class SceneSessionHost {
 
   async attachFolsomCombatEncounter() {
     if (this.locationId !== 'folsom' || !this.dungeon?.scene || this.dungeon.combatEncounter) return null;
-    this.dungeon.combatEncounter = await FolsomCombatEncounter.create({ dungeon: this.dungeon, audioRuntime: this.audioRuntime });
+    this.dungeon.combatEncounter = await FolsomCombatEncounter.create({ dungeon: this.dungeon, audioRuntime: this.audioRuntime, query: this.query, player: this.player });
     return this.dungeon.combatEncounter;
   }
 

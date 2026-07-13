@@ -871,7 +871,7 @@ test('combat feedback guards unsupported haptics, cooldowns contact audio, and h
   feedback.dispose();
 });
 
-test('Folsom promotes one model_idle combat actor exactly ten meters from spawn and cleans up', async () => {
+test('Folsom keeps the stationary model_idle subject and adds one independently routed walker', async () => {
   const scene = new THREE.Scene();
   const dungeon = { scene, collision: { sampleWalkableY: () => ({ y: 0.16 }), canStandAtFloorPosition: () => true, getIntersectingBlockers: () => [] } };
   const encounter = await FolsomCombatEncounter.create({ dungeon });
@@ -883,12 +883,16 @@ test('Folsom promotes one model_idle combat actor exactly ten meters from spawn 
   assert.equal(scene.children.filter((child) => child.name.includes('combat-subject')).length, 1);
   assert.equal(scene.getObjectByName('folsom-model-idle-raw-reference'), undefined);
   assert.ok(pelvis.x > 7 && pelvis.z < -3);
-  assert.equal(encounter.physics.world.bodies.len(), 19);
+  assert.ok(encounter.walkerController.actor);
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
+  assert.equal(encounter.physics.world.bodies.len(), 37);
   encounter.reset();
-  assert.equal(encounter.physics.world.bodies.len(), 19);
+  assert.equal(encounter.physics.world.bodies.len(), 37);
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
   assert.equal(scene.children.filter((child) => child.name.includes('combat-subject')).length, 1);
   encounter.dispose();
   assert.equal(scene.getObjectByName('folsom-model-idle-combat-subject'), undefined);
+  assert.equal(scene.children.some((child) => child.name.startsWith('folsom-procedural-walker-')), false);
 });
 
 test('skinned-vertex bounds produce one uniform 1.82 meter model_idle scale', () => {

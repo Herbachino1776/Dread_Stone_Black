@@ -159,7 +159,7 @@ export class FirstPersonViewmodelHost {
 
   getTorchCombatActor() {
     const runtime = this.dungeon?.isCombatLab ? this.dungeon : this.dungeon?.combatEncounter;
-    return runtime?.disposed === true ? null : runtime?.actor ?? null;
+    return runtime?.disposed === true ? null : runtime?.getPriorityCombatActor?.(this.player) ?? runtime?.actor ?? null;
   }
 
   getTorchDarknessLevel() {
