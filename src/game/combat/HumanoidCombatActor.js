@@ -317,7 +317,7 @@ export class HumanoidCombatActor {
     const wound = this.woundSystem.markExtracted(woundId, { releaseSeverity, direction });
     if (wound) {
       this.physiology.onWoundCreated(wound);
-      this.visualAdapter?.releaseEmbeddedReaction?.({ regionId: wound.regionId, severity: releaseSeverity, worldDirection: direction, actorState: this.lifeState });
+      this.visualAdapter?.releaseEmbeddedTension?.();
     }
     return wound;
   }
@@ -416,7 +416,7 @@ export class HumanoidCombatActor {
     this.reflex.intensity = THREE.MathUtils.clamp(Math.max(this.reflex.intensity, intensity * 1.8), 0, 1);
     this.reflex.time = 0.38 + this.reflex.intensity * 0.42;
     this.reflex.direction.copy(direction ?? new THREE.Vector3());
-    this.visualAdapter?.triggerPainReaction?.({ regionId, severity: intensity, worldDirection: direction, depth: details.depth ?? 0, slashSeverity: details.slashSeverity ?? 0, impactForce: details.force ?? 0, hitWorldPosition: details.point ?? null, actorState: this.lifeState, source: details.source ?? 'combat_contact', variation: details.variation ?? 0, impactMemory: details.impactMemory ?? 0, recoveryState: details.recoveryState ?? 'idle' });
+    this.visualAdapter?.triggerPainReaction?.({ regionId, severity: intensity, worldDirection: direction, depth: details.depth ?? 0, slashSeverity: details.slashSeverity ?? 0, impactForce: details.force ?? 0, hitWorldPosition: details.point ?? null, actorState: this.lifeState, source: details.source ?? 'combat_contact', reactionKind: details.reactionKind ?? null, variation: details.variation ?? 0, impactMemory: details.impactMemory ?? 0, recoveryState: details.recoveryState ?? 'idle' });
     if (intensity > 0.08 && this.lifeState !== 'dead') this.eventSink?.('pain_vocal', { position: this.getBodyWorldPosition('head'), severity: intensity });
   }
 

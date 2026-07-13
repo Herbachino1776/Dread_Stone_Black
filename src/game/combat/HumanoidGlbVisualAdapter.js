@@ -383,8 +383,8 @@ export class HumanoidGlbVisualAdapter {
     this.reactionController?.setEmbeddedTension?.(contact);
   }
 
-  releaseEmbeddedReaction(contact) {
-    return this.reactionController?.releaseEmbedded?.(contact) ?? false;
+  releaseEmbeddedTension() {
+    return this.reactionController?.releaseEmbeddedTension?.() ?? false;
   }
 
   bindVisibleSurface(worldPoint, options = {}) {
@@ -399,12 +399,9 @@ export class HumanoidGlbVisualAdapter {
   }
 
   getFallbackWoundAnchor(bodyId, sourcePoint, sourceNormal = new THREE.Vector3(0, 0, 1)) {
-    const pose = this.getProxyPose(bodyId);
-    if (!pose) return { point: sourcePoint.clone(), normal: sourceNormal.clone().normalize(), fallback: true };
-    const towardHit = sourcePoint.clone().sub(pose.position);
-    if (towardHit.lengthSq() < 1e-8) towardHit.copy(sourceNormal);
-    towardHit.normalize();
-    return { point: pose.position.clone().addScaledVector(towardHit, 0.012), normal: towardHit, fallback: true };
+    const normal = sourceNormal.clone();
+    if (normal.lengthSq() < 1e-8) normal.set(0, 0, 1);
+    return { point: sourcePoint.clone(), normal: normal.normalize(), fallback: true, bodyId };
   }
 
   getProxyPose(bodyId) {

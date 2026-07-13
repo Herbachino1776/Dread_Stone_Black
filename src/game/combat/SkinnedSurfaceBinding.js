@@ -38,11 +38,14 @@ export function reconstructSkinnedSurface(binding, target = {}) {
 
 export function findClosestSkinnedSurface(skinnedMeshes, worldPoint, { regionId = null, bodyId = null, referenceNormal = null, maximumDistance = MAX_SURFACE_PROJECTION_DISTANCE } = {}) {
   let best = null;
-  let bestDistanceSq = maximumDistance * maximumDistance;
+  const maximumDistanceSq = maximumDistance * maximumDistance;
+  let bestScore = Infinity;
   for (const mesh of skinnedMeshes ?? []) {
     const geometry = mesh.geometry;
     const position = geometry?.attributes?.position;
-    if (!mesh.visible || !position) continue;
+    let visible = mesh.visible;
+    for (let parent = mesh.parent; visible && parent; parent = parent.parent) visible = parent.visible;
+    if (!visible || !position) continue;
     mesh.updateMatrixWorld(true);
     mesh.skeleton?.update?.();
     const triangleCount = (geometry.index?.count ?? position.count) / 3;
@@ -54,12 +57,16 @@ export function findClosestSkinnedSurface(skinnedMeshes, worldPoint, { regionId 
       if (triangle.getArea() < 1e-10) continue;
       triangle.closestPointToPoint(worldPoint, closest);
       const distanceSq = closest.distanceToSquared(worldPoint);
-      if (distanceSq >= bestDistanceSq) continue;
+      if (distanceSq > maximumDistanceSq) continue;
+      const naturalNormal = triangle.getNormal(new THREE.Vector3());
+      const normalCompatibility = referenceNormal ? naturalNormal.dot(referenceNormal) : 1;
+      if (referenceNormal && normalCompatibility < -0.35) continue;
+      const score = distanceSq + (1 - THREE.MathUtils.clamp(normalCompatibility, 0, 1)) * 0.0036;
+      if (score >= bestScore) continue;
       const barycentric = triangle.getBarycoord(closest, new THREE.Vector3());
       if (!barycentric || Math.abs(barycentric.x + barycentric.y + barycentric.z - 1) > 1e-4) continue;
-      const normal = triangle.getNormal(new THREE.Vector3());
-      if (referenceNormal && normal.dot(referenceNormal) < 0) normal.negate();
-      bestDistanceSq = distanceSq;
+      const normal = referenceNormal?.clone?.().normalize() ?? naturalNormal;
+      bestScore = score;
       best = {
         kind: 'skinned_triangle',
         mesh,

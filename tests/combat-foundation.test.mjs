@@ -14,8 +14,8 @@ import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, W
 import { WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveSlashLeadingPart } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
-import { applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
-import { PAIN_REACTION_LIMITS, ProceduralPainReactionController, buildReactionPose, getReactionFamily, resolveReactionTiming } from '../src/game/combat/ProceduralPainReaction.js';
+import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
+import { PAIN_REACTION_LIMITS, REACTION_KINDS, REACTION_PROFILES, ProceduralPainReactionController, buildReactionPose, getReactionFamily, resolveReactionTiming } from '../src/game/combat/ProceduralPainReaction.js';
 import { MAX_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, findClosestSkinnedSurface, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
 import { COMBAT_DIRECTOR_EVENTS, CombatDirector, PENETRATION_STAGES, resolveMeleeTimeline } from '../src/game/combat/CombatDirector.js';
 import { isDamageIntent, MELEE_INTENTS, MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
@@ -179,6 +179,22 @@ test('penetration withdrawal cannot regress into a later embedded stage', () => 
   director.update(0.25);
   assert.deepEqual(interaction.stageHistory.map((entry) => entry.stage), [PENETRATION_STAGES.approach, PENETRATION_STAGES.surfaceContact, PENETRATION_STAGES.surfaceCompression, PENETRATION_STAGES.surfaceRupture, PENETRATION_STAGES.softTissue, PENETRATION_STAGES.withdrawal, PENETRATION_STAGES.exit, PENETRATION_STAGES.recovery]);
   assert.equal(interaction.completed, true);
+  director.dispose();
+});
+
+test('puncture entry owns one reaction event and extraction owns none while preserving extraction events', () => {
+  const director = new CombatDirector();
+  const observed = [];
+  director.subscribe('*', (event) => observed.push({ type: event.type, action: event.payload.action ?? event.payload.cue ?? event.payload.kind, source: event.payload.source }));
+  const intent = { weaponId: 'test_knife', intent: MELEE_INTENTS.stab, ownerId: 3, speed: 1, intentional: true, damaging: true };
+  const interaction = director.beginPuncture({ weapon: { id: 'test_knife', family: 'knife' }, intent, hit: { regionId: 'upper_chest' }, entryPoint: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1), depth: 0.012, force: 1 });
+  director.update(0.13);
+  assert.equal(observed.filter((event) => event.type === COMBAT_DIRECTOR_EVENTS.reaction && event.source === 'directed_puncture').length, 1);
+  director.completeWithdrawal(interaction.id, { direction: new THREE.Vector3(0, 0, 1), releaseSeverity: 0.04, position: new THREE.Vector3() });
+  director.update(0.25);
+  assert.equal(observed.filter((event) => event.type === COMBAT_DIRECTOR_EVENTS.reaction).length, 1, 'extraction schedules no second body reaction');
+  ['withdrawal_release', 'extract', 'extraction', 'withdrawal'].forEach((action) => assert.ok(observed.some((event) => event.action === action), `${action} remains scheduled`));
+  assert.equal(director.getDiagnostics().extractionReactionAttempted, false);
   director.dispose();
 });
 
@@ -356,6 +372,55 @@ test('reaction variation and impact memory change guarding without exceeding pos
   repeated.rotations.forEach((rotation) => assert.ok(rotation.length() <= PAIN_REACTION_LIMITS.maximumBoneAngle + 1e-8));
 });
 
+test('source-aware puncture and slash profiles use deliberate smooth onset without weakening blunt reactions', () => {
+  const punctureTiming = resolveReactionTiming('upper_chest', 0.45, REACTION_KINDS.punctureEntry);
+  const slashTiming = resolveReactionTiming('upper_chest', 0.45, REACTION_KINDS.slash);
+  assert.ok(punctureTiming.impact >= 0.11 && punctureTiming.impact <= 0.17);
+  assert.ok(punctureTiming.recovery >= 0.35 && punctureTiming.recovery <= 0.55);
+  assert.ok(slashTiming.impact >= 0.1 && slashTiming.recovery >= 0.27);
+  const contact = { regionId: 'upper_chest', severity: 0.55, depth: 0.06, localDirection: new THREE.Vector3(0.35, 0, -1).normalize() };
+  const puncture = buildReactionPose({ ...contact, reactionKind: REACTION_KINDS.punctureEntry });
+  const slash = buildReactionPose({ ...contact, slashSeverity: 0.55, reactionKind: REACTION_KINDS.slash });
+  const blunt = buildReactionPose({ ...contact, reactionKind: REACTION_KINDS.blunt });
+  const diagnostic = buildReactionPose({ ...contact, reactionKind: REACTION_KINDS.diagnostic });
+  assert.ok(slash.rotations.get('lower_chest').length() / puncture.rotations.get('lower_chest').length() >= 0.35);
+  assert.ok(slash.rotations.get('lower_chest').length() / puncture.rotations.get('lower_chest').length() <= 0.5);
+  assert.ok(slash.rootRecoil.length() <= 0.012 + 1e-8);
+  assert.ok(puncture.rootRecoil.length() <= 0.025 + 1e-8);
+  assert.ok(blunt.rotations.get('lower_chest').distanceTo(diagnostic.rotations.get('lower_chest')) < 1e-10, 'blunt keeps the pre-profile amplitude');
+  assert.equal(REACTION_PROFILES[REACTION_KINDS.blunt].amplitudeMultiplier, 1);
+
+  const { bones, controller } = createReactionRig();
+  controller.trigger({ regionId: 'upper_chest', severity: 0.35, depth: 0.025, worldDirection: new THREE.Vector3(0, 0, -1), source: 'directed_puncture' });
+  const samples = [];
+  for (let frame = 0; frame < 6; frame += 1) {
+    bones.forEach((bone) => bone.quaternion.identity());
+    controller.applyAfterMixer(1 / 30);
+    samples.push(controller.currentRotations.get('lower_chest')?.length() ?? 0);
+  }
+  assert.ok(samples.slice(1).every((value, index) => value >= samples[index] - 1e-9), 'puncture onset rises monotonically');
+  const largestJumpDegrees = Math.max(...samples.slice(1).map((value, index) => THREE.MathUtils.radToDeg(value - samples[index])));
+  assert.ok(largestJumpDegrees <= 2.5, `30 FPS onset jump stays deliberate (${largestJumpDegrees.toFixed(2)} degrees)`);
+});
+
+test('embedded-tension release eases to zero without invoking a new reaction trigger', () => {
+  const { bones, controller } = createReactionRig();
+  controller.setEmbeddedTension({ regionId: 'upper_chest', depth: 0.12, worldDirection: new THREE.Vector3(0, 0, -1) });
+  for (let frame = 0; frame < 8; frame += 1) { bones.forEach((bone) => bone.quaternion.identity()); controller.applyAfterMixer(1 / 60); }
+  const held = controller.embeddedTension;
+  let triggerCount = 0;
+  const originalTrigger = controller.trigger.bind(controller);
+  controller.trigger = (...args) => { triggerCount += 1; return originalTrigger(...args); };
+  assert.equal(controller.releaseEmbeddedTension(), true);
+  bones.forEach((bone) => bone.quaternion.identity());
+  controller.applyAfterMixer(1 / 60);
+  assert.ok(controller.embeddedTension > 0 && controller.embeddedTension < held, 'release eases instead of snapping');
+  for (let frame = 0; frame < 90; frame += 1) { bones.forEach((bone) => bone.quaternion.identity()); controller.applyAfterMixer(1 / 60); }
+  assert.equal(controller.embeddedTension, 0);
+  assert.equal(controller.embeddedRegion, null);
+  assert.equal(triggerCount, 0);
+});
+
 test('reaction controller preserves mixer-authored scales, clamps repeated hits, resets, and cannot accumulate pose drift', () => {
   const { root, bones, controller } = createReactionRig();
   const authoredScales = new Map([...bones].map(([id, bone]) => [id, bone.scale.clone()]));
@@ -382,6 +447,10 @@ test('reaction controller preserves mixer-authored scales, clamps repeated hits,
   bones.forEach((bone) => bone.quaternion.identity());
   controller.applyAfterMixer(1 / 60);
   assert.ok(controller.embeddedTension > firstTension && controller.embeddedTension < controller.embeddedTensionTarget);
+  controller.reset();
+  assert.equal(controller.embeddedTension, 0);
+  assert.equal(controller.embeddedTensionTarget, 0);
+  assert.equal(controller.embeddedRegion, null);
 });
 
 test('puncture bindings store valid barycentrics and follow animated and procedural skinned movement', () => {
@@ -416,6 +485,98 @@ test('slash paths use bounded multi-sample surface bindings and never require on
   const failed = findClosestSkinnedSurface([mesh], new THREE.Vector3(4, 4, 4));
   assert.equal(failed, null, 'failed projection can split the ribbon instead of bridging open space');
   geometry.dispose(); mesh.material.dispose();
+});
+
+test('semantic fallback anchors preserve torso contact and follow proxy-body motion', async () => {
+  const sourcePoint = new THREE.Vector3(0.18, 1.35, -0.22);
+  const sourceNormal = new THREE.Vector3(0.2, 0.1, 1).normalize();
+  const adapterAnchor = HumanoidGlbVisualAdapter.prototype.getFallbackWoundAnchor.call({}, 'upper_chest', sourcePoint, sourceNormal);
+  assert.ok(adapterAnchor.point.distanceTo(sourcePoint) < 1e-12, 'fallback never substitutes the proxy center');
+  assert.ok(adapterAnchor.normal.distanceTo(sourceNormal) < 1e-12);
+
+  const { actor, physics } = await createActor();
+  for (const bodyId of ['upper_chest', 'lower_chest', 'abdomen']) {
+    const { hit, worldPoint } = makeHit(actor, bodyId, new THREE.Vector3(0.035, 0.01, 0.1));
+    const wound = actor.beginPunctureWound({ hit, entryPoint: worldPoint, direction: new THREE.Vector3(0, 0, -1), surfaceNormal: new THREE.Vector3(0, 0, 1), depth: 0.018 });
+    const semantic = actor.woundSystem.getWorldPose(wound);
+    const attached = actor.woundSystem.getAttachedSurfacePose(wound);
+    assert.ok(attached, `${bodyId} fallback remains visible`);
+    assert.ok(attached.point.distanceTo(semantic.point) <= 0.015, `${bodyId} stays within semantic-contact tolerance`);
+    assert.equal(wound.visualSlot.puncture.material.userData.authoredKnifeWoundVariantId, wound.decalVariantId);
+  }
+  const tracked = actor.woundSystem.wounds[0];
+  const before = actor.woundSystem.getAttachedSurfacePose(tracked).point.clone();
+  const body = actor.bodies.get(tracked.bodyId).body;
+  const translation = body.translation();
+  body.setTranslation({ x: translation.x + 0.2, y: translation.y + 0.1, z: translation.z - 0.05 }, true);
+  body.setRotation(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.35), true);
+  const semanticAfter = actor.woundSystem.getWorldPose(tracked);
+  const after = actor.woundSystem.getAttachedSurfacePose(tracked);
+  assert.ok(after.point.distanceTo(before) > 0.15, 'fallback follows proxy translation and rotation');
+  assert.ok(after.point.distanceTo(semanticAfter.point) <= 0.015);
+  actor.dispose(); physics.dispose();
+});
+
+test('failed slash projection renders a bounded authored slash fallback and reset releases it', async () => {
+  const { actor, physics } = await createActor();
+  const { hit, worldPoint } = makeHit(actor, 'upper_chest', new THREE.Vector3(-0.08, 0, 0.1));
+  const endPoint = worldPoint.clone().add(new THREE.Vector3(0.18, 0.035, 0));
+  const materialCount = actor.woundSystem.decalLibrary.materialsById.size;
+  const wound = actor.applySlashWound({ hit, startPoint: worldPoint, endPoint, surfaceNormal: new THREE.Vector3(0, 0, 1), cutDirection: endPoint.clone().sub(worldPoint).normalize(), depth: 0.018, cutLength: worldPoint.distanceTo(endPoint), severity: 0.32, classification: 'shallow_cut' });
+  assert.equal(wound.surfaceBindingStatus, 'slash_fallback_anchor');
+  assert.equal(wound.fallbackReason, 'insufficient_slash_surface_samples');
+  assert.equal(wound.renderedSegmentCount, 1);
+  assert.equal(wound.visualSlot.puncture.visible, true);
+  assert.equal(wound.visualSlot.slash.visible, false);
+  assert.equal(wound.visualSlot.puncture.material.userData.authoredKnifeWoundVariantId, wound.decalVariantId);
+  assert.ok(wound.visualSlot.puncture.scale.x <= WOUND_CONFIG.maximumCutLength);
+  assert.equal(actor.woundSystem.decalLibrary.materialsById.size, materialCount, 'fallback creates no material or texture');
+  actor.reset();
+  assert.ok(actor.woundSystem.visualSlots.every((slot) => slot.woundId == null && !slot.puncture.visible && !slot.slash.visible));
+  assert.equal(wound.slashFallbackUsage, false);
+  assert.equal(wound.fallbackReason, null);
+  actor.dispose(); physics.dispose();
+});
+
+test('wound visuals reselect only on material category changes, remain bounded, and lock at completion', async () => {
+  const { actor, physics } = await createActor();
+  const { hit, worldPoint } = makeHit(actor, 'upper_chest', new THREE.Vector3(0, 0, 0.1));
+  const wound = actor.beginPunctureWound({ hit, entryPoint: worldPoint, direction: new THREE.Vector3(0, 0, -1), surfaceNormal: new THREE.Vector3(0, 0, 1), depth: 0.012, impactSeverity: 0.2 });
+  assert.equal(wound.decalPhysicalCategory, 'slit');
+  assert.equal(wound.decalSelectionRevisionCount, 0);
+  actor.woundSystem.extendPuncture(wound.id, { depth: 0.06 });
+  assert.equal(wound.decalPhysicalCategory, 'split');
+  const splitVariant = wound.decalVariantId;
+  const splitRevision = wound.decalSelectionRevisionCount;
+  actor.woundSystem.extendPuncture(wound.id, { depth: 0.061 });
+  assert.equal(wound.decalVariantId, splitVariant, 'same physical category cannot flicker');
+  assert.equal(wound.decalSelectionRevisionCount, splitRevision);
+  actor.woundSystem.extendPuncture(wound.id, { depth: 0.075, lateralMotion: 0.016 });
+  assert.equal(wound.decalPhysicalCategory, 'double');
+  wound.impactSeverity = 0.96;
+  wound.entryObliqueness = 0.62;
+  actor.woundSystem.extendPuncture(wound.id, { depth: 0.11, lateralMotion: 0.03 });
+  assert.equal(wound.decalPhysicalCategory, 'burst');
+  assert.ok(wound.decalSelectionRevisionCount <= 3);
+  actor.woundSystem.markExtracted(wound.id, { releaseSeverity: 0.11 });
+  assert.equal(wound.decalSelectionState, 'locked');
+  const lockedVariant = wound.decalVariantId;
+  wound.decalPhysicalCategory = 'slit';
+  actor.woundSystem.updateDecalSelection(wound, 'puncture');
+  assert.equal(wound.decalVariantId, lockedVariant, 'locked wound never reselects');
+  assert.ok(wound.decalSelectionRevisionCount <= 3);
+
+  const slashStart = worldPoint.clone().add(new THREE.Vector3(-0.12, 0.12, 0));
+  const slashEnd = slashStart.clone().add(new THREE.Vector3(0.1, 0, 0));
+  const slash = actor.applySlashWound({ hit: { ...hit, localPoint: hit.localPoint.clone().add(new THREE.Vector3(-0.12, 0.12, 0)) }, startPoint: slashStart, endPoint: slashEnd, surfaceNormal: new THREE.Vector3(0, 0, 1), cutDirection: new THREE.Vector3(1, 0, 0), depth: 0.03, cutLength: 0.1, severity: 0.45, classification: 'shallow_cut' });
+  const curvedEnd = slashEnd.clone().add(new THREE.Vector3(0, 0.1, 0));
+  actor.woundSystem.extendSlash(slash.id, { localEnd: slash.localCutEnd.clone().add(new THREE.Vector3(0, 0.1, 0)), worldEnd: curvedEnd, surfaceNormal: new THREE.Vector3(0, 0, 1), addedTravel: 0.1, depth: 0.03, severity: 0.52, edgeAlignment: 0.8 });
+  assert.ok(slash.pathCurvature >= 0.32, 'curvature derives from the sampled physical path');
+  assert.equal(slash.decalPhysicalCategory, 'crescent');
+  actor.woundSystem.finishSlash(slash.id, true);
+  assert.equal(slash.lastContactInterrupted, true);
+  assert.equal(slash.decalSelectionState, 'locked');
+  actor.dispose(); physics.dispose();
 });
 
 test('wound and reaction lifecycle keeps one bounded pool while retaining the session decal cache', async () => {

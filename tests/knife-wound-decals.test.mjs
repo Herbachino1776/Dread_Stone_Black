@@ -92,6 +92,37 @@ test('deterministic physical selection stays family-correct, plausible, mirrored
   [ordinary[0], severe, slash].forEach((selection) => assert.ok(!selection.mirroredX || selection.variant.allowMirrorX));
 });
 
+test('bounded deterministic anti-repetition varies only among physically eligible authored categories', () => {
+  const first = selectKnifeWoundVariant(manifest, punctureProperties({ woundId: 'ordered_1' }));
+  const identical = selectKnifeWoundVariant(manifest, punctureProperties({ woundId: 'ordered_1' }));
+  assert.equal(identical.variant.id, first.variant.id);
+  const second = selectKnifeWoundVariant(manifest, punctureProperties({ woundId: 'ordered_2', recentVariantIds: [first.variant.id] }));
+  assert.notEqual(second.variant.id, first.variant.id, 'immediate repeat is avoided when both slit variants are eligible');
+  assert.ok(second.eligibleCandidateIds.includes(first.variant.id));
+
+  const shallowPunctures = Array.from({ length: 12 }, (_, index) => selectKnifeWoundVariant(manifest, punctureProperties({ woundId: `shallow_${index}`, recentVariantIds: index ? [first.variant.id, second.variant.id] : [] })));
+  assert.ok(shallowPunctures.every((selection) => selection.variant.family === 'puncture' && selection.category === 'slit'));
+  assert.ok(shallowPunctures.every((selection) => !selection.variant.id.includes('_burst_')));
+  const split = selectKnifeWoundVariant(manifest, punctureProperties({ woundId: 'medium_split', penetrationDepth: 0.06, surfaceDisruption: 0.46, selectionSeverity: 0.5 }));
+  assert.equal(split.category, 'split');
+  const double = selectKnifeWoundVariant(manifest, punctureProperties({ woundId: 'torn_double', penetrationDepth: 0.075, lateralTearingMeters: 0.016, surfaceDisruption: 0.62, selectionSeverity: 0.68 }));
+  assert.equal(double.category, 'double');
+  const burst = selectKnifeWoundVariant(manifest, punctureProperties({ woundId: 'severe_burst', penetrationDepth: 0.11, entryObliqueness: 0.62, impactSeverity: 0.94, lateralTearingMeters: 0.028, surfaceDisruption: 0.9, selectionSeverity: 0.92 }));
+  assert.equal(burst.category, 'burst');
+
+  const slashHistory = [];
+  const shallowSlashes = Array.from({ length: 8 }, (_, index) => {
+    const selection = selectKnifeWoundVariant(manifest, slashProperties({ woundId: `shallow_slash_${index}`, recentVariantIds: slashHistory.slice(-4) }));
+    slashHistory.push(selection.variant.id);
+    return selection;
+  });
+  assert.deepEqual(new Set(shallowSlashes.map((selection) => selection.variant.id)), new Set(['knife_slash_long_01', 'knife_slash_long_02']));
+  assert.equal(selectKnifeWoundVariant(manifest, slashProperties({ woundId: 'jagged', maximumDepth: 0.04, surfaceDisruption: 0.58, selectionSeverity: 0.65 })).category, 'jagged');
+  assert.equal(selectKnifeWoundVariant(manifest, slashProperties({ woundId: 'gouge', cutLength: 0.07, maximumDepth: 0.03, edgeAlignment: 0.3, surfaceDisruption: 0.55, selectionSeverity: 0.62 })).category, 'gouge');
+  assert.equal(selectKnifeWoundVariant(manifest, slashProperties({ woundId: 'wide', maximumDepth: 0.065, surfaceDisruption: 0.82, selectionSeverity: 0.88 })).category, 'wide');
+  assert.equal(selectKnifeWoundVariant(manifest, slashProperties({ woundId: 'crescent', maximumDepth: 0.03, pathCurvature: 0.4, surfaceDisruption: 0.62, selectionSeverity: 0.68 })).category, 'crescent');
+});
+
 test('cropped UVs map alpha content rather than the transparent 512 canvas', () => {
   const variant = manifest.variants.find((entry) => entry.id === 'knife_puncture_slit_01');
   const uv = getAlphaBoundUv(variant, false);

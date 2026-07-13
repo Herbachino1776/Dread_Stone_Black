@@ -36,22 +36,28 @@ function randomFromSeed(seed) {
   return (value >>> 0) / 4294967296;
 }
 
-function punctureCategory(properties) {
-  const severeTearing = properties.surfaceDisruption >= 0.78
+export function punctureCategory(properties) {
+  const severeTearing = properties.penetrationDepth >= 0.075
+    && properties.surfaceDisruption >= 0.78
     && properties.entryObliqueness >= 0.45
-    && (properties.lateralTearingMeters >= 0.02 || properties.reopeningCount >= 2 || properties.impactSeverity >= 0.85);
+    && properties.impactSeverity >= 0.8
+    && (properties.lateralTearingMeters >= 0.02 || properties.reopeningCount >= 2 || properties.withdrawalDamage >= 0.8);
   if (severeTearing) return 'burst';
   if (properties.reopeningCount > 0 || properties.lateralTearingMeters >= 0.012 || properties.withdrawalDamage >= 0.55 || properties.entryObliqueness >= 0.28 && properties.impactSeverity >= 0.55) return 'double';
   if (properties.penetrationDepth >= 0.04 || properties.surfaceDisruption >= 0.38) return 'split';
   return 'slit';
 }
 
-function slashCategory(properties) {
-  if (properties.pathCurvature >= 0.32) return 'crescent';
-  if (properties.cutLength <= 0.075 && properties.edgeAlignment < 0.5) return 'gouge';
+export function slashCategory(properties) {
+  if (properties.pathCurvature >= 0.32 && properties.cutLength >= 0.08 && properties.maximumDepth >= 0.02) return 'crescent';
+  if (properties.cutLength <= 0.09 && properties.edgeAlignment < 0.5 && properties.maximumDepth >= 0.025) return 'gouge';
   if (properties.maximumDepth >= 0.055 && properties.surfaceDisruption >= 0.72) return 'wide';
-  if (properties.maximumDepth >= 0.032 || properties.surfaceDisruption >= 0.52 || properties.interrupted) return 'jagged';
+  if (properties.maximumDepth >= 0.032 || properties.surfaceDisruption >= 0.52 || properties.interrupted && properties.maximumDepth >= 0.02) return 'jagged';
   return 'long';
+}
+
+export function getKnifeWoundPhysicalCategory(properties) {
+  return properties.family === 'puncture' ? punctureCategory(properties) : slashCategory(properties);
 }
 
 export function validateKnifeWoundManifest(manifest) {
@@ -92,26 +98,34 @@ export function getAlphaBoundUv(variant, mirroredX = false) {
 
 export function selectKnifeWoundVariant(manifest, properties) {
   const family = properties.family;
-  const category = family === 'puncture' ? punctureCategory(properties) : slashCategory(properties);
+  const category = getKnifeWoundPhysicalCategory(properties);
   const severity = THREE.MathUtils.clamp(properties.selectionSeverity ?? properties.surfaceDisruption ?? 0.2, 0, 1);
   const familyCandidates = manifest.variants.filter((variant) => variant.family === family);
-  let candidates = familyCandidates.filter((variant) => variant.id.includes(`_${category}_`) && severity >= variant.severity[0] && severity <= variant.severity[1]);
+  let candidates = familyCandidates.filter((variant) => variant.id.includes(`_${category}_`) && severity >= variant.severity[0] - 0.08 && severity <= variant.severity[1] + 0.08);
   if (!candidates.length) candidates = familyCandidates.filter((variant) => variant.id.includes(`_${category}_`));
   if (!candidates.length) candidates = familyCandidates.filter((variant) => severity >= variant.severity[0] && severity <= variant.severity[1]);
   if (!candidates.length) candidates = familyCandidates;
   if (!candidates.length) throw new Error(`No authored ${family} wound decal candidate`);
-  const stableKey = [properties.woundId, family, category, severity.toFixed(3), properties.entryObliqueness?.toFixed?.(3) ?? 0, properties.edgeAlignment?.toFixed?.(3) ?? 0].join(':');
+  const eligibleCandidateIds = candidates.map((variant) => variant.id);
+  const recentVariantIds = (properties.recentVariantIds ?? []).filter((id) => eligibleCandidateIds.includes(id)).slice(-4);
+  const immediatePrevious = recentVariantIds.at(-1);
+  if (candidates.length > 1 && immediatePrevious) candidates = candidates.filter((variant) => variant.id !== immediatePrevious);
+  const stableKey = [properties.woundId, family, category].join(':');
   const deterministicSeed = hashString(stableKey);
-  const totalWeight = candidates.reduce((sum, variant) => sum + variant.weight, 0);
+  const weightedCandidates = candidates.map((variant) => {
+    const historyDistance = recentVariantIds.slice(0, -1).reverse().indexOf(variant.id);
+    return { variant, weight: variant.weight * (historyDistance >= 0 ? 0.18 + historyDistance * 0.08 : 1) };
+  });
+  const totalWeight = weightedCandidates.reduce((sum, entry) => sum + entry.weight, 0);
   let cursor = randomFromSeed(deterministicSeed) * totalWeight;
-  let selected = candidates.at(-1);
-  for (const candidate of candidates) {
+  let selected = weightedCandidates.at(-1).variant;
+  for (const candidate of weightedCandidates) {
     cursor -= candidate.weight;
-    if (cursor <= 0) { selected = candidate; break; }
+    if (cursor <= 0) { selected = candidate.variant; break; }
   }
   const mirroredX = selected.allowMirrorX === true && randomFromSeed(deterministicSeed ^ 0x9e3779b9) >= 0.5;
   const rotationVariationRadians = THREE.MathUtils.degToRad((randomFromSeed(deterministicSeed ^ 0x85ebca6b) * 2 - 1) * 5);
-  return { variant: selected, category, deterministicSeed, mirroredX, rotationVariationRadians, selectedAtSeverity: severity };
+  return { variant: selected, category, eligibleCandidateIds, deterministicSeed, mirroredX, rotationVariationRadians, selectedAtSeverity: severity };
 }
 
 export class KnifeWoundDecalLibrary {
