@@ -290,11 +290,15 @@ test('consciousness loss progressively relaxes the full pose without accumulatin
     layer.applyAfterLocomotion();
     return {
       diagnostics: layer.getDiagnostics(),
+      pelvis: bones.get('pelvis').quaternion.clone(),
       head: bones.get('head').quaternion.clone(),
       hand: bones.get('left_hand').quaternion.clone(),
       foot: bones.get('right_foot').quaternion.clone(),
     };
   };
+  const handoffStart = sampleGrounding(0);
+  const handoffNext = sampleGrounding(0.05);
+  assert.ok(handoffStart.pelvis.angleTo(handoffNext.pelvis) > 0.02, 'pelvis and torso continue falling immediately after the kneeling handoff');
   const braced = sampleGrounding(1.45);
   const grounded = sampleGrounding(COMBAT_LAB_WALKER_CONFIG.groundCollapseSeconds);
   assert.ok(braced.diagnostics.groundingProgress > 0.5 && braced.diagnostics.finalRelaxation === 0);

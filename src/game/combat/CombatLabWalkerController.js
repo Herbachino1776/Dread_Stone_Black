@@ -78,6 +78,10 @@ const smoothstep01 = (value) => {
   const t = clamp01(value);
   return t * t * (3 - 2 * t);
 };
+const groundBodyRelease = (progress) => {
+  const t = clamp01(progress / 0.82);
+  return 1 - (1 - t) * (1 - t);
+};
 const moveToward = (current, target, maximumDelta) => current < target ? Math.min(target, current + maximumDelta) : Math.max(target, current - maximumDelta);
 const wrapPhase = (phase) => ((phase % 1) + 1) % 1;
 const angleDelta = (from, to) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
@@ -387,7 +391,7 @@ export class ProceduralConsciousnessLossLayer {
     this.finalRelaxation = smoothstep01((this.groundingProgress - 0.8) / 0.2);
     return {
       brace: smoothstep01(this.groundingProgress / 0.34),
-      bodyRelease: smoothstep01((this.groundingProgress - 0.18) / 0.66),
+      bodyRelease: groundBodyRelease(this.groundingProgress),
       settle: smoothstep01((this.groundingProgress - 0.48) / 0.42),
       relaxation: this.finalRelaxation,
     };
@@ -445,7 +449,7 @@ export class ProceduralConsciousnessLossLayer {
     this.rotate('right_forearm', THREE.MathUtils.degToRad(-5) * shoulderRelease, 0, 0);
     if (this.groundingProgress > 0) {
       const brace = smoothstep01(this.groundingProgress / 0.34);
-      const bodyRelease = smoothstep01((this.groundingProgress - 0.18) / 0.66);
+      const bodyRelease = groundBodyRelease(this.groundingProgress);
       const settle = smoothstep01((this.groundingProgress - 0.48) / 0.42);
       const relaxation = this.finalRelaxation;
       const weakSide = this.direction < 0 ? 'left' : 'right';
