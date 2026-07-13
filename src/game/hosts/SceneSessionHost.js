@@ -5,6 +5,7 @@ import { resolveLocationIdForArea, resolveLocationReturnSpawn, resolveStartupAre
 import { getLoadedLocationDefinitionIds, getLocationDefinition, getLocationRegistryDebugSummary, loadLocationDefinition } from '../locations/locationRegistry.js';
 import { CombatLabScene } from '../combat/CombatLabScene.js';
 import { FolsomCombatEncounter } from '../combat/FolsomCombatEncounter.js';
+import { warmBloodChromaMaterials } from '../combat/BloodChromaMaterial.js';
 
 export class SceneSessionHost {
   constructor({ rendererHost, gameState, query = new URLSearchParams(window.location.search), audioRuntime = null, onSessionChanged = null } = {}) {
@@ -41,6 +42,7 @@ export class SceneSessionHost {
     await this.preloadLocationForArea(area);
     this.createSession({ area, fieldSpawn, spawnId });
     await this.attachFolsomCombatEncounter();
+    await this.warmBloodMaterials();
     return this.getSessionSummary();
   }
 
@@ -76,7 +78,7 @@ export class SceneSessionHost {
 
   async createCombatLabSession() {
     this.disposeCurrentSession();
-    this.dungeon = await CombatLabScene.create({ root: this.rendererHost.root, audioRuntime: this.audioRuntime, query: this.query });
+    this.dungeon = await CombatLabScene.create({ root: this.rendererHost.root, audioRuntime: this.audioRuntime, query: this.query, renderer: this.rendererHost.renderer });
     this.scene = this.dungeon.build();
     this.scene.add(this.camera);
     this.locationId = 'combat-lab';
@@ -88,6 +90,7 @@ export class SceneSessionHost {
       strafeSpeed: PlayerController.DUNGEON_STRAFE_SPEED,
     });
     this.dungeon.player = this.player;
+    await this.warmBloodMaterials();
     return this.getSessionSummary();
   }
 
@@ -120,6 +123,7 @@ export class SceneSessionHost {
       spawnId: destinationArea === 'field' ? null : destinationSpawnId,
     });
     await this.attachFolsomCombatEncounter();
+    await this.warmBloodMaterials();
     const summary = this.getSessionSummary();
     this.audioRuntime?.handleLocationTransition?.(locationId);
 
@@ -222,6 +226,10 @@ export class SceneSessionHost {
       hasPlayer: Boolean(this.player),
       locationLoadDebug: this.getLocationLoadDebugSummary(),
     };
+  }
+
+  warmBloodMaterials({ force = false, includeInactiveLights = true } = {}) {
+    return warmBloodChromaMaterials(this.rendererHost?.renderer, { scene: this.scene, camera: this.camera, force, includeInactiveLights });
   }
 
   configureCameraForLocation(locationId) {

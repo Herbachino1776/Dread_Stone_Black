@@ -44,12 +44,13 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSo
   readFile(new URL('../public/assets/models/npc/human/human_retro_256.glb', import.meta.url)),
   readFile(new URL('../public/assets/models/npc/human/model_idle.glb', import.meta.url)),
 ]);
-const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSource, actorRouterSource] = await Promise.all([
+const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSource, actorRouterSource, bloodMaterialSource] = await Promise.all([
   readFile(new URL('../src/game/combat/KnifeWoundDecalLibrary.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/world-scene/OutdoorLightingDirector.js', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatLabWalkerController.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatActorRouter.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/BloodChromaMaterial.js', import.meta.url), 'utf8'),
 ]);
 const dungeonSceneSource = await readFile(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
 const woundManifest = JSON.parse(woundManifestSource);
@@ -279,10 +280,10 @@ assert.match(physiologySource, /consciousness/);
 assert.match(physiologySource, /interruptBreathing/);
 assert.match(bloodSource, /InstancedMesh/);
 assert.match(bloodSource, /maximumDecals/);
-assert.match(stage2ConfigSource, /fresh: 0x981218/);
-assert.match(stage2ConfigSource, /spray: 0xb31b22/);
-assert.match(stage2ConfigSource, /arterial: 0xc3242b/);
-assert.match(stage2ConfigSource, /slashArterial: 0xff4050/);
+assert.match(stage2ConfigSource, /fresh: 0xc41222/);
+assert.match(stage2ConfigSource, /spray: 0xd41424/);
+assert.match(stage2ConfigSource, /arterial: 0xe0182d/);
+assert.match(stage2ConfigSource, /slashArterial: 0xf01b32/);
 assert.match(folsomEncounterSource, /folsom-model-idle-combat-player-blocker/);
 assert.match(folsomEncounterSource, /new CombatDirector/);
 assert.match(folsomEncounterSource, /applyMeleeSpacingEnvelope/);
@@ -293,9 +294,22 @@ assert.match(folsomEncounterSource, /folsomWalker/);
 assert.match(folsomEncounterSource, /this\.physics\.step\(deltaSeconds/);
 assert.match(combatLabPanelSource, /RAGDOLL Z/);
 assert.match(combatLabPanelSource, /CUT TEST 6/);
-assert.match(stage2ConfigSource, /dried: 0x2b0305/);
+assert.match(stage2ConfigSource, /pooled: 0x850810/);
+assert.match(stage2ConfigSource, /olderPool: 0x58050a/);
+assert.match(stage2ConfigSource, /dried: 0x2b0205/);
 assert.doesNotMatch(woundSource, /emissive\s*:/);
 assert.doesNotMatch(bloodSource, /emissive\s*:/);
+assert.match(bloodSource, /createBloodChromaMaterial/);
+assert.match(decalLibrarySource, /createBloodChromaMaterial/);
+assert.match(bloodMaterialSource, /customProgramCacheKey/);
+assert.match(bloodMaterialSource, /bloodDiffuseEnergy/);
+assert.match(bloodMaterialSource, /bloodMaximumBrightness/);
+assert.match(bloodMaterialSource, /toneMapped = false/);
+assert.match(bloodMaterialSource, /emissiveIntensity = 0/);
+assert.doesNotMatch(bloodMaterialSource, /AdditiveBlending|MeshBasicMaterial/);
+assert.match(sceneHostSource, /warmBloodChromaMaterials/);
+assert.match(combatLabSource, /blood-lighting/);
+assert.match(packageSource, /blood-chroma-material\.test\.mjs/);
 assert.match(feedbackSource, /navigator\?\.vibrate/);
 assert.match(feedbackSource, /maximumVoices/);
 assert.match(folsomEncounterSource, /folsom-model-idle-combat-subject/);

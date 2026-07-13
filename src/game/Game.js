@@ -126,6 +126,7 @@ export class Game {
       audioRuntime: this.audioRuntime,
     });
     this.viewmodelHost.initializeForSession(this.sceneSessionHost);
+    await this.sceneSessionHost.warmBloodMaterials();
     if (this.combatLabEnabled) this.combatLabDebugPanel = new CombatLabDebugPanel({ app: this.app, dungeon: this.dungeon, equipmentRuntime: this.equipmentRuntime });
     this.interactions = new Interactions({
       player: this.player,
@@ -187,6 +188,7 @@ export class Game {
   handleSceneSessionChanged(session = this.sceneSessionHost) {
     this.interactions?.initializeForSession?.({ player: session.player, dungeon: session.dungeon });
     this.viewmodelHost?.rebindSession?.(session);
+    void session.warmBloodMaterials?.();
     this.survivalHost?.initializeForSession?.(session);
     this.progressionHost?.handleLocationChanged?.(session);
     this.wasKeyboardInteractHeld = false;
@@ -224,6 +226,7 @@ export class Game {
     try {
       this.updateUnsafe(time);
       if (!this.hasRenderedFirstFrame) {
+        void this.sceneSessionHost.warmBloodMaterials({ force: true, includeInactiveLights: false });
         this.hasRenderedFirstFrame = true;
         this.resolveFirstFrame?.(true);
         this.resolveFirstFrame = null;

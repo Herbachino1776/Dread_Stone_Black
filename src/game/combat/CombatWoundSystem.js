@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cloneBloodChromaMaterial } from './BloodChromaMaterial.js';
 import { VESSEL_ZONES, WOUND_CONFIG } from './CombatStage2Config.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { getAlphaBoundUv, getKnifeWoundPhysicalCategory } from './KnifeWoundDecalLibrary.js';
@@ -94,6 +95,7 @@ export class CombatWoundSystem {
     this.decalLibrary = decalLibrary;
     this.isolateMaterials = isolateMaterials === true;
     this.ownedMaterials = new Map();
+    if (this.isolateMaterials) this.decalLibrary.materialsById.forEach((sourceMaterial) => this.ownedMaterials.set(sourceMaterial, cloneBloodChromaMaterial(sourceMaterial)));
     this.fadePrepared = false;
     this.bluntMaterial = new THREE.MeshStandardMaterial({ color: 0x372229, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     this.failedProjectionCount = 0;
@@ -650,7 +652,7 @@ export class CombatWoundSystem {
       console.error(`[combat] Authored wound material unavailable for ${wound.decalVariantId ?? 'unselected variant'}; using visible diagnostic fallback material.`);
     }
     if (!sourceMaterial || !this.isolateMaterials) return sourceMaterial ?? this.bluntMaterial;
-    if (!this.ownedMaterials.has(sourceMaterial)) this.ownedMaterials.set(sourceMaterial, sourceMaterial.clone());
+    if (!this.ownedMaterials.has(sourceMaterial)) this.ownedMaterials.set(sourceMaterial, cloneBloodChromaMaterial(sourceMaterial));
     return this.ownedMaterials.get(sourceMaterial);
   }
 
@@ -923,7 +925,6 @@ export class CombatWoundSystem {
     [this.bluntMaterial, ...this.ownedMaterials.values()].forEach((material) => {
       material.transparent = true;
       material.depthWrite = false;
-      material.needsUpdate = true;
     });
   }
 

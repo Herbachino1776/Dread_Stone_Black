@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG } from './CombatStage2Config.js';
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
+import { createBloodChromaMaterial, getBloodChromaFactoryDiagnostics, getBloodMaterialDiagnostics } from './BloodChromaMaterial.js';
 
 const dummy = new THREE.Object3D();
 const tmpDirection = new THREE.Vector3();
+const tmpColor = new THREE.Color();
 
 export class CombatBloodEffects {
   constructor({ scene, woundSystem, physiology, groundY = 0, wallX = null, eventSink = null } = {}) {
@@ -18,8 +20,10 @@ export class CombatBloodEffects {
     this.decals = [];
     this.nextDecal = 0;
     this.fadePrepared = false;
-    this.material = new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.spray, roughness: 0.78, metalness: 0.02 });
-    this.decalMaterial = new THREE.MeshStandardMaterial({ color: BLOOD_COLOR_PALETTE.pooled, roughness: 0.93, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.86, depthWrite: false });
+    this.material = createBloodChromaMaterial({ usage: 'particle', sourceColor: BLOOD_COLOR_PALETTE.spray, color: 0xffffff, roughness: 0.78, metalness: 0.02, transparent: true, opacity: 1, depthWrite: false });
+    this.material.name = 'pooled-combat-blood-particle-material';
+    this.decalMaterial = createBloodChromaMaterial({ usage: 'world-mark', color: BLOOD_COLOR_PALETTE.pooled, roughness: 0.93, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.86, depthWrite: false });
+    this.decalMaterial.name = 'pooled-combat-blood-world-mark-material';
     this.particleMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(BLOOD_EFFECT_CONFIG.particleRadius, 5, 4), this.material, BLOOD_EFFECT_CONFIG.maximumParticles);
     this.particleMesh.name = 'pooled-world-wound-blood-particles';
     this.particleMesh.castShadow = false;
@@ -40,6 +44,7 @@ export class CombatBloodEffects {
       mesh.name = `pooled-combat-blood-world-mark-${index}`;
       mesh.visible = false;
       mesh.renderOrder = 4;
+      enableCombatReadabilityLightLayer(mesh);
       this.scene.add(mesh);
       this.decals.push({ mesh, active: false, createdTime: 0, kind: 'ground' });
     }
@@ -164,8 +169,15 @@ export class CombatBloodEffects {
       }
       dummy.updateMatrix();
       this.particleMesh.setMatrixAt(index, dummy.matrix);
+      const paletteColor = particle.kind === 'arterial-pulse'
+        ? BLOOD_COLOR_PALETTE.arterial
+        : particle.kind === 'slash'
+          ? BLOOD_COLOR_PALETTE.fresh
+          : BLOOD_COLOR_PALETTE.spray;
+      this.particleMesh.setColorAt(index, tmpColor.setHex(paletteColor));
     });
     this.particleMesh.instanceMatrix.needsUpdate = true;
+    if (this.particleMesh.instanceColor) this.particleMesh.instanceColor.needsUpdate = true;
     this.particleMesh.computeBoundingSphere();
   }
 
@@ -179,12 +191,6 @@ export class CombatBloodEffects {
   beginFade() {
     if (this.fadePrepared) return;
     this.fadePrepared = true;
-    this.material.transparent = true;
-    this.material.depthWrite = false;
-    this.material.needsUpdate = true;
-    this.decalMaterial.transparent = true;
-    this.decalMaterial.depthWrite = false;
-    this.decalMaterial.needsUpdate = true;
   }
 
   setOpacity(opacity) {
@@ -194,8 +200,18 @@ export class CombatBloodEffects {
     this.decalMaterial.opacity = value * 0.86;
   }
 
-  getDiagnostics() {
-    return { particles: this.particles.filter((particle) => particle.active).length, particleLimit: this.particles.length, decals: this.decals.filter((decal) => decal.active).length, decalLimit: this.decals.length, approximateBytes: this.particles.length * 96 + this.decals.length * 48 };
+  getDiagnostics({ illumination = 1 } = {}) {
+    return {
+      particles: this.particles.filter((particle) => particle.active).length,
+      particleLimit: this.particles.length,
+      decals: this.decals.filter((decal) => decal.active).length,
+      decalLimit: this.decals.length,
+      approximateBytes: this.particles.length * 96 + this.decals.length * 48,
+      particleMaterial: getBloodMaterialDiagnostics(this.material, { illumination }),
+      worldMarkMaterial: getBloodMaterialDiagnostics(this.decalMaterial, { illumination }),
+      materialFactory: getBloodChromaFactoryDiagnostics(),
+      readabilityLayerMembership: this.particleMesh.layers.isEnabled(2) && this.decals.every((decal) => decal.mesh.layers.isEnabled(2)),
+    };
   }
 
   dispose() {

@@ -13,6 +13,8 @@ import { applyMeleeSpacingEnvelope } from './CombatPresentation.js';
 import { preloadKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
 import { CombatActorRouter } from './CombatActorRouter.js';
 import { CombatLabWalkerController } from './CombatLabWalkerController.js';
+import { BLOOD_LIGHTING_DEBUG_MODES, countBloodChromaRendererPrograms, getBloodMaterialDiagnostics, setBloodLightingDebugMode } from './BloodChromaMaterial.js';
+import { BLOOD_COLOR_PALETTE } from './CombatStage2Config.js';
 
 export class CombatLabScene {
   static async create(options = {}) {
@@ -20,8 +22,9 @@ export class CombatLabScene {
     return new CombatLabScene(options);
   }
 
-  constructor({ root = null, audioRuntime = null, query = new URLSearchParams(globalThis.location?.search ?? '') } = {}) {
+  constructor({ root = null, audioRuntime = null, query = new URLSearchParams(globalThis.location?.search ?? ''), renderer = null } = {}) {
     this.root = root;
+    this.renderer = renderer;
     this.area = 'combat-lab';
     this.locationId = 'combat-lab';
     this.fieldSpawn = 'combat-lab-start';
@@ -41,6 +44,10 @@ export class CombatLabScene {
     this.physics = new CombatPhysicsWorld();
     this.feedbackSystem = new CombatFeedbackSystem({ audioRuntime });
     this.query = query;
+    const debugTokens = new Set((this.query.get('debug') ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+    this.bloodLightingDebugEnabled = import.meta.env?.DEV === true && debugTokens.has('blood-lighting');
+    this.bloodLightingDebugModeIndex = 0;
+    if (this.bloodLightingDebugEnabled) setBloodLightingDebugMode(BLOOD_LIGHTING_DEBUG_MODES[0].id);
     this.weaponController = null;
     this.player = null;
     this.night = false;
@@ -68,6 +75,7 @@ export class CombatLabScene {
       query: this.query,
       beforeActorDisposal: (actor, reason) => this.weaponController?.cancelTarget?.(actor, reason),
     });
+    if (this.bloodLightingDebugEnabled) this.createBloodLightingDebugFixture();
   }
 
   handleCombatEvent(event, payload = {}) {
@@ -203,6 +211,59 @@ export class CombatLabScene {
   }
 
   clearWounds() { this.actor.woundSystem.clear(); }
+  createBloodLightingDebugFixture() {
+    const bodyId = 'upper_chest';
+    const collider = this.actor.colliders.get(bodyId);
+    const center = this.actor.getBodyWorldPosition(bodyId);
+    if (!collider || !center) return null;
+    const normal = this.playerSpawn.spawnPosition.clone().sub(center);
+    normal.y = 0;
+    if (normal.lengthSq() < 1e-8) normal.set(0, 0, 1);
+    normal.normalize();
+    const entryPoint = center.clone().addScaledVector(normal, 0.14);
+    const hit = this.actor.resolveHit(collider, entryPoint);
+    if (!hit) return null;
+    const wound = this.actor.woundSystem.createPuncture({
+      hit,
+      entryPoint,
+      axis: normal.clone().negate(),
+      surfaceNormal: normal,
+      entryTangent: new THREE.Vector3(1, 0, 0),
+      depth: 0.04,
+      impactSeverity: 0.62,
+      embeddedWeaponId: null,
+      createdTime: this.actor.elapsed,
+    });
+    wound.directedBloodReady = false;
+    this.bloodEffects.placeDecal(new THREE.Vector3(center.x - 0.85, 0, center.z + 0.65), 'ground', 1.4);
+    return wound;
+  }
+
+  cycleBloodLightingDebugMode() {
+    if (!this.bloodLightingDebugEnabled) return null;
+    this.bloodLightingDebugModeIndex = (this.bloodLightingDebugModeIndex + 1) % BLOOD_LIGHTING_DEBUG_MODES.length;
+    return setBloodLightingDebugMode(BLOOD_LIGHTING_DEBUG_MODES[this.bloodLightingDebugModeIndex].id);
+  }
+
+  sampleBloodDebugIllumination() {
+    if (!this.bloodLightingDebugEnabled) return 1;
+    const samplePoint = this.actor.getBodyWorldPosition('upper_chest') ?? new THREE.Vector3();
+    const illumination = [0, 0, 0];
+    this.scene.traverse((object) => {
+      if (!object.isLight || !object.visible || object.intensity <= 0 || !this.bloodEffects.particleMesh.layers.test(object.layers)) return;
+      for (let parent = object.parent; parent; parent = parent.parent) if (!parent.visible) return;
+      let contribution = object.intensity;
+      if (object.isPointLight || object.isSpotLight) {
+        const distance = Math.max(0.1, object.getWorldPosition(new THREE.Vector3()).distanceTo(samplePoint));
+        const cutoff = object.distance > 0 ? THREE.MathUtils.clamp(1 - distance / object.distance, 0, 1) ** 2 : 1;
+        contribution *= cutoff / Math.max(1, distance ** Math.max(0, object.decay ?? 2));
+      }
+      illumination[0] += object.color.r * contribution;
+      illumination[1] += object.color.g * contribution;
+      illumination[2] += object.color.b * contribution;
+    });
+    return illumination;
+  }
   createDebugSlash() {
     const bodyId = 'upper_chest';
     const body = this.actor.bodies.get(bodyId)?.body;
@@ -261,7 +322,19 @@ export class CombatLabScene {
   }
 
   getDiagnostics() {
-    return { physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), walker: this.walkerController?.getDiagnostics?.() ?? null, combatRouting: this.combatRouter.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics(), meleeSpacing: this.meleeSpacing };
+    const actor = this.actor.getDiagnostics();
+    const illumination = this.sampleBloodDebugIllumination();
+    const blood = this.bloodEffects.getDiagnostics({ illumination });
+    const selectedVariantId = actor.wounds?.selected?.decalVariantId;
+    const woundMaterial = selectedVariantId ? this.actor.woundSystem.decalLibrary.getMaterial(selectedVariantId) : null;
+    blood.authoredWoundMaterial = woundMaterial ? {
+      ...getBloodMaterialDiagnostics(woundMaterial, { albedo: new THREE.Color(BLOOD_COLOR_PALETTE.fresh), illumination }),
+      textureAttached: Boolean(woundMaterial.map),
+      neutralTint: woundMaterial.color.getHex() === 0xffffff,
+    } : null;
+    blood.rendererProgramCount = countBloodChromaRendererPrograms(this.renderer);
+    blood.debugEnabled = this.bloodLightingDebugEnabled;
+    return { physics: this.physics.getDiagnostics(), actor, walker: this.walkerController?.getDiagnostics?.() ?? null, combatRouting: this.combatRouter.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood, feedback: this.feedbackSystem.getDiagnostics(), meleeSpacing: this.meleeSpacing };
   }
 
   forceWalkerRespawn() { this.walkerController?.forceRespawn?.(); }
@@ -271,6 +344,7 @@ export class CombatLabScene {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.bloodLightingDebugEnabled) setBloodLightingDebugMode('final');
     this.weaponController?.cancel?.('scene-dispose');
     this.collision.removeBlocker(this.playerBlocker);
     this.walkerController?.dispose?.();

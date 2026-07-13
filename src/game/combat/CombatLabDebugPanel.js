@@ -59,6 +59,7 @@ export class CombatLabDebugPanel {
       ['TORCH T', () => this.equipLight('torch')],
       ['LANTERN L', () => this.equipLight('keepers_lantern')],
     ];
+    if (this.dungeon?.bloodLightingDebugEnabled) definitions.push(['BLOOD LIGHT', () => this.dungeon.cycleBloodLightingDebugMode?.()]);
     definitions.forEach(([label, action]) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -166,6 +167,9 @@ export class CombatLabDebugPanel {
     const director = diagnostics.director ?? {};
     const spacing = diagnostics.meleeSpacing ?? {};
     const blood = diagnostics.blood ?? {};
+    const bloodMaterial = blood.particleMaterial ?? {};
+    const woundBloodMaterial = blood.authoredWoundMaterial ?? {};
+    const bloodFactory = blood.materialFactory ?? {};
     const feedback = diagnostics.feedback ?? {};
     const physiology = actor.physiology ?? {};
     const wounds = actor.wounds ?? {};
@@ -193,6 +197,15 @@ export class CombatLabDebugPanel {
       `gash fallback ${wounds.latestSlash?.fallbackUsage ? 'YES' : 'NO'}  endpoint ${(wounds.latestSlash?.endpointScale ?? 0).toFixed(2)}  materials/draws ${wounds.latestSlash?.materialCount ?? 0}/${wounds.latestSlash?.drawCallCount ?? 0}  geometry rev ${wounds.latestSlash?.visualGeometryRevision ?? 0}`,
       `projection failures ${wounds.failedProjectionCount ?? 0}  fallback ${wounds.fallbackAnchorUsage ?? 0}  anchors ${this.woundAnchorsVisible ? 'ON' : 'OFF'}`,
       `blood fx ${blood.particles ?? 0}/${blood.particleLimit ?? 0}  decals ${blood.decals ?? 0}/${blood.decalLimit ?? 0}`,
+      ...(blood.debugEnabled ? [
+        `blood lighting ${bloodMaterial.debugMode ?? '-'}  ${bloodMaterial.materialType ?? '-'} / ${bloodMaterial.response ?? '-'}  program ${bloodMaterial.programCacheKey ?? '-'}`,
+        `blood source ${formatRgb(bloodMaterial.sourceRgb)}  illumination luma ${(bloodMaterial.illuminationLuminance ?? 0).toFixed(4)}  final ${formatRgb(bloodMaterial.finalRgb)}`,
+        `blood saturation ${(bloodMaterial.finalSaturation ?? 0).toFixed(4)}  red dominance ${(bloodMaterial.redDominance ?? 0).toFixed(4)}  cap ${(bloodMaterial.brightnessCap ?? 0).toFixed(2)}`,
+        `blood toneMapped ${bloodMaterial.toneMapped ? 'YES' : 'NO'}  emissive ${(bloodMaterial.emissiveIntensity ?? 0).toFixed(2)}  readability layer ${blood.readabilityLayerMembership ? 'YES' : 'NO'}`,
+        `wound material ${woundBloodMaterial.materialType ?? '-'} / ${woundBloodMaterial.response ?? '-'}  texture ${woundBloodMaterial.textureAttached ? 'YES' : 'NO'}  neutral tint ${woundBloodMaterial.neutralTint ? 'YES' : 'NO'}`,
+        `blood materials ${bloodFactory.materialCount ?? 0}  renderer programs ${blood.rendererProgramCount ?? 0}  shader hooks ${bloodFactory.shaderPatchCount ?? 0}`,
+        `blood warmups ${bloodFactory.warmupCount ?? 0}  warmup programs +${bloodFactory.lastWarmupProgramDelta ?? 0}`,
+      ] : []),
       `audio ${feedback.activeVoices ?? 0} voices  haptic ${feedback.activeHapticEvents ?? 0}  event ${feedback.lastEvent ?? '-'}  mute ${feedback.muted ? 'YES' : 'NO'}`,
       `trauma ${JSON.stringify(actor.regionalTrauma ?? {})}`,
       `pose ${JSON.stringify(actor.bodyPositions ?? {})}`,
@@ -239,4 +252,8 @@ export class CombatLabDebugPanel {
     this.disposers = [];
     this.panel?.remove();
   }
+}
+
+function formatRgb(rgb) {
+  return `[${(rgb?.[0] ?? 0).toFixed(3)},${(rgb?.[1] ?? 0).toFixed(3)},${(rgb?.[2] ?? 0).toFixed(3)}]`;
 }

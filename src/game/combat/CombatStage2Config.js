@@ -31,13 +31,14 @@ export const WOUND_CONFIG = Object.freeze({
 });
 
 export const BLOOD_COLOR_PALETTE = Object.freeze({
-  fresh: 0x981218,
-  spray: 0xb31b22,
-  arterial: 0xc3242b,
-  slashArterial: 0xff4050,
-  deep: 0x68080d,
-  pooled: 0x4a070a,
-  dried: 0x2b0305,
+  fresh: 0xc41222,
+  spray: 0xd41424,
+  arterial: 0xe0182d,
+  slashArterial: 0xf01b32,
+  deep: 0x72070d,
+  pooled: 0x850810,
+  olderPool: 0x58050a,
+  dried: 0x2b0205,
 });
 
 export const VESSEL_ZONES = Object.freeze([
