@@ -43,7 +43,12 @@ export class FirstPersonViewmodelHost {
     this.createRodViewmodelLights();
     this.fishingRodView = new FishingRodView({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState, dungeon: this.dungeon });
     this.keepersLanternViewmodel = new KeepersLanternViewmodel({ camera: this.camera, equipmentRuntime: this.equipmentRuntime, player: this.player });
-    this.torchViewmodel = new TorchViewmodel({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
+    this.torchViewmodel = new TorchViewmodel({
+      camera: this.camera,
+      equipmentRuntime: this.equipmentRuntime,
+      combatActorProvider: () => this.getTorchCombatActor(),
+      darknessProvider: () => this.getTorchDarknessLevel(),
+    });
     this.physicalToolViewmodel = new PhysicalToolViewmodel({ camera: this.camera, equipmentRuntime: this.equipmentRuntime });
     this.initializeCombatKnifeRuntime();
     this.toolInputViewmodel = this.createToolInputViewmodel();
@@ -150,6 +155,18 @@ export class FirstPersonViewmodelHost {
 
   getTorchLightingState() {
     return this.torchViewmodel?.getLightingState?.() ?? { owned: false, equipped: false, lit: false, active: false, intensity: 0, range: 0, castShadow: false };
+  }
+
+  getTorchCombatActor() {
+    const runtime = this.dungeon?.isCombatLab ? this.dungeon : this.dungeon?.combatEncounter;
+    return runtime?.disposed === true ? null : runtime?.actor ?? null;
+  }
+
+  getTorchDarknessLevel() {
+    const outdoorLevel = this.dungeon?.outdoorLightingDirector?.debug?.torchNeedLevel;
+    if (Number.isFinite(outdoorLevel)) return outdoorLevel;
+    if (this.dungeon?.isCombatLab) return this.dungeon.night === true || this.dungeon.lightingMode?.startsWith?.('night') ? 1 : 0;
+    return 0;
   }
 
   createRodViewmodelLights() {

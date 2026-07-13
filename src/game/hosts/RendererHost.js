@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { COMBAT_READABILITY_LIGHT_LAYER } from '../combat/CombatReadabilityLightLayer.js';
 
 export class RendererHost {
   constructor({ root, shellHtml = null }) {
@@ -61,6 +62,7 @@ export class RendererHost {
     const previousMask = camera.layers.mask;
     try {
       camera.layers.set(0);
+      camera.layers.enable(COMBAT_READABILITY_LIGHT_LAYER);
       this.renderer.render(scene, camera);
     } finally {
       camera.layers.mask = previousMask;

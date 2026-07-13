@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { KEEPERS_LANTERN_VIEWMODEL_LAYER } from './KeepersLanternViewmodel.js';
 import { findOutdoorScene, getOutdoorLightSourceRegistry, OUTDOOR_LIGHT_OWNER } from '../world-scene/OutdoorLightSourceRegistry.js';
+import { HeldTorchLightingRuntime } from './HeldTorchLightingRuntime.js';
 
 export const TORCH_ITEM_ID = 'torch';
 
@@ -37,7 +38,7 @@ function markViewmodel(object) {
 }
 
 export class TorchViewmodel {
-  constructor({ camera, equipmentRuntime } = {}) {
+  constructor({ camera, equipmentRuntime, combatActorProvider = null, darknessProvider = null } = {}) {
     this.camera = camera;
     this.equipmentRuntime = equipmentRuntime;
     this.elapsed = 0;
@@ -46,6 +47,10 @@ export class TorchViewmodel {
     this.debugTorchOverride = debugTorch === 'on' || debugTorch === 'off' ? debugTorch : null;
     this.flameLayers = [];
     this.aim = { x: 0, y: 0 };
+    this.combatActorProvider = combatActorProvider;
+    this.darknessProvider = darknessProvider;
+    this.flameWorldPosition = new THREE.Vector3();
+    this.torchMeshSelfShadowStatus = false;
 
     this.root = new THREE.Group();
     this.root.name = 'torch-first-person-viewmodel';
@@ -66,6 +71,12 @@ export class TorchViewmodel {
     this.lightRegistry = getOutdoorLightSourceRegistry(findOutdoorScene(this.camera));
     this.lightRegistry?.register(this.pointLight, { name: this.pointLight.name, owner: OUTDOOR_LIGHT_OWNER.PLAYER, source: TORCH_ITEM_ID, global: false });
     this.camera?.add?.(this.root);
+    this.closeCombatLighting = new HeldTorchLightingRuntime({
+      camera: this.camera,
+      lightRegistry: this.lightRegistry,
+      actorProvider: this.combatActorProvider,
+      darknessProvider: this.darknessProvider,
+    });
   }
 
   buildProceduralTorch() {
@@ -158,6 +169,7 @@ export class TorchViewmodel {
     this.pointLight = new THREE.PointLight(TORCH_LIGHTING.point.color, TORCH_LIGHTING.point.intensity, TORCH_LIGHTING.point.distance, TORCH_LIGHTING.point.decay);
     this.pointLight.name = 'torch-head-warm-point-light';
     this.pointLight.castShadow = false;
+    this.pointLight.userData.baseTorchIntensity = TORCH_LIGHTING.point.intensity;
     this.emitterTransform.add(this.pointLight);
     this.aimHitAnchor = this.emitterTransform;
   }
@@ -181,7 +193,22 @@ export class TorchViewmodel {
     const equippedOffhandId = this.equipmentRuntime?.getEquippedOffhandId?.() ?? null;
     const owned = this.equipmentRuntime?.hasItem ? this.equipmentRuntime.hasItem(TORCH_ITEM_ID) : equippedOffhandId === TORCH_ITEM_ID;
     const active = this.isActive();
-    return { owned, equipped: equippedOffhandId === TORCH_ITEM_ID, lit: this.lit, active, intensity: active ? this.pointLight.intensity : 0, range: TORCH_LIGHTING.point.distance, decay: TORCH_LIGHTING.point.decay, castShadow: false, debugOverride: this.debugTorchOverride };
+    const close = this.closeCombatLighting?.debugState ?? {};
+    return {
+      owned,
+      equipped: equippedOffhandId === TORCH_ITEM_ID,
+      lit: this.lit,
+      active,
+      intensity: active ? this.pointLight.intensity : 0,
+      range: TORCH_LIGHTING.point.distance,
+      decay: TORCH_LIGHTING.point.decay,
+      castShadow: close.shadowCasterCount > 0,
+      debugOverride: this.debugTorchOverride,
+      pointPosition: this.pointLight.getWorldPosition(this.flameWorldPosition),
+      flamePosition: this.flameWorldPosition,
+      torchMeshSelfShadowStatus: this.torchMeshSelfShadowStatus,
+      ...close,
+    };
   }
 
   setAimState(state = {}) {
@@ -192,9 +219,12 @@ export class TorchViewmodel {
   update(deltaSeconds) {
     const active = this.isActive();
     this.root.visible = active;
-    this.pointLight.intensity = active ? TORCH_LIGHTING.point.intensity : 0;
-    if (!active) return;
     const dt = THREE.MathUtils.clamp(deltaSeconds, 0.001, 0.05);
+    if (!active) {
+      this.pointLight.intensity = 0;
+      this.closeCombatLighting?.update(dt, { torchActive: false, pointLight: this.pointLight });
+      return;
+    }
     this.elapsed += dt;
     this.root.position.set(REST_POSITION.x + this.aim.x * 0.13, REST_POSITION.y + this.aim.y * 0.1, REST_POSITION.z);
     this.aimPivot.rotation.set(-this.aim.y * 0.23, -this.aim.x * 0.3, 0, 'YXZ');
@@ -207,7 +237,15 @@ export class TorchViewmodel {
       layer.material.needsUpdate = true;
     });
     const flicker = 0.97 + Math.sin(this.elapsed * 6.7) * 0.02 + Math.sin(this.elapsed * 11.3) * 0.012;
-    this.pointLight.intensity = TORCH_LIGHTING.point.intensity * flicker;
+    this.camera.updateMatrixWorld(true);
+    this.root.updateMatrixWorld(true);
+    this.emitterTransform.getWorldPosition(this.flameWorldPosition);
+    this.closeCombatLighting?.update(dt, {
+      torchActive: active,
+      flameWorldPosition: this.flameWorldPosition,
+      pointLight: this.pointLight,
+      flicker,
+    });
   }
 
   projectAimHit(clientX, clientY, viewport) {
@@ -234,10 +272,12 @@ export class TorchViewmodel {
       this.lightRegistry = nextRegistry;
       this.lightRegistry?.register(this.pointLight, { name: this.pointLight.name, owner: OUTDOOR_LIGHT_OWNER.PLAYER, source: TORCH_ITEM_ID, global: false });
     }
+    this.closeCombatLighting?.rebind?.({ camera: this.camera, lightRegistry: this.lightRegistry });
   }
 
   dispose() {
     this.lightRegistry?.unregister(this.pointLight);
+    this.closeCombatLighting?.dispose?.();
     this.camera?.remove?.(this.root);
     this.root.traverse((child) => {
       child.geometry?.dispose?.();

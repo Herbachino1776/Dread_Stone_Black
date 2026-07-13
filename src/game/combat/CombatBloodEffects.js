@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG } from './CombatStage2Config.js';
+import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 
 const dummy = new THREE.Object3D();
 const tmpDirection = new THREE.Vector3();
@@ -23,6 +24,7 @@ export class CombatBloodEffects {
     this.particleMesh.castShadow = false;
     this.particleMesh.receiveShadow = true;
     this.particleMesh.frustumCulled = false;
+    enableCombatReadabilityLightLayer(this.particleMesh);
     this.scene.add(this.particleMesh);
     this.createDecalPool();
     this.updateInstances();

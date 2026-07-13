@@ -4,6 +4,7 @@ import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { CURRENT_HUMANOID_BONE_MAP, CURRENT_HUMANOID_PROFILE, getHumanoidProfileScale } from './HumanoidModelProfiles.js';
 import { ProceduralPainReactionController } from './ProceduralPainReaction.js';
 import { findClosestSkinnedSurface, reconstructSkinnedSurface, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
+import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 
 export const HUMANOID_GLB_PATH = CURRENT_HUMANOID_PROFILE.assetPath;
 export const HUMANOID_GLB_AUTHORED_HEIGHT = CURRENT_HUMANOID_PROFILE.rawHeight;
@@ -131,6 +132,7 @@ export class HumanoidGlbVisualAdapter {
     this.scene.traverse((object) => {
       if (object.isBone) this.bones.set(object.name, object);
       if (!object.isSkinnedMesh) return;
+      enableCombatReadabilityLightLayer(object);
       this.skinnedMeshes.push(object);
       if (object.skeleton && !this.skeletons.includes(object.skeleton)) this.skeletons.push(object.skeleton);
       object.castShadow = true;

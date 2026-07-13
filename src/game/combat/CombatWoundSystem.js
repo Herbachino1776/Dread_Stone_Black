@@ -3,6 +3,7 @@ import { VESSEL_ZONES, WOUND_CONFIG } from './CombatStage2Config.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { getAlphaBoundUv } from './KnifeWoundDecalLibrary.js';
 import { MAX_SLASH_SURFACE_SAMPLES, MIN_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
+import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 
 const tmpPosition = new THREE.Vector3();
 const tmpQuaternion = new THREE.Quaternion();
@@ -120,11 +121,13 @@ export class CombatWoundSystem {
       puncture.visible = false;
       puncture.castShadow = false;
       puncture.receiveShadow = false;
+      enableCombatReadabilityLightLayer(puncture);
       const slash = new THREE.Mesh(makeSlashGeometry(), this.bluntMaterial);
       slash.name = `combat-wound-slash-visual-${index}`;
       slash.visible = false;
       slash.castShadow = false;
       slash.receiveShadow = false;
+      enableCombatReadabilityLightLayer(slash);
       this.scene.add(puncture, slash);
       this.visualSlots.push({ puncture, slash, woundId: null });
     }

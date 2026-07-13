@@ -388,9 +388,9 @@ export class HumanoidCombatActor {
     return this.activateRagdoll({ forced: true });
   }
 
-  getBodyWorldPosition(bodyId) {
+  getBodyWorldPosition(bodyId, target = new THREE.Vector3()) {
     const translation = this.bodies.get(bodyId)?.body?.translation?.();
-    return translation ? new THREE.Vector3(translation.x, translation.y, translation.z) : new THREE.Vector3();
+    return translation ? target.set(translation.x, translation.y, translation.z) : target.set(0, 0, 0);
   }
 
   updatePlayerCollisionBlocker(blocker = {}) {

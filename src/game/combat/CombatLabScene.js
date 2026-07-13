@@ -153,7 +153,7 @@ export class CombatLabScene {
     this.scene.fog.color.copy(this.scene.background);
     this.hemisphere.intensity = this.night ? 0.005 : 1.65;
     this.sun.intensity = this.night ? 0 : 2.6;
-    this.torch.intensity = this.night ? 5.2 : 0;
+    this.torch.intensity = 0;
   }
 
   setLightingMode(mode = 'day') {
@@ -165,7 +165,7 @@ export class CombatLabScene {
     this.hemisphere.intensity = night ? 0.005 : this.lightingMode === 'dusk' ? 0.34 : 1.65;
     this.sun.intensity = night ? 0 : this.lightingMode === 'dusk' ? 0.48 : 2.6;
     this.sun.color.set(this.lightingMode === 'dusk' ? 0xd17b64 : 0xffe0bd);
-    this.torch.intensity = this.lightingMode === 'night-torch' ? 5.2 : 0;
+    this.torch.intensity = 0;
     this.lantern.intensity = this.lightingMode === 'night-lantern' ? 4.4 : 0;
   }
 
