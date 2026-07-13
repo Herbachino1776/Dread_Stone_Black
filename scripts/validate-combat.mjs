@@ -10,11 +10,13 @@ assert.equal(result.bodyCount, 18);
 assert.equal(result.jointCount, 17);
 assert.ok(result.regionCount >= 20);
 
-const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, reactionSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, diagnosticDocsSource, glbBuffer, modelIdleGlbBuffer] = await Promise.all([
+const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSource, intentSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, reactionSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, directorDocsSource, diagnosticDocsSource, glbBuffer, modelIdleGlbBuffer] = await Promise.all([
   readFile(new URL('../src/game/Game.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/SceneSessionHost.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/FirstPersonViewmodelHost.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/WorldKnifeCombatController.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/CombatDirector.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/MeleeIntentWeapon.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/physical-tools/PhysicalToolViewmodel.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/HumanoidCombatActor.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/HumanoidGlbVisualAdapter.js', import.meta.url), 'utf8'),
@@ -35,6 +37,7 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, oldViewmod
   readFile(new URL('../src/game/Collision.js', import.meta.url), 'utf8'),
   readFile(new URL('../package.json', import.meta.url), 'utf8'),
   readFile(new URL('../docs/architecture/PHYSICAL_HUMANOID_COMBAT_FOUNDATION.md', import.meta.url), 'utf8').catch(() => ''),
+  readFile(new URL('../docs/architecture/COMBAT_DIRECTOR.md', import.meta.url), 'utf8'),
   readFile(new URL('../docs/model_idle_ab_diagnostic.md', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/models/npc/human/human_retro_256.glb', import.meta.url)),
   readFile(new URL('../public/assets/models/npc/human/model_idle.glb', import.meta.url)),
@@ -103,6 +106,15 @@ assert.match(knifeSource, /gripPointerId/);
 assert.match(knifeSource, /releaseGrip/);
 assert.match(knifeSource, /assistedWithdrawalRate/);
 assert.match(knifeSource, /non-damaging:no-pointer-owner/);
+assert.match(knifeSource, /MeleeIntentWeapon/);
+assert.match(knifeSource, /weaponLayers/);
+assert.match(knifeSource, /combatDirector\.beginPuncture/);
+assert.match(knifeSource, /combatDirector\.beginSlash/);
+assert.match(knifeSource, /combatDirector\.advancePenetration/);
+assert.match(knifeSource, /combatDirector\.beginWithdrawal/);
+assert.doesNotMatch(knifeSource, /this\.actor\.(beginPunctureWound|applyPenetration|applySlashWound|onWeaponExtracted)/);
+assert.doesNotMatch(knifeSource, /this\.feedbackSystem\?\.emit|this\.bloodEffects\?\.emit|this\.feedback\?\.shake/);
+assert.ok(knifeSource.indexOf('this.actualGrip.copy(this.desiredGrip)') >= 0, 'free collision pose follows the desired hand without artificial latency');
 assert.doesNotMatch(knifeSource, /getAttackControlState/);
 assert.match(viewmodelHostSource, /createToolInputViewmodel/);
 assert.match(viewmodelHostSource, /combatRuntime\?\.scene \?\? this\.dungeon\?\.scene/);
@@ -110,6 +122,20 @@ assert.match(viewmodelHostSource, /if \(!this\.combatRuntime\)/);
 assert.match(viewmodelHostSource, /bindPointerInput: this\.dungeon\?\.isCombatLab === true/);
 assert.doesNotMatch(viewmodelHostSource, /setCombatKnifeActive/);
 assert.match(viewmodelHostSource, /combatEncounter/);
+assert.match(viewmodelHostSource, /combatDirector: combatRuntime\?\.combatDirector/);
+assert.match(directorSource, /PENETRATION_STAGES/);
+['approach', 'surface_contact', 'surface_compression', 'surface_rupture', 'soft_tissue', 'hard_tissue', 'embedded', 'withdrawal', 'exit', 'recovery'].forEach((stage) => assert.match(directorSource, new RegExp(stage)));
+['lifecycle', 'tissue', 'wound', 'reaction', 'blood', 'audio', 'camera', 'haptic', 'resistance', 'recovery'].forEach((event) => assert.match(directorSource, new RegExp(`${event}: '${event}'`)));
+assert.match(directorSource, /a\.time - b\.time \|\| a\.sequence - b\.sequence/);
+assert.match(directorSource, /beginPuncture/);
+assert.match(directorSource, /beginSlash/);
+assert.match(directorSource, /advancePenetration/);
+assert.match(directorSource, /beginWithdrawal/);
+assert.match(directorSource, /resolveMeleeTimeline/);
+assert.match(intentSource, /stab: 'stab'/);
+assert.match(intentSource, /slash: 'slash'/);
+assert.match(intentSource, /withdraw: 'withdraw'/);
+assert.match(intentSource, /ownerId != null/);
 assert.match(actorSource, /CombatWoundSystem/);
 assert.match(actorSource, /CombatPhysiology/);
 assert.match(actorSource, /HumanoidGlbVisualAdapter/);
@@ -163,6 +189,8 @@ assert.match(surfaceBindingSource, /barycentric/);
 assert.match(surfaceBindingSource, /triangleIndices/);
 assert.match(surfaceBindingSource, /WOUND_SURFACE_BIAS = 0\.002/);
 assert.match(combatLabPanelSource, /ANCHORS A/);
+assert.match(combatLabPanelSource, /director\.activeInteractions/);
+assert.match(combatLabPanelSource, /weapon\.intent/);
 assert.match(physiologySource, /bloodReserve/);
 assert.match(physiologySource, /consciousness/);
 assert.match(bloodSource, /InstancedMesh/);
@@ -172,6 +200,8 @@ assert.match(stage2ConfigSource, /spray: 0xb31b22/);
 assert.match(stage2ConfigSource, /arterial: 0xc3242b/);
 assert.match(stage2ConfigSource, /slashArterial: 0xff4050/);
 assert.match(folsomEncounterSource, /folsom-model-idle-combat-player-blocker/);
+assert.match(folsomEncounterSource, /new CombatDirector/);
+assert.match(folsomEncounterSource, /this\.combatDirector\.update\(dt\)/);
 assert.match(combatLabPanelSource, /RAGDOLL Z/);
 assert.match(combatLabPanelSource, /CUT TEST 6/);
 assert.match(stage2ConfigSource, /dried: 0x2b0305/);
@@ -185,6 +215,8 @@ assert.match(folsomEncounterSource, /resolveCombatMortalityMode/);
 assert.match(folsomEncounterSource, /MODEL_IDLE_COMBAT_PROFILE/);
 assert.doesNotMatch(folsomEncounterSource, /FolsomModelIdleRawReference|modelIdleCombatTest|rawModelReference/);
 assert.match(combatLabSource, /MODEL_IDLE_COMBAT_PROFILE/);
+assert.match(combatLabSource, /new CombatDirector/);
+assert.match(combatLabSource, /this\.combatDirector\.beginSlash/);
 assert.match(diagnosticDocsSource, /exported idle animation is authoritative/);
 assert.match(diagnosticDocsSource, /never drive the GLB bones/);
 assert.match(combatLabSource, /resolveCombatMortalityMode/);
@@ -205,6 +237,12 @@ assert.match(configSource, /embeddedMaximumSeconds: 0\.4/);
 assert.match(packageSource, /@dimforge\/rapier3d-compat/);
 assert.match(docsSource, /\?combatLab=1/);
 assert.match(docsSource, /Folsom/);
+assert.match(docsSource, /Combat Director/);
+assert.match(directorDocsSource, /sole orchestration authority/);
+assert.match(directorDocsSource, /visual weapon/);
+assert.match(directorDocsSource, /collision weapon/);
+assert.match(directorDocsSource, /intent weapon/);
+assert.match(directorDocsSource, /Adding a future melee weapon/);
 assert.equal(stage2.woundLimit, 24);
 
 console.log(`Combat vertical slice configuration and integration are valid (${result.bodyCount} bodies, ${result.jointCount} joints, ${result.regionCount} semantic regions, ${stage2.vesselCount} vessel zones, ${stage2.woundLimit} pooled wounds).`);

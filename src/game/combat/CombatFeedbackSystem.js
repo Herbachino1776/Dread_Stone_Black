@@ -54,7 +54,7 @@ export class CombatFeedbackSystem {
     this.hapticEvents = this.hapticEvents.filter((entry) => this.elapsed - entry.time < 1);
   }
 
-  emit(event, { position = null, severity = 0.5, owner = 'combat-actor', force = false } = {}) {
+  emit(event, { position = null, severity = 0.5, owner = 'combat-actor', force = false, audio = true, haptics = true } = {}) {
     if (this.disposed || !EVENT_PROFILES[event]) return false;
     const cooldownKey = `${owner}:${event}`;
     if (!force && this.eventCooldowns.has(cooldownKey)) return false;
@@ -62,10 +62,18 @@ export class CombatFeedbackSystem {
     this.eventCounts.set(event, (this.eventCounts.get(event) ?? 0) + 1);
     this.eventLog.push({ event, owner, severity, time: this.elapsed });
     if (this.eventLog.length > 64) this.eventLog.shift();
-    if (!this.muted) this.playSynthesized(event, { position, severity, owner });
+    if (audio && !this.muted) this.playSynthesized(event, { position, severity, owner });
     const hapticEvent = HAPTIC_EVENT_MAP[event];
-    if (hapticEvent) this.emitHaptic(hapticEvent);
+    if (haptics && hapticEvent) this.emitHaptic(hapticEvent);
     return true;
+  }
+
+  emitAudio(event, payload = {}) {
+    return this.emit(event, { ...payload, haptics: false });
+  }
+
+  emitCombatHaptic(cue) {
+    return this.emitHaptic(cue);
   }
 
   ensureNoiseBuffer(context) {

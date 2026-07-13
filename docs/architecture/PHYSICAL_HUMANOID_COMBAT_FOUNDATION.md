@@ -1,5 +1,7 @@
 # Physical Humanoid Combat Foundation
 
+Combat event ownership is defined by [Combat Director](./COMBAT_DIRECTOR.md). That contract supersedes the older immediate-feedback descriptions below: collision reports contact facts, while the Director schedules wound, reaction, blood, audio, camera, haptic, resistance, and recovery work.
+
 ## Launch and scope
 
 The development laboratory is available in development builds at `/?combatLab=1`. It bypasses the title selection, creates an isolated scene, grants and equips the existing `old_work_knife` item ephemerally, and never writes equipment or actor state to the canonical save. The lab has flat ground, a body-contact wall, five authored lighting modes, a safe player spawn, and one standing humanoid.
@@ -58,7 +60,7 @@ The hand workspace is a camera-relative bounded box entirely in front of the nea
 
 Dragging from the projected knife grip adjusts lateral and vertical hand aim without capturing ordinary look touches elsewhere. Camera aim and this hand offset establish blade orientation. The ATTACK button is pressure control: touch begins with zero automatic insertion; dragging upward advances from the current extension, holding or releasing preserves the chosen hand/depth request, and a later downward gesture withdraws. On desktop, Space advances and Shift withdraws. Visibility change, page hide, unequip, invalid target, scene disposal, and reset all cancel embedding safely.
 
-The desired hand pose follows the camera, input, and workspace. The achievable pose moves toward it under maximum linear/angular rates. A thrust is simply increasing camera-local negative Z while retaining the blade's chosen quaternion, so up/down/left/right/downward orientations preserve their world path. No target is queried to aim the knife, and no torso, reticle, or camera center is passed to the solver. A miss is a normal result.
+The desired hand pose follows the camera, input, and workspace. In free space the visual/collision pose accepts that hand transform in the same step; authored lag is never used to imply weight. Contact resistance may physically stop, deflect, bind, or embed the collision solution, which the visual weapon presents without delayed tracking. A thrust is simply increasing camera-local negative Z while retaining the blade's chosen quaternion, so up/down/left/right/downward orientations preserve their world path. No target is queried to aim the knife, and no torso, reticle, or camera center is passed to the solver. A miss is a normal result.
 
 ## Contact and penetration flow
 

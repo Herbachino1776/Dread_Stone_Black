@@ -6,6 +6,8 @@ import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
 import { resolveCombatMortalityMode } from './CombatMortality.js';
 import { MODEL_IDLE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { CombatDirector } from './CombatDirector.js';
+import { MELEE_INTENTS } from './MeleeIntentWeapon.js';
 
 export class CombatLabScene {
   static async create(options = {}) {
@@ -44,11 +46,13 @@ export class CombatLabScene {
     this.collision.addBlocker(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: 0, wallX: -2.65 });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: 0, wallX: -2.65, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+    this.combatDirector = new CombatDirector({ actor: this.actor, bloodEffects: this.bloodEffects, feedbackSystem: this.feedbackSystem });
   }
 
   handleCombatEvent(event, payload = {}) {
     if (event === 'final_exhale') this.feedbackSystem.stopOwnerVocal('combat-actor');
-    this.feedbackSystem.emit(event, { ...payload, owner: 'combat-actor' });
+    if (this.combatDirector) this.combatDirector.forwardFeedbackEvent(event, { ...payload, owner: 'combat-actor' });
+    else this.feedbackSystem.emit(event, { ...payload, owner: 'combat-actor' });
   }
 
   build() {
@@ -116,6 +120,7 @@ export class CombatLabScene {
       (dt) => {
         this.feedbackSystem.update(dt);
         this.weaponController?.beforePhysics?.(dt);
+        this.combatDirector.update(dt);
         this.actor.beforePhysics(dt, this.player?.position);
       },
       (dt) => {
@@ -158,7 +163,7 @@ export class CombatLabScene {
 
   stepPhysics() {
     this.actor.prepareFrame(1 / 60);
-    this.physics.stepSingle((dt) => { this.feedbackSystem.update(dt); this.weaponController?.beforePhysics?.(dt); this.actor.beforePhysics(dt, this.player?.position); }, (dt) => { this.weaponController?.afterPhysicsStep?.(dt); this.bloodEffects.update(dt); });
+    this.physics.stepSingle((dt) => { this.feedbackSystem.update(dt); this.weaponController?.beforePhysics?.(dt); this.combatDirector.update(dt); this.actor.beforePhysics(dt, this.player?.position); }, (dt) => { this.weaponController?.afterPhysicsStep?.(dt); this.bloodEffects.update(dt); });
     this.actor.afterPhysics(0);
     this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.weaponController?.afterPhysics?.(0);
@@ -180,7 +185,21 @@ export class CombatLabScene {
     const endPoint = midpoint.clone().add(new THREE.Vector3(0.1, -0.025, 0));
     const hit = this.actor.resolveHit(collider, midpoint);
     if (!hit) return null;
-    return this.actor.applySlashWound({ hit, startPoint, endPoint, surfaceNormal: towardPlayer, cutDirection: endPoint.clone().sub(startPoint).normalize(), depth: 0.035, cutLength: startPoint.distanceTo(endPoint), severity: 0.78, classification: 'deep_slash' });
+    const interaction = this.combatDirector.beginSlash({
+      weapon: { id: 'combat_lab_debug_blade', family: 'debug_melee' },
+      intent: { weaponId: 'combat_lab_debug_blade', intent: MELEE_INTENTS.slash, ownerId: 'combat-lab', speed: 1, intentional: true, damaging: true },
+      hit,
+      startPoint,
+      endPoint,
+      surfaceNormal: towardPlayer,
+      cutDirection: endPoint.clone().sub(startPoint).normalize(),
+      depth: 0.035,
+      cutLength: startPoint.distanceTo(endPoint),
+      severity: 0.78,
+      classification: 'deep_slash',
+    });
+    if (interaction) this.combatDirector.finishSlash(interaction.id);
+    return interaction;
   }
   clearBlood() { this.bloodEffects.clear(); }
   toggleMortalityMode() {
@@ -202,12 +221,13 @@ export class CombatLabScene {
     this.actor.reset();
     this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.bloodEffects.clear();
+    this.combatDirector.reset();
     this.feedbackSystem.reset();
     this.weaponController?.reset?.();
   }
 
   getDiagnostics() {
-    return { physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics() };
+    return { physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics() };
   }
 
   dispose() {
@@ -215,6 +235,7 @@ export class CombatLabScene {
     this.disposed = true;
     this.weaponController?.cancel?.('scene-dispose');
     this.collision.removeBlocker(this.playerBlocker);
+    this.combatDirector.dispose();
     this.bloodEffects.dispose();
     this.feedbackSystem.dispose();
     this.actor.dispose();

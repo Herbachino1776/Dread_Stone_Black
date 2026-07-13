@@ -16,6 +16,8 @@ import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalit
 import { applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { PAIN_REACTION_LIMITS, ProceduralPainReactionController, buildReactionPose, getReactionFamily, resolveReactionTiming } from '../src/game/combat/ProceduralPainReaction.js';
 import { MAX_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, findClosestSkinnedSurface, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
+import { COMBAT_DIRECTOR_EVENTS, CombatDirector, PENETRATION_STAGES, resolveMeleeTimeline } from '../src/game/combat/CombatDirector.js';
+import { isDamageIntent, MELEE_INTENTS, MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
 
 async function createActor() {
   await initializeCombatPhysics();
@@ -67,6 +69,53 @@ test('thumb ownership and deliberate input are mandatory for offensive knife con
   assert.equal(canKnifeCreateOffensiveContact({ ...attack, deliberateSpeed: 0 }), false, 'idle sway and enemy motion cannot supply attack energy');
   assert.equal(canKnifeCreateOffensiveContact({ ...attack, state: KNIFE_CONTROL_STATES.returning }), false, 'spring return cannot cut');
   assert.equal(canKnifeCreateOffensiveContact({ ...attack, state: KNIFE_CONTROL_STATES.withdrawing }), false, 'assisted withdrawal cannot create a new wound');
+});
+
+test('generic melee intent separates owned attacks from locomotion, return, and withdrawal', () => {
+  const intentWeapon = new MeleeIntentWeapon({ weaponId: 'test_melee', minimumIntentSpeed: 0.03 });
+  assert.equal(intentWeapon.interpret({ ownerId: null, controlState: 'attacking', localVelocity: { x: 2, y: 0, z: -2 } }).intent, MELEE_INTENTS.idle);
+  assert.equal(isDamageIntent(intentWeapon.current), false, 'passive world or player movement has no damaging owner');
+  assert.equal(intentWeapon.interpret({ ownerId: 4, controlState: 'returning', localVelocity: { x: 0, y: 0, z: -2 } }).damaging, false);
+  assert.equal(intentWeapon.interpret({ ownerId: 4, controlState: 'attacking', localVelocity: { x: 0, y: 0, z: -2 } }).intent, MELEE_INTENTS.stab);
+  assert.equal(intentWeapon.interpret({ ownerId: 4, controlState: 'attacking', localVelocity: { x: 2, y: 0, z: 0 } }).intent, MELEE_INTENTS.slash);
+  assert.equal(intentWeapon.interpret({ ownerId: 4, controlState: 'withdrawing', localVelocity: { x: 0, y: 0, z: 2 }, embedded: true }).intent, MELEE_INTENTS.withdraw);
+});
+
+test('Combat Director executes successful melee interactions on one deterministic staged timeline', () => {
+  const director = new CombatDirector();
+  const observed = [];
+  director.subscribe('*', (event) => observed.push([event.time, event.sequence, event.type, event.payload.stage ?? event.payload.action ?? event.payload.cue]));
+  const intent = { weaponId: 'future_spear', intent: MELEE_INTENTS.stab, ownerId: 9, speed: 1.2, intentional: true, damaging: true };
+  const interaction = director.beginPuncture({ weapon: { id: 'future_spear', family: 'spear' }, intent, hit: {}, entryPoint: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1), depth: 0.01, force: 1 });
+  assert.ok(interaction, 'weapon-agnostic profiles can enter the director');
+  assert.equal(director.beginPuncture({ weapon: { id: 'passive_claw' }, intent: { ...intent, ownerId: null, intentional: false, damaging: false } }), null, 'unowned motion is rejected before damage scheduling');
+  director.update(0.05);
+  const stages = observed.filter((entry) => entry[2] === COMBAT_DIRECTOR_EVENTS.lifecycle).map((entry) => entry[3]);
+  assert.deepEqual(stages, [PENETRATION_STAGES.approach, PENETRATION_STAGES.surfaceContact, PENETRATION_STAGES.surfaceCompression, PENETRATION_STAGES.surfaceRupture, PENETRATION_STAGES.softTissue, PENETRATION_STAGES.embedded]);
+  assert.ok(observed.every((entry, index) => index === 0 || entry[0] > observed[index - 1][0] || entry[0] === observed[index - 1][0] && entry[1] > observed[index - 1][1]), 'equal-time events retain insertion order');
+  assert.ok(new Set(observed.map((entry) => entry[0])).size >= 8, 'wound, reaction, audio, blood, camera, and haptic work does not collapse into one instant');
+  director.dispose();
+});
+
+test('future melee profiles can override bounded timing offsets without replacing the director', () => {
+  const profile = { id: 'future_axe', family: 'axe', timeline: { slash: { audio: 0.03, recovery: 0.12 } } };
+  const timeline = resolveMeleeTimeline('slash', profile);
+  assert.equal(timeline.audio, 0.03);
+  assert.equal(timeline.recovery, 0.12);
+  assert.ok(timeline.rupture > 0, 'unspecified stages retain foundation defaults');
+  assert.throws(() => resolveMeleeTimeline('slash', { timeline: { slash: { recovery: -1 } } }), /Invalid slash timeline offset/);
+  assert.throws(() => resolveMeleeTimeline('slash', { timeline: { slash: { magicSmoke: 0.1 } } }), /Unknown slash timeline offset/);
+});
+
+test('penetration withdrawal cannot regress into a later embedded stage', () => {
+  const director = new CombatDirector();
+  const intent = { weaponId: 'test_spear', intent: MELEE_INTENTS.stab, ownerId: 3, speed: 1, intentional: true, damaging: true };
+  const interaction = director.beginPuncture({ weapon: { id: 'test_spear', family: 'spear' }, intent, hit: {}, entryPoint: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1), depth: 0.01, force: 1 });
+  director.beginWithdrawal(interaction.id, { direction: new THREE.Vector3(0, 0, 1), releaseSeverity: 0.01, position: new THREE.Vector3() });
+  director.update(0.2);
+  assert.deepEqual(interaction.stageHistory.map((entry) => entry.stage), [PENETRATION_STAGES.approach, PENETRATION_STAGES.surfaceContact, PENETRATION_STAGES.surfaceCompression, PENETRATION_STAGES.surfaceRupture, PENETRATION_STAGES.softTissue, PENETRATION_STAGES.withdrawal, PENETRATION_STAGES.exit, PENETRATION_STAGES.recovery]);
+  assert.equal(interaction.completed, true);
+  director.dispose();
 });
 
 test('knife release plans use bounded free, failed-contact, and embedded returns', () => {
@@ -679,7 +728,9 @@ test('one authoritative knife root keeps identity, scale, pose, ownership, and s
   assert.equal(actor.woundSystem.wounds.length, 0, 'return motion creates no wound');
   const embeddedHit = makeHit(actor, 'upper_chest');
   knife.acquireGrip(21, 300, 530, 500);
+  knife.applyGripGesture(21, 0, -20, 300, 510, 516);
   knife.beginPenetration(embeddedHit.hit, embeddedHit.worldPoint, new THREE.Vector3(0, 0, -1), 1);
+  knife.afterPhysicsStep(1 / 60);
   const embeddedWounds = actor.woundSystem.wounds.length;
   knife.releaseGrip('embedded-test-release');
   assert.equal(knife.state, KNIFE_CONTROL_STATES.withdrawing);
@@ -714,7 +765,7 @@ test('a grip-owned deliberate world-space thrust punctures through the authorita
   knife.acquireGrip(31, 280, 470, 0);
   for (let step = 1; step <= 12 && !knife.entry; step += 1) {
     knife.applyGripGesture(31, 0, -step * 5, 280, 470 - step * 5, step * 16);
-    physics.stepSingle((dt) => { knife.beforePhysics(dt); actor.beforePhysics(dt); }, () => {});
+    physics.stepSingle((dt) => { knife.beforePhysics(dt); actor.beforePhysics(dt); }, (dt) => knife.afterPhysicsStep(dt));
     knife.afterPhysics();
   }
   assert.equal(knife.state, KNIFE_CONTROL_STATES.embedded);
@@ -738,7 +789,7 @@ test('a grip-owned deliberate lateral sweep creates an edge-led slash', async ()
   knife.acquireGrip(32, 280, 470, 0);
   for (let step = 1; step <= 20; step += 1) {
     knife.applyGripGesture(32, -step * 5, 0, 280 - step * 5, 470, step * 16);
-    physics.stepSingle((dt) => { knife.beforePhysics(dt); actor.beforePhysics(dt); }, () => {});
+    physics.stepSingle((dt) => { knife.beforePhysics(dt); actor.beforePhysics(dt); }, (dt) => knife.afterPhysicsStep(dt));
     knife.afterPhysics();
   }
   assert.equal(knife.activeSlash?.part, 'edge');

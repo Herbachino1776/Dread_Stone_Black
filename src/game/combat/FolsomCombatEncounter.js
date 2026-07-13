@@ -5,6 +5,7 @@ import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
 import { resolveCombatMortalityMode } from './CombatMortality.js';
 import { MODEL_IDLE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { CombatDirector } from './CombatDirector.js';
 
 const FOLSOM_AUTHORED_PLAYER_SPAWN = Object.freeze([-2, 1.71, -4]);
 const FOLSOM_MODEL_IDLE_SPAWN_XZ = Object.freeze([8, -4]);
@@ -36,6 +37,7 @@ export class FolsomCombatEncounter {
     this.dungeon.collision?.addBlocker?.(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: this.groundY, wallX: null });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: this.groundY, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+    this.combatDirector = new CombatDirector({ actor: this.actor, bloodEffects: this.bloodEffects, feedbackSystem: this.feedbackSystem });
   }
 
   resolveCombatSpawn() {
@@ -55,7 +57,8 @@ export class FolsomCombatEncounter {
 
   handleCombatEvent(event, payload = {}) {
     if (event === 'final_exhale') this.feedbackSystem.stopOwnerVocal('folsom-combat-actor');
-    this.feedbackSystem.emit(event, { ...payload, owner: 'folsom-combat-actor' });
+    if (this.combatDirector) this.combatDirector.forwardFeedbackEvent(event, { ...payload, owner: 'folsom-combat-actor' });
+    else this.feedbackSystem.emit(event, { ...payload, owner: 'folsom-combat-actor' });
   }
 
   isPlayerInCombatRange(player) {
@@ -74,6 +77,7 @@ export class FolsomCombatEncounter {
     this.physics.step(deltaSeconds, (dt) => {
       this.feedbackSystem.update(dt);
       this.weaponController?.beforePhysics?.(dt);
+      this.combatDirector.update(dt);
       this.actor.beforePhysics(dt, player?.position);
     }, (dt) => {
       this.weaponController?.afterPhysicsStep?.(dt);
@@ -89,12 +93,13 @@ export class FolsomCombatEncounter {
     this.actor.reset();
     this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
     this.bloodEffects.clear();
+    this.combatDirector.reset();
     this.feedbackSystem.reset();
     this.weaponController?.reset?.();
   }
 
   getDiagnostics() {
-    return { modelProfileName: this.modelProfile.name, physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics(), spawnPosition: this.spawnPosition.toArray(), groundY: this.groundY };
+    return { modelProfileName: this.modelProfile.name, physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics(), spawnPosition: this.spawnPosition.toArray(), groundY: this.groundY };
   }
 
   dispose() {
@@ -102,6 +107,7 @@ export class FolsomCombatEncounter {
     this.disposed = true;
     this.weaponController?.cancel?.('encounter-dispose');
     this.dungeon.collision?.removeBlocker?.(this.playerBlocker);
+    this.combatDirector.dispose();
     this.bloodEffects.dispose();
     this.feedbackSystem.dispose();
     this.actor.dispose();

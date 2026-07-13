@@ -153,6 +153,7 @@ export class CombatLabDebugPanel {
     const physics = diagnostics.physics ?? {};
     const actor = diagnostics.actor ?? {};
     const weapon = diagnostics.weapon ?? {};
+    const director = diagnostics.director ?? {};
     const blood = diagnostics.blood ?? {};
     const feedback = diagnostics.feedback ?? {};
     const physiology = actor.physiology ?? {};
@@ -180,8 +181,11 @@ export class CombatLabDebugPanel {
       `pose ${JSON.stringify(actor.bodyPositions ?? {})}`,
       `ragdoll bones ${JSON.stringify(actor.visualAdapter?.ragdollBonePositions ?? {})}  bindings ${actor.visualAdapter?.ragdollBindingCount ?? 0}`,
       '',
+      `director ${(director.time ?? 0).toFixed(3)}s  active ${director.activeInteractions ?? 0}  queued ${director.queuedEvents ?? 0}`,
+      `directed event ${JSON.stringify(director.lastEvent ?? null)}`,
+      '',
       `knife ${weapon.equipped ? 'EQUIPPED' : 'HOLSTERED'}  ${weapon.state ?? 'unavailable'}`,
-      `reason ${weapon.reason ?? '-'}`,
+      `reason ${weapon.reason ?? '-'}  intent ${weapon.intent ?? '-'} (${weapon.intentReason ?? '-'})`,
       `pos ${JSON.stringify(weapon.worldPosition ?? [])}`,
       `rot ${JSON.stringify(weapon.worldRotation ?? [])}`,
       `forward ${JSON.stringify(weapon.bladeForward ?? [])}`,
@@ -191,7 +195,8 @@ export class CombatLabDebugPanel {
       `total world ${JSON.stringify(weapon.totalWorldVelocity ?? [])}  offensive ${JSON.stringify(weapon.offensiveVelocity ?? [])}`,
       `owner ${weapon.gripPointerOwner ?? '-'}  attack ${weapon.attackEnabled ? 'ENABLED' : 'SAFE'}  ${weapon.contactDamageReason ?? '-'}`,
       `visual/collision error ${(weapon.visibleCollisionError ?? 0).toFixed(5)}m`,
-      `part ${weapon.contactPart ?? '-'}  wound ${weapon.activeWoundId ?? '-'}  slash ${JSON.stringify(weapon.activeSlash ?? null)}`,
+      `part ${weapon.contactPart ?? '-'}  wound ${weapon.activeWoundId ?? '-'}  interaction ${weapon.activeCombatInteractionId ?? '-'}`,
+      `slash ${JSON.stringify(weapon.activeSlash ?? null)}`,
       '',
       'Grip handle, then up: thrust | down: withdraw | side: slash',
       'Release: safe spring return | X mortality | B debug',

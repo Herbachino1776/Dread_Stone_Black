@@ -243,13 +243,13 @@ export class HumanoidCombatActor {
     return { regionId, region: HUMANOID_ANATOMY_REGIONS.find((entry) => entry.id === regionId), bodyId, body: bodyEntry.body, collider, localPoint: local };
   }
 
-  beginPunctureWound({ hit, entryPoint, direction, depth = 0.004, hardContact = false, weaponId = 'old_work_knife' } = {}) {
+  beginPunctureWound({ hit, entryPoint, direction, depth = 0.004, hardContact = false, weaponId = 'old_work_knife', deferReaction = false, deferAudio = false } = {}) {
     const wound = this.woundSystem.createPuncture({ hit, entryPoint, axis: direction, depth, hardStructureContact: hardContact, embeddedWeaponId: weaponId, createdTime: this.elapsed });
     const state = this.regionState.get(hit.regionId);
     if (state) state.wounds = (state.wounds ?? 0) + 1;
     this.physiology.onWoundCreated(wound);
-    this.eventSink?.('puncture', { position: entryPoint, severity: wound.severity, wound });
-    this.triggerReflex(hit.regionId, Math.max(0.2, wound.severity), direction, { point: entryPoint, depth, force: 0.25, source: 'new_puncture' });
+    if (!deferAudio) this.eventSink?.('puncture', { position: entryPoint, severity: wound.severity, wound });
+    if (!deferReaction) this.triggerReflex(hit.regionId, Math.max(0.2, wound.severity), direction, { point: entryPoint, depth, force: 0.25, source: 'new_puncture' });
     return wound;
   }
 
@@ -275,7 +275,7 @@ export class HumanoidCombatActor {
     return severity;
   }
 
-  applySlashWound({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, woundId = null } = {}) {
+  applySlashWound({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, woundId = null, deferReaction = false } = {}) {
     let wound = woundId ? this.woundSystem.getWound(woundId) : null;
     const isNewWound = !wound;
     if (wound) {
@@ -300,7 +300,7 @@ export class HumanoidCombatActor {
     this.balanceImpairment += traumaSeverity * hit.region.balanceImpact;
     hit.body.applyImpulseAtPoint(cutDirection.clone().multiplyScalar(Math.min(0.22, severity * 0.08)), endPoint, true);
     this.physiology.onTrauma({ hit, severity: traumaSeverity, depth, deltaDepth: depth * 0.2, hardContact: false });
-    if (isNewWound) this.triggerReflex(hit.regionId, Math.max(0.16, traumaSeverity), cutDirection, { point: endPoint, depth, slashSeverity: severity, force: severity, source: 'new_slash' });
+    if (isNewWound && !deferReaction) this.triggerReflex(hit.regionId, Math.max(0.16, traumaSeverity), cutDirection, { point: endPoint, depth, slashSeverity: severity, force: severity, source: 'new_slash' });
     this.evaluateLifeState();
     return wound;
   }
