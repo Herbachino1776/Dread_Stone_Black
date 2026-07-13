@@ -8,6 +8,8 @@ import { resolveCombatMortalityMode } from './CombatMortality.js';
 import { MODEL_IDLE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 import { CombatDirector } from './CombatDirector.js';
 import { MELEE_INTENTS } from './MeleeIntentWeapon.js';
+import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
+import { applyMeleeSpacingEnvelope } from './CombatPresentation.js';
 
 export class CombatLabScene {
   static async create(options = {}) {
@@ -43,6 +45,7 @@ export class CombatLabScene {
     this.buildEnvironment();
     this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, visualProfile: MODEL_IDLE_COMBAT_PROFILE, mortalityMode: resolveCombatMortalityMode(), eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
     this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: 'combat-lab-humanoid-player-blocker' });
+    this.meleeSpacing = applyMeleeSpacingEnvelope(this.playerBlocker, { playerRadius: this.collision.playerRadius, readyReach: Math.abs(KNIFE_COMBAT_CONFIG.workspace.ready[2]) + KNIFE_COMBAT_CONFIG.bladeLength, gestureReach: KNIFE_COMBAT_CONFIG.workspace.thrustDistance, effectiveDepth: KNIFE_COMBAT_CONFIG.maximumPenetrationDepth });
     this.collision.addBlocker(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: 0, wallX: -2.65 });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: 0, wallX: -2.65, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
@@ -227,7 +230,7 @@ export class CombatLabScene {
   }
 
   getDiagnostics() {
-    return { physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics() };
+    return { physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics(), meleeSpacing: this.meleeSpacing };
   }
 
   dispose() {

@@ -6,6 +6,8 @@ import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
 import { resolveCombatMortalityMode } from './CombatMortality.js';
 import { MODEL_IDLE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 import { CombatDirector } from './CombatDirector.js';
+import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
+import { applyMeleeSpacingEnvelope } from './CombatPresentation.js';
 
 const FOLSOM_AUTHORED_PLAYER_SPAWN = Object.freeze([-2, 1.71, -4]);
 const FOLSOM_MODEL_IDLE_SPAWN_XZ = Object.freeze([8, -4]);
@@ -34,6 +36,7 @@ export class FolsomCombatEncounter {
     this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw, visualProfile: this.modelProfile, mortalityMode: resolveCombatMortalityMode(), eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
     this.actor.root.name = 'folsom-model-idle-combat-subject';
     this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: 'folsom-model-idle-combat-player-blocker' });
+    this.meleeSpacing = applyMeleeSpacingEnvelope(this.playerBlocker, { playerRadius: this.dungeon.collision?.playerRadius, readyReach: Math.abs(KNIFE_COMBAT_CONFIG.workspace.ready[2]) + KNIFE_COMBAT_CONFIG.bladeLength, gestureReach: KNIFE_COMBAT_CONFIG.workspace.thrustDistance, effectiveDepth: KNIFE_COMBAT_CONFIG.maximumPenetrationDepth });
     this.dungeon.collision?.addBlocker?.(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: this.groundY, wallX: null });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: this.groundY, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
@@ -99,7 +102,7 @@ export class FolsomCombatEncounter {
   }
 
   getDiagnostics() {
-    return { modelProfileName: this.modelProfile.name, physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics(), spawnPosition: this.spawnPosition.toArray(), groundY: this.groundY };
+    return { modelProfileName: this.modelProfile.name, physics: this.physics.getDiagnostics(), actor: this.actor.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood: this.bloodEffects.getDiagnostics(), feedback: this.feedbackSystem.getDiagnostics(), meleeSpacing: this.meleeSpacing, spawnPosition: this.spawnPosition.toArray(), groundY: this.groundY };
   }
 
   dispose() {

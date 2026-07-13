@@ -404,9 +404,9 @@ export class HumanoidCombatActor {
     blocker.from.z = pelvis.z;
     blocker.to.x = upper.x;
     blocker.to.z = upper.z;
-    blocker.radius = this.ragdollActive ? 0.2 : 0.29;
+    blocker.radius = this.ragdollActive ? 0.2 : blocker.meleeSpacingRadius ?? 0.29;
     blocker.height = this.ragdollActive ? 0.5 : 1.82;
-    blocker.userData = { actor: this, dynamic: true, ragdoll: this.ragdollActive };
+    blocker.userData = { actor: this, dynamic: true, ragdoll: this.ragdollActive, meleeSpacing: blocker.userData?.meleeSpacing ?? null };
     return blocker;
   }
 
@@ -415,7 +415,7 @@ export class HumanoidCombatActor {
     this.reflex.intensity = THREE.MathUtils.clamp(Math.max(this.reflex.intensity, intensity * 1.8), 0, 1);
     this.reflex.time = 0.38 + this.reflex.intensity * 0.42;
     this.reflex.direction.copy(direction ?? new THREE.Vector3());
-    this.visualAdapter?.triggerPainReaction?.({ regionId, severity: intensity, worldDirection: direction, depth: details.depth ?? 0, slashSeverity: details.slashSeverity ?? 0, impactForce: details.force ?? 0, hitWorldPosition: details.point ?? null, actorState: this.lifeState, source: details.source ?? 'combat_contact' });
+    this.visualAdapter?.triggerPainReaction?.({ regionId, severity: intensity, worldDirection: direction, depth: details.depth ?? 0, slashSeverity: details.slashSeverity ?? 0, impactForce: details.force ?? 0, hitWorldPosition: details.point ?? null, actorState: this.lifeState, source: details.source ?? 'combat_contact', variation: details.variation ?? 0, impactMemory: details.impactMemory ?? 0, recoveryState: details.recoveryState ?? 'idle' });
     if (intensity > 0.08 && this.lifeState !== 'dead') this.eventSink?.('pain_vocal', { position: this.getBodyWorldPosition('head'), severity: intensity });
   }
 
@@ -482,7 +482,7 @@ export class HumanoidCombatActor {
     const translation = body.translation();
     const velocity = body.linvel();
     tmpTarget.copy(restPosition);
-    if (['upper_chest', 'lower_chest', 'abdomen'].includes(bodyId)) tmpTarget.y += Math.sin(this.elapsed * 1.65) * 0.006;
+    if (['upper_chest', 'lower_chest', 'abdomen'].includes(bodyId)) tmpTarget.y += Math.sin(this.elapsed * 1.65) * 0.006 * (1 - (this.physiology?.breathInterruption ?? 0) * 0.88);
     if (this.lifeState === 'alive') tmpTarget.x += Math.sin(this.elapsed * 0.72) * 0.006 * (bodyId.includes('left') ? -1 : 1);
     this.applyReflexTarget(bodyId, tmpTarget);
     if (this.physiology.shock > 0.35 && this.lifeState !== 'dead') tmpTarget.x += Math.sin(this.elapsed * 22 + config.mass) * 0.006 * this.physiology.shock;

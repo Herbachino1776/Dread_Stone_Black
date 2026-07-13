@@ -18,6 +18,8 @@ import { PAIN_REACTION_LIMITS, ProceduralPainReactionController, buildReactionPo
 import { MAX_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, findClosestSkinnedSurface, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
 import { COMBAT_DIRECTOR_EVENTS, CombatDirector, PENETRATION_STAGES, resolveMeleeTimeline } from '../src/game/combat/CombatDirector.js';
 import { isDamageIntent, MELEE_INTENTS, MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
+import { Feedback } from '../src/game/Feedback.js';
+import { applyMeleeSpacingEnvelope, resolveMeleeSpacingEnvelope, resolveWeaponMicroResponse, sampleTissueResistanceCurve } from '../src/game/combat/CombatPresentation.js';
 
 async function createActor() {
   await initializeCombatPhysics();
@@ -89,12 +91,69 @@ test('Combat Director executes successful melee interactions on one deterministi
   const interaction = director.beginPuncture({ weapon: { id: 'future_spear', family: 'spear' }, intent, hit: {}, entryPoint: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1), depth: 0.01, force: 1 });
   assert.ok(interaction, 'weapon-agnostic profiles can enter the director');
   assert.equal(director.beginPuncture({ weapon: { id: 'passive_claw' }, intent: { ...intent, ownerId: null, intentional: false, damaging: false } }), null, 'unowned motion is rejected before damage scheduling');
-  director.update(0.05);
+  director.update(0.16);
   const stages = observed.filter((entry) => entry[2] === COMBAT_DIRECTOR_EVENTS.lifecycle).map((entry) => entry[3]);
   assert.deepEqual(stages, [PENETRATION_STAGES.approach, PENETRATION_STAGES.surfaceContact, PENETRATION_STAGES.surfaceCompression, PENETRATION_STAGES.surfaceRupture, PENETRATION_STAGES.softTissue, PENETRATION_STAGES.embedded]);
   assert.ok(observed.every((entry, index) => index === 0 || entry[0] > observed[index - 1][0] || entry[0] === observed[index - 1][0] && entry[1] > observed[index - 1][1]), 'equal-time events retain insertion order');
   assert.ok(new Set(observed.map((entry) => entry[0])).size >= 8, 'wound, reaction, audio, blood, camera, and haptic work does not collapse into one instant');
+  const skinBreakTime = observed.find((entry) => entry[2] === COMBAT_DIRECTOR_EVENTS.audio && entry[3] === 'puncture')[0];
+  const reactionTime = observed.find((entry) => entry[2] === COMBAT_DIRECTOR_EVENTS.reaction)[0];
+  const bloodTime = observed.find((entry) => entry[2] === COMBAT_DIRECTOR_EVENTS.blood && entry[3] === 'entry')[0];
+  const cameraTime = observed.find((entry) => entry[2] === COMBAT_DIRECTOR_EVENTS.camera)[0];
+  assert.ok(skinBreakTime < reactionTime && reactionTime < bloodTime && bloodTime < cameraTime, 'skin break, reaction, seep, and camera impulse remain individually readable');
+  assert.ok(director.getDiagnostics().pooledEvents > 0, 'executed timeline events return to the bounded event pool');
   director.dispose();
+});
+
+test('melee spacing leaves load room at minimum collision distance and reaches authored full depth', () => {
+  const readyReach = Math.abs(KNIFE_COMBAT_CONFIG.workspace.ready[2]) + KNIFE_COMBAT_CONFIG.bladeLength;
+  const envelope = resolveMeleeSpacingEnvelope({ playerRadius: 0.5, readyReach, gestureReach: KNIFE_COMBAT_CONFIG.workspace.thrustDistance, effectiveDepth: KNIFE_COMBAT_CONFIG.maximumPenetrationDepth });
+  assert.ok(envelope.loadingClearance >= 0.06, 'the ready tip cannot touch the target at minimum player collision distance');
+  assert.ok(envelope.fullGestureDepth >= KNIFE_COMBAT_CONFIG.maximumPenetrationDepth, 'one full comfortable gesture can still reach maximum penetration');
+  assert.ok(envelope.fullGestureDepth - KNIFE_COMBAT_CONFIG.maximumPenetrationDepth <= 0.03, 'full gesture overtravel remains small and controlled');
+  assert.ok(Math.abs(0.5 + envelope.blockerRadius - envelope.minimumCenterDistance) < 1e-8);
+  const blocker = { radius: 0.29, userData: {} };
+  assert.equal(applyMeleeSpacingEnvelope(blocker, { playerRadius: 0.5, readyReach, gestureReach: KNIFE_COMBAT_CONFIG.workspace.thrustDistance, effectiveDepth: KNIFE_COMBAT_CONFIG.maximumPenetrationDepth }).blockerRadius, blocker.radius);
+});
+
+test('continuous tissue curves progress from light skin to muscle, bone approach, and sticky release', () => {
+  const base = { surfaceThickness: 0.012, softTissueResistance: 0.48, hardDepth: 0.1, hardStructureResistance: 1.8 };
+  const skin = sampleTissueResistanceCurve({ ...base, depth: 0.004 });
+  const muscle = sampleTissueResistanceCurve({ ...base, depth: 0.055 });
+  const bone = sampleTissueResistanceCurve({ ...base, depth: 0.095 });
+  const withdrawalDeep = sampleTissueResistanceCurve({ ...base, depth: 0.07, withdrawing: true });
+  const withdrawalExit = sampleTissueResistanceCurve({ ...base, depth: 0.002, withdrawing: true });
+  assert.ok(skin.effectiveResistance < muscle.effectiveResistance);
+  assert.ok(muscle.effectiveResistance < bone.effectiveResistance);
+  assert.equal(skin.phase, 'skin');
+  assert.equal(muscle.phase, 'muscle');
+  assert.equal(bone.phase, 'bone_approach');
+  assert.ok(withdrawalDeep.effectiveResistance > withdrawalExit.effectiveResistance, 'adhesion releases progressively near the surface');
+  assert.equal(withdrawalExit.phase, 'surface_release');
+});
+
+test('weapon micro responses stay within millimeter and few-degree presentation limits', () => {
+  const response = resolveWeaponMicroResponse('hard_stop', 1, -0.7);
+  assert.ok(response.compression <= 0.006);
+  assert.ok(response.recoil <= 0.0045);
+  assert.ok(Math.abs(THREE.MathUtils.radToDeg(response.roll)) <= 2.4);
+  assert.ok(Math.abs(THREE.MathUtils.radToDeg(response.twist)) <= 2.4);
+  assert.ok(response.vibration <= 0.00075);
+});
+
+test('camera combat impulse is directional, bounded, deterministic, and non-oscillating', () => {
+  const camera = new THREE.PerspectiveCamera();
+  const feedback = new Feedback(camera);
+  feedback.shake({ durationMs: 110, intensity: 0.01, direction: new THREE.Vector3(0, 0, -1), polarity: -1, damping: 18 });
+  const samples = [];
+  for (let index = 0; index < 14; index += 1) {
+    camera.position.set(0, 0, 0);
+    feedback.update(0.01);
+    samples.push(camera.position.z);
+  }
+  assert.ok(samples.some((value) => value > 0));
+  assert.ok(samples.every((value) => value >= -1e-9 && value <= 0.010001), 'camera settles along one restrained recoil direction without oscillation');
+  assert.equal(feedback.getDiagnostics().active, false);
 });
 
 test('future melee profiles can override bounded timing offsets without replacing the director', () => {
@@ -112,7 +171,8 @@ test('penetration withdrawal cannot regress into a later embedded stage', () => 
   const intent = { weaponId: 'test_spear', intent: MELEE_INTENTS.stab, ownerId: 3, speed: 1, intentional: true, damaging: true };
   const interaction = director.beginPuncture({ weapon: { id: 'test_spear', family: 'spear' }, intent, hit: {}, entryPoint: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, -1), depth: 0.01, force: 1 });
   director.beginWithdrawal(interaction.id, { direction: new THREE.Vector3(0, 0, 1), releaseSeverity: 0.01, position: new THREE.Vector3() });
-  director.update(0.2);
+  director.completeWithdrawal(interaction.id, { direction: new THREE.Vector3(0, 0, 1), releaseSeverity: 0.01, position: new THREE.Vector3() });
+  director.update(0.25);
   assert.deepEqual(interaction.stageHistory.map((entry) => entry.stage), [PENETRATION_STAGES.approach, PENETRATION_STAGES.surfaceContact, PENETRATION_STAGES.surfaceCompression, PENETRATION_STAGES.surfaceRupture, PENETRATION_STAGES.softTissue, PENETRATION_STAGES.withdrawal, PENETRATION_STAGES.exit, PENETRATION_STAGES.recovery]);
   assert.equal(interaction.completed, true);
   director.dispose();
@@ -281,6 +341,15 @@ test('procedural reactions are region-specific, direction-aware, severity-scaled
   const legTiming = resolveReactionTiming('right_thigh', 0.8);
   assert.ok(neckTiming.impact >= 0.05 && neckTiming.impact <= 0.09);
   assert.ok(legTiming.recovery > neckTiming.recovery);
+});
+
+test('reaction variation and impact memory change guarding without exceeding pose limits', () => {
+  const base = { regionId: 'upper_chest', severity: 0.55, localDirection: new THREE.Vector3(0.35, 0, -1).normalize(), depth: 0.06 };
+  const first = buildReactionPose({ ...base, variation: -0.75, impactMemory: 0.15 });
+  const repeated = buildReactionPose({ ...base, variation: 0.75, impactMemory: 0.65, recoveryWeight: 0.4 });
+  assert.ok(first.rotations.get('lower_chest').distanceTo(repeated.rotations.get('lower_chest')) > 0.001, 'deterministic variation prevents identical repeated chest motion');
+  assert.ok(repeated.rotations.get('left_upper_arm').length() > first.rotations.get('left_upper_arm').length(), 'recent torso wounds increase restrained guarding');
+  repeated.rotations.forEach((rotation) => assert.ok(rotation.length() <= PAIN_REACTION_LIMITS.maximumBoneAngle + 1e-8));
 });
 
 test('reaction controller preserves mixer-authored scales, clamps repeated hits, resets, and cannot accumulate pose drift', () => {
@@ -594,6 +663,36 @@ test('physiology permits shallow limb injury but differentiates blood loss and n
   physics.dispose();
 });
 
+test('heavy torso presentation briefly interrupts breathing and restores it smoothly', async () => {
+  const { physics, actor } = await createActor();
+  actor.physiology.interruptBreathing({ severity: 0.7, depth: 0.09 });
+  actor.physiology.update(1 / 60);
+  const interrupted = actor.physiology.breathInterruption;
+  assert.equal(actor.physiology.breathingState, 'interrupted');
+  assert.ok(interrupted > 0.4);
+  for (let index = 0; index < 180; index += 1) actor.physiology.update(1 / 60);
+  assert.ok(actor.physiology.breathInterruption < 0.01);
+  assert.equal(actor.physiology.breathingState, 'steady');
+  actor.dispose();
+  physics.dispose();
+});
+
+test('Combat Director interrupts breathing once when a torso penetration becomes heavy', () => {
+  const interruptions = [];
+  const actor = {
+    applyPenetration: () => 0.34,
+    physiology: { interruptBreathing: (payload) => interruptions.push(payload) },
+  };
+  const director = new CombatDirector({ actor });
+  const interaction = { result: { woundId: 'wound_test' }, flags: new Set() };
+  const payload = { action: 'penetrate', hit: { regionId: 'upper_chest' }, depth: 0.07 };
+  director.applyTissueEvent({ interaction, payload });
+  director.applyTissueEvent({ interaction, payload });
+  assert.equal(interruptions.length, 1, 'continuous depth events do not restart the breath interruption every physics step');
+  assert.deepEqual(interruptions[0], { severity: 0.34, depth: 0.07 });
+  director.dispose();
+});
+
 test('combat feedback guards unsupported haptics, cooldowns contact audio, and honors disable', () => {
   const feedback = new CombatFeedbackSystem();
   assert.doesNotThrow(() => feedback.emitHaptic('penetration'));
@@ -731,6 +830,7 @@ test('one authoritative knife root keeps identity, scale, pose, ownership, and s
   knife.applyGripGesture(21, 0, -20, 300, 510, 516);
   knife.beginPenetration(embeddedHit.hit, embeddedHit.worldPoint, new THREE.Vector3(0, 0, -1), 1);
   knife.afterPhysicsStep(1 / 60);
+  knife.afterPhysicsStep(1 / 60);
   const embeddedWounds = actor.woundSystem.wounds.length;
   knife.releaseGrip('embedded-test-release');
   assert.equal(knife.state, KNIFE_CONTROL_STATES.withdrawing);
@@ -771,6 +871,7 @@ test('a grip-owned deliberate world-space thrust punctures through the authorita
   assert.equal(knife.state, KNIFE_CONTROL_STATES.embedded);
   assert.equal(knife.contactState, 'surface_puncture');
   assert.equal(knife.contactDamageReason, 'damaging:grip-owned-deliberate-motion');
+  knife.afterPhysicsStep(1 / 60);
   assert.equal(actor.woundSystem.wounds.length, 1);
   knife.dispose(); actor.dispose(); physics.dispose();
 });

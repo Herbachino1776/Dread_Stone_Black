@@ -5,6 +5,7 @@ import { SLASH_CONFIG } from './CombatStage2Config.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from './KnifeControlState.js';
 import { CombatDirector } from './CombatDirector.js';
 import { isDamageIntent, MeleeIntentWeapon } from './MeleeIntentWeapon.js';
+import { resolveWeaponMicroResponse, sampleTissueResistanceCurve } from './CombatPresentation.js';
 
 const forwardLocal = new THREE.Vector3(0, 0, -1);
 const edgeLocalA = new THREE.Vector3(-KNIFE_COMBAT_CONFIG.bladeWidth * 0.5, 0, -0.05);
@@ -103,6 +104,22 @@ export class WorldKnifeCombatController {
     this.lastSweep = null;
     this.lastFrameVelocity = 0;
     this.visibleCollisionError = 0;
+    this.maximumPresentationOffset = 0;
+    this.lastPhysicsDt = 1 / 60;
+    this.tissueResistanceSample = { phase: 'skin', effectiveResistance: this.config.minimumPunctureSpeed, drag: 0, deflection: 0 };
+    this.microResponse = { kind: 'idle', duration: 0, compression: 0, recoil: 0, roll: 0, twist: 0, vibration: 0 };
+    this.microElapsed = 0;
+    this.microCompression = 0;
+    this.microRecoil = 0;
+    this.microRoll = 0;
+    this.microTwist = 0;
+    this.microVariation = 0;
+    this.microActive = false;
+    this.presentationReady = true;
+    this.microLocalOffset = new THREE.Vector3();
+    this.microWorldOffset = new THREE.Vector3();
+    this.microQuaternion = new THREE.Quaternion();
+    this.microEuler = new THREE.Euler(0, 0, 0, 'XYZ');
     this.disposers = [];
     this.buildVisual();
     this.weaponLayers = Object.freeze({
@@ -340,8 +357,18 @@ export class WorldKnifeCombatController {
     this.returnDuration = plan.durationSeconds;
     this.returnStartAim.set(this.aimX, this.aimY);
     this.returnStartExtension = this.desiredExtension;
-    if (this.entry) this.assistedWithdrawalRate = Math.max(0.04, this.penetrationDepth / Math.max(0.01, plan.durationSeconds));
+    if (this.entry) {
+      this.assistedWithdrawalRate = Math.max(0.04, this.penetrationDepth / Math.max(0.01, plan.durationSeconds));
+      this.beginDirectedWithdrawal();
+    }
     this.failedContact = false;
+  }
+
+  beginDirectedWithdrawal(worldEntry = this.getEntryWorldPose()) {
+    if (!this.entry?.directorInteractionId || this.entry.withdrawalStarted) return false;
+    this.entry.withdrawalStarted = true;
+    this.combatDirector.beginWithdrawal(this.entry.directorInteractionId, { releaseSeverity: this.maximumDepthReached, direction: worldEntry?.axis?.clone?.().negate?.(), position: worldEntry?.point ?? this.currentTip });
+    return true;
   }
 
   updateInput(dt) {
@@ -359,6 +386,7 @@ export class WorldKnifeCombatController {
       this.desiredExtension = 0;
       this.state = KNIFE_CONTROL_STATES.ready;
       this.reason = 'ready-after-return';
+      this.presentationReady = !this.microActive;
     }
   }
 
@@ -380,6 +408,7 @@ export class WorldKnifeCombatController {
   }
 
   beforePhysics(dt) {
+    this.lastPhysicsDt = Math.max(0, dt);
     this.visual.visible = this.isEquipped();
     if (!this.visual.visible) {
       if (this.entry || this.gripPointerId != null || this.state !== KNIFE_CONTROL_STATES.ready) this.cancel('weapon-unequipped');
@@ -462,7 +491,7 @@ export class WorldKnifeCombatController {
       this.failedContact = true;
       this.actualGrip.add(contactNormal.multiplyScalar(Math.min(0.035, travel)));
       semanticHit.body.applyImpulseAtPoint(movementDirection.multiplyScalar(0.035), contactPoint, true);
-      this.combatDirector.reportContact({ weapon: this.weaponDefinition, intent: this.intentState, hit: semanticHit, position: contactPoint, cue: classification.state === 'glancing_contact' ? 'blade_scrape' : 'clothing_contact', severity: 0.2, resistance: classification.state });
+      this.combatDirector.reportContact({ weapon: this.weaponDefinition, intent: this.intentState, hit: semanticHit, position: contactPoint, direction: movementDirection, cue: classification.state === 'glancing_contact' ? 'blade_scrape' : 'clothing_contact', severity: 0.2, resistance: classification.state, weaponAdapter: this });
       return;
     }
     if (!classification.penetrates) {
@@ -471,7 +500,7 @@ export class WorldKnifeCombatController {
       this.reason = classification.reason;
       this.failedContact = true;
       this.actualGrip.add(contactNormal.multiplyScalar(Math.min(0.025, travel)));
-      this.combatDirector.reportContact({ weapon: this.weaponDefinition, intent: this.intentState, hit: semanticHit, position: contactPoint, cue: 'failed_tip', severity: this.lastFrameVelocity * 0.2, resistance: 'failed_tip_stop' });
+      this.combatDirector.reportContact({ weapon: this.weaponDefinition, intent: this.intentState, hit: semanticHit, position: contactPoint, direction: movementDirection, cue: 'failed_tip', severity: this.lastFrameVelocity * 0.2, resistance: 'failed_tip_stop', weaponAdapter: this });
       return;
     }
     this.beginPenetration(semanticHit, contactPoint, forward, alignment);
@@ -554,8 +583,8 @@ export class WorldKnifeCombatController {
       }
     } else if (part === 'flat' || part === 'spine') {
       semanticHit.body.applyImpulseAtPoint(direction.clone().multiplyScalar(Math.min(0.045, speed * 0.008)), point, true);
-      this.combatDirector.reportContact({ weapon: this.weaponDefinition, intent: this.intentState, hit: semanticHit, position: point, cue: part === 'spine' ? 'blunt_contact' : 'clothing_contact', severity: pressure * speed * 0.1, resistance: `${part}_contact` });
-    } else if (classification.state === 'scraping_contact') this.combatDirector.reportContact({ weapon: this.weaponDefinition, intent: this.intentState, hit: semanticHit, position: point, cue: 'blade_scrape', severity: speed * 0.1, resistance: 'surface_scrape' });
+      this.combatDirector.reportContact({ weapon: this.weaponDefinition, intent: this.intentState, hit: semanticHit, position: point, direction, cue: part === 'spine' ? 'blunt_contact' : 'clothing_contact', severity: pressure * speed * 0.1, resistance: `${part}_contact`, weaponAdapter: this });
+    } else if (classification.state === 'scraping_contact') this.combatDirector.reportContact({ weapon: this.weaponDefinition, intent: this.intentState, hit: semanticHit, position: point, direction, cue: 'blade_scrape', severity: speed * 0.1, resistance: 'surface_scrape', weaponAdapter: this });
     return true;
   }
 
@@ -608,6 +637,8 @@ export class WorldKnifeCombatController {
       softFeedback: false,
       deepFeedback: false,
       hardFeedback: false,
+      withdrawalStarted: false,
+      resistancePhase: 'skin',
     };
     this.penetrationDepth = 0.004;
     this.maximumDepthReached = 0.004;
@@ -651,7 +682,9 @@ export class WorldKnifeCombatController {
       ? Math.max(-0.04, this.penetrationDepth - this.assistedWithdrawalRate * dt)
       : THREE.MathUtils.clamp(desiredProjection, -0.04, maximumRegionDepth);
     const hardDepth = this.entry.hardDepth;
-    const penetration = advancePenetrationDepth({ currentDepth: this.penetrationDepth, targetDepth, dt, tissueResistance: this.entry.hit.region.softTissueResistance + (hardDepth != null && targetDepth >= hardDepth ? this.entry.hit.region.hardStructureResistance : 0), hardDepth, maximumDepth: maximumRegionDepth, penetrationRate: this.config.penetrationRate, withdrawalRate: assistedWithdrawal ? this.assistedWithdrawalRate : this.config.withdrawalRate });
+    const wantsWithdrawal = assistedWithdrawal || targetDepth < this.penetrationDepth;
+    const resistanceProfile = sampleTissueResistanceCurve({ depth: this.penetrationDepth, surfaceThickness: this.entry.hit.region.surfaceThickness, softTissueResistance: this.entry.hit.region.softTissueResistance, hardDepth, hardStructureResistance: this.entry.hit.region.hardStructureResistance, withdrawing: wantsWithdrawal }, this.tissueResistanceSample);
+    const penetration = advancePenetrationDepth({ currentDepth: this.penetrationDepth, targetDepth, dt, tissueResistance: resistanceProfile.effectiveResistance, hardDepth, maximumDepth: maximumRegionDepth, penetrationRate: this.config.penetrationRate, withdrawalRate: assistedWithdrawal ? this.assistedWithdrawalRate : this.config.withdrawalRate });
     const hardContact = penetration.hardContact;
     targetDepth = penetration.targetDepth;
     if (hardContact) {
@@ -659,10 +692,10 @@ export class WorldKnifeCombatController {
       this.reason = 'hard-structure-resistance';
       if (!this.entry.hardFeedback) {
         this.entry.hardFeedback = true;
-        this.combatDirector.advancePenetration(this.entry.directorInteractionId, { hit: this.entry.hit, entryPoint: worldEntry.point, direction: worldEntry.axis, deltaDepth: 0, depth: this.penetrationDepth, force: 0, hardContact: true });
+        this.combatDirector.advancePenetration(this.entry.directorInteractionId, { hit: this.entry.hit, entryPoint: worldEntry.point, direction: worldEntry.axis, deltaDepth: 0, depth: this.penetrationDepth, force: 0, hardContact: true, resistanceProfile });
       }
     }
-    const resistance = this.entry.hit.region.softTissueResistance + (hardContact ? this.entry.hit.region.hardStructureResistance : 0);
+    const resistance = resistanceProfile.effectiveResistance;
     const previousDepth = this.penetrationDepth;
     this.penetrationDepth = penetration.depth;
     if (penetration.extracted) { this.extract(); return; }
@@ -679,9 +712,16 @@ export class WorldKnifeCombatController {
     this.actualGrip.copy(constrainedTip).addScaledVector(worldEntry.axis, -this.config.bladeLength);
     const deltaDepth = Math.max(0, this.penetrationDepth - previousDepth);
     const withdrawal = this.penetrationDepth < previousDepth - 0.001;
+    if (withdrawal) {
+      this.beginDirectedWithdrawal(worldEntry);
+      if (this.entry.resistancePhase !== resistanceProfile.phase) {
+        this.entry.resistancePhase = resistanceProfile.phase;
+        this.combatDirector.reportResistance(this.entry.directorInteractionId, { kind: resistanceProfile.phase, intensity: resistanceProfile.drag, depth: this.penetrationDepth, position: worldEntry.point });
+      }
+    }
     this.maximumDepthReached = Math.max(this.maximumDepthReached, this.penetrationDepth);
     if (deltaDepth > 0 && embeddedAttackEnabled) {
-      this.combatDirector.advancePenetration(this.entry.directorInteractionId, { hit: this.entry.hit, entryPoint: worldEntry.point, direction: worldEntry.axis, deltaDepth, depth: this.penetrationDepth, force: resistance + force, hardContact });
+      this.combatDirector.advancePenetration(this.entry.directorInteractionId, { hit: this.entry.hit, entryPoint: worldEntry.point, direction: worldEntry.axis, deltaDepth, depth: this.penetrationDepth, force: resistance + force, hardContact, resistanceProfile });
       if (this.penetrationDepth >= 0.025) this.entry.softFeedback = true;
       if (this.penetrationDepth >= 0.075) this.entry.deepFeedback = true;
     }
@@ -695,7 +735,10 @@ export class WorldKnifeCombatController {
   extract(reason = 'fully-extracted') {
     const entry = this.entry;
     const worldEntry = entry ? this.getEntryWorldPose() : null;
-    if (entry?.directorInteractionId) this.combatDirector.beginWithdrawal(entry.directorInteractionId, { releaseSeverity: this.maximumDepthReached, direction: worldEntry?.axis?.clone?.().negate?.(), position: worldEntry?.point ?? this.currentTip });
+    if (entry?.directorInteractionId) {
+      this.beginDirectedWithdrawal(worldEntry);
+      this.combatDirector.completeWithdrawal(entry.directorInteractionId, { releaseSeverity: this.maximumDepthReached, direction: worldEntry?.axis?.clone?.().negate?.(), position: worldEntry?.point ?? this.currentTip });
+    }
     this.contactState = 'fully_extracted';
     this.reason = reason;
     this.entry = null;
@@ -722,13 +765,65 @@ export class WorldKnifeCombatController {
     }
   }
 
+  onCombatResistance(payload = {}, interaction = {}) {
+    resolveWeaponMicroResponse(payload.kind, payload.intensity, interaction.variation ?? 0, this.microResponse);
+    this.microVariation = interaction.variation ?? 0;
+    this.microElapsed = 0;
+    this.microActive = true;
+    this.presentationReady = false;
+  }
+
+  onCombatRecovery(_payload = {}, interaction = {}) {
+    resolveWeaponMicroResponse('recovery_settle', 0.24, interaction.variation ?? this.microVariation, this.microResponse);
+    this.microVariation = interaction.variation ?? this.microVariation;
+    this.microElapsed = 0;
+    this.microActive = true;
+    this.presentationReady = false;
+  }
+
+  updateMicroPresentation(dt) {
+    const safeDt = Math.max(0, Math.min(0.05, Number(dt) || 0));
+    this.microElapsed += safeDt;
+    const duration = Math.max(0.001, this.microResponse.duration || 0.001);
+    const t = THREE.MathUtils.clamp(this.microElapsed / duration, 0, 1);
+    const riseEnd = 0.18;
+    let envelope;
+    if (t < riseEnd) {
+      const rise = t / riseEnd;
+      envelope = rise * rise * (3 - 2 * rise);
+    } else {
+      const recovery = (t - riseEnd) / (1 - riseEnd);
+      const x = recovery * 6;
+      const raw = (1 + x) * Math.exp(-x);
+      const end = 7 * Math.exp(-6);
+      envelope = Math.max(0, (raw - end) / (1 - end));
+    }
+    const response = 1 - Math.exp(-safeDt * (envelope > 0.35 ? 42 : 20));
+    this.microCompression = THREE.MathUtils.lerp(this.microCompression, this.microResponse.compression * envelope, response);
+    this.microRecoil = THREE.MathUtils.lerp(this.microRecoil, this.microResponse.recoil * envelope, response);
+    this.microRoll = THREE.MathUtils.lerp(this.microRoll, this.microResponse.roll * envelope, response);
+    this.microTwist = THREE.MathUtils.lerp(this.microTwist, this.microResponse.twist * envelope, response);
+    const vibration = this.microActive
+      ? Math.sin(this.microElapsed * Math.PI * 46 + this.microVariation * Math.PI) * this.microResponse.vibration * Math.exp(-this.microElapsed * 28)
+      : 0;
+    this.microLocalOffset.set(vibration, -Math.abs(vibration) * 0.22, this.microCompression + this.microRecoil);
+    this.microWorldOffset.copy(this.microLocalOffset).applyQuaternion(this.actualQuaternion);
+    this.microQuaternion.setFromEuler(this.microEuler.set(this.microTwist, this.microRoll * 0.32, this.microRoll));
+    if (t >= 1 && Math.abs(this.microCompression) + Math.abs(this.microRecoil) + Math.abs(this.microRoll) + Math.abs(this.microTwist) < 0.00008) {
+      this.microActive = false;
+      this.presentationReady = this.state === KNIFE_CONTROL_STATES.ready || this.state === KNIFE_CONTROL_STATES.gripped || this.state === KNIFE_CONTROL_STATES.attacking;
+    }
+  }
+
   afterPhysics() {
     if (!this.visual.visible) return;
-    this.visualGrip.copy(this.actualGrip);
-    this.visualQuaternion.copy(this.actualQuaternion);
+    this.updateMicroPresentation(this.lastPhysicsDt);
+    this.visualGrip.copy(this.actualGrip).add(this.microWorldOffset);
+    this.visualQuaternion.copy(this.actualQuaternion).multiply(this.microQuaternion).normalize();
     this.visual.position.copy(this.visualGrip);
     this.visual.quaternion.copy(this.visualQuaternion);
     this.visibleCollisionError = this.visual.position.distanceTo(this.actualGrip);
+    this.maximumPresentationOffset = Math.max(this.maximumPresentationOffset, this.visibleCollisionError);
     this.updateDebug();
   }
 
@@ -849,7 +944,10 @@ export class WorldKnifeCombatController {
 
   cancel(reason = 'cancelled') {
     if (this.entry) {
-      if (this.entry.directorInteractionId) this.combatDirector.beginWithdrawal(this.entry.directorInteractionId, { releaseSeverity: 0, direction: null, position: this.currentTip });
+      if (this.entry.directorInteractionId) {
+        this.combatDirector.beginWithdrawal(this.entry.directorInteractionId, { releaseSeverity: 0, direction: null, position: this.currentTip });
+        this.combatDirector.completeWithdrawal(this.entry.directorInteractionId, { releaseSeverity: 0, direction: null, position: this.currentTip });
+      }
       this.actor.setEmbeddedWeapon(null);
     }
     this.finishActiveSlash(true);
@@ -873,6 +971,17 @@ export class WorldKnifeCombatController {
     this.cancel('reset');
     this.aimX = 0;
     this.aimY = 0;
+    this.microElapsed = 0;
+    this.microCompression = 0;
+    this.microRecoil = 0;
+    this.microRoll = 0;
+    this.microTwist = 0;
+    this.microActive = false;
+    this.presentationReady = true;
+    this.microLocalOffset.set(0, 0, 0);
+    this.microWorldOffset.set(0, 0, 0);
+    this.microQuaternion.identity();
+    this.maximumPresentationOffset = 0;
     this.initializePose();
   }
 
@@ -903,6 +1012,10 @@ export class WorldKnifeCombatController {
       intentReason: this.intentState.reason,
       weaponLayers: { visual: 'responsive-hand-pose', collision: 'resistance-capable-world-pose', intent: 'owned-gesture-classifier' },
       visibleCollisionError: Number(this.visibleCollisionError.toFixed(5)),
+      maximumPresentationOffset: Number(this.maximumPresentationOffset.toFixed(5)),
+      presentationReady: this.presentationReady,
+      microImpact: { kind: this.microResponse.kind, active: this.microActive, compression: Number(this.microCompression.toFixed(5)), recoil: Number(this.microRecoil.toFixed(5)), rollDegrees: Number(THREE.MathUtils.radToDeg(this.microRoll).toFixed(2)), twistDegrees: Number(THREE.MathUtils.radToDeg(this.microTwist).toFixed(2)) },
+      tissueResistance: { phase: this.tissueResistanceSample.phase, effective: Number((this.tissueResistanceSample.effectiveResistance ?? 0).toFixed(3)), drag: Number((this.tissueResistanceSample.drag ?? 0).toFixed(3)), boneProximity: Number((this.tissueResistanceSample.boneProgress ?? 0).toFixed(3)) },
       gripPointerActive: this.gripPointerId != null,
       gripPointerOwner: this.gripPointerId,
       visualRootName: this.visual.name,

@@ -108,6 +108,7 @@ export class CombatBloodEffects {
     const circulation = this.physiology?.circulation ?? 0;
     if (circulation <= 0.005) return;
     (this.woundSystem?.getActiveWounds?.() ?? []).forEach((wound) => {
+      if (wound.directedBloodReady === false) return;
       if (wound.bleedingRate <= 0.0001) return;
       wound.effectAccumulator = (wound.effectAccumulator ?? 0) + dt;
       const arterial = wound.bleedingProfile.kind.includes('arterial');

@@ -21,12 +21,20 @@ export class CombatPhysiology {
     this.neurologicalIntegrity = 1;
     this.breathingIntegrity = 1;
     this.breathingState = 'steady';
+    this.breathInterruption = 0;
+    this.breathInterruptionRemaining = 0;
     this.timeSinceMortalInjury = 0;
     this.mortalInjury = false;
     this.lastState = 'conscious';
   }
 
   setEventSink(eventSink) { this.eventSink = eventSink; }
+
+  interruptBreathing({ severity = 0, depth = 0 } = {}) {
+    const interruption = THREE.MathUtils.clamp(0.18 + severity * 0.34 + depth * 1.8, 0, 0.82);
+    this.breathInterruption = Math.max(this.breathInterruption, interruption);
+    this.breathInterruptionRemaining = Math.max(this.breathInterruptionRemaining, 0.16 + interruption * 0.24);
+  }
 
   onTrauma({ hit, severity = 0, depth = 0, deltaDepth = 0, hardContact = false } = {}) {
     if (!hit?.regionId) return;
@@ -81,6 +89,9 @@ export class CombatPhysiology {
     this.bloodReserve = THREE.MathUtils.clamp(this.bloodReserve - lost, 0, 1);
     this.totalBloodLost += lost;
     this.painLoad = Math.max(0, this.painLoad - PHYSIOLOGY_CONFIG.painRecoveryPerSecond * dt);
+    if (this.breathInterruptionRemaining > 0) this.breathInterruptionRemaining = Math.max(0, this.breathInterruptionRemaining - dt);
+    else this.breathInterruption *= Math.exp(-4.2 * dt);
+    if (this.breathInterruption < 0.001) this.breathInterruption = 0;
     const shockTarget = THREE.MathUtils.clamp((1 - this.bloodReserve) * 1.12 + this.painLoad * 0.18 + (1 - this.breathingIntegrity) * 0.28, 0, 1);
     this.shock = shockTarget > this.shock ? THREE.MathUtils.lerp(this.shock, shockTarget, 1 - Math.exp(-1.5 * dt)) : Math.max(shockTarget, this.shock - PHYSIOLOGY_CONFIG.shockRecoveryPerSecond * dt);
     const consciousnessTarget = THREE.MathUtils.clamp(this.neurologicalIntegrity * (1 - this.shock * 0.82) * (0.55 + this.bloodReserve * 0.45) * (0.7 + this.breathingIntegrity * 0.3), 0, 1);
@@ -120,6 +131,7 @@ export class CombatPhysiology {
     if (this.actor.lifeState === 'dead' || this.circulation <= 0.01) this.breathingState = 'still';
     else if (this.breathingIntegrity < 0.22 || this.consciousness < 0.2) this.breathingState = 'failing';
     else if (this.shock > 0.65) this.breathingState = 'gasping';
+    else if (this.breathInterruption > 0.08) this.breathingState = 'interrupted';
     else if (this.painLoad > 0.35 || this.breathingIntegrity < 0.7) this.breathingState = 'strained';
     else this.breathingState = 'steady';
   }
@@ -152,6 +164,6 @@ export class CombatPhysiology {
   }
 
   getDiagnostics() {
-    return { bloodReserve: this.bloodReserve, circulation: this.circulation, bloodLossRate: this.bloodLossRate, totalBloodLost: this.totalBloodLost, pain: this.painLoad, shock: this.shock, consciousness: this.consciousness, neurologicalIntegrity: this.neurologicalIntegrity, breathingIntegrity: this.breathingIntegrity, breathingState: this.breathingState, mortalInjury: this.mortalInjury, timeSinceMortalInjury: this.timeSinceMortalInjury };
+    return { bloodReserve: this.bloodReserve, circulation: this.circulation, bloodLossRate: this.bloodLossRate, totalBloodLost: this.totalBloodLost, pain: this.painLoad, shock: this.shock, consciousness: this.consciousness, neurologicalIntegrity: this.neurologicalIntegrity, breathingIntegrity: this.breathingIntegrity, breathingState: this.breathingState, breathInterruption: this.breathInterruption, breathInterruptionRemaining: this.breathInterruptionRemaining, mortalInjury: this.mortalInjury, timeSinceMortalInjury: this.timeSinceMortalInjury };
   }
 }

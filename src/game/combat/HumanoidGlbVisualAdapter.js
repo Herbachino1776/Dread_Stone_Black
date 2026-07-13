@@ -237,8 +237,9 @@ export class HumanoidGlbVisualAdapter {
   updateAnimationAuthority(deltaSeconds) {
     if (!this.mixer || !this.presentationRoot) return;
     const dt = Math.max(0, deltaSeconds);
-    const diagnostics = this.reactionController?.getDiagnostics?.();
-    const targetPlaybackScale = diagnostics?.phase === 'impact' && diagnostics.severity > 0.65 ? 0.7 : diagnostics?.phase === 'pain_hold' ? 0.84 : 1;
+    const reactionPlaybackScale = this.reactionController?.getPlaybackScale?.() ?? 1;
+    const breathingPlaybackScale = 1 - (this.actor.physiology?.breathInterruption ?? 0) * 0.58;
+    const targetPlaybackScale = Math.min(reactionPlaybackScale, breathingPlaybackScale);
     this.idlePlaybackScale = THREE.MathUtils.lerp(this.idlePlaybackScale, targetPlaybackScale, 1 - Math.exp(-dt * 10));
     this.mixer.timeScale = this.idlePlaybackScale;
     this.mixer.update(dt);
@@ -300,6 +301,10 @@ export class HumanoidGlbVisualAdapter {
 
   triggerPainReaction(contact) {
     return this.reactionController?.trigger?.(contact) ?? false;
+  }
+
+  setImpactMemory(memory) {
+    this.reactionController?.setImpactMemory?.(memory);
   }
 
   setEmbeddedTension(contact) {

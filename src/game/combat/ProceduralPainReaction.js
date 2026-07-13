@@ -55,30 +55,33 @@ function setRotation(target, boneId, x = 0, y = 0, z = 0) {
   target.set(boneId, rotation);
 }
 
-export function buildReactionPose({ regionId, severity = 0, localDirection = new THREE.Vector3(0, 0, -1), localHitPoint = null, depth = 0, slashSeverity = 0 } = {}) {
+export function buildReactionPose({ regionId, severity = 0, localDirection = new THREE.Vector3(0, 0, -1), localHitPoint = null, depth = 0, slashSeverity = 0, variation = 0, impactMemory = 0, recoveryWeight = 0 } = {}) {
   const family = getReactionFamily(regionId);
   const side = getReactionSide(regionId, localDirection, localHitPoint);
   const s = clamp01(Math.max(severity, depth * 6.5, slashSeverity * 0.72));
   const deep = clamp01(depth / 0.12);
   const sideSign = side === 'left' ? -1 : 1;
+  const varied = THREE.MathUtils.clamp(variation, -1, 1);
+  const memory = clamp01(impactMemory);
+  const recoveryBlend = clamp01(recoveryWeight);
   const lateral = THREE.MathUtils.clamp(localDirection.x, -1, 1);
   const front = THREE.MathUtils.clamp(-localDirection.z, -1, 1);
   const rotations = new Map();
   const deg = THREE.MathUtils.degToRad;
-  let rootRecoil = localDirection.clone().normalize().multiplyScalar(0.02 + 0.05 * s);
+  let rootRecoil = localDirection.clone().normalize().multiplyScalar((0.02 + 0.05 * s) * (1 - memory * 0.12) * (1 - recoveryBlend * 0.08));
   rootRecoil.y = family === 'leg' ? -0.012 * s : Math.min(rootRecoil.y, 0.015);
   if (rootRecoil.length() > PAIN_REACTION_LIMITS.maximumRootRecoil) rootRecoil.setLength(PAIN_REACTION_LIMITS.maximumRootRecoil);
 
   if (family === 'torso') {
-    const fold = deg(3 + 6 * s + 5 * deep) * Math.max(0.45, Math.abs(front));
-    const sideBend = deg((4 + 5 * s) * (Math.abs(lateral) > 0.15 ? -Math.sign(lateral) : -sideSign * 0.25));
+    const fold = deg(3 + 6 * s + 5 * deep) * Math.max(0.45, Math.abs(front)) * (1 + varied * 0.07);
+    const sideBend = deg((4 + 5 * s) * (Math.abs(lateral) > 0.15 ? -Math.sign(lateral) : -sideSign * (0.25 + varied * 0.08)));
     setRotation(rotations, 'abdomen', fold * 0.62, 0, sideBend * 0.55);
     setRotation(rotations, 'lower_chest', fold * 0.72, sideBend * 0.28, sideBend * 0.72);
     setRotation(rotations, 'upper_chest', fold * 0.4, sideBend * 0.62, sideBend * 0.48);
     setRotation(rotations, 'neck', fold * 0.18, -sideBend * 0.2, sideBend * 0.16);
     setRotation(rotations, 'head', fold * 0.24, -sideBend * 0.16, sideBend * 0.14);
-    setRotation(rotations, 'left_upper_arm', deg(1.5 + s * 2.5), 0, deg(-1.5 - s * 2));
-    setRotation(rotations, 'right_upper_arm', deg(1.5 + s * 2.5), 0, deg(1.5 + s * 2));
+    setRotation(rotations, 'left_upper_arm', deg(1.5 + s * 2.5 + memory * 1.8), 0, deg(-1.5 - s * 2 - memory * 1.4));
+    setRotation(rotations, 'right_upper_arm', deg(1.5 + s * 2.5 + memory * 1.8), 0, deg(1.5 + s * 2 + memory * 1.4));
   } else if (family === 'neck') {
     const withdraw = deg(5 + 7 * s);
     const turn = deg((5 + 8 * s) * -sideSign);
@@ -87,18 +90,18 @@ export function buildReactionPose({ regionId, severity = 0, localDirection = new
     setRotation(rotations, 'head', -withdraw, turn, -sideSign * withdraw * 0.82);
     setRotation(rotations, `${side}_upper_arm`, 0, 0, sideSign * deg(4 + s * 3));
   } else if (family === 'head') {
-    const snap = deg(5 + 10 * s);
+    const snap = deg(5 + 10 * s) * (1 + varied * 0.09);
     setRotation(rotations, 'head', -snap * 0.55, -sideSign * snap, -sideSign * snap * 0.72);
     setRotation(rotations, 'neck', -snap * 0.36, -sideSign * snap * 0.54, -sideSign * snap * 0.42);
     setRotation(rotations, 'upper_chest', snap * 0.12, sideSign * snap * 0.16, sideSign * snap * 0.14);
   } else if (family === 'arm') {
-    const pull = deg(4 + 8 * s);
+    const pull = deg(4 + 8 * s + memory * 2.2) * (1 + varied * 0.06);
     setRotation(rotations, `${side}_upper_arm`, -pull * 0.58, sideSign * pull * 0.45, -sideSign * pull);
     setRotation(rotations, `${side}_forearm`, -pull * 0.75, sideSign * pull * 0.18, -sideSign * pull * 0.26);
     setRotation(rotations, 'upper_chest', pull * 0.12, -sideSign * pull * 0.16, -sideSign * pull * 0.22);
     rootRecoil.multiplyScalar(0.35);
   } else if (family === 'leg') {
-    const dip = deg(3 + 6 * s);
+    const dip = deg(3 + 6 * s + memory * 2.1) * (1 + varied * 0.055);
     setRotation(rotations, 'pelvis', dip * 0.12, -sideSign * dip * 0.18, -sideSign * dip * 0.72);
     setRotation(rotations, 'abdomen', dip * 0.22, sideSign * dip * 0.12, sideSign * dip * 0.58);
     setRotation(rotations, `${side}_thigh`, -dip * 0.64, 0, sideSign * dip * 0.24);
@@ -123,18 +126,24 @@ export class ProceduralPainReactionController {
     this.embeddedRegion = null;
     this.embeddedDirection = new THREE.Vector3();
     this.embeddedDirectionTarget = new THREE.Vector3();
+    this.impactMemory = { torso: 0, leftArm: 0, rightArm: 0, leftLeg: 0, rightLeg: 0 };
+    this.impactMemoryTarget = { torso: 0, leftArm: 0, rightArm: 0, leftLeg: 0, rightLeg: 0 };
     this.tmpQuaternion = new THREE.Quaternion();
     this.tmpEuler = new THREE.Euler(0, 0, 0, 'XYZ');
     this.rootYawQuaternion = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), baseYaw);
   }
 
-  trigger({ regionId, severity, worldDirection, hitWorldPosition = null, depth = 0, slashSeverity = 0, impactForce = 0, actorState = 'alive' } = {}) {
+  trigger({ regionId, severity, worldDirection, hitWorldPosition = null, depth = 0, slashSeverity = 0, impactForce = 0, actorState = 'alive', variation = 0, impactMemory = 0, recoveryState = 'idle' } = {}) {
     if (actorState === 'dead') return false;
     const localDirection = (worldDirection?.clone?.() ?? new THREE.Vector3(0, 0, -1)).applyQuaternion(this.rootYawQuaternion.clone().invert()).normalize();
     const localHitPoint = hitWorldPosition?.clone?.() ? this.presentationRoot.worldToLocal(hitWorldPosition.clone()) : null;
     const stateScale = ['incapacitated', 'dying'].includes(actorState) ? 0.72 : 1;
-    const pose = buildReactionPose({ regionId, severity: Math.max(severity ?? 0, impactForce * 0.18) * stateScale, localDirection, localHitPoint, depth, slashSeverity });
+    const pose = buildReactionPose({ regionId, severity: Math.max(severity ?? 0, impactForce * 0.18) * stateScale, localDirection, localHitPoint, depth, slashSeverity, variation, impactMemory, recoveryWeight: recoveryState === 'recovery' ? this.currentWeight : 0 });
     const timing = resolveReactionTiming(regionId, pose.severity);
+    const timingVariation = 1 + THREE.MathUtils.clamp(variation, -1, 1) * 0.055;
+    timing.impact *= recoveryState === 'recovery' ? 0.84 : timingVariation;
+    timing.hold *= 1 + impactMemory * 0.08 - variation * 0.035;
+    timing.recovery *= 1 + impactMemory * 0.1 + variation * 0.04;
     const fromRotations = new Map([...this.currentRotations].map(([id, value]) => [id, value.clone()]));
     if (this.active && this.active.pose.severity > pose.severity) {
       pose.severity = Math.max(pose.severity, this.active.pose.severity * 0.82);
@@ -145,6 +154,10 @@ export class ProceduralPainReactionController {
     this.elapsed = 0;
     this.affectedBones = [...pose.rotations.keys()];
     return true;
+  }
+
+  setImpactMemory(memory = {}) {
+    Object.keys(this.impactMemoryTarget).forEach((key) => { this.impactMemoryTarget[key] = clamp01(memory[key] ?? 0); });
   }
 
   setEmbeddedTension({ regionId, depth = 0, worldDirection } = {}) {
@@ -192,6 +205,8 @@ export class ProceduralPainReactionController {
 
   applyAfterMixer(dt) {
     const tensionResponse = 1 - Math.exp(-Math.max(0, dt) * 9);
+    const memoryResponse = 1 - Math.exp(-Math.max(0, dt) * 3.4);
+    Object.keys(this.impactMemory).forEach((key) => { this.impactMemory[key] = THREE.MathUtils.lerp(this.impactMemory[key], this.impactMemoryTarget[key], memoryResponse); });
     this.embeddedTension = THREE.MathUtils.lerp(this.embeddedTension, this.embeddedTensionTarget, tensionResponse);
     if (this.embeddedDirectionTarget.lengthSq() > 1e-8) this.embeddedDirection.lerp(this.embeddedDirectionTarget, tensionResponse).normalize();
     const sample = this.sample(dt);
@@ -227,6 +242,7 @@ export class ProceduralPainReactionController {
         this.currentRotations.set(boneId, combined);
       });
     }
+    this.applyImpactMemoryPose();
     const root = activePose?.rootRecoil?.clone?.().multiplyScalar(sample.weight) ?? new THREE.Vector3();
     if (this.embeddedTension > 0) root.addScaledVector(this.embeddedDirection, -Math.min(0.012, this.embeddedTension * 0.012));
     if (root.length() > PAIN_REACTION_LIMITS.maximumRootRecoil) root.setLength(PAIN_REACTION_LIMITS.maximumRootRecoil);
@@ -234,6 +250,48 @@ export class ProceduralPainReactionController {
     this.presentationRoot.position.copy(this.basePosition).add(root);
     this.presentationRoot.rotation.set(0, this.baseYaw, 0);
     return sample;
+  }
+
+  applyImpactMemoryPose() {
+    const deg = THREE.MathUtils.degToRad;
+    const torso = this.impactMemory.torso;
+    if (torso > 0.001) {
+      this.applyMemoryRotation('abdomen', deg(1.25) * torso, 0, 0);
+      this.applyMemoryRotation('lower_chest', deg(0.72) * torso, 0, 0);
+      this.applyMemoryRotation('left_upper_arm', deg(0.9) * torso, 0, deg(-0.8) * torso);
+      this.applyMemoryRotation('right_upper_arm', deg(0.9) * torso, 0, deg(0.8) * torso);
+    }
+    const leftArm = this.impactMemory.leftArm;
+    if (leftArm > 0.001) {
+      this.applyMemoryRotation('left_upper_arm', deg(-0.7) * leftArm, 0, deg(-1.1) * leftArm);
+      this.applyMemoryRotation('left_forearm', deg(-0.8) * leftArm, 0, deg(-0.35) * leftArm);
+    }
+    const rightArm = this.impactMemory.rightArm;
+    if (rightArm > 0.001) {
+      this.applyMemoryRotation('right_upper_arm', deg(-0.7) * rightArm, 0, deg(1.1) * rightArm);
+      this.applyMemoryRotation('right_forearm', deg(-0.8) * rightArm, 0, deg(0.35) * rightArm);
+    }
+    const leftLeg = this.impactMemory.leftLeg;
+    const rightLeg = this.impactMemory.rightLeg;
+    if (leftLeg > 0.001 || rightLeg > 0.001) {
+      this.applyMemoryRotation('pelvis', 0, 0, deg(0.8) * (leftLeg - rightLeg));
+      if (leftLeg > 0.001) this.applyMemoryRotation('left_thigh', deg(-0.85) * leftLeg, 0, deg(0.35) * leftLeg);
+      if (rightLeg > 0.001) this.applyMemoryRotation('right_thigh', deg(-0.85) * rightLeg, 0, deg(-0.35) * rightLeg);
+    }
+  }
+
+  applyMemoryRotation(boneId, x, y, z) {
+    const bone = this.bones.get(boneId);
+    if (!bone) return;
+    this.tmpQuaternion.setFromEuler(this.tmpEuler.set(x, y, z));
+    bone.quaternion.multiply(this.tmpQuaternion).normalize();
+  }
+
+  getPlaybackScale() {
+    if (!this.active) return 1;
+    if (this.elapsed < this.active.timing.impact) return this.active.pose.severity > 0.65 ? 0.7 : 0.86;
+    if (this.elapsed < this.active.timing.impact + this.active.timing.hold) return 0.84;
+    return 1;
   }
 
   reset() {
@@ -247,6 +305,7 @@ export class ProceduralPainReactionController {
     this.embeddedRegion = null;
     this.embeddedDirection.set(0, 0, 0);
     this.embeddedDirectionTarget.set(0, 0, 0);
+    Object.keys(this.impactMemory).forEach((key) => { this.impactMemory[key] = 0; this.impactMemoryTarget[key] = 0; });
     this.presentationRoot?.position.copy(this.basePosition);
     if (this.presentationRoot) this.presentationRoot.rotation.set(0, this.baseYaw, 0);
   }
@@ -262,6 +321,7 @@ export class ProceduralPainReactionController {
       affectedBones: [...new Set([...this.affectedBones, ...this.currentRotations.keys()])],
       additiveAngles: Object.fromEntries([...this.currentRotations].map(([id, value]) => [id, Number(THREE.MathUtils.radToDeg(value.length()).toFixed(2))])),
       embeddedTension: Number(this.embeddedTension.toFixed(3)),
+      impactMemory: this.impactMemory,
     };
   }
 }

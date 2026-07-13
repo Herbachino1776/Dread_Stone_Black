@@ -154,6 +154,7 @@ export class CombatLabDebugPanel {
     const actor = diagnostics.actor ?? {};
     const weapon = diagnostics.weapon ?? {};
     const director = diagnostics.director ?? {};
+    const spacing = diagnostics.meleeSpacing ?? {};
     const blood = diagnostics.blood ?? {};
     const feedback = diagnostics.feedback ?? {};
     const physiology = actor.physiology ?? {};
@@ -167,7 +168,7 @@ export class CombatLabDebugPanel {
       `actor ${actor.state ?? 'unknown'}  mortality ${actor.mortalityMode ?? 'unknown'}  motor ${(actor.motorStrength ?? 0).toFixed(2)}`,
       `balance ${(actor.balanceImpairment ?? 0).toFixed(2)}  consciousness ${(actor.consciousnessImpairment ?? 0).toFixed(2)}  wounds ${actor.activeWounds ?? 0}`,
       `blood ${(physiology.bloodReserve ?? 1).toFixed(3)}  loss/s ${(physiology.bloodLossRate ?? 0).toFixed(4)}  shock ${(physiology.shock ?? 0).toFixed(2)}  conscious ${(physiology.consciousness ?? 1).toFixed(2)}`,
-      `breathing ${physiology.breathingState ?? '-'}  collapse ${actor.collapseFamily ?? '-'}  ragdoll ${actor.ragdollActive ? 'ACTIVE' : 'OFF'}  sleep ${actor.corpseSleeping ? 'YES' : 'NO'}`,
+      `breathing ${physiology.breathingState ?? '-'}  interrupt ${(physiology.breathInterruption ?? 0).toFixed(2)}  collapse ${actor.collapseFamily ?? '-'}  ragdoll ${actor.ragdollActive ? 'ACTIVE' : 'OFF'}  sleep ${actor.corpseSleeping ? 'YES' : 'NO'}`,
       `wound ${JSON.stringify(wounds.selected ?? null)}`,
       `reaction ${reaction.region ?? '-'}  severity ${(reaction.severity ?? 0).toFixed(2)}  phase ${reaction.phase ?? 'idle'}  remaining ${(reaction.timeRemaining ?? 0).toFixed(3)}s`,
       `reaction bones ${JSON.stringify(reaction.affectedBones ?? [])}`,
@@ -181,7 +182,9 @@ export class CombatLabDebugPanel {
       `pose ${JSON.stringify(actor.bodyPositions ?? {})}`,
       `ragdoll bones ${JSON.stringify(actor.visualAdapter?.ragdollBonePositions ?? {})}  bindings ${actor.visualAdapter?.ragdollBindingCount ?? 0}`,
       '',
-      `director ${(director.time ?? 0).toFixed(3)}s  active ${director.activeInteractions ?? 0}  queued ${director.queuedEvents ?? 0}`,
+      `director ${(director.time ?? 0).toFixed(3)}s  active ${director.activeInteractions ?? 0}  queued ${director.queuedEvents ?? 0}  pool ${director.pooledEvents ?? 0}`,
+      `impact memory ${JSON.stringify(director.impactMemory ?? {})}`,
+      `spacing center ${(spacing.minimumCenterDistance ?? 0).toFixed(3)}m  load ${(spacing.loadingClearance ?? 0).toFixed(3)}m  full depth ${(spacing.fullGestureDepth ?? 0).toFixed(3)}m`,
       `directed event ${JSON.stringify(director.lastEvent ?? null)}`,
       '',
       `knife ${weapon.equipped ? 'EQUIPPED' : 'HOLSTERED'}  ${weapon.state ?? 'unavailable'}`,
@@ -195,6 +198,8 @@ export class CombatLabDebugPanel {
       `total world ${JSON.stringify(weapon.totalWorldVelocity ?? [])}  offensive ${JSON.stringify(weapon.offensiveVelocity ?? [])}`,
       `owner ${weapon.gripPointerOwner ?? '-'}  attack ${weapon.attackEnabled ? 'ENABLED' : 'SAFE'}  ${weapon.contactDamageReason ?? '-'}`,
       `visual/collision error ${(weapon.visibleCollisionError ?? 0).toFixed(5)}m`,
+      `presentation ${weapon.presentationReady ? 'READY' : 'SETTLING'}  micro ${JSON.stringify(weapon.microImpact ?? null)}`,
+      `tissue ${JSON.stringify(weapon.tissueResistance ?? null)}  max offset ${(weapon.maximumPresentationOffset ?? 0).toFixed(5)}m`,
       `part ${weapon.contactPart ?? '-'}  wound ${weapon.activeWoundId ?? '-'}  interaction ${weapon.activeCombatInteractionId ?? '-'}`,
       `slash ${JSON.stringify(weapon.activeSlash ?? null)}`,
       '',

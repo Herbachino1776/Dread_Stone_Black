@@ -10,12 +10,14 @@ assert.equal(result.bodyCount, 18);
 assert.equal(result.jointCount, 17);
 assert.ok(result.regionCount >= 20);
 
-const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSource, intentSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, reactionSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, directorDocsSource, diagnosticDocsSource, glbBuffer, modelIdleGlbBuffer] = await Promise.all([
+const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSource, presentationSource, cameraFeedbackSource, intentSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, reactionSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, directorDocsSource, diagnosticDocsSource, glbBuffer, modelIdleGlbBuffer] = await Promise.all([
   readFile(new URL('../src/game/Game.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/SceneSessionHost.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/FirstPersonViewmodelHost.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/WorldKnifeCombatController.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatDirector.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/CombatPresentation.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/Feedback.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/MeleeIntentWeapon.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/physical-tools/PhysicalToolViewmodel.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/HumanoidCombatActor.js', import.meta.url), 'utf8'),
@@ -126,12 +128,22 @@ assert.match(viewmodelHostSource, /combatDirector: combatRuntime\?\.combatDirect
 assert.match(directorSource, /PENETRATION_STAGES/);
 ['approach', 'surface_contact', 'surface_compression', 'surface_rupture', 'soft_tissue', 'hard_tissue', 'embedded', 'withdrawal', 'exit', 'recovery'].forEach((stage) => assert.match(directorSource, new RegExp(stage)));
 ['lifecycle', 'tissue', 'wound', 'reaction', 'blood', 'audio', 'camera', 'haptic', 'resistance', 'recovery'].forEach((event) => assert.match(directorSource, new RegExp(`${event}: '${event}'`)));
-assert.match(directorSource, /a\.time - b\.time \|\| a\.sequence - b\.sequence/);
+assert.match(directorSource, /queued\.time < event\.time/);
+assert.match(directorSource, /this\.eventPool\.pop\(\)/);
+assert.match(directorSource, /releaseEvent\(event\)/);
 assert.match(directorSource, /beginPuncture/);
 assert.match(directorSource, /beginSlash/);
 assert.match(directorSource, /advancePenetration/);
 assert.match(directorSource, /beginWithdrawal/);
+assert.match(directorSource, /completeWithdrawal/);
 assert.match(directorSource, /resolveMeleeTimeline/);
+assert.match(presentationSource, /sampleTissueResistanceCurve/);
+assert.match(presentationSource, /resolveWeaponMicroResponse/);
+assert.match(presentationSource, /resolveMeleeSpacingEnvelope/);
+assert.match(presentationSource, /minimumLoadClearance/);
+assert.doesNotMatch(cameraFeedbackSource, /Math\.random/);
+assert.match(cameraFeedbackSource, /shakeDirection/);
+assert.match(cameraFeedbackSource, /damping/);
 assert.match(intentSource, /stab: 'stab'/);
 assert.match(intentSource, /slash: 'slash'/);
 assert.match(intentSource, /withdraw: 'withdraw'/);
@@ -163,6 +175,8 @@ assert.match(reactionSource, /recovery/);
 assert.match(reactionSource, /maximumBoneAngle/);
 assert.match(reactionSource, /embeddedTension/);
 assert.match(reactionSource, /embeddedTensionTarget/);
+assert.match(reactionSource, /impactMemory/);
+assert.match(reactionSource, /variation/);
 assert.doesNotMatch(actorSource, /throttled_depth_escalation|hardReactionTriggered/);
 assert.match(adapterSource, /beginRagdoll/);
 assert.match(adapterSource, /updateRagdoll/);
@@ -191,8 +205,10 @@ assert.match(surfaceBindingSource, /WOUND_SURFACE_BIAS = 0\.002/);
 assert.match(combatLabPanelSource, /ANCHORS A/);
 assert.match(combatLabPanelSource, /director\.activeInteractions/);
 assert.match(combatLabPanelSource, /weapon\.intent/);
+assert.match(combatLabPanelSource, /minimumCenterDistance/);
 assert.match(physiologySource, /bloodReserve/);
 assert.match(physiologySource, /consciousness/);
+assert.match(physiologySource, /interruptBreathing/);
 assert.match(bloodSource, /InstancedMesh/);
 assert.match(bloodSource, /maximumDecals/);
 assert.match(stage2ConfigSource, /fresh: 0x981218/);
@@ -201,6 +217,7 @@ assert.match(stage2ConfigSource, /arterial: 0xc3242b/);
 assert.match(stage2ConfigSource, /slashArterial: 0xff4050/);
 assert.match(folsomEncounterSource, /folsom-model-idle-combat-player-blocker/);
 assert.match(folsomEncounterSource, /new CombatDirector/);
+assert.match(folsomEncounterSource, /applyMeleeSpacingEnvelope/);
 assert.match(folsomEncounterSource, /this\.combatDirector\.update\(dt\)/);
 assert.match(combatLabPanelSource, /RAGDOLL Z/);
 assert.match(combatLabPanelSource, /CUT TEST 6/);
@@ -243,6 +260,9 @@ assert.match(directorDocsSource, /visual weapon/);
 assert.match(directorDocsSource, /collision weapon/);
 assert.match(directorDocsSource, /intent weapon/);
 assert.match(directorDocsSource, /Adding a future melee weapon/);
+assert.match(directorDocsSource, /Melee spacing contract/);
+assert.match(directorDocsSource, /ready weapon must still have at least 6 cm/);
+assert.match(directorDocsSource, /axe normally uses its ready head reach/);
 assert.equal(stage2.woundLimit, 24);
 
 console.log(`Combat vertical slice configuration and integration are valid (${result.bodyCount} bodies, ${result.jointCount} joints, ${result.regionCount} semantic regions, ${stage2.vesselCount} vessel zones, ${stage2.woundLimit} pooled wounds).`);
