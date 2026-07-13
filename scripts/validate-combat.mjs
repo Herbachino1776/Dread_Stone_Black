@@ -10,7 +10,7 @@ assert.equal(result.bodyCount, 18);
 assert.equal(result.jointCount, 17);
 assert.ok(result.regionCount >= 20);
 
-const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSource, presentationSource, cameraFeedbackSource, intentSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, reactionSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, directorDocsSource, diagnosticDocsSource, glbBuffer, modelIdleGlbBuffer] = await Promise.all([
+const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSource, presentationSource, cameraFeedbackSource, intentSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, animationControllerSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, directorDocsSource, diagnosticDocsSource, glbBuffer, testmanGlbBuffer, testmanManifestSource, testmanValidationSource] = await Promise.all([
   readFile(new URL('../src/game/Game.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/SceneSessionHost.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/FirstPersonViewmodelHost.js', import.meta.url), 'utf8'),
@@ -24,7 +24,7 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSo
   readFile(new URL('../src/game/combat/HumanoidGlbVisualAdapter.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/HumanoidModelProfiles.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatWoundSystem.js', import.meta.url), 'utf8'),
-  readFile(new URL('../src/game/combat/ProceduralPainReaction.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/HumanoidAnimationPackController.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/SkinnedSurfaceBinding.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatPhysiology.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatBloodEffects.js', import.meta.url), 'utf8'),
@@ -40,9 +40,11 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSo
   readFile(new URL('../package.json', import.meta.url), 'utf8'),
   readFile(new URL('../docs/architecture/PHYSICAL_HUMANOID_COMBAT_FOUNDATION.md', import.meta.url), 'utf8').catch(() => ''),
   readFile(new URL('../docs/architecture/COMBAT_DIRECTOR.md', import.meta.url), 'utf8'),
-  readFile(new URL('../docs/model_idle_ab_diagnostic.md', import.meta.url), 'utf8'),
+  readFile(new URL('../docs/testman_animpack_v002_diagnostic.md', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/models/npc/human/human_retro_256.glb', import.meta.url)),
-  readFile(new URL('../public/assets/models/npc/human/model_idle.glb', import.meta.url)),
+  readFile(new URL('../public/assets/enemies/testman/testman_animpack_v002.glb', import.meta.url)),
+  readFile(new URL('../public/assets/enemies/testman/testman_animpack_v002.json', import.meta.url), 'utf8'),
+  readFile(new URL('../public/assets/enemies/testman/testman_animpack_v002_validation.json', import.meta.url), 'utf8'),
 ]);
 const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSource, actorRouterSource, bloodMaterialSource] = await Promise.all([
   readFile(new URL('../src/game/combat/KnifeWoundDecalLibrary.js', import.meta.url), 'utf8'),
@@ -85,12 +87,51 @@ assert.ok(glbJson.skins?.[0]?.joints?.length >= 18, 'humanoid GLB contains a coh
 assert.ok(glbJson.images?.every((image) => image.bufferView != null), 'humanoid textures are embedded');
 const nodeNames = new Set(glbJson.nodes.map((node) => node.name));
 ['body', 'body_top0', 'body_top1', 'body_top2', 'neck', 'head', 'arm_left_top', 'arm_left_bot', 'arm_left_hand', 'arm_right_top', 'arm_right_bot', 'arm_right_hand', 'leg_left_top', 'leg_left_bot', 'leg_left_foot', 'leg_right_top', 'leg_right_bot', 'leg_right_foot'].forEach((name) => assert.ok(nodeNames.has(name), `required mapped GLB bone exists: ${name}`));
-const modelIdleGlbJson = parseGlbJson(modelIdleGlbBuffer);
-assert.ok(modelIdleGlbJson.meshes?.length >= 1, 'model_idle.glb contains a mesh');
-assert.ok(modelIdleGlbJson.skins?.length >= 1, 'model_idle.glb contains a skin');
-assert.ok(modelIdleGlbJson.meshes.flatMap((mesh) => mesh.primitives).some((primitive) => primitive.attributes.JOINTS_0 != null && primitive.attributes.WEIGHTS_0 != null), 'model_idle.glb contains a SkinnedMesh primitive');
-assert.ok(modelIdleGlbJson.animations?.some((animation) => animation.channels.length > 0), 'model_idle.glb animation metadata is inspected');
-assert.ok(modelIdleGlbJson.images?.every((image) => image.bufferView != null), 'model_idle.glb textures are embedded');
+const testmanGlbJson = parseGlbJson(testmanGlbBuffer);
+const testmanManifest = JSON.parse(testmanManifestSource);
+const testmanValidation = JSON.parse(testmanValidationSource);
+const manifestAnimationNames = testmanManifest.animations.map((animation) => animation.name);
+const exportedAnimationNames = testmanGlbJson.animations?.map((animation) => animation.name) ?? [];
+assert.equal(testmanManifest.schema, 'dreadstone.animation_pack.v1');
+assert.equal(testmanManifest.asset, 'testman_animpack_v002.glb');
+assert.equal(testmanManifest.approved_animation_count, 5);
+assert.equal(testmanManifest.animations.length, testmanManifest.approved_animation_count);
+assert.equal(new Set(manifestAnimationNames).size, manifestAnimationNames.length, 'Testman manifest animation names are unique');
+assert.deepEqual(exportedAnimationNames, manifestAnimationNames, 'every manifest animation is discoverable in the v002 GLB');
+assert.ok(testmanGlbJson.meshes?.length >= 1, 'Testman v002 GLB contains a mesh');
+assert.ok(testmanGlbJson.skins?.length >= 1, 'Testman v002 GLB contains a skin');
+assert.ok(testmanGlbJson.meshes.flatMap((mesh) => mesh.primitives).some((primitive) => primitive.attributes.JOINTS_0 != null && primitive.attributes.WEIGHTS_0 != null), 'Testman v002 GLB contains a SkinnedMesh primitive');
+assert.ok(testmanGlbJson.animations?.every((animation) => animation.channels.length > 0), 'every Testman v002 animation contains channels');
+assert.ok(testmanGlbJson.images?.every((image) => image.bufferView != null), 'Testman v002 textures are embedded');
+const testmanNodeNames = new Set(testmanGlbJson.nodes.map((node) => node.name));
+['body', 'body_top0', 'body_top1', 'body_top2', 'neck', 'head', 'arm_left_top', 'arm_left_bot', 'arm_left_hand', 'arm_right_top', 'arm_right_bot', 'arm_right_hand', 'leg_left_top', 'leg_left_bot', 'leg_left_foot', 'leg_right_top', 'leg_right_bot', 'leg_right_foot'].forEach((name) => assert.ok(testmanNodeNames.has(name), `required mapped Testman v002 bone exists: ${name}`));
+const animationsByKind = testmanManifest.animations.reduce((groups, animation) => {
+  if (!groups.has(animation.approved_kind)) groups.set(animation.approved_kind, []);
+  groups.get(animation.approved_kind).push(animation);
+  return groups;
+}, new Map());
+assert.equal(animationsByKind.get('WALK')?.length, 1);
+assert.ok(animationsByKind.get('WALK').every((animation) => animation.loop && !animation.play_once && !animation.hold_final_pose));
+assert.equal(animationsByKind.get('HURT_LEFT')?.length, 1);
+assert.equal(animationsByKind.get('HURT_RIGHT')?.length, 1);
+assert.ok([...animationsByKind.get('HURT_LEFT'), ...animationsByKind.get('HURT_RIGHT')].every((animation) => !animation.loop && animation.play_once && !animation.hold_final_pose && animation.return_to_previous_state));
+assert.equal(animationsByKind.get('DEATH')?.length, 2);
+assert.ok(animationsByKind.get('DEATH').every((animation) => !animation.loop && animation.play_once && animation.hold_final_pose && !animation.return_to_previous_state));
+testmanManifest.animations.forEach((metadata, index) => {
+  const animation = testmanGlbJson.animations[index];
+  const bounds = animation.samplers.map((sampler) => testmanGlbJson.accessors[sampler.input]).filter(Boolean);
+  const start = Math.min(...bounds.map((accessor) => accessor.min?.[0]).filter(Number.isFinite));
+  const end = Math.max(...bounds.map((accessor) => accessor.max?.[0]).filter(Number.isFinite));
+  assert.ok(Math.abs((end - start) - metadata.duration_seconds) < 1e-5, `${metadata.name} duration matches its manifest metadata`);
+});
+assert.equal(testmanValidation.status, 'PASS');
+assert.equal(testmanValidation.file_size_bytes, testmanGlbBuffer.length);
+assert.deepEqual(testmanValidation.expected_animation_names, manifestAnimationNames);
+assert.deepEqual(testmanValidation.exported_animation_names, manifestAnimationNames);
+assert.deepEqual(testmanValidation.missing_animations, []);
+assert.deepEqual(testmanValidation.unexpected_animations, []);
+assert.deepEqual(testmanValidation.duplicate_animation_names, []);
+assert.equal(testmanValidation.preview_floor_exported, false);
 
 assert.match(sceneHostSource, /combatLab/);
 assert.match(sceneHostSource, /FolsomCombatEncounter/);
@@ -133,11 +174,11 @@ assert.doesNotMatch(walkerSource, /SETTLING_TO_GROUND|advanceGroundCollapse|grou
 assert.doesNotMatch(walkerSource, /Math\.random/);
 assert.doesNotMatch(walkerSource, /forceRagdoll|activateRagdoll/);
 assert.match(walkerSource, /deathCollapseSeconds: 5\.4/);
-assert.match(walkerSource, /advanceCollapse/);
 assert.match(walkerSource, /shouldHoldFinalPose/);
 assert.match(walkerSource, /WalkerVitalStabPolicy/);
-assert.match(walkerSource, /ProceduralHumanoidLocomotionLayer/);
-assert.match(walkerSource, /ProceduralConsciousnessLossLayer/);
+assert.match(walkerSource, /setMovementState/);
+assert.match(walkerSource, /playDeathAnimation/);
+assert.doesNotMatch(walkerSource, /ProceduralHumanoidLocomotionLayer|ProceduralConsciousnessLossLayer|applyAfterMixer|applyAfterLocomotion/);
 assert.doesNotMatch(knifeSource, /this\.actor\.(beginPunctureWound|applyPenetration|applySlashWound|onWeaponExtracted)/);
 assert.doesNotMatch(knifeSource, /this\.feedbackSystem\?\.emit|this\.bloodEffects\?\.emit|this\.feedback\?\.shake/);
 assert.ok(knifeSource.indexOf('this.actualGrip.copy(this.desiredGrip)') >= 0, 'free collision pose follows the desired hand without artificial latency');
@@ -190,26 +231,27 @@ assert.doesNotMatch(adapterSource, /material\.normalMap\.magFilter = THREE\.Near
 assert.match(adapterSource, /no-cast-shadow|no-receive-shadow|no-normal-map|no-directional-shadow|tight-shadow-frustum/);
 assert.match(adapterSource, /cachedAssetPromises = new Map/);
 assert.match(adapterSource, /loadCachedAsset\(this\.profile\.assetPath\)/);
-assert.match(profileSource, /model_idle_animation_authoritative/);
-assert.match(profileSource, /\.\/assets\/models\/npc\/human\/model_idle\.glb/);
+assert.match(profileSource, /testman_animpack_v002_animation_authoritative/);
+assert.match(profileSource, /\.\/assets\/enemies\/testman\/testman_animpack_v002\.glb/);
+assert.match(profileSource, /\.\/assets\/enemies\/testman\/testman_animpack_v002\.json/);
 assert.match(profileSource, /animationAuthoritative: true/);
 assert.match(profileSource, /targetHeight: 1\.82/);
 assert.match(profileSource, /proxyFit/);
 assert.match(adapterSource, /measureVisibleSkinnedBounds/);
 assert.match(adapterSource, /AnimationMixer/);
-assert.ok(adapterSource.indexOf('this.mixer.update(dt)') < adapterSource.indexOf('this.reactionController?.applyAfterMixer(dt)'), 'AnimationMixer writes the fresh authored pose before additive pain reactions');
-assert.ok(adapterSource.indexOf('this.reactionController?.applyAfterMixer(dt)') < adapterSource.indexOf('this.actor.syncAnimationProxyBodies(this)'), 'semantic proxies sync after additive reaction bones and skeleton update');
-assert.match(adapterSource, /this\.mixerAuthoredScales/);
-assert.doesNotMatch(reactionSource, /\.scale\.(set|copy)|inverseBindMatrices|boneInverses/);
-assert.doesNotMatch(reactionSource, /Rapier|RigidBody|translation\(\)|rotation\(\)/);
-assert.match(reactionSource, /impact/);
-assert.match(reactionSource, /pain_hold/);
-assert.match(reactionSource, /recovery/);
-assert.match(reactionSource, /maximumBoneAngle/);
-assert.match(reactionSource, /embeddedTension/);
-assert.match(reactionSource, /embeddedTensionTarget/);
-assert.match(reactionSource, /impactMemory/);
-assert.match(reactionSource, /variation/);
+assert.ok(adapterSource.indexOf('this.animationController.update(dt)') < adapterSource.indexOf('this.actor.woundSystem?.update?.(dt)'), 'authored animation resolves before skinned wounds');
+assert.ok(adapterSource.indexOf('this.actor.woundSystem?.update?.(dt)') < adapterSource.indexOf('this.actor.syncAnimationProxyBodies(this)'), 'semantic proxies sync after the completed authored pose');
+assert.match(animationControllerSource, /HURT_LEFT/);
+assert.match(animationControllerSource, /HURT_RIGHT/);
+assert.match(animationControllerSource, /exactly two DEATH clips/);
+assert.match(animationControllerSource, /THREE\.LoopRepeat/);
+assert.match(animationControllerSource, /THREE\.LoopOnce/);
+assert.match(animationControllerSource, /return_to_previous_state/);
+assert.match(animationControllerSource, /hold_final_pose/);
+assert.doesNotMatch(animationControllerSource, /Math\.random|Rapier|RigidBody/);
+assert.doesNotMatch(adapterSource, /ProceduralPainReaction|applyAfterMixer|mixerAuthoredScales/);
+assert.match(actorSource, /if \(this\.visualProfile\.authoredDeathAnimations\) return false;/);
+assert.doesNotMatch(combatLabPanelSource, /RAGDOLL Z|forceRagdoll/);
 assert.doesNotMatch(actorSource, /throttled_depth_escalation|hardReactionTriggered/);
 assert.match(adapterSource, /beginRagdoll/);
 assert.match(adapterSource, /updateRagdoll/);
@@ -284,15 +326,14 @@ assert.match(stage2ConfigSource, /fresh: 0xc41222/);
 assert.match(stage2ConfigSource, /spray: 0xd41424/);
 assert.match(stage2ConfigSource, /arterial: 0xe0182d/);
 assert.match(stage2ConfigSource, /slashArterial: 0xf01b32/);
-assert.match(folsomEncounterSource, /folsom-model-idle-combat-player-blocker/);
+assert.match(folsomEncounterSource, /folsom-testman-combat-player-blocker/);
 assert.match(folsomEncounterSource, /new CombatDirector/);
 assert.match(folsomEncounterSource, /applyMeleeSpacingEnvelope/);
 assert.match(folsomEncounterSource, /new CombatActorRouter/);
-assert.match(folsomEncounterSource, /new ProceduralWalkerController/);
+assert.match(folsomEncounterSource, /new CombatLabWalkerController/);
 assert.match(folsomEncounterSource, /getPriorityCombatActor/);
 assert.match(folsomEncounterSource, /folsomWalker/);
 assert.match(folsomEncounterSource, /this\.physics\.step\(deltaSeconds/);
-assert.match(combatLabPanelSource, /RAGDOLL Z/);
 assert.match(combatLabPanelSource, /CUT TEST 6/);
 assert.match(stage2ConfigSource, /pooled: 0x850810/);
 assert.match(stage2ConfigSource, /olderPool: 0x58050a/);
@@ -312,16 +353,16 @@ assert.match(combatLabSource, /blood-lighting/);
 assert.match(packageSource, /blood-chroma-material\.test\.mjs/);
 assert.match(feedbackSource, /navigator\?\.vibrate/);
 assert.match(feedbackSource, /maximumVoices/);
-assert.match(folsomEncounterSource, /folsom-model-idle-combat-subject/);
-assert.match(folsomEncounterSource, /FOLSOM_MODEL_IDLE_SPAWN_XZ/);
+assert.match(folsomEncounterSource, /folsom-testman-combat-subject/);
+assert.match(folsomEncounterSource, /FOLSOM_TESTMAN_SPAWN_XZ/);
 assert.match(folsomEncounterSource, /resolveCombatMortalityMode/);
-assert.match(folsomEncounterSource, /MODEL_IDLE_COMBAT_PROFILE/);
+assert.match(folsomEncounterSource, /TESTMAN_COMBAT_PROFILE/);
 assert.doesNotMatch(folsomEncounterSource, /FolsomModelIdleRawReference|modelIdleCombatTest|rawModelReference/);
-assert.match(combatLabSource, /MODEL_IDLE_COMBAT_PROFILE/);
+assert.match(combatLabSource, /TESTMAN_COMBAT_PROFILE/);
 assert.match(combatLabSource, /new CombatDirector/);
 assert.match(combatLabSource, /this\.combatDirector\.beginSlash/);
-assert.match(diagnosticDocsSource, /exported idle animation is authoritative/);
-assert.match(diagnosticDocsSource, /never drive the GLB bones/);
+assert.match(diagnosticDocsSource, /testman_animpack_v002\.json.*source of truth/);
+assert.match(diagnosticDocsSource, /never drives? the GLB bones/);
 assert.match(combatLabSource, /resolveCombatMortalityMode/);
 assert.match(combatLabSource, /toggleMortalityMode/);
 assert.match(combatLabPanelSource, /MORTALITY X/);

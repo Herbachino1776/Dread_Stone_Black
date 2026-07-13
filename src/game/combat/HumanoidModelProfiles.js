@@ -6,7 +6,7 @@ export const CURRENT_HUMANOID_BONE_MAP = Object.freeze({
   right_thigh: 'leg_right_top', right_lower_leg: 'leg_right_bot', right_foot: 'leg_right_foot',
 });
 
-export const MODEL_IDLE_BONE_MAP = Object.freeze({
+export const TESTMAN_BONE_MAP = Object.freeze({
   pelvis: 'body', abdomen: 'body_top0', lower_chest: 'body_top1', upper_chest: 'body_top2', neck: 'neck', head: 'head',
   left_upper_arm: 'arm_left_top', left_forearm: 'arm_left_bot', left_hand: 'arm_left_hand',
   right_upper_arm: 'arm_right_top', right_forearm: 'arm_right_bot', right_hand: 'arm_right_hand',
@@ -26,17 +26,21 @@ export const CURRENT_HUMANOID_PROFILE = Object.freeze({
   colliderFitNotes: 'Canonical 2.06 m combat profile; existing 18-body/17-joint collider layout is unchanged.',
 });
 
-export const MODEL_IDLE_COMBAT_PROFILE = Object.freeze({
-  name: 'model_idle_animation_authoritative',
-  assetPath: './assets/models/npc/human/model_idle.glb',
+export const TESTMAN_COMBAT_PROFILE = Object.freeze({
+  name: 'testman_animpack_v002_animation_authoritative',
+  assetPath: './assets/enemies/testman/testman_animpack_v002.glb',
+  animationManifestPath: './assets/enemies/testman/testman_animpack_v002.json',
   rawHeight: 84.13298431508957,
   targetHeight: 1.82,
   animationAuthoritative: true,
+  authoredAnimationPack: true,
+  authoredDeathAnimations: true,
+  animationFadeSeconds: 0.1,
+  walkReferenceSpeed: 0.72,
   groundClearance: 0.02,
   rootYaw: 0,
   rootOffset: Object.freeze([0, 0, 0]),
-  boneMap: MODEL_IDLE_BONE_MAP,
-  idleClipName: 'rig|rig|idle|rig|idle',
+  boneMap: TESTMAN_BONE_MAP,
   proxyFit: Object.freeze({
     pelvis: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.17, 0.11, 0.11]), bone: 'body' }),
     abdomen: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.16, 0.09, 0.11]), start: 'body', end: 'body_top0' }),

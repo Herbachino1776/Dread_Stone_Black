@@ -1,6 +1,7 @@
 import { isDamageIntent, MELEE_INTENTS } from './MeleeIntentWeapon.js';
 import { COMBAT_PRESENTATION_CONFIG, deterministicCombatVariation, getImpactMemoryChannel } from './CombatPresentation.js';
-import { REACTION_KINDS } from './ProceduralPainReaction.js';
+
+const AUTHORED_REACTION_KINDS = Object.freeze({ punctureEntry: 'puncture_entry', slash: 'slash' });
 
 export const PENETRATION_STAGES = Object.freeze({
   approach: 'approach',
@@ -155,7 +156,7 @@ export class CombatDirector {
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.audio, t.audio, { cue: 'puncture', position: directedPoint, severity: 0.25 });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.tissue, { stage: PENETRATION_STAGES.softTissue });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.tissue, t.tissue, { action: 'penetrate', hit, entryPoint: directedPoint, direction: directedAxis, deltaDepth: depth, depth, force, hardContact: false });
-    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.reaction, t.reaction, { hit, point: directedPoint, direction: directedAxis, depth, force, severity: 0.2, source: 'directed_puncture', reactionKind: REACTION_KINDS.punctureEntry });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.reaction, t.reaction, { hit, point: directedPoint, direction: directedAxis, depth, force, severity: 0.2, source: 'directed_puncture', reactionKind: AUTHORED_REACTION_KINDS.punctureEntry });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.blood, t.blood, { action: 'entry', direction: directedAxis, severity: 0.2 });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.blood, t.blood + COMBAT_PRESENTATION_CONFIG.bloodActivationDelaySeconds, { action: 'activate' });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.camera, t.camera, { durationMs: 105, intensity: 0.0095, direction: directedAxis, polarity: -1, damping: 18 });
@@ -218,7 +219,7 @@ export class CombatDirector {
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.wound, t.rupture, { action: 'create_slash', hit, startPoint: directedStart, endPoint: directedEnd, surfaceNormal: directedNormal, cutDirection: directedCut, depth, cutLength, severity, classification, edgeAlignment, onWoundCreated });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.audio, t.audio, { cue: classification === 'deep_slash' ? 'deep_slash' : 'shallow_slash', position: directedEnd, severity });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.tissue, { stage: PENETRATION_STAGES.softTissue });
-    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.reaction, t.reaction, { hit, point: directedEnd, direction: directedCut, depth, force: severity, severity: Math.max(0.16, severity * 0.3), slashSeverity: severity, source: 'directed_slash', reactionKind: REACTION_KINDS.slash });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.reaction, t.reaction, { hit, point: directedEnd, direction: directedCut, depth, force: severity, severity: Math.max(0.16, severity * 0.3), slashSeverity: severity, source: 'directed_slash', reactionKind: AUTHORED_REACTION_KINDS.slash });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.blood, t.blood, { action: 'slash', direction: directedCut, severity });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.blood, t.blood + COMBAT_PRESENTATION_CONFIG.bloodActivationDelaySeconds, { action: 'activate' });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.camera, t.camera, { durationMs: 105, intensity: Math.min(0.011, 0.005 + severity * 0.005), direction: directedCut, polarity: -1, damping: 18 });
@@ -452,8 +453,8 @@ export class CombatDirector {
     const memoryChannel = getImpactMemoryChannel(payload.hit.regionId);
     if (memoryChannel) this.impactMemory[memoryChannel] = Math.min(COMBAT_PRESENTATION_CONFIG.impactMemoryMaximum, this.impactMemory[memoryChannel] + 0.14 + Math.min(1, payload.severity ?? 0) * 0.16);
     const memory = memoryChannel ? this.impactMemory[memoryChannel] : 0;
-    const currentReaction = this.actor.visualAdapter?.reactionController?.getDiagnostics?.() ?? null;
-    this.actor.triggerReflex(payload.hit.regionId, payload.severity, payload.direction, { point: payload.point, depth: payload.depth, slashSeverity: payload.slashSeverity, force: payload.force, source: payload.source, reactionKind: payload.reactionKind, variation: interaction.variation, impactMemory: memory, recoveryState: currentReaction?.phase ?? 'idle' });
+    const currentAnimation = this.actor.visualAdapter?.animationController?.getDiagnostics?.() ?? null;
+    this.actor.triggerReflex(payload.hit.regionId, payload.severity, payload.direction, { point: payload.point, depth: payload.depth, slashSeverity: payload.slashSeverity, force: payload.force, source: payload.source, reactionKind: payload.reactionKind, variation: interaction.variation, impactMemory: memory, recoveryState: currentAnimation?.state ?? 'HOLDING' });
     if (['upper_chest', 'lower_chest'].includes(payload.hit.regionId) && (payload.depth >= 0.035 || payload.severity >= 0.28)) this.actor.physiology?.interruptBreathing?.({ severity: payload.severity, depth: payload.depth });
   }
 

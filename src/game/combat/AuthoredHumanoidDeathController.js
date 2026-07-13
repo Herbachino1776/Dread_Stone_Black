@@ -1,53 +1,24 @@
-import * as THREE from 'three';
-import {
-  COMBAT_LAB_WALKER_CONFIG,
-  ProceduralConsciousnessLossLayer,
-  ProceduralHumanoidLocomotionLayer,
-  WALKER_STATES,
-  WalkerVitalStabPolicy,
-} from './CombatLabWalkerController.js';
+import { COMBAT_LAB_WALKER_CONFIG, WALKER_STATES, WalkerVitalStabPolicy } from './CombatLabWalkerController.js';
 
 const LIVING_STATE = WALKER_STATES.nearPlayer;
 
 export class AuthoredHumanoidDeathController {
-  constructor({ actor, groundY = 0, config = COMBAT_LAB_WALKER_CONFIG, onGrounded = null } = {}) {
+  constructor({ actor, config = COMBAT_LAB_WALKER_CONFIG, onGrounded = null } = {}) {
     this.actor = actor;
-    this.groundY = groundY;
     this.config = config;
     this.onGrounded = onGrounded;
     this.state = LIVING_STATE;
     this.stateElapsed = 0;
-    this.collapseDirection = 1;
-    this.locomotion = new ProceduralHumanoidLocomotionLayer({ config });
-    this.consciousnessLoss = new ProceduralConsciousnessLossLayer();
+    this.deathDurationSeconds = config.deathCollapseSeconds;
+    this.selectedDeathName = null;
     this.lethality = new WalkerVitalStabPolicy();
-    this.actor?.visualAdapter?.setLocomotionController?.(this);
-  }
-
-  bindBones(bones) {
-    this.locomotion.bindBones(bones);
-    this.consciousnessLoss.bindBones(bones);
-  }
-
-  restoreAuthoredPose() {
-    this.locomotion.restoreAuthoredPose();
-  }
-
-  applyAfterMixer() {
-    this.locomotion.applyAfterMixer();
-    this.consciousnessLoss.applyAfterLocomotion();
-    this.consciousnessLoss.preserveFootGroundClearance(this.groundY);
   }
 
   prepareFrame(deltaSeconds) {
-    const dt = Math.max(0, Math.min(0.05, Number(deltaSeconds) || 0));
-    if (this.state === WALKER_STATES.grounded || this.state === LIVING_STATE) return;
-    this.stateElapsed += dt;
-    if (this.state === WALKER_STATES.losingConsciousness) {
-      this.consciousnessLoss.advanceCollapse(this.stateElapsed, this.config.deathCollapseSeconds);
-      this.locomotion.advance(dt, { speed: 0, walking: false, impaired: true, dying: true, locomotionWeight: this.consciousnessLoss.locomotionWeight });
-      if (this.stateElapsed >= this.config.deathCollapseSeconds) this.holdGroundedPose();
-    }
+    if (this.state !== WALKER_STATES.losingConsciousness) return;
+    this.stateElapsed += Math.max(0, Math.min(0.05, Number(deltaSeconds) || 0));
+    const animationState = this.actor?.visualAdapter?.animationController?.state;
+    if (animationState === 'DEAD' || this.stateElapsed >= this.deathDurationSeconds + 0.15) this.holdGroundedPose();
   }
 
   beforePhysics() {
@@ -63,16 +34,10 @@ export class AuthoredHumanoidDeathController {
       return;
     }
     if (this.lethality.criticalStabCount < 2 || this.state !== LIVING_STATE) return;
-    const region = this.lethality.lastQualifyingRegion ?? '';
-    const impactX = this.actor?.lastReaction?.direction?.x;
-    this.collapseDirection = region.startsWith('left_')
-      ? -1
-      : region.startsWith('right_')
-        ? 1
-        : Number.isFinite(impactX) && Math.abs(impactX) > 0.05
-          ? Math.sign(impactX)
-          : 1;
-    this.consciousnessLoss.begin(this.collapseDirection);
+    const regionId = this.lethality.lastQualifyingRegion ?? '';
+    const result = this.actor.visualAdapter?.playDeathAnimation?.({ regionId, variation: this.lethality.criticalStabCount });
+    this.selectedDeathName = result?.name ?? null;
+    this.deathDurationSeconds = result?.durationSeconds ?? this.config.deathCollapseSeconds;
     this.state = WALKER_STATES.losingConsciousness;
     this.stateElapsed = 0;
   }
@@ -85,9 +50,7 @@ export class AuthoredHumanoidDeathController {
 
   holdGroundedPose() {
     if (this.state !== WALKER_STATES.losingConsciousness) return false;
-    this.consciousnessLoss.holdGroundedPose();
     this.state = WALKER_STATES.grounded;
-    this.stateElapsed = 0;
     this.onGrounded?.(this.actor);
     return true;
   }
@@ -97,38 +60,28 @@ export class AuthoredHumanoidDeathController {
   }
 
   reset() {
-    this.restoreAuthoredPose();
     this.state = LIVING_STATE;
     this.stateElapsed = 0;
-    this.collapseDirection = 1;
+    this.deathDurationSeconds = this.config.deathCollapseSeconds;
+    this.selectedDeathName = null;
     this.lethality = new WalkerVitalStabPolicy();
-    this.consciousnessLoss.reset();
   }
 
   getDiagnostics() {
-    const collapse = this.consciousnessLoss.getDiagnostics();
+    const animation = this.actor?.visualAdapter?.animationController?.getDiagnostics?.() ?? null;
     return {
       state: this.state,
-      finalPoseHeld: this.shouldHoldFinalPose(),
+      finalPoseHeld: this.shouldHoldFinalPose() && animation?.finalPoseHeld === true,
       ragdollActive: this.actor?.ragdollActive === true,
+      selectedDeathName: this.selectedDeathName,
+      deathDurationSeconds: this.deathDurationSeconds,
+      deathProgress: Math.min(1, this.stateElapsed / Math.max(0.001, this.deathDurationSeconds)),
+      animation,
       ...this.lethality.getDiagnostics(),
-      deathCollapseProgress: Number(collapse.overallProgress.toFixed(3)),
-      consciousnessLossProgress: Number(collapse.progress.toFixed(3)),
-      collapseDirection: collapse.collapseDirection,
-      groundingProgress: Number(collapse.groundingProgress.toFixed(3)),
-      finalRelaxation: Number(collapse.finalRelaxation.toFixed(3)),
-      pelvisGroundHeight: Number.isFinite(collapse.pelvisGroundHeight) ? Number(collapse.pelvisGroundHeight.toFixed(3)) : null,
-      chestGroundHeight: Number.isFinite(collapse.chestGroundHeight) ? Number(collapse.chestGroundHeight.toFixed(3)) : null,
-      torsoGroundSpan: Number.isFinite(collapse.torsoGroundSpan) ? Number(collapse.torsoGroundSpan.toFixed(3)) : null,
-      lowerBodyGroundLift: Number(collapse.lowerBodyGroundLift.toFixed(3)),
-      minimumLowerBodyGroundMargin: Number.isFinite(collapse.minimumLowerBodyGroundMargin) ? Number(collapse.minimumLowerBodyGroundMargin.toFixed(3)) : null,
     };
   }
 
   dispose() {
-    if (this.actor?.visualAdapter?.locomotionController === this) this.actor.visualAdapter.setLocomotionController(null);
-    this.locomotion.bindBones(null);
-    this.consciousnessLoss.bindBones(null);
     this.actor = null;
   }
 }

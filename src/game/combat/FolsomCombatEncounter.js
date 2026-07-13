@@ -4,17 +4,17 @@ import { HumanoidCombatActor } from './HumanoidCombatActor.js';
 import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
 import { resolveCombatMortalityMode } from './CombatMortality.js';
-import { MODEL_IDLE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { TESTMAN_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 import { CombatDirector } from './CombatDirector.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { applyMeleeSpacingEnvelope } from './CombatPresentation.js';
 import { preloadKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
 import { CombatActorRouter } from './CombatActorRouter.js';
-import { COMBAT_LAB_WALKER_CONFIG, ProceduralWalkerController, WALKER_STATES } from './CombatLabWalkerController.js';
+import { COMBAT_LAB_WALKER_CONFIG, CombatLabWalkerController, WALKER_STATES } from './CombatLabWalkerController.js';
 import { AuthoredHumanoidDeathController } from './AuthoredHumanoidDeathController.js';
 
 const FOLSOM_AUTHORED_PLAYER_SPAWN = Object.freeze([-2, 1.71, -4]);
-const FOLSOM_MODEL_IDLE_SPAWN_XZ = Object.freeze([8, -4]);
+const FOLSOM_TESTMAN_SPAWN_XZ = Object.freeze([8, -4]);
 const FOLSOM_COMBAT_RANGE = 6.5;
 
 export const FOLSOM_COMBAT_FOOTPRINT = Object.freeze({
@@ -67,7 +67,7 @@ export class FolsomCombatEncounter {
     this.combatRouter = new CombatActorRouter();
     this.weaponController = null;
     this.disposed = false;
-    this.modelProfile = MODEL_IDLE_COMBAT_PROFILE;
+    this.modelProfile = TESTMAN_COMBAT_PROFILE;
     this.playerSpawn = new THREE.Vector3(...FOLSOM_AUTHORED_PLAYER_SPAWN);
     this.supportFloors = [];
     this.supportGroundVariation = 0;
@@ -79,8 +79,8 @@ export class FolsomCombatEncounter {
     const spawnOffset = new THREE.Vector3(this.spawnPosition.x, this.groundY, this.spawnPosition.z + 3.55);
     const spawnYaw = Math.atan2(this.playerSpawn.x - this.spawnPosition.x, this.playerSpawn.z - this.spawnPosition.z);
     this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw, visualProfile: this.modelProfile, mortalityMode: resolveCombatMortalityMode(), automaticMortality: false, eventSink: (event, payload) => this.handleStationaryCombatEvent(event, payload) });
-    this.actor.root.name = 'folsom-model-idle-combat-subject';
-    this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: 'folsom-model-idle-combat-player-blocker' });
+    this.actor.root.name = 'folsom-testman-combat-subject';
+    this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: 'folsom-testman-combat-player-blocker' });
     this.meleeSpacing = this.applyActorMeleeSpacing(this.playerBlocker);
     this.dungeon.collision?.addBlocker?.(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: this.groundY, wallX: null });
@@ -94,7 +94,7 @@ export class FolsomCombatEncounter {
       onGrounded: (actor) => this.disableStationaryGroundedCollisionOwnership(actor),
     });
 
-    this.walkerController = new ProceduralWalkerController({
+    this.walkerController = new CombatLabWalkerController({
       scene: this.scene,
       physics: this.physics,
       collision: this.dungeon.collision,
@@ -182,8 +182,8 @@ export class FolsomCombatEncounter {
       },
       getBloodGroundHeight: (position) => this.dungeon.collision?.sampleWalkableY?.(position.x, position.z, position.y)?.y ?? position.y,
       getBloodWallX: () => null,
-      getActorName: (generation) => `folsom-procedural-walker-${generation}`,
-      getBlockerName: (generation) => `folsom-procedural-walker-blocker-${generation}`,
+      getActorName: (generation) => `folsom-authored-walker-${generation}`,
+      getBlockerName: (generation) => `folsom-authored-walker-blocker-${generation}`,
       getFeedbackOwner: (generation) => `folsom-walker-${generation}`,
       ensureRapierGroundSupport: ({ spawnPosition, playerPosition }) => ({
         supported: this.isRapierSupported(spawnPosition) && this.isRapierSupported(playerPosition),
@@ -205,7 +205,7 @@ export class FolsomCombatEncounter {
       const blocked = (this.dungeon.collision?.getIntersectingBlockers?.(new THREE.Vector3(x, floorY + 1.55, z), 0.5) ?? []).length > 0;
       if (walkable && !blocked) return floorPosition;
     }
-    return new THREE.Vector3(FOLSOM_MODEL_IDLE_SPAWN_XZ[0], 0.16, FOLSOM_MODEL_IDLE_SPAWN_XZ[1]);
+    return new THREE.Vector3(FOLSOM_TESTMAN_SPAWN_XZ[0], 0.16, FOLSOM_TESTMAN_SPAWN_XZ[1]);
   }
 
   handleStationaryCombatEvent(event, payload = {}) {

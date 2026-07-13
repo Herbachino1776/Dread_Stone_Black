@@ -177,7 +177,7 @@ test('Folsom reset leaves exactly two fresh active actors and no stale walker co
   encounter.dispose();
 });
 
-test('authored Folsom spawn uses the skeletal ground collapse and never hands off to ragdoll', async () => {
+test('authored Folsom spawn completes its death state without procedural collapse or ragdoll', async () => {
   const { encounter, player, collision } = await createEncounter();
   const actor = encounter.actor;
   const controller = encounter.stationaryDeathController;

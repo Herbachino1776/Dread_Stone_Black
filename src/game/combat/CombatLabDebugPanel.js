@@ -46,7 +46,6 @@ export class CombatLabDebugPanel {
       ['CONSC Y', () => this.cycleConsciousness()],
       ['RESERVE G', () => this.cycleBloodReserve()],
       ['MORTALITY X', () => this.toggleMortality()],
-      ['RAGDOLL Z', () => this.forceRagdoll()],
       ['CUT TEST 6', () => this.dungeon?.createDebugSlash?.()],
       ['WALK PAUSE 7', () => this.dungeon?.toggleWalkerLocomotion?.()],
       ['WALK STAB 8', () => this.dungeon?.forceWalkerQualifyingStab?.()],
@@ -98,7 +97,6 @@ export class CombatLabDebugPanel {
       if (event.code === 'KeyY') this.cycleConsciousness();
       if (event.code === 'KeyG') this.cycleBloodReserve();
       if (event.code === 'KeyX') this.toggleMortality();
-      if (event.code === 'KeyZ') this.forceRagdoll();
       if (event.code === 'Digit6') this.dungeon?.createDebugSlash?.();
       if (event.code === 'Digit7') this.dungeon?.toggleWalkerLocomotion?.();
       if (event.code === 'Digit8') this.dungeon?.forceWalkerQualifyingStab?.();
@@ -142,7 +140,6 @@ export class CombatLabDebugPanel {
   cycleConsciousness() { const values = [1, 0.5, 0.15]; this.consciousnessMode = (this.consciousnessMode + 1) % values.length; this.dungeon.actor.physiology.setConsciousness(values[this.consciousnessMode]); }
   cycleBloodReserve() { const values = [1, 0.45, 0.12]; this.bloodMode = (this.bloodMode + 1) % values.length; this.dungeon.actor.physiology.setBloodReserve(values[this.bloodMode]); }
   toggleMortality() { this.dungeon?.toggleMortalityMode?.(); }
-  forceRagdoll() { this.dungeon?.actor?.forceRagdoll?.(); }
   triggerCollapse(family, lethal) { this.dungeon.actor.requestCollapse(family, { immediate: family === 'neurological' || family === 'neck_failure', lethal }); }
   equipLight(itemId) {
     if (!this.equipmentRuntime.hasItem(itemId)) this.equipmentRuntime.acquireItem(itemId, { source: 'combat_lab_ephemeral' });
@@ -214,9 +211,9 @@ export class CombatLabDebugPanel {
       `walker ${walker.enabled ? walker.state ?? 'waiting' : 'DISABLED'}  id ${walker.actorInstanceId ?? '-'}  generation ${walker.respawnGeneration ?? 0}  live ${walker.liveWalkers ?? 0}`,
       `walker pos ${JSON.stringify(walker.worldPosition ?? [])}  distance ${(walker.distanceToPlayer ?? 0).toFixed(2)}m  speed ${(walker.currentSpeed ?? 0).toFixed(2)}/${(walker.desiredSpeed ?? 0).toFixed(2)}/${(walker.maximumSpeed ?? 0).toFixed(2)}`,
       `yaw ${(walker.currentYaw ?? 0).toFixed(2)} -> ${(walker.desiredYaw ?? 0).toFixed(2)}  error ${(walker.turnError ?? 0).toFixed(2)}  paused ${walker.paused ? 'YES' : 'NO'}`,
-      `gait blend ${(walker.locomotionBlendWeight ?? 0).toFixed(2)}  phase ${(walker.gaitPhase ?? 0).toFixed(2)}/${(walker.oppositeGaitPhase ?? 0).toFixed(2)}  cadence ${(walker.cadence ?? 0).toFixed(2)}  stride ${(walker.strideLength ?? 0).toFixed(2)}  stance ${walker.stanceLeg ?? '-'}`,
+      `authored ${walker.activeAnimation ?? '-'}  walk loop ${walker.walkLooping ? 'YES' : 'NO'}`,
       `vital stabs ${walker.criticalStabCount ?? 0}/2  impaired ${walker.firstStabImpaired ? 'YES' : 'NO'}  wounds ${JSON.stringify(walker.qualifyingWoundIds ?? [])}  last ${walker.lastQualifyingRegion ?? '-'} ${(walker.lastQualifyingDepth ?? 0).toFixed(3)}m`,
-      `death skeletal ${walker.ragdollActive ? 'RAGDOLL ERROR' : walker.finalPoseHeld ? 'GROUNDED HOLD' : 'AUTHORED'}  ground ${(walker.groundingProgress ?? 0).toFixed(2)} relax ${(walker.finalRelaxation ?? 0).toFixed(2)} chest/pelvis ${(walker.chestGroundHeight ?? 0).toFixed(2)}/${(walker.pelvisGroundHeight ?? 0).toFixed(2)}m`,
+      `death ${walker.deathAnimation ?? '-'}  progress ${(walker.deathProgress ?? 0).toFixed(2)}  ${walker.ragdollActive ? 'RAGDOLL ERROR' : walker.finalPoseHeld ? 'FINAL POSE HELD' : 'AUTHORED'}`,
       `owned body/collider/joint ${walker.ownedRigidBodyCount ?? 0}/${walker.ownedColliderCount ?? 0}/${walker.ownedJointCount ?? 0}  materials ${walker.materialCloneCount ?? 0}  wounds ${walker.activeWoundCount ?? 0}  subscriptions ${walker.remainingEventSubscriptions ?? 0}`,
       `routing actors/colliders ${routing.actorCount ?? 0}/${routing.colliderCount ?? 0}  disposed ${JSON.stringify(walker.lastDisposalSummary ?? null)}`,
       '',

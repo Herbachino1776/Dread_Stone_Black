@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { CURRENT_HUMANOID_BONE_MAP, CURRENT_HUMANOID_PROFILE, getHumanoidProfileScale } from './HumanoidModelProfiles.js';
-import { ProceduralPainReactionController } from './ProceduralPainReaction.js';
+import { HumanoidAnimationPackController } from './HumanoidAnimationPackController.js';
 import { findClosestSkinnedSurface, reconstructSkinnedSurface, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 
@@ -13,6 +13,7 @@ export const HUMANOID_GLB_SCALE = getHumanoidProfileScale(CURRENT_HUMANOID_PROFI
 export const HUMANOID_GLB_BONE_MAP = CURRENT_HUMANOID_BONE_MAP;
 
 const cachedAssetPromises = new Map();
+const cachedAnimationManifestPromises = new Map();
 let assetLoadCount = 0;
 const CHARACTER_LIGHTING_MODES = new Set(['normal', 'no-cast-shadow', 'no-receive-shadow', 'no-normal-map', 'no-directional-shadow', 'linear-normal-map', 'tight-shadow-frustum']);
 
@@ -138,6 +139,38 @@ function loadCachedAsset(assetPath) {
   return cachedAssetPromises.get(assetPath);
 }
 
+function loadCachedAnimationManifest(manifestPath) {
+  if (!manifestPath) return Promise.resolve(null);
+  if (!cachedAnimationManifestPromises.has(manifestPath)) {
+    const promise = fetch(manifestPath).then((response) => {
+      if (!response.ok) throw new Error(`Animation manifest request failed (${response.status}): ${manifestPath}`);
+      return response.json();
+    }).catch((error) => {
+      cachedAnimationManifestPromises.delete(manifestPath);
+      throw error;
+    });
+    cachedAnimationManifestPromises.set(manifestPath, promise);
+  }
+  return cachedAnimationManifestPromises.get(manifestPath);
+}
+
+export function resolveAnimationPackManifest(manifest, clips, profileName = 'humanoid-animation-pack') {
+  if (!manifest || manifest.schema !== 'dreadstone.animation_pack.v1') throw new Error(`Humanoid GLB profile ${profileName} has an invalid animation manifest schema`);
+  if (!Array.isArray(manifest.animations) || manifest.animations.length !== manifest.approved_animation_count) throw new Error(`Humanoid GLB profile ${profileName} has an invalid approved animation count`);
+  const entriesByName = new Map();
+  const entriesByKind = new Map();
+  for (const entry of manifest.animations) {
+    if (!entry?.name || !entry.approved_kind || entriesByName.has(entry.name)) throw new Error(`Humanoid GLB profile ${profileName} has invalid or duplicate animation metadata`);
+    entriesByName.set(entry.name, entry);
+    if (!entriesByKind.has(entry.approved_kind)) entriesByKind.set(entry.approved_kind, []);
+    entriesByKind.get(entry.approved_kind).push(entry);
+  }
+  const clipsByName = new Map(clips.filter((clip) => clip?.name && clip.tracks?.length > 0).map((clip) => [clip.name, clip]));
+  const missing = [...entriesByName.keys()].filter((name) => !clipsByName.has(name));
+  if (missing.length) throw new Error(`Humanoid GLB profile ${profileName} is missing manifest animations: ${missing.join(', ')}`);
+  return { entriesByName, entriesByKind, clipsByName };
+}
+
 export function isolateObjectMaterials(root) {
   const clonesBySource = new Map();
   root?.traverse?.((object) => {
@@ -167,11 +200,12 @@ export class HumanoidGlbVisualAdapter {
     this.ragdollDiagnostics = this.createRagdollDiagnostics();
     this.mixer = null;
     this.idleAction = null;
-    this.idlePlaybackScale = 1;
-    this.reactionController = null;
-    this.reactionBones = new Map();
-    this.mixerAuthoredScales = new Map();
-    this.locomotionController = null;
+    this.animationManifest = null;
+    this.animationPack = null;
+    this.animationController = null;
+    this.animationBones = new Map();
+    this.pendingHurt = null;
+    this.pendingDeath = null;
     this.isolateMaterials = isolateMaterials === true;
     this.ownedMaterials = new Map();
     this.fadePrepared = false;
@@ -198,8 +232,15 @@ export class HumanoidGlbVisualAdapter {
   }
 
   async load() {
-    const asset = await loadCachedAsset(this.profile.assetPath);
+    const [asset, animationManifest] = await Promise.all([
+      loadCachedAsset(this.profile.assetPath),
+      loadCachedAnimationManifest(this.profile.animationManifestPath),
+    ]);
     if (this.disposed) return;
+    if (animationManifest) {
+      const expectedAssetName = this.profile.assetPath.split('/').pop();
+      if (animationManifest.asset !== expectedAssetName) throw new Error(`Humanoid GLB profile ${this.profile.name} manifest targets ${animationManifest.asset}, expected ${expectedAssetName}`);
+    }
     this.scene = clone(asset.scene);
     this.scene.name = 'humanoid-combat-glb-visual';
     if (this.isolateMaterials) this.ownedMaterials = isolateObjectMaterials(this.scene);
@@ -239,7 +280,7 @@ export class HumanoidGlbVisualAdapter {
     this.applyCharacterLightingDiagnostic();
     if (!this.skinnedMeshes.length || !this.skeletons.length) throw new Error(`Humanoid GLB has no SkinnedMesh/skeleton: ${this.profile.assetPath}`);
     if (this.profile.animationAuthoritative) {
-      this.initializeAnimationAuthoritative(asset.animations ?? []);
+      this.initializeAnimationAuthoritative(asset.animations ?? [], animationManifest);
       return;
     }
     this.scene.position.fromArray(this.profile.rootOffset);
@@ -302,18 +343,39 @@ export class HumanoidGlbVisualAdapter {
     return diagnostics;
   }
 
-  initializeAnimationAuthoritative(clips) {
+  initializeAnimationAuthoritative(clips, animationManifest = null) {
     this.presentationRoot = new THREE.Group();
-    this.presentationRoot.name = 'model-idle-animation-authoritative-root';
+    this.presentationRoot.name = 'testman-animpack-v002-animation-authoritative-root';
     this.presentationRoot.add(this.scene);
     this.parent.add(this.presentationRoot);
-    const idleClip = clips.find((clip) => clip.name === this.profile.idleClipName && clip.tracks.length > 0)
+    this.animationManifest = animationManifest;
+    this.animationPack = animationManifest ? resolveAnimationPackManifest(animationManifest, clips, this.profile.name) : null;
+    const baseEntry = this.animationPack?.entriesByKind.get('WALK')?.[0] ?? null;
+    const idleClip = (baseEntry ? this.animationPack.clipsByName.get(baseEntry.name) : null)
+      ?? clips.find((clip) => clip.name === this.profile.idleClipName && clip.tracks.length > 0)
       ?? clips.find((clip) => /idle/i.test(clip.name) && clip.tracks.length > 0)
       ?? clips.find((clip) => clip.tracks.length > 0);
     if (!idleClip) throw new Error(`Humanoid GLB profile ${this.profile.name} has no valid idle animation`);
     this.mixer = new THREE.AnimationMixer(this.scene);
-    this.idleAction = this.mixer.clipAction(idleClip);
-    this.idleAction.setLoop(THREE.LoopRepeat, Infinity).play();
+    if (this.animationPack) {
+      this.animationController = new HumanoidAnimationPackController({
+        mixer: this.mixer,
+        animationPack: this.animationPack,
+        manifest: animationManifest,
+        fadeSeconds: this.profile.animationFadeSeconds,
+        walkReferenceSpeed: this.profile.walkReferenceSpeed,
+      });
+      this.idleAction = this.animationController.walkAction;
+      if (this.pendingDeath) this.animationController.playDeath(this.pendingDeath);
+      else if (this.pendingHurt) this.animationController.playHurt(this.pendingHurt);
+      this.pendingDeath = null;
+      this.pendingHurt = null;
+    } else {
+      this.idleAction = this.mixer.clipAction(idleClip);
+      this.idleAction.setLoop(baseEntry?.loop === false ? THREE.LoopOnce : THREE.LoopRepeat, baseEntry?.loop === false ? 1 : Infinity);
+      this.idleAction.clampWhenFinished = baseEntry?.hold_final_pose === true;
+      this.idleAction.play();
+    }
     this.mixer.update(0);
     this.scene.updateMatrixWorld(true);
     this.skeletons.forEach((skeleton) => skeleton.update());
@@ -333,21 +395,19 @@ export class HumanoidGlbVisualAdapter {
     this.presentationRoot.updateMatrixWorld(true);
     this.skeletons.forEach((skeleton) => skeleton.update());
     this.normalizedVisibleBounds = measureVisibleSkinnedBounds(this.scene);
-    this.resolveReactionBones();
-    this.reactionController = new ProceduralPainReactionController({ bones: this.reactionBones, presentationRoot: this.presentationRoot, basePosition: this.basePresentationPosition, baseYaw: this.basePresentationYaw });
-    this.locomotionController?.bindBones?.(this.reactionBones);
+    this.resolveAnimationBones();
     this.actor.setAnimationAuthorityReady(this);
   }
 
-  resolveReactionBones() {
-    this.reactionBones.clear();
+  resolveAnimationBones() {
+    this.animationBones.clear();
     const missing = [];
     Object.entries(this.profile.boneMap).forEach(([semanticId, boneName]) => {
       const bone = this.bones.get(boneName);
-      if (bone) this.reactionBones.set(semanticId, bone);
+      if (bone) this.animationBones.set(semanticId, bone);
       else missing.push(`${semanticId} -> ${boneName}`);
     });
-    if (missing.length) throw new Error(`Humanoid reaction profile ${this.profile.name} is missing mapped bones: ${missing.join(', ')}`);
+    if (missing.length) throw new Error(`Humanoid animation profile ${this.profile.name} is missing mapped bones: ${missing.join(', ')}`);
   }
 
   captureBindings() {
@@ -382,25 +442,11 @@ export class HumanoidGlbVisualAdapter {
 
   updateAnimationAuthority(deltaSeconds) {
     if (!this.mixer || !this.presentationRoot) return;
-    // Living pose authority: actor root -> fresh idle mixer pose -> walker gait
-    // and consciousness loss -> additive pain -> matrices/skeleton -> skinned
-    // wounds -> semantic proxies.
+    // The approved pack is the only skeletal pose authority. Wounds and semantic
+    // proxies sample the completed authored pose after the mixer advances.
     const dt = Math.max(0, deltaSeconds);
-    const holdFinalPose = this.locomotionController?.shouldHoldFinalPose?.() === true;
-    const reactionPlaybackScale = this.reactionController?.getPlaybackScale?.() ?? 1;
-    const breathingPlaybackScale = 1 - (this.actor.physiology?.breathInterruption ?? 0) * 0.58;
-    const targetPlaybackScale = Math.min(reactionPlaybackScale, breathingPlaybackScale);
-    this.idlePlaybackScale = holdFinalPose ? 0 : THREE.MathUtils.lerp(this.idlePlaybackScale, targetPlaybackScale, 1 - Math.exp(-dt * 10));
-    this.mixer.timeScale = this.idlePlaybackScale;
-    this.locomotionController?.restoreAuthoredPose?.();
-    this.mixer.update(holdFinalPose ? 0 : dt);
-    this.reactionBones.forEach((bone, id) => {
-      const scale = this.mixerAuthoredScales.get(id);
-      if (scale) scale.copy(bone.scale);
-      else this.mixerAuthoredScales.set(id, bone.scale.clone());
-    });
-    this.locomotionController?.applyAfterMixer?.(dt);
-    if (!holdFinalPose) this.reactionController?.applyAfterMixer(dt);
+    if (this.animationController) this.animationController.update(dt);
+    else this.mixer.update(dt);
     this.presentationRoot.updateMatrixWorld(true);
     this.skeletons.forEach((skeleton) => skeleton.update());
     this.actor.woundSystem?.update?.(dt);
@@ -408,9 +454,16 @@ export class HumanoidGlbVisualAdapter {
     if (this.characterLightingPanel) this.updateCharacterLightingDiagnostics();
   }
 
-  setLocomotionController(controller = null) {
-    this.locomotionController = controller;
-    if (this.reactionBones.size) controller?.bindBones?.(this.reactionBones);
+  setMovementState(movement = {}) {
+    return this.animationController?.setMovement?.(movement) ?? false;
+  }
+
+  playDeathAnimation(options = {}) {
+    if (!this.animationController) {
+      this.pendingDeath = { ...options };
+      return null;
+    }
+    return this.animationController.playDeath(options);
   }
 
   setAuthoritativeTransform(position, yaw) {
@@ -419,10 +472,6 @@ export class HumanoidGlbVisualAdapter {
     this.basePresentationYaw = Number.isFinite(yaw) ? yaw + this.profile.rootYaw : this.basePresentationYaw;
     this.presentationRoot.position.copy(this.basePresentationPosition);
     this.presentationRoot.rotation.set(0, this.basePresentationYaw, 0);
-    if (this.reactionController) {
-      this.reactionController.baseYaw = this.basePresentationYaw;
-      this.reactionController.rootYawQuaternion.setFromAxisAngle(proxyUp, this.basePresentationYaw);
-    }
   }
 
   beginRagdoll() {
@@ -430,17 +479,17 @@ export class HumanoidGlbVisualAdapter {
     // the actor has explicitly transitioned into a terminal/collapse state.
     if (!this.scene || !this.presentationRoot || this.ragdollBindings.length) return this.ragdollBindings.length > 0;
     this.mixer.timeScale = 0;
-    // Preserve the exact mixer + locomotion + pain pose, including bounded root
-    // recoil, until offsets have been captured against the kinematic proxies.
+    // Preserve the exact authored mixer pose until offsets have been captured
+    // against the kinematic proxies for an explicitly forced ragdoll diagnostic.
     this.presentationRoot.updateMatrixWorld(true);
     this.scene.updateMatrixWorld(true);
     this.ragdollDiagnostics.activationCount += 1;
-    this.ragdollDiagnostics.finalAnimatedPelvisPosition = this.reactionBones.get('pelvis')?.getWorldPosition(new THREE.Vector3()).toArray() ?? null;
+    this.ragdollDiagnostics.finalAnimatedPelvisPosition = this.animationBones.get('pelvis')?.getWorldPosition(new THREE.Vector3()).toArray() ?? null;
     this.ragdollDiagnostics.firstRagdollPelvisPosition = null;
     this.ragdollDiagnostics.maximumParentChildBoneLengthError = 0;
     this.ragdollDiagnostics.nonFiniteTransformCount = 0;
     this.ragdollDiagnostics.changedBoneScaleCount = 0;
-    this.ragdollBindings = [...this.reactionBones].map(([bodyId, bone]) => {
+    this.ragdollBindings = [...this.animationBones].map(([bodyId, bone]) => {
       const bodyEntry = this.actor.bodies.get(bodyId);
       if (!bodyEntry) return null;
       const translation = bodyEntry.body.translation();
@@ -478,19 +527,15 @@ export class HumanoidGlbVisualAdapter {
   }
 
   triggerPainReaction(contact) {
-    return this.reactionController?.trigger?.(contact) ?? false;
-  }
-
-  setImpactMemory(memory) {
-    this.reactionController?.setImpactMemory?.(memory);
-  }
-
-  setEmbeddedTension(contact) {
-    this.reactionController?.setEmbeddedTension?.(contact);
-  }
-
-  releaseEmbeddedTension() {
-    return this.reactionController?.releaseEmbeddedTension?.() ?? false;
+    const localHitX = contact?.hitWorldPosition && this.presentationRoot
+      ? this.presentationRoot.worldToLocal(contact.hitWorldPosition.clone()).x
+      : null;
+    const options = { ...contact, localHitX };
+    if (!this.animationController) {
+      if (!this.pendingDeath) this.pendingHurt = options;
+      return null;
+    }
+    return this.animationController.playHurt(options);
   }
 
   bindVisibleSurface(worldPoint, options = {}) {
@@ -542,12 +587,9 @@ export class HumanoidGlbVisualAdapter {
 
   reset() {
     if (this.profile.animationAuthoritative) {
-      this.reactionController?.reset?.();
-      this.locomotionController?.restoreAuthoredPose?.();
+      this.animationController?.reset?.();
       this.ragdollBindings = [];
       this.ragdollDiagnostics = this.createRagdollDiagnostics();
-      this.idlePlaybackScale = 1;
-      this.idleAction?.reset().play();
       this.mixer?.setTime(0);
       this.presentationRoot?.position.copy(this.basePresentationPosition);
       if (this.presentationRoot) this.presentationRoot.rotation.set(0, this.basePresentationYaw, 0);
@@ -562,9 +604,8 @@ export class HumanoidGlbVisualAdapter {
   getDiagnostics() {
     const rawSize = this.rawVisibleBounds?.getSize(new THREE.Vector3());
     const normalizedSize = this.normalizedVisibleBounds?.getSize(new THREE.Vector3());
-    const scaleChangedBones = [...this.mixerAuthoredScales].filter(([id, scale]) => scale.distanceTo(this.reactionBones.get(id)?.scale ?? scale) > 1e-8).map(([id]) => id);
-    const ragdollBonePositions = Object.fromEntries(['pelvis', 'upper_chest', 'head'].map((id) => [id, this.reactionBones.get(id)?.getWorldPosition(new THREE.Vector3()).toArray().map((value) => Number(value.toFixed(2))) ?? null]));
-    return { path: this.profile.assetPath, profileName: this.profile.name, animationAuthoritative: this.profile.animationAuthoritative === true, loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, ragdollBindingCount: this.ragdollBindings.length, ragdollBonePositions, ragdoll: { ...this.ragdollDiagnostics }, mixerCount: this.mixer ? 1 : 0, reactionControllerCount: this.reactionController ? 1 : 0, locomotionEnabled: Boolean(this.locomotionController), materialCloneCount: this.materialCloneCount, idleClip: this.idleAction?.getClip?.().name ?? null, rawMeasuredVisibleHeight: rawSize?.y ?? null, normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight, normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null, groundY: this.actor.visualRootPosition.y, groundClearance: this.profile.groundClearance ?? null, height: this.profile.targetHeight, scale: this.uniformScale ?? getHumanoidProfileScale(this.profile), scaleChangedBones, lighting: this.updateCharacterLightingDiagnostics(), reaction: this.reactionController?.getDiagnostics?.() ?? null };
+    const ragdollBonePositions = Object.fromEntries(['pelvis', 'upper_chest', 'head'].map((id) => [id, this.animationBones.get(id)?.getWorldPosition(new THREE.Vector3()).toArray().map((value) => Number(value.toFixed(2))) ?? null]));
+    return { path: this.profile.assetPath, profileName: this.profile.name, animationAuthoritative: this.profile.animationAuthoritative === true, animationManifestPath: this.profile.animationManifestPath ?? null, manifestAnimationCount: this.animationPack?.entriesByName.size ?? 0, manifestAnimationNames: [...(this.animationPack?.entriesByName.keys() ?? [])], loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, ragdollBindingCount: this.ragdollBindings.length, ragdollBonePositions, ragdoll: { ...this.ragdollDiagnostics }, mixerCount: this.mixer ? 1 : 0, materialCloneCount: this.materialCloneCount, idleClip: this.idleAction?.getClip?.().name ?? null, rawMeasuredVisibleHeight: rawSize?.y ?? null, normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight, normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null, groundY: this.actor.visualRootPosition.y, groundClearance: this.profile.groundClearance ?? null, height: this.profile.targetHeight, scale: this.uniformScale ?? getHumanoidProfileScale(this.profile), lighting: this.updateCharacterLightingDiagnostics(), animation: this.animationController?.getDiagnostics?.() ?? null };
   }
 
   get materialCloneCount() { return this.ownedMaterials.size; }
@@ -609,15 +650,13 @@ export class HumanoidGlbVisualAdapter {
     this.scene?.removeFromParent();
     this.scene = null;
     this.presentationRoot = null;
+    this.animationController?.dispose?.();
+    this.animationController = null;
     this.mixer = null;
     this.idleAction = null;
-    this.idlePlaybackScale = 1;
-    this.reactionController?.reset?.();
-    this.reactionController = null;
-    this.locomotionController?.bindBones?.(null);
-    this.locomotionController = null;
-    this.reactionBones.clear();
-    this.mixerAuthoredScales.clear();
+    this.animationBones.clear();
+    this.pendingHurt = null;
+    this.pendingDeath = null;
     this.bindings = [];
     this.ragdollBindings = [];
     this.ragdollDiagnostics = this.createRagdollDiagnostics();

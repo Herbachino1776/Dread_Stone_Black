@@ -155,7 +155,7 @@ export class HumanoidCombatActor {
 
   prepareFrame(deltaSeconds) {
     if (this.visualProfile.animationAuthoritative && !this.ragdollActive) this.visualAdapter?.updateAnimationAuthority?.(deltaSeconds);
-    if (!this.ragdollActive && this.lifeState !== 'alive' && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll({ forced: this.ragdollForced });
+    if (!this.ragdollActive && this.lifeState !== 'alive' && !this.visualProfile.authoredDeathAnimations && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll({ forced: this.ragdollForced });
   }
 
   syncAnimationProxyBodies(adapter = this.visualAdapter) {
@@ -474,11 +474,17 @@ export class HumanoidCombatActor {
   transitionLifeState(nextState, reason = 'trauma') {
     if (!this.automaticMortality) return false;
     if (this.isImmortalReactive() && (nextState === 'dying' || nextState === 'dead')) nextState = 'incapacitated';
+    else if (this.visualProfile.authoredDeathAnimations && nextState === 'incapacitated') nextState = 'dying';
     const order = { alive: 0, incapacitated: 1, dying: 2, dead: 3 };
     if (!(nextState in order) || order[nextState] <= order[this.lifeState]) return false;
     this.lifeState = nextState;
     this.collapseReason ??= reason;
-    if (['incapacitated', 'dying', 'dead'].includes(nextState) && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll();
+    if (nextState === 'dying' && this.visualProfile.authoredDeathAnimations) {
+      this.visualAdapter?.playDeathAnimation?.({
+        regionId: this.lastReaction?.regionId ?? this.collapseFamily ?? '',
+        variation: this.lastReaction?.severity ?? 0,
+      });
+    } else if (!this.visualProfile.authoredDeathAnimations && ['incapacitated', 'dying', 'dead'].includes(nextState) && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll();
     if (nextState === 'incapacitated') this.eventSink?.('unconscious', { position: this.getBodyWorldPosition('head'), severity: 0.6 });
     if (nextState === 'dying') this.eventSink?.('shock_gasp', { position: this.getBodyWorldPosition('head'), severity: 0.9 });
     if (nextState === 'dead') {
@@ -489,6 +495,7 @@ export class HumanoidCombatActor {
   }
 
   activateRagdoll({ forced = false } = {}) {
+    if (this.visualProfile.authoredDeathAnimations) return false;
     if (this.ragdollActive || !this.animationAuthorityReady) return false;
     if (typeof this.visualAdapter?.getProxyPose === 'function') this.syncAnimationProxyBodies(this.visualAdapter);
     const finalPose = new Map();
@@ -603,6 +610,7 @@ export class HumanoidCombatActor {
   }
 
   forceRagdoll() {
+    if (this.visualProfile.authoredDeathAnimations) return false;
     this.ragdollForced = true;
     this.collapseFamily ??= 'general_trauma';
     this.collapseReason ??= 'combat-lab-forced-ragdoll';

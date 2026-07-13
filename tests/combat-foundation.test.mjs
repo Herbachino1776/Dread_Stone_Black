@@ -9,13 +9,12 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
-import { CURRENT_HUMANOID_PROFILE, MODEL_IDLE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
+import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
 import { WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveSlashLeadingPart } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
-import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
-import { PAIN_REACTION_LIMITS, REACTION_KINDS, REACTION_PROFILES, ProceduralPainReactionController, buildReactionPose, getReactionFamily, resolveReactionTiming } from '../src/game/combat/ProceduralPainReaction.js';
+import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveAnimationPackManifest, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { MAX_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, findClosestSkinnedSurface, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
 import { COMBAT_DIRECTOR_EVENTS, CombatDirector, PENETRATION_STAGES, resolveMeleeTimeline } from '../src/game/combat/CombatDirector.js';
 import { isDamageIntent, MELEE_INTENTS, MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
@@ -309,19 +308,6 @@ test('diagnostic GLB profiles fail clearly when a required mapped bone is missin
   );
 });
 
-function createReactionRig() {
-  const root = new THREE.Group();
-  const bones = new Map(Object.keys(MODEL_IDLE_COMBAT_PROFILE.boneMap).map((id) => {
-    const bone = new THREE.Bone();
-    bone.name = id;
-    bone.scale.set(1, 1, 1);
-    root.add(bone);
-    return [id, bone];
-  }));
-  const controller = new ProceduralPainReactionController({ bones, presentationRoot: root, basePosition: new THREE.Vector3(), baseYaw: 0 });
-  return { root, bones, controller };
-}
-
 function createSkinnedSurfaceFixture() {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, -0.5, 0.5, 0, 0.5, 0.5, 0], 3));
@@ -342,118 +328,7 @@ function createSkinnedSurfaceFixture() {
   return { root, mesh, bone, geometry };
 }
 
-test('procedural reactions are region-specific, direction-aware, severity-scaled, and time-bounded', () => {
-  assert.equal(getReactionFamily('upper_chest'), 'torso');
-  assert.equal(getReactionFamily('neck'), 'neck');
-  assert.equal(getReactionFamily('left_forearm'), 'arm');
-  assert.equal(getReactionFamily('right_thigh'), 'leg');
-  const shallow = buildReactionPose({ regionId: 'upper_chest', severity: 0.2, depth: 0.01, localDirection: new THREE.Vector3(-0.7, 0, -0.7).normalize() });
-  const deep = buildReactionPose({ regionId: 'upper_chest', severity: 0.9, depth: 0.12, localDirection: new THREE.Vector3(-0.7, 0, -0.7).normalize() });
-  const opposite = buildReactionPose({ regionId: 'upper_chest', severity: 0.9, depth: 0.12, localDirection: new THREE.Vector3(0.7, 0, -0.7).normalize() });
-  assert.ok(deep.rotations.get('lower_chest').length() > shallow.rotations.get('lower_chest').length());
-  assert.equal(Math.sign(deep.rotations.get('lower_chest').z), -Math.sign(opposite.rotations.get('lower_chest').z));
-  assert.ok(deep.rootRecoil.dot(new THREE.Vector3(-0.7, 0, -0.7).normalize()) > 0, 'whole-root recoil follows blade travel away from the attacker');
-  assert.ok([...deep.rotations.values()].every((rotation) => rotation.length() <= PAIN_REACTION_LIMITS.maximumBoneAngle + 1e-8));
-  assert.deepEqual([...buildReactionPose({ regionId: 'neck', severity: 0.8 }).rotations.keys()].includes('head'), true);
-  assert.deepEqual([...buildReactionPose({ regionId: 'left_forearm', severity: 0.8 }).rotations.keys()].filter((id) => id.includes('arm')), ['left_upper_arm', 'left_forearm']);
-  assert.ok(buildReactionPose({ regionId: 'right_thigh', severity: 0.8 }).rotations.has('pelvis'));
-  const neckTiming = resolveReactionTiming('neck', 0.8);
-  const legTiming = resolveReactionTiming('right_thigh', 0.8);
-  assert.ok(neckTiming.impact >= 0.05 && neckTiming.impact <= 0.09);
-  assert.ok(legTiming.recovery > neckTiming.recovery);
-});
-
-test('reaction variation and impact memory change guarding without exceeding pose limits', () => {
-  const base = { regionId: 'upper_chest', severity: 0.55, localDirection: new THREE.Vector3(0.35, 0, -1).normalize(), depth: 0.06 };
-  const first = buildReactionPose({ ...base, variation: -0.75, impactMemory: 0.15 });
-  const repeated = buildReactionPose({ ...base, variation: 0.75, impactMemory: 0.65, recoveryWeight: 0.4 });
-  assert.ok(first.rotations.get('lower_chest').distanceTo(repeated.rotations.get('lower_chest')) > 0.001, 'deterministic variation prevents identical repeated chest motion');
-  assert.ok(repeated.rotations.get('left_upper_arm').length() > first.rotations.get('left_upper_arm').length(), 'recent torso wounds increase restrained guarding');
-  repeated.rotations.forEach((rotation) => assert.ok(rotation.length() <= PAIN_REACTION_LIMITS.maximumBoneAngle + 1e-8));
-});
-
-test('source-aware puncture and slash profiles use deliberate smooth onset without weakening blunt reactions', () => {
-  const punctureTiming = resolveReactionTiming('upper_chest', 0.45, REACTION_KINDS.punctureEntry);
-  const slashTiming = resolveReactionTiming('upper_chest', 0.45, REACTION_KINDS.slash);
-  assert.ok(punctureTiming.impact >= 0.11 && punctureTiming.impact <= 0.17);
-  assert.ok(punctureTiming.recovery >= 0.35 && punctureTiming.recovery <= 0.55);
-  assert.ok(slashTiming.impact >= 0.1 && slashTiming.recovery >= 0.27);
-  const contact = { regionId: 'upper_chest', severity: 0.55, depth: 0.06, localDirection: new THREE.Vector3(0.35, 0, -1).normalize() };
-  const puncture = buildReactionPose({ ...contact, reactionKind: REACTION_KINDS.punctureEntry });
-  const slash = buildReactionPose({ ...contact, slashSeverity: 0.55, reactionKind: REACTION_KINDS.slash });
-  const blunt = buildReactionPose({ ...contact, reactionKind: REACTION_KINDS.blunt });
-  const diagnostic = buildReactionPose({ ...contact, reactionKind: REACTION_KINDS.diagnostic });
-  assert.ok(slash.rotations.get('lower_chest').length() / puncture.rotations.get('lower_chest').length() >= 0.35);
-  assert.ok(slash.rotations.get('lower_chest').length() / puncture.rotations.get('lower_chest').length() <= 0.5);
-  assert.ok(slash.rootRecoil.length() <= 0.012 + 1e-8);
-  assert.ok(puncture.rootRecoil.length() <= 0.025 + 1e-8);
-  assert.ok(blunt.rotations.get('lower_chest').distanceTo(diagnostic.rotations.get('lower_chest')) < 1e-10, 'blunt keeps the pre-profile amplitude');
-  assert.equal(REACTION_PROFILES[REACTION_KINDS.blunt].amplitudeMultiplier, 1);
-
-  const { bones, controller } = createReactionRig();
-  controller.trigger({ regionId: 'upper_chest', severity: 0.35, depth: 0.025, worldDirection: new THREE.Vector3(0, 0, -1), source: 'directed_puncture' });
-  const samples = [];
-  for (let frame = 0; frame < 6; frame += 1) {
-    bones.forEach((bone) => bone.quaternion.identity());
-    controller.applyAfterMixer(1 / 30);
-    samples.push(controller.currentRotations.get('lower_chest')?.length() ?? 0);
-  }
-  assert.ok(samples.slice(1).every((value, index) => value >= samples[index] - 1e-9), 'puncture onset rises monotonically');
-  const largestJumpDegrees = Math.max(...samples.slice(1).map((value, index) => THREE.MathUtils.radToDeg(value - samples[index])));
-  assert.ok(largestJumpDegrees <= 2.5, `30 FPS onset jump stays deliberate (${largestJumpDegrees.toFixed(2)} degrees)`);
-});
-
-test('embedded-tension release eases to zero without invoking a new reaction trigger', () => {
-  const { bones, controller } = createReactionRig();
-  controller.setEmbeddedTension({ regionId: 'upper_chest', depth: 0.12, worldDirection: new THREE.Vector3(0, 0, -1) });
-  for (let frame = 0; frame < 8; frame += 1) { bones.forEach((bone) => bone.quaternion.identity()); controller.applyAfterMixer(1 / 60); }
-  const held = controller.embeddedTension;
-  let triggerCount = 0;
-  const originalTrigger = controller.trigger.bind(controller);
-  controller.trigger = (...args) => { triggerCount += 1; return originalTrigger(...args); };
-  assert.equal(controller.releaseEmbeddedTension(), true);
-  bones.forEach((bone) => bone.quaternion.identity());
-  controller.applyAfterMixer(1 / 60);
-  assert.ok(controller.embeddedTension > 0 && controller.embeddedTension < held, 'release eases instead of snapping');
-  for (let frame = 0; frame < 90; frame += 1) { bones.forEach((bone) => bone.quaternion.identity()); controller.applyAfterMixer(1 / 60); }
-  assert.equal(controller.embeddedTension, 0);
-  assert.equal(controller.embeddedRegion, null);
-  assert.equal(triggerCount, 0);
-});
-
-test('reaction controller preserves mixer-authored scales, clamps repeated hits, resets, and cannot accumulate pose drift', () => {
-  const { root, bones, controller } = createReactionRig();
-  const authoredScales = new Map([...bones].map(([id, bone]) => [id, bone.scale.clone()]));
-  for (let hit = 0; hit < 40; hit += 1) controller.trigger({ regionId: hit % 2 ? 'neck' : 'upper_chest', severity: 1.4, depth: 0.16, worldDirection: new THREE.Vector3(hit % 2 ? 1 : -1, 0, -1).normalize(), actorState: 'alive' });
-  for (let frame = 0; frame < 90; frame += 1) {
-    bones.forEach((bone) => bone.quaternion.identity()); // stand-in for the fresh AnimationMixer-authored local pose
-    controller.applyAfterMixer(1 / 60);
-    assert.ok([...controller.currentRotations.values()].every((rotation) => rotation.length() <= PAIN_REACTION_LIMITS.maximumBoneAngle + 1e-8));
-  }
-  assert.equal(controller.getDiagnostics().phase, 'idle');
-  bones.forEach((bone, id) => {
-    assert.ok(1 - Math.abs(bone.quaternion.w) < 1e-8, `${id} returns to the fresh authored pose`);
-    assert.deepEqual(bone.scale.toArray(), authoredScales.get(id).toArray(), `${id} scale remains mixer-authored`);
-  });
-  controller.trigger({ regionId: 'left_forearm', severity: 0.7, worldDirection: new THREE.Vector3(0, 0, -1), actorState: 'alive' });
-  controller.reset();
-  assert.equal(controller.getDiagnostics().phase, 'idle');
-  assert.deepEqual(root.position.toArray(), [0, 0, 0]);
-  controller.setEmbeddedTension({ regionId: 'upper_chest', depth: 0.12, worldDirection: new THREE.Vector3(0, 0, -1) });
-  bones.forEach((bone) => bone.quaternion.identity());
-  controller.applyAfterMixer(1 / 60);
-  const firstTension = controller.embeddedTension;
-  assert.ok(firstTension > 0 && firstTension < controller.embeddedTensionTarget, 'embedded depth eases into a bounded hold instead of snapping');
-  bones.forEach((bone) => bone.quaternion.identity());
-  controller.applyAfterMixer(1 / 60);
-  assert.ok(controller.embeddedTension > firstTension && controller.embeddedTension < controller.embeddedTensionTarget);
-  controller.reset();
-  assert.equal(controller.embeddedTension, 0);
-  assert.equal(controller.embeddedTensionTarget, 0);
-  assert.equal(controller.embeddedRegion, null);
-});
-
-test('puncture bindings store valid barycentrics and follow animated and procedural skinned movement', () => {
+test('puncture bindings store valid barycentrics and follow authored skinned animation', () => {
   const { root, mesh, bone, geometry } = createSkinnedSurfaceFixture();
   const hitPoint = new THREE.Vector3(0.12, 0.08, 0.03);
   const binding = findClosestSkinnedSurface([mesh], hitPoint, { regionId: 'upper_chest', bodyId: 'upper_chest' });
@@ -471,7 +346,7 @@ test('puncture bindings store valid barycentrics and follow animated and procedu
   bone.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.16);
   root.updateMatrixWorld(true); mesh.skeleton.update();
   const flinched = reconstructSkinnedSurface(binding);
-  assert.ok(flinched.point.distanceTo(animated.point) > 0.001, 'binding follows additive procedural bone rotation');
+  assert.ok(flinched.point.distanceTo(animated.point) > 0.001, 'binding follows the next authored bone pose');
   geometry.dispose(); mesh.material.dispose();
 });
 
@@ -604,18 +479,18 @@ test('wound and reaction lifecycle keeps one bounded pool while retaining the se
   physics.dispose();
 });
 
-test('animation-authoritative bodies become dynamic only for bounded ragdoll collapse and reset to kinematic', async () => {
+test('Testman authored deaths never hand skeletal authority to ragdoll', async () => {
   await initializeCombatPhysics();
   const physics = new CombatPhysicsWorld();
-  const actor = new HumanoidCombatActor({ physics, scene: new THREE.Scene(), visualProfile: MODEL_IDLE_COMBAT_PROFILE });
+  const actor = new HumanoidCombatActor({ physics, scene: new THREE.Scene(), visualProfile: TESTMAN_COMBAT_PROFILE });
   actor.animationAuthorityReady = true;
-  actor.visualAdapter = { beginRagdoll: () => true, updateRagdoll() {}, reset() {}, dispose() {} };
+  let ragdollBeginCount = 0;
+  actor.visualAdapter = { beginRagdoll: () => { ragdollBeginCount += 1; return true; }, updateRagdoll() {}, reset() {}, dispose() {} };
   assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 2));
-  assert.equal(actor.activateRagdoll({ forced: true }), true);
-  assert.equal(actor.ragdollActive, true);
-  assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 0));
-  actor.reset();
+  assert.equal(actor.activateRagdoll({ forced: true }), false);
+  assert.equal(actor.forceRagdoll(), false);
   assert.equal(actor.ragdollActive, false);
+  assert.equal(ragdollBeginCount, 0);
   assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 2));
   actor.dispose();
   physics.dispose();
@@ -872,17 +747,17 @@ test('combat feedback guards unsupported haptics, cooldowns contact audio, and h
   feedback.dispose();
 });
 
-test('Folsom keeps the stationary model_idle subject and adds one independently routed walker', async () => {
+test('Folsom keeps the stationary Testman subject and adds one independently routed walker', async () => {
   const scene = new THREE.Scene();
   const dungeon = { scene, collision: { sampleWalkableY: () => ({ y: 0.16 }), canStandAtFloorPosition: () => true, getIntersectingBlockers: () => [] } };
   const encounter = await FolsomCombatEncounter.create({ dungeon });
   const pelvis = encounter.actor.getBodyWorldPosition('pelvis');
   const playerSpawn = new THREE.Vector3(-2, 1.71, -4);
   assert.equal(Math.hypot(encounter.spawnPosition.x - playerSpawn.x, encounter.spawnPosition.z - playerSpawn.z), 10);
-  assert.equal(encounter.actor.visualProfile, MODEL_IDLE_COMBAT_PROFILE);
-  assert.ok(scene.getObjectByName('folsom-model-idle-combat-subject'));
+  assert.equal(encounter.actor.visualProfile, TESTMAN_COMBAT_PROFILE);
+  assert.ok(scene.getObjectByName('folsom-testman-combat-subject'));
   assert.equal(scene.children.filter((child) => child.name.includes('combat-subject')).length, 1);
-  assert.equal(scene.getObjectByName('folsom-model-idle-raw-reference'), undefined);
+  assert.equal(scene.getObjectByName('folsom-testman-raw-reference'), undefined);
   assert.ok(pelvis.x > 7 && pelvis.z < -3);
   assert.ok(encounter.walkerController.actor);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
@@ -892,11 +767,11 @@ test('Folsom keeps the stationary model_idle subject and adds one independently 
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
   assert.equal(scene.children.filter((child) => child.name.includes('combat-subject')).length, 1);
   encounter.dispose();
-  assert.equal(scene.getObjectByName('folsom-model-idle-combat-subject'), undefined);
-  assert.equal(scene.children.some((child) => child.name.startsWith('folsom-procedural-walker-')), false);
+  assert.equal(scene.getObjectByName('folsom-testman-combat-subject'), undefined);
+  assert.equal(scene.children.some((child) => child.name.startsWith('folsom-authored-walker-')), false);
 });
 
-test('skinned-vertex bounds produce one uniform 1.82 meter model_idle scale', () => {
+test('skinned-vertex bounds produce one uniform 1.82 meter Testman scale', () => {
   const root = new THREE.Group();
   const bone = new THREE.Bone();
   const geometry = new THREE.BoxGeometry(1, 2, 0.5);
@@ -911,23 +786,40 @@ test('skinned-vertex bounds produce one uniform 1.82 meter model_idle scale', ()
   skinned.bind(new THREE.Skeleton([bone]));
   root.add(skinned);
   const rawHeight = measureVisibleSkinnedBounds(root).getSize(new THREE.Vector3()).y;
-  const uniformScale = MODEL_IDLE_COMBAT_PROFILE.targetHeight / rawHeight;
+  const uniformScale = TESTMAN_COMBAT_PROFILE.targetHeight / rawHeight;
   root.scale.setScalar(uniformScale);
   const normalized = measureVisibleSkinnedBounds(root);
   assert.ok(Math.abs(normalized.getSize(new THREE.Vector3()).y - 1.82) < 1e-6);
   assert.deepEqual(root.scale.toArray(), [uniformScale, uniformScale, uniformScale]);
-  assert.equal(MODEL_IDLE_COMBAT_PROFILE.animationAuthoritative, true);
-  assert.ok(MODEL_IDLE_COMBAT_PROFILE.rawHeight > 84.12 && MODEL_IDLE_COMBAT_PROFILE.rawHeight < 84.14);
-  assert.equal(Object.keys(MODEL_IDLE_COMBAT_PROFILE.proxyFit).length, 18);
+  assert.equal(TESTMAN_COMBAT_PROFILE.animationAuthoritative, true);
+  assert.ok(TESTMAN_COMBAT_PROFILE.rawHeight > 84.12 && TESTMAN_COMBAT_PROFILE.rawHeight < 84.14);
+  assert.equal(Object.keys(TESTMAN_COMBAT_PROFILE.proxyFit).length, 18);
   geometry.dispose();
   material.dispose();
 });
 
-test('model_idle authoritative profile is independent and disables physics-to-bone binding', () => {
-  assert.notEqual(CURRENT_HUMANOID_PROFILE.assetPath, MODEL_IDLE_COMBAT_PROFILE.assetPath);
-  assert.notEqual(CURRENT_HUMANOID_PROFILE.boneMap, MODEL_IDLE_COMBAT_PROFILE.boneMap);
-  assert.equal(MODEL_IDLE_COMBAT_PROFILE.assetPath, './assets/models/npc/human/model_idle.glb');
-  assert.equal(MODEL_IDLE_COMBAT_PROFILE.name, 'model_idle_animation_authoritative');
+test('Testman v002 authoritative profile is independent and uses its enemy-specific manifest route', () => {
+  assert.notEqual(CURRENT_HUMANOID_PROFILE.assetPath, TESTMAN_COMBAT_PROFILE.assetPath);
+  assert.notEqual(CURRENT_HUMANOID_PROFILE.boneMap, TESTMAN_COMBAT_PROFILE.boneMap);
+  assert.equal(TESTMAN_COMBAT_PROFILE.assetPath, './assets/enemies/testman/testman_animpack_v002.glb');
+  assert.equal(TESTMAN_COMBAT_PROFILE.animationManifestPath, './assets/enemies/testman/testman_animpack_v002.json');
+  assert.equal(TESTMAN_COMBAT_PROFILE.idleClipName, undefined);
+  assert.equal(TESTMAN_COMBAT_PROFILE.name, 'testman_animpack_v002_animation_authoritative');
+});
+
+test('Testman v002 manifest is the source of truth for discoverable animation clips', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../public/assets/enemies/testman/testman_animpack_v002.json', import.meta.url), 'utf8'));
+  const clips = manifest.animations.map(({ name }) => ({ name, tracks: [{}] }));
+  const pack = resolveAnimationPackManifest(manifest, clips, TESTMAN_COMBAT_PROFILE.name);
+  assert.equal(pack.entriesByName.size, manifest.approved_animation_count);
+  assert.equal(pack.entriesByKind.get('WALK')[0].loop, true);
+  assert.ok(pack.entriesByKind.get('HURT_LEFT')[0].play_once);
+  assert.ok(pack.entriesByKind.get('HURT_RIGHT')[0].return_to_previous_state);
+  assert.ok(pack.entriesByKind.get('DEATH').every((entry) => entry.play_once && entry.hold_final_pose));
+  assert.throws(
+    () => resolveAnimationPackManifest(manifest, clips.slice(1), TESTMAN_COMBAT_PROFILE.name),
+    /missing manifest animations: DSB_Death_ChestHold_LEFT_v001/,
+  );
 });
 
 test('authored wound materials preserve authored color and remain lighting-responsive', async () => {
