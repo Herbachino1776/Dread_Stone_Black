@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "glb_path": "D:\\AI aRt\\DSB   Custom Blender Exports\\testman_animpack_v002.glb",
+  "file_size_bytes": 1319976,
+  "mesh_count": 1,
+  "skin_count": 1,
+  "animation_count": 5,
+  "expected_animation_names": [
+    "DSB_Death_ChestHold_LEFT_v001",
+    "DSB_Death_Faceplant_LEFT_v001",
+    "DSB_Hurt_LEFT_Flank_v001",
+    "DSB_Hurt_RIGHT_Flank_v001",
+    "DSB_Walk_NORMAL_v001"
+  ],
+  "exported_animation_names": [
+    "DSB_Death_ChestHold_LEFT_v001",
+    "DSB_Death_Faceplant_LEFT_v001",
+    "DSB_Hurt_LEFT_Flank_v001",
+    "DSB_Hurt_RIGHT_Flank_v001",
+    "DSB_Walk_NORMAL_v001"
+  ],
+  "missing_animations": [],
+  "unexpected_animations": [],
+  "duplicate_animation_names": [],
+  "preview_floor_exported": false,
+  "node_count": 62,
+  "generator": "Khronos glTF Blender I/O v5.1.20",
+  "removed_unapproved_animations": []
+}
