@@ -6,6 +6,7 @@ import { getAlphaBoundUv, getKnifeWoundPhysicalCategory } from './KnifeWoundDeca
 import { MAX_SLASH_SURFACE_SAMPLES, MIN_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 import { appendSlashVisualPathPoint, createSlashVisualWorkspace, deriveSlashFragmentMetrics, makeSlashFragmentGeometry, resetSlashVisualPath, updateSlashFragmentGeometry } from './SlashWoundVisual.js';
+import { MAX_SWORD_CUT_SURFACE_SAMPLES, createSwordCutRibbonWorkspace, makeSwordCutRibbonGeometry, resetSwordCutRibbonGeometry, updateSwordCutRibbonGeometry } from './SwordCutWoundVisual.js';
 import { FULLY_OPAQUE_THRESHOLD, applyFadeOpacity, captureAndPrepareFadeMaterials, clampFadeOpacity, restoreFadeMaterials } from './MaterialFadeState.js';
 
 const tmpPosition = new THREE.Vector3();
@@ -27,6 +28,7 @@ export const PUNCTURE_VISUAL_LIMITS = Object.freeze({
 export const PUNCTURE_DECAL_SCALE = 1.3;
 
 export const SLASH_VISUAL_WIDTH_LIMITS = Object.freeze({ shallow: [0.004, 0.01], deep: [0.008, 0.02], severeMaximum: 0.03 });
+export const MAX_SWORD_CUT_VISUALS = 12;
 
 function makePunctureGeometry() {
   const geometry = new THREE.BufferGeometry();
@@ -93,6 +95,7 @@ export class CombatWoundSystem {
     this.wounds = [];
     this.nextWoundId = 1;
     this.visualSlots = [];
+    this.swordVisualSlots = [];
     this.decalLibrary = decalLibrary;
     this.isolateMaterials = isolateMaterials === true;
     this.ownedMaterials = new Map();
@@ -100,6 +103,8 @@ export class CombatWoundSystem {
     this.fadePrepared = false;
     this.fadeMaterialBaselines = new Map();
     this.bluntMaterial = new THREE.MeshStandardMaterial({ color: 0x372229, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    this.swordCutCenterMaterial = new THREE.MeshStandardMaterial({ color: 0x2a0207, roughness: 0.98, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.98, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    this.swordCutLipMaterial = new THREE.MeshStandardMaterial({ color: 0x651019, roughness: 0.9, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.96, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -1 });
     this.failedProjectionCount = 0;
     this.fallbackUsageCount = 0;
     this.bindingFailureLogged = false;
@@ -107,6 +112,7 @@ export class CombatWoundSystem {
     this.missingMaterialWarnings = new Set();
     this.debugVisible = false;
     this.createVisualPool();
+    this.createSwordVisualPool();
     this.createSurfaceDebug();
   }
 
@@ -127,6 +133,22 @@ export class CombatWoundSystem {
       enableCombatReadabilityLightLayer(slash);
       this.scene.add(puncture, slash);
       this.visualSlots.push({ puncture, slash, slashWorkspace: createSlashVisualWorkspace(), woundId: null });
+    }
+  }
+
+  createSwordVisualPool() {
+    const count = Math.min(this.maximumWounds, MAX_SWORD_CUT_VISUALS);
+    for (let index = 0; index < count; index += 1) {
+      const ribbon = new THREE.Mesh(makeSwordCutRibbonGeometry(), [this.swordCutCenterMaterial, this.swordCutLipMaterial]);
+      ribbon.name = `combat-sword-cut-ribbon-${index}`;
+      ribbon.visible = false;
+      ribbon.castShadow = false;
+      ribbon.receiveShadow = false;
+      ribbon.frustumCulled = false;
+      ribbon.renderOrder = 9;
+      enableCombatReadabilityLightLayer(ribbon);
+      this.scene.add(ribbon);
+      this.swordVisualSlots.push({ ribbon, workspace: createSwordCutRibbonWorkspace(), woundId: null, assignedTime: 0 });
     }
   }
 
@@ -166,14 +188,33 @@ export class CombatWoundSystem {
     return slot;
   }
 
-  bindSurfacePoint(wound, worldPoint, referenceNormal = null) {
+  allocateSwordVisual(woundId, createdTime = 0) {
+    let slot = this.swordVisualSlots.find((entry) => entry.woundId == null);
+    if (!slot) {
+      slot = this.swordVisualSlots.reduce((oldest, entry) => entry.assignedTime < oldest.assignedTime ? entry : oldest, this.swordVisualSlots[0]);
+      const displaced = this.getWound(slot?.woundId);
+      if (displaced) {
+        displaced.swordVisualSlot = null;
+        displaced.visualOwner = null;
+        displaced.renderedSegmentCount = 0;
+      }
+    }
+    if (!slot) return null;
+    slot.woundId = woundId;
+    slot.assignedTime = createdTime;
+    slot.ribbon.visible = false;
+    resetSwordCutRibbonGeometry(slot.ribbon.geometry, slot.workspace);
+    return slot;
+  }
+
+  bindSurfacePoint(wound, worldPoint, referenceNormal = null, regionId = wound.regionId, bodyId = wound.bodyId) {
     const adapter = this.actor.visualAdapter;
-    const binding = adapter?.bindVisibleSurface?.(worldPoint, { regionId: wound.regionId, bodyId: wound.bodyId, referenceNormal });
+    const binding = adapter?.bindVisibleSurface?.(worldPoint, { regionId, bodyId, referenceNormal });
     if (binding && validateSurfaceBinding(binding)) return binding;
     this.failedProjectionCount += 1;
     if (adapter?.scene && !this.bindingFailureLogged) {
       this.bindingFailureLogged = true;
-      console.warn('[combat] Visible skinned-surface wound binding failed; using bounded mapped-bone fallback.');
+      console.warn('[combat] Visible skinned-surface wound binding failed; using the wound family fallback policy.');
     }
     return null;
   }
@@ -480,6 +521,135 @@ export class CombatWoundSystem {
     return wound;
   }
 
+  appendSwordCutSurfaceSample(wound, { hit, worldPoint, surfaceNormal, direction = null } = {}) {
+    if (!wound || !worldPoint || !hit?.regionId || !hit?.bodyId) return null;
+    const binding = this.bindSurfacePoint(wound, worldPoint, surfaceNormal, hit.regionId, hit.bodyId);
+    const previous = wound.swordSamples.at(-1);
+    const sourcePoint = worldPoint.clone();
+    const breakBefore = Boolean(previous) && (!previous.binding || !binding || previous.sourcePoint.distanceTo(sourcePoint) > 0.16);
+    const sample = {
+      sourcePoint,
+      binding,
+      regionId: hit.regionId,
+      bodyId: hit.bodyId,
+      localPoint: hit.localPoint.clone(),
+      breakBefore,
+      worldDirection: direction?.clone?.() ?? null,
+    };
+    if (!binding) {
+      wound.failedProjectionCount += 1;
+      wound.fallbackReason = 'sword_surface_projection_failed';
+    }
+    if (wound.swordSamples.length >= MAX_SWORD_CUT_SURFACE_SAMPLES) wound.swordSamples[MAX_SWORD_CUT_SURFACE_SAMPLES - 1] = sample;
+    else wound.swordSamples.push(sample);
+    wound.surfaceBinding ??= binding;
+    wound.surfaceBindingAttempted = true;
+    const validCount = wound.swordSamples.reduce((count, entry) => count + (entry.binding ? 1 : 0), 0);
+    wound.surfaceBindingStatus = validCount >= 2 ? 'sword_ribbon_skinned_surface' : validCount === 1 ? 'sword_surface_point_pending' : 'sword_surface_invalid';
+    wound.fallbackAnchorUsage = false;
+    if (binding) wound.fallbackReason = null;
+    return sample;
+  }
+
+  updateSwordCutMetrics(wound) {
+    const travelRatio = THREE.MathUtils.clamp(wound.totalTravel / 0.3, 0, 1.5);
+    const depthRatio = THREE.MathUtils.clamp(wound.maximumDepth / 0.06, 0, 1.5);
+    const speedRatio = THREE.MathUtils.clamp(wound.maximumSwingSpeed / 1.8, 0, 1.5);
+    wound.cutLength = Math.min(WOUND_CONFIG.maximumCutLength, wound.totalTravel);
+    wound.severity = THREE.MathUtils.clamp(wound.maximumContactSeverity * 0.44 + travelRatio * 0.25 + depthRatio * 0.24 + speedRatio * 0.07, 0.04, 2);
+    wound.visualLengthMeters = wound.cutLength;
+    wound.visualWidthMeters = THREE.MathUtils.clamp(0.006 + depthRatio * 0.006 + wound.severity * 0.0035, 0.006, 0.024);
+    wound.woundType = wound.maximumDepth >= 0.028 || wound.severity >= 0.72 ? 'sword_deep_cut' : 'sword_cut';
+    wound.swordLethality = THREE.MathUtils.clamp((wound.accumulatedTrauma ?? 0) * 0.55 + depthRatio * 0.42 + travelRatio * 0.28 + wound.severity * 0.25, 0, 4);
+    wound.visualRevision += 1;
+  }
+
+  createSwordCut({ hit, point, surfaceNormal, direction, travel = 0, depth = 0, severity = 0, edgeAlignment = 0, swingSpeed = 0, edgeDamageId = null, createdTime = 0 } = {}) {
+    if (!hit?.body || !point || !surfaceNormal || !direction) return null;
+    const rotation = hit.body.rotation();
+    const inverse = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).invert();
+    const localNormal = surfaceNormal.clone().applyQuaternion(inverse).normalize();
+    const localDirection = direction.clone().applyQuaternion(inverse).normalize();
+    const localPoint = hit.localPoint.clone();
+    const wound = this.createWound({
+      actor: this.actor,
+      regionId: hit.regionId,
+      bodyId: hit.bodyId,
+      woundType: 'sword_cut',
+      interactionKind: 'sword_cut',
+      weaponFamily: 'sword',
+      edgeDamageId,
+      localEntryPoint: localPoint.clone(),
+      localSurfaceNormal: localNormal,
+      localPenetrationAxis: localNormal.clone().negate(),
+      currentDepth: depth,
+      maximumDepth: depth,
+      cutLength: 0,
+      totalTravel: Math.max(0, travel),
+      localCutStart: localPoint.clone(),
+      localCutEnd: localPoint.clone(),
+      localCutDirection: localDirection,
+      severity: Math.max(0, severity),
+      maximumContactSeverity: Math.max(0, severity),
+      maximumSwingSpeed: Math.max(0, swingSpeed),
+      averageEdgeAlignment: THREE.MathUtils.clamp(edgeAlignment, 0, 1),
+      edgeAlignmentSampleCount: 1,
+      accumulatedTrauma: 0,
+      tissueClass: hit.region?.vital ?? 'none',
+      hardStructureContact: false,
+      embeddedWeaponId: null,
+      createdTime,
+      impactedRegionIds: [hit.regionId],
+      swordSamples: [],
+      lastWorldDirection: direction.clone(),
+    }, { visualFamily: 'sword' });
+    this.appendSwordCutSurfaceSample(wound, { hit, worldPoint: point, surfaceNormal, direction });
+    this.updateSwordCutMetrics(wound);
+    this.resolveBleedingProfile(wound);
+    this.updateWoundVisual(wound);
+    return wound;
+  }
+
+  extendSwordCut(woundId, { hit, point, surfaceNormal, direction, travel = 0, depth = 0, severity = 0, edgeAlignment = 0, swingSpeed = 0 } = {}) {
+    const wound = this.getWound(woundId);
+    if (!wound || wound.visualFamily !== 'sword' || !hit?.body) return null;
+    wound.totalTravel += Math.max(0, travel);
+    wound.currentDepth = Math.max(wound.currentDepth, depth);
+    wound.maximumDepth = Math.max(wound.maximumDepth, depth);
+    wound.maximumContactSeverity = Math.max(wound.maximumContactSeverity, severity);
+    wound.maximumSwingSpeed = Math.max(wound.maximumSwingSpeed, swingSpeed);
+    wound.averageEdgeAlignment = (wound.averageEdgeAlignment * wound.edgeAlignmentSampleCount + THREE.MathUtils.clamp(edgeAlignment, 0, 1)) / (wound.edgeAlignmentSampleCount + 1);
+    wound.edgeAlignmentSampleCount += 1;
+    if (direction) wound.lastWorldDirection.copy(direction);
+    if (!wound.impactedRegionIds.includes(hit.regionId)) wound.impactedRegionIds.push(hit.regionId);
+    wound.localCutEnd.copy(hit.localPoint);
+    this.appendSwordCutSurfaceSample(wound, { hit, worldPoint: point, surfaceNormal, direction });
+    this.updateSwordCutMetrics(wound);
+    this.resolveBleedingProfile(wound);
+    this.updateWoundVisual(wound);
+    return wound;
+  }
+
+  recordSwordCutTrauma(woundId, { traumaSeverity = 0, hit = null } = {}) {
+    const wound = this.getWound(woundId);
+    if (!wound || wound.visualFamily !== 'sword') return null;
+    wound.accumulatedTrauma = Math.max(0, wound.accumulatedTrauma + Math.max(0, traumaSeverity));
+    if (hit?.regionId && !wound.impactedRegionIds.includes(hit.regionId)) wound.impactedRegionIds.push(hit.regionId);
+    this.updateSwordCutMetrics(wound);
+    this.resolveBleedingProfile(wound);
+    return wound;
+  }
+
+  finishSwordCut(woundId, interrupted = false) {
+    const wound = this.getWound(woundId);
+    if (!wound || wound.visualFamily !== 'sword') return null;
+    wound.currentDepth = 0;
+    wound.lastContactInterrupted = Boolean(interrupted);
+    wound.completed = true;
+    this.updateWoundVisual(wound);
+    return wound;
+  }
+
   createBluntMarker({ hit, severity = 0.1, createdTime = 0 } = {}) {
     const wound = this.createWound({ actor: this.actor, regionId: hit.regionId, bodyId: hit.bodyId, woundType: 'blunt_trauma_marker', localEntryPoint: hit.localPoint.clone(), localSurfaceNormal: new THREE.Vector3(0, 0, 1), localPenetrationAxis: new THREE.Vector3(), currentDepth: 0, maximumDepth: 0, cutLength: 0, localCutStart: hit.localPoint.clone(), localCutEnd: hit.localPoint.clone(), localCutDirection: new THREE.Vector3(), severity, tissueClass: 'surface', hardStructureContact: true, embeddedWeaponId: null, createdTime });
     wound.bleedingProfile = { kind: 'none', baseRate: 0 };
@@ -487,14 +657,15 @@ export class CombatWoundSystem {
     return wound;
   }
 
-  createWound(data) {
+  createWound(data, { visualFamily = 'knife' } = {}) {
     if (this.wounds.length >= this.maximumWounds) {
       const replace = this.wounds.find((wound) => !wound.active && !wound.vesselInvolvement) ?? this.wounds.reduce((oldest, wound) => wound.createdTime < oldest.createdTime ? wound : oldest, this.wounds[0]);
       if (replace) this.removeWound(replace.id);
     }
     const id = `wound_${this.nextWoundId++}`;
-    const visualSlot = this.allocateVisual(id);
-    const wound = { id, ...data, vesselInvolvement: null, bleedingProfile: { kind: 'capillary', baseRate: 0.002 }, bleedingRate: 0, bloodEmitted: 0, withdrawalBoostRemaining: 0, pulsePhase: 0, active: true, closed: false, reopenedCount: 0, visualSlot, visualOwner: visualSlot ? 'pooled-skinned-surface-visual' : null, surfaceBinding: null, surfaceBindingStatus: 'pending', surfaceBindingAttempted: false, fallbackAnchorUsage: false, fallbackReason: null, semanticAnchorDistance: null, surfaceDistance: null, slashSamples: [], slashPathPoints: [], failedProjectionCount: 0, decalVariantId: null, decalFamily: null, decalPhysicalCategory: null, decalEligibleCandidateIds: [], decalSelectionState: 'provisional', decalSelectionLocked: false, decalSelectionRevisionCount: 0, deterministicSeed: null, mirroredX: false, selectedAtSeverity: null, materialAvailable: true, visualRevision: 0 };
+    const visualSlot = visualFamily === 'knife' ? this.allocateVisual(id) : null;
+    const swordVisualSlot = visualFamily === 'sword' ? this.allocateSwordVisual(id, data.createdTime) : null;
+    const wound = { id, ...data, visualFamily, vesselInvolvement: null, bleedingProfile: { kind: 'capillary', baseRate: 0.002 }, bleedingRate: 0, bloodEmitted: 0, withdrawalBoostRemaining: 0, pulsePhase: 0, active: true, closed: false, reopenedCount: 0, visualSlot, swordVisualSlot, visualOwner: visualSlot ? 'pooled-skinned-surface-visual' : swordVisualSlot ? 'pooled-sword-cut-ribbon' : null, surfaceBinding: null, surfaceBindingStatus: 'pending', surfaceBindingAttempted: false, fallbackAnchorUsage: false, fallbackReason: null, semanticAnchorDistance: null, surfaceDistance: null, slashSamples: [], slashPathPoints: [], failedProjectionCount: 0, decalVariantId: null, decalFamily: null, decalPhysicalCategory: null, decalEligibleCandidateIds: [], decalSelectionState: 'provisional', decalSelectionLocked: false, decalSelectionRevisionCount: 0, deterministicSeed: null, mirroredX: false, selectedAtSeverity: null, materialAvailable: true, visualRevision: 0 };
     this.wounds.push(wound);
     return wound;
   }
@@ -573,6 +744,16 @@ export class CombatWoundSystem {
       wound.bleedingProfile = { kind: vessel.vesselType, baseRate: vessel.rate };
       return wound.bleedingProfile;
     }
+    if (wound.visualFamily === 'sword') {
+      const vitalRegion = wound.impactedRegionIds?.some((regionId) => ['head', 'face', 'skull', 'neck', 'upper_chest', 'lower_chest'].includes(regionId));
+      const deepCut = wound.woundType === 'sword_deep_cut';
+      if (wound.impactedRegionIds?.includes('neck') && (wound.maximumDepth >= 0.018 || wound.severity >= 0.62)) {
+        wound.bleedingProfile = { kind: 'major_venous', baseRate: 0.035 + wound.severity * 0.018 };
+      } else if (deepCut || vitalRegion && wound.maximumDepth >= 0.02) {
+        wound.bleedingProfile = { kind: 'venous', baseRate: 0.018 + wound.severity * (vitalRegion ? 0.014 : 0.008) };
+      } else wound.bleedingProfile = { kind: 'capillary', baseRate: 0.0025 + wound.severity * 0.0045 };
+      return wound.bleedingProfile;
+    }
     if (wound.woundType === 'blunt_trauma_marker') wound.bleedingProfile = { kind: 'none', baseRate: 0 };
     else if (wound.maximumDepth >= 0.055 || wound.woundType === 'deep_slash') wound.bleedingProfile = { kind: 'venous', baseRate: 0.014 + wound.severity * 0.007 };
     else wound.bleedingProfile = { kind: 'capillary', baseRate: 0.0015 + wound.severity * 0.0025 };
@@ -580,8 +761,18 @@ export class CombatWoundSystem {
   }
 
   resolveVesselIntersection(wound) {
-    const candidates = VESSEL_ZONES.filter((zone) => zone.regionId === wound.regionId && wound.maximumDepth >= zone.minimumDepth);
+    const candidates = VESSEL_ZONES.filter((zone) => (wound.visualFamily === 'sword' ? wound.impactedRegionIds?.includes(zone.regionId) : zone.regionId === wound.regionId) && wound.maximumDepth >= zone.minimumDepth);
     for (const zone of candidates) {
+      if (wound.visualFamily === 'sword') {
+        const samples = wound.swordSamples.filter((sample) => sample.regionId === zone.regionId && sample.localPoint);
+        let distance = Infinity;
+        for (let index = 0; index < samples.length; index += 1) {
+          distance = Math.min(distance, Math.hypot(samples[index].localPoint.x - zone.surfaceCenter[0], samples[index].localPoint.y - zone.surfaceCenter[1]));
+          if (index > 0 && samples[index - 1].bodyId === samples[index].bodyId) distance = Math.min(distance, distancePointToSegment2D(zone.surfaceCenter[0], zone.surfaceCenter[1], samples[index - 1].localPoint.x, samples[index - 1].localPoint.y, samples[index].localPoint.x, samples[index].localPoint.y));
+        }
+        if (distance <= zone.surfaceRadius) return zone;
+        continue;
+      }
       const distance = wound.cutLength > 0.001
         ? distancePointToSegment2D(zone.surfaceCenter[0], zone.surfaceCenter[1], wound.localCutStart.x, wound.localCutStart.y, wound.localCutEnd.x, wound.localCutEnd.y)
         : Math.hypot(wound.localEntryPoint.x - zone.surfaceCenter[0], wound.localEntryPoint.y - zone.surfaceCenter[1]);
@@ -616,6 +807,20 @@ export class CombatWoundSystem {
   }
 
   getWorldPose(wound) {
+    if (wound?.visualFamily === 'sword') {
+      for (let index = wound.swordSamples.length - 1; index >= 0; index -= 1) {
+        const sample = wound.swordSamples[index];
+        if (!validateSurfaceBinding(sample.binding)) continue;
+        const reconstructed = this.actor.visualAdapter?.reconstructVisibleSurface?.(sample.binding) ?? reconstructSkinnedSurface(sample.binding);
+        if (!reconstructed) continue;
+        return {
+          point: reconstructed.point.clone(),
+          normal: reconstructed.normal.clone(),
+          direction: sample.worldDirection?.clone?.() ?? wound.lastWorldDirection?.clone?.() ?? reconstructed.normal.clone(),
+          surfaceBound: true,
+        };
+      }
+    }
     const entry = this.actor.bodies.get(wound?.bodyId);
     if (!entry) return null;
     const translation = entry.body.translation();
@@ -636,6 +841,27 @@ export class CombatWoundSystem {
       this.updateWoundVisual(wound);
     });
     this.updateSurfaceDebug(this.wounds.at(-1));
+  }
+
+  updateSwordCutVisual(wound) {
+    const slot = wound?.swordVisualSlot;
+    if (!slot) return;
+    const diagnostics = updateSwordCutRibbonGeometry({
+      geometry: slot.ribbon.geometry,
+      workspace: slot.workspace,
+      samples: wound.swordSamples,
+      width: wound.visualWidthMeters,
+      reconstructSurface: (binding, target) => validateSurfaceBinding(binding)
+        ? this.actor.visualAdapter?.reconstructVisibleSurface?.(binding, target) ?? reconstructSkinnedSurface(binding, target)
+        : null,
+    });
+    slot.ribbon.visible = diagnostics.renderedSegmentCount > 0;
+    wound.renderedSegmentCount = diagnostics.renderedSegmentCount;
+    wound.invalidFragmentCount = diagnostics.hiddenFragmentCount;
+    wound.continuousRegionTransitionCount = diagnostics.continuousRegionTransitionCount;
+    wound.surfaceBindingStatus = diagnostics.renderedSegmentCount > 0 ? 'sword_ribbon_skinned_surface' : 'sword_ribbon_hidden_invalid';
+    wound.surfaceDistance = diagnostics.renderedSegmentCount > 0 ? 0.00015 : null;
+    wound.swordVisualDiagnostics = diagnostics;
   }
 
   getAttachedSurfacePose(wound, semanticOverride = null) {
@@ -788,6 +1014,10 @@ export class CombatWoundSystem {
   }
 
   updateWoundVisual(wound) {
+    if (wound?.visualFamily === 'sword') {
+      this.updateSwordCutVisual(wound);
+      return;
+    }
     const slot = wound?.visualSlot;
     if (!slot) return;
     const isSlash = wound.cutLength > 0.001 || ['shallow_cut', 'deep_slash'].includes(wound.woundType);
@@ -851,6 +1081,7 @@ export class CombatWoundSystem {
     const index = this.wounds.findIndex((wound) => wound.id === id);
     if (index < 0) return;
     const [wound] = this.wounds.splice(index, 1);
+    this.actor.physiology?.onWoundRemoved?.(wound);
     if (wound.visualSlot) {
       wound.visualSlot.puncture.visible = false;
       wound.visualSlot.slash.visible = false;
@@ -860,11 +1091,20 @@ export class CombatWoundSystem {
       wound.visualSlot.slashWorkspace.fragmentCount = 0;
       wound.visualSlot.woundId = null;
     }
+    if (wound.swordVisualSlot) {
+      wound.swordVisualSlot.ribbon.visible = false;
+      resetSwordCutRibbonGeometry(wound.swordVisualSlot.ribbon.geometry, wound.swordVisualSlot.workspace);
+      wound.swordVisualSlot.woundId = null;
+      wound.swordVisualSlot.assignedTime = 0;
+      wound.swordVisualSlot = null;
+    }
     wound.surfaceBinding = null;
     wound.slashSamples.length = 0;
     wound.slashPathPoints.length = 0;
     wound.slashFallbackUsage = false;
     wound.slashVisualDiagnostics = null;
+    if (wound.swordSamples) wound.swordSamples.length = 0;
+    wound.swordVisualDiagnostics = null;
     wound.fallbackReason = null;
   }
 
@@ -887,6 +1127,9 @@ export class CombatWoundSystem {
       count: this.wounds.length,
       active: this.getActiveWounds().length,
       arterial: this.wounds.filter((entry) => entry.bleedingProfile.kind.includes('arterial')).length,
+      swordCuts: this.wounds.filter((entry) => entry.visualFamily === 'sword').length,
+      visibleSwordCuts: this.swordVisualSlots.filter((entry) => entry.ribbon.visible).length,
+      swordCutVisualLimit: this.swordVisualSlots.length,
       materialCloneCount: this.materialCloneCount,
       failedProjectionCount: this.failedProjectionCount,
       fallbackAnchorUsage: this.fallbackUsageCount,
@@ -934,7 +1177,14 @@ export class CombatWoundSystem {
         fallbackAnchorUsage: wound.fallbackAnchorUsage,
         slashFallbackUsage: wound.slashFallbackUsage ?? false,
         materialAvailable: wound.materialAvailable,
+        visualFamily: wound.visualFamily,
+        impactedRegionIds: wound.impactedRegionIds ?? null,
+        accumulatedTrauma: wound.accumulatedTrauma ?? null,
+        swordLethality: wound.swordLethality ?? null,
+        invalidFragmentCount: wound.invalidFragmentCount ?? 0,
+        continuousRegionTransitionCount: wound.continuousRegionTransitionCount ?? 0,
         ...(wound.slashVisualDiagnostics ?? {}),
+        ...(wound.swordVisualDiagnostics ?? {}),
       } : null,
     };
   }
@@ -944,7 +1194,7 @@ export class CombatWoundSystem {
   beginFade() {
     if (!this.isolateMaterials || this.fadePrepared) return false;
     this.fadePrepared = true;
-    captureAndPrepareFadeMaterials([this.bluntMaterial, ...this.ownedMaterials.values()], this.fadeMaterialBaselines);
+    captureAndPrepareFadeMaterials([this.bluntMaterial, this.swordCutCenterMaterial, this.swordCutLipMaterial, ...this.ownedMaterials.values()], this.fadeMaterialBaselines);
     return true;
   }
 
@@ -973,11 +1223,15 @@ export class CombatWoundSystem {
     this.clear();
     this.visualSlots.forEach((slot) => { slot.puncture.geometry.dispose(); slot.slash.geometry.dispose(); slot.puncture.removeFromParent(); slot.slash.removeFromParent(); });
     this.bluntMaterial.dispose();
+    this.swordVisualSlots.forEach((slot) => { slot.ribbon.geometry.dispose(); slot.ribbon.removeFromParent(); });
+    this.swordCutCenterMaterial.dispose();
+    this.swordCutLipMaterial.dispose();
     this.ownedMaterials.forEach((material) => material.dispose());
     this.ownedMaterials.clear();
     this.fadeMaterialBaselines.clear();
     this.surfaceDebugRoot.traverse((object) => { object.geometry?.dispose?.(); object.material?.dispose?.(); });
     this.surfaceDebugRoot.removeFromParent();
     this.visualSlots = [];
+    this.swordVisualSlots = [];
   }
 }

@@ -11,6 +11,7 @@ export class CombatPhysiology {
   }
 
   reset() {
+    this.registeredWoundIds = new Set();
     this.bloodReserve = PHYSIOLOGY_CONFIG.initialBloodReserve;
     this.circulation = 1;
     this.bloodLossRate = 0;
@@ -56,10 +57,31 @@ export class CombatPhysiology {
 
   onWoundCreated(wound) {
     if (!wound) return;
+    this.registeredWoundIds.add(wound.id);
+    wound.physiologyRegistered = true;
+    this.onWoundUpdated(wound);
+  }
+
+  onWoundUpdated(wound) {
+    if (!wound) return;
+    this.registeredWoundIds.add(wound.id);
+    wound.physiologyRegistered = true;
     if (wound.vesselInvolvement?.vesselType?.includes('arterial')) {
-      this.mortalInjury = wound.regionId === 'neck' || wound.severity >= 1;
-      this.shock = Math.min(1, this.shock + (wound.regionId === 'neck' ? 0.2 : 0.08));
+      this.mortalInjury ||= wound.regionId === 'neck' || wound.severity >= 1;
+      if (wound.physiologyNotifiedVesselId !== wound.vesselInvolvement.id) {
+        this.shock = Math.min(1, this.shock + (wound.regionId === 'neck' ? 0.2 : 0.08));
+        wound.physiologyNotifiedVesselId = wound.vesselInvolvement.id;
+      }
     }
+    if (wound.visualFamily === 'sword' && wound.swordLethality >= 2.2 && wound.impactedRegionIds?.some((regionId) => ['head', 'face', 'skull', 'neck', 'upper_chest', 'lower_chest'].includes(regionId))) {
+      this.mortalInjury = true;
+    }
+  }
+
+  onWoundRemoved(wound) {
+    if (!wound) return;
+    this.registeredWoundIds.delete(wound.id);
+    wound.physiologyRegistered = false;
   }
 
   update(dt) {
@@ -164,6 +186,6 @@ export class CombatPhysiology {
   }
 
   getDiagnostics() {
-    return { bloodReserve: this.bloodReserve, circulation: this.circulation, bloodLossRate: this.bloodLossRate, totalBloodLost: this.totalBloodLost, pain: this.painLoad, shock: this.shock, consciousness: this.consciousness, neurologicalIntegrity: this.neurologicalIntegrity, breathingIntegrity: this.breathingIntegrity, breathingState: this.breathingState, breathInterruption: this.breathInterruption, breathInterruptionRemaining: this.breathInterruptionRemaining, mortalInjury: this.mortalInjury, timeSinceMortalInjury: this.timeSinceMortalInjury };
+    return { bloodReserve: this.bloodReserve, circulation: this.circulation, bloodLossRate: this.bloodLossRate, totalBloodLost: this.totalBloodLost, pain: this.painLoad, shock: this.shock, consciousness: this.consciousness, neurologicalIntegrity: this.neurologicalIntegrity, breathingIntegrity: this.breathingIntegrity, breathingState: this.breathingState, breathInterruption: this.breathInterruption, breathInterruptionRemaining: this.breathInterruptionRemaining, mortalInjury: this.mortalInjury, timeSinceMortalInjury: this.timeSinceMortalInjury, registeredWounds: this.registeredWoundIds.size };
   }
 }

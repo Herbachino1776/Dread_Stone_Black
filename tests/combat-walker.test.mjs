@@ -111,6 +111,27 @@ test('walker lethality counts only two unique deliberate deep vital punctures', 
   assert.equal(policy.evaluate([{ ...base, id: 'third', maximumDepth: 0.2 }]).length, 0);
 });
 
+test('walker lethality accepts physiological sword cuts with vital weighting and bounded limb accumulation', () => {
+  const vitalPolicy = new WalkerVitalStabPolicy();
+  const sword = { interactionKind: 'sword_cut', physiologyRegistered: true, regionId: 'upper_chest', impactedRegionIds: ['upper_chest'], maximumDepth: 0.026 };
+  assert.deepEqual(vitalPolicy.evaluate([{ ...sword, id: 'glance', swordLethality: 0.4 }]), []);
+  assert.equal(vitalPolicy.evaluate([{ ...sword, id: 'first', swordLethality: 1.1 }]).length, 1);
+  assert.equal(vitalPolicy.criticalStabCount, 1);
+  assert.equal(vitalPolicy.evaluate([{ ...sword, id: 'second', impactedRegionIds: ['upper_chest', 'neck'], swordLethality: 1.2 }]).length, 1);
+  assert.equal(vitalPolicy.criticalStabCount, 2);
+
+  const decisivePolicy = new WalkerVitalStabPolicy();
+  assert.equal(decisivePolicy.evaluate([{ ...sword, id: 'decisive', regionId: 'neck', impactedRegionIds: ['neck'], swordLethality: 2.7 }]).length, 1);
+  assert.equal(decisivePolicy.criticalStabCount, 2, 'one sufficiently deep vital sword cut can select authored death');
+
+  const limbPolicy = new WalkerVitalStabPolicy();
+  const limb = { ...sword, regionId: 'left_forearm', impactedRegionIds: ['left_forearm'], swordLethality: 1.1 };
+  for (let index = 0; index < 5; index += 1) limbPolicy.evaluate([{ ...limb, id: `limb-${index}` }]);
+  assert.ok(limbPolicy.criticalStabCount < 2, 'limb cuts accumulate materially slower than vital cuts');
+  limbPolicy.evaluate([{ ...limb, id: 'limb-5' }]);
+  assert.ok(limbPolicy.criticalStabCount >= 2, 'repeated sword cuts can still incapacitate a normal Testman');
+});
+
 test('walker material cloning shares textures while isolating actor opacity', () => {
   const texture = new THREE.Texture();
   const shared = new THREE.MeshStandardMaterial({ map: texture, opacity: 1 });

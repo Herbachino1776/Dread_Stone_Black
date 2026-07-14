@@ -8,6 +8,7 @@ import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG } from './CombatMortal
 import { HumanoidGlbVisualAdapter } from './HumanoidGlbVisualAdapter.js';
 import { CURRENT_HUMANOID_PROFILE } from './HumanoidModelProfiles.js';
 import { getKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
+import { deriveSwordCutTrauma } from './SwordCutDamage.js';
 
 const BODY_COLLISION_GROUPS = 0x00020001;
 const tmpPosition = new THREE.Vector3();
@@ -18,6 +19,7 @@ const tmpEuler = new THREE.Euler();
 const tmpDirection = new THREE.Vector3();
 const HUMANOID_PHYSICAL_SCALE = 0.82;
 let humanoidActorInstanceSerial = 0;
+const HUMANOID_REGION_BY_ID = new Map(HUMANOID_ANATOMY_REGIONS.map((region) => [region.id, region]));
 
 export const RAGDOLL_HANDOFF_LIMITS = Object.freeze({
   maximumInheritedLinearSpeed: 0.9,
@@ -132,6 +134,14 @@ export class HumanoidCombatActor {
   }
 
   setEventSink(eventSink) { this.eventSink = eventSink; this.physiology?.setEventSink?.(eventSink); }
+
+  areAnatomyRegionsAdjacent(firstRegionId, secondRegionId) {
+    if (!firstRegionId || !secondRegionId) return false;
+    if (firstRegionId === secondRegionId) return true;
+    const first = HUMANOID_REGION_BY_ID.get(firstRegionId);
+    const second = HUMANOID_REGION_BY_ID.get(secondRegionId);
+    return first?.parentId === secondRegionId || second?.parentId === firstRegionId;
+  }
   setEnvironmentContactHints(hints = {}) { Object.assign(this.environmentContactHints, hints); }
   setLivingRootTransform(position, yaw = this.visualRootYaw, velocity = null) {
     if (this.ragdollActive || this.disposed || !position) return false;
@@ -427,13 +437,47 @@ export class HumanoidCombatActor {
     return wound;
   }
 
-  applyEdgeDamage({ hit, point, direction, depth = 0, travel = 0, severity = 0, edgeAlignment = 0, classification = 'cut', part = 'edge' } = {}) {
+  beginSwordCutWound({ hit, point, surfaceNormal, direction, sample, edgeDamage } = {}) {
+    const wound = this.woundSystem.createSwordCut({
+      hit,
+      point,
+      surfaceNormal,
+      direction,
+      travel: sample?.travel,
+      depth: sample?.depth,
+      severity: sample?.severity,
+      edgeAlignment: sample?.edgeAlignment,
+      swingSpeed: sample?.swingSpeed,
+      edgeDamageId: edgeDamage?.schema ? `${edgeDamage.schema}:${edgeDamage.startedAt}` : null,
+      createdTime: this.elapsed,
+    });
+    if (!wound) return null;
+    const state = this.regionState.get(hit.regionId);
+    if (state) state.wounds = (state.wounds ?? 0) + 1;
+    this.physiology.onWoundCreated(wound);
+    return wound;
+  }
+
+  extendSwordCutWound(woundId, { hit, point, surfaceNormal, direction, sample } = {}) {
+    return this.woundSystem.extendSwordCut(woundId, {
+      hit,
+      point,
+      surfaceNormal,
+      direction,
+      travel: sample?.travel,
+      depth: sample?.depth,
+      severity: sample?.severity,
+      edgeAlignment: sample?.edgeAlignment,
+      swingSpeed: sample?.swingSpeed,
+    });
+  }
+
+  applyEdgeDamage({ hit, point, direction, depth = 0, travel = 0, severity = 0, edgeAlignment = 0, swingSpeed = 0, classification = 'cut', part = 'edge', weaponFamily = 'sword' } = {}) {
     if (!hit?.region || !point || !direction || this.lifeState === 'dead') return 0;
     const state = this.regionState.get(hit.regionId) ?? { trauma: 0, pain: 0, structural: 0, motorWeakness: 0, maximumDepth: 0, wounds: 0 };
-    const contactScale = classification === 'thrust' ? 1.12 : 0.82 + Math.max(0, Math.min(1, edgeAlignment)) * 0.28;
-    const traumaSeverity = (Math.max(0, severity) * 0.075 + Math.max(0, travel) * 0.28 + Math.max(0, depth) * 1.7)
-      * contactScale
-      * HUMANOID_DURABILITY_CONFIG.traumaScale;
+    const swordTrauma = deriveSwordCutTrauma({ travel, depth, edgeAlignment, swingSpeed, severity, region: hit.region });
+    const contactScale = classification === 'thrust' ? 1.12 : 1;
+    const traumaSeverity = swordTrauma.trauma * contactScale * (weaponFamily === 'sword' ? 1 : HUMANOID_DURABILITY_CONFIG.traumaScale);
     state.trauma += traumaSeverity;
     state.pain += traumaSeverity * hit.region.painResponse;
     state.structural += traumaSeverity * hit.region.structuralImportance;
@@ -443,7 +487,7 @@ export class HumanoidCombatActor {
     this.balanceImpairment += traumaSeverity * hit.region.balanceImpact;
     this.consciousnessImpairment = Math.max(this.consciousnessImpairment, traumaSeverity * hit.region.consciousnessImpact);
     hit.body?.applyImpulseAtPoint?.(direction.clone().multiplyScalar(Math.min(0.28, 0.035 + severity * 0.09)), point, true);
-    this.lastEdgeDamage = { regionId: hit.regionId, bodyId: hit.bodyId, classification, part, depth, travel, severity: traumaSeverity, point: point.clone(), direction: direction.clone() };
+    this.lastEdgeDamage = { regionId: hit.regionId, bodyId: hit.bodyId, classification, part, depth, travel, swingSpeed, severity: traumaSeverity, vitalityMultiplier: swordTrauma.vitalityMultiplier, point: point.clone(), direction: direction.clone() };
     this.physiology.onTrauma({ hit, severity: traumaSeverity, depth, deltaDepth: Math.max(depth * 0.18, travel * 0.04), hardContact: false });
     this.evaluateLifeState();
     return traumaSeverity;

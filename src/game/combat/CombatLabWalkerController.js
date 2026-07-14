@@ -45,6 +45,7 @@ export const COMBAT_LAB_WALKER_CONFIG = Object.freeze({
 });
 
 const VITAL_REGIONS = new Set(['upper_chest', 'lower_chest', 'abdomen', 'neck']);
+const SWORD_CRITICAL_REGIONS = new Set(['head', 'face', 'skull', 'neck', 'upper_chest', 'lower_chest']);
 const LIVING_MOVEMENT_STATES = new Set([
   WALKER_STATES.spawning,
   WALKER_STATES.blendingToWalk,
@@ -80,28 +81,49 @@ export class WalkerVitalStabPolicy {
     this.torsoDepth = torsoDepth;
     this.neckDepth = neckDepth;
     this.countedWoundIds = new Set();
+    this.countedWoundWeights = new Map();
     this.lastQualifyingRegion = null;
     this.lastQualifyingDepth = 0;
     this.criticalStabCount = 0;
     this.locked = false;
   }
 
+  resolveQualifyingWeight(wound) {
+    if (!wound || this.countedWoundIds.has(wound.id)) return 0;
+    if (wound.interactionKind === 'puncture' && wound.deliberateStab === true && wound.surfaceRuptured === true) {
+      if (!VITAL_REGIONS.has(wound.regionId)) return 0;
+      const threshold = wound.regionId === 'neck' ? this.neckDepth : this.torsoDepth;
+      return Number.isFinite(wound.maximumDepth) && wound.maximumDepth >= threshold ? 1 : 0;
+    }
+    if (wound.interactionKind !== 'sword_cut' || wound.physiologyRegistered !== true) return 0;
+    const score = Number(wound.swordLethality) || 0;
+    const regions = wound.impactedRegionIds?.length ? wound.impactedRegionIds : [wound.regionId];
+    if (regions.some((regionId) => SWORD_CRITICAL_REGIONS.has(regionId))) {
+      if (score < 0.72) return 0;
+      return score >= 2.5 ? 2 : 1;
+    }
+    if (regions.some((regionId) => regionId === 'abdomen' || regionId === 'pelvis')) {
+      if (score < 0.9) return 0;
+      return score >= 2.8 ? 2 : 0.65;
+    }
+    if (score < 0.72) return 0;
+    return score >= 2.5 ? 0.75 : 0.35;
+  }
+
   qualifies(wound) {
-    if (!wound || this.countedWoundIds.has(wound.id)) return false;
-    if (wound.interactionKind !== 'puncture' || wound.deliberateStab !== true || wound.surfaceRuptured !== true) return false;
-    if (!VITAL_REGIONS.has(wound.regionId)) return false;
-    const threshold = wound.regionId === 'neck' ? this.neckDepth : this.torsoDepth;
-    return Number.isFinite(wound.maximumDepth) && wound.maximumDepth >= threshold;
+    return this.resolveQualifyingWeight(wound) > 0;
   }
 
   evaluate(wounds = []) {
     if (this.locked) return [];
     const newlyQualified = [];
     for (const wound of wounds) {
-      if (!this.qualifies(wound)) continue;
+      const weight = this.resolveQualifyingWeight(wound);
+      if (weight <= 0) continue;
       this.countedWoundIds.add(wound.id);
-      this.criticalStabCount += 1;
-      this.lastQualifyingRegion = wound.regionId;
+      this.countedWoundWeights.set(wound.id, weight);
+      this.criticalStabCount += weight;
+      this.lastQualifyingRegion = wound.impactedRegionIds?.find((regionId) => SWORD_CRITICAL_REGIONS.has(regionId)) ?? wound.regionId;
       this.lastQualifyingDepth = wound.maximumDepth;
       newlyQualified.push(wound);
       if (this.criticalStabCount >= 2) {
@@ -123,6 +145,7 @@ export class WalkerVitalStabPolicy {
     return {
       criticalStabCount: this.criticalStabCount,
       qualifyingWoundIds: [...this.countedWoundIds],
+      qualifyingWoundWeights: Object.fromEntries(this.countedWoundWeights),
       lastQualifyingRegion: this.lastQualifyingRegion,
       lastQualifyingDepth: this.lastQualifyingDepth,
       locked: this.locked,
@@ -568,7 +591,8 @@ export class CombatLabWalkerController {
     if (this.actor && this.actor.disposed) throw new Error('Disposed walker remained active.');
     if (![this.position.x, this.position.y, this.position.z, this.currentSpeed, this.currentYaw, this.desiredYaw].every(Number.isFinite)) throw new Error('Walker movement became non-finite.');
     if (this.actor?.ragdollActive && [WALKER_STATES.losingConsciousness, WALKER_STATES.grounded].includes(this.state)) throw new Error('Walker skeletal death entered ragdoll.');
-    if (this.lethality.countedWoundIds.size !== this.lethality.criticalStabCount) throw new Error('Walker counted a puncture more than once.');
+    const qualifyingWeight = [...this.lethality.countedWoundWeights.values()].reduce((sum, value) => sum + value, 0);
+    if (Math.abs(qualifyingWeight - this.lethality.criticalStabCount) > 1e-8) throw new Error('Walker wound lethality accounting drifted.');
   }
 
   getDiagnostics() {

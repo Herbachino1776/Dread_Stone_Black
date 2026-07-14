@@ -92,9 +92,7 @@ export class CombatDirector {
     });
     this.subscribe(COMBAT_DIRECTOR_EVENTS.tissue, (event) => this.applyTissueEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.wound, (event) => this.applyWoundEvent(event));
-    this.subscribe(COMBAT_DIRECTOR_EVENTS.edgeDamage, (event) => {
-      if (event.payload.action === 'finish') finishEdgeDamageInteraction(event.payload.edgeDamage, { interrupted: event.payload.interrupted, completedAt: event.time });
-    });
+    this.subscribe(COMBAT_DIRECTOR_EVENTS.edgeDamage, (event) => this.applyEdgeDamageEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.reaction, (event) => this.applyReactionEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.blood, (event) => this.applyBloodEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.audio, (event) => this.feedbackSystem?.emitAudio?.(event.payload.cue, event.payload) ?? this.feedbackSystem?.emit?.(event.payload.cue, { ...event.payload, haptics: false }));
@@ -265,12 +263,12 @@ export class CombatDirector {
     return true;
   }
 
-  beginEdgeDamage({ weapon, intent, hit, point, localPoint = null, surfaceNormal, direction, travel = 0, depth = 0, severity = 0, edgeAlignment = 0, classification = 'cut', part = 'edge', weaponAdapter = null } = {}) {
+  beginEdgeDamage({ weapon, intent, hit, point, localPoint = null, surfaceNormal, direction, travel = 0, depth = 0, severity = 0, edgeAlignment = 0, swingSpeed = 0, classification = 'cut', part = 'edge', weaponAdapter = null } = {}) {
     const interaction = this.createInteraction({ kind: 'edge_damage', weapon, intent, target: hit, weaponAdapter });
     if (!interaction) return null;
     const t = resolveMeleeTimeline(intent.intent === MELEE_INTENTS.stab ? 'puncture' : 'slash', weapon);
     const edgeDamage = createEdgeDamageInteraction({ weaponId: interaction.weapon.id, weaponFamily: interaction.weapon.family, hit, classification, part, startedAt: this.time });
-    const sample = appendEdgeDamageSample(edgeDamage, { point, localPoint: localPoint ?? hit?.localPoint, normal: surfaceNormal, direction, travel, depth, severity, edgeAlignment, time: this.time });
+    const sample = appendEdgeDamageSample(edgeDamage, { hit, point, localPoint: localPoint ?? hit?.localPoint, normal: surfaceNormal, direction, travel, depth, severity, edgeAlignment, swingSpeed, time: this.time });
     interaction.result.edgeDamage = edgeDamage;
     interaction.readyAt = this.time + t.rupture;
     interaction.recoveryOffset = t.recovery ?? 0.16;
@@ -278,9 +276,9 @@ export class CombatDirector {
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.resistance, t.contact, { kind: classification === 'thrust' ? 'tip_resistance' : 'edge_drag', intensity: Math.min(1, severity * 0.45), depth });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.compression, { stage: PENETRATION_STAGES.surfaceCompression });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.rupture, { stage: PENETRATION_STAGES.surfaceRupture });
-    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.edgeDamage, t.rupture, { action: 'begin', edgeDamage, sample });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.edgeDamage, t.rupture, { action: 'begin', edgeDamage, sample, hit, point: cloneVector(point), surfaceNormal: cloneVector(surfaceNormal), direction: cloneVector(direction) });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.tissue, { stage: PENETRATION_STAGES.softTissue });
-    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.tissue, t.tissue, { action: 'edge_damage', hit, point: cloneVector(point), direction: cloneVector(direction), depth, travel, severity, edgeAlignment, classification, part });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.tissue, t.tissue, { action: 'edge_damage', hit, point: cloneVector(point), direction: cloneVector(direction), depth, travel, severity, edgeAlignment, swingSpeed, classification, part, weaponFamily: interaction.weapon.family });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.reaction, t.reaction, { hit, point: cloneVector(point), direction: cloneVector(direction), depth, force: severity, severity: Math.max(0.16, severity * 0.32), slashSeverity: classification === 'cut' ? severity : 0, source: `directed_sword_${classification}`, reactionKind: classification === 'thrust' ? AUTHORED_REACTION_KINDS.punctureEntry : AUTHORED_REACTION_KINDS.slash });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.audio, t.audio, { cue: classification === 'thrust' ? 'puncture' : 'deep_slash', position: cloneVector(point), severity });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.camera, t.camera, { durationMs: 105, intensity: Math.min(0.011, 0.004 + severity * 0.005), direction: cloneVector(direction), polarity: -1, damping: 18 });
@@ -292,10 +290,10 @@ export class CombatDirector {
     const interaction = this.getActiveInteraction(interactionId);
     const edgeDamage = interaction?.result?.edgeDamage;
     if (!interaction || !edgeDamage || interaction.flags.has('edge_damage_finishing')) return false;
-    const sample = appendEdgeDamageSample(edgeDamage, { point: payload.point, localPoint: payload.localPoint ?? payload.hit?.localPoint, normal: payload.surfaceNormal, direction: payload.direction, travel: payload.travel, depth: payload.depth, severity: payload.severity, edgeAlignment: payload.edgeAlignment, time: this.time });
+    const sample = appendEdgeDamageSample(edgeDamage, { hit: payload.hit, point: payload.point, localPoint: payload.localPoint ?? payload.hit?.localPoint, normal: payload.surfaceNormal, direction: payload.direction, travel: payload.travel, depth: payload.depth, severity: payload.severity, edgeAlignment: payload.edgeAlignment, swingSpeed: payload.swingSpeed, time: this.time });
     const delay = Math.max(0.002, (interaction.readyAt ?? this.time) - this.time);
-    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.edgeDamage, delay, { action: 'extend', edgeDamage, sample });
-    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.tissue, delay, { action: 'edge_damage', hit: payload.hit, point: cloneVector(payload.point), direction: cloneVector(payload.direction), depth: payload.depth, travel: payload.travel, severity: payload.severity, edgeAlignment: payload.edgeAlignment, classification: edgeDamage.classification, part: edgeDamage.part });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.edgeDamage, delay, { action: 'extend', edgeDamage, sample, hit: payload.hit, point: cloneVector(payload.point), surfaceNormal: cloneVector(payload.surfaceNormal), direction: cloneVector(payload.direction) });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.tissue, delay, { action: 'edge_damage', hit: payload.hit, point: cloneVector(payload.point), direction: cloneVector(payload.direction), depth: payload.depth, travel: payload.travel, severity: payload.severity, edgeAlignment: payload.edgeAlignment, swingSpeed: payload.swingSpeed, classification: edgeDamage.classification, part: edgeDamage.part, weaponFamily: interaction.weapon.family });
     return true;
   }
 
@@ -474,6 +472,39 @@ export class CombatDirector {
     this.subscribers.get('*')?.forEach((handler) => handler(event));
   }
 
+  applyEdgeDamageEvent({ interaction, payload, time }) {
+    const edgeDamage = payload.edgeDamage;
+    const isSwordCut = interaction.weapon.family === 'sword' && edgeDamage?.classification === 'cut';
+    if (isSwordCut && payload.action === 'begin') {
+      const wound = this.actor?.beginSwordCutWound?.({
+        hit: payload.hit,
+        point: payload.point,
+        surfaceNormal: payload.surfaceNormal,
+        direction: payload.direction,
+        sample: payload.sample,
+        edgeDamage,
+      });
+      if (wound) {
+        wound.directedBloodReady = true;
+        interaction.result.wound = wound;
+        interaction.result.woundId = wound.id;
+        this.bloodEffects?.emitSlash?.(wound, payload.direction);
+      }
+    } else if (isSwordCut && payload.action === 'extend' && interaction.result.woundId) {
+      interaction.result.wound = this.actor?.extendSwordCutWound?.(interaction.result.woundId, {
+        hit: payload.hit,
+        point: payload.point,
+        surfaceNormal: payload.surfaceNormal,
+        direction: payload.direction,
+        sample: payload.sample,
+        edgeDamage,
+      }) ?? interaction.result.wound;
+    } else if (isSwordCut && payload.action === 'finish' && interaction.result.woundId) {
+      interaction.result.wound = this.actor?.woundSystem?.finishSwordCut?.(interaction.result.woundId, payload.interrupted) ?? interaction.result.wound;
+    }
+    if (payload.action === 'finish') finishEdgeDamageInteraction(edgeDamage, { interrupted: payload.interrupted, completedAt: time });
+  }
+
   applyWoundEvent({ interaction, payload }) {
     if (!this.actor) return;
     if (payload.action === 'create_puncture') {
@@ -508,6 +539,10 @@ export class CombatDirector {
     if (payload.action === 'edge_damage') {
       const traumaSeverity = this.actor.applyEdgeDamage?.(payload);
       interaction.result.traumaSeverity = (interaction.result.traumaSeverity ?? 0) + (traumaSeverity ?? 0);
+      if (interaction.result.woundId) {
+        const wound = this.actor.woundSystem?.recordSwordCutTrauma?.(interaction.result.woundId, { traumaSeverity, hit: payload.hit });
+        this.actor.physiology?.onWoundUpdated?.(wound);
+      }
       return;
     }
     if (payload.action !== 'penetrate') return;

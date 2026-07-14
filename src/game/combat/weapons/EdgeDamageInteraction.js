@@ -19,6 +19,8 @@ export function createEdgeDamageInteraction({ weaponId, weaponFamily = 'sword', 
     totalTravel: 0,
     maximumDepth: 0,
     accumulatedSeverity: 0,
+    maximumSwingSpeed: 0,
+    impactedRegions: hit?.regionId ? [hit.regionId] : [],
     startedAt,
     completedAt: null,
     completed: false,
@@ -28,6 +30,7 @@ export function createEdgeDamageInteraction({ weaponId, weaponFamily = 'sword', 
 }
 
 export function appendEdgeDamageSample(edgeDamage, {
+  hit = null,
   point,
   localPoint = null,
   normal,
@@ -36,6 +39,7 @@ export function appendEdgeDamageSample(edgeDamage, {
   depth = 0,
   severity = 0,
   edgeAlignment = 0,
+  swingSpeed = 0,
   time = 0,
 } = {}) {
   if (!edgeDamage || edgeDamage.completed) return null;
@@ -48,6 +52,9 @@ export function appendEdgeDamageSample(edgeDamage, {
     depth: Math.max(0, Number(depth) || 0),
     severity: Math.max(0, Number(severity) || 0),
     edgeAlignment: Math.max(0, Math.min(1, Number(edgeAlignment) || 0)),
+    swingSpeed: Math.max(0, Number(swingSpeed) || 0),
+    bodyId: hit?.bodyId ?? edgeDamage.target.bodyId,
+    regionId: hit?.regionId ?? edgeDamage.target.regionId,
     time: Math.max(0, Number(time) || 0),
   };
   if (edgeDamage.samples.length >= EDGE_DAMAGE_MAX_SAMPLES) edgeDamage.samples.shift();
@@ -55,6 +62,8 @@ export function appendEdgeDamageSample(edgeDamage, {
   edgeDamage.totalTravel += sample.travel;
   edgeDamage.maximumDepth = Math.max(edgeDamage.maximumDepth, sample.depth);
   edgeDamage.accumulatedSeverity += sample.severity;
+  edgeDamage.maximumSwingSpeed = Math.max(edgeDamage.maximumSwingSpeed, sample.swingSpeed);
+  if (sample.regionId && !edgeDamage.impactedRegions.includes(sample.regionId)) edgeDamage.impactedRegions.push(sample.regionId);
   edgeDamage.revision += 1;
   return sample;
 }

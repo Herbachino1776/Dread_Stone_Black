@@ -451,7 +451,7 @@ export class SwordWorldWeaponController {
         : THREE.MathUtils.clamp(0.002 + pressure * 0.018 + this.lastFrameVelocity * edgeAlignment * 0.006, 0.002, 0.026);
       const travel = Math.min(0.12, Math.max(0.003, contactTravel.length()));
       const severity = THREE.MathUtils.clamp(this.lastFrameVelocity * (0.35 + pressure * 0.3) * (0.7 + edgeAlignment * 0.3), 0.12, 1);
-      this.trackEdgeDamage({ routed, point, normal, direction, travel, depth, severity, edgeAlignment, classification: classification.classification, part });
+      this.trackEdgeDamage({ routed, point, normal, direction, travel, depth, severity, edgeAlignment, swingSpeed: this.lastFrameVelocity, classification: classification.classification, part });
     } else {
       this.finishActiveEdgeDamage(false);
       if (this.elapsed >= this.contactCooldownUntil) {
@@ -464,14 +464,15 @@ export class SwordWorldWeaponController {
     return true;
   }
 
-  trackEdgeDamage({ routed, point, normal, direction, travel, depth, severity, edgeAlignment, classification, part }) {
+  trackEdgeDamage({ routed, point, normal, direction, travel, depth, severity, edgeAlignment, swingSpeed, classification, part }) {
     const active = this.activeEdgeDamage;
-    const samePath = active && active.actor === routed.actor && active.bodyId === routed.hit.bodyId && active.regionId === routed.hit.regionId && active.classification === classification && active.lastPoint.distanceTo(point) <= 0.24;
+    const adjacentRegion = active?.actor?.areAnatomyRegionsAdjacent?.(active.regionId, routed.hit.regionId) === true;
+    const samePath = active && active.actor === routed.actor && (active.regionId === routed.hit.regionId || adjacentRegion) && active.classification === classification && active.lastPoint.distanceTo(point) <= 0.24;
     if (!samePath) {
       this.finishActiveEdgeDamage(false);
-      const interaction = routed.director.beginEdgeDamage({ weapon: this.weaponDefinition, intent: this.intentState, hit: routed.hit, point, localPoint: routed.hit.localPoint, surfaceNormal: normal, direction, travel, depth, severity, edgeAlignment, classification, part, weaponAdapter: this });
+      const interaction = routed.director.beginEdgeDamage({ weapon: this.weaponDefinition, intent: this.intentState, hit: routed.hit, point, localPoint: routed.hit.localPoint, surfaceNormal: normal, direction, travel, depth, severity, edgeAlignment, swingSpeed, classification, part, weaponAdapter: this });
       if (!interaction) return;
-      this.activeEdgeDamage = { actor: routed.actor, director: routed.director, interactionId: interaction.id, bodyId: routed.hit.bodyId, regionId: routed.hit.regionId, classification, part, hit: routed.hit, lastPoint: point.clone(), lastNormal: normal.clone(), lastDirection: direction.clone(), pendingTravel: 0, pendingSeverity: 0, pendingDepth: 0, pendingEdgeAlignment: 0, pendingSamples: 0 };
+      this.activeEdgeDamage = { actor: routed.actor, director: routed.director, interactionId: interaction.id, bodyId: routed.hit.bodyId, regionId: routed.hit.regionId, classification, part, hit: routed.hit, lastPoint: point.clone(), lastNormal: normal.clone(), lastDirection: direction.clone(), pendingTravel: 0, pendingSeverity: 0, pendingDepth: 0, pendingEdgeAlignment: 0, pendingSwingSpeed: 0, pendingSamples: 0 };
       this.edgeDamageCount += 1;
       return;
     }
@@ -479,8 +480,11 @@ export class SwordWorldWeaponController {
     active.pendingSeverity += severity;
     active.pendingDepth = Math.max(active.pendingDepth, depth);
     active.pendingEdgeAlignment += edgeAlignment;
+    active.pendingSwingSpeed = Math.max(active.pendingSwingSpeed, swingSpeed);
     active.pendingSamples += 1;
     active.hit = routed.hit;
+    active.bodyId = routed.hit.bodyId;
+    active.regionId = routed.hit.regionId;
     active.lastPoint.copy(point);
     active.lastNormal.copy(normal);
     active.lastDirection.copy(direction);
@@ -491,11 +495,12 @@ export class SwordWorldWeaponController {
     const active = this.activeEdgeDamage;
     if (!active?.pendingSamples) return false;
     const count = active.pendingSamples;
-    active.director.extendEdgeDamage(active.interactionId, { hit: active.hit, point: active.lastPoint, localPoint: active.hit.localPoint, surfaceNormal: active.lastNormal, direction: active.lastDirection, travel: active.pendingTravel, depth: active.pendingDepth, severity: active.pendingSeverity / count, edgeAlignment: active.pendingEdgeAlignment / count });
+    active.director.extendEdgeDamage(active.interactionId, { hit: active.hit, point: active.lastPoint, localPoint: active.hit.localPoint, surfaceNormal: active.lastNormal, direction: active.lastDirection, travel: active.pendingTravel, depth: active.pendingDepth, severity: active.pendingSeverity / count, edgeAlignment: active.pendingEdgeAlignment / count, swingSpeed: active.pendingSwingSpeed });
     active.pendingTravel = 0;
     active.pendingSeverity = 0;
     active.pendingDepth = 0;
     active.pendingEdgeAlignment = 0;
+    active.pendingSwingSpeed = 0;
     active.pendingSamples = 0;
     return true;
   }
