@@ -8,12 +8,42 @@ import { isDamageIntent, MeleeIntentWeapon } from './MeleeIntentWeapon.js';
 import { resolveWeaponMicroResponse, sampleTissueResistanceCurve } from './CombatPresentation.js';
 
 const forwardLocal = new THREE.Vector3(0, 0, -1);
-const edgeLocalA = new THREE.Vector3(-KNIFE_COMBAT_CONFIG.bladeWidth * 0.5, 0, -0.05);
-const edgeLocalB = new THREE.Vector3(-KNIFE_COMBAT_CONFIG.bladeWidth * 0.5, 0, -KNIFE_COMBAT_CONFIG.bladeLength * 0.9);
+const knifeBladeHalfWidth = KNIFE_COMBAT_CONFIG.bladeWidth * 0.5;
+const knifeBladeShoulder = KNIFE_COMBAT_CONFIG.bladeLength * 0.78;
+const knifeEdgeHeelLocal = new THREE.Vector3(-knifeBladeHalfWidth, 0, -0.006);
+const knifeEdgeShoulderLocal = new THREE.Vector3(-knifeBladeHalfWidth * 0.92, 0, -knifeBladeShoulder);
+const knifeEdgeTipLocal = new THREE.Vector3(0, 0, -KNIFE_COMBAT_CONFIG.bladeLength);
+const knifeEdgeHeelLength = knifeEdgeHeelLocal.distanceTo(knifeEdgeShoulderLocal);
+const knifeEdgeTipLength = knifeEdgeShoulderLocal.distanceTo(knifeEdgeTipLocal);
+const knifeEdgeLength = knifeEdgeHeelLength + knifeEdgeTipLength;
 export const COMBAT_KNIFE_VIEWMODEL_LAYER = 1;
 export const COMBAT_KNIFE_WORLD_LAYER = 0;
+export const KNIFE_EDGE_COLLISION_RADIUS = KNIFE_COMBAT_CONFIG.bladeThickness * 0.5;
+export const KNIFE_EDGE_BASE_SAMPLE_COUNT = 3;
+export const KNIFE_EDGE_MAX_SAMPLE_COUNT = 9;
 const COMBAT_KNIFE_RENDER_ORDER = 10030;
 const SLASH_EXTENSION_DIRECTION_DOT = Math.cos(THREE.MathUtils.degToRad(SLASH_CONFIG.extensionDirectionDegrees));
+const EDGE_CONTACT_TOI_EPSILON = 1e-5;
+
+export function sampleKnifeCuttingEdgeLocal(edgeFraction, target = new THREE.Vector3()) {
+  const distance = THREE.MathUtils.clamp(edgeFraction, 0, 1) * knifeEdgeLength;
+  if (distance <= knifeEdgeHeelLength) return target.lerpVectors(knifeEdgeHeelLocal, knifeEdgeShoulderLocal, distance / knifeEdgeHeelLength);
+  return target.lerpVectors(knifeEdgeShoulderLocal, knifeEdgeTipLocal, (distance - knifeEdgeHeelLength) / knifeEdgeTipLength);
+}
+
+export function resolveKnifeEdgeSampleCount(previousStart, previousEnd, currentStart, currentEnd, radius = KNIFE_EDGE_COLLISION_RADIUS) {
+  const previousX = previousEnd.x - previousStart.x;
+  const previousY = previousEnd.y - previousStart.y;
+  const previousZ = previousEnd.z - previousStart.z;
+  const currentX = currentEnd.x - currentStart.x;
+  const currentY = currentEnd.y - currentStart.y;
+  const currentZ = currentEnd.z - currentStart.z;
+  const rotationTravel = Math.hypot(currentX - previousX, currentY - previousY, currentZ - previousZ);
+  const maximumGap = Math.max(1e-5, radius * 2);
+  let intervals = KNIFE_EDGE_BASE_SAMPLE_COUNT - 1;
+  while (intervals < KNIFE_EDGE_MAX_SAMPLE_COUNT - 1 && rotationTravel / intervals > maximumGap) intervals *= 2;
+  return Math.min(KNIFE_EDGE_MAX_SAMPLE_COUNT, intervals + 1);
+}
 
 export function resolveSlashLeadingPart(localMotion) {
   const lateralLead = Math.abs(localMotion.x);
@@ -113,11 +143,11 @@ export class WorldKnifeCombatController {
       contactNormal: new THREE.Vector3(),
       prospectiveEdgeStart: new THREE.Vector3(),
       prospectiveEdgeEnd: new THREE.Vector3(),
-      currentMidpoint: new THREE.Vector3(),
-      totalPreviousMidpoint: new THREE.Vector3(),
-      totalEdgeMotion: new THREE.Vector3(),
-      deliberateDirection: new THREE.Vector3(),
-      previousMidpoint: new THREE.Vector3(),
+      edgeSampleLocal: new THREE.Vector3(),
+      edgeSamplePrevious: new THREE.Vector3(),
+      edgeSampleCurrent: new THREE.Vector3(),
+      selectedEdgePrevious: new THREE.Vector3(),
+      selectedEdgeCurrent: new THREE.Vector3(),
       edgeMotion: new THREE.Vector3(),
       point: new THREE.Vector3(),
       normal: new THREE.Vector3(),
@@ -127,6 +157,7 @@ export class WorldKnifeCombatController {
       correction: new THREE.Vector3(),
       impulse: new THREE.Vector3(),
       inverseQuaternion: new THREE.Quaternion(),
+      edgeContact: { hit: null, toi: Infinity, sampleT: 0.5, anchorDistance: Infinity },
     };
     this.slashState = {
       actor: null,
@@ -155,6 +186,7 @@ export class WorldKnifeCombatController {
       pendingClassification: null,
       lastCommittedClassification: null,
       extensionCommitCount: 0,
+      edgeAnchorT: 0.5,
     };
     this.onSlashWoundCreated = (wound, directedInteraction) => {
       if (this.activeSlash?.directorInteractionId === directedInteraction.id) this.activeSlash.woundId = wound?.id ?? null;
@@ -164,6 +196,7 @@ export class WorldKnifeCombatController {
     this.activeSlash = null;
     this.lastContactPart = 'none';
     this.slashCount = 0;
+    this.lastEdgeSampleCount = 0;
     this.penetrationDepth = 0;
     this.maximumDepthReached = 0;
     this.contactNormal = new THREE.Vector3();
@@ -623,27 +656,49 @@ export class WorldKnifeCombatController {
 
   resolveSweptEdgeContact(dt) {
     const scratch = this.slashScratch;
-    const prospectiveStart = scratch.prospectiveEdgeStart.copy(edgeLocalA).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
-    const prospectiveEnd = scratch.prospectiveEdgeEnd.copy(edgeLocalB).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
-    const currentMidpoint = scratch.currentMidpoint.addVectors(prospectiveStart, prospectiveEnd).multiplyScalar(0.5);
-    const totalPreviousMidpoint = scratch.totalPreviousMidpoint.addVectors(this.previousEdgeStart, this.previousEdgeEnd).multiplyScalar(0.5);
-    const totalEdgeMotion = scratch.totalEdgeMotion.subVectors(currentMidpoint, totalPreviousMidpoint);
-    const deliberateDirection = scratch.deliberateDirection.copy(this.offensiveVelocity.lengthSq() > 1e-8 ? this.offensiveVelocity : totalEdgeMotion).normalize();
-    const deliberateTravel = Math.min(totalEdgeMotion.length(), this.offensiveVelocity.length() * dt);
-    const previousMidpoint = scratch.previousMidpoint.copy(currentMidpoint).addScaledVector(deliberateDirection, -deliberateTravel);
-    const edgeMotion = scratch.edgeMotion.subVectors(currentMidpoint, previousMidpoint);
-    if (edgeMotion.lengthSq() < 1e-8) return false;
-    const hit = this.physics.castWeaponTip(previousMidpoint, currentMidpoint, this.config.bladeWidth * 0.32, this.combatColliderFilter);
-    if (!hit?.collider) return false;
+    const prospectiveStart = scratch.prospectiveEdgeStart.copy(knifeEdgeHeelLocal).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+    const prospectiveEnd = scratch.prospectiveEdgeEnd.copy(knifeEdgeTipLocal).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+    const sampleCount = resolveKnifeEdgeSampleCount(this.previousEdgeStart, this.previousEdgeEnd, prospectiveStart, prospectiveEnd);
+    const contact = scratch.edgeContact;
+    const stableAnchorT = this.activeSlash?.edgeAnchorT ?? 0.5;
+    contact.hit = null;
+    contact.toi = Infinity;
+    contact.sampleT = 0.5;
+    contact.anchorDistance = Infinity;
+    this.lastEdgeSampleCount = sampleCount;
+    const positionsPrepared = this.physics.prepareWeaponSweepBatch?.() === true;
+    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+      const sampleT = sampleIndex / (sampleCount - 1);
+      sampleKnifeCuttingEdgeLocal(sampleT, scratch.edgeSampleLocal);
+      const samplePrevious = scratch.edgeSamplePrevious.copy(scratch.edgeSampleLocal).applyQuaternion(this.previousQuaternion).add(this.previousGrip);
+      const sampleCurrent = scratch.edgeSampleCurrent.copy(scratch.edgeSampleLocal).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+      if (samplePrevious.distanceToSquared(sampleCurrent) < 1e-8) continue;
+      const sampleHit = this.physics.castWeaponTip(samplePrevious, sampleCurrent, KNIFE_EDGE_COLLISION_RADIUS, this.combatColliderFilter, positionsPrepared);
+      if (!sampleHit?.collider) continue;
+      const toi = THREE.MathUtils.clamp(sampleHit.time_of_impact ?? 0, 0, 1);
+      const anchorDistance = Math.abs(sampleT - stableAnchorT);
+      const earlier = toi < contact.toi - EDGE_CONTACT_TOI_EPSILON;
+      const sameTimeStableAnchor = Math.abs(toi - contact.toi) <= EDGE_CONTACT_TOI_EPSILON && anchorDistance < contact.anchorDistance;
+      if (!earlier && !sameTimeStableAnchor) continue;
+      contact.hit = sampleHit;
+      contact.toi = toi;
+      contact.sampleT = sampleT;
+      contact.anchorDistance = anchorDistance;
+      scratch.selectedEdgePrevious.copy(samplePrevious);
+      scratch.selectedEdgeCurrent.copy(sampleCurrent);
+    }
+    const hit = contact.hit;
+    if (!hit) return false;
     const point = hit.witness1
       ? scratch.point.set(hit.witness1.x, hit.witness1.y, hit.witness1.z)
-      : scratch.point.copy(currentMidpoint);
+      : scratch.point.copy(scratch.selectedEdgePrevious).lerp(scratch.selectedEdgeCurrent, contact.toi);
     const routedTarget = this.resolveCombatTarget(hit.collider, point);
     if (!routedTarget) return false;
     const { hit: semanticHit, actor: targetActor, director: targetDirector } = routedTarget;
     const normal = hit.normal1
       ? scratch.normal.set(hit.normal1.x, hit.normal1.y, hit.normal1.z).normalize()
       : scratch.normal.copy(point).sub(this.getBodyCenter(semanticHit.body, scratch.bodyCenter)).normalize();
+    const edgeMotion = scratch.edgeMotion.subVectors(scratch.selectedEdgeCurrent, scratch.selectedEdgePrevious);
     const direction = scratch.direction.copy(this.offensiveVelocity.lengthSq() > 1e-8 ? this.offensiveVelocity : edgeMotion).normalize();
     const localMotion = scratch.localMotion.copy(direction).applyQuaternion(scratch.inverseQuaternion.copy(this.actualQuaternion).invert());
     const lateralLead = Math.abs(localMotion.x);
@@ -663,6 +718,7 @@ export class WorldKnifeCombatController {
     }
     const slash = this.activeSlash;
     slash.hit = semanticHit;
+    slash.edgeAnchorT = contact.sampleT;
     slash.duration += dt;
     slash.travel = Math.min(SLASH_CONFIG.maximumWoundLength, slash.travel + stepTravel);
     slash.pressure = THREE.MathUtils.lerp(slash.pressure, pressure, 0.4);
@@ -739,6 +795,7 @@ export class WorldKnifeCombatController {
     slash.pendingClassification = null;
     slash.lastCommittedClassification = null;
     slash.extensionCommitCount = 0;
+    slash.edgeAnchorT = 0.5;
     this.activeSlash = slash;
     return slash;
   }
@@ -975,8 +1032,8 @@ export class WorldKnifeCombatController {
   updateDerivedPose(initial = false) {
     normalizedBladeForward(this.actualQuaternion, this.bladeForward);
     deriveBladeTip(this.actualGrip, this.actualQuaternion, this.config.bladeLength, this.currentTip);
-    this.edgeStart.copy(edgeLocalA).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
-    this.edgeEnd.copy(edgeLocalB).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+    this.edgeStart.copy(knifeEdgeHeelLocal).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+    this.edgeEnd.copy(knifeEdgeTipLocal).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
     if (initial) this.previousTip.copy(this.currentTip);
     if (initial) {
       this.previousEdgeStart.copy(this.edgeStart);
@@ -1262,7 +1319,7 @@ export class WorldKnifeCombatController {
       activeWoundId: this.entry?.woundId ?? this.activeSlash?.woundId ?? null,
       activeCombatInteractionId: this.entry?.directorInteractionId ?? this.activeSlash?.directorInteractionId ?? null,
       activeCombatActorId: this.entry?.actor?.instanceId ?? this.activeSlash?.actor?.instanceId ?? null,
-      activeSlash: this.activeSlash ? { regionId: this.activeSlash.regionId, part: this.activeSlash.part, duration: Number(this.activeSlash.duration.toFixed(3)), travel: Number(this.activeSlash.travel.toFixed(3)), pendingTravel: Number(this.activeSlash.pendingTravel.toFixed(3)), extensionCommitCount: this.activeSlash.extensionCommitCount, woundId: this.activeSlash.woundId } : null,
+      activeSlash: this.activeSlash ? { regionId: this.activeSlash.regionId, part: this.activeSlash.part, duration: Number(this.activeSlash.duration.toFixed(3)), travel: Number(this.activeSlash.travel.toFixed(3)), pendingTravel: Number(this.activeSlash.pendingTravel.toFixed(3)), extensionCommitCount: this.activeSlash.extensionCommitCount, edgeAnchorT: Number(this.activeSlash.edgeAnchorT.toFixed(3)), edgeSampleCount: this.lastEdgeSampleCount, woundId: this.activeSlash.woundId } : null,
       slashCount: this.slashCount,
     };
   }

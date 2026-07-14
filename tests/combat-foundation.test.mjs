@@ -11,7 +11,7 @@ import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
-import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveSlashLeadingPart } from '../src/game/combat/WorldKnifeCombatController.js';
+import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, KNIFE_EDGE_BASE_SAMPLE_COUNT, KNIFE_EDGE_COLLISION_RADIUS, KNIFE_EDGE_MAX_SAMPLE_COUNT, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveKnifeEdgeSampleCount, resolveSlashLeadingPart, sampleKnifeCuttingEdgeLocal } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
 import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveAnimationPackManifest, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
@@ -545,6 +545,72 @@ test('edge-aware slash classification rejects the flat, spine, jitter, and low p
   assert.equal(classifySlashContact({ ...valid, part: 'edge', edgeAlignment: 0.1 }).state, 'scraping_contact');
   assert.equal(extendSlashLength(0.1, 2), 0.1 + SLASH_CONFIG.maximumStepLength);
   assert.ok(extendSlashLength(WOUND_CONFIG.maximumCutLength, 1) <= WOUND_CONFIG.maximumCutLength);
+});
+
+test('knife edge sweeps the authored heel, midpoint, and tip with rotation-only adaptive density', () => {
+  const heel = sampleKnifeCuttingEdgeLocal(0);
+  const midpoint = sampleKnifeCuttingEdgeLocal(0.5);
+  const tip = sampleKnifeCuttingEdgeLocal(1);
+  assert.deepEqual(heel.toArray(), [-KNIFE_COMBAT_CONFIG.bladeWidth * 0.5, 0, -0.006]);
+  assert.ok(midpoint.x < -KNIFE_COMBAT_CONFIG.bladeWidth * 0.4 && midpoint.z < -0.11 && midpoint.z > -0.14, 'midpoint follows the long straight cutting edge instead of an oversized blade-center hitbox');
+  assert.deepEqual(tip.toArray(), [0, 0, -KNIFE_COMBAT_CONFIG.bladeLength]);
+  assert.equal(KNIFE_EDGE_COLLISION_RADIUS, KNIFE_COMBAT_CONFIG.bladeThickness * 0.5);
+  assert.ok(KNIFE_EDGE_COLLISION_RADIUS < KNIFE_COMBAT_CONFIG.tipRadius);
+  const previousStart = new THREE.Vector3(0, 0, 0);
+  const previousEnd = new THREE.Vector3(0, 0, -KNIFE_COMBAT_CONFIG.bladeLength);
+  const translatedStart = new THREE.Vector3(0.2, 0, 0);
+  const translatedEnd = new THREE.Vector3(0.2, 0, -KNIFE_COMBAT_CONFIG.bladeLength);
+  assert.equal(resolveKnifeEdgeSampleCount(previousStart, previousEnd, translatedStart, translatedEnd), KNIFE_EDGE_BASE_SAMPLE_COUNT, 'translation alone stays at heel/midpoint/tip');
+  const fastRotatedEnd = new THREE.Vector3(-KNIFE_COMBAT_CONFIG.bladeLength, 0, 0);
+  assert.equal(resolveKnifeEdgeSampleCount(previousStart, previousEnd, previousStart, fastRotatedEnd), KNIFE_EDGE_MAX_SAMPLE_COUNT, 'fast rotation adds bounded samples rather than widening the collision radius');
+});
+
+test('knife edge sweep selects earliest contact and retains its sample anchor through a brief miss', () => {
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 100);
+  camera.updateMatrixWorld(true);
+  const viewport = { querySelector: () => null, getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 702 }) };
+  const collider = { handle: 7, userData: { bodyId: 'abdomen' } };
+  const castCalls = [];
+  let preparedCount = 0;
+  let castMode = 'earliest-midpoint';
+  let routedPoint = new THREE.Vector3();
+  const physics = {
+    prepareWeaponSweepBatch() { preparedCount += 1; return true; },
+    castWeaponTip(previous, current, radius, _predicate, positionsPrepared) {
+      const sampleIndex = castCalls.length % KNIFE_EDGE_BASE_SAMPLE_COUNT;
+      castCalls.push({ previous: previous.clone(), current: current.clone(), radius, positionsPrepared });
+      if (castMode === 'miss') return null;
+      const toi = castMode === 'equal' ? 0.2 : [0.7, 0.12, 0.45][sampleIndex];
+      return { collider, time_of_impact: toi, witness1: { x: sampleIndex, y: 1, z: -3 }, normal1: { x: -1, y: 0, z: 0 } };
+    },
+  };
+  const targetActor = {};
+  const targetDirector = { beginSlash: () => ({ id: 'slash-edge-sweep' }), extendSlash: () => true, finishSlash: () => true, reportContact() {} };
+  const semanticHit = { bodyId: 'abdomen', regionId: 'abdomen', region: { softTissueResistance: 0.4 }, body: { applyImpulseAtPoint() {}, translation: () => ({ x: 0, y: 1, z: -3 }) }, collider, localPoint: new THREE.Vector3() };
+  const equipment = { getEquippedToolId: () => 'old_work_knife', hasItem: () => true };
+  const knife = new WorldKnifeCombatController({ app: viewport, scene, camera, actor: null, physics, equipmentRuntime: equipment, bindPointerInput: false });
+  knife.resolveCombatTarget = (_collider, point) => { routedPoint.copy(point); return { actor: targetActor, director: targetDirector, hit: semanticHit }; };
+  knife.previousGrip.copy(knife.actualGrip).add(new THREE.Vector3(-0.02, 0, 0));
+  knife.previousQuaternion.copy(knife.actualQuaternion);
+  knife.previousEdgeStart.copy(knife.edgeStart).add(new THREE.Vector3(-0.02, 0, 0));
+  knife.previousEdgeEnd.copy(knife.edgeEnd).add(new THREE.Vector3(-0.02, 0, 0));
+  knife.offensiveVelocity.set(1, 0, 0);
+  assert.equal(knife.resolveSweptEdgeContact(1 / 60), true);
+  assert.equal(preparedCount, 1, 'the edge batch propagates colliders once');
+  assert.equal(castCalls.length, KNIFE_EDGE_BASE_SAMPLE_COUNT);
+  assert.ok(castCalls.every((call) => call.radius === KNIFE_EDGE_COLLISION_RADIUS && call.positionsPrepared));
+  assert.equal(routedPoint.x, 1, 'the earliest midpoint contact wins even though heel was sampled first');
+  assert.equal(knife.activeSlash.edgeAnchorT, 0.5);
+  const activeSlash = knife.activeSlash;
+  castMode = 'miss';
+  assert.equal(knife.resolveSweptEdgeContact(1 / 60), false);
+  assert.equal(knife.activeSlash, activeSlash);
+  assert.equal(knife.activeSlash.edgeAnchorT, 0.5, 'a brief miss does not move or discard the contact anchor');
+  castMode = 'equal';
+  assert.equal(knife.resolveSweptEdgeContact(1 / 60), true);
+  assert.equal(routedPoint.x, 1, 'equal-time contact resumes at the stable midpoint anchor');
+  knife.dispose();
 });
 
 test('knife slash extensions batch tiny travel and flush the final attached endpoint', () => {

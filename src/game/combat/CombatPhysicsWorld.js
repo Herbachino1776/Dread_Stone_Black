@@ -25,6 +25,9 @@ export class CombatPhysicsWorld {
     this.disposed = false;
     this.contactCount = 0;
     this.sweepCount = 0;
+    this.weaponSweepVelocity = { x: 0, y: 0, z: 0 };
+    this.weaponSweepRotation = { x: 0, y: 0, z: 0, w: 1 };
+    this.weaponSweepShapes = new Map();
     this.eventQueue = new RAPIER.EventQueue(true);
   }
 
@@ -107,17 +110,30 @@ export class CombatPhysicsWorld {
     });
   }
 
-  castWeaponTip(previousTip, nextTip, radius, predicate = null) {
-    const velocity = { x: nextTip.x - previousTip.x, y: nextTip.y - previousTip.y, z: nextTip.z - previousTip.z };
+  prepareWeaponSweepBatch() {
+    this.world.propagateModifiedBodyPositionsToColliders();
+    return true;
+  }
+
+  castWeaponTip(previousTip, nextTip, radius, predicate = null, positionsPrepared = false) {
+    const velocity = this.weaponSweepVelocity;
+    velocity.x = nextTip.x - previousTip.x;
+    velocity.y = nextTip.y - previousTip.y;
+    velocity.z = nextTip.z - previousTip.z;
     const distance = Math.hypot(velocity.x, velocity.y, velocity.z);
     if (distance < 1e-6) return null;
     this.sweepCount += 1;
-    this.world.propagateModifiedBodyPositionsToColliders();
+    if (!positionsPrepared) this.world.propagateModifiedBodyPositionsToColliders();
+    let shape = this.weaponSweepShapes.get(radius);
+    if (!shape) {
+      shape = new RAPIER.Ball(radius);
+      this.weaponSweepShapes.set(radius, shape);
+    }
     return this.world.castShape(
       previousTip,
-      { x: 0, y: 0, z: 0, w: 1 },
+      this.weaponSweepRotation,
       velocity,
-      new RAPIER.Ball(radius),
+      shape,
       0,
       1,
       true,
@@ -149,6 +165,7 @@ export class CombatPhysicsWorld {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.weaponSweepShapes.clear();
     this.eventQueue.free();
     this.world.free();
   }
