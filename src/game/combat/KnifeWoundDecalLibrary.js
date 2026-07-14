@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createBloodChromaMaterial } from './BloodChromaMaterial.js';
 
 export const KNIFE_WOUND_MANIFEST_URL = './assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json';
+export const KNIFE_WOUND_DECAL_COLOR_FILTER = Object.freeze([1.28, 0.9, 0.9]);
 
 const MATERIAL_OPTIONS = Object.freeze({
   color: 0xffffff,
@@ -192,7 +193,7 @@ export class KnifeWoundDecalLibrary {
     textures.forEach(([variant, texture]) => {
       this.variantsById.set(variant.id, variant);
       this.texturesById.set(variant.id, texture);
-      const material = createBloodChromaMaterial({ usage: 'authored-wound', ...MATERIAL_OPTIONS, map: texture });
+      const material = createBloodChromaMaterial({ usage: 'authored-wound', colorFilter: KNIFE_WOUND_DECAL_COLOR_FILTER, ...MATERIAL_OPTIONS, map: texture });
       material.name = `authored-knife-wound-material-${variant.id}`;
       material.userData.authoredKnifeWoundVariantId = variant.id;
       this.materialsById.set(variant.id, material);
@@ -253,7 +254,7 @@ export function installKnifeWoundManifestForHeadlessTests(manifest) {
   sharedLibrary.manifest = manifest;
   manifest.variants.forEach((variant) => {
     sharedLibrary.variantsById.set(variant.id, variant);
-    const material = createBloodChromaMaterial({ usage: 'authored-wound', ...MATERIAL_OPTIONS });
+    const material = createBloodChromaMaterial({ usage: 'authored-wound', colorFilter: KNIFE_WOUND_DECAL_COLOR_FILTER, ...MATERIAL_OPTIONS });
     material.name = `headless-authored-knife-wound-material-${variant.id}`;
     material.userData.authoredKnifeWoundVariantId = variant.id;
     sharedLibrary.materialsById.set(variant.id, material);

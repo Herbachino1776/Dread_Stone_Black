@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export const BLOOD_CHROMA_PROGRAM_CACHE_KEY = 'dread-stone-blood-chroma-v1';
+export const BLOOD_CHROMA_PROGRAM_CACHE_KEY = 'dread-stone-blood-chroma-v2';
 
 export const BLOOD_CHROMA_RESPONSE = Object.freeze({
   saturationFloor: 0.78,
@@ -47,12 +47,13 @@ uniform float bloodMaximumBrightness;
 uniform float bloodSpecularEnergyScale;
 uniform float bloodReadabilityScalar;
 uniform float bloodExposure;
+uniform vec3 bloodColorFilter;
 uniform int bloodLightingDebugMode;
 `;
 
 const BLOOD_SHADER_RESPONSE = `
 vec3 bloodStandardPbr = outgoingLight;
-vec3 bloodAlbedo = clamp( diffuseColor.rgb, vec3( 0.0 ), vec3( 1.0 ) );
+vec3 bloodAlbedo = clamp( diffuseColor.rgb * bloodColorFilter, vec3( 0.0 ), vec3( 1.0 ) );
 float bloodSourcePeak = max( max( bloodAlbedo.r, bloodAlbedo.g ), bloodAlbedo.b );
 float bloodSourceMinimum = min( min( bloodAlbedo.r, bloodAlbedo.g ), bloodAlbedo.b );
 float bloodSourceLuminance = dot( bloodAlbedo, vec3( 0.2126, 0.7152, 0.0722 ) );
@@ -99,6 +100,7 @@ function lightLuminance(value) {
 
 export function resolveBloodChromaResponse({
   albedo,
+  colorFilter = [1, 1, 1],
   alpha = 1,
   illumination = 1,
   exposure = BLOOD_CHROMA_RESPONSE.exposure,
@@ -108,7 +110,8 @@ export function resolveBloodChromaResponse({
   illuminationGain = BLOOD_CHROMA_RESPONSE.illuminationGain,
   readabilityScalar = BLOOD_CHROMA_RESPONSE.readabilityScalar,
 } = {}) {
-  const source = asRgb(albedo);
+  const filter = asRgb(colorFilter, [1, 1, 1]);
+  const source = asRgb(albedo).map((channel, index) => THREE.MathUtils.clamp(channel * filter[index], 0, 1));
   const sourcePeak = Math.max(...source, 0);
   const sourceMinimum = Math.min(...source);
   const sourceSaturation = sourcePeak > 1e-8 ? (sourcePeak - sourceMinimum) / sourcePeak : 0;
@@ -127,6 +130,7 @@ export function resolveBloodChromaResponse({
     rgb,
     alpha,
     source,
+    colorFilter: filter,
     chroma,
     illuminationLuminance,
     resolvedIllumination,
@@ -138,9 +142,11 @@ export function resolveBloodChromaResponse({
   };
 }
 
-function applyBloodChromaShader(shader) {
+function applyBloodChromaShader(shader, colorFilter = [1, 1, 1]) {
   shaderPatchCount += 1;
-  Object.assign(shader.uniforms, sharedUniforms);
+  Object.assign(shader.uniforms, sharedUniforms, {
+    bloodColorFilter: { value: new THREE.Vector3(...asRgb(colorFilter, [1, 1, 1])) },
+  });
   if (!shader.fragmentShader.includes('#include <common>') || !shader.fragmentShader.includes('#include <opaque_fragment>')) {
     throw new Error('Blood chroma shader patch points are unavailable');
   }
@@ -151,21 +157,23 @@ function applyBloodChromaShader(shader) {
 
 function bloodProgramCacheKey() { return BLOOD_CHROMA_PROGRAM_CACHE_KEY; }
 
-function registerMaterial(material, usage) {
+function registerMaterial(material, usage, { colorFilter = [1, 1, 1] } = {}) {
+  const resolvedColorFilter = asRgb(colorFilter, [1, 1, 1]);
   material.toneMapped = false;
   material.depthTest = true;
   material.blending = THREE.NormalBlending;
   if (material.transparent && material.side === THREE.DoubleSide) material.forceSinglePass = true;
   material.emissive.setHex(0x000000);
   material.emissiveIntensity = 0;
-  material.onBeforeCompile = applyBloodChromaShader;
+  material.onBeforeCompile = (shader) => applyBloodChromaShader(shader, material.userData.bloodColorFilter);
   material.customProgramCacheKey = bloodProgramCacheKey;
   material.userData = {
     ...material.userData,
     isBloodChromaMaterial: true,
     bloodUsage: usage,
     bloodProgramCacheKey: BLOOD_CHROMA_PROGRAM_CACHE_KEY,
-    bloodResponseVersion: 1,
+    bloodResponseVersion: 2,
+    bloodColorFilter: resolvedColorFilter,
   };
   registeredMaterials.add(material);
   materialRevision += 1;
@@ -176,7 +184,7 @@ function registerMaterial(material, usage) {
   return material;
 }
 
-export function createBloodChromaMaterial({ usage = 'generic', sourceColor = null, ...options } = {}) {
+export function createBloodChromaMaterial({ usage = 'generic', sourceColor = null, colorFilter = [1, 1, 1], ...options } = {}) {
   const material = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 0.86,
@@ -187,12 +195,12 @@ export function createBloodChromaMaterial({ usage = 'generic', sourceColor = nul
     ...options,
   });
   if (sourceColor != null) material.userData.bloodSourceColor = sourceColor;
-  return registerMaterial(material, usage);
+  return registerMaterial(material, usage, { colorFilter });
 }
 
 export function cloneBloodChromaMaterial(sourceMaterial, { usage = sourceMaterial?.userData?.bloodUsage ?? 'wound-isolated' } = {}) {
   if (!sourceMaterial?.userData?.isBloodChromaMaterial) return sourceMaterial?.clone?.() ?? null;
-  return registerMaterial(sourceMaterial.clone(), usage);
+  return registerMaterial(sourceMaterial.clone(), usage, { colorFilter: sourceMaterial.userData.bloodColorFilter });
 }
 
 export function isBloodChromaMaterial(material) {
@@ -214,11 +222,16 @@ export function getBloodMaterialDiagnostics(material, { albedo = material?.color
   const diagnosticAlbedo = material?.userData?.bloodSourceColor != null && albedo === material?.color
     ? new THREE.Color(material.userData.bloodSourceColor)
     : albedo;
-  const response = resolveBloodChromaResponse({ albedo: diagnosticAlbedo, illumination });
+  const response = resolveBloodChromaResponse({
+    albedo: diagnosticAlbedo,
+    colorFilter: material?.userData?.bloodColorFilter,
+    illumination,
+  });
   return {
     materialType: material?.type ?? 'none',
     response: isBloodChromaMaterial(material) ? 'blood-chroma' : 'standard-pbr',
     sourceRgb: response.source,
+    colorFilter: response.colorFilter,
     illuminationLuminance: response.illuminationLuminance,
     finalRgb: response.rgb,
     finalSaturation: response.saturation,

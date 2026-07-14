@@ -14,7 +14,7 @@ import {
 import { BLOOD_COLOR_PALETTE } from '../src/game/combat/CombatStage2Config.js';
 import { CombatBloodEffects } from '../src/game/combat/CombatBloodEffects.js';
 import { CombatWoundSystem } from '../src/game/combat/CombatWoundSystem.js';
-import { disposeKnifeWoundDecalLibrary, installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
+import { disposeKnifeWoundDecalLibrary, installKnifeWoundManifestForHeadlessTests, KNIFE_WOUND_DECAL_COLOR_FILTER } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 
 const manifest = JSON.parse(await readFile(new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url), 'utf8'));
 
@@ -50,11 +50,12 @@ test('blood materials use one stable chroma-preserving standard-material shader 
   assert.match(shader.fragmentShader, /#include <opaque_fragment>/);
   assert.equal(shader.uniforms.bloodMaximumBrightness.value, BLOOD_CHROMA_RESPONSE.maximumBrightness);
   assert.equal(shader.uniforms.bloodSaturationFloor.value, BLOOD_CHROMA_RESPONSE.saturationFloor);
+  assert.deepEqual(shader.uniforms.bloodColorFilter.value.toArray(), [1, 1, 1]);
 
   const clone = cloneBloodChromaMaterial(material);
   assert.notEqual(clone, material);
   assert.equal(clone.customProgramCacheKey(), material.customProgramCacheKey());
-  assert.equal(clone.onBeforeCompile, material.onBeforeCompile);
+  assert.deepEqual(clone.userData.bloodColorFilter, material.userData.bloodColorFilter);
   clone.dispose();
   material.dispose();
 });
@@ -105,6 +106,7 @@ test('authored wound texture relationships and alpha survive the shader response
   library.materialsById.forEach((material, id) => {
     assert.equal(isBloodChromaMaterial(material), true, `${id} uses the blood response`);
     assert.equal(material.color.getHex(), 0xffffff, `${id} keeps a neutral material tint`);
+    assert.deepEqual(material.userData.bloodColorFilter, [...KNIFE_WOUND_DECAL_COLOR_FILTER], `${id} uses the brighter-red decal filter`);
     assert.equal(material.alphaTest, 0.065);
     assert.equal(material.transparent, true);
     assert.equal(material.depthWrite, false);
@@ -114,6 +116,10 @@ test('authored wound texture relationships and alpha survive the shader response
   });
   assert.ok(manifest.variants.filter((variant) => variant.family === 'puncture').every((variant) => isBloodChromaMaterial(library.getMaterial(variant.id))));
   assert.ok(manifest.variants.filter((variant) => variant.family === 'slash').every((variant) => isBloodChromaMaterial(library.getMaterial(variant.id))));
+  const neutral = resolveBloodChromaResponse({ albedo: [0.42, 0.018, 0.025], illumination: 1 });
+  const filtered = resolveBloodChromaResponse({ albedo: [0.42, 0.018, 0.025], colorFilter: KNIFE_WOUND_DECAL_COLOR_FILTER, illumination: 1 });
+  assert.ok(filtered.rgb[0] > neutral.rgb[0] * 1.2, 'decal filter materially brightens the authored red channel');
+  assert.ok(filtered.redDominance > neutral.redDominance, 'decal filter stays redder as it brightens');
   disposeKnifeWoundDecalLibrary();
 });
 
