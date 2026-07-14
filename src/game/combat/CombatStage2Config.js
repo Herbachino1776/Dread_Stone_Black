@@ -8,6 +8,8 @@ export const SLASH_CONFIG = Object.freeze({
   minimumPressure: 0.05,
   deepPressure: 0.3,
   minimumCutTravel: 0.012,
+  extensionCommitDistance: 0.01,
+  extensionDirectionDegrees: 12,
   maximumStepLength: 0.11,
   maximumWoundLength: 0.52,
   shallowDepth: 0.012,
@@ -129,6 +131,8 @@ export function validateCombatStage2Configuration(regionIds = []) {
   const errors = [];
   const knownRegions = new Set(regionIds);
   if (SLASH_CONFIG.maximumStepLength <= 0 || SLASH_CONFIG.maximumWoundLength < SLASH_CONFIG.maximumStepLength) errors.push('invalid slash length bounds');
+  if (SLASH_CONFIG.extensionCommitDistance <= 0 || SLASH_CONFIG.extensionCommitDistance > SLASH_CONFIG.maximumStepLength) errors.push('invalid slash extension commit distance');
+  if (SLASH_CONFIG.extensionDirectionDegrees <= 0 || SLASH_CONFIG.extensionDirectionDegrees >= 180) errors.push('invalid slash extension direction threshold');
   if (WOUND_CONFIG.maximumWounds <= 0 || WOUND_CONFIG.maximumDepth <= 0) errors.push('invalid wound limits');
   VESSEL_ZONES.forEach((zone) => {
     if (!knownRegions.has(zone.regionId)) errors.push(`vessel ${zone.id} references missing region`);

@@ -547,6 +547,61 @@ test('edge-aware slash classification rejects the flat, spine, jitter, and low p
   assert.ok(extendSlashLength(WOUND_CONFIG.maximumCutLength, 1) <= WOUND_CONFIG.maximumCutLength);
 });
 
+test('knife slash extensions batch tiny travel and flush the final attached endpoint', () => {
+  const controller = Object.create(WorldKnifeCombatController.prototype);
+  const extensions = [];
+  const slash = {
+    directorInteractionId: 'slash-test',
+    director: { extendSlash: (interactionId, payload) => { extensions.push({ interactionId, ...payload }); return true; } },
+    hit: { regionId: 'abdomen' },
+    startPoint: new THREE.Vector3(),
+    lastPoint: new THREE.Vector3(),
+    surfaceNormal: new THREE.Vector3(0, 0, 1),
+    direction: new THREE.Vector3(1, 0, 0),
+    lastCommittedDirection: new THREE.Vector3(1, 0, 0),
+    pendingTravel: 0,
+    pendingDepth: 0,
+    pendingSeverity: 0,
+    pendingDamageSeverity: 0,
+    pendingDepthWeightedSeverity: 0,
+    pendingEdgeAlignment: 0,
+    pendingClassification: null,
+    lastCommittedClassification: 'shallow_cut',
+    extensionCommitCount: 0,
+  };
+  const sample = { depth: 0.02, severity: 0.3, classification: 'shallow_cut', edgeAlignment: 0.8 };
+  controller.accumulateSlashExtension(slash, { ...sample, addedTravel: 0.003 });
+  controller.accumulateSlashExtension(slash, { ...sample, addedTravel: 0.003 });
+  controller.accumulateSlashExtension(slash, { ...sample, addedTravel: 0.003 });
+  assert.equal(extensions.length, 0, 'sub-centimeter physics samples do not schedule redundant wound rebuilds');
+  controller.accumulateSlashExtension(slash, { ...sample, addedTravel: 0.002 });
+  assert.equal(extensions.length, 1);
+  assert.ok(Math.abs(extensions[0].cutLength - 0.011) < 1e-9, 'the committed extension retains all accumulated physical travel');
+  assert.ok(Math.abs(extensions[0].damageSeverity - 1.2) < 1e-9, 'batched presentation work retains every sample contribution to slash trauma');
+  assert.ok(Math.abs(extensions[0].depthWeightedSeverity - 0.024) < 1e-9);
+  controller.accumulateSlashExtension(slash, { ...sample, addedTravel: 0.003 });
+  assert.equal(extensions.length, 1);
+  controller.commitSlashExtension(slash, true);
+  assert.equal(extensions.length, 2, 'contact completion flushes the residual endpoint so the slash shape stays attached');
+  assert.equal(extensions[1].cutLength, 0.003);
+  assert.equal(slash.extensionCommitCount, 2);
+  assert.ok(SLASH_CONFIG.extensionCommitDistance >= 0.008 && SLASH_CONFIG.extensionCommitDistance <= 0.012);
+});
+
+test('knife slash ownership survives misses shorter than the release window', () => {
+  const controller = Object.create(WorldKnifeCombatController.prototype);
+  const slash = { missedTime: 0 };
+  controller.activeSlash = slash;
+  let finished = false;
+  controller.finishActiveSlash = () => { finished = true; controller.activeSlash = null; };
+  for (let frame = 0; frame < 6; frame += 1) controller.releaseSlashContact(1 / 60, false);
+  assert.equal(finished, false);
+  assert.equal(controller.activeSlash, slash);
+  slash.missedTime = 0;
+  controller.releaseSlashContact(1 / 60, false);
+  assert.equal(controller.activeSlash, slash, 'a resumed same-owner contact can reset hysteresis without starting another slash');
+});
+
 test('mobile slash gestures accept either lateral direction and stop inward blade tunneling', () => {
   assert.equal(resolveSlashLeadingPart(new THREE.Vector3(-1, 0.1, 0)), 'edge');
   assert.equal(resolveSlashLeadingPart(new THREE.Vector3(1, 0.1, 0)), 'edge');

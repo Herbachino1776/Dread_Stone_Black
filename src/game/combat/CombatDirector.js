@@ -231,7 +231,21 @@ export class CombatDirector {
     const interaction = this.getActiveInteraction(interactionId);
     if (!interaction) return false;
     const delay = Math.max(0.002, (interaction.readyAt ?? this.time) - this.time);
-    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.wound, delay, { action: 'extend_slash', ...payload });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.wound, delay, {
+      action: 'extend_slash',
+      hit: payload.hit,
+      startPoint: cloneVector(payload.startPoint),
+      endPoint: cloneVector(payload.endPoint),
+      surfaceNormal: cloneVector(payload.surfaceNormal),
+      cutDirection: cloneVector(payload.cutDirection),
+      depth: payload.depth,
+      cutLength: payload.cutLength,
+      severity: payload.severity,
+      damageSeverity: payload.damageSeverity,
+      depthWeightedSeverity: payload.depthWeightedSeverity,
+      classification: payload.classification,
+      edgeAlignment: payload.edgeAlignment,
+    });
     return true;
   }
 

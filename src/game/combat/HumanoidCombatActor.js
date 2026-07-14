@@ -397,7 +397,7 @@ export class HumanoidCombatActor {
     return severity;
   }
 
-  applySlashWound({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, edgeAlignment = 1, woundId = null, deferReaction = false } = {}) {
+  applySlashWound({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, damageSeverity = null, depthWeightedSeverity = null, classification, edgeAlignment = 1, woundId = null, deferReaction = false } = {}) {
     let wound = woundId ? this.woundSystem.getWound(woundId) : null;
     const isNewWound = !wound;
     if (wound) {
@@ -411,7 +411,9 @@ export class HumanoidCombatActor {
       if (state) state.wounds = (state.wounds ?? 0) + 1;
       this.physiology.onWoundCreated(wound);
     }
-    const traumaSeverity = severity * (0.18 + depth * 2.8) * HUMANOID_DURABILITY_CONFIG.traumaScale;
+    const accumulatedSeverity = Number.isFinite(damageSeverity) ? Math.max(0, damageSeverity) : severity;
+    const accumulatedDepthSeverity = Number.isFinite(depthWeightedSeverity) ? Math.max(0, depthWeightedSeverity) : severity * depth;
+    const traumaSeverity = (accumulatedSeverity * 0.18 + accumulatedDepthSeverity * 2.8) * HUMANOID_DURABILITY_CONFIG.traumaScale;
     const state = this.regionState.get(hit.regionId) ?? { trauma: 0, pain: 0, structural: 0, motorWeakness: 0, maximumDepth: 0, wounds: 1 };
     state.trauma += traumaSeverity;
     state.pain += traumaSeverity * hit.region.painResponse;
