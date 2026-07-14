@@ -23,6 +23,9 @@ export const DREADSTONE_SWORD_DIMENSIONS = Object.freeze({
   tipZ: -0.892469227,
   bladeHeelZ: -0.214,
   bladeShoulderZ: -0.70,
+  bladeLength: 0.678469227,
+  bladeWidth: 0.071,
+  bladeThickness: 0.024,
   bladeHalfWidth: 0.0355,
   bladeHalfThickness: 0.012,
   guardCenterZ: -0.16,
@@ -133,7 +136,15 @@ export class SwordWorldWeaponController {
     this.contactActivationProvider = contactActivationProvider;
     this.visualAssetLoader = visualAssetLoader;
     this.config = SWORD_WORLD_WEAPON_CONFIG;
-    this.weaponDefinition = Object.freeze({ id: this.config.itemId, family: 'sword', authoredDimensions: DREADSTONE_SWORD_DIMENSIONS });
+    this.weaponDefinition = Object.freeze({
+      id: this.config.itemId,
+      family: 'sword',
+      bladeLength: DREADSTONE_SWORD_DIMENSIONS.bladeLength,
+      bladeWidth: DREADSTONE_SWORD_DIMENSIONS.bladeWidth,
+      bladeThickness: DREADSTONE_SWORD_DIMENSIONS.bladeThickness,
+      maximumPenetrationDepth: DREADSTONE_SWORD_DIMENSIONS.bladeLength,
+      authoredDimensions: DREADSTONE_SWORD_DIMENSIONS,
+    });
     this.intentWeapon = new MeleeIntentWeapon({ weaponId: this.config.itemId, minimumIntentSpeed: this.config.minimumAttackSpeed, slashBias: 0.58 });
     this.intentState = this.intentWeapon.current;
     this.gestureOwnership = new WeaponGestureOwnership(this.config.workspace);

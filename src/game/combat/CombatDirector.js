@@ -223,7 +223,6 @@ export class CombatDirector {
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.audio, t.audio, { cue: classification === 'deep_slash' ? 'deep_slash' : 'shallow_slash', position: directedEnd, severity });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.tissue, { stage: PENETRATION_STAGES.softTissue });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.reaction, t.reaction, { hit, point: directedEnd, direction: directedCut, depth, force: severity, severity: Math.max(0.16, severity * 0.3), slashSeverity: severity, source: 'directed_slash', reactionKind: AUTHORED_REACTION_KINDS.slash });
-    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.blood, t.blood, { action: 'slash', direction: directedCut, severity });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.blood, t.blood + COMBAT_PRESENTATION_CONFIG.bloodActivationDelaySeconds, { action: 'activate' });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.camera, t.camera, { durationMs: 105, intensity: Math.min(0.011, 0.005 + severity * 0.005), direction: directedCut, polarity: -1, damping: 18 });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.haptic, t.haptic, { cue: classification === 'deep_slash' ? 'deep_slash' : 'surface_contact' });
@@ -475,6 +474,7 @@ export class CombatDirector {
   applyEdgeDamageEvent({ interaction, payload, time }) {
     const edgeDamage = payload.edgeDamage;
     const isSwordCut = interaction.weapon.family === 'sword' && edgeDamage?.classification === 'cut';
+    const isSwordThrust = interaction.weapon.family === 'sword' && edgeDamage?.classification === 'thrust';
     if (isSwordCut && payload.action === 'begin') {
       const wound = this.actor?.beginSwordCutWound?.({
         hit: payload.hit,
@@ -488,7 +488,6 @@ export class CombatDirector {
         wound.directedBloodReady = true;
         interaction.result.wound = wound;
         interaction.result.woundId = wound.id;
-        this.bloodEffects?.emitSlash?.(wound, payload.direction);
       }
     } else if (isSwordCut && payload.action === 'extend' && interaction.result.woundId) {
       interaction.result.wound = this.actor?.extendSwordCutWound?.(interaction.result.woundId, {
@@ -501,6 +500,27 @@ export class CombatDirector {
       }) ?? interaction.result.wound;
     } else if (isSwordCut && payload.action === 'finish' && interaction.result.woundId) {
       interaction.result.wound = this.actor?.woundSystem?.finishSwordCut?.(interaction.result.woundId, payload.interrupted) ?? interaction.result.wound;
+    } else if (isSwordThrust && payload.action === 'begin') {
+      const wound = this.actor?.beginSwordThrustWound?.({
+        hit: payload.hit,
+        point: payload.point,
+        surfaceNormal: payload.surfaceNormal,
+        direction: payload.direction,
+        sample: payload.sample,
+        edgeDamage,
+        weaponProfile: interaction.weapon.profile,
+        weaponId: interaction.weapon.id,
+      });
+      if (wound) {
+        wound.directedBloodReady = true;
+        interaction.result.wound = wound;
+        interaction.result.woundId = wound.id;
+        this.bloodEffects?.emitEntry?.(wound, payload.sample?.severity ?? 0.2);
+      }
+    } else if (isSwordThrust && payload.action === 'extend' && interaction.result.woundId) {
+      interaction.result.wound = this.actor?.extendSwordThrustWound?.(interaction.result.woundId, { sample: payload.sample }) ?? interaction.result.wound;
+    } else if (isSwordThrust && payload.action === 'finish' && interaction.result.woundId) {
+      interaction.result.wound = this.actor?.finishSwordThrustWound?.(interaction.result.woundId) ?? interaction.result.wound;
     }
     if (payload.action === 'finish') finishEdgeDamageInteraction(edgeDamage, { interrupted: payload.interrupted, completedAt: time });
   }
@@ -540,7 +560,9 @@ export class CombatDirector {
       const traumaSeverity = this.actor.applyEdgeDamage?.(payload);
       interaction.result.traumaSeverity = (interaction.result.traumaSeverity ?? 0) + (traumaSeverity ?? 0);
       if (interaction.result.woundId) {
-        const wound = this.actor.woundSystem?.recordSwordCutTrauma?.(interaction.result.woundId, { traumaSeverity, hit: payload.hit });
+        const wound = payload.classification === 'cut'
+          ? this.actor.woundSystem?.recordSwordCutTrauma?.(interaction.result.woundId, { traumaSeverity, hit: payload.hit })
+          : this.actor.woundSystem?.getWound?.(interaction.result.woundId);
         this.actor.physiology?.onWoundUpdated?.(wound);
       }
       return;
@@ -569,7 +591,6 @@ export class CombatDirector {
     const wound = interaction.result.wound;
     if (!wound || !this.bloodEffects) return;
     if (payload.action === 'entry') this.bloodEffects.emitEntry(wound, payload.severity);
-    else if (payload.action === 'slash') this.bloodEffects.emitSlash(wound, payload.direction);
     else if (payload.action === 'activate') wound.directedBloodReady = true;
     else if (payload.action === 'withdrawal') { wound.directedBloodReady = true; this.bloodEffects.emitWithdrawal(wound, payload.direction); }
   }

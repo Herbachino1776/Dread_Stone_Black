@@ -375,8 +375,8 @@ export class HumanoidCombatActor {
     return { actor: this, regionId, region: HUMANOID_ANATOMY_REGIONS.find((entry) => entry.id === regionId), bodyId, body: bodyEntry.body, collider, localPoint: local };
   }
 
-  beginPunctureWound({ hit, entryPoint, direction, surfaceNormal = null, entryTangent = null, depth = 0.004, impactSeverity = 0, weaponProfile = null, hardContact = false, weaponId = 'old_work_knife', deferReaction = false, deferAudio = false } = {}) {
-    const wound = this.woundSystem.createPuncture({ hit, entryPoint, axis: direction, surfaceNormal, entryTangent, depth, impactSeverity, weaponProfile, hardStructureContact: hardContact, embeddedWeaponId: weaponId, createdTime: this.elapsed });
+  beginPunctureWound({ hit, entryPoint, direction, surfaceNormal = null, entryTangent = null, depth = 0.004, impactSeverity = 0, weaponProfile = null, hardContact = false, weaponId = 'old_work_knife', embeddedWeaponId = weaponId, deferReaction = false, deferAudio = false } = {}) {
+    const wound = this.woundSystem.createPuncture({ hit, entryPoint, axis: direction, surfaceNormal, entryTangent, depth, impactSeverity, weaponProfile, weaponId, hardStructureContact: hardContact, embeddedWeaponId, createdTime: this.elapsed });
     const state = this.regionState.get(hit.regionId);
     if (state) state.wounds = (state.wounds ?? 0) + 1;
     this.physiology.onWoundCreated(wound);
@@ -456,6 +456,34 @@ export class HumanoidCombatActor {
     if (state) state.wounds = (state.wounds ?? 0) + 1;
     this.physiology.onWoundCreated(wound);
     return wound;
+  }
+
+  beginSwordThrustWound({ hit, point, surfaceNormal, direction, sample, edgeDamage, weaponProfile = null, weaponId = 'dreadstone_sword' } = {}) {
+    const wound = this.beginPunctureWound({
+      hit,
+      entryPoint: point,
+      direction,
+      surfaceNormal,
+      depth: sample?.depth,
+      impactSeverity: sample?.severity,
+      weaponProfile,
+      weaponId,
+      embeddedWeaponId: null,
+      deferReaction: true,
+      deferAudio: true,
+    });
+    if (!wound) return null;
+    wound.interactionKind = 'sword_thrust';
+    wound.edgeDamageId = edgeDamage?.schema ? `${edgeDamage.schema}:${edgeDamage.startedAt}` : null;
+    return wound;
+  }
+
+  extendSwordThrustWound(woundId, { sample } = {}) {
+    return this.woundSystem.extendPuncture(woundId, { depth: sample?.depth ?? 0 });
+  }
+
+  finishSwordThrustWound(woundId) {
+    return this.woundSystem.finishPuncture(woundId);
   }
 
   extendSwordCutWound(woundId, { hit, point, surfaceNormal, direction, sample } = {}) {

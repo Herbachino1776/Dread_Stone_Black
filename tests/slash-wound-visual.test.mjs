@@ -255,7 +255,7 @@ test('live growth appends stable deterministic tail fragments instead of rebuild
   assert.ok(second.diagnostics.maximumUncoveredGap <= SLASH_CONTINUITY_TOLERANCE);
 });
 
-test('one slash owns one wound, one material, one draw call, and no fragment gameplay state', () => {
+test('one slash owns one authoritative wound while persistent slash presentation stays disabled', () => {
   const { system, scene, hit } = createWoundSystem();
   const wound = createSlash(system, hit, { endPoint: new THREE.Vector3(0.2, 0.04, 0.01) });
   const woundCount = system.wounds.length;
@@ -264,12 +264,14 @@ test('one slash owns one wound, one material, one draw call, and no fragment gam
   assert.equal(system.wounds.length, woundCount);
   assert.equal(woundCount, 1);
   assert.equal(wound.visualSlot.slash.geometry.uuid, geometryId);
-  assert.equal(wound.slashVisualDiagnostics.materialCount, 1);
-  assert.equal(wound.slashVisualDiagnostics.drawCallCount, 1);
+  assert.equal(wound.slashVisualDiagnostics.materialCount, 0);
+  assert.equal(wound.slashVisualDiagnostics.drawCallCount, 0);
+  assert.equal(wound.slashVisualDiagnostics.oneSampleSeedUsageCount, 0);
   assert.ok(wound.decalVariantId.startsWith('knife_puncture_slit_'));
   assert.equal(wound.decalFamily, 'slash');
   assert.equal(wound.visualSlot.puncture.visible, false);
-  assert.equal(wound.visualSlot.slash.visible, true);
+  assert.equal(wound.visualSlot.slash.visible, false);
+  assert.equal(wound.surfaceVisualStatus, 'retired_no_persistent_slash');
   assert.equal(scene.children.filter((object) => object.name === wound.visualSlot.slash.name).length, 1, 'fragments do not create child meshes');
   assert.equal('bleedingRate' in wound.visualSlot.slashWorkspace, false);
   assert.equal('physiology' in wound.visualSlot.slashWorkspace, false);
@@ -306,7 +308,7 @@ test('fragment rendering creates no additional physiology or pain events for the
   actor.dispose(); physics.dispose();
 });
 
-test('animated multi-triangle torso bindings preserve curved-chain continuity and pooled geometry', () => {
+test('retired slash visuals retain animated multi-triangle surface bindings and pooled geometry', () => {
   const fixture = createGridSurface();
   const adapter = createSurfaceAdapter(fixture);
   const { system, hit } = createWoundSystem(adapter);
@@ -314,20 +316,21 @@ test('animated multi-triangle torso bindings preserve curved-chain continuity an
   assert.ok(wound.slashSamples.length >= 10, 'dense surface samples keep the strip close to animated torso curvature');
   assert.ok(new Set(wound.slashSamples.map((sample) => sample.binding.triangleIndex)).size >= 3, 'recorded slash crosses several valid surface triangles');
   const geometryId = wound.visualSlot.slash.geometry.uuid;
-  const before = [...wound.visualSlot.slashWorkspace.fragmentCenters.slice(0, wound.renderedSegmentCount * 3)];
+  const before = reconstructSkinnedSurface(wound.slashSamples[0].binding).point.clone();
   fixture.bone.position.set(0.11, 0.035, 0);
   fixture.root.updateMatrixWorld(true);
   fixture.mesh.skeleton.update();
   system.updateWoundVisual(wound);
-  const after = [...wound.visualSlot.slashWorkspace.fragmentCenters.slice(0, wound.renderedSegmentCount * 3)];
+  const after = reconstructSkinnedSurface(wound.slashSamples[0].binding).point;
   assert.equal(wound.visualSlot.slash.geometry.uuid, geometryId);
-  assert.ok(Math.abs(after[0] - before[0] - 0.11) < 1e-4, 'fragment centers follow animated torso translation');
-  assert.ok(Math.abs(after[1] - before[1] - 0.035) < 1e-4);
-  assert.ok(wound.slashVisualDiagnostics.maximumUncoveredGap <= SLASH_CONTINUITY_TOLERANCE);
+  assert.ok(Math.abs(after.x - before.x - 0.11) < 1e-4, 'surface bindings remain animation-following for future wound work');
+  assert.ok(Math.abs(after.y - before.y - 0.035) < 1e-4);
+  assert.equal(wound.renderedSegmentCount, 0);
+  assert.equal(wound.visualSlot.slash.visible, false);
   system.dispose(); fixture.geometry.dispose(); fixture.mesh.material.dispose();
 });
 
-test('temporary failed binding splits invalid surface space without breaking valid-section continuity', () => {
+test('temporary failed binding preserves split surface samples without reviving slash presentation', () => {
   const fixture = createGridSurface();
   const adapter = createSurfaceAdapter(fixture);
   const { system, hit } = createWoundSystem(adapter);
@@ -337,43 +340,45 @@ test('temporary failed binding splits invalid surface space without breaking val
   system.extendSlash(wound.id, { localEnd: new THREE.Vector3(0.16, 0.1, 0.01), worldEnd: new THREE.Vector3(0.16, 0.1, 0.01), surfaceNormal: normal, addedTravel: 0.1, depth: 0.026, severity: 0.52, edgeAlignment: 0.8 });
   system.extendSlash(wound.id, { localEnd: new THREE.Vector3(0.24, 0.15, 0.01), worldEnd: new THREE.Vector3(0.24, 0.15, 0.01), surfaceNormal: normal, addedTravel: 0.1, depth: 0.026, severity: 0.52, edgeAlignment: 0.8 });
   assert.ok(wound.slashSamples.some((sample) => sample.breakBefore), 'the failed binding is not bridged');
-  assert.ok(wound.slashVisualDiagnostics.maximumUncoveredGap <= SLASH_CONTINUITY_TOLERANCE, 'each valid section remains continuous');
-  assert.equal(wound.slashVisualDiagnostics.drawCallCount, 1);
+  assert.equal(wound.slashVisualDiagnostics.fragmentCount, 0);
+  assert.equal(wound.slashVisualDiagnostics.drawCallCount, 0);
+  assert.equal(wound.visualSlot.slash.visible, false);
   system.dispose(); fixture.geometry.dispose(); fixture.mesh.material.dispose();
 });
 
-test('fallback and reopening remain continuous chains rather than stretched or dotted punctures', () => {
+test('fallback and reopening retain physical wound dimensions without creating slash marks', () => {
   const { system, hit } = createWoundSystem();
   const wound = createSlash(system, hit, { endPoint: new THREE.Vector3(0.2, 0.04, 0.01), cutLength: 0.31 });
   const geometryId = wound.visualSlot.slash.geometry.uuid;
   const initialWidth = wound.visualWidthMeters;
-  assert.equal(wound.slashVisualDiagnostics.fallbackUsage, true);
-  assert.ok(wound.slashVisualDiagnostics.fragmentCount > 1);
-  assert.ok(wound.slashVisualDiagnostics.maximumUncoveredGap <= SLASH_CONTINUITY_TOLERANCE);
+  assert.equal(wound.slashVisualDiagnostics.fragmentCount, 0);
+  assert.equal(wound.slashVisualDiagnostics.oneSampleSeedUsageCount, 0);
   wound.reopenedCount += 1;
   wound.lateralTearingMeters = 0.018;
   system.updateSlashDimensions(wound);
   system.updateWoundVisual(wound);
   assert.equal(wound.visualSlot.slash.geometry.uuid, geometryId);
   assert.ok(wound.visualWidthMeters > initialWidth);
-  assert.ok(wound.slashVisualDiagnostics.fragmentCount > 1);
-  assert.ok(wound.slashVisualDiagnostics.maximumUncoveredGap <= SLASH_CONTINUITY_TOLERANCE);
+  assert.equal(wound.slashVisualDiagnostics.fragmentCount, 0);
+  assert.equal(wound.visualSlot.slash.visible, false);
   assert.equal(wound.visualSlot.puncture.visible, false);
   system.dispose();
 });
 
-test('stab puncture presentation is uniformly 30 percent larger without changing its authored UV or wound dimensions', () => {
-  const { system, hit } = createWoundSystem();
+test('knife puncture presentation uses the 1.45 scale without changing authored UV or physical wound dimensions', () => {
+  const fixture = createGridSurface();
+  const { system, hit } = createWoundSystem(createSurfaceAdapter(fixture));
   const wound = system.createPuncture({ hit, entryPoint: hit.localPoint, axis: new THREE.Vector3(0, 0, -1), surfaceNormal: normal, entryTangent: new THREE.Vector3(1, 0, 0), depth: 0.018, impactSeverity: 0.3, weaponProfile: KNIFE_COMBAT_CONFIG });
-  assert.equal(PUNCTURE_DECAL_SCALE, 1.3);
-  assert.ok(Math.abs(wound.visualSlot.puncture.scale.x - wound.visualMajorMeters * 1.3) < 1e-9);
-  assert.ok(Math.abs(wound.visualSlot.puncture.scale.y - wound.visualMinorMeters * 1.3) < 1e-9);
+  assert.equal(PUNCTURE_DECAL_SCALE, 1.45);
+  assert.equal(wound.puncturePresentationScale, 1.45);
+  assert.ok(Math.abs(wound.visualSlot.puncture.scale.x - wound.visualMajorMeters * 1.45) < 1e-9);
+  assert.ok(Math.abs(wound.visualSlot.puncture.scale.y - wound.visualMinorMeters * 1.45) < 1e-9);
   assert.equal(wound.visualSlot.puncture.visible, true);
   assert.equal(wound.visualSlot.slash.visible, false);
   assert.equal(wound.visualSlot.puncture.material.userData.authoredKnifeWoundVariantId, wound.decalVariantId);
   const cropped = getAlphaBoundUv(variant(wound.decalVariantId), wound.mirroredX);
   assert.deepEqual([...wound.visualSlot.puncture.geometry.attributes.uv.array], [cropped.u0, cropped.v0, cropped.u1, cropped.v0, cropped.u0, cropped.v1, cropped.u1, cropped.v1]);
-  system.dispose();
+  system.dispose(); fixture.geometry.dispose(); fixture.mesh.material.dispose();
 });
 
 test('slash visual source has no unseeded randomness, fragment meshes, or gameplay wound creation', () => {

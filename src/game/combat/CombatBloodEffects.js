@@ -64,11 +64,6 @@ export class CombatBloodEffects {
     if (count >= 4) this.eventSink?.('blood_spray', { position: this.woundSystem.getWorldPose(wound)?.point, severity: wound?.severity ?? 0.3 });
   }
 
-  emitSlash(wound, direction = null) {
-    const count = Math.min(BLOOD_EFFECT_CONFIG.slashBurstMaximum, 1 + Math.floor((wound?.severity ?? 0) * 4));
-    this.emitBurst(wound, count, 'slash', direction);
-  }
-
   emitBurst(wound, count, kind, direction = null) {
     const pose = this.woundSystem.getWorldPose(wound);
     if (!pose || !wound || wound.bleedingProfile.kind === 'none') return;
@@ -78,7 +73,7 @@ export class CombatBloodEffects {
       outward.x += (Math.random() - 0.5) * 0.38;
       outward.y += (Math.random() - 0.2) * 0.32;
       outward.z += (Math.random() - 0.5) * 0.38;
-      const speed = kind === 'withdrawal' ? 0.8 + Math.random() * 1.1 : kind === 'slash' ? 0.55 + Math.random() * 0.9 : 0.35 + Math.random() * 0.65;
+      const speed = kind === 'withdrawal' ? 0.8 + Math.random() * 1.1 : 0.35 + Math.random() * 0.65;
       this.spawnParticle(wound, pose.point, outward.normalize().multiplyScalar(speed), kind);
     }
   }
@@ -173,9 +168,7 @@ export class CombatBloodEffects {
       this.particleMesh.setMatrixAt(index, dummy.matrix);
       const paletteColor = particle.kind === 'arterial-pulse'
         ? BLOOD_COLOR_PALETTE.arterial
-        : particle.kind === 'slash'
-          ? BLOOD_COLOR_PALETTE.fresh
-          : BLOOD_COLOR_PALETTE.spray;
+        : BLOOD_COLOR_PALETTE.spray;
       this.particleMesh.setColorAt(index, tmpColor.setHex(paletteColor));
     });
     this.particleMesh.instanceMatrix.needsUpdate = true;
