@@ -216,6 +216,23 @@ test('knife release plans return free contact and leave a planted blade embedded
   assert.ok(springSamples.every((value, index) => index === 0 || value >= springSamples[index - 1]), 'critical return is monotonic and cannot oscillate');
 });
 
+test('a planted knife recalls as soon as the player walks beyond its short tether', () => {
+  const controller = Object.create(WorldKnifeCombatController.prototype);
+  controller.gripPointerId = null;
+  controller.state = KNIFE_CONTROL_STATES.embedded;
+  controller.config = KNIFE_COMBAT_CONFIG;
+  controller.entry = { plantedDesiredGrip: new THREE.Vector3(1, 2, 3) };
+  controller.desiredGrip = new THREE.Vector3(1, 2, 3);
+  const observed = [];
+  controller.extract = (reason) => { observed.push(reason); controller.entry = null; controller.state = KNIFE_CONTROL_STATES.returning; };
+  controller.solveFreePose = (dt) => observed.push(dt);
+  controller.desiredGrip.x += KNIFE_COMBAT_CONFIG.forcedExtractionDistance - 0.001;
+  assert.equal(controller.recallPlantedKnifeIfSeparated(1 / 60), false, 'nearby planted hold remains available');
+  controller.desiredGrip.x += 0.002;
+  assert.equal(controller.recallPlantedKnifeIfSeparated(1 / 60), true, 'crossing the existing forced-extraction distance recalls immediately');
+  assert.deepEqual(observed, ['walk-away-recall', 1 / 60]);
+});
+
 test('knife tip and forward axis derive from one world transform', () => {
   const grip = new THREE.Vector3(1, 2, 3);
   const rotation = new THREE.Quaternion();

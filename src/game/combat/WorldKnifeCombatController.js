@@ -482,6 +482,7 @@ export class WorldKnifeCombatController {
     this.deliberateInputVelocity.set(0, 0, 0);
     this.attackEnabled = false;
     this.offensiveVelocity.set(0, 0, 0);
+    if (this.entry) this.entry.plantedDesiredGrip.copy(this.desiredGrip);
     const plan = getKnifeReleasePlan({ embeddedDepth: this.penetrationDepth, failedContact: this.failedContact, config: this.config });
     this.state = plan.state;
     this.reason = `${reason}:${plan.reason}`;
@@ -908,6 +909,7 @@ export class WorldKnifeCombatController {
       withdrawalStarted: false,
       resistancePhase: 'skin',
       reportedLateralMotion: 0,
+      plantedDesiredGrip: new THREE.Vector3(),
     };
     this.penetrationDepth = 0.004;
     this.maximumDepthReached = 0.004;
@@ -942,12 +944,21 @@ export class WorldKnifeCombatController {
     };
   }
 
+  recallPlantedKnifeIfSeparated(dt) {
+    if (this.gripPointerId != null || this.state === KNIFE_CONTROL_STATES.withdrawing || !this.entry?.plantedDesiredGrip) return false;
+    if (this.entry.plantedDesiredGrip.distanceToSquared(this.desiredGrip) <= this.config.forcedExtractionDistance ** 2) return false;
+    this.extract('walk-away-recall');
+    this.solveFreePose(dt);
+    return true;
+  }
+
   solveEmbeddedPose(dt) {
     const worldEntry = this.getEntryWorldPose();
     if (!worldEntry || this.entry.actor?.disposed || !this.entry.actor?.bodies?.has(this.entry.bodyId)) { this.cancel('target-invalid'); return; }
     const maximumRegionDepth = Math.min(this.entry.hit.region.maximumTissueDepth, this.config.maximumPenetrationDepth, this.config.bladeLength);
     const assistedWithdrawal = this.state === KNIFE_CONTROL_STATES.withdrawing;
     const plantedHold = this.gripPointerId == null && !assistedWithdrawal;
+    if (plantedHold && this.recallPlantedKnifeIfSeparated(dt)) return;
     const desiredProjection = this.desiredTip.clone().sub(worldEntry.point).dot(worldEntry.axis);
     let targetDepth = assistedWithdrawal
       ? Math.max(-0.04, this.penetrationDepth - this.config.withdrawalRate * dt)
