@@ -72,6 +72,7 @@ export function sweepCuttingEdge({
   colliderFilter,
   stableAnchorT = 0.5,
   toiEpsilon = 1e-5,
+  positionsPrepared = null,
   scratch,
 }) {
   scratch.currentStart.copy(edgePath.points[0]).applyQuaternion(currentQuaternion).add(currentPosition);
@@ -83,14 +84,16 @@ export function sweepCuttingEdge({
   contact.sampleT = 0.5;
   contact.anchorDistance = Infinity;
   contact.sampleCount = sampleCount;
-  const positionsPrepared = physics.prepareWeaponSweepBatch?.() === true;
+  const batchPositionsPrepared = positionsPrepared == null
+    ? physics.prepareWeaponSweepBatch?.() === true
+    : positionsPrepared === true;
   for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
     const sampleT = sampleIndex / (sampleCount - 1);
     sampleCuttingEdgeLocal(edgePath, sampleT, scratch.localSample);
     const samplePrevious = scratch.previousSample.copy(scratch.localSample).applyQuaternion(previousQuaternion).add(previousPosition);
     const sampleCurrent = scratch.currentSample.copy(scratch.localSample).applyQuaternion(currentQuaternion).add(currentPosition);
     if (samplePrevious.distanceToSquared(sampleCurrent) < 1e-8) continue;
-    const sampleHit = physics.castWeaponTip(samplePrevious, sampleCurrent, radius, colliderFilter, positionsPrepared);
+    const sampleHit = physics.castWeaponTip(samplePrevious, sampleCurrent, radius, colliderFilter, batchPositionsPrepared);
     if (!sampleHit?.collider) continue;
     const toi = THREE.MathUtils.clamp(sampleHit.time_of_impact ?? 0, 0, 1);
     const anchorDistance = Math.abs(sampleT - stableAnchorT);

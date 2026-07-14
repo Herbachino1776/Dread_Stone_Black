@@ -23,8 +23,37 @@ import { isDamageIntent, MELEE_INTENTS, MeleeIntentWeapon } from '../src/game/co
 import { Feedback } from '../src/game/Feedback.js';
 import { applyMeleeSpacingEnvelope, resolveMeleeSpacingEnvelope, resolveWeaponMicroResponse, sampleTissueResistanceCurve } from '../src/game/combat/CombatPresentation.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
+import { EDGE_DAMAGE_SCHEMA } from '../src/game/combat/weapons/EdgeDamageInteraction.js';
+import { DREADSTONE_SWORD_DIMENSIONS, DREADSTONE_SWORD_GLB_PATH, SWORD_CONTACT_PRIMITIVES, SWORD_EDGE_BASE_SAMPLE_COUNT, SWORD_EDGE_MAX_SAMPLE_COUNT, SWORD_VIEWMODEL_LAYER, SwordWorldWeaponController, classifySwordContact, resolveSwordEdgeSampleCount, resolveSwordLeadingPart } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
 
 installKnifeWoundManifestForHeadlessTests(JSON.parse(readFileSync(new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url), 'utf8')));
+
+test('authored sword dimensions drive complete weapon-neutral contact primitives', () => {
+  assert.equal(DREADSTONE_SWORD_GLB_PATH, './assets/weapons/melee/dreadstone_sword_v002.glb');
+  assert.equal(DREADSTONE_SWORD_DIMENSIONS.tipZ, -0.892469227);
+  assert.ok(DREADSTONE_SWORD_DIMENSIONS.overallLength > 1.09 && DREADSTONE_SWORD_DIMENSIONS.overallLength < 1.11);
+  assert.deepEqual(Object.keys(SWORD_CONTACT_PRIMITIVES), ['tip', 'leftEdge', 'rightEdge', 'flat', 'spine', 'guard', 'grip']);
+  assert.equal(SWORD_CONTACT_PRIMITIVES.tip.point[2], DREADSTONE_SWORD_DIMENSIONS.tipZ);
+  assert.equal(SWORD_CONTACT_PRIMITIVES.guard.points[0][0], -DREADSTONE_SWORD_DIMENSIONS.guardHalfSpan);
+});
+
+test('long sword edges adapt sampling and classify every authored contact family', () => {
+  const previousStart = new THREE.Vector3(-0.035, 0, -0.214);
+  const previousEnd = new THREE.Vector3(0, 0, -0.892);
+  const currentStart = previousStart.clone();
+  const currentEnd = new THREE.Vector3(0, 0, 0.46);
+  assert.equal(resolveSwordEdgeSampleCount(previousStart, previousEnd, previousStart, previousEnd), SWORD_EDGE_BASE_SAMPLE_COUNT);
+  assert.equal(resolveSwordEdgeSampleCount(previousStart, previousEnd, currentStart, currentEnd), SWORD_EDGE_MAX_SAMPLE_COUNT);
+  assert.equal(resolveSwordLeadingPart(new THREE.Vector3(0, 0, -1)), 'tip');
+  assert.equal(resolveSwordLeadingPart(new THREE.Vector3(1, 0, 0)), 'edge');
+  assert.equal(resolveSwordLeadingPart(new THREE.Vector3(0, 1, 0)), 'flat');
+  assert.equal(resolveSwordLeadingPart(new THREE.Vector3(0, -1, 0)), 'spine');
+  assert.equal(classifySwordContact({ part: 'tip', speed: 1, localMotion: new THREE.Vector3(0, 0, -1) }).classification, 'thrust');
+  assert.equal(classifySwordContact({ part: 'leftEdge', speed: 1, localMotion: new THREE.Vector3(1, 0, 0) }).classification, 'cut');
+  assert.equal(classifySwordContact({ part: 'rightEdge', speed: 0.05, localMotion: new THREE.Vector3(0.1, 0, 0) }).classification, 'scrape');
+  assert.equal(classifySwordContact({ part: 'flat', speed: 1, localMotion: new THREE.Vector3(0, 1, 0) }).classification, 'flat_strike');
+  assert.equal(classifySwordContact({ part: 'guard', speed: 1, localMotion: new THREE.Vector3(1, 0, 0) }).classification, 'guard_impact');
+});
 
 async function createActor() {
   await initializeCombatPhysics();
@@ -523,6 +552,92 @@ test('Testman authored deaths never hand skeletal authority to ragdoll', async (
   assert.equal(actor.ragdollActive, false);
   assert.equal(ragdollBeginCount, 0);
   assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 2));
+  actor.dispose();
+  physics.dispose();
+});
+
+test('sword edge damage reaches semantic anatomy without creating knife wounds or decals', async () => {
+  const { actor, physics } = await createActor();
+  const director = new CombatDirector({ actor });
+  const { hit, worldPoint } = makeHit(actor, 'upper_chest');
+  const beforeTrauma = actor.regionState.get(hit.regionId).trauma;
+  const weapon = { id: 'dreadstone_sword', family: 'sword' };
+  const intent = new MeleeIntentWeapon({ weaponId: weapon.id }).interpret({ ownerId: 9, controlState: 'attacking', localVelocity: new THREE.Vector3(0.8, 0, 0) });
+  const interaction = director.beginEdgeDamage({ weapon, intent, hit, point: worldPoint, localPoint: hit.localPoint, surfaceNormal: new THREE.Vector3(0, 0, 1), direction: new THREE.Vector3(1, 0, 0), travel: 0.08, depth: 0.018, severity: 0.72, edgeAlignment: 0.9, classification: 'cut', part: 'leftEdge' });
+  assert.ok(interaction);
+  assert.equal(interaction.result.edgeDamage.schema, EDGE_DAMAGE_SCHEMA);
+  assert.equal(interaction.result.edgeDamage.target.regionId, hit.regionId);
+  assert.equal(interaction.result.wound, undefined);
+  director.extendEdgeDamage(interaction.id, { hit, point: worldPoint.clone().add(new THREE.Vector3(0.06, 0, 0)), localPoint: hit.localPoint.clone().add(new THREE.Vector3(0.06, 0, 0)), surfaceNormal: new THREE.Vector3(0, 0, 1), direction: new THREE.Vector3(1, 0, 0), travel: 0.06, depth: 0.015, severity: 0.6, edgeAlignment: 0.86 });
+  director.finishEdgeDamage(interaction.id);
+  director.update(0.4);
+  assert.equal(actor.woundSystem.wounds.length, 0, 'sword damage never enters the knife wound/decal renderer');
+  assert.ok(actor.regionState.get(hit.regionId).trauma > beforeTrauma, 'edge damage applies trauma through semantic anatomy');
+  assert.equal(interaction.result.edgeDamage.completed, true);
+  assert.equal(interaction.result.edgeDamage.samples.length, 2);
+  assert.equal(director.eventLog.some((event) => event.type === COMBAT_DIRECTOR_EVENTS.wound), false);
+  director.dispose();
+  actor.dispose();
+  physics.dispose();
+});
+
+test('sword controller loads the grip-origin GLB and directly follows owned world-space input', async () => {
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(70, 390 / 702, 0.05, 100);
+  camera.updateMatrixWorld(true);
+  const viewport = { querySelector: () => null, getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 702 }) };
+  const equipment = { hasItem: (id) => id === 'dreadstone_sword', getEquippedWeaponProfile: () => ({ id: 'dreadstone_sword' }) };
+  const source = new THREE.Group();
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.01, 0.9), new THREE.MeshStandardMaterial());
+  source.add(mesh);
+  const sword = new SwordWorldWeaponController({ app: viewport, scene, camera, equipmentRuntime: equipment, physics: null, contactActivationProvider: () => false, visualAssetLoader: async () => source, bindPointerInput: false });
+  await sword.visualLoadPromise;
+  assert.equal(sword.visualAssetState, 'loaded');
+  assert.equal(sword.visual.children[0].position.length(), 0, 'the authored grip origin is used without a corrective mesh offset');
+  assert.equal(sword.visual.children[0].children[0].layers.mask, 1 << SWORD_VIEWMODEL_LAYER);
+  const before = sword.actualGrip.clone();
+  assert.equal(sword.acquireGrip(4, 195, 560, 0), true);
+  assert.equal(sword.applyGripGesture(4, 90, -30, 285, 530, 16), true);
+  sword.beforePhysics(1 / 60);
+  assert.ok(sword.actualGrip.distanceTo(before) > 0.05);
+  assert.ok(sword.actualGrip.distanceTo(sword.desiredGrip) < 1e-9, 'free-space collision follows the desired hand with no smoothing delay');
+  const cameraLocalPose = camera.worldToLocal(sword.actualGrip.clone());
+  camera.position.set(5, 2, -4);
+  camera.rotateY(0.8);
+  camera.updateMatrixWorld(true);
+  sword.beforePhysics(1 / 60);
+  assert.ok(camera.worldToLocal(sword.actualGrip.clone()).distanceTo(cameraLocalPose) < 1e-6, 'camera rebasing preserves the owned sword pose without generating attack travel');
+  assert.deepEqual(Object.keys(sword.primitives), ['leftEdge', 'rightEdge', 'flat', 'spine', 'guard', 'grip']);
+  sword.afterPhysics();
+  assert.ok(sword.visual.position.distanceTo(sword.actualGrip) < 1e-9);
+  sword.dispose();
+  assert.equal(scene.children.includes(sword.visual), false);
+});
+
+test('a deliberate sword sweep routes its authored edge into anatomy without knife wound visuals', async () => {
+  await initializeCombatPhysics();
+  const physics = new CombatPhysicsWorld();
+  const scene = new THREE.Scene();
+  const actor = new HumanoidCombatActor({ physics, scene, mortalityMode: COMBAT_MORTALITY_MODES.immortalReactive });
+  const camera = new THREE.PerspectiveCamera(70, 390 / 702, 0.1, 100);
+  camera.position.set(-0.02, 1.81, -2.3);
+  camera.updateMatrixWorld(true);
+  const viewport = { querySelector: () => null, getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 702 }) };
+  const equipment = { getEquippedWeaponProfile: () => ({ id: 'dreadstone_sword' }), hasItem: () => true };
+  const sword = new SwordWorldWeaponController({ app: viewport, scene, camera, actor, physics, equipmentRuntime: equipment, bindPointerInput: false, contactActivationProvider: () => true, visualAssetLoader: async () => new THREE.Group() });
+  sword.acquireGrip(42, 280, 470, 0);
+  for (let step = 1; step <= 12; step += 1) {
+    sword.applyGripGesture(42, -step * 4, 0, 280 - step * 4, 470, step * 16);
+    physics.stepSingle((dt) => { sword.beforePhysics(dt); actor.beforePhysics(dt); }, (dt) => sword.afterPhysicsStep(dt));
+  }
+  sword.releaseGrip('test-complete');
+  for (let step = 0; step < 18; step += 1) physics.stepSingle((dt) => { sword.beforePhysics(dt); actor.beforePhysics(dt); }, (dt) => sword.afterPhysicsStep(dt));
+  const totalTrauma = [...actor.regionState.values()].reduce((sum, state) => sum + state.trauma, 0);
+  assert.ok(sword.edgeDamageCount >= 1);
+  assert.equal(sword.lastContactPart === 'leftEdge' || sword.lastContactPart === 'rightEdge', true);
+  assert.ok(totalTrauma > 0);
+  assert.equal(actor.woundSystem.wounds.length, 0, 'swept sword cuts never produce a knife decal chain');
+  sword.dispose();
   actor.dispose();
   physics.dispose();
 });

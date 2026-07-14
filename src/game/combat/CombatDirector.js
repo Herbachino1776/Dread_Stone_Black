@@ -1,5 +1,6 @@
 import { isDamageIntent, MELEE_INTENTS } from './MeleeIntentWeapon.js';
 import { COMBAT_PRESENTATION_CONFIG, deterministicCombatVariation, getImpactMemoryChannel } from './CombatPresentation.js';
+import { appendEdgeDamageSample, createEdgeDamageInteraction, finishEdgeDamageInteraction } from './weapons/EdgeDamageInteraction.js';
 
 const AUTHORED_REACTION_KINDS = Object.freeze({ punctureEntry: 'puncture_entry', slash: 'slash' });
 
@@ -20,6 +21,7 @@ export const COMBAT_DIRECTOR_EVENTS = Object.freeze({
   lifecycle: 'lifecycle',
   tissue: 'tissue',
   wound: 'wound',
+  edgeDamage: 'edge_damage',
   reaction: 'reaction',
   blood: 'blood',
   audio: 'audio',
@@ -90,6 +92,9 @@ export class CombatDirector {
     });
     this.subscribe(COMBAT_DIRECTOR_EVENTS.tissue, (event) => this.applyTissueEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.wound, (event) => this.applyWoundEvent(event));
+    this.subscribe(COMBAT_DIRECTOR_EVENTS.edgeDamage, (event) => {
+      if (event.payload.action === 'finish') finishEdgeDamageInteraction(event.payload.edgeDamage, { interrupted: event.payload.interrupted, completedAt: event.time });
+    });
     this.subscribe(COMBAT_DIRECTOR_EVENTS.reaction, (event) => this.applyReactionEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.blood, (event) => this.applyBloodEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.audio, (event) => this.feedbackSystem?.emitAudio?.(event.payload.cue, event.payload) ?? this.feedbackSystem?.emit?.(event.payload.cue, { ...event.payload, haptics: false }));
@@ -257,6 +262,53 @@ export class CombatDirector {
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.wound, afterWound, { action: 'finish_slash', interrupted });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, afterWound + recoveryDelay, { stage: PENETRATION_STAGES.recovery });
     this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.recovery, afterWound + recoveryDelay, { reason: interrupted ? 'slash-interrupted' : 'slash-complete' });
+    return true;
+  }
+
+  beginEdgeDamage({ weapon, intent, hit, point, localPoint = null, surfaceNormal, direction, travel = 0, depth = 0, severity = 0, edgeAlignment = 0, classification = 'cut', part = 'edge', weaponAdapter = null } = {}) {
+    const interaction = this.createInteraction({ kind: 'edge_damage', weapon, intent, target: hit, weaponAdapter });
+    if (!interaction) return null;
+    const t = resolveMeleeTimeline(intent.intent === MELEE_INTENTS.stab ? 'puncture' : 'slash', weapon);
+    const edgeDamage = createEdgeDamageInteraction({ weaponId: interaction.weapon.id, weaponFamily: interaction.weapon.family, hit, classification, part, startedAt: this.time });
+    const sample = appendEdgeDamageSample(edgeDamage, { point, localPoint: localPoint ?? hit?.localPoint, normal: surfaceNormal, direction, travel, depth, severity, edgeAlignment, time: this.time });
+    interaction.result.edgeDamage = edgeDamage;
+    interaction.readyAt = this.time + t.rupture;
+    interaction.recoveryOffset = t.recovery ?? 0.16;
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.contact, { stage: PENETRATION_STAGES.surfaceContact });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.resistance, t.contact, { kind: classification === 'thrust' ? 'tip_resistance' : 'edge_drag', intensity: Math.min(1, severity * 0.45), depth });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.compression, { stage: PENETRATION_STAGES.surfaceCompression });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.rupture, { stage: PENETRATION_STAGES.surfaceRupture });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.edgeDamage, t.rupture, { action: 'begin', edgeDamage, sample });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, t.tissue, { stage: PENETRATION_STAGES.softTissue });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.tissue, t.tissue, { action: 'edge_damage', hit, point: cloneVector(point), direction: cloneVector(direction), depth, travel, severity, edgeAlignment, classification, part });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.reaction, t.reaction, { hit, point: cloneVector(point), direction: cloneVector(direction), depth, force: severity, severity: Math.max(0.16, severity * 0.32), slashSeverity: classification === 'cut' ? severity : 0, source: `directed_sword_${classification}`, reactionKind: classification === 'thrust' ? AUTHORED_REACTION_KINDS.punctureEntry : AUTHORED_REACTION_KINDS.slash });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.audio, t.audio, { cue: classification === 'thrust' ? 'puncture' : 'deep_slash', position: cloneVector(point), severity });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.camera, t.camera, { durationMs: 105, intensity: Math.min(0.011, 0.004 + severity * 0.005), direction: cloneVector(direction), polarity: -1, damping: 18 });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.haptic, t.haptic, { cue: classification === 'thrust' ? 'penetration' : 'deep_slash' });
+    return interaction;
+  }
+
+  extendEdgeDamage(interactionId, payload = {}) {
+    const interaction = this.getActiveInteraction(interactionId);
+    const edgeDamage = interaction?.result?.edgeDamage;
+    if (!interaction || !edgeDamage || interaction.flags.has('edge_damage_finishing')) return false;
+    const sample = appendEdgeDamageSample(edgeDamage, { point: payload.point, localPoint: payload.localPoint ?? payload.hit?.localPoint, normal: payload.surfaceNormal, direction: payload.direction, travel: payload.travel, depth: payload.depth, severity: payload.severity, edgeAlignment: payload.edgeAlignment, time: this.time });
+    const delay = Math.max(0.002, (interaction.readyAt ?? this.time) - this.time);
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.edgeDamage, delay, { action: 'extend', edgeDamage, sample });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.tissue, delay, { action: 'edge_damage', hit: payload.hit, point: cloneVector(payload.point), direction: cloneVector(payload.direction), depth: payload.depth, travel: payload.travel, severity: payload.severity, edgeAlignment: payload.edgeAlignment, classification: edgeDamage.classification, part: edgeDamage.part });
+    return true;
+  }
+
+  finishEdgeDamage(interactionId, interrupted = false) {
+    const interaction = this.getActiveInteraction(interactionId);
+    const edgeDamage = interaction?.result?.edgeDamage;
+    if (!interaction || !edgeDamage || interaction.flags.has('edge_damage_finishing')) return false;
+    interaction.flags.add('edge_damage_finishing');
+    const delay = Math.max(0.002, (interaction.readyAt ?? this.time) - this.time);
+    const recoveryDelay = Math.max(0.01, interaction.recoveryOffset ?? 0.04);
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.edgeDamage, delay, { action: 'finish', edgeDamage, interrupted });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, delay + recoveryDelay, { stage: PENETRATION_STAGES.recovery });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.recovery, delay + recoveryDelay, { reason: interrupted ? 'edge-damage-interrupted' : 'edge-damage-complete' });
     return true;
   }
 
@@ -452,7 +504,13 @@ export class CombatDirector {
   }
 
   applyTissueEvent({ interaction, payload }) {
-    if (!this.actor || payload.action !== 'penetrate') return;
+    if (!this.actor) return;
+    if (payload.action === 'edge_damage') {
+      const traumaSeverity = this.actor.applyEdgeDamage?.(payload);
+      interaction.result.traumaSeverity = (interaction.result.traumaSeverity ?? 0) + (traumaSeverity ?? 0);
+      return;
+    }
+    if (payload.action !== 'penetrate') return;
     const traumaSeverity = this.actor.applyPenetration({ ...payload, woundId: interaction.result.woundId });
     const isHeavyTorsoPenetration = ['upper_chest', 'lower_chest'].includes(payload.hit?.regionId)
       && (payload.depth >= 0.035 || traumaSeverity >= 0.28);

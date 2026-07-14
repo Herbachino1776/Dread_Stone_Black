@@ -46,7 +46,7 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSo
   readFile(new URL('../public/assets/enemies/testman/testman_animpack_v002.json', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/enemies/testman/testman_animpack_v002_validation.json', import.meta.url), 'utf8'),
 ]);
-const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSource, actorRouterSource, bloodMaterialSource, weaponPoseSource, weaponGestureSource, weaponContactRouterSource, sweptCuttingEdgeSource, weaponVisualAssetSource, weaponContactScratchSource] = await Promise.all([
+const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSource, actorRouterSource, bloodMaterialSource, weaponPoseSource, weaponGestureSource, weaponContactRouterSource, sweptCuttingEdgeSource, weaponVisualAssetSource, weaponContactScratchSource, swordControllerSource, edgeDamageSource] = await Promise.all([
   readFile(new URL('../src/game/combat/KnifeWoundDecalLibrary.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/world-scene/OutdoorLightingDirector.js', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url), 'utf8'),
@@ -59,6 +59,8 @@ const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSou
   readFile(new URL('../src/game/combat/weapons/SweptCuttingEdge.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/weapons/WeaponVisualAsset.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/weapons/WeaponContactScratch.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/weapons/SwordWorldWeaponController.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/weapons/EdgeDamageInteraction.js', import.meta.url), 'utf8'),
 ]);
 const dungeonSceneSource = await readFile(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
 const [knifeGlbBuffer, swordGlbBuffer] = await Promise.all([
@@ -181,6 +183,25 @@ assert.match(knifeSource, /sweepCuttingEdge/);
 assert.match(sweptCuttingEdgeSource, /sampleCuttingEdgeLocal/);
 assert.match(knifeSource, /disposeOwnedWeaponVisual/);
 assert.match(weaponContactScratchSource, /createWeaponContactScratch/);
+['WeaponPoseWorkspace', 'WeaponGestureOwnership', 'WeaponContactRouter', 'SweptCuttingEdge', 'WeaponVisualAsset', 'WeaponContactScratch'].forEach((moduleName) => assert.match(swordControllerSource, new RegExp(moduleName)));
+assert.match(swordControllerSource, /dreadstone_sword_v002\.glb/);
+assert.match(swordControllerSource, /DREADSTONE_SWORD_DIMENSIONS/);
+assert.match(swordControllerSource, /tip: Object\.freeze/);
+assert.match(swordControllerSource, /leftEdge: Object\.freeze/);
+assert.match(swordControllerSource, /rightEdge: Object\.freeze/);
+assert.match(swordControllerSource, /flat: Object\.freeze/);
+assert.match(swordControllerSource, /spine: Object\.freeze/);
+assert.match(swordControllerSource, /guard: Object\.freeze/);
+assert.match(swordControllerSource, /grip: Object\.freeze/);
+assert.match(swordControllerSource, /SWORD_EDGE_MAX_SAMPLE_COUNT = 17/);
+assert.match(swordControllerSource, /beginEdgeDamage/);
+assert.doesNotMatch(swordControllerSource, /beginSlash|applySlashWound|KnifeWound|slash-decal|broadsword/i);
+assert.match(edgeDamageSource, /dreadstone\.edge-damage\.v1/);
+assert.match(edgeDamageSource, /worldPoint/);
+assert.match(edgeDamageSource, /localPoint/);
+assert.match(directorSource, /beginEdgeDamage/);
+assert.match(actorSource, /applyEdgeDamage/);
+assert.match(viewmodelHostSource, /new SwordWorldWeaponController/);
 assert.match(knifeSource, /getProjectedActivePoint/);
 assert.match(knifeSource, /contactActivationProvider/);
 assert.match(knifeSource, /deliberateInputVelocity/);

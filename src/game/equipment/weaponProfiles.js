@@ -36,5 +36,19 @@ export const weaponProfiles = createWeaponProfileRegistry([
     weaponType: 'tool',
     damage: 2, attackRange: 2.0, attackCooldown: 1.2, windupTime: 0.1, recoveryTime: 0.2, staminaCost: 1, hitReactionType: 'light_stagger',
     tags: ['weapon', 'tool', 'fishing', 'field-survival'],
+  },
+  {
+    id: 'dreadstone_sword',
+    displayName: 'Dreadstone Sword',
+    description: 'A long, balanced blade controlled directly in world space.',
+    weaponType: 'sword',
+    damage: 16,
+    attackRange: 3.0,
+    attackCooldown: 0.92,
+    windupTime: 0.08,
+    recoveryTime: 0.28,
+    staminaCost: 4,
+    hitReactionType: 'heavy_stagger',
+    tags: ['weapon', 'melee', 'sword', 'physical-melee', 'field-survival'],
   }
 ]);

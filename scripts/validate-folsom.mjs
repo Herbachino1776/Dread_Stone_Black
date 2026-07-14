@@ -79,6 +79,7 @@ const knifeViewmodel = new WorldKnifeCombatController({
   actor: { colliderRegions: new Map(), bodies: new Map(), setEmbeddedWeapon() {} },
   physics: { castWeaponTip: () => null }, bindPointerInput: false, contactActivationProvider: () => false,
 });
+await knifeViewmodel.visualLoadPromise;
 knifeViewmodel.afterPhysics();
 const unifiedToolViewmodel = {
   getActiveToolId: () => knifeViewmodel.isEquipped() ? knifeViewmodel.getActiveToolId() : toolViewmodel.getActiveToolId(),
@@ -242,7 +243,7 @@ assert.ok(toolViewmodel.recoilRemaining > 0, 'Physical tools enter impact recoil
 toolViewmodel.dispose();
 const rightHandEquipment = new EquipmentRuntime({
   weaponProfiles: equipmentRegistry.weapons,
-  startingEquipment: { acquiredItemIds: ['unarmed', 'old_work_knife', 'wood_axe', 'iron_drain_bar'], equipped: { weapon: 'wood_axe', tool: 'old_work_knife' } },
+  startingEquipment: { acquiredItemIds: ['unarmed', 'old_work_knife', 'wood_axe', 'dreadstone_sword', 'iron_drain_bar'], equipped: { weapon: 'wood_axe', tool: 'old_work_knife' } },
 });
 const rightHandPanel = Object.assign(Object.create(EquipmentPanel.prototype), {
   equipmentRuntime: rightHandEquipment,
@@ -252,12 +253,25 @@ const rightHandPanel = Object.assign(Object.create(EquipmentPanel.prototype), {
 assert.equal(rightHandPanel.getRightHandDisplayName(), 'Wood Axe', 'Right-hand header reports the actually visible Axe when repairing an old conflicting save.');
 const rightHandEntries = rightHandPanel.getPocketEntries(rightHandEquipment.getEquippedWeaponProfile());
 assert.ok(rightHandEntries.some((entry) => entry.id === 'old_work_knife') && rightHandEntries.some((entry) => entry.id === 'iron_drain_bar'), 'Knife and Drain Bar are selectable in the Right Hand pocket.');
+assert.ok(rightHandEntries.some((entry) => entry.id === 'dreadstone_sword'), 'Dreadstone Sword is independently selectable in the Right Hand pocket.');
 rightHandEntries.find((entry) => entry.id === 'old_work_knife').onActivate();
 assert.equal(rightHandEquipment.getEquippedWeaponProfile().id, 'unarmed', 'Equipping the Knife clears an Axe/Rod from the same right hand.');
 assert.equal(rightHandEquipment.getEquippedToolId(), 'old_work_knife', 'Right Hand selection equips the Knife into the physical tool slot.');
 assert.equal(rightHandPanel.getRightHandDisplayName(), 'Old Work Knife', 'Right-hand header visibly confirms the equipped Work Knife.');
 rightHandPanel.activePocket = 'keyItems';
 assert.equal(rightHandPanel.getPocketEntries(rightHandEquipment.getEquippedWeaponProfile()).some((entry) => entry.id === 'old_work_knife'), false, 'The Work Knife is no longer mislabeled as a Key Item.');
+const swordStorageValues = new Map();
+const swordStorage = {
+  get length() { return swordStorageValues.size; }, key: (index) => [...swordStorageValues.keys()][index] ?? null,
+  getItem: (key) => swordStorageValues.get(key) ?? null, setItem: (key, value) => swordStorageValues.set(key, String(value)), removeItem: (key) => swordStorageValues.delete(key),
+};
+const swordState = new GameState(swordStorage);
+const swordEquipment = new EquipmentRuntime({ weaponProfiles: equipmentRegistry.weapons, startingEquipment: { acquiredItemIds: ['unarmed'], equipped: { weapon: 'unarmed' } } });
+const swordInventory = new SurvivalInventoryBridge({ equipmentRuntime: swordEquipment, gameState: swordState });
+assert.equal(swordInventory.acquireItem('dreadstone_sword', { source: 'folsom_courtyard_sword_chest' }), true, 'The Folsom chest acquires the sword through the existing field inventory bridge.');
+assert.equal(swordEquipment.hasItem('dreadstone_sword'), true, 'Sword acquisition exposes the independent equippable weapon profile.');
+assert.equal(swordInventory.equipWeapon('dreadstone_sword'), true, 'The sword equips through the shared right-hand convention.');
+assert.equal(new GameState(swordStorage).getEquippedFieldTool(), 'dreadstone_sword', 'Sword ownership and right-hand selection survive field-state reload.');
 const pickupEquipment = new EquipmentRuntime({
   weaponProfiles: equipmentRegistry.weapons,
   startingEquipment: { acquiredItemIds: ['unarmed', 'wood_axe'], equipped: { weapon: 'wood_axe', tool: null } },
@@ -364,7 +378,13 @@ const shedRearShelf = (folsom.architecturalPrimitives ?? []).find((primitive) =>
 const shedRewardSpace = (folsom.architecturalPrimitives ?? []).find((primitive) => primitive.tags?.includes('future-shed-reward-space'));
 const axeChest = (folsom.outdoorChests ?? []).find((chest) => chest.itemId === 'wood_axe');
 const torchChest = (folsom.outdoorChests ?? []).find((chest) => chest.itemId === 'torch');
+const swordChest = (folsom.outdoorChests ?? []).find((chest) => chest.itemId === 'dreadstone_sword');
 const knifePickup = (folsom.outdoorPickups ?? []).find((pickup) => pickup.itemId === 'old_work_knife');
+assert.equal(swordChest?.id, 'folsom_courtyard_sword_chest', 'Folsom exposes the Dreadstone Sword from an immediate-use courtyard chest.');
+assert.equal(equipmentRegistry.items.dreadstone_sword?.source, swordChest.id, 'The equippable sword registry points at its canonical Folsom source.');
+const folsomPlayerStart = (folsom.spawns ?? []).find((spawn) => spawn.id === 'folsom_player_start')?.position;
+assert.ok(Math.hypot(swordChest.position.x - folsomPlayerStart.x, swordChest.position.z - folsomPlayerStart.z) < 6, 'The sword chest is immediately visible within a few steps of the Folsom start.');
+assert.equal(folsomCollision.collisionWorld.canStandAt(new THREE.Vector3(swordChest.position.x, 1.55, swordChest.position.z)), true, 'The immediate sword chest sits on navigable courtyard ground.');
 const underworksGate = (folsom.architecturalPrimitives ?? []).find((primitive) => primitive.id === 'folsom_cellar_gate');
 const underworksInteraction = (folsom.outdoorInteractions ?? []).find((interaction) => interaction.id === 'folsom_underworks_locked');
 const underworksReturnSpawn = (folsom.spawns ?? []).find((spawn) => spawn.id === 'folsom_underworks_return');

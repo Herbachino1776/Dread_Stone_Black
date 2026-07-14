@@ -8,6 +8,7 @@ import { TorchViewmodel } from '../viewmodels/TorchViewmodel.js';
 import { PhysicalToolActionController } from '../physical-tools/PhysicalToolActionController.js';
 import { PhysicalToolViewmodel } from '../physical-tools/PhysicalToolViewmodel.js';
 import { WorldKnifeCombatController } from '../combat/WorldKnifeCombatController.js';
+import { SwordWorldWeaponController } from '../combat/weapons/SwordWorldWeaponController.js';
 
 const ROD_VIEWMODEL_LIGHTING = Object.freeze({
   skyColor: 0xffe2b8,
@@ -78,7 +79,10 @@ export class FirstPersonViewmodelHost {
     this.player = session?.player;
     this.dungeon = session?.dungeon;
     this.combatKnifeController?.dispose?.();
+    this.combatSwordController?.dispose?.();
     this.combatKnifeController = null;
+    this.combatSwordController = null;
+    this.combatWeaponController = null;
     this.combatRuntime = null;
     this.combatActivationProvider = null;
     if (this.fishingRodView) this.fishingRodView.dungeon = this.dungeon;
@@ -96,12 +100,29 @@ export class FirstPersonViewmodelHost {
     const combatRuntime = this.dungeon?.isCombatLab ? this.dungeon : this.dungeon?.combatEncounter;
     const contactActivationProvider = this.dungeon?.isCombatLab ? () => true : combatRuntime ? () => combatRuntime.isPlayerInCombatRange(this.player) : () => false;
     this.combatKnifeController = new WorldKnifeCombatController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, bloodEffects: combatRuntime?.bloodEffects ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, bindPointerInput: this.dungeon?.isCombatLab === true });
-    combatRuntime?.attachWeaponController?.(this.combatKnifeController);
+    this.combatSwordController = new SwordWorldWeaponController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, bindPointerInput: true });
+    const controllers = [this.combatKnifeController, this.combatSwordController];
+    const active = () => controllers.find((controller) => controller?.isEquipped?.()) ?? this.combatKnifeController;
+    this.combatWeaponController = {
+      beforePhysics: (dt) => controllers.forEach((controller) => controller?.beforePhysics?.(dt)),
+      afterPhysicsStep: (dt) => controllers.forEach((controller) => controller?.afterPhysicsStep?.(dt)),
+      afterPhysics: (alpha) => controllers.forEach((controller) => controller?.afterPhysics?.(alpha)),
+      cancel: (reason) => controllers.forEach((controller) => controller?.cancel?.(reason)),
+      reset: () => controllers.forEach((controller) => controller?.reset?.()),
+      cancelTarget: (actor, reason) => controllers.forEach((controller) => controller?.cancelTarget?.(actor, reason)),
+      nudgeExtension: (delta) => active()?.nudgeExtension?.(delta),
+      nudgeAim: (deltaX, deltaY) => active()?.nudgeAim?.(deltaX, deltaY),
+      setDebugVisible: (visible) => controllers.forEach((controller) => controller?.setDebugVisible?.(visible)),
+      getDiagnostics: () => ({ active: active()?.getDiagnostics?.() ?? null, knife: this.combatKnifeController?.getDiagnostics?.() ?? null, sword: this.combatSwordController?.getDiagnostics?.() ?? null }),
+    };
+    combatRuntime?.attachWeaponController?.(this.combatWeaponController);
     this.combatRuntime = combatRuntime;
   }
 
   createToolInputViewmodel() {
-    const active = () => this.combatKnifeController?.isEquipped?.() ? this.combatKnifeController : this.physicalToolViewmodel;
+    const active = () => this.combatSwordController?.isEquipped?.()
+      ? this.combatSwordController
+      : this.combatKnifeController?.isEquipped?.() ? this.combatKnifeController : this.physicalToolViewmodel;
     return {
       getActiveToolId: () => active()?.getActiveToolId?.() ?? null,
       projectGrabHit: (...args) => active()?.projectGrabHit?.(...args) ?? false,
@@ -131,6 +152,8 @@ export class FirstPersonViewmodelHost {
     if (!this.combatRuntime) {
       this.combatKnifeController?.beforePhysics?.(deltaSeconds);
       this.combatKnifeController?.afterPhysics?.();
+      this.combatSwordController?.beforePhysics?.(deltaSeconds);
+      this.combatSwordController?.afterPhysics?.();
     }
     this.castingController?.update(deltaSeconds);
     return this.getDebugSummary(context);
@@ -202,6 +225,7 @@ export class FirstPersonViewmodelHost {
       fishing: this.castingController?.debug ?? null,
       physicalToolId: this.toolInputViewmodel?.getActiveToolId?.() ?? null,
       combatKnife: this.combatKnifeController?.getDiagnostics?.() ?? null,
+      combatSword: this.combatSwordController?.getDiagnostics?.() ?? null,
     };
   }
 
@@ -213,6 +237,7 @@ export class FirstPersonViewmodelHost {
     this.torchViewmodel?.dispose?.();
     this.physicalToolActionController?.dispose?.();
     this.combatKnifeController?.dispose?.();
+    this.combatSwordController?.dispose?.();
     this.physicalToolViewmodel?.dispose?.();
     this.keepersLanternViewmodel?.dispose?.();
     this.sceneSessionHost?.setLanternRevealEmitterProvider?.(null);
@@ -223,6 +248,8 @@ export class FirstPersonViewmodelHost {
     this.torchViewmodel = null;
     this.physicalToolActionController = null;
     this.combatKnifeController = null;
+    this.combatSwordController = null;
+    this.combatWeaponController = null;
     this.combatRuntime = null;
     this.toolInputViewmodel = null;
     this.physicalToolViewmodel = null;

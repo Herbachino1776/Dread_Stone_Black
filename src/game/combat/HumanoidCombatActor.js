@@ -427,6 +427,28 @@ export class HumanoidCombatActor {
     return wound;
   }
 
+  applyEdgeDamage({ hit, point, direction, depth = 0, travel = 0, severity = 0, edgeAlignment = 0, classification = 'cut', part = 'edge' } = {}) {
+    if (!hit?.region || !point || !direction || this.lifeState === 'dead') return 0;
+    const state = this.regionState.get(hit.regionId) ?? { trauma: 0, pain: 0, structural: 0, motorWeakness: 0, maximumDepth: 0, wounds: 0 };
+    const contactScale = classification === 'thrust' ? 1.12 : 0.82 + Math.max(0, Math.min(1, edgeAlignment)) * 0.28;
+    const traumaSeverity = (Math.max(0, severity) * 0.075 + Math.max(0, travel) * 0.28 + Math.max(0, depth) * 1.7)
+      * contactScale
+      * HUMANOID_DURABILITY_CONFIG.traumaScale;
+    state.trauma += traumaSeverity;
+    state.pain += traumaSeverity * hit.region.painResponse;
+    state.structural += traumaSeverity * hit.region.structuralImportance;
+    state.motorWeakness = Math.min(0.94, state.motorWeakness + traumaSeverity * 0.24);
+    state.maximumDepth = Math.max(state.maximumDepth, depth);
+    this.regionState.set(hit.regionId, state);
+    this.balanceImpairment += traumaSeverity * hit.region.balanceImpact;
+    this.consciousnessImpairment = Math.max(this.consciousnessImpairment, traumaSeverity * hit.region.consciousnessImpact);
+    hit.body?.applyImpulseAtPoint?.(direction.clone().multiplyScalar(Math.min(0.28, 0.035 + severity * 0.09)), point, true);
+    this.lastEdgeDamage = { regionId: hit.regionId, bodyId: hit.bodyId, classification, part, depth, travel, severity: traumaSeverity, point: point.clone(), direction: direction.clone() };
+    this.physiology.onTrauma({ hit, severity: traumaSeverity, depth, deltaDepth: Math.max(depth * 0.18, travel * 0.04), hardContact: false });
+    this.evaluateLifeState();
+    return traumaSeverity;
+  }
+
   applyBluntContact({ hit, point, direction, severity = 0.1 } = {}) {
     const wound = this.woundSystem.createBluntMarker({ hit, severity, createdTime: this.elapsed });
     hit.body.applyImpulseAtPoint(direction.clone().multiplyScalar(Math.min(0.16, severity * 0.12)), point, true);

@@ -2,6 +2,7 @@ import { EQUIPMENT_SLOTS } from '../../engine/equipment/EquipmentSlot.js';
 
 export const SURVIVAL_ITEM_IDS = Object.freeze([
   'wood_axe',
+  'dreadstone_sword',
   'fishing_rod',
   'torch',
   'keepers_lantern',
@@ -11,7 +12,7 @@ export const SURVIVAL_ITEM_IDS = Object.freeze([
   'flint_stick',
 ]);
 
-const WEAPON_IDS = new Set(['wood_axe', 'fishing_rod']);
+const WEAPON_IDS = new Set(['wood_axe', 'fishing_rod', 'dreadstone_sword']);
 const OFFHAND_IDS = new Set(['torch', 'keepers_lantern']);
 const CONSUMABLE_IDS = new Set(['wood', 'raw_fish', 'cooked_fish']);
 const KEY_ITEM_IDS = new Set(['flint_stick']);
@@ -99,7 +100,7 @@ export class SurvivalInventoryBridge {
   }
 
   syncRuntimeFromFieldState() {
-    for (const itemId of ['wood_axe', 'fishing_rod', 'torch', 'keepers_lantern']) {
+    for (const itemId of ['wood_axe', 'fishing_rod', 'dreadstone_sword', 'torch', 'keepers_lantern']) {
       if (this.gameState?.hasFieldItem?.(itemId) && !this.equipmentRuntime?.hasItem?.(itemId)) {
         this.equipmentRuntime?.acquireItem?.(itemId, { source: 'field_survival_state_sync', tags: ['field-survival', 'save-compat'] });
       }
