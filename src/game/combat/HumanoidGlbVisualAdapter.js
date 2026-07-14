@@ -6,6 +6,7 @@ import { HumanoidAnimationPackController } from './HumanoidAnimationPackControll
 import { buildSkinnedTriangleInfluenceMetadata, findClosestSkinnedSurface, reconstructSkinnedSurface, reconstructSurfaceBindingNeighborhood, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 import { FULLY_OPAQUE_THRESHOLD, applyFadeOpacity, captureAndPrepareFadeMaterials, clampFadeOpacity, restoreFadeMaterials } from './MaterialFadeState.js';
+import { actorLocalToWorld as transformActorLocalToWorld, worldToActorLocal as transformWorldToActorLocal } from './CombatCoordinateSpaces.js';
 
 export const HUMANOID_GLB_PATH = CURRENT_HUMANOID_PROFILE.assetPath;
 export const HUMANOID_GLB_AUTHORED_HEIGHT = CURRENT_HUMANOID_PROFILE.rawHeight;
@@ -560,10 +561,25 @@ export class HumanoidGlbVisualAdapter {
 
   prepareVisibleSurfaceFrame() {
     if (!this.scene) return false;
+    // Complete the authored pose and every ancestor transform before sampling
+    // skinned vertices. The surface binder and reconstructor both operate in world.
     this.presentationRoot?.updateMatrixWorld(true);
     this.scene.updateMatrixWorld(true);
+    this.skinnedMeshes.forEach((mesh) => mesh.updateMatrixWorld(true));
     this.skeletons.forEach((skeleton) => skeleton.update());
     return true;
+  }
+
+  getActorCoordinateRoot() {
+    return this.presentationRoot ?? this.scene;
+  }
+
+  actorLocalToWorld(actorLocalPoint, target = new THREE.Vector3()) {
+    return transformActorLocalToWorld(this.getActorCoordinateRoot(), actorLocalPoint, target);
+  }
+
+  worldToActorLocal(worldPoint, target = new THREE.Vector3()) {
+    return transformWorldToActorLocal(this.getActorCoordinateRoot(), worldPoint, target);
   }
 
   reconstructVisibleSurface(binding, target, { refresh = true } = {}) {
@@ -594,9 +610,14 @@ export class HumanoidGlbVisualAdapter {
       const start = startBone.getWorldPosition(new THREE.Vector3());
       const end = endBone.getWorldPosition(new THREE.Vector3());
       const direction = end.clone().sub(start);
-      const quaternion = direction.lengthSq() > 1e-8
-        ? new THREE.Quaternion().setFromUnitVectors(proxyUp, direction.normalize())
-        : startBone.getWorldQuaternion(new THREE.Quaternion());
+      const quaternion = startBone.getWorldQuaternion(new THREE.Quaternion());
+      if (direction.lengthSq() > 1e-8) {
+        // Preserve authored twist (including actor spawn yaw) while aligning the
+        // proxy's local Y axis exactly to the current start/end bone segment.
+        const authoredUp = proxyUp.clone().applyQuaternion(quaternion).normalize();
+        const alignment = new THREE.Quaternion().setFromUnitVectors(authoredUp, direction.normalize());
+        quaternion.premultiply(alignment).normalize();
+      }
       return { position: start.add(end).multiplyScalar(0.5), quaternion };
     }
     const bone = this.bones.get(fit.bone);

@@ -12,6 +12,7 @@ import { bindWeaponPointerEvents, DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR, WeaponG
 import { computeCameraRelativeWeaponPose, createWeaponPoseWorkspace, initializeCameraRelativeWeaponPose, rebaseWorldWeaponPoseToCamera } from './weapons/WeaponPoseWorkspace.js';
 import { createCuttingEdgePath, resolveCuttingEdgeSampleCount, sampleCuttingEdgeLocal, sweepCuttingEdge } from './weapons/SweptCuttingEdge.js';
 import { applyWeaponRenderLayer, cloneOwnedWeaponVisual, createCachedWeaponGlbLoader, disposeOwnedWeaponVisual } from './weapons/WeaponVisualAsset.js';
+import { physicsBodyLocalDirectionToWorld, physicsBodyLocalToWorld, worldDirectionToPhysicsBodyLocal } from './CombatCoordinateSpaces.js';
 
 const forwardLocal = new THREE.Vector3(0, 0, -1);
 const knifeBladeHalfWidth = KNIFE_COMBAT_CONFIG.bladeWidth * 0.5;
@@ -837,7 +838,7 @@ export class WorldKnifeCombatController {
       hit,
       bodyId: hit.bodyId,
       localPoint: hit.localPoint.clone(),
-      localAxis: axis.clone().applyQuaternion(new THREE.Quaternion(hit.body.rotation().x, hit.body.rotation().y, hit.body.rotation().z, hit.body.rotation().w).invert()),
+      localAxis: worldDirectionToPhysicsBodyLocal(hit.bodyTransformAtCollision ?? hit.body, axis),
       initialAlignment: alignment,
       hardDepth: this.resolveHardStructureDepth(hit),
       woundId: null,
@@ -874,12 +875,11 @@ export class WorldKnifeCombatController {
   getEntryWorldPose() {
     const body = this.entry?.hit?.body;
     if (!body) return null;
-    const translation = body.translation();
-    const rotation = body.rotation();
-    const bodyQ = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
     return {
-      point: this.entry.localPoint.clone().applyQuaternion(bodyQ).add(new THREE.Vector3(translation.x, translation.y, translation.z)),
-      axis: this.entry.localAxis.clone().applyQuaternion(bodyQ).normalize(),
+      // A planted knife intentionally follows the current physics proxy. This is
+      // distinct from initial surface binding, which uses the preserved world hit.
+      point: physicsBodyLocalToWorld(body, this.entry.localPoint),
+      axis: physicsBodyLocalDirectionToWorld(body, this.entry.localAxis),
     };
   }
 

@@ -9,6 +9,7 @@ import { HumanoidGlbVisualAdapter } from './HumanoidGlbVisualAdapter.js';
 import { CURRENT_HUMANOID_PROFILE } from './HumanoidModelProfiles.js';
 import { getKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
 import { deriveSwordCutTrauma } from './SwordCutDamage.js';
+import { capturePhysicsBodyTransform, worldToPhysicsBodyLocal } from './CombatCoordinateSpaces.js';
 
 const BODY_COLLISION_GROUPS = 0x00020001;
 const tmpPosition = new THREE.Vector3();
@@ -284,11 +285,7 @@ export class HumanoidCombatActor {
   }
 
   worldPointToBodyLocal(body, worldPoint) {
-    const translation = body.translation();
-    const rotation = body.rotation();
-    return worldPoint.clone()
-      .sub(new THREE.Vector3(translation.x, translation.y, translation.z))
-      .applyQuaternion(new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).invert());
+    return worldToPhysicsBodyLocal(body, worldPoint);
   }
 
   measureJointAnchorSeparation() {
@@ -367,12 +364,23 @@ export class HumanoidCombatActor {
     const bodyId = collider.userData?.bodyId;
     const bodyEntry = this.bodies.get(bodyId);
     if (!bodyEntry) return null;
-    const translation = bodyEntry.body.translation();
-    const rotation = bodyEntry.body.rotation();
-    const local = worldPoint.clone().sub(new THREE.Vector3(translation.x, translation.y, translation.z)).applyQuaternion(new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).invert());
+    // Capture the collision-time body transform once. Director staging may run
+    // wound creation after animation has advanced the live proxy body.
+    const bodyTransformAtCollision = capturePhysicsBodyTransform(bodyEntry.body);
+    const local = worldToPhysicsBodyLocal(bodyTransformAtCollision, worldPoint);
     let regionId = baseRegionId;
     if (bodyId === 'head') regionId = local.z > 0.075 && local.y < 0.1 ? 'face' : 'skull';
-    return { actor: this, regionId, region: HUMANOID_ANATOMY_REGIONS.find((entry) => entry.id === regionId), bodyId, body: bodyEntry.body, collider, localPoint: local };
+    return {
+      actor: this,
+      regionId,
+      region: HUMANOID_ANATOMY_REGIONS.find((entry) => entry.id === regionId),
+      bodyId,
+      body: bodyEntry.body,
+      collider,
+      localPoint: local,
+      collisionPointWorld: worldPoint.clone(),
+      bodyTransformAtCollision,
+    };
   }
 
   beginPunctureWound({ hit, entryPoint, direction, surfaceNormal = null, entryTangent = null, depth = 0.004, impactSeverity = 0, weaponProfile = null, hardContact = false, weaponId = 'old_work_knife', embeddedWeaponId = weaponId, deferReaction = false, deferAudio = false } = {}) {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { skinnedMeshLocalToWorld } from './CombatCoordinateSpaces.js';
 
 export const WOUND_SURFACE_BIAS = 0.0008;
 export const MAX_SLASH_SURFACE_SAMPLES = 48;
@@ -259,7 +260,11 @@ export function reconstructSkinnedSurface(binding, target = {}) {
   const va = mesh.getVertexPosition(indices[0], vertices[0]);
   const vb = mesh.getVertexPosition(indices[1], vertices[1]);
   const vc = mesh.getVertexPosition(indices[2], vertices[2]);
-  mesh.localToWorld(va); mesh.localToWorld(vb); mesh.localToWorld(vc);
+  // getVertexPosition returns the current skinned vertex in SkinnedMesh-local
+  // space. Only this explicit conversion produces wound/decal world space.
+  skinnedMeshLocalToWorld(mesh, va, va);
+  skinnedMeshLocalToWorld(mesh, vb, vb);
+  skinnedMeshLocalToWorld(mesh, vc, vc);
   if (![va.x, va.y, va.z, vb.x, vb.y, vb.z, vc.x, vc.y, vc.z].every(Number.isFinite)) return null;
   const barycentric = binding.barycentric;
   const point = target.point ?? new THREE.Vector3();
@@ -326,7 +331,9 @@ export function findClosestSkinnedSurface(skinnedMeshes, worldPoint, {
         : ordinaryLimit;
       const indices = getTriangleVertexIndices(geometry, triangleIndex);
       mesh.getVertexPosition(indices[0], a); mesh.getVertexPosition(indices[1], b); mesh.getVertexPosition(indices[2], c);
-      mesh.localToWorld(a); mesh.localToWorld(b); mesh.localToWorld(c);
+      skinnedMeshLocalToWorld(mesh, a, a);
+      skinnedMeshLocalToWorld(mesh, b, b);
+      skinnedMeshLocalToWorld(mesh, c, c);
       triangle.set(a, b, c);
       if (triangle.getArea() < 1e-10) continue;
       triangle.closestPointToPoint(worldPoint, closest);
@@ -373,6 +380,9 @@ export function findClosestSkinnedSurface(skinnedMeshes, worldPoint, {
         regionId,
         bodyId,
         sourcePoint: worldPoint.clone(),
+        sourceSpace: 'world',
+        triangleVertexSpace: 'skinned_mesh_local',
+        reconstructionSpace: 'world',
         distanceAtBind: Math.sqrt(distanceSq),
         normalProjectionDistanceAtBind: normalProjectionDistance,
         semanticCompatibility: semanticCompatibility ? { ...semanticCompatibility } : null,

@@ -8,6 +8,7 @@ import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer
 import { createSlashVisualWorkspace, deriveSlashFragmentMetrics, makeSlashFragmentGeometry, resetSlashVisualPath } from './SlashWoundVisual.js';
 import { MAX_SWORD_CUT_SURFACE_SAMPLES, SWORD_CUT_MAX_SEGMENT_LENGTH, SWORD_CUT_TARGET_SAMPLE_SPACING, createSwordCutRibbonWorkspace, makeSwordCutRibbonGeometry, resetSwordCutRibbonGeometry } from './SwordCutWoundVisual.js';
 import { FULLY_OPAQUE_THRESHOLD, applyFadeOpacity, captureAndPrepareFadeMaterials, clampFadeOpacity, restoreFadeMaterials } from './MaterialFadeState.js';
+import { capturePhysicsBodyTransform, createPunctureCoordinateSnapshot, physicsBodyLocalDirectionToWorld, physicsBodyLocalToWorld, worldDirectionToPhysicsBodyLocal } from './CombatCoordinateSpaces.js';
 
 const tmpPosition = new THREE.Vector3();
 const tmpNormal = new THREE.Vector3();
@@ -30,6 +31,23 @@ export const PUNCTURE_DECAL_SCALE = KNIFE_PUNCTURE_PRESENTATION_SCALE;
 export const SLASH_VISUAL_WIDTH_LIMITS = Object.freeze({ shallow: [0.004, 0.01], deep: [0.008, 0.02], severeMaximum: 0.03 });
 export const MAX_SWORD_CUT_VISUALS = 12;
 const LEGACY_KNIFE_SURFACE_PROJECTION_DISTANCE = 0.1;
+const MAX_DEV_PUNCTURE_COORDINATE_SNAPSHOTS = 12;
+
+export const KNIFE_PUNCTURE_SURFACE_BINDING_OPTIONS = Object.freeze({
+  anatomyAware: false,
+  maximumDistance: LEGACY_KNIFE_SURFACE_PROJECTION_DISTANCE,
+  allowLegacyDistance: true,
+});
+
+export const SWORD_THRUST_SURFACE_BINDING_OPTIONS = Object.freeze({
+  anatomyAware: true,
+});
+
+export function resolvePunctureSurfaceBindingOptions(wound = {}) {
+  return wound.weaponFamily === 'sword'
+    ? SWORD_THRUST_SURFACE_BINDING_OPTIONS
+    : KNIFE_PUNCTURE_SURFACE_BINDING_OPTIONS;
+}
 
 export function createSwordCutVisualDiagnostics() {
   return {
@@ -134,6 +152,7 @@ export class CombatWoundSystem {
     this.failedProjectionCount = 0;
     this.fallbackUsageCount = 0;
     this.bindingFailureLogged = false;
+    this.punctureCoordinateDiagnostics = import.meta.env?.DEV === true ? [] : null;
     this.recentVariantHistory = { puncture: [], slash: [] };
     this.missingMaterialWarnings = new Set();
     this.debugVisible = false;
@@ -254,12 +273,51 @@ export class CombatWoundSystem {
     return null;
   }
 
+  getPunctureSurfaceBindingOptions(wound = {}) {
+    return resolvePunctureSurfaceBindingOptions(wound);
+  }
+
+  bindPunctureSurface(wound, collisionEntryWorld, collisionNormalWorld) {
+    return this.bindSurfacePoint(
+      wound,
+      collisionEntryWorld,
+      collisionNormalWorld,
+      wound.regionId,
+      wound.bodyId,
+      this.getPunctureSurfaceBindingOptions(wound),
+    );
+  }
+
+  recordPunctureCoordinateDiagnostic(wound) {
+    if (!this.punctureCoordinateDiagnostics || !validateSurfaceBinding(wound?.surfaceBinding)) return null;
+    const adapter = this.actor.visualAdapter;
+    const reconstructed = adapter?.reconstructVisibleSurface?.(wound.surfaceBinding, undefined, { refresh: false })
+      ?? reconstructSkinnedSurface(wound.surfaceBinding);
+    if (!reconstructed) return null;
+    const snapshot = createPunctureCoordinateSnapshot({
+      collisionEntryWorld: wound.collisionEntryWorld,
+      collisionEntryBodyLocal: wound.collisionEntryBodyLocal,
+      collisionNormalWorld: wound.collisionNormalWorld,
+      bodyTransformAtCollision: wound.bodyTransformAtCollision,
+      presentationRoot: adapter?.getActorCoordinateRoot?.() ?? adapter?.presentationRoot ?? adapter?.scene,
+      binding: wound.surfaceBinding,
+      reconstructed,
+    });
+    this.punctureCoordinateDiagnostics.push(snapshot);
+    if (this.punctureCoordinateDiagnostics.length > MAX_DEV_PUNCTURE_COORDINATE_SNAPSHOTS) {
+      this.punctureCoordinateDiagnostics.splice(0, this.punctureCoordinateDiagnostics.length - MAX_DEV_PUNCTURE_COORDINATE_SNAPSHOTS);
+    }
+    return snapshot;
+  }
+
   attachPunctureSurface(wound, worldPoint, referenceNormal) {
-    wound.surfaceBinding = this.bindSurfacePoint(wound, worldPoint, referenceNormal);
+    wound.surfaceBinding = this.bindPunctureSurface(wound, worldPoint, referenceNormal);
     wound.surfaceBindingStatus = wound.surfaceBinding ? 'skinned_triangle' : 'puncture_hidden_invalid_surface';
+    wound.surfaceBindingLocked = Boolean(wound.surfaceBinding);
     wound.fallbackAnchorUsage = false;
     wound.fallbackReason = wound.surfaceBinding ? null : 'skinned_projection_failed';
     wound.surfaceBindingAttempted = true;
+    this.recordPunctureCoordinateDiagnostic(wound);
   }
 
   attachSlashSamples(wound, startPoint, endPoint, referenceNormal) {
@@ -331,11 +389,10 @@ export class CombatWoundSystem {
     wound.pathCurvature = THREE.MathUtils.clamp(accumulatedTurn / Math.PI, 0, 1);
   }
 
-  captureEntryTangent(wound, worldTangent) {
+  captureEntryTangent(wound, worldTangent, bodyTransform = null) {
     const tangent = worldTangent?.clone?.() ?? new THREE.Vector3(1, 0, 0);
-    const bodyRotation = this.actor.bodies.get(wound.bodyId)?.body?.rotation?.();
-    const inverseBody = bodyRotation ? new THREE.Quaternion(bodyRotation.x, bodyRotation.y, bodyRotation.z, bodyRotation.w).invert() : new THREE.Quaternion();
-    wound.entryTangent = tangent.clone().applyQuaternion(inverseBody).normalize();
+    const body = bodyTransform ?? this.actor.bodies.get(wound.bodyId)?.body;
+    wound.entryTangent = worldDirectionToPhysicsBodyLocal(body, tangent) ?? tangent.clone().normalize();
     const surface = validateSurfaceBinding(wound.surfaceBinding) ? reconstructSkinnedSurface(wound.surfaceBinding) : null;
     if (!surface?.vertices) return;
     tmpEdgeA.subVectors(surface.vertices[1], surface.vertices[0]);
@@ -486,24 +543,29 @@ export class CombatWoundSystem {
       this.updateWoundVisual(nearby);
       return nearby;
     }
-    const inverseBody = new THREE.Quaternion(hit.body.rotation().x, hit.body.rotation().y, hit.body.rotation().z, hit.body.rotation().w).invert();
-    const localAxis = axis.clone().applyQuaternion(inverseBody).normalize();
-    const worldSurfaceNormal = surfaceNormal?.clone?.().normalize() ?? axis.clone().negate().normalize();
-    const localNormal = worldSurfaceNormal.clone().applyQuaternion(inverseBody).normalize();
-    const entryAlignment = THREE.MathUtils.clamp(Math.abs(axis.dot(worldSurfaceNormal)), 0, 1);
+    const bodyTransformAtCollision = capturePhysicsBodyTransform(hit.bodyTransformAtCollision ?? hit.body);
+    const collisionEntryBodyLocal = hit.localPoint.clone();
+    const collisionEntryWorld = entryPoint?.clone?.()
+      ?? hit.collisionPointWorld?.clone?.()
+      ?? physicsBodyLocalToWorld(bodyTransformAtCollision, collisionEntryBodyLocal);
+    const collisionAxisWorld = axis.clone().normalize();
+    const worldSurfaceNormal = surfaceNormal?.clone?.().normalize() ?? collisionAxisWorld.clone().negate();
+    const localAxis = worldDirectionToPhysicsBodyLocal(bodyTransformAtCollision, collisionAxisWorld);
+    const localNormal = worldDirectionToPhysicsBodyLocal(bodyTransformAtCollision, worldSurfaceNormal);
+    const entryAlignment = THREE.MathUtils.clamp(Math.abs(collisionAxisWorld.dot(worldSurfaceNormal)), 0, 1);
     const wound = this.createWound({
       actor: this.actor,
       regionId: hit.regionId,
       bodyId: hit.bodyId,
       woundType: depth >= 0.075 ? 'deep_puncture' : 'puncture',
-      localEntryPoint: hit.localPoint.clone(),
+      localEntryPoint: collisionEntryBodyLocal.clone(),
       localSurfaceNormal: localNormal,
       localPenetrationAxis: localAxis,
       currentDepth: depth,
       maximumDepth: depth,
       cutLength: 0,
-      localCutStart: hit.localPoint.clone(),
-      localCutEnd: hit.localPoint.clone(),
+      localCutStart: collisionEntryBodyLocal.clone(),
+      localCutEnd: collisionEntryBodyLocal.clone(),
       localCutDirection: new THREE.Vector3(),
       severity: THREE.MathUtils.clamp(depth * 5.2, 0.04, 1.5),
       tissueClass: hit.region?.vital ?? 'none',
@@ -521,13 +583,19 @@ export class CombatWoundSystem {
       impactSeverity: THREE.MathUtils.clamp(impactSeverity, 0, 1),
       withdrawalDamage: 0,
       lateralTearingMeters: 0,
+      collisionEntryWorld,
+      collisionEntryBodyLocal,
+      collisionNormalWorld: worldSurfaceNormal.clone(),
+      bodyTransformAtCollision,
     });
     this.updatePunctureDimensions(wound);
     this.updateDecalSelection(wound, 'puncture');
     this.resolveBleedingProfile(wound);
-    const semanticEntry = this.getWorldPose(wound);
-    this.attachPunctureSurface(wound, semanticEntry?.point ?? entryPoint, semanticEntry?.normal ?? worldSurfaceNormal);
-    this.captureEntryTangent(wound, entryTangent);
+    // Binding starts from the immutable physical collision in world space. The
+    // body-local point remains authoritative only for physiology and the planted
+    // weapon; it is never treated as actor-local or SkinnedMesh-local geometry.
+    this.attachPunctureSurface(wound, collisionEntryWorld, worldSurfaceNormal);
+    this.captureEntryTangent(wound, entryTangent, bodyTransformAtCollision);
     this.updateWoundVisual(wound);
     return wound;
   }
@@ -788,7 +856,7 @@ export class CombatWoundSystem {
     const id = `wound_${this.nextWoundId++}`;
     const visualSlot = visualFamily === 'knife' ? this.allocateVisual(id) : null;
     const swordVisualSlot = visualFamily === 'sword' ? this.allocateSwordVisual(id, data.createdTime) : null;
-    const wound = { id, ...data, visualFamily, vesselInvolvement: null, bleedingProfile: { kind: 'capillary', baseRate: 0.002 }, bleedingRate: 0, bloodEmitted: 0, withdrawalBoostRemaining: 0, pulsePhase: 0, active: true, closed: false, reopenedCount: 0, visualSlot, swordVisualSlot, visualOwner: visualSlot ? 'pooled-skinned-surface-visual' : swordVisualSlot ? 'pooled-sword-cut-ribbon' : null, surfaceBinding: null, surfaceBindingStatus: 'pending', surfaceBindingAttempted: false, fallbackAnchorUsage: false, fallbackReason: null, semanticAnchorDistance: null, surfaceDistance: null, slashSamples: [], slashPathPoints: [], failedProjectionCount: 0, decalVariantId: null, decalFamily: null, decalPhysicalCategory: null, decalEligibleCandidateIds: [], decalSelectionState: 'provisional', decalSelectionLocked: false, decalSelectionRevisionCount: 0, deterministicSeed: null, mirroredX: false, selectedAtSeverity: null, materialAvailable: true, visualRevision: 0 };
+    const wound = { id, ...data, visualFamily, vesselInvolvement: null, bleedingProfile: { kind: 'capillary', baseRate: 0.002 }, bleedingRate: 0, bloodEmitted: 0, withdrawalBoostRemaining: 0, pulsePhase: 0, active: true, closed: false, reopenedCount: 0, visualSlot, swordVisualSlot, visualOwner: visualSlot ? 'pooled-skinned-surface-visual' : swordVisualSlot ? 'pooled-sword-cut-ribbon' : null, surfaceBinding: null, surfaceBindingStatus: 'pending', surfaceBindingAttempted: false, surfaceBindingLocked: false, fallbackAnchorUsage: false, fallbackReason: null, semanticAnchorDistance: null, surfaceDistance: null, slashSamples: [], slashPathPoints: [], failedProjectionCount: 0, decalVariantId: null, decalFamily: null, decalPhysicalCategory: null, decalEligibleCandidateIds: [], decalSelectionState: 'provisional', decalSelectionLocked: false, decalSelectionRevisionCount: 0, deterministicSeed: null, mirroredX: false, selectedAtSeverity: null, materialAvailable: true, visualRevision: 0 };
     this.wounds.push(wound);
     return wound;
   }
@@ -926,16 +994,11 @@ export class CombatWoundSystem {
   getActiveWounds() { return this.wounds.filter((wound) => wound.active); }
 
   bodyLocalPointToWorld(body, localPoint, target = new THREE.Vector3()) {
-    const translation = body.translation();
-    const rotation = body.rotation();
-    return target.copy(localPoint)
-      .applyQuaternion(new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w))
-      .add(new THREE.Vector3(translation.x, translation.y, translation.z));
+    return physicsBodyLocalToWorld(body, localPoint, target);
   }
 
   bodyLocalNormalToWorld(body, localNormal, target = new THREE.Vector3()) {
-    const rotation = body.rotation();
-    return target.copy(localNormal).applyQuaternion(new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w)).normalize();
+    return physicsBodyLocalDirectionToWorld(body, localNormal, target);
   }
 
   getWorldPose(wound) {
@@ -962,9 +1025,9 @@ export class CombatWoundSystem {
     const rotation = entry.body.rotation();
     const bodyQuaternion = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
     return {
-      point: wound.localEntryPoint.clone().applyQuaternion(bodyQuaternion).add(new THREE.Vector3(translation.x, translation.y, translation.z)),
-      normal: wound.localSurfaceNormal.clone().applyQuaternion(bodyQuaternion).normalize(),
-      direction: wound.localCutDirection.clone().applyQuaternion(bodyQuaternion).normalize(),
+      point: physicsBodyLocalToWorld(entry.body, wound.localEntryPoint),
+      normal: physicsBodyLocalDirectionToWorld(entry.body, wound.localSurfaceNormal),
+      direction: physicsBodyLocalDirectionToWorld(entry.body, wound.localCutDirection),
       bodyQuaternion,
       translation: new THREE.Vector3(translation.x, translation.y, translation.z),
     };
@@ -1082,12 +1145,21 @@ export class CombatWoundSystem {
         return reconstructed;
       }
       wound.fallbackReason = 'skinned_binding_reconstruction_failed';
+      // A successful triangle/barycentric bind is immutable. Temporary invalid
+      // reconstruction hides the decal instead of selecting a different surface.
+      wound.surfaceBindingStatus = 'puncture_hidden_invalid_surface';
+      wound.semanticAnchorDistance = null;
+      return null;
     }
-    if (!semantic) return null;
-    if (!wound.surfaceRetryAttempted && this.actor.visualAdapter?.scene) {
+    if (!wound.surfaceBindingLocked
+      && !wound.surfaceRetryAttempted
+      && this.actor.visualAdapter?.scene
+      && wound.collisionEntryWorld) {
       wound.surfaceRetryAttempted = true;
-      this.attachPunctureSurface(wound, semantic.point, semantic.normal);
-      if (wound.surfaceBinding) return this.getAttachedSurfacePose(wound, semantic);
+      // A not-yet-ready presentation may retry once, but it must reuse the
+      // immutable collision-world anchor rather than a live body-derived pose.
+      this.attachPunctureSurface(wound, wound.collisionEntryWorld, wound.collisionNormalWorld);
+      if (validateSurfaceBinding(wound.surfaceBinding)) return this.getAttachedSurfacePose(wound, semantic);
     }
     wound.surfaceBindingStatus = 'puncture_hidden_invalid_surface';
     wound.fallbackAnchorUsage = false;
@@ -1257,6 +1329,7 @@ export class CombatWoundSystem {
     this.fallbackUsageCount = 0;
     this.recentVariantHistory.puncture.length = 0;
     this.recentVariantHistory.slash.length = 0;
+    this.punctureCoordinateDiagnostics?.splice(0);
     this.missingMaterialWarnings.clear();
     this.surfaceDebugRoot.visible = false;
   }
@@ -1275,6 +1348,13 @@ export class CombatWoundSystem {
       materialCloneCount: this.materialCloneCount,
       failedProjectionCount: this.failedProjectionCount,
       fallbackAnchorUsage: this.fallbackUsageCount,
+      ...(this.punctureCoordinateDiagnostics ? {
+        punctureCoordinates: {
+          count: this.punctureCoordinateDiagnostics.length,
+          maximumCount: MAX_DEV_PUNCTURE_COORDINATE_SNAPSHOTS,
+          latest: this.punctureCoordinateDiagnostics.at(-1) ?? null,
+        },
+      } : {}),
       decalLibrary: this.decalLibrary.getDiagnostics(),
       recentVariantHistory: {
         puncture: this.recentVariantHistory.puncture.map((entry) => entry.variantId),
