@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { HumanoidAnimationPackController, HUMANOID_ANIMATION_STATES, resolveDeathIndex, resolveHurtKind } from '../src/game/combat/HumanoidAnimationPackController.js';
-import { resolveAnimationPackManifest, isolateObjectMaterials } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
+import { HumanoidGlbVisualAdapter, resolveAnimationPackManifest, isolateObjectMaterials } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { COMBAT_LAB_WALKER_CONFIG, WalkerVitalStabPolicy } from '../src/game/combat/CombatLabWalkerController.js';
 
 const manifest = JSON.parse(readFileSync(new URL('../public/assets/enemies/testman/testman_animpack_v002.json', import.meta.url), 'utf8'));
@@ -21,6 +21,15 @@ function createAnimationRig() {
   const mixer = new THREE.AnimationMixer(root);
   const controller = new HumanoidAnimationPackController({ mixer, animationPack: pack, manifest, fadeSeconds: 0.05, walkReferenceSpeed: COMBAT_LAB_WALKER_CONFIG.baseWalkingSpeed });
   return { root, mixer, controller, pack };
+}
+
+function createFadeAdapter(root) {
+  const adapter = Object.create(HumanoidGlbVisualAdapter.prototype);
+  adapter.isolateMaterials = true;
+  adapter.ownedMaterials = isolateObjectMaterials(root);
+  adapter.fadePrepared = false;
+  adapter.fadeMaterialBaselines = new Map();
+  return adapter;
 }
 
 test('v002 walk is the only looping base animation and follows walker motion', () => {
@@ -121,6 +130,83 @@ test('walker material cloning shares textures while isolating actor opacity', ()
   stationary.geometry.dispose();
   walkerA.geometry.dispose();
   walkerB.geometry.dispose();
+  shared.dispose();
+  texture.dispose();
+});
+
+test('character fade state stays opaque until explicitly begun, remains isolated, and resets exactly', () => {
+  const texture = new THREE.Texture();
+  let textureDisposeCount = 0;
+  texture.addEventListener('dispose', () => { textureDisposeCount += 1; });
+  const shared = new THREE.MeshStandardMaterial({ map: texture, opacity: 0.82, transparent: false, depthWrite: true, alphaTest: 0.24 });
+  const stationaryRoot = new THREE.Group();
+  const walkerRoot = new THREE.Group();
+  const nextWaveRoot = new THREE.Group();
+  const stationaryMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), shared);
+  const walkerMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), shared);
+  const nextWaveMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), shared);
+  stationaryMesh.renderOrder = 7;
+  walkerMesh.renderOrder = 7;
+  nextWaveMesh.renderOrder = 7;
+  stationaryRoot.add(stationaryMesh);
+  walkerRoot.add(walkerMesh);
+  nextWaveRoot.add(nextWaveMesh);
+  const stationaryAdapter = createFadeAdapter(stationaryRoot);
+  const walkerAdapter = createFadeAdapter(walkerRoot);
+  const nextWaveAdapter = createFadeAdapter(nextWaveRoot);
+  const stationaryMaterial = stationaryMesh.material;
+  const walkerMaterial = walkerMesh.material;
+  const nextWaveMaterial = nextWaveMesh.material;
+
+  assert.notEqual(stationaryMaterial, walkerMaterial, 'each actor owns its cloned material');
+  assert.notEqual(walkerMaterial, nextWaveMaterial, 'a fresh wave receives a fresh clone');
+  assert.equal(walkerAdapter.setOpacity(1), false, 'assigning full opacity cannot implicitly prepare a fade');
+  assert.equal(walkerAdapter.setOpacity(0.999), false, 'the safe opaque threshold remains outside the transparent queue');
+  assert.deepEqual(
+    { opacity: walkerMaterial.opacity, transparent: walkerMaterial.transparent, depthWrite: walkerMaterial.depthWrite, alphaTest: walkerMaterial.alphaTest, renderOrder: walkerMesh.renderOrder },
+    { opacity: 0.82, transparent: false, depthWrite: true, alphaTest: 0.24, renderOrder: 7 },
+  );
+
+  assert.equal(walkerAdapter.beginFade(), true);
+  const preparedVersion = walkerMaterial.version;
+  assert.equal(walkerAdapter.beginFade(), false, 'fade preparation is idempotent');
+  assert.equal(walkerMaterial.transparent, true);
+  assert.equal(walkerMaterial.depthWrite, false);
+  assert.equal(walkerMaterial.alphaTest, 0.24, 'fade preparation preserves alpha-test behavior');
+  assert.equal(walkerMesh.renderOrder, 7, 'fade preparation never changes mesh render order');
+  assert.equal(walkerAdapter.setFadeOpacity(0.5), true);
+  assert.equal(walkerMaterial.opacity, 0.41);
+  assert.equal(walkerMaterial.version, preparedVersion, 'alpha updates do not retoggle shader-defining state');
+  assert.deepEqual(
+    { opacity: stationaryMaterial.opacity, transparent: stationaryMaterial.transparent, depthWrite: stationaryMaterial.depthWrite },
+    { opacity: 0.82, transparent: false, depthWrite: true },
+    'one actor fading cannot mutate another actor',
+  );
+
+  assert.equal(walkerAdapter.resetFade(), true);
+  assert.equal(walkerAdapter.resetFade(), false, 'fade reset is idempotent');
+  assert.deepEqual(
+    { opacity: walkerMaterial.opacity, transparent: walkerMaterial.transparent, depthWrite: walkerMaterial.depthWrite, alphaTest: walkerMaterial.alphaTest, renderOrder: walkerMesh.renderOrder },
+    { opacity: 0.82, transparent: false, depthWrite: true, alphaTest: 0.24, renderOrder: 7 },
+  );
+  assert.deepEqual(
+    { opacity: nextWaveMaterial.opacity, transparent: nextWaveMaterial.transparent, depthWrite: nextWaveMaterial.depthWrite },
+    { opacity: 0.82, transparent: false, depthWrite: true },
+    'next-wave character materials begin genuinely opaque',
+  );
+  const woundBehindBody = new THREE.MeshBasicMaterial({ transparent: true, depthTest: true, depthWrite: false });
+  assert.equal(walkerMaterial.depthWrite && woundBehindBody.depthTest, true, 'opaque body depth fully occludes wound decals behind the torso');
+
+  let walkerMaterialDisposeCount = 0;
+  walkerMaterial.addEventListener('dispose', () => { walkerMaterialDisposeCount += 1; });
+  walkerAdapter.ownedMaterials.forEach((material) => material.dispose());
+  assert.equal(walkerMaterialDisposeCount, 1, 'walker-owned cloned materials dispose after its fade');
+  assert.equal(textureDisposeCount, 0, 'disposing an actor clone never disposes its shared texture');
+
+  stationaryAdapter.ownedMaterials.forEach((material) => material.dispose());
+  nextWaveAdapter.ownedMaterials.forEach((material) => material.dispose());
+  [stationaryMesh, walkerMesh, nextWaveMesh].forEach((mesh) => mesh.geometry.dispose());
+  woundBehindBody.dispose();
   shared.dispose();
   texture.dispose();
 });

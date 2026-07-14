@@ -5,6 +5,7 @@ import { CURRENT_HUMANOID_BONE_MAP, CURRENT_HUMANOID_PROFILE, getHumanoidProfile
 import { HumanoidAnimationPackController } from './HumanoidAnimationPackController.js';
 import { findClosestSkinnedSurface, reconstructSkinnedSurface, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
+import { FULLY_OPAQUE_THRESHOLD, applyFadeOpacity, captureAndPrepareFadeMaterials, clampFadeOpacity, restoreFadeMaterials } from './MaterialFadeState.js';
 
 export const HUMANOID_GLB_PATH = CURRENT_HUMANOID_PROFILE.assetPath;
 export const HUMANOID_GLB_AUTHORED_HEIGHT = CURRENT_HUMANOID_PROFILE.rawHeight;
@@ -627,32 +628,31 @@ export class HumanoidGlbVisualAdapter {
   }
 
   beginFade() {
-    if (this.fadePrepared) return;
+    if (!this.isolateMaterials || this.fadePrepared) return false;
     this.fadePrepared = true;
-    this.ownedMaterials.forEach((material) => {
-      this.fadeMaterialBaselines.set(material, { opacity: material.opacity, transparent: material.transparent, depthWrite: material.depthWrite });
-      material.transparent = true;
-      material.depthWrite = false;
-      material.needsUpdate = true;
-    });
+    captureAndPrepareFadeMaterials(this.ownedMaterials.values(), this.fadeMaterialBaselines);
+    return true;
+  }
+
+  setFadeOpacity(opacity) {
+    if (!this.isolateMaterials || !this.fadePrepared) return false;
+    applyFadeOpacity(this.fadeMaterialBaselines, opacity);
+    return true;
   }
 
   setOpacity(opacity) {
-    if (!this.isolateMaterials) return;
-    this.beginFade();
-    const value = THREE.MathUtils.clamp(Number(opacity) || 0, 0, 1);
-    this.ownedMaterials.forEach((material) => { material.opacity = value; });
+    if (!this.isolateMaterials) return false;
+    const value = clampFadeOpacity(opacity);
+    if (!this.fadePrepared && value >= FULLY_OPAQUE_THRESHOLD) return false;
+    if (!this.fadePrepared) this.beginFade();
+    return this.setFadeOpacity(value);
   }
 
   resetFade() {
-    this.fadeMaterialBaselines.forEach((baseline, material) => {
-      material.opacity = baseline.opacity;
-      material.transparent = baseline.transparent;
-      material.depthWrite = baseline.depthWrite;
-      material.needsUpdate = true;
-    });
-    this.fadeMaterialBaselines.clear();
+    const restored = this.fadePrepared || this.fadeMaterialBaselines.size > 0;
+    restoreFadeMaterials(this.fadeMaterialBaselines);
     this.fadePrepared = false;
+    return restored;
   }
 
   dispose() {

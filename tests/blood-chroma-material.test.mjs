@@ -140,9 +140,16 @@ test('particles and world marks retain their pools, light layer, and fixed mater
 
   const particleVersion = effects.material.version;
   const markVersion = effects.decalMaterial.version;
+  const particleBaseline = { opacity: effects.material.opacity, transparent: effects.material.transparent, depthWrite: effects.material.depthWrite, alphaTest: effects.material.alphaTest };
+  const markBaseline = { opacity: effects.decalMaterial.opacity, transparent: effects.decalMaterial.transparent, depthWrite: effects.decalMaterial.depthWrite, alphaTest: effects.decalMaterial.alphaTest };
+  const opaqueBody = new THREE.MeshStandardMaterial({ opacity: 1, transparent: false, depthWrite: true });
+  assert.equal(effects.setOpacity(1), false, 'full opacity cannot implicitly enter fade state');
+  assert.equal(effects.fadePrepared, false);
+  assert.equal(effects.beginFade(), true);
+  assert.equal(effects.beginFade(), false, 'blood fade preparation is idempotent');
   for (let index = 0; index < 40; index += 1) {
     effects.placeDecal(new THREE.Vector3(index * 0.01, 0, 0), index % 2 ? 'ground' : 'wall', 0.6);
-    effects.setOpacity(1 - index / 80);
+    effects.setFadeOpacity(1 - index / 80);
     effects.clear();
   }
   assert.equal(getBloodChromaFactoryDiagnostics().materialCount, created.materialCount, 'repeated combat does not allocate materials');
@@ -150,6 +157,12 @@ test('particles and world marks retain their pools, light layer, and fixed mater
   assert.equal(effects.decalMaterial.version, markVersion, 'mark opacity never recompiles its shader');
   assert.equal(effects.material.transparent, true);
   assert.equal(effects.material.depthWrite, false);
+  assert.deepEqual({ opacity: opaqueBody.opacity, transparent: opaqueBody.transparent, depthWrite: opaqueBody.depthWrite }, { opacity: 1, transparent: false, depthWrite: true }, 'blood fade state is independent from character depth state');
+  assert.equal(effects.resetFade(), true);
+  assert.equal(effects.resetFade(), false, 'blood fade reset is idempotent');
+  assert.deepEqual({ opacity: effects.material.opacity, transparent: effects.material.transparent, depthWrite: effects.material.depthWrite, alphaTest: effects.material.alphaTest }, particleBaseline);
+  assert.deepEqual({ opacity: effects.decalMaterial.opacity, transparent: effects.decalMaterial.transparent, depthWrite: effects.decalMaterial.depthWrite, alphaTest: effects.decalMaterial.alphaTest }, markBaseline);
+  opaqueBody.dispose();
   effects.dispose();
   assert.equal(getBloodChromaFactoryDiagnostics().materialCount, baseline.materialCount, 'materials dispose only at full effects shutdown');
 });
@@ -161,14 +174,22 @@ test('isolated wound fade materials are precreated and never allocated during st
   assert.equal(wounds.materialCloneCount, manifest.variants.length, 'all isolated fade materials exist before the first wound');
   const materialCount = getBloodChromaFactoryDiagnostics().materialCount;
   const versionByMaterial = new Map([...wounds.ownedMaterials.values()].map((material) => [material, material.version]));
+  const stateByMaterial = new Map([...wounds.ownedMaterials.values()].map((material) => [material, { opacity: material.opacity, transparent: material.transparent, depthWrite: material.depthWrite, alphaTest: material.alphaTest }]));
+  assert.equal(wounds.setOpacity(1), false, 'full opacity leaves wound materials in their original depth contract');
+  assert.equal(wounds.fadePrepared, false);
+  assert.equal(wounds.beginFade(), true);
+  assert.equal(wounds.beginFade(), false, 'wound fade preparation is idempotent');
   for (let index = 0; index < 80; index += 1) {
     const variant = manifest.variants[index % manifest.variants.length];
     assert.ok(wounds.getWoundMaterial({ woundType: 'puncture', decalVariantId: variant.id }));
-    wounds.setOpacity((index % 10) / 10);
+    wounds.setFadeOpacity((index % 10) / 10);
   }
   assert.equal(wounds.materialCloneCount, manifest.variants.length);
   assert.equal(getBloodChromaFactoryDiagnostics().materialCount, materialCount, 'repeated stabbing/fade lookups allocate no materials');
   versionByMaterial.forEach((version, material) => assert.equal(material.version, version, 'opacity does not trigger recompilation'));
+  assert.equal(wounds.resetFade(), true);
+  assert.equal(wounds.resetFade(), false, 'wound fade reset is idempotent');
+  stateByMaterial.forEach((state, material) => assert.deepEqual({ opacity: material.opacity, transparent: material.transparent, depthWrite: material.depthWrite, alphaTest: material.alphaTest }, state));
   wounds.clear();
   assert.equal(getBloodChromaFactoryDiagnostics().materialCount, materialCount, 'actor reset preserves its material pool');
   wounds.dispose();

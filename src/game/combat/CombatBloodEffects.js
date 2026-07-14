@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG } from './CombatStage2Config.js';
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 import { createBloodChromaMaterial, getBloodChromaFactoryDiagnostics, getBloodMaterialDiagnostics } from './BloodChromaMaterial.js';
+import { FULLY_OPAQUE_THRESHOLD, applyFadeOpacity, captureAndPrepareFadeMaterials, clampFadeOpacity, restoreFadeMaterials } from './MaterialFadeState.js';
 
 const dummy = new THREE.Object3D();
 const tmpDirection = new THREE.Vector3();
@@ -20,6 +21,7 @@ export class CombatBloodEffects {
     this.decals = [];
     this.nextDecal = 0;
     this.fadePrepared = false;
+    this.fadeMaterialBaselines = new Map();
     this.material = createBloodChromaMaterial({ usage: 'particle', sourceColor: BLOOD_COLOR_PALETTE.spray, color: 0xffffff, roughness: 0.78, metalness: 0.02, transparent: true, opacity: 1, depthWrite: false });
     this.material.name = 'pooled-combat-blood-particle-material';
     this.decalMaterial = createBloodChromaMaterial({ usage: 'world-mark', color: BLOOD_COLOR_PALETTE.pooled, roughness: 0.93, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.86, depthWrite: false });
@@ -189,15 +191,30 @@ export class CombatBloodEffects {
   }
 
   beginFade() {
-    if (this.fadePrepared) return;
+    if (this.fadePrepared) return false;
     this.fadePrepared = true;
+    captureAndPrepareFadeMaterials([this.material, this.decalMaterial], this.fadeMaterialBaselines);
+    return true;
+  }
+
+  setFadeOpacity(opacity) {
+    if (!this.fadePrepared) return false;
+    applyFadeOpacity(this.fadeMaterialBaselines, opacity);
+    return true;
   }
 
   setOpacity(opacity) {
-    this.beginFade();
-    const value = THREE.MathUtils.clamp(Number(opacity) || 0, 0, 1);
-    this.material.opacity = value;
-    this.decalMaterial.opacity = value * 0.86;
+    const value = clampFadeOpacity(opacity);
+    if (!this.fadePrepared && value >= FULLY_OPAQUE_THRESHOLD) return false;
+    if (!this.fadePrepared) this.beginFade();
+    return this.setFadeOpacity(value);
+  }
+
+  resetFade() {
+    const restored = this.fadePrepared || this.fadeMaterialBaselines.size > 0;
+    restoreFadeMaterials(this.fadeMaterialBaselines);
+    this.fadePrepared = false;
+    return restored;
   }
 
   getDiagnostics({ illumination = 1 } = {}) {
@@ -222,6 +239,7 @@ export class CombatBloodEffects {
     this.decals.forEach((decal) => decal.mesh.removeFromParent());
     this.decalGeometry.dispose();
     this.decalMaterial.dispose();
+    this.fadeMaterialBaselines.clear();
     this.decals = [];
   }
 }

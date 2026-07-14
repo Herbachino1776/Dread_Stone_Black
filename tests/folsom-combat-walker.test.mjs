@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { CollisionWorld } from '../src/game/Collision.js';
 import { FOLSOM_COMBAT_FOOTPRINT, FOLSOM_ENEMY_WAVE_CONFIG, FOLSOM_RAPIER_SUPPORT, FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { WALKER_STATES } from '../src/game/combat/CombatLabWalkerController.js';
+import { HumanoidGlbVisualAdapter, isolateObjectMaterials } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import { MELEE_INTENTS } from '../src/game/combat/MeleeIntentWeapon.js';
 
@@ -27,6 +28,27 @@ async function createEncounter({ yaw = 0, query = new URLSearchParams(), blocker
   const dungeon = { scene, collision, isPositionInFishingWater: () => false };
   const encounter = await FolsomCombatEncounter.create({ dungeon, player, query });
   return { scene, collision, player, dungeon, encounter };
+}
+
+function createLifecycleVisualAdapter(root) {
+  const adapter = Object.create(HumanoidGlbVisualAdapter.prototype);
+  adapter.isolateMaterials = true;
+  adapter.ownedMaterials = isolateObjectMaterials(root);
+  adapter.fadePrepared = false;
+  adapter.fadeMaterialBaselines = new Map();
+  return adapter;
+}
+
+function trackFadeCalls(component) {
+  const calls = { beginFade: 0, setFadeOpacity: 0, resetFade: 0 };
+  Object.keys(calls).forEach((method) => {
+    const original = component[method].bind(component);
+    component[method] = (...args) => {
+      calls[method] += 1;
+      return original(...args);
+    };
+  });
+  return calls;
 }
 
 function makeHit(actor, bodyId) {
@@ -233,6 +255,79 @@ test('dying Folsom walker releases player and combat collision immediately', asy
   encounter.dispose();
 });
 
+test('losing consciousness and grounded hold stay opaque until the one-second fade boundary', async () => {
+  const { encounter } = await createEncounter();
+  const sourceMaterial = new THREE.MeshStandardMaterial({ opacity: 0.9, transparent: false, depthWrite: true, alphaTest: 0.13 });
+  const root = new THREE.Group();
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), sourceMaterial);
+  mesh.renderOrder = 4;
+  root.add(mesh);
+  const visualAdapter = createLifecycleVisualAdapter(root);
+  const actor = { instanceId: 'corpse-fade-lifecycle-probe', root, visualAdapter, woundSystem: encounter.actor.woundSystem };
+  const bloodEffects = encounter.bloodEffects;
+  const slot = encounter.enemyWaveCorpses.stationary;
+  const visualCalls = trackFadeCalls(visualAdapter);
+  const woundCalls = trackFadeCalls(actor.woundSystem);
+  const bloodCalls = trackFadeCalls(bloodEffects);
+  const characterMaterial = mesh.material;
+  const woundMaterial = [...actor.woundSystem.ownedMaterials.values()][0];
+  const woundBaseline = { opacity: woundMaterial.opacity, transparent: woundMaterial.transparent, depthWrite: woundMaterial.depthWrite, alphaTest: woundMaterial.alphaTest };
+  const bloodBaseline = { opacity: bloodEffects.material.opacity, transparent: bloodEffects.material.transparent, depthWrite: bloodEffects.material.depthWrite };
+  const fadeStart = FOLSOM_ENEMY_WAVE_CONFIG.corpseDespawnSeconds - FOLSOM_ENEMY_WAVE_CONFIG.corpseFadeSeconds;
+
+  encounter.advanceCorpseLifecycle(slot, actor, WALKER_STATES.losingConsciousness, bloodEffects, null, 1);
+  encounter.advanceCorpseLifecycle(slot, actor, WALKER_STATES.grounded, bloodEffects, null, fadeStart - 1.001);
+  assert.equal(slot.elapsed, fadeStart - 0.001);
+  assert.equal(slot.fadeStarted, false);
+  assert.equal(slot.opacity, 1);
+  assert.deepEqual(visualCalls, { beginFade: 0, setFadeOpacity: 0, resetFade: 0 });
+  assert.deepEqual(woundCalls, { beginFade: 0, setFadeOpacity: 0, resetFade: 0 });
+  assert.deepEqual(bloodCalls, { beginFade: 0, setFadeOpacity: 0, resetFade: 0 });
+  assert.deepEqual(
+    { opacity: characterMaterial.opacity, transparent: characterMaterial.transparent, depthWrite: characterMaterial.depthWrite, alphaTest: characterMaterial.alphaTest, renderOrder: mesh.renderOrder },
+    { opacity: 0.9, transparent: false, depthWrite: true, alphaTest: 0.13, renderOrder: 4 },
+    'the authored death and grounded hold keep normal opaque depth occlusion',
+  );
+
+  encounter.advanceCorpseLifecycle(slot, actor, WALKER_STATES.grounded, bloodEffects, null, 0.0011);
+  assert.equal(slot.fadeStarted, true);
+  assert.deepEqual(visualCalls, { beginFade: 1, setFadeOpacity: 1, resetFade: 0 });
+  assert.deepEqual(woundCalls, { beginFade: 1, setFadeOpacity: 1, resetFade: 0 });
+  assert.deepEqual(bloodCalls, { beginFade: 1, setFadeOpacity: 1, resetFade: 0 });
+  assert.equal(characterMaterial.transparent, true);
+  assert.equal(characterMaterial.depthWrite, false);
+  assert.ok(slot.opacity < 1 && slot.opacity > 0.999, 'fade alpha starts only after crossing the configured boundary');
+
+  encounter.advanceCorpseLifecycle(slot, actor, WALKER_STATES.grounded, bloodEffects, null, 0.25);
+  assert.deepEqual(visualCalls, { beginFade: 1, setFadeOpacity: 2, resetFade: 0 });
+  assert.ok(slot.opacity > 0.749 && slot.opacity < 0.751);
+  assert.ok(characterMaterial.opacity > 0.674 && characterMaterial.opacity < 0.676);
+  assert.equal(bloodEffects.material.opacity, slot.opacity, 'blood fading is independent and proportional to its own baseline');
+
+  encounter.resetCorpseFade(actor, bloodEffects);
+  assert.deepEqual(visualCalls, { beginFade: 1, setFadeOpacity: 2, resetFade: 1 });
+  assert.deepEqual(woundCalls, { beginFade: 1, setFadeOpacity: 2, resetFade: 1 });
+  assert.deepEqual(bloodCalls, { beginFade: 1, setFadeOpacity: 2, resetFade: 1 });
+  assert.deepEqual(
+    { opacity: characterMaterial.opacity, transparent: characterMaterial.transparent, depthWrite: characterMaterial.depthWrite, alphaTest: characterMaterial.alphaTest, renderOrder: mesh.renderOrder },
+    { opacity: 0.9, transparent: false, depthWrite: true, alphaTest: 0.13, renderOrder: 4 },
+  );
+  assert.deepEqual(
+    { opacity: woundMaterial.opacity, transparent: woundMaterial.transparent, depthWrite: woundMaterial.depthWrite, alphaTest: woundMaterial.alphaTest },
+    woundBaseline,
+  );
+  assert.deepEqual(
+    { opacity: bloodEffects.material.opacity, transparent: bloodEffects.material.transparent, depthWrite: bloodEffects.material.depthWrite },
+    bloodBaseline,
+  );
+  assert.equal(root.visible, true);
+
+  visualAdapter.ownedMaterials.forEach((material) => material.dispose());
+  mesh.geometry.dispose();
+  sourceMaterial.dispose();
+  encounter.dispose();
+});
+
 test('two dead enemies fade-despawn at ten seconds and a fresh wave of two returns two seconds later', async () => {
   const { encounter } = await createEncounter();
   const stationaryActor = encounter.actor;
@@ -266,7 +361,11 @@ test('two dead enemies fade-despawn at ten seconds and a fresh wave of two retur
   assert.equal(encounter.getActiveCombatActors().length, 2);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
   assert.equal(encounter.enemyWaveCorpses.stationary.started, false);
+  assert.equal(encounter.enemyWaveCorpses.stationary.fadeStarted, false);
   assert.equal(encounter.enemyWaveCorpses.walker.started, false);
+  assert.equal(encounter.enemyWaveCorpses.walker.fadeStarted, false);
+  assert.equal(encounter.actor.woundSystem.fadePrepared, false);
+  assert.equal(encounter.walkerController.actor.woundSystem.fadePrepared, false);
   encounter.dispose();
 });
 
