@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { cloneBloodChromaMaterial } from './BloodChromaMaterial.js';
-import { VESSEL_ZONES, WOUND_CONFIG } from './CombatStage2Config.js';
+import { cloneBloodChromaMaterial, createBloodChromaMaterial } from './BloodChromaMaterial.js';
+import { BLOOD_COLOR_PALETTE, VESSEL_ZONES, WOUND_CONFIG } from './CombatStage2Config.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { getAlphaBoundUv, getKnifeWoundPhysicalCategory } from './KnifeWoundDecalLibrary.js';
-import { MAX_SLASH_SURFACE_SAMPLES, MIN_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
+import { MAX_SLASH_SURFACE_SAMPLES, MIN_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, areSurfaceAnatomiesCompatible, createSurfaceBindingDiagnostics, reconstructSkinnedSurface, reconstructSurfaceBindingNeighborhood, sampleSlashPath, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 import { appendSlashVisualPathPoint, createSlashVisualWorkspace, deriveSlashFragmentMetrics, makeSlashFragmentGeometry, resetSlashVisualPath, updateSlashFragmentGeometry } from './SlashWoundVisual.js';
-import { MAX_SWORD_CUT_SURFACE_SAMPLES, createSwordCutRibbonWorkspace, makeSwordCutRibbonGeometry, resetSwordCutRibbonGeometry, updateSwordCutRibbonGeometry } from './SwordCutWoundVisual.js';
+import { MAX_SWORD_CUT_SURFACE_SAMPLES, SWORD_CUT_MAX_SEGMENT_LENGTH, SWORD_CUT_TARGET_SAMPLE_SPACING, createSwordCutRibbonWorkspace, makeSwordCutRibbonGeometry, resetSwordCutRibbonGeometry, updateSwordCutRibbonGeometry } from './SwordCutWoundVisual.js';
 import { FULLY_OPAQUE_THRESHOLD, applyFadeOpacity, captureAndPrepareFadeMaterials, clampFadeOpacity, restoreFadeMaterials } from './MaterialFadeState.js';
 
 const tmpPosition = new THREE.Vector3();
@@ -29,6 +29,30 @@ export const PUNCTURE_DECAL_SCALE = 1.3;
 
 export const SLASH_VISUAL_WIDTH_LIMITS = Object.freeze({ shallow: [0.004, 0.01], deep: [0.008, 0.02], severeMaximum: 0.03 });
 export const MAX_SWORD_CUT_VISUALS = 12;
+const LEGACY_KNIFE_SURFACE_PROJECTION_DISTANCE = 0.1;
+
+export function createSwordCutVisualDiagnostics() {
+  return {
+    ...createSurfaceBindingDiagnostics(),
+    rebindAttempts: 0,
+    rebindSuccesses: 0,
+    insertedResampleCount: 0,
+    sampleCompactionCount: 0,
+    renderedSegmentCount: 0,
+    hiddenSegmentCount: 0,
+    maximumRenderedSegmentLength: 0,
+    maximumMidpointToSurfaceError: 0,
+    oneSampleSeedUsageCount: 0,
+  };
+}
+
+function deriveSwordWoundColors() {
+  const arterial = new THREE.Color(BLOOD_COLOR_PALETTE.arterial);
+  return {
+    center: arterial.clone().multiplyScalar(0.72),
+    lips: arterial.clone().multiplyScalar(0.86),
+  };
+}
 
 function makePunctureGeometry() {
   const geometry = new THREE.BufferGeometry();
@@ -103,8 +127,9 @@ export class CombatWoundSystem {
     this.fadePrepared = false;
     this.fadeMaterialBaselines = new Map();
     this.bluntMaterial = new THREE.MeshStandardMaterial({ color: 0x372229, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-    this.swordCutCenterMaterial = new THREE.MeshStandardMaterial({ color: 0x2a0207, roughness: 0.98, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.98, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-    this.swordCutLipMaterial = new THREE.MeshStandardMaterial({ color: 0x651019, roughness: 0.9, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.96, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -1 });
+    const swordWoundColors = deriveSwordWoundColors();
+    this.swordCutCenterMaterial = createBloodChromaMaterial({ usage: 'sword-wound-center', sourceColor: swordWoundColors.center.getHex(), color: swordWoundColors.center, roughness: 0.97, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.98, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    this.swordCutLipMaterial = createBloodChromaMaterial({ usage: 'sword-wound-lips', sourceColor: swordWoundColors.lips.getHex(), color: swordWoundColors.lips, roughness: 0.93, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.96, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -1 });
     this.failedProjectionCount = 0;
     this.fallbackUsageCount = 0;
     this.bindingFailureLogged = false;
@@ -207,9 +232,18 @@ export class CombatWoundSystem {
     return slot;
   }
 
-  bindSurfacePoint(wound, worldPoint, referenceNormal = null, regionId = wound.regionId, bodyId = wound.bodyId) {
+  bindSurfacePoint(wound, worldPoint, referenceNormal = null, regionId = wound.regionId, bodyId = wound.bodyId, bindingOptions = {}) {
     const adapter = this.actor.visualAdapter;
-    const binding = adapter?.bindVisibleSurface?.(worldPoint, { regionId, bodyId, referenceNormal });
+    const swordBinding = wound.visualFamily === 'sword';
+    const binding = adapter?.bindVisibleSurface?.(worldPoint, {
+      regionId,
+      bodyId,
+      referenceNormal,
+      anatomyAware: swordBinding,
+      diagnostics: swordBinding ? wound.swordBindingDiagnostics : null,
+      ...(swordBinding ? {} : { maximumDistance: LEGACY_KNIFE_SURFACE_PROJECTION_DISTANCE, allowLegacyDistance: true }),
+      ...bindingOptions,
+    });
     if (binding && validateSurfaceBinding(binding)) return binding;
     this.failedProjectionCount += 1;
     if (adapter?.scene && !this.bindingFailureLogged) {
@@ -521,34 +555,104 @@ export class CombatWoundSystem {
     return wound;
   }
 
+  appendBoundedSwordSample(wound, sample) {
+    const samples = wound.swordSamples;
+    if (samples.length >= MAX_SWORD_CUT_SURFACE_SAMPLES) {
+      let removalIndex = 1;
+      let bestScore = Infinity;
+      for (let index = 1; index < samples.length - 1; index += 1) {
+        const previous = samples[index - 1];
+        const current = samples[index];
+        const next = samples[index + 1];
+        tmpEdgeA.subVectors(next.sourcePoint, previous.sourcePoint);
+        const lengthSq = tmpEdgeA.lengthSq();
+        const t = lengthSq > 1e-10 ? THREE.MathUtils.clamp(tmpEdgeB.subVectors(current.sourcePoint, previous.sourcePoint).dot(tmpEdgeA) / lengthSq, 0, 1) : 0;
+        tmpPosition.copy(previous.sourcePoint).addScaledVector(tmpEdgeA, t);
+        const protectedSample = current.breakBefore || next.breakBefore
+          || !areSurfaceAnatomiesCompatible(previous.regionId, current.regionId, previous.bodyId, current.bodyId)
+          || !areSurfaceAnatomiesCompatible(current.regionId, next.regionId, current.bodyId, next.bodyId);
+        const score = current.sourcePoint.distanceTo(tmpPosition) + (protectedSample ? 1 : 0);
+        if (score < bestScore) { bestScore = score; removalIndex = index; }
+      }
+      const removed = samples[removalIndex];
+      const next = samples[removalIndex + 1];
+      const previous = samples[removalIndex - 1];
+      if (next) {
+        next.breakBefore ||= removed.breakBefore || !areSurfaceAnatomiesCompatible(previous.regionId, next.regionId, previous.bodyId, next.bodyId);
+        next.midpointBinding = null;
+        next.midpointBindingAttempted = false;
+        next.midpointPreviousSampleId = null;
+      }
+      samples.splice(removalIndex, 1);
+      wound.swordBindingDiagnostics.sampleCompactionCount += 1;
+    }
+    samples.push(sample);
+    return sample;
+  }
+
   appendSwordCutSurfaceSample(wound, { hit, worldPoint, surfaceNormal, direction = null } = {}) {
     if (!wound || !worldPoint || !hit?.regionId || !hit?.bodyId) return null;
-    const binding = this.bindSurfacePoint(wound, worldPoint, surfaceNormal, hit.regionId, hit.bodyId);
-    const previous = wound.swordSamples.at(-1);
-    const sourcePoint = worldPoint.clone();
-    const breakBefore = Boolean(previous) && (!previous.binding || !binding || previous.sourcePoint.distanceTo(sourcePoint) > 0.16);
-    const sample = {
-      sourcePoint,
-      binding,
-      regionId: hit.regionId,
-      bodyId: hit.bodyId,
-      localPoint: hit.localPoint.clone(),
-      breakBefore,
-      worldDirection: direction?.clone?.() ?? null,
-    };
-    if (!binding) {
-      wound.failedProjectionCount += 1;
-      wound.fallbackReason = 'sword_surface_projection_failed';
+    let previousAccepted = null;
+    for (let index = wound.swordSamples.length - 1; index >= 0; index -= 1) {
+      if (!validateSurfaceBinding(wound.swordSamples[index].binding)) continue;
+      previousAccepted = wound.swordSamples[index];
+      break;
     }
-    if (wound.swordSamples.length >= MAX_SWORD_CUT_SURFACE_SAMPLES) wound.swordSamples[MAX_SWORD_CUT_SURFACE_SAMPLES - 1] = sample;
-    else wound.swordSamples.push(sample);
-    wound.surfaceBinding ??= binding;
+    if (previousAccepted && previousAccepted.sourcePoint.distanceTo(worldPoint) < 0.0015 && previousAccepted.regionId === hit.regionId && previousAccepted.bodyId === hit.bodyId) return previousAccepted;
+    const sourceDistance = previousAccepted?.sourcePoint.distanceTo(worldPoint) ?? 0;
+    const stepCount = previousAccepted
+      ? Math.min(MAX_SWORD_CUT_SURFACE_SAMPLES - 1, Math.max(1, Math.ceil(sourceDistance / SWORD_CUT_TARGET_SAMPLE_SPACING)))
+      : 1;
+    let latestSample = null;
+    for (let stepIndex = 1; stepIndex <= stepCount; stepIndex += 1) {
+      const t = stepIndex / stepCount;
+      const sourcePoint = previousAccepted ? previousAccepted.sourcePoint.clone().lerp(worldPoint, t) : worldPoint.clone();
+      const sourceNormal = previousAccepted?.sourceNormal?.clone?.().lerp(surfaceNormal, t) ?? surfaceNormal.clone();
+      if (sourceNormal.lengthSq() < 1e-10) sourceNormal.copy(surfaceNormal);
+      sourceNormal.normalize();
+      const usePreviousSemantic = previousAccepted && t < 0.5;
+      const regionId = usePreviousSemantic ? previousAccepted.regionId : hit.regionId;
+      const bodyId = usePreviousSemantic ? previousAccepted.bodyId : hit.bodyId;
+      const binding = this.bindSurfacePoint(wound, sourcePoint, sourceNormal, regionId, bodyId);
+      const previous = wound.swordSamples.at(-1);
+      const localPoint = previousAccepted?.localPoint && previousAccepted.bodyId === hit.bodyId
+        ? previousAccepted.localPoint.clone().lerp(hit.localPoint, t)
+        : stepIndex === stepCount ? hit.localPoint.clone() : null;
+      const sample = {
+        sampleId: wound.nextSwordSampleId++,
+        sourcePoint,
+        sourceNormal,
+        binding,
+        regionId,
+        bodyId,
+        localPoint,
+        breakBefore: Boolean(previous) && (
+          !validateSurfaceBinding(previous.binding)
+          || !validateSurfaceBinding(binding)
+          || !areSurfaceAnatomiesCompatible(previous.regionId, regionId, previous.bodyId, bodyId)
+          || previous.sourcePoint.distanceTo(sourcePoint) > SWORD_CUT_MAX_SEGMENT_LENGTH
+        ),
+        worldDirection: direction?.clone?.() ?? previousAccepted?.worldDirection?.clone?.() ?? null,
+        segmentRebindAttempted: false,
+        midpointBinding: null,
+        midpointBindingAttempted: false,
+        midpointPreviousSampleId: null,
+      };
+      if (!binding) {
+        wound.failedProjectionCount += 1;
+        wound.fallbackReason = 'sword_surface_projection_failed';
+      } else {
+        wound.surfaceBinding ??= binding;
+        wound.fallbackReason = null;
+      }
+      if (previousAccepted && stepIndex < stepCount) wound.swordBindingDiagnostics.insertedResampleCount += 1;
+      latestSample = this.appendBoundedSwordSample(wound, sample);
+    }
     wound.surfaceBindingAttempted = true;
-    const validCount = wound.swordSamples.reduce((count, entry) => count + (entry.binding ? 1 : 0), 0);
-    wound.surfaceBindingStatus = validCount >= 2 ? 'sword_ribbon_skinned_surface' : validCount === 1 ? 'sword_surface_point_pending' : 'sword_surface_invalid';
+    const validCount = wound.swordSamples.reduce((count, entry) => count + (validateSurfaceBinding(entry.binding) ? 1 : 0), 0);
+    wound.surfaceBindingStatus = validCount >= 2 ? 'sword_ribbon_skinned_surface' : validCount === 1 ? 'sword_surface_seed_pending' : 'sword_surface_invalid';
     wound.fallbackAnchorUsage = false;
-    if (binding) wound.fallbackReason = null;
-    return sample;
+    return latestSample;
   }
 
   updateSwordCutMetrics(wound) {
@@ -603,6 +707,8 @@ export class CombatWoundSystem {
       swordSamples: [],
       lastWorldDirection: direction.clone(),
     }, { visualFamily: 'sword' });
+    wound.swordBindingDiagnostics = createSwordCutVisualDiagnostics();
+    wound.nextSwordSampleId = 1;
     this.appendSwordCutSurfaceSample(wound, { hit, worldPoint: point, surfaceNormal, direction });
     this.updateSwordCutMetrics(wound);
     this.resolveBleedingProfile(wound);
@@ -808,9 +914,11 @@ export class CombatWoundSystem {
 
   getWorldPose(wound) {
     if (wound?.visualFamily === 'sword') {
+      let hasSkinnedBinding = false;
       for (let index = wound.swordSamples.length - 1; index >= 0; index -= 1) {
         const sample = wound.swordSamples[index];
         if (!validateSurfaceBinding(sample.binding)) continue;
+        hasSkinnedBinding = true;
         const reconstructed = this.actor.visualAdapter?.reconstructVisibleSurface?.(sample.binding) ?? reconstructSkinnedSurface(sample.binding);
         if (!reconstructed) continue;
         return {
@@ -820,6 +928,7 @@ export class CombatWoundSystem {
           surfaceBound: true,
         };
       }
+      if (hasSkinnedBinding) return null;
     }
     const entry = this.actor.bodies.get(wound?.bodyId);
     if (!entry) return null;
@@ -836,11 +945,64 @@ export class CombatWoundSystem {
   }
 
   update(dt) {
+    this.actor.visualAdapter?.prepareVisibleSurfaceFrame?.();
     this.wounds.forEach((wound) => {
       wound.withdrawalBoostRemaining = Math.max(0, wound.withdrawalBoostRemaining - dt);
       this.updateWoundVisual(wound);
     });
     this.updateSurfaceDebug(this.wounds.at(-1));
+  }
+
+  bindSwordSegmentMidpoint(wound, previousSample, sample, { force = false } = {}) {
+    if (!previousSample?.sourcePoint || !sample?.sourcePoint) return null;
+    if (sample.midpointPreviousSampleId !== previousSample.sampleId) {
+      sample.midpointBinding = null;
+      sample.midpointBindingAttempted = false;
+      sample.midpointPreviousSampleId = previousSample.sampleId;
+    }
+    if (force || !sample.midpointBindingAttempted) {
+      sample.midpointBindingAttempted = true;
+      const animatedNeighborhood = force && sample.midpointBinding
+        ? this.actor.visualAdapter?.reconstructVisibleSurfaceNeighborhood?.(sample.midpointBinding, undefined, { refresh: false }) ?? reconstructSurfaceBindingNeighborhood(sample.midpointBinding)
+        : null;
+      if (animatedNeighborhood) tmpPosition.copy(animatedNeighborhood.point);
+      else tmpPosition.lerpVectors(previousSample.sourcePoint, sample.sourcePoint, 0.5);
+      if (animatedNeighborhood) tmpNormal.copy(animatedNeighborhood.normal);
+      else tmpNormal.addVectors(previousSample.sourceNormal, sample.sourceNormal);
+      if (tmpNormal.lengthSq() < 1e-10) tmpNormal.copy(sample.sourceNormal);
+      tmpNormal.normalize();
+      sample.midpointBinding = this.bindSurfacePoint(wound, tmpPosition, tmpNormal, sample.regionId, sample.bodyId);
+    }
+    return validateSurfaceBinding(sample.midpointBinding) ? sample.midpointBinding : null;
+  }
+
+  getSwordSegmentMidpointPose(wound, previousSample, sample, target) {
+    const binding = this.bindSwordSegmentMidpoint(wound, previousSample, sample);
+    if (!binding) return null;
+    const pose = this.actor.visualAdapter?.reconstructVisibleSurface?.(binding, target, { refresh: false }) ?? reconstructSkinnedSurface(binding, target);
+    if (pose) pose.binding = binding;
+    return pose;
+  }
+
+  attemptSwordLocalRebind(wound, { previousSample, sample, previousValid, currentValid }) {
+    if (sample.segmentRebindAttempted) return false;
+    sample.segmentRebindAttempted = true;
+    wound.swordBindingDiagnostics.rebindAttempts += 1;
+    let rebound = null;
+    if (!currentValid) {
+      const animatedNeighborhood = this.actor.visualAdapter?.reconstructVisibleSurfaceNeighborhood?.(sample.binding, undefined, { refresh: false }) ?? reconstructSurfaceBindingNeighborhood(sample.binding);
+      rebound = this.bindSurfacePoint(wound, animatedNeighborhood?.point ?? sample.sourcePoint, animatedNeighborhood?.normal ?? sample.sourceNormal, sample.regionId, sample.bodyId);
+      if (rebound) sample.binding = rebound;
+    } else if (!previousValid) {
+      const animatedNeighborhood = this.actor.visualAdapter?.reconstructVisibleSurfaceNeighborhood?.(previousSample.binding, undefined, { refresh: false }) ?? reconstructSurfaceBindingNeighborhood(previousSample.binding);
+      rebound = this.bindSurfacePoint(wound, animatedNeighborhood?.point ?? previousSample.sourcePoint, animatedNeighborhood?.normal ?? previousSample.sourceNormal, previousSample.regionId, previousSample.bodyId);
+      if (rebound) previousSample.binding = rebound;
+    } else {
+      rebound = this.bindSwordSegmentMidpoint(wound, previousSample, sample, { force: true });
+    }
+    if (!rebound) return false;
+    wound.swordBindingDiagnostics.rebindSuccesses += 1;
+    return true;
   }
 
   updateSwordCutVisual(wound) {
@@ -852,16 +1014,28 @@ export class CombatWoundSystem {
       samples: wound.swordSamples,
       width: wound.visualWidthMeters,
       reconstructSurface: (binding, target) => validateSurfaceBinding(binding)
-        ? this.actor.visualAdapter?.reconstructVisibleSurface?.(binding, target) ?? reconstructSkinnedSurface(binding, target)
+        ? this.actor.visualAdapter?.reconstructVisibleSurface?.(binding, target, { refresh: false }) ?? reconstructSkinnedSurface(binding, target)
         : null,
+      resolveMidpointSurface: (previousSample, sample, target) => this.getSwordSegmentMidpointPose(wound, previousSample, sample, target),
+      attemptLocalRebind: (context) => this.attemptSwordLocalRebind(wound, context),
     });
-    slot.ribbon.visible = diagnostics.renderedSegmentCount > 0;
+    Object.assign(wound.swordBindingDiagnostics, {
+      renderedSegmentCount: diagnostics.renderedSegmentCount,
+      hiddenSegmentCount: diagnostics.hiddenSegmentCount,
+      maximumRenderedSegmentLength: Math.max(wound.swordBindingDiagnostics.maximumRenderedSegmentLength, diagnostics.maximumRenderedSegmentLength),
+      maximumMidpointToSurfaceError: Math.max(wound.swordBindingDiagnostics.maximumMidpointToSurfaceError, diagnostics.maximumMidpointToSurfaceError),
+      oneSampleSeedUsageCount: Math.max(wound.swordBindingDiagnostics.oneSampleSeedUsageCount, diagnostics.oneSampleSeedUsageCount),
+    });
+    const combinedDiagnostics = { ...wound.swordBindingDiagnostics, ...diagnostics };
+    slot.ribbon.visible = diagnostics.renderedPrimitiveCount > 0;
     wound.renderedSegmentCount = diagnostics.renderedSegmentCount;
     wound.invalidFragmentCount = diagnostics.hiddenFragmentCount;
     wound.continuousRegionTransitionCount = diagnostics.continuousRegionTransitionCount;
-    wound.surfaceBindingStatus = diagnostics.renderedSegmentCount > 0 ? 'sword_ribbon_skinned_surface' : 'sword_ribbon_hidden_invalid';
-    wound.surfaceDistance = diagnostics.renderedSegmentCount > 0 ? 0.00015 : null;
-    wound.swordVisualDiagnostics = diagnostics;
+    wound.surfaceBindingStatus = diagnostics.renderedSegmentCount > 0
+      ? 'sword_ribbon_skinned_surface'
+      : diagnostics.oneSampleSeedUsageCount > 0 ? 'sword_surface_seed' : 'sword_ribbon_hidden_invalid';
+    wound.surfaceDistance = diagnostics.renderedPrimitiveCount > 0 ? 0.00015 : null;
+    wound.swordVisualDiagnostics = combinedDiagnostics;
   }
 
   getAttachedSurfacePose(wound, semanticOverride = null) {

@@ -1,31 +1,50 @@
 import * as THREE from 'three';
+import { areSurfaceAnatomiesCompatible, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 
 export const MAX_SWORD_CUT_SURFACE_SAMPLES = 48;
 export const MAX_SWORD_CUT_RIBBON_SEGMENTS = MAX_SWORD_CUT_SURFACE_SAMPLES - 1;
 export const SWORD_CUT_VERTICES_PER_SEGMENT = 12;
 export const SWORD_CUT_INDICES_PER_SEGMENT = 18;
 export const SWORD_CUT_CENTER_INDEX_CAPACITY = MAX_SWORD_CUT_RIBBON_SEGMENTS * 6;
+export const SWORD_CUT_TARGET_SAMPLE_SPACING = 0.014;
+export const SWORD_CUT_MAX_SEGMENT_LENGTH = 0.024;
+export const SWORD_CUT_MAX_MIDPOINT_SURFACE_ERROR = 0.0045;
+export const SWORD_CUT_MAX_NORMAL_ANGLE_DEGREES = 65;
+export const SWORD_CUT_SEED_LENGTH = 0.008;
 
+const MIN_SEGMENT_NORMAL_DOT = Math.cos(THREE.MathUtils.degToRad(SWORD_CUT_MAX_NORMAL_ANGLE_DEGREES));
 const startTangent = new THREE.Vector3();
 const endTangent = new THREE.Vector3();
 const startSide = new THREE.Vector3();
 const endSide = new THREE.Vector3();
+const midpoint = new THREE.Vector3();
+const midpointNormal = new THREE.Vector3();
+const seedStartPoint = new THREE.Vector3();
+const seedEndPoint = new THREE.Vector3();
+const seedFallbackTangent = new THREE.Vector3();
 
 function makePose() {
   return {
     point: new THREE.Vector3(),
     normal: new THREE.Vector3(),
     vertices: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()],
+    expectedPoint: new THREE.Vector3(),
+    expectedNormal: new THREE.Vector3(),
   };
 }
 
 export function createSwordCutRibbonWorkspace() {
   return {
     poses: Array.from({ length: MAX_SWORD_CUT_SURFACE_SAMPLES }, makePose),
+    midpointPoses: Array.from({ length: MAX_SWORD_CUT_RIBBON_SEGMENTS }, makePose),
     valid: new Uint8Array(MAX_SWORD_CUT_SURFACE_SAMPLES),
+    connected: new Uint8Array(MAX_SWORD_CUT_SURFACE_SAMPLES),
     renderedSegmentCount: 0,
     hiddenFragmentCount: 0,
     continuousRegionTransitionCount: 0,
+    oneSampleSeedUsageCount: 0,
+    maximumRenderedSegmentLength: 0,
+    maximumMidpointToSurfaceError: 0,
   };
 }
 
@@ -78,8 +97,8 @@ function writeRibbonSegment({ geometry, segmentIndex, start, end, width }) {
   const outerHalfWidth = width * 0.5;
   const centerHalfWidth = Math.max(0.0011, width * 0.16);
   const centerBias = 0.00015;
-  const lipOuterBias = 0.00085;
-  const lipCrestBias = 0.0021;
+  const lipOuterBias = 0.0007;
+  const lipCrestBias = 0.0018;
   const vertex = segmentIndex * SWORD_CUT_VERTICES_PER_SEGMENT;
 
   writeVertex(positions, normals, vertex, start.point, start.normal, startSide, -centerHalfWidth, centerBias);
@@ -105,12 +124,67 @@ function writeRibbonSegment({ geometry, segmentIndex, start, end, width }) {
   return true;
 }
 
+function writeSurfaceSeed({ geometry, segmentIndex, pose, sample, width }) {
+  seedFallbackTangent.subVectors(pose.vertices[1], pose.vertices[0]);
+  startTangent.copy(sample?.worldDirection ?? seedFallbackTangent);
+  startTangent.addScaledVector(pose.normal, -startTangent.dot(pose.normal));
+  if (startTangent.lengthSq() < 1e-10) {
+    startTangent.subVectors(pose.vertices[2], pose.vertices[0]).addScaledVector(pose.normal, -startTangent.dot(pose.normal));
+  }
+  if (startTangent.lengthSq() < 1e-10) return false;
+  startTangent.normalize();
+  seedStartPoint.copy(pose.point).addScaledVector(startTangent, -SWORD_CUT_SEED_LENGTH * 0.5);
+  seedEndPoint.copy(pose.point).addScaledVector(startTangent, SWORD_CUT_SEED_LENGTH * 0.5);
+  const start = { point: seedStartPoint, normal: pose.normal };
+  const end = { point: seedEndPoint, normal: pose.normal };
+  return writeRibbonSegment({ geometry, segmentIndex, start, end, width: Math.min(width, 0.006) });
+}
+
 export function resetSwordCutRibbonGeometry(geometry, workspace) {
   geometry.clearGroups();
   workspace.valid.fill(0);
+  workspace.connected.fill(0);
   workspace.renderedSegmentCount = 0;
   workspace.hiddenFragmentCount = 0;
   workspace.continuousRegionTransitionCount = 0;
+  workspace.oneSampleSeedUsageCount = 0;
+  workspace.maximumRenderedSegmentLength = 0;
+  workspace.maximumMidpointToSurfaceError = 0;
+}
+
+function reconstructSample(samples, index, workspace, reconstructSurface) {
+  const sample = samples[index];
+  if (!validateSurfaceBinding(sample?.binding)) {
+    workspace.valid[index] = 0;
+    return null;
+  }
+  const pose = reconstructSurface(sample.binding, workspace.poses[index]);
+  if (!pose?.point || !pose?.normal || ![pose.point.x, pose.point.y, pose.point.z, pose.normal.x, pose.normal.y, pose.normal.z].every(Number.isFinite)) {
+    workspace.valid[index] = 0;
+    return null;
+  }
+  workspace.valid[index] = 1;
+  return pose;
+}
+
+function validateSegment({ previousSample, sample, start, end, midpointPose, maximumBridgeDistance }) {
+  if (!validateSurfaceBinding(previousSample?.binding) || !validateSurfaceBinding(sample?.binding)) return { valid: false, reason: 'invalid_binding' };
+  if (previousSample.binding.mesh !== sample.binding.mesh) return { valid: false, reason: 'mesh_discontinuity' };
+  if (!areSurfaceAnatomiesCompatible(previousSample.regionId, sample.regionId, previousSample.bodyId, sample.bodyId)) return { valid: false, reason: 'semantic_discontinuity' };
+  const segmentLength = start.point.distanceTo(end.point);
+  if (segmentLength > maximumBridgeDistance) return { valid: false, reason: 'excessive_segment_length', segmentLength };
+  if (start.normal.dot(end.normal) < MIN_SEGMENT_NORMAL_DOT) return { valid: false, reason: 'normal_discontinuity', segmentLength };
+  if (!midpointPose?.point) return { valid: false, reason: 'midpoint_unbound', segmentLength };
+  if (midpointPose.binding && (
+    midpointPose.binding.mesh !== previousSample.binding.mesh
+    || !areSurfaceAnatomiesCompatible(sample.regionId, midpointPose.binding.regionId, sample.bodyId, midpointPose.binding.bodyId)
+  )) return { valid: false, reason: 'midpoint_semantic_discontinuity', segmentLength };
+  midpoint.lerpVectors(start.point, end.point, 0.5);
+  const midpointError = midpoint.distanceTo(midpointPose.point);
+  if (midpointError > SWORD_CUT_MAX_MIDPOINT_SURFACE_ERROR) return { valid: false, reason: 'midpoint_surface_error', segmentLength, midpointError };
+  midpointNormal.addVectors(start.normal, end.normal);
+  if (midpointNormal.lengthSq() < 1e-10 || midpointNormal.normalize().dot(midpointPose.normal) < MIN_SEGMENT_NORMAL_DOT) return { valid: false, reason: 'midpoint_normal_discontinuity', segmentLength, midpointError };
+  return { valid: true, segmentLength, midpointError };
 }
 
 export function updateSwordCutRibbonGeometry({
@@ -118,56 +192,91 @@ export function updateSwordCutRibbonGeometry({
   workspace,
   samples,
   reconstructSurface,
+  resolveMidpointSurface = null,
+  attemptLocalRebind = null,
   width = 0.012,
-  maximumBridgeDistance = 0.16,
+  maximumBridgeDistance = SWORD_CUT_MAX_SEGMENT_LENGTH,
 } = {}) {
   resetSwordCutRibbonGeometry(geometry, workspace);
   const sampleCount = Math.min(samples?.length ?? 0, MAX_SWORD_CUT_SURFACE_SAMPLES);
-  for (let index = 0; index < sampleCount; index += 1) {
-    const sample = samples[index];
-    if (!sample?.binding) continue;
-    const pose = reconstructSurface(sample.binding, workspace.poses[index]);
-    if (!pose?.point || !pose?.normal || ![pose.point.x, pose.point.y, pose.point.z, pose.normal.x, pose.normal.y, pose.normal.z].every(Number.isFinite)) continue;
-    workspace.valid[index] = 1;
-  }
+  for (let index = 0; index < sampleCount; index += 1) reconstructSample(samples, index, workspace, reconstructSurface);
 
   let renderedSegmentCount = 0;
-  for (let index = 1; index < sampleCount && renderedSegmentCount < MAX_SWORD_CUT_RIBBON_SEGMENTS; index += 1) {
+  let renderedPrimitiveCount = 0;
+  for (let index = 1; index < sampleCount && renderedPrimitiveCount < MAX_SWORD_CUT_RIBBON_SEGMENTS; index += 1) {
     const previousSample = samples[index - 1];
     const sample = samples[index];
-    const start = workspace.poses[index - 1];
-    const end = workspace.poses[index];
-    const invalid = !workspace.valid[index - 1]
-      || !workspace.valid[index]
-      || sample.breakBefore
-      || previousSample.binding?.mesh !== sample.binding?.mesh
-      || start.point.distanceTo(end.point) > maximumBridgeDistance;
-    if (invalid) {
+    let start = workspace.poses[index - 1];
+    let end = workspace.poses[index];
+    let midpointPose = workspace.valid[index - 1] && workspace.valid[index] && !sample.breakBefore
+      ? resolveMidpointSurface?.(previousSample, sample, workspace.midpointPoses[index - 1]) ?? null
+      : null;
+    let result = !workspace.valid[index - 1] || !workspace.valid[index] || sample.breakBefore
+      ? { valid: false, reason: sample.breakBefore ? 'explicit_break' : 'invalid_binding' }
+      : validateSegment({ previousSample, sample, start, end, midpointPose, maximumBridgeDistance });
+
+    if (!result.valid && result.reason !== 'explicit_break' && attemptLocalRebind?.({
+      previousSample,
+      sample,
+      index,
+      reason: result.reason,
+      previousValid: Boolean(workspace.valid[index - 1]),
+      currentValid: Boolean(workspace.valid[index]),
+    }) === true) {
+      reconstructSample(samples, index - 1, workspace, reconstructSurface);
+      reconstructSample(samples, index, workspace, reconstructSurface);
+      start = workspace.poses[index - 1];
+      end = workspace.poses[index];
+      midpointPose = workspace.valid[index - 1] && workspace.valid[index]
+        ? resolveMidpointSurface?.(previousSample, sample, workspace.midpointPoses[index - 1]) ?? null
+        : null;
+      result = workspace.valid[index - 1] && workspace.valid[index]
+        ? validateSegment({ previousSample, sample, start, end, midpointPose, maximumBridgeDistance })
+        : { valid: false, reason: 'invalid_binding' };
+    }
+    if (!result.valid) {
       workspace.hiddenFragmentCount += 1;
       continue;
     }
-    if (!writeRibbonSegment({ geometry, segmentIndex: renderedSegmentCount, start, end, width })) {
+    if (!writeRibbonSegment({ geometry, segmentIndex: renderedPrimitiveCount, start, end, width })) {
       workspace.hiddenFragmentCount += 1;
       continue;
     }
+    workspace.connected[index - 1] = 1;
+    workspace.connected[index] = 1;
+    workspace.maximumRenderedSegmentLength = Math.max(workspace.maximumRenderedSegmentLength, result.segmentLength);
+    workspace.maximumMidpointToSurfaceError = Math.max(workspace.maximumMidpointToSurfaceError, result.midpointError);
     if (previousSample.regionId && sample.regionId && previousSample.regionId !== sample.regionId) workspace.continuousRegionTransitionCount += 1;
     renderedSegmentCount += 1;
+    renderedPrimitiveCount += 1;
+  }
+
+  for (let index = 0; index < sampleCount && renderedPrimitiveCount < MAX_SWORD_CUT_RIBBON_SEGMENTS; index += 1) {
+    if (!workspace.valid[index] || workspace.connected[index]) continue;
+    if (!writeSurfaceSeed({ geometry, segmentIndex: renderedPrimitiveCount, pose: workspace.poses[index], sample: samples[index], width })) continue;
+    workspace.oneSampleSeedUsageCount += 1;
+    renderedPrimitiveCount += 1;
   }
 
   workspace.renderedSegmentCount = renderedSegmentCount;
   geometry.clearGroups();
-  if (renderedSegmentCount > 0) {
-    geometry.addGroup(0, renderedSegmentCount * 6, 0);
-    geometry.addGroup(SWORD_CUT_CENTER_INDEX_CAPACITY, renderedSegmentCount * 12, 1);
+  if (renderedPrimitiveCount > 0) {
+    geometry.addGroup(0, renderedPrimitiveCount * 6, 0);
+    geometry.addGroup(SWORD_CUT_CENTER_INDEX_CAPACITY, renderedPrimitiveCount * 12, 1);
     geometry.attributes.position.needsUpdate = true;
     geometry.attributes.normal.needsUpdate = true;
     geometry.index.needsUpdate = true;
   }
   return {
     renderedSegmentCount,
+    renderedPrimitiveCount,
+    hiddenSegmentCount: workspace.hiddenFragmentCount,
     hiddenFragmentCount: workspace.hiddenFragmentCount,
     continuousRegionTransitionCount: workspace.continuousRegionTransitionCount,
     sampleCount,
-    bounded: sampleCount <= MAX_SWORD_CUT_SURFACE_SAMPLES && renderedSegmentCount <= MAX_SWORD_CUT_RIBBON_SEGMENTS,
+    oneSampleSeedUsageCount: workspace.oneSampleSeedUsageCount,
+    maximumRenderedSegmentLength: workspace.maximumRenderedSegmentLength,
+    maximumMidpointToSurfaceError: workspace.maximumMidpointToSurfaceError,
+    bounded: sampleCount <= MAX_SWORD_CUT_SURFACE_SAMPLES && renderedPrimitiveCount <= MAX_SWORD_CUT_RIBBON_SEGMENTS,
   };
 }

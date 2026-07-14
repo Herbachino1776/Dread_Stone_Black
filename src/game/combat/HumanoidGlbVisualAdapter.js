@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { CURRENT_HUMANOID_BONE_MAP, CURRENT_HUMANOID_PROFILE, getHumanoidProfileScale } from './HumanoidModelProfiles.js';
 import { HumanoidAnimationPackController } from './HumanoidAnimationPackController.js';
-import { findClosestSkinnedSurface, reconstructSkinnedSurface, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
+import { buildSkinnedTriangleInfluenceMetadata, findClosestSkinnedSurface, reconstructSkinnedSurface, reconstructSurfaceBindingNeighborhood, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 import { FULLY_OPAQUE_THRESHOLD, applyFadeOpacity, captureAndPrepareFadeMaterials, clampFadeOpacity, restoreFadeMaterials } from './MaterialFadeState.js';
 
@@ -195,6 +195,7 @@ export class HumanoidGlbVisualAdapter {
     this.presentationRoot = null;
     this.skinnedMeshes = [];
     this.skeletons = [];
+    this.surfaceBindingMetadata = new Map();
     this.bones = new Map();
     this.bindings = [];
     this.ragdollBindings = [];
@@ -278,6 +279,10 @@ export class HumanoidGlbVisualAdapter {
         }
         material.needsUpdate = true;
       });
+    });
+    this.skinnedMeshes.forEach((mesh) => {
+      const metadata = buildSkinnedTriangleInfluenceMetadata(mesh, { boneMap: this.profile.boneMap });
+      if (metadata) this.surfaceBindingMetadata.set(mesh, metadata);
     });
     this.applyCharacterLightingDiagnostic();
     if (!this.skinnedMeshes.length || !this.skeletons.length) throw new Error(`Humanoid GLB has no SkinnedMesh/skeleton: ${this.profile.assetPath}`);
@@ -546,13 +551,31 @@ export class HumanoidGlbVisualAdapter {
 
   bindVisibleSurface(worldPoint, options = {}) {
     if (!this.scene || !this.skinnedMeshes.length) return null;
-    this.presentationRoot?.updateMatrixWorld(true);
-    this.skeletons.forEach((skeleton) => skeleton.update());
-    return findClosestSkinnedSurface(this.skinnedMeshes, worldPoint, options);
+    this.prepareVisibleSurfaceFrame();
+    return findClosestSkinnedSurface(this.skinnedMeshes, worldPoint, {
+      ...options,
+      triangleMetadataByMesh: options.triangleMetadataByMesh ?? this.surfaceBindingMetadata,
+    });
   }
 
-  reconstructVisibleSurface(binding, target) {
-    return validateSurfaceBinding(binding) ? reconstructSkinnedSurface(binding, target) : null;
+  prepareVisibleSurfaceFrame() {
+    if (!this.scene) return false;
+    this.presentationRoot?.updateMatrixWorld(true);
+    this.scene.updateMatrixWorld(true);
+    this.skeletons.forEach((skeleton) => skeleton.update());
+    return true;
+  }
+
+  reconstructVisibleSurface(binding, target, { refresh = true } = {}) {
+    if (!validateSurfaceBinding(binding) || !this.scene) return null;
+    if (refresh) this.prepareVisibleSurfaceFrame();
+    return reconstructSkinnedSurface(binding, target);
+  }
+
+  reconstructVisibleSurfaceNeighborhood(binding, target, { refresh = true } = {}) {
+    if (!binding || !this.scene) return null;
+    if (refresh) this.prepareVisibleSurfaceFrame();
+    return reconstructSurfaceBindingNeighborhood(binding, target);
   }
 
   getFallbackWoundAnchor(bodyId, sourcePoint, sourceNormal = new THREE.Vector3(0, 0, 1)) {
@@ -681,6 +704,7 @@ export class HumanoidGlbVisualAdapter {
     this.bones.clear();
     this.skinnedMeshes = [];
     this.skeletons = [];
+    this.surfaceBindingMetadata.clear();
     this.ownedMaterials.forEach((material) => material.dispose());
     this.ownedMaterials.clear();
     this.fadeMaterialBaselines.clear();

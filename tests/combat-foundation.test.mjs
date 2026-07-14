@@ -16,7 +16,7 @@ import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, KNIFE_EDGE_BASE
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
 import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveAnimationPackManifest, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
-import { MAX_SLASH_SURFACE_SAMPLES, MAX_SURFACE_PROJECTION_DISTANCE, WOUND_SURFACE_BIAS, findClosestSkinnedSurface, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
+import { MAX_ADJACENT_SURFACE_PROJECTION_DISTANCE, MAX_SLASH_SURFACE_SAMPLES, MAX_SURFACE_PROJECTION_DISTANCE, WOUND_SURFACE_BIAS, buildSkinnedTriangleInfluenceMetadata, createSurfaceBindingDiagnostics, findClosestSkinnedSurface, reconstructSkinnedSurface, reconstructSurfaceBindingNeighborhood, sampleSlashPath, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
 import { HumanoidAnimationPackController } from '../src/game/combat/HumanoidAnimationPackController.js';
 import { COMBAT_DIRECTOR_EVENTS, CombatDirector, PENETRATION_STAGES, resolveMeleeTimeline } from '../src/game/combat/CombatDirector.js';
 import { isDamageIntent, MELEE_INTENTS, MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
@@ -26,7 +26,7 @@ import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/Kn
 import { EDGE_DAMAGE_SCHEMA } from '../src/game/combat/weapons/EdgeDamageInteraction.js';
 import { DREADSTONE_SWORD_DIMENSIONS, DREADSTONE_SWORD_GLB_PATH, SWORD_CONTACT_PRIMITIVES, SWORD_EDGE_BASE_SAMPLE_COUNT, SWORD_EDGE_MAX_SAMPLE_COUNT, SWORD_VIEWMODEL_LAYER, SwordWorldWeaponController, classifySwordContact, resolveSwordEdgeSampleCount, resolveSwordLeadingPart } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
 import { deriveSwordCutTrauma } from '../src/game/combat/SwordCutDamage.js';
-import { MAX_SWORD_CUT_RIBBON_SEGMENTS, MAX_SWORD_CUT_SURFACE_SAMPLES } from '../src/game/combat/SwordCutWoundVisual.js';
+import { MAX_SWORD_CUT_RIBBON_SEGMENTS, MAX_SWORD_CUT_SURFACE_SAMPLES, SWORD_CUT_MAX_MIDPOINT_SURFACE_ERROR, SWORD_CUT_MAX_SEGMENT_LENGTH, SWORD_CUT_TARGET_SAMPLE_SPACING, createSwordCutRibbonWorkspace, makeSwordCutRibbonGeometry, updateSwordCutRibbonGeometry } from '../src/game/combat/SwordCutWoundVisual.js';
 import { CombatBloodEffects } from '../src/game/combat/CombatBloodEffects.js';
 
 installKnifeWoundManifestForHeadlessTests(JSON.parse(readFileSync(new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url), 'utf8')));
@@ -381,6 +381,7 @@ function createSkinnedSurfaceFixture() {
   for (let index = 0; index < 4; index += 1) weights[index * 4] = 1;
   geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
   const bone = new THREE.Bone();
+  bone.name = 'body_top2';
   const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshStandardMaterial());
   mesh.name = 'test-visible-skinned-surface';
   mesh.add(bone);
@@ -391,6 +392,67 @@ function createSkinnedSurfaceFixture() {
   mesh.skeleton.update();
   return { root, mesh, bone, geometry };
 }
+
+function createAnatomySelectionFixture() {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+    -0.08, -0.08, 0, 0.08, -0.08, 0, 0, 0.08, 0,
+    -0.08, -0.08, 0.008, 0.08, -0.08, 0.008, 0, 0.08, 0.008,
+  ], 3));
+  geometry.setIndex([0, 1, 2, 3, 4, 5]);
+  const skinIndices = new Uint16Array(24);
+  for (let index = 3; index < 6; index += 1) skinIndices[index * 4] = 1;
+  geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndices, 4));
+  const skinWeights = new Float32Array(24);
+  for (let index = 0; index < 6; index += 1) skinWeights[index * 4] = 1;
+  geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeights, 4));
+  const abdomenBone = new THREE.Bone(); abdomenBone.name = 'abdomen_bone';
+  const chestBone = new THREE.Bone(); chestBone.name = 'chest_bone';
+  const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshStandardMaterial());
+  mesh.name = 'semantic-selection-surface';
+  mesh.add(abdomenBone, chestBone);
+  mesh.bind(new THREE.Skeleton([abdomenBone, chestBone]));
+  const root = new THREE.Group(); root.add(mesh); root.updateMatrixWorld(true); mesh.skeleton.update();
+  const metadata = buildSkinnedTriangleInfluenceMetadata(mesh, { boneMap: { abdomen: 'abdomen_bone', upper_chest: 'chest_bone' } });
+  return { root, mesh, geometry, metadata };
+}
+
+test('anatomy-aware projection prefers routed skin influence and rejects incompatible, distant, and reversed candidates', () => {
+  const fixture = createAnatomySelectionFixture();
+  const metadataByMesh = new Map([[fixture.mesh, fixture.metadata]]);
+  const diagnostics = createSurfaceBindingDiagnostics();
+  const binding = findClosestSkinnedSurface([fixture.mesh], new THREE.Vector3(0, 0, 0.002), {
+    regionId: 'upper_chest', bodyId: 'upper_chest', referenceNormal: new THREE.Vector3(0, 0, 1),
+    anatomyAware: true, triangleMetadataByMesh: metadataByMesh, diagnostics,
+  });
+  assert.ok(validateSurfaceBinding(binding));
+  assert.equal(binding.triangleIndex, 1, 'the routed chest triangle wins over the geometrically closer abdomen triangle');
+  assert.equal(binding.semanticCompatibility.kind, 'exact');
+  assert.equal(binding.semanticCompatibility.dominantSemanticId, 'upper_chest');
+  assert.ok(diagnostics.anatomyIncompatibleCandidateRejectionCount >= 1);
+  assert.equal(diagnostics.successfulBindings, 1);
+  assert.equal(diagnostics.selectedTriangleSemanticCompatibility.kind, 'exact');
+  assert.equal(diagnostics.selectedTriangleSemanticCompatibility.triangleIndex, 1);
+
+  const incompatibleDiagnostics = createSurfaceBindingDiagnostics();
+  assert.equal(findClosestSkinnedSurface([fixture.mesh], new THREE.Vector3(0, 0, 0.002), {
+    regionId: 'left_hand', bodyId: 'left_hand', anatomyAware: true, triangleMetadataByMesh: metadataByMesh, diagnostics: incompatibleDiagnostics,
+  }), null);
+  assert.ok(incompatibleDiagnostics.anatomyIncompatibleCandidateRejectionCount >= 2);
+
+  const distanceDiagnostics = createSurfaceBindingDiagnostics();
+  assert.equal(findClosestSkinnedSurface([fixture.mesh], new THREE.Vector3(0, 0, MAX_ADJACENT_SURFACE_PROJECTION_DISTANCE + 0.02), {
+    regionId: 'upper_chest', bodyId: 'upper_chest', referenceNormal: new THREE.Vector3(0, 0, 1), anatomyAware: true, triangleMetadataByMesh: metadataByMesh, diagnostics: distanceDiagnostics,
+  }), null);
+  assert.ok(distanceDiagnostics.excessiveDistanceRejectionCount > 0);
+
+  const normalDiagnostics = createSurfaceBindingDiagnostics();
+  assert.equal(findClosestSkinnedSurface([fixture.mesh], new THREE.Vector3(0, 0, 0.01), {
+    regionId: 'upper_chest', bodyId: 'upper_chest', referenceNormal: new THREE.Vector3(0, 0, -1), anatomyAware: true, triangleMetadataByMesh: metadataByMesh, diagnostics: normalDiagnostics,
+  }), null);
+  assert.ok(normalDiagnostics.normalIncompatibilityRejectionCount > 0);
+  fixture.geometry.dispose(); fixture.mesh.material.dispose();
+});
 
 test('puncture bindings store valid barycentrics and follow authored skinned animation', () => {
   const { root, mesh, bone, geometry } = createSkinnedSurfaceFixture();
@@ -456,13 +518,29 @@ test('sword cut ribbon is barycentric-bound, geometric, continuous across adjace
   assert.equal(wound.visualFamily, 'sword');
   assert.equal(wound.visualSlot, null, 'sword never allocates the knife decal renderer');
   assert.equal(wound.decalVariantId, null);
-  assert.equal(wound.swordSamples.length, 2);
+  assert.ok(wound.swordSamples.length > 2, 'fast edge travel is spatially resampled instead of joined by one chord');
   assert.ok(wound.swordSamples.every((sample) => validateSurfaceBinding(sample.binding)));
+  assert.ok(wound.swordSamples.slice(1).every((sample, index) => sample.sourcePoint.distanceTo(wound.swordSamples[index].sourcePoint) <= SWORD_CUT_TARGET_SAMPLE_SPACING + 1e-6));
+  assert.ok(wound.swordVisualDiagnostics.insertedResampleCount > 0);
+  assert.ok(wound.swordVisualDiagnostics.bindingAttempts >= wound.swordSamples.length);
+  assert.ok(wound.swordVisualDiagnostics.successfulBindings >= wound.swordSamples.length);
+  assert.equal(wound.swordVisualDiagnostics.failedBindings, 0);
+  assert.ok(wound.swordVisualDiagnostics.maximumAcceptedBindDistance <= MAX_SURFACE_PROJECTION_DISTANCE);
+  for (const key of ['bindingAttempts', 'successfulBindings', 'failedBindings', 'anatomyIncompatibleCandidateRejectionCount', 'excessiveDistanceRejectionCount', 'normalIncompatibilityRejectionCount', 'rebindAttempts', 'rebindSuccesses', 'insertedResampleCount', 'renderedSegmentCount', 'hiddenSegmentCount', 'maximumAcceptedBindDistance', 'maximumRenderedSegmentLength', 'maximumMidpointToSurfaceError', 'oneSampleSeedUsageCount']) {
+    assert.ok(Object.hasOwn(wound.swordVisualDiagnostics, key), `bounded sword diagnostics expose ${key}`);
+  }
   assert.deepEqual(wound.impactedRegionIds, ['upper_chest', 'lower_chest']);
   assert.equal(wound.continuousRegionTransitionCount, 1);
-  assert.equal(wound.renderedSegmentCount, 1);
+  assert.equal(wound.renderedSegmentCount, wound.swordSamples.length - 1);
+  assert.ok(wound.swordVisualDiagnostics.maximumRenderedSegmentLength <= SWORD_CUT_MAX_SEGMENT_LENGTH);
+  assert.ok(wound.swordVisualDiagnostics.maximumMidpointToSurfaceError <= SWORD_CUT_MAX_MIDPOINT_SURFACE_ERROR);
   assert.equal(wound.swordVisualSlot.ribbon.visible, true);
   assert.equal(wound.swordVisualSlot.ribbon.geometry.groups.length, 2, 'center and wound lips use two bounded material groups');
+  assert.equal(wound.swordVisualSlot.ribbon.material[0].userData.bloodUsage, 'sword-wound-center');
+  assert.equal(wound.swordVisualSlot.ribbon.material[1].userData.bloodUsage, 'sword-wound-lips');
+  assert.ok(wound.swordVisualSlot.ribbon.material[0].color.r > wound.swordVisualSlot.ribbon.material[0].color.g * 4);
+  assert.ok(wound.swordVisualSlot.ribbon.material[1].color.getHSL({}).l > wound.swordVisualSlot.ribbon.material[0].color.getHSL({}).l);
+  assert.ok(Math.abs(wound.swordVisualSlot.ribbon.material[0].color.getHSL({}).h - new THREE.Color(BLOOD_COLOR_PALETTE.arterial).getHSL({}).h) < 0.01);
   const positions = wound.swordVisualSlot.ribbon.geometry.attributes.position;
   assert.ok(positions.getZ(5) > positions.getZ(0), 'wound lip crest sits above the recessed center');
   const before = positions.getX(0);
@@ -472,10 +550,26 @@ test('sword cut ribbon is barycentric-bound, geometric, continuous across adjace
   actor.woundSystem.update(1 / 60);
   assert.ok(positions.getX(0) > before + 0.1, 'the ribbon follows animated skin through barycentric reconstruction');
 
-  wound.swordSamples[1].binding.barycentric.set(-1, 1, 1);
+  const expectedRebindPoint = reconstructSurfaceBindingNeighborhood(wound.swordSamples[3].binding).point.clone();
+  wound.swordSamples[3].binding.barycentric.set(-1, 1, 1);
   actor.woundSystem.update(1 / 60);
-  assert.equal(wound.renderedSegmentCount, 0);
-  assert.equal(wound.swordVisualSlot.ribbon.visible, false, 'invalid fragments are hidden instead of floating');
+  assert.ok(validateSurfaceBinding(wound.swordSamples[3].binding), 'one local anatomy-aware rebind repairs a corrupted endpoint');
+  assert.ok(reconstructSkinnedSurface(wound.swordSamples[3].binding).point.distanceTo(expectedRebindPoint) < 0.005, 'rebind uses the animated wound neighborhood, not the stale world contact');
+  assert.ok(wound.swordVisualDiagnostics.rebindAttempts >= 1);
+  assert.ok(wound.swordVisualDiagnostics.rebindSuccesses >= 1);
+  assert.equal(wound.renderedSegmentCount, wound.swordSamples.length - 1, 'animated-neighborhood rebind restores both adjacent fragments in place');
+  const renderedBeforeInvalidFragment = wound.renderedSegmentCount;
+  wound.swordSamples[3].binding.barycentric.set(-1, 1, 1);
+  wound.swordSamples[3].segmentRebindAttempted = true;
+  wound.swordSamples[4].segmentRebindAttempted = true;
+  assert.equal(validateSurfaceBinding(wound.swordSamples[3].binding), false);
+  actor.woundSystem.update(1 / 60);
+  assert.ok(wound.renderedSegmentCount <= renderedBeforeInvalidFragment);
+  assert.ok(wound.invalidFragmentCount >= 2, 'only fragments touching the corrupted binding are hidden');
+  assert.equal(wound.swordVisualSlot.ribbon.visible, true, 'valid fragments on either side remain visible');
+  wound.swordSamples.forEach((sample) => { sample.binding.barycentric.set(-1, 1, 1); sample.segmentRebindAttempted = true; });
+  actor.woundSystem.update(1 / 60);
+  assert.equal(wound.swordVisualSlot.ribbon.visible, false, 'a wound with no valid visible-surface binding never falls back to floating geometry');
   assert.ok(wound.swordSamples.length <= MAX_SWORD_CUT_SURFACE_SAMPLES);
   assert.ok(wound.renderedSegmentCount <= MAX_SWORD_CUT_RIBBON_SEGMENTS);
 
@@ -486,13 +580,72 @@ test('sword cut ribbon is barycentric-bound, geometric, continuous across adjace
   fixture.mesh.material.dispose();
 });
 
+test('sword ribbon renders a bound short seed and breaks long or off-surface bridges with bounded diagnostics', () => {
+  const fixture = createSkinnedSurfaceFixture();
+  const makeSample = (x, sampleId) => {
+    const sourcePoint = new THREE.Vector3(x, 0, 0.01);
+    return {
+      sampleId,
+      sourcePoint,
+      sourceNormal: new THREE.Vector3(0, 0, 1),
+      binding: findClosestSkinnedSurface([fixture.mesh], sourcePoint, { regionId: 'upper_chest', bodyId: 'upper_chest', referenceNormal: new THREE.Vector3(0, 0, 1) }),
+      regionId: 'upper_chest', bodyId: 'upper_chest', breakBefore: false, worldDirection: new THREE.Vector3(1, 0, 0),
+    };
+  };
+  const geometry = makeSwordCutRibbonGeometry();
+  const workspace = createSwordCutRibbonWorkspace();
+  const reconstruct = (binding, target) => reconstructSkinnedSurface(binding, target);
+  const midpointOnSurface = (previous, sample, target) => {
+    const sourcePoint = previous.sourcePoint.clone().lerp(sample.sourcePoint, 0.5);
+    const binding = findClosestSkinnedSurface([fixture.mesh], sourcePoint, { regionId: sample.regionId, bodyId: sample.bodyId, referenceNormal: sample.sourceNormal });
+    const pose = binding ? reconstructSkinnedSurface(binding, target) : null;
+    if (pose) pose.binding = binding;
+    return pose;
+  };
+
+  const seed = updateSwordCutRibbonGeometry({ geometry, workspace, samples: [makeSample(0, 1)], reconstructSurface: reconstruct });
+  assert.equal(seed.renderedSegmentCount, 0);
+  assert.equal(seed.renderedPrimitiveCount, 1);
+  assert.equal(seed.oneSampleSeedUsageCount, 1);
+  assert.equal(geometry.groups.length, 2);
+
+  const bridge = updateSwordCutRibbonGeometry({
+    geometry, workspace, samples: [makeSample(-0.04, 1), makeSample(0.04, 2)], reconstructSurface: reconstruct,
+    resolveMidpointSurface: midpointOnSurface, attemptLocalRebind: () => false,
+  });
+  assert.equal(bridge.renderedSegmentCount, 0);
+  assert.equal(bridge.hiddenSegmentCount, 1);
+  assert.equal(bridge.oneSampleSeedUsageCount, 2, 'valid endpoints remain as tiny bound fragments without an air bridge');
+  assert.equal(bridge.maximumRenderedSegmentLength, 0);
+
+  const offSurfaceMidpoint = updateSwordCutRibbonGeometry({
+    geometry, workspace, samples: [makeSample(-0.01, 1), makeSample(0.01, 2)], reconstructSurface: reconstruct,
+    resolveMidpointSurface: (previous, sample, target) => {
+      const pose = midpointOnSurface(previous, sample, target);
+      pose.point.z += SWORD_CUT_MAX_MIDPOINT_SURFACE_ERROR + 0.002;
+      return pose;
+    },
+    attemptLocalRebind: () => false,
+  });
+  assert.equal(offSurfaceMidpoint.renderedSegmentCount, 0);
+  assert.equal(offSurfaceMidpoint.hiddenSegmentCount, 1);
+
+  const boundedSamples = Array.from({ length: MAX_SWORD_CUT_SURFACE_SAMPLES + 12 }, (_, index) => makeSample(-0.23 + index * 0.01, index + 1));
+  const bounded = updateSwordCutRibbonGeometry({ geometry, workspace, samples: boundedSamples, reconstructSurface: reconstruct, resolveMidpointSurface: midpointOnSurface, attemptLocalRebind: () => false });
+  assert.equal(bounded.sampleCount, MAX_SWORD_CUT_SURFACE_SAMPLES);
+  assert.equal(bounded.bounded, true);
+  assert.ok(bounded.renderedSegmentCount <= MAX_SWORD_CUT_RIBBON_SEGMENTS);
+  assert.ok(bounded.maximumRenderedSegmentLength <= SWORD_CUT_MAX_SEGMENT_LENGTH);
+  geometry.dispose(); fixture.geometry.dispose(); fixture.mesh.material.dispose();
+});
+
 test('surface projection reaches animation-following skin from bounded proxy depth without accepting distant geometry', () => {
   const { mesh, geometry } = createSkinnedSurfaceFixture();
-  const proxyDepthPoint = new THREE.Vector3(0.1, 0.08, 0.075);
+  const proxyDepthPoint = new THREE.Vector3(0.1, 0.08, MAX_SURFACE_PROJECTION_DISTANCE - 0.005);
   const binding = findClosestSkinnedSurface([mesh], proxyDepthPoint, { regionId: 'upper_chest', bodyId: 'upper_chest', referenceNormal: new THREE.Vector3(0, 0, 1) });
   assert.ok(validateSurfaceBinding(binding), 'a contact from inside the animated torso proxy reaches the visible skin');
   assert.ok(reconstructSkinnedSurface(binding).point.distanceTo(proxyDepthPoint) <= MAX_SURFACE_PROJECTION_DISTANCE + 1e-8);
-  assert.equal(findClosestSkinnedSurface([mesh], new THREE.Vector3(0.1, 0.08, 0.11)), null, 'projection remains bounded and cannot jump to unrelated distant surfaces');
+  assert.equal(findClosestSkinnedSurface([mesh], new THREE.Vector3(0.1, 0.08, MAX_SURFACE_PROJECTION_DISTANCE + 0.005)), null, 'projection remains tightly bounded and cannot jump to unrelated distant surfaces');
   geometry.dispose(); mesh.material.dispose();
 });
 
@@ -1195,15 +1348,29 @@ test('loaded Testman bounds, root scale, semantic proxies, and wound projection 
     if (object.isBone) bones.set(object.name, object);
     if (object.isSkinnedMesh) skinnedMeshes.push(object);
   });
+  const triangleMetadataByMesh = new Map(skinnedMeshes.map((mesh) => [mesh, buildSkinnedTriangleInfluenceMetadata(mesh, { boneMap: TESTMAN_COMBAT_PROFILE.boneMap })]));
   const adapter = { profile: TESTMAN_COMBAT_PROFILE, bones };
+  const surfaceBindings = [];
   for (const [bodyId, fit] of Object.entries(TESTMAN_COMBAT_PROFILE.proxyFit)) {
     const pose = HumanoidGlbVisualAdapter.prototype.getProxyPose.call(adapter, bodyId);
     const outward = new THREE.Vector3(0, 0, 1).applyQuaternion(pose.quaternion).normalize();
     const contactPoint = pose.position.clone().addScaledVector(outward, fit.radius ?? fit.halfExtents[2]);
-    const binding = findClosestSkinnedSurface(skinnedMeshes, contactPoint, { bodyId, regionId: bodyId, referenceNormal: outward });
+    const binding = findClosestSkinnedSurface(skinnedMeshes, contactPoint, { bodyId, regionId: bodyId, referenceNormal: outward, anatomyAware: true, triangleMetadataByMesh });
     assert.ok(validateSurfaceBinding(binding), `${bodyId} proxy reaches the final scaled skin`);
     assert.ok(binding.distanceAtBind <= MAX_SURFACE_PROJECTION_DISTANCE, `${bodyId} uses the bounded projection distance`);
+    assert.ok(['exact', 'weighted_overlap', 'adjacent', 'adjacent_overlap'].includes(binding.semanticCompatibility.kind), `${bodyId} records semantic triangle compatibility`);
     assert.ok(reconstructSkinnedSurface(binding).point.distanceTo(contactPoint) <= MAX_SURFACE_PROJECTION_DISTANCE + 1e-8);
+    surfaceBindings.push([bodyId, binding]);
+  }
+  for (const clip of gltf.animations.filter((entry) => /Hurt|Death/.test(entry.name))) {
+    mixer.stopAllAction();
+    const action = mixer.clipAction(clip); action.reset().play();
+    for (const fraction of [0.25, 0.5, 0.75, 1]) {
+      mixer.setTime(clip.duration * fraction);
+      root.updateMatrixWorld(true);
+      skinnedMeshes.forEach((mesh) => mesh.skeleton.update());
+      surfaceBindings.forEach(([bodyId, binding]) => assert.ok(reconstructSkinnedSurface(binding), `${bodyId} remains reconstructed during ${clip.name} at ${fraction}`));
+    }
   }
   mixer.stopAllAction();
 });
