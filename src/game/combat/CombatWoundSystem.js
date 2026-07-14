@@ -191,7 +191,7 @@ export class CombatWoundSystem {
     wound.slashPathPoints = [startPoint.clone(), endPoint.clone()];
     wound.pathCurvature = 0;
     const length = startPoint.distanceTo(endPoint);
-    const desiredCount = THREE.MathUtils.clamp(Math.ceil(length / 0.045) + 1, MIN_SLASH_SURFACE_SAMPLES, 8);
+    const desiredCount = THREE.MathUtils.clamp(Math.ceil(length / 0.025) + 1, MIN_SLASH_SURFACE_SAMPLES, 12);
     let breakBefore = false;
     wound.slashSamples = sampleSlashPath(startPoint, endPoint, desiredCount).map((worldPoint) => {
       const binding = this.bindSurfacePoint(wound, worldPoint, referenceNormal);

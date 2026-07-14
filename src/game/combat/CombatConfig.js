@@ -33,8 +33,6 @@ export const KNIFE_COMBAT_CONFIG = Object.freeze({
   return: Object.freeze({
     freeSeconds: 0.15,
     failedContactSeconds: 0.19,
-    embeddedMinimumSeconds: 0.25,
-    embeddedMaximumSeconds: 0.4,
   }),
   workspace: Object.freeze({
     relaxed: Object.freeze([0.1, -0.22, -0.48]),

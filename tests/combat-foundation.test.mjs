@@ -11,7 +11,7 @@ import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
-import { COMBAT_KNIFE_VIEWMODEL_LAYER, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveSlashLeadingPart } from '../src/game/combat/WorldKnifeCombatController.js';
+import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveSlashLeadingPart } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
 import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveAnimationPackManifest, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
@@ -197,7 +197,7 @@ test('puncture entry owns one reaction event and extraction owns none while pres
   director.dispose();
 });
 
-test('knife release plans use bounded free, failed-contact, and embedded returns', () => {
+test('knife release plans return free contact and leave a planted blade embedded', () => {
   const free = getKnifeReleasePlan({ config: KNIFE_COMBAT_CONFIG });
   const failed = getKnifeReleasePlan({ failedContact: true, config: KNIFE_COMBAT_CONFIG });
   const shallow = getKnifeReleasePlan({ embeddedDepth: 0.01, config: KNIFE_COMBAT_CONFIG });
@@ -205,9 +205,11 @@ test('knife release plans use bounded free, failed-contact, and embedded returns
   assert.equal(free.state, KNIFE_CONTROL_STATES.returning);
   assert.ok(free.durationSeconds >= 0.12 && free.durationSeconds <= 0.18);
   assert.ok(failed.durationSeconds >= 0.16 && failed.durationSeconds <= 0.22);
-  assert.equal(shallow.state, KNIFE_CONTROL_STATES.withdrawing);
-  assert.ok(shallow.durationSeconds >= 0.25 && deep.durationSeconds <= 0.4);
-  assert.ok(deep.durationSeconds > shallow.durationSeconds);
+  assert.equal(shallow.state, KNIFE_CONTROL_STATES.embedded);
+  assert.equal(deep.state, KNIFE_CONTROL_STATES.embedded);
+  assert.equal(shallow.durationSeconds, 0);
+  assert.equal(deep.durationSeconds, 0);
+  assert.equal(deep.reason, 'planted-embedded-hold');
   const springSamples = [0, 0.03, 0.06, 0.09, 0.12, 0.15].map((time) => criticallyDampedReturnProgress(time, 0.15));
   assert.equal(springSamples[0], 0);
   assert.equal(springSamples.at(-1), 1);
@@ -338,7 +340,7 @@ test('puncture bindings store valid barycentrics and follow authored skinned ani
   assert.ok(Math.abs(binding.barycentric.x + binding.barycentric.y + binding.barycentric.z - 1) < 1e-6);
   const initial = reconstructSkinnedSurface(binding);
   assert.ok(hitPoint.distanceTo(initial.point) < 0.05);
-  assert.ok(WOUND_SURFACE_BIAS <= 0.003);
+  assert.ok(WOUND_SURFACE_BIAS <= 0.001, 'decals stay close enough to the animated skin to avoid visibly floating');
   bone.position.x = 0.18;
   root.updateMatrixWorld(true); mesh.skeleton.update();
   const animated = reconstructSkinnedSurface(binding);
@@ -359,6 +361,16 @@ test('slash paths use bounded multi-sample surface bindings and never require on
   assert.ok(bindings.every((binding) => reconstructSkinnedSurface(binding).point.distanceTo(binding.sourcePoint) < 0.05));
   const failed = findClosestSkinnedSurface([mesh], new THREE.Vector3(4, 4, 4));
   assert.equal(failed, null, 'failed projection can split the ribbon instead of bridging open space');
+  geometry.dispose(); mesh.material.dispose();
+});
+
+test('surface projection reaches animation-following skin from bounded proxy depth without accepting distant geometry', () => {
+  const { mesh, geometry } = createSkinnedSurfaceFixture();
+  const proxyDepthPoint = new THREE.Vector3(0.1, 0.08, 0.15);
+  const binding = findClosestSkinnedSurface([mesh], proxyDepthPoint, { regionId: 'upper_chest', bodyId: 'upper_chest', referenceNormal: new THREE.Vector3(0, 0, 1) });
+  assert.ok(validateSurfaceBinding(binding), 'a contact from inside the animated torso proxy reaches the visible skin');
+  assert.ok(reconstructSkinnedSurface(binding).point.distanceTo(proxyDepthPoint) <= 0.18 + 1e-8);
+  assert.equal(findClosestSkinnedSurface([mesh], new THREE.Vector3(0.1, 0.08, 0.19)), null, 'projection remains bounded and cannot jump to unrelated distant surfaces');
   geometry.dispose(); mesh.material.dispose();
 });
 
@@ -848,8 +860,9 @@ test('one authoritative knife root keeps identity, scale, pose, ownership, and s
   const knifeMeshes = [];
   knife.visual.traverse((object) => { if (object.isMesh) knifeMeshes.push(object); });
   assert.ok(knifeMeshes.length > 0);
-  assert.ok(knifeMeshes.every((mesh) => mesh.layers.mask === 1 << COMBAT_KNIFE_VIEWMODEL_LAYER), 'knife renders only in the depth-cleared viewmodel pass');
+  assert.ok(knifeMeshes.every((mesh) => mesh.layers.mask === 1 << COMBAT_KNIFE_VIEWMODEL_LAYER), 'the free knife uses the stable depth-cleared viewmodel pass');
   assert.ok(knifeMeshes.every((mesh) => mesh.castShadow === false && mesh.receiveShadow === false && mesh.frustumCulled === false), 'camera motion cannot introduce world-shadow shimmer or near-frustum flicker');
+  assert.ok(knife.materials.every((material) => material.depthTest === true && material.depthWrite === true), 'knife materials retain normal depth behavior');
   assert.ok(knifeMeshes.every((mesh) => mesh.renderOrder === 10030));
   knife.afterPhysics();
   const identity = knife.visual.id;
@@ -893,15 +906,37 @@ test('one authoritative knife root keeps identity, scale, pose, ownership, and s
   knife.acquireGrip(21, 300, 530, 500);
   knife.applyGripGesture(21, 0, -20, 300, 510, 516);
   knife.beginPenetration(embeddedHit.hit, embeddedHit.worldPoint, new THREE.Vector3(0, 0, -1), 1);
+  assert.equal(knife.visualDepthMode, 'world-occluded');
+  assert.ok(knifeMeshes.every((mesh) => mesh.layers.mask === 1 << COMBAT_KNIFE_WORLD_LAYER), 'an implanted knife returns to world depth so the body occludes the buried blade');
+  assert.ok(knifeMeshes.every((mesh) => mesh.renderOrder === 0));
   knife.afterPhysicsStep(1 / 60);
   knife.afterPhysicsStep(1 / 60);
   const embeddedWounds = actor.woundSystem.wounds.length;
+  const plantedDepth = knife.penetrationDepth;
   knife.releaseGrip('embedded-test-release');
-  assert.equal(knife.state, KNIFE_CONTROL_STATES.withdrawing);
+  assert.equal(knife.state, KNIFE_CONTROL_STATES.embedded);
   for (let index = 0; index < 30; index += 1) knife.beforePhysics(1 / 60);
-  assert.equal(knife.entry, null, 'embedded release completes assisted extraction');
+  assert.ok(knife.entry, 'releasing the grip leaves the knife planted in the enemy');
+  assert.ok(Math.abs(knife.penetrationDepth - plantedDepth) < 1e-8, 'an unattended planted knife keeps its penetration depth');
+  const plantedEntryBeforeAnimation = knife.getEntryWorldPose().point.clone();
+  const animatedBody = embeddedHit.hit.body;
+  const animatedBodyPosition = animatedBody.translation();
+  animatedBody.setTranslation({ x: animatedBodyPosition.x + 0.08, y: animatedBodyPosition.y + 0.04, z: animatedBodyPosition.z - 0.03 }, true);
+  animatedBody.setRotation(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.18), true);
+  knife.beforePhysics(1 / 60);
+  const plantedEntryAfterAnimation = knife.getEntryWorldPose();
+  assert.ok(plantedEntryAfterAnimation.point.distanceTo(plantedEntryBeforeAnimation) > 0.05, 'the planted anchor follows the authored animated proxy body');
+  assert.ok(knife.currentTip.distanceTo(plantedEntryAfterAnimation.point.clone().addScaledVector(plantedEntryAfterAnimation.axis, knife.penetrationDepth)) < 1e-8, 'the buried tip remains constrained to the animated entry axis');
+  knife.afterPhysics();
+  assert.ok(knife.visibleCollisionError < 1e-8, 'embedded presentation stays exactly on its animated collision anchor');
+  knife.state = KNIFE_CONTROL_STATES.withdrawing;
+  for (let index = 0; index < 30 && knife.entry; index += 1) knife.beforePhysics(1 / 60);
+  assert.equal(knife.entry, null, 'an explicit withdrawal still extracts the blade');
   assert.ok([KNIFE_CONTROL_STATES.returning, KNIFE_CONTROL_STATES.ready].includes(knife.state));
-  assert.equal(actor.woundSystem.wounds.length, embeddedWounds, 'assisted withdrawal cannot create another wound');
+  assert.equal(knife.visualDepthMode, 'viewmodel');
+  assert.ok(knifeMeshes.every((mesh) => mesh.layers.mask === 1 << COMBAT_KNIFE_VIEWMODEL_LAYER));
+  assert.equal(actor.woundSystem.wounds.length, embeddedWounds, 'withdrawal cannot create another wound');
+  for (let index = 0; index < 15; index += 1) knife.beforePhysics(1 / 60);
   knife.cancel('pointer-cancel-test');
   assert.equal(knife.gripPointerId, null);
   const preResumeLocal = camera.worldToLocal(knife.actualGrip.clone());

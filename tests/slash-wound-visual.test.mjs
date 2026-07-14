@@ -176,9 +176,12 @@ test('straight, short, shallow, deep, and maximum-length slash chains cover endp
     assert.ok(diagnostics.maximumUncoveredGap <= SLASH_CONTINUITY_TOLERANCE, `${name} has no uncovered path interval`);
     assert.ok(diagnostics.minimumVisibleOverlapRatio >= 0.6, `${name} visibly overlaps neighboring alpha intervals`);
     assert.ok(diagnostics.averageCenterSpacing <= diagnostics.maximumPermittedSpacing + 1e-8, `${name} center spacing is bounded`);
-    assert.equal(workspace.fragmentPathDistances[0], 0, `${name} covers its start`);
+    assert.ok(workspace.fragmentPathDistances[0] - workspace.fragmentLengths[0] * 0.5 <= SLASH_CONTINUITY_TOLERANCE, `${name} covers its start`);
+    assert.ok(workspace.fragmentPathDistances[0] - workspace.fragmentLengths[0] * 0.5 >= -SLASH_CONTINUITY_TOLERANCE, `${name} does not hang before the skin-bound path`);
     const last = diagnostics.fragmentCount - 1;
     assert.ok(length - workspace.fragmentPathDistances[last] <= workspace.fragmentLengths[last] * 0.5 + SLASH_CONTINUITY_TOLERANCE, `${name} covers its end`);
+    assert.ok(workspace.fragmentPathDistances[last] + workspace.fragmentLengths[last] * 0.5 <= length + SLASH_CONTINUITY_TOLERANCE, `${name} does not hang beyond the skin-bound path`);
+    assert.ok(diagnostics.maximumEndpointOverhang <= SLASH_CONTINUITY_TOLERANCE, `${name} endpoints remain clipped to the sampled skin path`);
   });
   const longest = renderPath([new THREE.Vector3(), new THREE.Vector3(0.52, 0, 0)], { maximumDepth: 0.012 });
   assert.ok(longest.diagnostics.fragmentCount < MAX_SLASH_FRAGMENT_COUNT, 'the longest allowed slash leaves spare pooled capacity');
@@ -308,6 +311,7 @@ test('animated multi-triangle torso bindings preserve curved-chain continuity an
   const adapter = createSurfaceAdapter(fixture);
   const { system, hit } = createWoundSystem(adapter);
   const wound = createSlash(system, hit);
+  assert.ok(wound.slashSamples.length >= 10, 'dense surface samples keep the strip close to animated torso curvature');
   assert.ok(new Set(wound.slashSamples.map((sample) => sample.binding.triangleIndex)).size >= 3, 'recorded slash crosses several valid surface triangles');
   const geometryId = wound.visualSlot.slash.geometry.uuid;
   const before = [...wound.visualSlot.slashWorkspace.fragmentCenters.slice(0, wound.renderedSegmentCount * 3)];

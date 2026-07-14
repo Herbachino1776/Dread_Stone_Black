@@ -506,7 +506,6 @@ export class CombatLabWalkerController {
   releaseDeathCollisionOwnership() {
     if (!this.actor || this.deathCollisionReleased) return;
     this.deathCollisionReleased = true;
-    this.beforeActorDisposal?.(this.actor, 'walker-death-collision-release');
     if (this.routingRegistered) this.combatRouter?.unregister?.(this.actor);
     this.routingRegistered = false;
     this.actor.colliders?.forEach?.((collider) => collider.setEnabled?.(false));

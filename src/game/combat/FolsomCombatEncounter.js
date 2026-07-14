@@ -233,7 +233,6 @@ export class FolsomCombatEncounter {
   releaseStationaryDeathCollisionOwnership(actor = this.actor) {
     if (!actor || actor !== this.actor || this.stationaryDeathCollisionReleased) return false;
     this.stationaryDeathCollisionReleased = true;
-    this.weaponController?.cancelTarget?.(actor, 'folsom-stationary-death-collision-release');
     this.combatRouter.unregister(actor);
     actor.colliders?.forEach?.((collider) => collider.setEnabled?.(false));
     this.dungeon.collision?.removeBlocker?.(this.playerBlocker);
@@ -334,7 +333,7 @@ export class FolsomCombatEncounter {
       this.actor,
       this.stationaryDeathController?.state,
       this.bloodEffects,
-      null,
+      () => this.weaponController?.cancelTarget?.(this.actor, 'folsom-stationary-corpse-despawn'),
       dt,
     );
     const walkerActor = this.walkerController?.actor;

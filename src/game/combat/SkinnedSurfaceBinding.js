@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 
-export const WOUND_SURFACE_BIAS = 0.002;
+export const WOUND_SURFACE_BIAS = 0.0008;
 export const MAX_SLASH_SURFACE_SAMPLES = 48;
 export const MIN_SLASH_SURFACE_SAMPLES = 3;
-export const MAX_SURFACE_PROJECTION_DISTANCE = 0.12;
+export const MAX_SURFACE_PROJECTION_DISTANCE = 0.18;
 
 const a = new THREE.Vector3();
 const b = new THREE.Vector3();

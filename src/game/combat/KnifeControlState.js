@@ -16,12 +16,10 @@ export function canKnifeCreateOffensiveContact({ pointerOwnerId = null, state = 
 
 export function getKnifeReleasePlan({ embeddedDepth = 0, failedContact = false, config } = {}) {
   if (embeddedDepth > 0) {
-    const ratio = Math.min(1, embeddedDepth / Math.max(0.001, config.maximumPenetrationDepth));
     return {
-      state: KNIFE_CONTROL_STATES.withdrawing,
-      durationSeconds: config.return.embeddedMinimumSeconds
-        + (config.return.embeddedMaximumSeconds - config.return.embeddedMinimumSeconds) * ratio,
-      reason: 'assisted-embedded-withdrawal',
+      state: KNIFE_CONTROL_STATES.embedded,
+      durationSeconds: 0,
+      reason: 'planted-embedded-hold',
     };
   }
   return {

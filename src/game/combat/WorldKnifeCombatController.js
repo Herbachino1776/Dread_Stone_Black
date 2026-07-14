@@ -14,6 +14,7 @@ const tmpVector = new THREE.Vector3();
 const tmpVectorB = new THREE.Vector3();
 const tmpQuaternion = new THREE.Quaternion();
 export const COMBAT_KNIFE_VIEWMODEL_LAYER = 1;
+export const COMBAT_KNIFE_WORLD_LAYER = 0;
 const COMBAT_KNIFE_RENDER_ORDER = 10030;
 
 export function resolveSlashLeadingPart(localMotion) {
@@ -80,7 +81,6 @@ export class WorldKnifeCombatController {
     this.returnStartExtension = 0;
     this.failedContact = false;
     this.wasCombatContactActive = false;
-    this.assistedWithdrawalRate = 0;
     this.desiredGrip = new THREE.Vector3();
     this.actualGrip = new THREE.Vector3();
     this.previousGrip = new THREE.Vector3();
@@ -118,6 +118,7 @@ export class WorldKnifeCombatController {
     this.microTwist = 0;
     this.microVariation = 0;
     this.microActive = false;
+    this.visualDepthMode = null;
     this.presentationReady = true;
     this.microLocalOffset = new THREE.Vector3();
     this.microWorldOffset = new THREE.Vector3();
@@ -197,7 +198,22 @@ export class WorldKnifeCombatController {
       object.userData.combatWeaponPart = object.name;
       object.userData.combatKnifeViewmodel = true;
     });
+    this.visualDepthMode = 'viewmodel';
     this.scene.add(this.visual);
+  }
+
+  syncVisualDepthMode() {
+    const depthMode = this.entry ? 'world-occluded' : 'viewmodel';
+    if (this.visualDepthMode === depthMode) return false;
+    const layer = this.entry ? COMBAT_KNIFE_WORLD_LAYER : COMBAT_KNIFE_VIEWMODEL_LAYER;
+    this.visual.traverse((object) => {
+      object.layers.set(layer);
+      if (!object.isMesh) return;
+      object.renderOrder = this.entry ? 0 : COMBAT_KNIFE_RENDER_ORDER;
+      object.userData.combatKnifeViewmodel = !this.entry;
+    });
+    this.visualDepthMode = depthMode;
+    return true;
   }
 
   buildDebug() {
@@ -370,10 +386,6 @@ export class WorldKnifeCombatController {
     this.returnDuration = plan.durationSeconds;
     this.returnStartAim.set(this.aimX, this.aimY);
     this.returnStartExtension = this.desiredExtension;
-    if (this.entry) {
-      this.assistedWithdrawalRate = Math.max(0.04, this.penetrationDepth / Math.max(0.01, plan.durationSeconds));
-      this.beginDirectedWithdrawal();
-    }
     this.failedContact = false;
   }
 
@@ -454,6 +466,7 @@ export class WorldKnifeCombatController {
     this.previousEdgeEnd.copy(this.edgeEnd);
     if (this.entry) this.solveEmbeddedPose(dt);
     else this.solveFreePose(dt);
+    this.syncVisualDepthMode();
     this.updateDerivedPose();
   }
 
@@ -681,6 +694,7 @@ export class WorldKnifeCombatController {
     this.state = KNIFE_CONTROL_STATES.embedded;
     this.reason = 'aligned-tip-punctured-surface';
     targetActor.setEmbeddedWeapon(this);
+    this.syncVisualDepthMode();
   }
 
   resolveHardStructureDepth(hit) {
@@ -711,15 +725,18 @@ export class WorldKnifeCombatController {
     const worldEntry = this.getEntryWorldPose();
     if (!worldEntry || this.entry.actor?.disposed || !this.entry.actor?.bodies?.has(this.entry.bodyId)) { this.cancel('target-invalid'); return; }
     const maximumRegionDepth = Math.min(this.entry.hit.region.maximumTissueDepth, this.config.maximumPenetrationDepth, this.config.bladeLength);
-    const assistedWithdrawal = this.state === KNIFE_CONTROL_STATES.withdrawing || this.gripPointerId == null;
+    const assistedWithdrawal = this.state === KNIFE_CONTROL_STATES.withdrawing;
+    const plantedHold = this.gripPointerId == null && !assistedWithdrawal;
     const desiredProjection = this.desiredTip.clone().sub(worldEntry.point).dot(worldEntry.axis);
     let targetDepth = assistedWithdrawal
-      ? Math.max(-0.04, this.penetrationDepth - this.assistedWithdrawalRate * dt)
-      : THREE.MathUtils.clamp(desiredProjection, -0.04, maximumRegionDepth);
+      ? Math.max(-0.04, this.penetrationDepth - this.config.withdrawalRate * dt)
+      : plantedHold
+        ? this.penetrationDepth
+        : THREE.MathUtils.clamp(desiredProjection, -0.04, maximumRegionDepth);
     const hardDepth = this.entry.hardDepth;
     const wantsWithdrawal = assistedWithdrawal || targetDepth < this.penetrationDepth;
     const resistanceProfile = sampleTissueResistanceCurve({ depth: this.penetrationDepth, surfaceThickness: this.entry.hit.region.surfaceThickness, softTissueResistance: this.entry.hit.region.softTissueResistance, hardDepth, hardStructureResistance: this.entry.hit.region.hardStructureResistance, withdrawing: wantsWithdrawal }, this.tissueResistanceSample);
-    const penetration = advancePenetrationDepth({ currentDepth: this.penetrationDepth, targetDepth, dt, tissueResistance: resistanceProfile.effectiveResistance, hardDepth, maximumDepth: maximumRegionDepth, penetrationRate: this.config.penetrationRate, withdrawalRate: assistedWithdrawal ? this.assistedWithdrawalRate : this.config.withdrawalRate });
+    const penetration = advancePenetrationDepth({ currentDepth: this.penetrationDepth, targetDepth, dt, tissueResistance: resistanceProfile.effectiveResistance, hardDepth, maximumDepth: maximumRegionDepth, penetrationRate: this.config.penetrationRate, withdrawalRate: this.config.withdrawalRate });
     const hardContact = penetration.hardContact;
     targetDepth = penetration.targetDepth;
     if (hardContact) {
@@ -781,6 +798,7 @@ export class WorldKnifeCombatController {
     this.entry = null;
     this.penetrationDepth = 0;
     entry?.actor?.setEmbeddedWeapon?.(null);
+    this.syncVisualDepthMode();
     if (this.gripPointerId == null) {
       this.state = KNIFE_CONTROL_STATES.returning;
       this.returnElapsed = 0;
@@ -855,8 +873,12 @@ export class WorldKnifeCombatController {
   afterPhysics() {
     if (!this.visual.visible) return;
     this.updateMicroPresentation(this.lastPhysicsDt);
-    this.visualGrip.copy(this.actualGrip).add(this.microWorldOffset);
-    this.visualQuaternion.copy(this.actualQuaternion).multiply(this.microQuaternion).normalize();
+    this.visualGrip.copy(this.actualGrip);
+    this.visualQuaternion.copy(this.actualQuaternion);
+    if (!this.entry) {
+      this.visualGrip.add(this.microWorldOffset);
+      this.visualQuaternion.multiply(this.microQuaternion).normalize();
+    }
     this.visual.position.copy(this.visualGrip);
     this.visual.quaternion.copy(this.visualQuaternion);
     this.visibleCollisionError = this.visual.position.distanceTo(this.actualGrip);
@@ -990,6 +1012,7 @@ export class WorldKnifeCombatController {
     this.finishActiveSlash(true);
     this.entry = null;
     this.penetrationDepth = 0;
+    this.syncVisualDepthMode();
     this.desiredExtension = 0;
     this.aimX = 0;
     this.aimY = 0;
@@ -1059,6 +1082,7 @@ export class WorldKnifeCombatController {
       visibleCollisionError: Number(this.visibleCollisionError.toFixed(5)),
       maximumPresentationOffset: Number(this.maximumPresentationOffset.toFixed(5)),
       presentationReady: this.presentationReady,
+      visualDepthMode: this.visualDepthMode,
       microImpact: { kind: this.microResponse.kind, active: this.microActive, compression: Number(this.microCompression.toFixed(5)), recoil: Number(this.microRecoil.toFixed(5)), rollDegrees: Number(THREE.MathUtils.radToDeg(this.microRoll).toFixed(2)), twistDegrees: Number(THREE.MathUtils.radToDeg(this.microTwist).toFixed(2)) },
       tissueResistance: { phase: this.tissueResistanceSample.phase, effective: Number((this.tissueResistanceSample.effectiveResistance ?? 0).toFixed(3)), drag: Number((this.tissueResistanceSample.drag ?? 0).toFixed(3)), boneProximity: Number((this.tissueResistanceSample.boneProgress ?? 0).toFixed(3)) },
       gripPointerActive: this.gripPointerId != null,

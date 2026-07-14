@@ -203,6 +203,12 @@ test('authored Folsom spawn completes its death state without procedural collaps
   const { encounter, player, collision } = await createEncounter();
   const actor = encounter.actor;
   const controller = encounter.stationaryDeathController;
+  const cancelledTargets = [];
+  encounter.attachWeaponController({
+    cancelTarget: (target, reason) => cancelledTargets.push({ target, reason }),
+    cancel() {},
+    reset() {},
+  });
   assert.equal(actor.automaticMortality, false);
   controller.forceQualifyingStab('upper_chest');
   controller.forceQualifyingStab('abdomen');
@@ -212,6 +218,7 @@ test('authored Folsom spawn completes its death state without procedural collaps
   assert.equal(encounter.getActiveCombatActors().includes(actor), false);
   assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);
   assert.equal(collision.blockerRects.includes(encounter.playerBlocker), false);
+  assert.equal(cancelledTargets.length, 0, 'death collision release does not pull a planted knife out of the animated body');
 
   for (let frame = 0; frame < 120; frame += 1) controller.prepareFrame(0.05);
   actor.prepareFrame(0.05);
@@ -241,6 +248,12 @@ test('dying Folsom walker releases player and combat collision immediately', asy
   const controller = encounter.walkerController;
   const actor = controller.actor;
   const blocker = controller.playerBlocker;
+  const cancelledTargets = [];
+  encounter.attachWeaponController({
+    cancelTarget: (target, reason) => cancelledTargets.push({ target, reason }),
+    cancel() {},
+    reset() {},
+  });
   assert.equal(collision.blockerRects.includes(blocker), true);
 
   controller.forceQualifyingStab();
@@ -252,6 +265,7 @@ test('dying Folsom walker releases player and combat collision immediately', asy
   assert.equal(encounter.getActiveCombatActors().includes(actor), false);
   assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);
   assert.equal(collision.blockerRects.includes(blocker), false);
+  assert.equal(cancelledTargets.length, 0, 'walker death collision release preserves an implanted weapon until disposal');
   encounter.dispose();
 });
 
@@ -332,6 +346,12 @@ test('two dead enemies fade-despawn at ten seconds and a fresh wave of two retur
   const { encounter } = await createEncounter();
   const stationaryActor = encounter.actor;
   const firstWalkerInstanceId = encounter.walkerController.actor.instanceId;
+  const cancelledTargets = [];
+  encounter.attachWeaponController({
+    cancelTarget: (target, reason) => cancelledTargets.push({ target, reason }),
+    cancel() {},
+    reset() {},
+  });
   encounter.stationaryDeathController.forceQualifyingStab('upper_chest');
   encounter.stationaryDeathController.forceQualifyingStab('abdomen');
   encounter.walkerController.forceQualifyingStab();
@@ -350,6 +370,7 @@ test('two dead enemies fade-despawn at ten seconds and a fresh wave of two retur
   assert.equal(encounter.enemyWaveCorpses.walker.despawned, true);
   assert.equal(stationaryActor.root.visible, false);
   assert.equal(encounter.walkerController.actor?.instanceId ?? null, null);
+  assert.deepEqual(cancelledTargets.map(({ reason }) => reason).sort(), ['folsom-stationary-corpse-despawn', 'walker-dispose'], 'embedded weapons are released only when each corpse actually despawns');
 
   for (let frame = 0; frame < 39; frame += 1) encounter.updateEnemyWaveLifecycle(0.05);
   assert.equal(encounter.walkerController.actor?.instanceId ?? null, null);

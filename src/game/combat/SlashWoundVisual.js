@@ -246,25 +246,37 @@ export function updateSlashFragmentGeometry({
   let previousVisibleLength = 0;
   let previousSectionIndex = -1;
   let finalEndpointScale = SLASH_FRAGMENT_ENDPOINT_SCALE;
+  let maximumEndpointOverhang = 0;
   for (let sectionIndex = 0; sectionIndex < workspace.sectionCount && fragmentCount < MAX_SLASH_FRAGMENT_COUNT; sectionIndex += 1) {
     const section = workspace.sections[sectionIndex];
     if (section.length <= 1e-8) continue;
-    const sectionFragmentCount = Math.floor(section.length / safeSpacing) + 1;
+    const maximumFragmentLength = safeMajorLength * (1 + SLASH_FRAGMENT_SCALE_VARIATION) * 1.04;
+    const endpointInset = Math.min(section.length * 0.5, maximumFragmentLength * SLASH_FRAGMENT_ENDPOINT_SCALE * 0.5);
+    const centerSpan = Math.max(0, section.length - endpointInset * 2);
+    const sectionFragmentCount = Math.max(1, Math.ceil(centerSpan / safeSpacing) + 1);
     for (let localIndex = 0; localIndex < sectionFragmentCount && fragmentCount < MAX_SLASH_FRAGMENT_COUNT; localIndex += 1) {
-      const centerDistance = Math.min(section.length, localIndex * safeSpacing);
+      const centerDistance = sectionFragmentCount === 1
+        ? section.length * 0.5
+        : localIndex === sectionFragmentCount - 1
+          ? section.length - endpointInset
+          : endpointInset + localIndex * safeSpacing;
       const progress = section.length > 1e-8 ? centerDistance / section.length : 0.5;
       const endpointEnvelope = localIndex === 0 || localIndex === sectionFragmentCount - 1 ? SLASH_FRAGMENT_ENDPOINT_SCALE : 1;
+      const endpointFragment = localIndex === 0 || localIndex === sectionFragmentCount - 1;
       const variation = getSlashFragmentVariation(deterministicSeed, fragmentCount, variant?.allowMirrorX === true, workspace.variation);
       samplePreparedPath(workspace, section, centerDistance);
       const curvatureScale = 1 + THREE.MathUtils.clamp(workspace.localCurvature / Math.PI, 0, 1) * 0.04;
-      const visibleLength = safeMajorLength * endpointEnvelope * variation.scale * curvatureScale * Math.cos(variation.angle);
-      const renderedLength = safeMajorLength * endpointEnvelope * variation.scale * curvatureScale;
+      const nominalRenderedLength = safeMajorLength * endpointEnvelope * variation.scale * curvatureScale;
+      const endpointLength = Math.min(section.length, centerDistance * 2, (section.length - centerDistance) * 2);
+      const renderedLength = endpointFragment ? endpointLength : nominalRenderedLength;
+      const fragmentAngle = endpointFragment ? 0 : variation.angle;
+      const visibleLength = renderedLength * Math.cos(fragmentAngle);
       const renderedWidth = safeWidth * (0.96 + (variation.scale - 1) * 0.5 + (curvatureScale - 1) * 0.5);
       workspace.side.crossVectors(workspace.normal, workspace.tangent);
       if (workspace.side.lengthSq() < 1e-8) workspace.side.set(0, 1, 0).cross(workspace.normal);
       workspace.side.normalize();
-      const cosine = Math.cos(variation.angle);
-      const sine = Math.sin(variation.angle);
+      const cosine = Math.cos(fragmentAngle);
+      const sine = Math.sin(fragmentAngle);
       workspace.rotatedTangent.copy(workspace.tangent).multiplyScalar(cosine).addScaledVector(workspace.side, sine).normalize();
       workspace.rotatedSide.copy(workspace.side).multiplyScalar(cosine).addScaledVector(workspace.tangent, -sine).normalize();
 
@@ -289,7 +301,7 @@ export function updateSlashFragmentGeometry({
       workspace.fragmentNormals[dataOffset + 2] = workspace.normal.z;
       workspace.fragmentLengths[fragmentCount] = visibleLength;
       workspace.fragmentScales[fragmentCount] = variation.scale;
-      workspace.fragmentAngles[fragmentCount] = variation.angle;
+      workspace.fragmentAngles[fragmentCount] = fragmentAngle;
       workspace.fragmentCurvatures[fragmentCount] = workspace.localCurvature;
       workspace.fragmentProgress[fragmentCount] = progress;
       workspace.fragmentMirrors[fragmentCount] = variation.mirroredX ? 1 : 0;
@@ -313,7 +325,9 @@ export function updateSlashFragmentGeometry({
         minimumVisibleOverlapRatio = Math.min(minimumVisibleOverlapRatio, Math.max(0, overlap) / Math.max(previousVisibleLength, visibleLength));
         spacingSum += spacing;
         spacingPairCount += 1;
-      }
+      } else maximumUncoveredGap = Math.max(maximumUncoveredGap, Math.max(0, centerDistance - visibleLength * 0.5));
+      if (localIndex === 0) maximumEndpointOverhang = Math.max(maximumEndpointOverhang, Math.max(0, renderedLength * 0.5 - centerDistance));
+      if (localIndex === sectionFragmentCount - 1) maximumEndpointOverhang = Math.max(maximumEndpointOverhang, Math.max(0, centerDistance + renderedLength * 0.5 - section.length));
       previousCenterDistance = centerDistance;
       previousVisibleLength = visibleLength;
       previousSectionIndex = sectionIndex;
@@ -365,6 +379,7 @@ export function updateSlashFragmentGeometry({
     drawCallCount: fragmentCount > 0 ? 1 : 0,
     visualGeometryRevision: workspace.geometryRevision,
     maximumPermittedSpacing: safeSpacing,
+    maximumEndpointOverhang,
     fragmentLimit: MAX_SLASH_FRAGMENT_COUNT,
   };
 }
