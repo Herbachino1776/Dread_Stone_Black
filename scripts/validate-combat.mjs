@@ -55,6 +55,10 @@ const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSou
   readFile(new URL('../src/game/combat/BloodChromaMaterial.js', import.meta.url), 'utf8'),
 ]);
 const dungeonSceneSource = await readFile(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
+const [knifeGlbBuffer, swordGlbBuffer] = await Promise.all([
+  readFile(new URL('../public/assets/weapons/melee/old_work_knife_v004.glb', import.meta.url)),
+  readFile(new URL('../public/assets/weapons/melee/dreadstone_sword_v002.glb', import.meta.url)),
+]);
 const woundManifest = JSON.parse(woundManifestSource);
 
 function parseGlbJson(buffer) {
@@ -151,7 +155,12 @@ assert.doesNotMatch(oldViewmodelSource, /old-work-knife-held|old-work-knife-shor
 assert.doesNotMatch(oldViewmodelSource, /addTool\('old_work_knife'/);
 assert.match(knifeSource, /old-work-knife-authoritative-world-weapon/);
 assert.match(knifeSource, /COMBAT_KNIFE_VIEWMODEL_LAYER = 1/);
-assert.match(knifeSource, /object\.layers\.set\(COMBAT_KNIFE_VIEWMODEL_LAYER\)/);
+assert.match(knifeSource, /GLTFLoader/);
+assert.match(knifeSource, /\.\/assets\/weapons\/melee\/old_work_knife_v004\.glb/);
+assert.doesNotMatch(knifeSource, /dreadstone_sword_v002\.glb/);
+assert.match(knifeSource, /const layer = this\.entry \? COMBAT_KNIFE_WORLD_LAYER : COMBAT_KNIFE_VIEWMODEL_LAYER/);
+assert.match(knifeSource, /object\.layers\.set\(layer\)/);
+assert.doesNotMatch(knifeSource, /minFilter|magFilter/);
 assert.match(knifeSource, /object\.castShadow = false/);
 assert.match(knifeSource, /object\.frustumCulled = false/);
 assert.match(knifeSource, /getProjectedActivePoint/);
@@ -175,6 +184,8 @@ assert.match(knifeSource, /combatRouter/);
 assert.match(actorRouterSource, /entriesByColliderHandle/);
 assert.match(actorRouterSource, /resolveCollider/);
 assert.match(actorRouterSource, /unregister/);
+parseGlbJson(knifeGlbBuffer);
+parseGlbJson(swordGlbBuffer);
 ['SPAWNING', 'BLENDING_TO_WALK', 'APPROACHING', 'BLENDING_TO_IDLE', 'NEAR_PLAYER', 'HIT_REACTING', 'LOSING_CONSCIOUSNESS', 'GROUNDED', 'DISPOSED', 'RESPAWNING'].forEach((state) => assert.match(walkerSource, new RegExp(state)));
 assert.doesNotMatch(walkerSource, /SETTLING_TO_GROUND|advanceGroundCollapse|groundCollapseSeconds/);
 assert.doesNotMatch(walkerSource, /Math\.random/);

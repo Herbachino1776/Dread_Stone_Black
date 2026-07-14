@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { advancePenetrationDepth, clampWorkspacePoint, classifyKnifeContact, classifySlashContact, deriveBladeTip, normalizedBladeForward } from './CombatMath.js';
 import { SLASH_CONFIG } from './CombatStage2Config.js';
@@ -22,8 +23,42 @@ export const KNIFE_EDGE_COLLISION_RADIUS = KNIFE_COMBAT_CONFIG.bladeThickness * 
 export const KNIFE_EDGE_BASE_SAMPLE_COUNT = 3;
 export const KNIFE_EDGE_MAX_SAMPLE_COUNT = 9;
 const COMBAT_KNIFE_RENDER_ORDER = 10030;
+export const OLD_WORK_KNIFE_GLB_PATH = './assets/weapons/melee/old_work_knife_v004.glb';
 const SLASH_EXTENSION_DIRECTION_DOT = Math.cos(THREE.MathUtils.degToRad(SLASH_CONFIG.extensionDirectionDegrees));
 const EDGE_CONTACT_TOI_EPSILON = 1e-5;
+let oldWorkKnifeAssetPromise = null;
+let oldWorkKnifeLoadWarningShown = false;
+
+function loadOldWorkKnifeAsset() {
+  if (!oldWorkKnifeAssetPromise) {
+    oldWorkKnifeAssetPromise = new GLTFLoader().loadAsync(OLD_WORK_KNIFE_GLB_PATH).then((gltf) => {
+      const root = gltf.scene ?? gltf.scenes?.[0];
+      if (!root) throw new Error(`Old Work Knife GLB loaded without a scene: ${OLD_WORK_KNIFE_GLB_PATH}`);
+      return root;
+    });
+  }
+  return oldWorkKnifeAssetPromise;
+}
+
+function cloneKnifeVisual(source) {
+  const root = source.clone(true);
+  const geometryClones = new Map();
+  const materialClones = new Map();
+  const cloneGeometry = (geometry) => {
+    if (!geometryClones.has(geometry)) geometryClones.set(geometry, geometry.clone());
+    return geometryClones.get(geometry);
+  };
+  const cloneMaterial = (material) => {
+    if (!materialClones.has(material)) materialClones.set(material, material.clone());
+    return materialClones.get(material);
+  };
+  root.traverse((object) => {
+    if (!object.isMesh) return;
+    if (object.geometry) object.geometry = cloneGeometry(object.geometry);
+    if (object.material) object.material = Array.isArray(object.material) ? object.material.map(cloneMaterial) : cloneMaterial(object.material);
+  });
+  return { root, geometries: [...geometryClones.values()], materials: [...materialClones.values()] };
+}
 
 export function sampleKnifeCuttingEdgeLocal(edgeFraction, target = new THREE.Vector3()) {
   const distance = THREE.MathUtils.clamp(edgeFraction, 0, 1) * knifeEdgeLength;
@@ -67,7 +102,7 @@ function setLine(line, start, end) {
 }
 
 export class WorldKnifeCombatController {
-  constructor({ app, scene, camera, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, bloodEffects = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, bindPointerInput = true } = {}) {
+  constructor({ app, scene, camera, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, bloodEffects = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, visualAssetLoader = loadOldWorkKnifeAsset, bindPointerInput = true } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.scene = scene;
@@ -85,6 +120,7 @@ export class WorldKnifeCombatController {
     this.ownsCombatDirector = combatDirector == null;
     if (feedback) this.combatDirector.setCameraFeedback(feedback);
     this.contactActivationProvider = contactActivationProvider;
+    this.visualAssetLoader = visualAssetLoader;
     this.bindPointerInput = bindPointerInput;
     this.config = KNIFE_COMBAT_CONFIG;
     this.weaponDefinition = Object.freeze({ id: this.config.itemId, family: 'knife', maximumPenetrationDepth: this.config.maximumPenetrationDepth });
@@ -222,6 +258,7 @@ export class WorldKnifeCombatController {
     this.microQuaternion = new THREE.Quaternion();
     this.microEuler = new THREE.Euler(0, 0, 0, 'XYZ');
     this.disposers = [];
+    this.disposed = false;
     this.buildVisual();
     this.weaponLayers = Object.freeze({
       visual: Object.freeze({ kind: 'visual', root: this.visual }),
@@ -234,26 +271,56 @@ export class WorldKnifeCombatController {
   }
 
   buildVisual() {
-    const wood = new THREE.MeshStandardMaterial({ color: 0x4c3021, roughness: 0.96 });
-    const wornWood = new THREE.MeshStandardMaterial({ color: 0x76513a, roughness: 0.9 });
-    const rust = new THREE.MeshStandardMaterial({ color: 0x6a4a3b, roughness: 0.72, metalness: 0.58 });
-    const darkRust = new THREE.MeshStandardMaterial({ color: 0x302621, roughness: 0.82, metalness: 0.45 });
-    this.materials = [wood, wornWood, rust, darkRust];
+    this.materials = [];
+    this.visualGeometries = [];
+    this.visualAssetState = 'loading';
+    this.visualAssetError = null;
     this.visual = new THREE.Group();
     this.visual.name = 'old-work-knife-authoritative-world-weapon';
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.03, this.config.handleLength, 10), wood);
+    this.visualDepthMode = 'viewmodel';
+    this.applyVisualDepthMode();
+    this.scene.add(this.visual);
+    this.visualLoadPromise = this.visualAssetLoader().then((source) => {
+      const visual = cloneKnifeVisual(source);
+      if (this.disposed) {
+        visual.geometries.forEach((geometry) => geometry.dispose());
+        visual.materials.forEach((material) => material.dispose());
+        return 'disposed';
+      }
+      visual.root.name = 'old-work-knife-glb-visual';
+      visual.root.userData.sourceAsset = OLD_WORK_KNIFE_GLB_PATH;
+      this.visual.add(visual.root);
+      this.visualGeometries.push(...visual.geometries);
+      this.materials.push(...visual.materials);
+      this.visualAssetState = 'loaded';
+      this.applyVisualDepthMode();
+      return this.visualAssetState;
+    }).catch((error) => {
+      if (this.disposed) return 'disposed';
+      this.visualAssetError = error;
+      this.buildFallbackVisual();
+      this.visualAssetState = 'fallback';
+      this.applyVisualDepthMode();
+      if (!oldWorkKnifeLoadWarningShown && typeof window !== 'undefined') {
+        oldWorkKnifeLoadWarningShown = true;
+        console.warn(`Failed to load ${OLD_WORK_KNIFE_GLB_PATH}; using the procedural fallback.`, error);
+      }
+      return this.visualAssetState;
+    });
+  }
+
+  buildFallbackVisual() {
+    const wood = new THREE.MeshStandardMaterial({ color: 0x4c3021, roughness: 0.96 });
+    const rust = new THREE.MeshStandardMaterial({ color: 0x6a4a3b, roughness: 0.72, metalness: 0.58 });
+    const darkRust = new THREE.MeshStandardMaterial({ color: 0x302621, roughness: 0.82, metalness: 0.45 });
+    const handleGeometry = new THREE.CylinderGeometry(0.026, 0.03, this.config.handleLength, 8);
+    const guardGeometry = new THREE.BoxGeometry(0.09, 0.022, 0.025);
+    const handle = new THREE.Mesh(handleGeometry, wood);
     handle.name = 'old-work-knife-grip';
     handle.rotation.x = Math.PI / 2;
     handle.position.z = this.config.handleLength * 0.5;
     this.visual.add(handle);
-    [0.025, 0.065, 0.105].forEach((z, index) => {
-      const wrap = new THREE.Mesh(new THREE.TorusGeometry(0.029, 0.0045, 5, 10), index === 1 ? wornWood : darkRust);
-      wrap.name = `old-work-knife-handle-wrap-${index}`;
-      wrap.rotation.x = Math.PI / 2;
-      wrap.position.z = z;
-      this.visual.add(wrap);
-    });
-    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.022, 0.025), darkRust);
+    const guard = new THREE.Mesh(guardGeometry, darkRust);
     guard.name = 'old-work-knife-guard';
     guard.position.z = 0.015;
     this.visual.add(guard);
@@ -271,45 +338,30 @@ export class WorldKnifeCombatController {
     const bladeMesh = new THREE.Mesh(blade, rust);
     bladeMesh.name = 'old-work-knife-blade-body';
     this.visual.add(bladeMesh);
-    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.009, this.config.bladeThickness * 1.3, shoulder), darkRust);
-    spine.name = 'old-work-knife-spine';
-    spine.position.set(halfWidth * 0.82, 0, -shoulder * 0.5);
-    this.visual.add(spine);
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.006, this.config.bladeThickness * 0.8, shoulder), rust);
-    edge.name = 'old-work-knife-cutting-edge';
-    edge.position.set(-halfWidth * 0.92, 0, -shoulder * 0.5);
-    this.visual.add(edge);
-    const pommelRadius = 0.026;
-    const pommel = new THREE.Mesh(new THREE.SphereGeometry(pommelRadius, 8, 6), darkRust);
-    pommel.name = 'old-work-knife-pommel';
-    pommel.position.z = this.config.handleLength - pommelRadius;
-    this.visual.add(pommel);
-    this.visual.traverse((object) => {
-      object.layers.set(COMBAT_KNIFE_VIEWMODEL_LAYER);
-      if (!object.isMesh) return;
-      object.renderOrder = COMBAT_KNIFE_RENDER_ORDER;
-      object.castShadow = false;
-      object.receiveShadow = false;
-      object.frustumCulled = false;
-      object.userData.itemId = this.config.itemId;
-      object.userData.combatWeaponPart = object.name;
-      object.userData.combatKnifeViewmodel = true;
-    });
-    this.visualDepthMode = 'viewmodel';
-    this.scene.add(this.visual);
+    this.materials.push(wood, rust, darkRust);
+    this.visualGeometries.push(handleGeometry, guardGeometry, blade);
   }
 
-  syncVisualDepthMode() {
-    const depthMode = this.entry ? 'world-occluded' : 'viewmodel';
-    if (this.visualDepthMode === depthMode) return false;
+  applyVisualDepthMode() {
     const layer = this.entry ? COMBAT_KNIFE_WORLD_LAYER : COMBAT_KNIFE_VIEWMODEL_LAYER;
     this.visual.traverse((object) => {
       object.layers.set(layer);
       if (!object.isMesh) return;
       object.renderOrder = this.entry ? 0 : COMBAT_KNIFE_RENDER_ORDER;
+      object.castShadow = false;
+      object.receiveShadow = false;
+      object.frustumCulled = false;
+      object.userData.itemId = this.config.itemId;
+      object.userData.combatWeaponPart = object.name;
       object.userData.combatKnifeViewmodel = !this.entry;
     });
+  }
+
+  syncVisualDepthMode() {
+    const depthMode = this.entry ? 'world-occluded' : 'viewmodel';
+    if (this.visualDepthMode === depthMode) return false;
     this.visualDepthMode = depthMode;
+    this.applyVisualDepthMode();
     return true;
   }
 
@@ -1318,6 +1370,7 @@ export class WorldKnifeCombatController {
       maximumPresentationOffset: Number(this.maximumPresentationOffset.toFixed(5)),
       presentationReady: this.presentationReady,
       visualDepthMode: this.visualDepthMode,
+      visualAssetState: this.visualAssetState,
       microImpact: { kind: this.microResponse.kind, active: this.microActive, compression: Number(this.microCompression.toFixed(5)), recoil: Number(this.microRecoil.toFixed(5)), rollDegrees: Number(THREE.MathUtils.radToDeg(this.microRoll).toFixed(2)), twistDegrees: Number(THREE.MathUtils.radToDeg(this.microTwist).toFixed(2)) },
       tissueResistance: { phase: this.tissueResistanceSample.phase, effective: Number((this.tissueResistanceSample.effectiveResistance ?? 0).toFixed(3)), drag: Number((this.tissueResistanceSample.drag ?? 0).toFixed(3)), boneProximity: Number((this.tissueResistanceSample.boneProgress ?? 0).toFixed(3)) },
       gripPointerActive: this.gripPointerId != null,
@@ -1338,11 +1391,14 @@ export class WorldKnifeCombatController {
   }
 
   dispose() {
+    this.disposed = true;
     this.cancel('disposed');
     this.disposers.forEach((dispose) => dispose());
     this.disposers = [];
-    this.visual.traverse((object) => object.geometry?.dispose?.());
+    this.visualGeometries.forEach((geometry) => geometry.dispose());
+    this.visualGeometries = [];
     this.materials.forEach((entry) => entry.dispose());
+    this.materials = [];
     this.debugRoot.traverse((object) => { object.geometry?.dispose?.(); object.material?.dispose?.(); });
     this.visual.removeFromParent();
     this.debugRoot.removeFromParent();
