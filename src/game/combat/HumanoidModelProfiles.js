@@ -30,7 +30,7 @@ export const TESTMAN_COMBAT_PROFILE = Object.freeze({
   name: 'testman_animpack_v002_animation_authoritative',
   assetPath: './assets/enemies/testman/testman_animpack_v002.glb',
   animationManifestPath: './assets/enemies/testman/testman_animpack_v002.json',
-  rawHeight: 84.13298431508957,
+  rawHeight: 4.835451218922911,
   targetHeight: 1.82,
   animationAuthoritative: true,
   authoredAnimationPack: true,

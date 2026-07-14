@@ -384,7 +384,11 @@ export class HumanoidGlbVisualAdapter {
     this.rawVisibleBounds = measureVisibleSkinnedBounds(this.scene);
     const measuredHeight = this.rawVisibleBounds.getSize(new THREE.Vector3()).y;
     if (!(measuredHeight > 0)) throw new Error(`Humanoid GLB profile ${this.profile.name} has empty skinned bounds`);
-    this.uniformScale = this.profile.targetHeight / measuredHeight;
+    const rawHeightTolerance = Math.max(0.0001, this.profile.rawHeight * 0.00001);
+    if (Math.abs(measuredHeight - this.profile.rawHeight) > rawHeightTolerance) {
+      throw new Error(`Humanoid GLB profile ${this.profile.name} rawHeight ${this.profile.rawHeight} does not match loaded skinned height ${measuredHeight}`);
+    }
+    this.uniformScale = getHumanoidProfileScale(this.profile);
     this.scene.scale.setScalar(this.uniformScale);
     this.scene.updateMatrixWorld(true);
     this.skeletons.forEach((skeleton) => skeleton.update());

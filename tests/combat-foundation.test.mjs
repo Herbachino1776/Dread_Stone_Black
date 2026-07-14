@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { COMBAT_REQUIRED_REGION_IDS, HUMANOID_ANATOMY_REGIONS, HUMANOID_BODY_CONFIG, HUMANOID_JOINT_CONFIG, KNIFE_COMBAT_CONFIG, validateCombatConfiguration } from '../src/game/combat/CombatConfig.js';
 import { advancePenetrationDepth, clampWorkspacePoint, classifyKnifeContact, classifySlashContact, computeWorldThrust, deriveBladeTip, extendSlashLength, normalizedBladeForward, visibleCollisionTransformsWithinTolerance } from '../src/game/combat/CombatMath.js';
 import { CombatPhysicsWorld, initializeCombatPhysics } from '../src/game/combat/CombatPhysicsWorld.js';
@@ -9,13 +10,14 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
-import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
+import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
 import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, KNIFE_EDGE_BASE_SAMPLE_COUNT, KNIFE_EDGE_COLLISION_RADIUS, KNIFE_EDGE_MAX_SAMPLE_COUNT, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveKnifeEdgeSampleCount, resolveSlashLeadingPart, sampleKnifeCuttingEdgeLocal } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
 import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveAnimationPackManifest, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
-import { MAX_SLASH_SURFACE_SAMPLES, WOUND_SURFACE_BIAS, findClosestSkinnedSurface, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
+import { MAX_SLASH_SURFACE_SAMPLES, MAX_SURFACE_PROJECTION_DISTANCE, WOUND_SURFACE_BIAS, findClosestSkinnedSurface, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
+import { HumanoidAnimationPackController } from '../src/game/combat/HumanoidAnimationPackController.js';
 import { COMBAT_DIRECTOR_EVENTS, CombatDirector, PENETRATION_STAGES, resolveMeleeTimeline } from '../src/game/combat/CombatDirector.js';
 import { isDamageIntent, MELEE_INTENTS, MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
 import { Feedback } from '../src/game/Feedback.js';
@@ -383,11 +385,11 @@ test('slash paths use bounded multi-sample surface bindings and never require on
 
 test('surface projection reaches animation-following skin from bounded proxy depth without accepting distant geometry', () => {
   const { mesh, geometry } = createSkinnedSurfaceFixture();
-  const proxyDepthPoint = new THREE.Vector3(0.1, 0.08, 0.15);
+  const proxyDepthPoint = new THREE.Vector3(0.1, 0.08, 0.075);
   const binding = findClosestSkinnedSurface([mesh], proxyDepthPoint, { regionId: 'upper_chest', bodyId: 'upper_chest', referenceNormal: new THREE.Vector3(0, 0, 1) });
   assert.ok(validateSurfaceBinding(binding), 'a contact from inside the animated torso proxy reaches the visible skin');
-  assert.ok(reconstructSkinnedSurface(binding).point.distanceTo(proxyDepthPoint) <= 0.18 + 1e-8);
-  assert.equal(findClosestSkinnedSurface([mesh], new THREE.Vector3(0.1, 0.08, 0.19)), null, 'projection remains bounded and cannot jump to unrelated distant surfaces');
+  assert.ok(reconstructSkinnedSurface(binding).point.distanceTo(proxyDepthPoint) <= MAX_SURFACE_PROJECTION_DISTANCE + 1e-8);
+  assert.equal(findClosestSkinnedSurface([mesh], new THREE.Vector3(0.1, 0.08, 0.11)), null, 'projection remains bounded and cannot jump to unrelated distant surfaces');
   geometry.dispose(); mesh.material.dispose();
 });
 
@@ -797,6 +799,14 @@ test('persistent wounds are region-owned, body-local, severity-aware, pooled, an
   assert.equal(slash.regionId, 'left_forearm');
   assert.ok(slash.severity > shallow.severity);
   assert.ok(slash.cutLength <= deepPoint.distanceTo(worldPoint) + 1e-9);
+  const extensionLocal = hit.localPoint.clone().add(new THREE.Vector3(0.16, 0.03, 0));
+  const bodyTranslation = hit.body.translation();
+  const bodyRotation = hit.body.rotation();
+  const extensionWorld = extensionLocal.clone()
+    .applyQuaternion(new THREE.Quaternion(bodyRotation.x, bodyRotation.y, bodyRotation.z, bodyRotation.w))
+    .add(new THREE.Vector3(bodyTranslation.x, bodyTranslation.y, bodyTranslation.z));
+  actor.applySlashWound({ hit: { ...hit, localPoint: extensionLocal }, startPoint: deepPoint, endPoint: extensionWorld, surfaceNormal: new THREE.Vector3(0, 0, 1), cutDirection: new THREE.Vector3(1, 0, 0), depth: 0.065, cutLength: 0.05, severity: 0.9, classification: 'deep_slash', woundId: slash.id });
+  assert.ok(slash.localCutEnd.distanceTo(extensionLocal) < 1e-9, 'slash extensions store the current semantic local hit without applying world travel twice');
   const before = actor.woundSystem.getWorldPose(slash).point;
   actor.bodies.get('left_forearm').body.setTranslation({ x: 0.2, y: 2, z: -3 }, true);
   const after = actor.woundSystem.getWorldPose(slash).point;
@@ -921,31 +931,49 @@ test('Folsom keeps the stationary Testman subject and adds one independently rou
   assert.equal(scene.children.some((child) => child.name.startsWith('folsom-authored-walker-')), false);
 });
 
-test('skinned-vertex bounds produce one uniform 1.82 meter Testman scale', () => {
-  const root = new THREE.Group();
-  const bone = new THREE.Bone();
-  const geometry = new THREE.BoxGeometry(1, 2, 0.5);
-  const positionCount = geometry.attributes.position.count;
-  geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(positionCount * 4), 4));
-  const weights = new Float32Array(positionCount * 4);
-  for (let index = 0; index < positionCount; index += 1) weights[index * 4] = 1;
-  geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
-  const material = new THREE.MeshStandardMaterial();
-  const skinned = new THREE.SkinnedMesh(geometry, material);
-  skinned.add(bone);
-  skinned.bind(new THREE.Skeleton([bone]));
-  root.add(skinned);
+test('loaded Testman bounds, root scale, semantic proxies, and wound projection share one meter space', async () => {
+  globalThis.self ??= globalThis;
+  globalThis.ProgressEvent ??= class ProgressEvent { constructor(type, init = {}) { this.type = type; Object.assign(this, init); } };
+  globalThis.createImageBitmap ??= async () => ({ width: 1, height: 1, close() {} });
+  const bytes = readFileSync(new URL('../public/assets/enemies/testman/testman_animpack_v002.glb', import.meta.url));
+  const assetBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const gltf = await new GLTFLoader().parseAsync(assetBuffer, new URL('../public/assets/enemies/testman/', import.meta.url).href);
+  const manifest = JSON.parse(readFileSync(new URL('../public/assets/enemies/testman/testman_animpack_v002.json', import.meta.url), 'utf8'));
+  const animationPack = resolveAnimationPackManifest(manifest, gltf.animations, TESTMAN_COMBAT_PROFILE.name);
+  const mixer = new THREE.AnimationMixer(gltf.scene);
+  new HumanoidAnimationPackController({ mixer, animationPack, manifest, fadeSeconds: TESTMAN_COMBAT_PROFILE.animationFadeSeconds, walkReferenceSpeed: TESTMAN_COMBAT_PROFILE.walkReferenceSpeed });
+  mixer.update(0);
+  const root = gltf.scene;
   const rawHeight = measureVisibleSkinnedBounds(root).getSize(new THREE.Vector3()).y;
-  const uniformScale = TESTMAN_COMBAT_PROFILE.targetHeight / rawHeight;
+  const uniformScale = getHumanoidProfileScale(TESTMAN_COMBAT_PROFILE);
+  assert.ok(Math.abs(rawHeight - TESTMAN_COMBAT_PROFILE.rawHeight) < 1e-6, 'the profile records the loaded v002 skinned height, not the older asset height');
+  assert.ok(uniformScale > 0.37 && uniformScale < 0.38, 'one profile scale normalizes the smaller v002 asset');
   root.scale.setScalar(uniformScale);
+  const scaled = measureVisibleSkinnedBounds(root);
+  root.position.y = TESTMAN_COMBAT_PROFILE.groundClearance - scaled.min.y;
   const normalized = measureVisibleSkinnedBounds(root);
   assert.ok(Math.abs(normalized.getSize(new THREE.Vector3()).y - 1.82) < 1e-6);
   assert.deepEqual(root.scale.toArray(), [uniformScale, uniformScale, uniformScale]);
   assert.equal(TESTMAN_COMBAT_PROFILE.animationAuthoritative, true);
-  assert.ok(TESTMAN_COMBAT_PROFILE.rawHeight > 84.12 && TESTMAN_COMBAT_PROFILE.rawHeight < 84.14);
   assert.equal(Object.keys(TESTMAN_COMBAT_PROFILE.proxyFit).length, 18);
-  geometry.dispose();
-  material.dispose();
+
+  const bones = new Map();
+  const skinnedMeshes = [];
+  root.traverse((object) => {
+    if (object.isBone) bones.set(object.name, object);
+    if (object.isSkinnedMesh) skinnedMeshes.push(object);
+  });
+  const adapter = { profile: TESTMAN_COMBAT_PROFILE, bones };
+  for (const [bodyId, fit] of Object.entries(TESTMAN_COMBAT_PROFILE.proxyFit)) {
+    const pose = HumanoidGlbVisualAdapter.prototype.getProxyPose.call(adapter, bodyId);
+    const outward = new THREE.Vector3(0, 0, 1).applyQuaternion(pose.quaternion).normalize();
+    const contactPoint = pose.position.clone().addScaledVector(outward, fit.radius ?? fit.halfExtents[2]);
+    const binding = findClosestSkinnedSurface(skinnedMeshes, contactPoint, { bodyId, regionId: bodyId, referenceNormal: outward });
+    assert.ok(validateSurfaceBinding(binding), `${bodyId} proxy reaches the final scaled skin`);
+    assert.ok(binding.distanceAtBind <= MAX_SURFACE_PROJECTION_DISTANCE, `${bodyId} uses the bounded projection distance`);
+    assert.ok(reconstructSkinnedSurface(binding).point.distanceTo(contactPoint) <= MAX_SURFACE_PROJECTION_DISTANCE + 1e-8);
+  }
+  mixer.stopAllAction();
 });
 
 test('Testman v002 authoritative profile is independent and uses its enemy-specific manifest route', () => {

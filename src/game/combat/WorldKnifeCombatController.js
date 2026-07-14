@@ -167,6 +167,7 @@ export class WorldKnifeCombatController {
       part: 'none',
       hit: null,
       startPoint: new THREE.Vector3(),
+      startLocalPoint: new THREE.Vector3(),
       lastPoint: new THREE.Vector3(),
       surfaceNormal: new THREE.Vector3(),
       direction: new THREE.Vector3(),
@@ -739,7 +740,7 @@ export class WorldKnifeCombatController {
         const interaction = slash.director.beginSlash({
           weapon: this.weaponDefinition,
           intent: this.intentState,
-          hit: semanticHit,
+          hit: { ...semanticHit, localPoint: slash.startLocalPoint.clone() },
           startPoint: slash.startPoint,
           endPoint: point,
           surfaceNormal: normal,
@@ -777,6 +778,7 @@ export class WorldKnifeCombatController {
     slash.part = part;
     slash.hit = hit;
     slash.startPoint.copy(point);
+    slash.startLocalPoint.copy(hit.localPoint);
     slash.lastPoint.copy(point);
     slash.surfaceNormal.copy(normal);
     slash.direction.copy(direction);

@@ -401,9 +401,7 @@ export class HumanoidCombatActor {
     let wound = woundId ? this.woundSystem.getWound(woundId) : null;
     const isNewWound = !wound;
     if (wound) {
-      const rotation = hit.body.rotation();
-      const inverse = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).invert();
-      const localEnd = hit.localPoint.clone().add(endPoint.clone().sub(startPoint).applyQuaternion(inverse));
+      const localEnd = hit.localPoint.clone();
       wound = this.woundSystem.extendSlash(wound.id, { localEnd, worldEnd: endPoint, surfaceNormal, addedTravel: cutLength, depth, severity, edgeAlignment });
     } else {
       wound = this.woundSystem.createSlash({ hit, startPoint, endPoint, surfaceNormal, cutDirection, depth, cutLength, severity, classification, edgeAlignment, createdTime: this.elapsed });

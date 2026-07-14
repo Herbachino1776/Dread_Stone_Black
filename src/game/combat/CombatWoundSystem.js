@@ -433,7 +433,8 @@ export class CombatWoundSystem {
     this.updatePunctureDimensions(wound);
     this.updateDecalSelection(wound, 'puncture');
     this.resolveBleedingProfile(wound);
-    this.attachPunctureSurface(wound, entryPoint, worldSurfaceNormal);
+    const semanticEntry = this.getWorldPose(wound);
+    this.attachPunctureSurface(wound, semanticEntry?.point ?? entryPoint, semanticEntry?.normal ?? worldSurfaceNormal);
     this.captureEntryTangent(wound, entryTangent);
     this.updateWoundVisual(wound);
     return wound;
@@ -468,7 +469,10 @@ export class CombatWoundSystem {
     const wound = this.createWound({ actor: this.actor, regionId: hit.regionId, bodyId: hit.bodyId, woundType, localEntryPoint: localStart.clone(), localSurfaceNormal: localNormal, localPenetrationAxis: localNormal.clone().negate(), currentDepth: depth, maximumDepth: depth, cutLength: Math.min(cutLength, WOUND_CONFIG.maximumCutLength), localCutStart: localStart, localCutEnd: localEnd, localCutDirection: localDirection, severity, tissueClass: hit.region?.vital ?? 'none', hardStructureContact: false, embeddedWeaponId: null, createdTime, edgeAlignment: THREE.MathUtils.clamp(edgeAlignment, 0, 1), pathCurvature: 0, lateralTearingMeters: 0 });
     wound.failedProjectionCount = 0;
     wound.nextSampleBreak = false;
-    this.attachSlashSamples(wound, startPoint, endPoint, surfaceNormal);
+    const bindingStart = this.bodyLocalPointToWorld(hit.body, localStart);
+    const bindingEnd = this.bodyLocalPointToWorld(hit.body, localEnd);
+    const bindingNormal = this.bodyLocalNormalToWorld(hit.body, localNormal);
+    this.attachSlashSamples(wound, bindingStart, bindingEnd, bindingNormal);
     this.updateSlashDimensions(wound);
     this.updateDecalSelection(wound, 'slash');
     this.resolveBleedingProfile(wound);
@@ -521,7 +525,10 @@ export class CombatWoundSystem {
     wound.maximumDepth = Math.max(wound.maximumDepth, depth);
     wound.severity = Math.min(2, Math.max(wound.severity, severity) + physicalTravel * 0.35);
     if (Number.isFinite(edgeAlignment)) wound.edgeAlignment = THREE.MathUtils.lerp(wound.edgeAlignment, THREE.MathUtils.clamp(edgeAlignment, 0, 1), 0.35);
-    this.appendSlashSurfaceSample(wound, worldEnd, surfaceNormal);
+    const body = this.actor.bodies.get(wound.bodyId)?.body;
+    const bindingPoint = body ? this.bodyLocalPointToWorld(body, localEnd) : worldEnd;
+    const bindingNormal = body ? this.bodyLocalNormalToWorld(body, wound.localSurfaceNormal) : surfaceNormal;
+    this.appendSlashSurfaceSample(wound, bindingPoint, bindingNormal);
     if (wound.maximumDepth >= 0.05 || wound.severity >= WOUND_CONFIG.seriousSeverity) wound.woundType = 'deep_slash';
     this.updateSlashDimensions(wound);
     this.updateDecalSelection(wound, 'slash');
@@ -594,6 +601,19 @@ export class CombatWoundSystem {
 
   getWound(id) { return this.wounds.find((wound) => wound.id === id) ?? null; }
   getActiveWounds() { return this.wounds.filter((wound) => wound.active); }
+
+  bodyLocalPointToWorld(body, localPoint, target = new THREE.Vector3()) {
+    const translation = body.translation();
+    const rotation = body.rotation();
+    return target.copy(localPoint)
+      .applyQuaternion(new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w))
+      .add(new THREE.Vector3(translation.x, translation.y, translation.z));
+  }
+
+  bodyLocalNormalToWorld(body, localNormal, target = new THREE.Vector3()) {
+    const rotation = body.rotation();
+    return target.copy(localNormal).applyQuaternion(new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w)).normalize();
+  }
 
   getWorldPose(wound) {
     const entry = this.actor.bodies.get(wound?.bodyId);
