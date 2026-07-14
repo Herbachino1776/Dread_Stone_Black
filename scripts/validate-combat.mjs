@@ -46,13 +46,19 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSo
   readFile(new URL('../public/assets/enemies/testman/testman_animpack_v002.json', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/enemies/testman/testman_animpack_v002_validation.json', import.meta.url), 'utf8'),
 ]);
-const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSource, actorRouterSource, bloodMaterialSource] = await Promise.all([
+const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSource, actorRouterSource, bloodMaterialSource, weaponPoseSource, weaponGestureSource, weaponContactRouterSource, sweptCuttingEdgeSource, weaponVisualAssetSource, weaponContactScratchSource] = await Promise.all([
   readFile(new URL('../src/game/combat/KnifeWoundDecalLibrary.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/world-scene/OutdoorLightingDirector.js', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatLabWalkerController.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatActorRouter.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/BloodChromaMaterial.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/weapons/WeaponPoseWorkspace.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/weapons/WeaponGestureOwnership.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/weapons/WeaponContactRouter.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/weapons/SweptCuttingEdge.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/weapons/WeaponVisualAsset.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/game/combat/weapons/WeaponContactScratch.js', import.meta.url), 'utf8'),
 ]);
 const dungeonSceneSource = await readFile(new URL('../src/game/DungeonScene.js', import.meta.url), 'utf8');
 const [knifeGlbBuffer, swordGlbBuffer] = await Promise.all([
@@ -155,14 +161,26 @@ assert.doesNotMatch(oldViewmodelSource, /old-work-knife-held|old-work-knife-shor
 assert.doesNotMatch(oldViewmodelSource, /addTool\('old_work_knife'/);
 assert.match(knifeSource, /old-work-knife-authoritative-world-weapon/);
 assert.match(knifeSource, /COMBAT_KNIFE_VIEWMODEL_LAYER = 1/);
-assert.match(knifeSource, /GLTFLoader/);
+assert.match(knifeSource, /createCachedWeaponGlbLoader/);
+assert.match(weaponVisualAssetSource, /GLTFLoader/);
 assert.match(knifeSource, /\.\/assets\/weapons\/melee\/old_work_knife_v004\.glb/);
 assert.doesNotMatch(knifeSource, /dreadstone_sword_v002\.glb/);
 assert.match(knifeSource, /const layer = this\.entry \? COMBAT_KNIFE_WORLD_LAYER : COMBAT_KNIFE_VIEWMODEL_LAYER/);
-assert.match(knifeSource, /object\.layers\.set\(layer\)/);
+assert.match(knifeSource, /applyWeaponRenderLayer/);
+assert.match(weaponVisualAssetSource, /object\.layers\.set\(layer\)/);
 assert.doesNotMatch(knifeSource, /minFilter|magFilter/);
-assert.match(knifeSource, /object\.castShadow = false/);
-assert.match(knifeSource, /object\.frustumCulled = false/);
+assert.match(weaponVisualAssetSource, /object\.castShadow = false/);
+assert.match(weaponVisualAssetSource, /object\.frustumCulled = false/);
+assert.match(knifeSource, /createWeaponPoseWorkspace/);
+assert.match(weaponPoseSource, /rebaseWorldWeaponPoseToCamera/);
+assert.match(knifeSource, /WeaponGestureOwnership/);
+assert.match(weaponGestureSource, /deliberateVelocity/);
+assert.match(knifeSource, /WeaponContactRouter/);
+assert.match(weaponContactRouterSource, /resolveTarget/);
+assert.match(knifeSource, /sweepCuttingEdge/);
+assert.match(sweptCuttingEdgeSource, /sampleCuttingEdgeLocal/);
+assert.match(knifeSource, /disposeOwnedWeaponVisual/);
+assert.match(weaponContactScratchSource, /createWeaponContactScratch/);
 assert.match(knifeSource, /getProjectedActivePoint/);
 assert.match(knifeSource, /contactActivationProvider/);
 assert.match(knifeSource, /deliberateInputVelocity/);

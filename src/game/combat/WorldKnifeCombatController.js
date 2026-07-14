@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { advancePenetrationDepth, clampWorkspacePoint, classifyKnifeContact, classifySlashContact, deriveBladeTip, normalizedBladeForward } from './CombatMath.js';
 import { SLASH_CONFIG } from './CombatStage2Config.js';
@@ -7,6 +6,12 @@ import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedR
 import { CombatDirector } from './CombatDirector.js';
 import { isDamageIntent, MeleeIntentWeapon } from './MeleeIntentWeapon.js';
 import { resolveWeaponMicroResponse, sampleTissueResistanceCurve } from './CombatPresentation.js';
+import { createWeaponContactScratch, getRigidBodyWorldPosition } from './weapons/WeaponContactScratch.js';
+import { WeaponContactRouter } from './weapons/WeaponContactRouter.js';
+import { bindWeaponPointerEvents, DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR, WeaponGestureOwnership } from './weapons/WeaponGestureOwnership.js';
+import { computeCameraRelativeWeaponPose, createWeaponPoseWorkspace, initializeCameraRelativeWeaponPose, rebaseWorldWeaponPoseToCamera } from './weapons/WeaponPoseWorkspace.js';
+import { createCuttingEdgePath, resolveCuttingEdgeSampleCount, sampleCuttingEdgeLocal, sweepCuttingEdge } from './weapons/SweptCuttingEdge.js';
+import { applyWeaponRenderLayer, cloneOwnedWeaponVisual, createCachedWeaponGlbLoader, disposeOwnedWeaponVisual } from './weapons/WeaponVisualAsset.js';
 
 const forwardLocal = new THREE.Vector3(0, 0, -1);
 const knifeBladeHalfWidth = KNIFE_COMBAT_CONFIG.bladeWidth * 0.5;
@@ -14,9 +19,7 @@ const knifeBladeShoulder = KNIFE_COMBAT_CONFIG.bladeLength * 0.78;
 const knifeEdgeHeelLocal = new THREE.Vector3(-knifeBladeHalfWidth, 0, -0.006);
 const knifeEdgeShoulderLocal = new THREE.Vector3(-knifeBladeHalfWidth * 0.92, 0, -knifeBladeShoulder);
 const knifeEdgeTipLocal = new THREE.Vector3(0, 0, -KNIFE_COMBAT_CONFIG.bladeLength);
-const knifeEdgeHeelLength = knifeEdgeHeelLocal.distanceTo(knifeEdgeShoulderLocal);
-const knifeEdgeTipLength = knifeEdgeShoulderLocal.distanceTo(knifeEdgeTipLocal);
-const knifeEdgeLength = knifeEdgeHeelLength + knifeEdgeTipLength;
+const knifeCuttingEdgePath = createCuttingEdgePath([knifeEdgeHeelLocal, knifeEdgeShoulderLocal, knifeEdgeTipLocal]);
 export const COMBAT_KNIFE_VIEWMODEL_LAYER = 1;
 export const COMBAT_KNIFE_WORLD_LAYER = 0;
 export const KNIFE_EDGE_COLLISION_RADIUS = KNIFE_COMBAT_CONFIG.bladeThickness * 0.5;
@@ -25,59 +28,19 @@ export const KNIFE_EDGE_MAX_SAMPLE_COUNT = 9;
 const COMBAT_KNIFE_RENDER_ORDER = 10030;
 export const OLD_WORK_KNIFE_GLB_PATH = './assets/weapons/melee/old_work_knife_v004.glb';
 const SLASH_EXTENSION_DIRECTION_DOT = Math.cos(THREE.MathUtils.degToRad(SLASH_CONFIG.extensionDirectionDegrees));
-const EDGE_CONTACT_TOI_EPSILON = 1e-5;
-let oldWorkKnifeAssetPromise = null;
 let oldWorkKnifeLoadWarningShown = false;
-
-function loadOldWorkKnifeAsset() {
-  if (!oldWorkKnifeAssetPromise) {
-    oldWorkKnifeAssetPromise = new GLTFLoader().loadAsync(OLD_WORK_KNIFE_GLB_PATH).then((gltf) => {
-      const root = gltf.scene ?? gltf.scenes?.[0];
-      if (!root) throw new Error(`Old Work Knife GLB loaded without a scene: ${OLD_WORK_KNIFE_GLB_PATH}`);
-      return root;
-    });
-  }
-  return oldWorkKnifeAssetPromise;
-}
-
-function cloneKnifeVisual(source) {
-  const root = source.clone(true);
-  const geometryClones = new Map();
-  const materialClones = new Map();
-  const cloneGeometry = (geometry) => {
-    if (!geometryClones.has(geometry)) geometryClones.set(geometry, geometry.clone());
-    return geometryClones.get(geometry);
-  };
-  const cloneMaterial = (material) => {
-    if (!materialClones.has(material)) materialClones.set(material, material.clone());
-    return materialClones.get(material);
-  };
-  root.traverse((object) => {
-    if (!object.isMesh) return;
-    if (object.geometry) object.geometry = cloneGeometry(object.geometry);
-    if (object.material) object.material = Array.isArray(object.material) ? object.material.map(cloneMaterial) : cloneMaterial(object.material);
-  });
-  return { root, geometries: [...geometryClones.values()], materials: [...materialClones.values()] };
-}
+const loadOldWorkKnifeAsset = createCachedWeaponGlbLoader(OLD_WORK_KNIFE_GLB_PATH, 'Old Work Knife');
 
 export function sampleKnifeCuttingEdgeLocal(edgeFraction, target = new THREE.Vector3()) {
-  const distance = THREE.MathUtils.clamp(edgeFraction, 0, 1) * knifeEdgeLength;
-  if (distance <= knifeEdgeHeelLength) return target.lerpVectors(knifeEdgeHeelLocal, knifeEdgeShoulderLocal, distance / knifeEdgeHeelLength);
-  return target.lerpVectors(knifeEdgeShoulderLocal, knifeEdgeTipLocal, (distance - knifeEdgeHeelLength) / knifeEdgeTipLength);
+  return sampleCuttingEdgeLocal(knifeCuttingEdgePath, edgeFraction, target);
 }
 
 export function resolveKnifeEdgeSampleCount(previousStart, previousEnd, currentStart, currentEnd, radius = KNIFE_EDGE_COLLISION_RADIUS) {
-  const previousX = previousEnd.x - previousStart.x;
-  const previousY = previousEnd.y - previousStart.y;
-  const previousZ = previousEnd.z - previousStart.z;
-  const currentX = currentEnd.x - currentStart.x;
-  const currentY = currentEnd.y - currentStart.y;
-  const currentZ = currentEnd.z - currentStart.z;
-  const rotationTravel = Math.hypot(currentX - previousX, currentY - previousY, currentZ - previousZ);
-  const maximumGap = Math.max(1e-5, radius * 2);
-  let intervals = KNIFE_EDGE_BASE_SAMPLE_COUNT - 1;
-  while (intervals < KNIFE_EDGE_MAX_SAMPLE_COUNT - 1 && rotationTravel / intervals > maximumGap) intervals *= 2;
-  return Math.min(KNIFE_EDGE_MAX_SAMPLE_COUNT, intervals + 1);
+  return resolveCuttingEdgeSampleCount(previousStart, previousEnd, currentStart, currentEnd, {
+    radius,
+    baseSampleCount: KNIFE_EDGE_BASE_SAMPLE_COUNT,
+    maxSampleCount: KNIFE_EDGE_MAX_SAMPLE_COUNT,
+  });
 }
 
 export function resolveSlashLeadingPart(localMotion) {
@@ -119,6 +82,7 @@ export class WorldKnifeCombatController {
     this.combatRouter = combatRouter;
     this.ownsCombatDirector = combatDirector == null;
     if (feedback) this.combatDirector.setCameraFeedback(feedback);
+    this.weaponContactRouter = new WeaponContactRouter({ combatRouter, fallbackActor: actor, fallbackDirector: this.combatDirector, cameraFeedback: feedback });
     this.contactActivationProvider = contactActivationProvider;
     this.visualAssetLoader = visualAssetLoader;
     this.bindPointerInput = bindPointerInput;
@@ -133,11 +97,22 @@ export class WorldKnifeCombatController {
     this.aimX = 0;
     this.aimY = 0;
     this.desiredExtension = 0;
-    this.gripPointerId = null;
-    this.gripStart = new THREE.Vector2();
-    this.lastGripPoint = new THREE.Vector2();
-    this.lastGripTimeMs = 0;
-    this.deliberateInputVelocity = new THREE.Vector3();
+    this.gestureOwnership = new WeaponGestureOwnership(this.config.workspace);
+    Object.defineProperties(this, {
+      gripPointerId: {
+        configurable: true,
+        get: () => this.gestureOwnership.pointerId,
+        set: (value) => { this.gestureOwnership.pointerId = value; },
+      },
+      lastGripTimeMs: {
+        configurable: true,
+        get: () => this.gestureOwnership.lastTimeMs,
+        set: (value) => { this.gestureOwnership.lastTimeMs = value; },
+      },
+    });
+    this.gripStart = this.gestureOwnership.startPoint;
+    this.lastGripPoint = this.gestureOwnership.lastPoint;
+    this.deliberateInputVelocity = this.gestureOwnership.deliberateVelocity;
     this.offensiveVelocity = new THREE.Vector3();
     this.totalWorldVelocity = new THREE.Vector3();
     this.attackEnabled = false;
@@ -163,38 +138,9 @@ export class WorldKnifeCombatController {
     this.edgeEnd = new THREE.Vector3();
     this.previousEdgeStart = new THREE.Vector3();
     this.previousEdgeEnd = new THREE.Vector3();
-    this.poseLocal = new THREE.Vector3();
-    this.poseEuler = new THREE.Euler(0, 0, 0, 'YXZ');
-    this.poseQuaternion = new THREE.Quaternion();
-    this.cameraRebaseDelta = new THREE.Matrix4();
-    this.cameraRebaseInverse = new THREE.Matrix4();
-    this.cameraRebaseRotation = new THREE.Quaternion();
-    this.slashScratch = {
-      prospectiveTip: new THREE.Vector3(),
-      travel: new THREE.Vector3(),
-      forward: new THREE.Vector3(),
-      movementDirection: new THREE.Vector3(),
-      offensiveSweepStart: new THREE.Vector3(),
-      contactPoint: new THREE.Vector3(),
-      contactNormal: new THREE.Vector3(),
-      prospectiveEdgeStart: new THREE.Vector3(),
-      prospectiveEdgeEnd: new THREE.Vector3(),
-      edgeSampleLocal: new THREE.Vector3(),
-      edgeSamplePrevious: new THREE.Vector3(),
-      edgeSampleCurrent: new THREE.Vector3(),
-      selectedEdgePrevious: new THREE.Vector3(),
-      selectedEdgeCurrent: new THREE.Vector3(),
-      edgeMotion: new THREE.Vector3(),
-      point: new THREE.Vector3(),
-      normal: new THREE.Vector3(),
-      direction: new THREE.Vector3(),
-      localMotion: new THREE.Vector3(),
-      bodyCenter: new THREE.Vector3(),
-      correction: new THREE.Vector3(),
-      impulse: new THREE.Vector3(),
-      inverseQuaternion: new THREE.Quaternion(),
-      edgeContact: { hit: null, toi: Infinity, sampleT: 0.5, anchorDistance: Infinity },
-    };
+    this.poseWorkspace = createWeaponPoseWorkspace();
+    this.poseQuaternion = this.poseWorkspace.localQuaternion;
+    this.slashScratch = createWeaponContactScratch();
     this.slashState = {
       actor: null,
       director: null,
@@ -229,6 +175,22 @@ export class WorldKnifeCombatController {
       if (this.activeSlash?.directorInteractionId === directedInteraction.id) this.activeSlash.woundId = wound?.id ?? null;
     };
     this.combatColliderFilter = (collider) => this.ownsCombatCollider(collider);
+    this.edgeSweepRequest = {
+      edgePath: knifeCuttingEdgePath,
+      previousPosition: this.previousGrip,
+      previousQuaternion: this.previousQuaternion,
+      currentPosition: this.actualGrip,
+      currentQuaternion: this.actualQuaternion,
+      previousStart: this.previousEdgeStart,
+      previousEnd: this.previousEdgeEnd,
+      radius: KNIFE_EDGE_COLLISION_RADIUS,
+      baseSampleCount: KNIFE_EDGE_BASE_SAMPLE_COUNT,
+      maxSampleCount: KNIFE_EDGE_MAX_SAMPLE_COUNT,
+      physics: this.physics,
+      colliderFilter: this.combatColliderFilter,
+      stableAnchorT: 0.5,
+      scratch: this.slashScratch.edgeSweep,
+    };
     this.entry = null;
     this.activeSlash = null;
     this.lastContactPart = 'none';
@@ -238,6 +200,24 @@ export class WorldKnifeCombatController {
     this.maximumDepthReached = 0;
     this.contactNormal = new THREE.Vector3();
     this.lastSweep = { from: new THREE.Vector3(), to: new THREE.Vector3() };
+    this.poseRebasePositions = [this.actualGrip, this.previousGrip, this.desiredGrip, this.currentTip, this.previousTip, this.desiredTip, this.edgeStart, this.edgeEnd, this.previousEdgeStart, this.previousEdgeEnd, this.lastSweep.from, this.lastSweep.to];
+    this.poseRebaseQuaternions = [this.actualQuaternion, this.previousQuaternion, this.desiredQuaternion];
+    this.poseRebaseRequest = { camera: this.camera, poseWorkspace: this.poseWorkspace, anchored: false, positions: this.poseRebasePositions, quaternions: this.poseRebaseQuaternions };
+    this.desiredPoseRequest = {
+      camera: this.camera,
+      workspace: this.config.workspace,
+      poseWorkspace: this.poseWorkspace,
+      aimX: 0,
+      aimY: 0,
+      extension: 0,
+      pitchFromAimY: 0.34,
+      yawFromAimX: -0.34,
+      rollFromAimX: -0.12,
+      tipLength: this.config.bladeLength,
+      desiredGrip: this.desiredGrip,
+      desiredQuaternion: this.desiredQuaternion,
+      desiredTip: this.desiredTip,
+    };
     this.lastFrameVelocity = 0;
     this.visibleCollisionError = 0;
     this.maximumPresentationOffset = 0;
@@ -281,10 +261,9 @@ export class WorldKnifeCombatController {
     this.applyVisualDepthMode();
     this.scene.add(this.visual);
     this.visualLoadPromise = this.visualAssetLoader().then((source) => {
-      const visual = cloneKnifeVisual(source);
+      const visual = cloneOwnedWeaponVisual(source);
       if (this.disposed) {
-        visual.geometries.forEach((geometry) => geometry.dispose());
-        visual.materials.forEach((material) => material.dispose());
+        disposeOwnedWeaponVisual(visual);
         return 'disposed';
       }
       visual.root.name = 'old-work-knife-glb-visual';
@@ -344,16 +323,13 @@ export class WorldKnifeCombatController {
 
   applyVisualDepthMode() {
     const layer = this.entry ? COMBAT_KNIFE_WORLD_LAYER : COMBAT_KNIFE_VIEWMODEL_LAYER;
-    this.visual.traverse((object) => {
-      object.layers.set(layer);
-      if (!object.isMesh) return;
-      object.renderOrder = this.entry ? 0 : COMBAT_KNIFE_RENDER_ORDER;
-      object.castShadow = false;
-      object.receiveShadow = false;
-      object.frustumCulled = false;
-      object.userData.itemId = this.config.itemId;
-      object.userData.combatWeaponPart = object.name;
-      object.userData.combatKnifeViewmodel = !this.entry;
+    const viewmodel = !this.entry;
+    applyWeaponRenderLayer(this.visual, {
+      layer,
+      renderOrder: viewmodel ? COMBAT_KNIFE_RENDER_ORDER : 0,
+      itemId: this.config.itemId,
+      viewmodel,
+      configureMesh: (object) => { object.userData.combatKnifeViewmodel = viewmodel; },
     });
   }
 
@@ -403,71 +379,39 @@ export class WorldKnifeCombatController {
   }
 
   initializePose() {
-    this.camera.updateMatrixWorld(true);
-    this.lastCameraWorldMatrix = new THREE.Matrix4().copy(this.camera.matrixWorld);
-    const local = this.poseLocal.fromArray(this.config.workspace.ready);
-    this.actualGrip.copy(local);
-    this.camera.localToWorld(this.actualGrip);
-    this.desiredGrip.copy(this.actualGrip);
-    this.previousGrip.copy(this.actualGrip);
-    this.camera.getWorldQuaternion(this.actualQuaternion);
-    this.previousQuaternion.copy(this.actualQuaternion);
-    this.desiredQuaternion.copy(this.actualQuaternion);
+    initializeCameraRelativeWeaponPose({
+      camera: this.camera,
+      workspace: this.config.workspace,
+      poseWorkspace: this.poseWorkspace,
+      actualGrip: this.actualGrip,
+      previousGrip: this.previousGrip,
+      desiredGrip: this.desiredGrip,
+      actualQuaternion: this.actualQuaternion,
+      previousQuaternion: this.previousQuaternion,
+      desiredQuaternion: this.desiredQuaternion,
+    });
     this.updateDerivedPose(true);
     this.lastSweep.from.copy(this.currentTip);
     this.lastSweep.to.copy(this.currentTip);
   }
 
   rebaseFreeWeaponToCamera() {
-    this.camera.updateMatrixWorld(true);
-    if (!this.lastCameraWorldMatrix) {
-      this.lastCameraWorldMatrix = new THREE.Matrix4().copy(this.camera.matrixWorld);
-      return;
-    }
-    const delta = this.cameraRebaseDelta.copy(this.camera.matrixWorld).multiply(this.cameraRebaseInverse.copy(this.lastCameraWorldMatrix).invert());
-    this.lastCameraWorldMatrix.copy(this.camera.matrixWorld);
-    if (this.entry) return;
-    const rotationDelta = this.cameraRebaseRotation.setFromRotationMatrix(delta);
-    this.actualGrip.applyMatrix4(delta);
-    this.previousGrip.applyMatrix4(delta);
-    this.desiredGrip.applyMatrix4(delta);
-    this.currentTip.applyMatrix4(delta);
-    this.previousTip.applyMatrix4(delta);
-    this.desiredTip.applyMatrix4(delta);
-    this.edgeStart.applyMatrix4(delta);
-    this.edgeEnd.applyMatrix4(delta);
-    this.previousEdgeStart.applyMatrix4(delta);
-    this.previousEdgeEnd.applyMatrix4(delta);
-    this.actualQuaternion.premultiply(rotationDelta).normalize();
-    this.previousQuaternion.premultiply(rotationDelta).normalize();
-    this.desiredQuaternion.premultiply(rotationDelta).normalize();
-    this.lastSweep.from.applyMatrix4(delta);
-    this.lastSweep.to.applyMatrix4(delta);
+    this.poseRebaseRequest.anchored = Boolean(this.entry);
+    rebaseWorldWeaponPoseToCamera(this.poseRebaseRequest);
   }
 
   bindInput() {
-    const down = (event) => this.pointerDown(event);
-    const move = (event) => this.pointerMove(event);
-    const end = (event) => this.pointerEnd(event);
-    this.viewport?.addEventListener?.('pointerdown', down, { passive: false, capture: true });
-    this.viewport?.addEventListener?.('pointermove', move, { passive: false, capture: true });
-    this.viewport?.addEventListener?.('pointerup', end, { passive: false, capture: true });
-    this.viewport?.addEventListener?.('pointercancel', end, { passive: false, capture: true });
-    const cancel = () => this.cancel('app-suspended');
-    document.addEventListener('visibilitychange', cancel);
-    window.addEventListener('pagehide', cancel);
-    this.disposers.push(
-      () => this.viewport?.removeEventListener?.('pointerdown', down, { capture: true }),
-      () => this.viewport?.removeEventListener?.('pointermove', move, { capture: true }),
-      () => this.viewport?.removeEventListener?.('pointerup', end, { capture: true }),
-      () => this.viewport?.removeEventListener?.('pointercancel', end, { capture: true }),
-      () => document.removeEventListener('visibilitychange', cancel),
-      () => window.removeEventListener('pagehide', cancel),
-    );
+    this.disposers.push(bindWeaponPointerEvents({
+      viewport: this.viewport,
+      onPointerDown: (event) => this.pointerDown(event),
+      onPointerMove: (event) => this.pointerMove(event),
+      onPointerEnd: (event) => this.pointerEnd(event),
+      onSuspend: () => this.cancel('app-suspended'),
+    }));
   }
 
   pointerDown(event) {
-    if (this.gripPointerId != null || !this.isEquipped() || event.target?.closest?.('button,[data-control="move"],[data-control="look"],[data-equipment-panel]')) return;
+    if (this.gripPointerId != null || !this.isEquipped() || event.target?.closest?.(DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR)) return;
     if (!this.projectGrabHit(event.clientX, event.clientY, this.viewport)) return;
     event.preventDefault();
     event.stopImmediatePropagation?.();
@@ -496,43 +440,28 @@ export class WorldKnifeCombatController {
 
   acquireGrip(pointerId, clientX, clientY, timeMs = performance.now()) {
     if (this.gripPointerId != null || !this.isEquipped()) return false;
-    this.gripPointerId = pointerId;
-    this.gripStart.set(clientX, clientY);
-    this.lastGripPoint.set(clientX, clientY);
-    this.lastGripTimeMs = timeMs;
-    this.deliberateInputVelocity.set(0, 0, 0);
+    if (!this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
     this.state = this.entry ? KNIFE_CONTROL_STATES.embedded : KNIFE_CONTROL_STATES.gripped;
     this.reason = 'thumb-grip-acquired';
     return true;
   }
 
   applyGripGesture(pointerId, deltaX, deltaY, clientX, clientY, timeMs = performance.now()) {
-    if (pointerId !== this.gripPointerId) return false;
-    const dt = Math.max(0.008, Math.min(0.08, (timeMs - this.lastGripTimeMs) / 1000 || 1 / 60));
-    const stepX = clientX - this.lastGripPoint.x;
-    const stepY = clientY - this.lastGripPoint.y;
     const previousExtension = this.desiredExtension;
-    this.aimX = THREE.MathUtils.clamp(deltaX * this.config.workspace.lateralSensitivity, -1, 1);
-    this.aimY = THREE.MathUtils.clamp(-deltaY * this.config.workspace.verticalSensitivity, -1, 1);
-    this.desiredExtension = THREE.MathUtils.clamp(-deltaY * this.config.workspace.thrustSensitivity, 0, this.config.workspace.thrustDistance);
-    this.deliberateInputVelocity.set(
-      stepX * this.config.workspace.lateralSensitivity * this.config.workspace.lateralReach / dt,
-      -stepY * this.config.workspace.verticalSensitivity * this.config.workspace.verticalReach / dt,
-      -(this.desiredExtension - previousExtension) / dt,
-    );
-    this.lastGripPoint.set(clientX, clientY);
-    this.lastGripTimeMs = timeMs;
-    const intentionalTravel = Math.hypot(deltaX, deltaY);
+    const sample = this.gestureOwnership.update(pointerId, deltaX, deltaY, clientX, clientY, timeMs, previousExtension);
+    if (!sample) return false;
+    this.aimX = sample.aimX;
+    this.aimY = sample.aimY;
+    this.desiredExtension = sample.extension;
     if (this.entry) this.state = KNIFE_CONTROL_STATES.embedded;
-    else this.state = intentionalTravel >= 4 ? KNIFE_CONTROL_STATES.attacking : KNIFE_CONTROL_STATES.gripped;
+    else this.state = sample.intentionalTravel >= 4 ? KNIFE_CONTROL_STATES.attacking : KNIFE_CONTROL_STATES.gripped;
     this.reason = this.entry ? 'grip-owned-embedded-manipulation' : this.state === KNIFE_CONTROL_STATES.attacking ? 'grip-owned-deliberate-attack' : 'thumb-gripped';
     return true;
   }
 
   releaseGrip(reason = 'pointer-release') {
     if (this.gripPointerId == null && !this.entry && this.state === KNIFE_CONTROL_STATES.ready) return;
-    this.gripPointerId = null;
-    this.deliberateInputVelocity.set(0, 0, 0);
+    this.gestureOwnership.release();
     this.attackEnabled = false;
     this.offensiveVelocity.set(0, 0, 0);
     if (this.entry) this.entry.plantedDesiredGrip.copy(this.desiredGrip);
@@ -554,21 +483,15 @@ export class WorldKnifeCombatController {
   }
 
   ownsCombatCollider(collider) {
-    return this.combatRouter?.ownsCollider?.(collider) ?? this.actor?.colliderRegions?.has?.(collider?.handle) ?? false;
+    return this.weaponContactRouter.ownsCollider(collider);
   }
 
   resolveCombatTarget(collider, worldPoint) {
-    const routed = this.combatRouter?.resolveCollider?.(collider, worldPoint);
-    if (routed) {
-      if (this.feedback) routed.director.setCameraFeedback?.(this.feedback);
-      return routed;
-    }
-    const hit = this.actor?.resolveHit?.(collider, worldPoint);
-    return hit ? { actor: this.actor, director: this.combatDirector, hit } : null;
+    return this.weaponContactRouter.resolveTarget(collider, worldPoint);
   }
 
   updateInput(dt) {
-    this.deliberateInputVelocity.multiplyScalar(Math.exp(-18 * dt));
+    this.gestureOwnership.decayDeliberateVelocity(dt);
     if (this.state !== KNIFE_CONTROL_STATES.returning) return;
     this.returnElapsed += dt;
     const progress = THREE.MathUtils.clamp(this.returnElapsed / Math.max(0.001, this.returnDuration), 0, 1);
@@ -587,20 +510,10 @@ export class WorldKnifeCombatController {
   }
 
   computeDesiredPose() {
-    const workspace = this.config.workspace;
-    const local = this.poseLocal.set(
-      workspace.ready[0] + this.aimX * workspace.lateralReach,
-      workspace.ready[1] + this.aimY * workspace.verticalReach,
-      workspace.ready[2] - this.desiredExtension,
-    );
-    clampWorkspacePoint(local, workspace);
-    this.camera.updateMatrixWorld(true);
-    this.desiredGrip.copy(local);
-    this.camera.localToWorld(this.desiredGrip);
-    this.camera.getWorldQuaternion(this.desiredQuaternion);
-    this.poseQuaternion.setFromEuler(this.poseEuler.set(this.aimY * 0.34, -this.aimX * 0.34, -this.aimX * 0.12));
-    this.desiredQuaternion.multiply(this.poseQuaternion).normalize();
-    deriveBladeTip(this.desiredGrip, this.desiredQuaternion, this.config.bladeLength, this.desiredTip);
+    this.desiredPoseRequest.aimX = this.aimX;
+    this.desiredPoseRequest.aimY = this.aimY;
+    this.desiredPoseRequest.extension = this.desiredExtension;
+    computeCameraRelativeWeaponPose(this.desiredPoseRequest);
   }
 
   beforePhysics(dt) {
@@ -710,49 +623,22 @@ export class WorldKnifeCombatController {
 
   resolveSweptEdgeContact(dt) {
     const scratch = this.slashScratch;
-    const prospectiveStart = scratch.prospectiveEdgeStart.copy(knifeEdgeHeelLocal).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
-    const prospectiveEnd = scratch.prospectiveEdgeEnd.copy(knifeEdgeTipLocal).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
-    const sampleCount = resolveKnifeEdgeSampleCount(this.previousEdgeStart, this.previousEdgeEnd, prospectiveStart, prospectiveEnd);
-    const contact = scratch.edgeContact;
     const stableAnchorT = this.activeSlash?.edgeAnchorT ?? 0.5;
-    contact.hit = null;
-    contact.toi = Infinity;
-    contact.sampleT = 0.5;
-    contact.anchorDistance = Infinity;
-    this.lastEdgeSampleCount = sampleCount;
-    const positionsPrepared = this.physics.prepareWeaponSweepBatch?.() === true;
-    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
-      const sampleT = sampleIndex / (sampleCount - 1);
-      sampleKnifeCuttingEdgeLocal(sampleT, scratch.edgeSampleLocal);
-      const samplePrevious = scratch.edgeSamplePrevious.copy(scratch.edgeSampleLocal).applyQuaternion(this.previousQuaternion).add(this.previousGrip);
-      const sampleCurrent = scratch.edgeSampleCurrent.copy(scratch.edgeSampleLocal).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
-      if (samplePrevious.distanceToSquared(sampleCurrent) < 1e-8) continue;
-      const sampleHit = this.physics.castWeaponTip(samplePrevious, sampleCurrent, KNIFE_EDGE_COLLISION_RADIUS, this.combatColliderFilter, positionsPrepared);
-      if (!sampleHit?.collider) continue;
-      const toi = THREE.MathUtils.clamp(sampleHit.time_of_impact ?? 0, 0, 1);
-      const anchorDistance = Math.abs(sampleT - stableAnchorT);
-      const earlier = toi < contact.toi - EDGE_CONTACT_TOI_EPSILON;
-      const sameTimeStableAnchor = Math.abs(toi - contact.toi) <= EDGE_CONTACT_TOI_EPSILON && anchorDistance < contact.anchorDistance;
-      if (!earlier && !sameTimeStableAnchor) continue;
-      contact.hit = sampleHit;
-      contact.toi = toi;
-      contact.sampleT = sampleT;
-      contact.anchorDistance = anchorDistance;
-      scratch.selectedEdgePrevious.copy(samplePrevious);
-      scratch.selectedEdgeCurrent.copy(sampleCurrent);
-    }
+    this.edgeSweepRequest.stableAnchorT = stableAnchorT;
+    const contact = sweepCuttingEdge(this.edgeSweepRequest);
+    this.lastEdgeSampleCount = contact.sampleCount;
     const hit = contact.hit;
     if (!hit) return false;
     const point = hit.witness1
       ? scratch.point.set(hit.witness1.x, hit.witness1.y, hit.witness1.z)
-      : scratch.point.copy(scratch.selectedEdgePrevious).lerp(scratch.selectedEdgeCurrent, contact.toi);
+      : scratch.point.copy(scratch.edgeSweep.selectedPrevious).lerp(scratch.edgeSweep.selectedCurrent, contact.toi);
     const routedTarget = this.resolveCombatTarget(hit.collider, point);
     if (!routedTarget) return false;
     const { hit: semanticHit, actor: targetActor, director: targetDirector } = routedTarget;
     const normal = hit.normal1
       ? scratch.normal.set(hit.normal1.x, hit.normal1.y, hit.normal1.z).normalize()
       : scratch.normal.copy(point).sub(this.getBodyCenter(semanticHit.body, scratch.bodyCenter)).normalize();
-    const edgeMotion = scratch.edgeMotion.subVectors(scratch.selectedEdgeCurrent, scratch.selectedEdgePrevious);
+    const edgeMotion = scratch.edgeMotion.subVectors(scratch.edgeSweep.selectedCurrent, scratch.edgeSweep.selectedPrevious);
     const direction = scratch.direction.copy(this.offensiveVelocity.lengthSq() > 1e-8 ? this.offensiveVelocity : edgeMotion).normalize();
     const localMotion = scratch.localMotion.copy(direction).applyQuaternion(scratch.inverseQuaternion.copy(this.actualQuaternion).invert());
     const lateralLead = Math.abs(localMotion.x);
@@ -905,8 +791,7 @@ export class WorldKnifeCombatController {
   }
 
   getBodyCenter(body, target = new THREE.Vector3()) {
-    const translation = body.translation();
-    return target.set(translation.x, translation.y, translation.z);
+    return getRigidBodyWorldPosition(body, target);
   }
 
   releaseSlashContact(dt, interrupted) {
@@ -1306,7 +1191,7 @@ export class WorldKnifeCombatController {
     this.state = KNIFE_CONTROL_STATES.ready;
     this.contactState = 'no_contact';
     this.reason = reason;
-    this.gripPointerId = null;
+    this.gestureOwnership.release();
     this.attackEnabled = false;
     this.deliberateInputVelocity.set(0, 0, 0);
     this.offensiveVelocity.set(0, 0, 0);
@@ -1395,12 +1280,10 @@ export class WorldKnifeCombatController {
     this.cancel('disposed');
     this.disposers.forEach((dispose) => dispose());
     this.disposers = [];
-    this.visualGeometries.forEach((geometry) => geometry.dispose());
+    disposeOwnedWeaponVisual({ root: this.visual, geometries: this.visualGeometries, materials: this.materials });
     this.visualGeometries = [];
-    this.materials.forEach((entry) => entry.dispose());
     this.materials = [];
     this.debugRoot.traverse((object) => { object.geometry?.dispose?.(); object.material?.dispose?.(); });
-    this.visual.removeFromParent();
     this.debugRoot.removeFromParent();
     if (this.ownsCombatDirector) this.combatDirector.dispose();
   }
