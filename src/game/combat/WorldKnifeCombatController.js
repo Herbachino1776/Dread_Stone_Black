@@ -13,6 +13,8 @@ const edgeLocalB = new THREE.Vector3(-KNIFE_COMBAT_CONFIG.bladeWidth * 0.5, 0, -
 const tmpVector = new THREE.Vector3();
 const tmpVectorB = new THREE.Vector3();
 const tmpQuaternion = new THREE.Quaternion();
+export const COMBAT_KNIFE_VIEWMODEL_LAYER = 1;
+const COMBAT_KNIFE_RENDER_ORDER = 10030;
 
 export function resolveSlashLeadingPart(localMotion) {
   const lateralLead = Math.abs(localMotion.x);
@@ -184,7 +186,17 @@ export class WorldKnifeCombatController {
     pommel.name = 'old-work-knife-pommel';
     pommel.position.z = this.config.handleLength - pommelRadius;
     this.visual.add(pommel);
-    this.visual.traverse((object) => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; object.userData.itemId = this.config.itemId; object.userData.combatWeaponPart = object.name; } });
+    this.visual.traverse((object) => {
+      object.layers.set(COMBAT_KNIFE_VIEWMODEL_LAYER);
+      if (!object.isMesh) return;
+      object.renderOrder = COMBAT_KNIFE_RENDER_ORDER;
+      object.castShadow = false;
+      object.receiveShadow = false;
+      object.frustumCulled = false;
+      object.userData.itemId = this.config.itemId;
+      object.userData.combatWeaponPart = object.name;
+      object.userData.combatKnifeViewmodel = true;
+    });
     this.scene.add(this.visual);
   }
 

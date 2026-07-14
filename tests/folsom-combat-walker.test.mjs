@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { CollisionWorld } from '../src/game/Collision.js';
-import { FOLSOM_COMBAT_FOOTPRINT, FOLSOM_RAPIER_SUPPORT, FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
+import { FOLSOM_COMBAT_FOOTPRINT, FOLSOM_ENEMY_WAVE_CONFIG, FOLSOM_RAPIER_SUPPORT, FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { WALKER_STATES } from '../src/game/combat/CombatLabWalkerController.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import { MELEE_INTENTS } from '../src/game/combat/MeleeIntentWeapon.js';
@@ -230,6 +230,43 @@ test('dying Folsom walker releases player and combat collision immediately', asy
   assert.equal(encounter.getActiveCombatActors().includes(actor), false);
   assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);
   assert.equal(collision.blockerRects.includes(blocker), false);
+  encounter.dispose();
+});
+
+test('two dead enemies fade-despawn at ten seconds and a fresh wave of two returns two seconds later', async () => {
+  const { encounter } = await createEncounter();
+  const stationaryActor = encounter.actor;
+  const firstWalkerInstanceId = encounter.walkerController.actor.instanceId;
+  encounter.stationaryDeathController.forceQualifyingStab('upper_chest');
+  encounter.stationaryDeathController.forceQualifyingStab('abdomen');
+  encounter.walkerController.forceQualifyingStab();
+  encounter.walkerController.forceQualifyingStab();
+
+  assert.equal(FOLSOM_ENEMY_WAVE_CONFIG.corpseDespawnSeconds, 10);
+  assert.equal(FOLSOM_ENEMY_WAVE_CONFIG.respawnDelaySeconds, 2);
+  for (let frame = 0; frame < 190; frame += 1) encounter.updateEnemyWaveLifecycle(0.05);
+  assert.ok(encounter.enemyWaveCorpses.stationary.opacity > 0.49 && encounter.enemyWaveCorpses.stationary.opacity < 0.51);
+  assert.ok(encounter.enemyWaveCorpses.walker.opacity > 0.49 && encounter.enemyWaveCorpses.walker.opacity < 0.51);
+  assert.equal(encounter.enemyWaveCorpses.stationary.despawned, false);
+  assert.equal(encounter.enemyWaveCorpses.walker.despawned, false);
+
+  for (let frame = 0; frame < 10; frame += 1) encounter.updateEnemyWaveLifecycle(0.05);
+  assert.equal(encounter.enemyWaveCorpses.stationary.despawned, true);
+  assert.equal(encounter.enemyWaveCorpses.walker.despawned, true);
+  assert.equal(stationaryActor.root.visible, false);
+  assert.equal(encounter.walkerController.actor?.instanceId ?? null, null);
+
+  for (let frame = 0; frame < 39; frame += 1) encounter.updateEnemyWaveLifecycle(0.05);
+  assert.equal(encounter.walkerController.actor?.instanceId ?? null, null);
+  encounter.updateEnemyWaveLifecycle(0.05);
+  assert.equal(encounter.waveGeneration, 2);
+  assert.equal(stationaryActor.root.visible, true);
+  assert.ok(encounter.walkerController.actor);
+  assert.notEqual(encounter.walkerController.actor.instanceId, firstWalkerInstanceId);
+  assert.equal(encounter.getActiveCombatActors().length, 2);
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
+  assert.equal(encounter.enemyWaveCorpses.stationary.started, false);
+  assert.equal(encounter.enemyWaveCorpses.walker.started, false);
   encounter.dispose();
 });
 

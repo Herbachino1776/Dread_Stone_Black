@@ -11,7 +11,7 @@ import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
-import { WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveSlashLeadingPart } from '../src/game/combat/WorldKnifeCombatController.js';
+import { COMBAT_KNIFE_VIEWMODEL_LAYER, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveSlashLeadingPart } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
 import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveAnimationPackManifest, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
@@ -845,6 +845,12 @@ test('one authoritative knife root keeps identity, scale, pose, ownership, and s
   const equipment = { getEquippedToolId: () => 'old_work_knife', hasItem: () => true };
   let contactRange = false;
   const knife = new WorldKnifeCombatController({ app: viewport, scene, camera, actor, physics, equipmentRuntime: equipment, bindPointerInput: false, contactActivationProvider: () => contactRange });
+  const knifeMeshes = [];
+  knife.visual.traverse((object) => { if (object.isMesh) knifeMeshes.push(object); });
+  assert.ok(knifeMeshes.length > 0);
+  assert.ok(knifeMeshes.every((mesh) => mesh.layers.mask === 1 << COMBAT_KNIFE_VIEWMODEL_LAYER), 'knife renders only in the depth-cleared viewmodel pass');
+  assert.ok(knifeMeshes.every((mesh) => mesh.castShadow === false && mesh.receiveShadow === false && mesh.frustumCulled === false), 'camera motion cannot introduce world-shadow shimmer or near-frustum flicker');
+  assert.ok(knifeMeshes.every((mesh) => mesh.renderOrder === 10030));
   knife.afterPhysics();
   const identity = knife.visual.id;
   const scale = knife.visual.scale.clone();

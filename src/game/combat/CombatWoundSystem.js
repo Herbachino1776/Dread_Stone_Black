@@ -97,6 +97,7 @@ export class CombatWoundSystem {
     this.ownedMaterials = new Map();
     if (this.isolateMaterials) this.decalLibrary.materialsById.forEach((sourceMaterial) => this.ownedMaterials.set(sourceMaterial, cloneBloodChromaMaterial(sourceMaterial)));
     this.fadePrepared = false;
+    this.fadeMaterialBaselines = new Map();
     this.bluntMaterial = new THREE.MeshStandardMaterial({ color: 0x372229, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     this.failedProjectionCount = 0;
     this.fallbackUsageCount = 0;
@@ -923,6 +924,7 @@ export class CombatWoundSystem {
     if (!this.isolateMaterials || this.fadePrepared) return;
     this.fadePrepared = true;
     [this.bluntMaterial, ...this.ownedMaterials.values()].forEach((material) => {
+      this.fadeMaterialBaselines.set(material, { opacity: material.opacity, transparent: material.transparent, depthWrite: material.depthWrite });
       material.transparent = true;
       material.depthWrite = false;
     });
@@ -936,12 +938,24 @@ export class CombatWoundSystem {
     this.ownedMaterials.forEach((material) => { material.opacity = value; });
   }
 
+  resetFade() {
+    this.fadeMaterialBaselines.forEach((baseline, material) => {
+      material.opacity = baseline.opacity;
+      material.transparent = baseline.transparent;
+      material.depthWrite = baseline.depthWrite;
+      material.needsUpdate = true;
+    });
+    this.fadeMaterialBaselines.clear();
+    this.fadePrepared = false;
+  }
+
   dispose() {
     this.clear();
     this.visualSlots.forEach((slot) => { slot.puncture.geometry.dispose(); slot.slash.geometry.dispose(); slot.puncture.removeFromParent(); slot.slash.removeFromParent(); });
     this.bluntMaterial.dispose();
     this.ownedMaterials.forEach((material) => material.dispose());
     this.ownedMaterials.clear();
+    this.fadeMaterialBaselines.clear();
     this.surfaceDebugRoot.traverse((object) => { object.geometry?.dispose?.(); object.material?.dispose?.(); });
     this.surfaceDebugRoot.removeFromParent();
     this.visualSlots = [];

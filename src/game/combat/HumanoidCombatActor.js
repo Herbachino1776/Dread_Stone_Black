@@ -903,6 +903,7 @@ export class HumanoidCombatActor {
 
   reset() {
     if (this.disposed) return;
+    this.woundSystem.resetFade?.();
     this.woundSystem.clear();
     this.disposePhysicalBody();
     this.regionState.clear();

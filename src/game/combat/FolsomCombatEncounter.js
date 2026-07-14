@@ -38,6 +38,16 @@ export const FOLSOM_WALKER_CONFIG = Object.freeze({
   spawnCandidateCount: 12,
 });
 
+export const FOLSOM_ENEMY_WAVE_CONFIG = Object.freeze({
+  size: 2,
+  corpseDespawnSeconds: 10,
+  corpseFadeSeconds: 1,
+  respawnDelaySeconds: 2,
+});
+
+const DEATH_STATES = new Set([WALKER_STATES.losingConsciousness, WALKER_STATES.grounded]);
+const createCorpseLifecycle = () => ({ started: false, elapsed: 0, opacity: 1, despawned: false, actorInstanceId: null });
+
 const isInsideBounds = (position, bounds, margin = 0) => Boolean(position
   && position.x >= bounds.minX + margin
   && position.x <= bounds.maxX - margin
@@ -78,7 +88,7 @@ export class FolsomCombatEncounter {
     this.groundY = Number.isFinite(sampledGround?.y) ? sampledGround.y : 0.16;
     const spawnOffset = new THREE.Vector3(this.spawnPosition.x, this.groundY, this.spawnPosition.z + 3.55);
     const spawnYaw = Math.atan2(this.playerSpawn.x - this.spawnPosition.x, this.playerSpawn.z - this.spawnPosition.z);
-    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw, visualProfile: this.modelProfile, mortalityMode: resolveCombatMortalityMode(), automaticMortality: false, eventSink: (event, payload) => this.handleStationaryCombatEvent(event, payload) });
+    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw, visualProfile: this.modelProfile, mortalityMode: resolveCombatMortalityMode(), automaticMortality: false, isolateVisualMaterials: true, eventSink: (event, payload) => this.handleStationaryCombatEvent(event, payload) });
     this.actor.root.name = 'folsom-testman-combat-subject';
     this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: 'folsom-testman-combat-player-blocker' });
     this.meleeSpacing = this.applyActorMeleeSpacing(this.playerBlocker);
@@ -109,6 +119,8 @@ export class FolsomCombatEncounter {
       beforeActorDisposal: (actor, reason) => this.weaponController?.cancelTarget?.(actor, reason),
     });
     this.walkerController.prepareFrame(0, this.player);
+    this.waveGeneration = 1;
+    this.resetEnemyWaveLifecycle();
     this.priorityCombatActor = this.getPriorityCombatActor(this.player);
     this.combatActiveActor = null;
   }
@@ -255,6 +267,80 @@ export class FolsomCombatEncounter {
     this.weaponController = controller;
   }
 
+  resetEnemyWaveLifecycle() {
+    this.enemyWaveCorpses = {
+      stationary: createCorpseLifecycle(),
+      walker: createCorpseLifecycle(),
+    };
+    this.waveRespawnElapsed = 0;
+  }
+
+  setCorpseOpacity(actor, bloodEffects, opacity) {
+    if (!actor) return;
+    const value = THREE.MathUtils.clamp(Number(opacity) || 0, 0, 1);
+    actor.visualAdapter?.setOpacity?.(value);
+    actor.woundSystem?.setOpacity?.(value);
+    bloodEffects?.setOpacity?.(value);
+  }
+
+  advanceCorpseLifecycle(slot, actor, state, bloodEffects, onDespawn, deltaSeconds) {
+    if (!slot || slot.despawned || !actor || !DEATH_STATES.has(state)) return;
+    if (!slot.started) {
+      slot.started = true;
+      slot.actorInstanceId = actor.instanceId;
+    }
+    slot.elapsed += Math.max(0, Number(deltaSeconds) || 0);
+    const fadeStart = FOLSOM_ENEMY_WAVE_CONFIG.corpseDespawnSeconds - FOLSOM_ENEMY_WAVE_CONFIG.corpseFadeSeconds;
+    slot.opacity = slot.elapsed <= fadeStart
+      ? 1
+      : 1 - THREE.MathUtils.clamp((slot.elapsed - fadeStart) / FOLSOM_ENEMY_WAVE_CONFIG.corpseFadeSeconds, 0, 1);
+    this.setCorpseOpacity(actor, bloodEffects, slot.opacity);
+    if (slot.elapsed < FOLSOM_ENEMY_WAVE_CONFIG.corpseDespawnSeconds) return;
+    slot.opacity = 0;
+    slot.despawned = true;
+    this.setCorpseOpacity(actor, bloodEffects, 0);
+    actor.root.visible = false;
+    onDespawn?.();
+  }
+
+  updateEnemyWaveLifecycle(deltaSeconds) {
+    const dt = Math.max(0, Math.min(0.05, Number(deltaSeconds) || 0));
+    const bothAlreadyDespawned = this.enemyWaveCorpses.stationary.despawned && this.enemyWaveCorpses.walker.despawned;
+    this.advanceCorpseLifecycle(
+      this.enemyWaveCorpses.stationary,
+      this.actor,
+      this.stationaryDeathController?.state,
+      this.bloodEffects,
+      null,
+      dt,
+    );
+    const walkerActor = this.walkerController?.actor;
+    this.advanceCorpseLifecycle(
+      this.enemyWaveCorpses.walker,
+      walkerActor,
+      this.walkerController?.state,
+      this.walkerController?.bloodEffects,
+      () => this.walkerController?.disposeWalker?.({ respawn: false }),
+      dt,
+    );
+    const bothDespawned = this.enemyWaveCorpses.stationary.despawned && this.enemyWaveCorpses.walker.despawned;
+    if (!bothDespawned) {
+      this.waveRespawnElapsed = 0;
+      return;
+    }
+    if (!bothAlreadyDespawned) {
+      this.waveRespawnElapsed = 0;
+      return;
+    }
+    this.waveRespawnElapsed += dt;
+    if (this.waveRespawnElapsed >= FOLSOM_ENEMY_WAVE_CONFIG.respawnDelaySeconds) this.startNextEnemyWave();
+  }
+
+  startNextEnemyWave() {
+    this.waveGeneration += 1;
+    return this.reset(this.player, { preserveWaveGeneration: true, reason: 'enemy-wave-respawn' });
+  }
+
   update(deltaSeconds, player = this.player) {
     if (this.disposed) return;
     this.player = player ?? this.player;
@@ -277,6 +363,7 @@ export class FolsomCombatEncounter {
     this.actor.afterPhysics(this.physics.interpolationAlpha);
     this.walkerController?.afterPhysics(this.physics.interpolationAlpha);
     if (!this.stationaryDeathCollisionReleased) this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
+    this.updateEnemyWaveLifecycle(deltaSeconds);
     this.priorityCombatActor = this.getPriorityCombatActor(this.player);
     const combatShadowTarget = this.priorityCombatActor?.getBodyWorldPosition?.('upper_chest');
     if (combatShadowTarget) this.scene.userData.activeCombatShadowTarget = combatShadowTarget;
@@ -284,10 +371,11 @@ export class FolsomCombatEncounter {
     this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha);
   }
 
-  reset(player = this.player) {
+  reset(player = this.player, { preserveWaveGeneration = false, reason = 'encounter-reset' } = {}) {
     if (this.disposed) return false;
     this.player = player ?? this.player;
-    this.weaponController?.cancel?.('encounter-reset');
+    this.weaponController?.cancel?.(reason);
+    this.actor.root.visible = true;
     this.stationaryDeathController?.reset();
     this.actor.reset();
     this.combatRouter.register(this.actor, this.combatDirector);
@@ -295,10 +383,14 @@ export class FolsomCombatEncounter {
     this.dungeon.collision?.addBlocker?.(this.playerBlocker);
     this.stationaryDeathCollisionReleased = false;
     this.bloodEffects.clear();
+    this.bloodEffects.setOpacity(1);
     this.combatDirector.reset();
+    this.walkerController.stationaryActor = this.actor;
     this.walkerController?.reset(this.player);
     this.feedbackSystem.reset();
     this.weaponController?.reset?.();
+    if (!preserveWaveGeneration) this.waveGeneration = 1;
+    this.resetEnemyWaveLifecycle();
     this.priorityCombatActor = this.getPriorityCombatActor(this.player);
     return true;
   }
@@ -319,6 +411,16 @@ export class FolsomCombatEncounter {
       encounterFootprintActive: this.walkerController?.footprintActive ?? false,
       supportFloorCount: this.supportFloors.length,
       supportGroundVariation: this.supportGroundVariation,
+      enemyWave: {
+        generation: this.waveGeneration,
+        size: FOLSOM_ENEMY_WAVE_CONFIG.size,
+        corpseDespawnSeconds: FOLSOM_ENEMY_WAVE_CONFIG.corpseDespawnSeconds,
+        corpseFadeSeconds: FOLSOM_ENEMY_WAVE_CONFIG.corpseFadeSeconds,
+        respawnDelaySeconds: FOLSOM_ENEMY_WAVE_CONFIG.respawnDelaySeconds,
+        respawnElapsed: this.waveRespawnElapsed,
+        stationary: { ...this.enemyWaveCorpses.stationary },
+        walker: { ...this.enemyWaveCorpses.walker },
+      },
       physics: this.physics.getDiagnostics(),
       actor: this.actor.getDiagnostics(),
       stationaryDeath: this.stationaryDeathController?.getDiagnostics?.() ?? null,

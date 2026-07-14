@@ -1,3 +1,17 @@
+export const MOBILE_STRAFE_INPUT_SCALE = 0.72;
+export const MOBILE_LOOK_SENSITIVITY_SCALE = 0.85;
+
+export function scaleMobileMoveStick(stick) {
+  return { x: stick.x * MOBILE_STRAFE_INPUT_SCALE, y: -stick.y };
+}
+
+export function scaleMobileLookStick(stick, applyVerticalDeadzone = (value) => value) {
+  return {
+    x: stick.x * MOBILE_LOOK_SENSITIVITY_SCALE,
+    y: applyVerticalDeadzone(-stick.y) * MOBILE_LOOK_SENSITIVITY_SCALE,
+  };
+}
+
 export class MobileControls {
   constructor(root) {
     this.root = root;
@@ -88,8 +102,9 @@ export class MobileControls {
     event.preventDefault();
 
     const stick = this.getStickVector(event, this.moveCenter, this.moveZone);
-    this.move.x = stick.x;
-    this.move.y = -stick.y;
+    const move = scaleMobileMoveStick(stick);
+    this.move.x = move.x;
+    this.move.y = move.y;
     this.moveKnob.style.transform = `translate(${stick.knobX}px, ${stick.knobY}px)`;
   }
 
@@ -114,8 +129,9 @@ export class MobileControls {
     event.preventDefault();
 
     const stick = this.getStickVector(event, this.lookCenter, this.lookZone);
-    this.look.x = stick.x;
-    this.look.y = this.applyLookVerticalDeadzone(-stick.y);
+    const look = scaleMobileLookStick(stick, (value) => this.applyLookVerticalDeadzone(value));
+    this.look.x = look.x;
+    this.look.y = look.y;
     this.lookKnob.style.transform = `translate(${stick.knobX}px, ${stick.knobY}px)`;
   }
 

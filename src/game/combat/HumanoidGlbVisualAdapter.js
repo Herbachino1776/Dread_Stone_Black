@@ -209,6 +209,7 @@ export class HumanoidGlbVisualAdapter {
     this.isolateMaterials = isolateMaterials === true;
     this.ownedMaterials = new Map();
     this.fadePrepared = false;
+    this.fadeMaterialBaselines = new Map();
     this.rawVisibleBounds = null;
     this.normalizedVisibleBounds = null;
     this.uniformScale = null;
@@ -586,6 +587,7 @@ export class HumanoidGlbVisualAdapter {
   }
 
   reset() {
+    this.resetFade();
     if (this.profile.animationAuthoritative) {
       this.animationController?.reset?.();
       this.ragdollBindings = [];
@@ -628,6 +630,7 @@ export class HumanoidGlbVisualAdapter {
     if (this.fadePrepared) return;
     this.fadePrepared = true;
     this.ownedMaterials.forEach((material) => {
+      this.fadeMaterialBaselines.set(material, { opacity: material.opacity, transparent: material.transparent, depthWrite: material.depthWrite });
       material.transparent = true;
       material.depthWrite = false;
       material.needsUpdate = true;
@@ -639,6 +642,17 @@ export class HumanoidGlbVisualAdapter {
     this.beginFade();
     const value = THREE.MathUtils.clamp(Number(opacity) || 0, 0, 1);
     this.ownedMaterials.forEach((material) => { material.opacity = value; });
+  }
+
+  resetFade() {
+    this.fadeMaterialBaselines.forEach((baseline, material) => {
+      material.opacity = baseline.opacity;
+      material.transparent = baseline.transparent;
+      material.depthWrite = baseline.depthWrite;
+      material.needsUpdate = true;
+    });
+    this.fadeMaterialBaselines.clear();
+    this.fadePrepared = false;
   }
 
   dispose() {
@@ -665,6 +679,7 @@ export class HumanoidGlbVisualAdapter {
     this.skeletons = [];
     this.ownedMaterials.forEach((material) => material.dispose());
     this.ownedMaterials.clear();
+    this.fadeMaterialBaselines.clear();
     this.characterLightingPanel?.remove?.();
     this.characterLightingPanel = null;
   }
