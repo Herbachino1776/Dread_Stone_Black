@@ -3,6 +3,48 @@ import { RAPIER } from './CombatPhysicsWorld.js';
 
 export const DAMAGE_MANIFEST_SCHEMA = 'dreadstone.damage_authoring.v1';
 
+export const ACTIVE_DAMAGE_SEGMENT_CONTRACTS = Object.freeze({
+  head_neck: Object.freeze({
+    segmentId: 'head_neck',
+    attachedObject: 'DSB_ATTACHED_HEAD',
+    detachedObject: 'DSB_SEGMENT_HEAD',
+    proximalStump: 'DSB_STUMP_NECK_TORSO',
+    distalStump: 'DSB_STUMP_NECK_HEAD',
+    parentRegion: 'neck',
+    bone: 'head',
+    detachedBodyIds: Object.freeze(['head']),
+    fatal: true,
+    detachedMassHint: 4.5,
+    colliderHint: 'convex_hull',
+  }),
+  left_elbow: Object.freeze({
+    segmentId: 'left_elbow',
+    attachedObject: 'DSB_ATTACHED_FOREARM_L',
+    detachedObject: 'DSB_SEGMENT_FOREARM_L',
+    proximalStump: 'DSB_STUMP_ELBOW_L_UPPER',
+    distalStump: 'DSB_STUMP_ELBOW_L_LOWER',
+    parentRegion: 'arm_left_top',
+    bone: 'arm_left_bot',
+    detachedBodyIds: Object.freeze(['left_forearm', 'left_hand']),
+    fatal: false,
+    detachedMassHint: 1.8,
+    colliderHint: 'convex_hull',
+  }),
+  right_elbow: Object.freeze({
+    segmentId: 'right_elbow',
+    attachedObject: 'DSB_ATTACHED_FOREARM_R',
+    detachedObject: 'DSB_SEGMENT_FOREARM_R',
+    proximalStump: 'DSB_STUMP_ELBOW_R_UPPER',
+    distalStump: 'DSB_STUMP_ELBOW_R_LOWER',
+    parentRegion: 'arm_right_top',
+    bone: 'arm_right_bot',
+    detachedBodyIds: Object.freeze(['right_forearm', 'right_hand']),
+    fatal: false,
+    detachedMassHint: 1.8,
+    colliderHint: 'convex_hull',
+  }),
+});
+
 export const DAMAGE_INTACT_VISIBLE_OBJECTS = Object.freeze([
   'DSB_BODY_CORE',
   'DSB_ATTACHED_HEAD',
@@ -30,6 +72,7 @@ export const DAMAGE_INTACT_HIDDEN_OBJECTS = Object.freeze([
 const DETACHED_COLLISION_GROUPS = 0x00020001;
 const MAXIMUM_DETACHED_LINEAR_SPEED = 8;
 const MAXIMUM_DETACHED_ANGULAR_SPEED = 14;
+const MAXIMUM_DIAGNOSTIC_COUNT = 1_000_000;
 const tmpPoint = new THREE.Vector3();
 
 function basename(path = '') {
@@ -61,6 +104,10 @@ function sameNames(actual, expected) {
   return left.every((name, index) => name === right[index]);
 }
 
+function incrementBounded(value) {
+  return Math.min(MAXIMUM_DIAGNOSTIC_COUNT, value + 1);
+}
+
 export function validateDamageAsset({ manifest, root, profile, clips = [], animationManifest = null } = {}) {
   const errors = [];
   const { objects, duplicates } = collectNamedObjects(root);
@@ -76,28 +123,22 @@ export function validateDamageAsset({ manifest, root, profile, clips = [], anima
   if (missingObjects.length) errors.push(`missing required objects: ${missingObjects.join(', ')}`);
   if (duplicateRequiredObjects.length) errors.push(`duplicate required objects: ${duplicateRequiredObjects.join(', ')}`);
 
-  const headSegments = (manifest?.segments ?? []).filter((entry) => entry?.segmentId === 'head_neck');
-  const headSegment = headSegments[0] ?? null;
-  if (headSegments.length !== 1) errors.push(`expected one head_neck segment, found ${headSegments.length}`);
-  const expectedHeadMetadata = {
-    attachedObject: 'DSB_ATTACHED_HEAD',
-    detachedObject: 'DSB_SEGMENT_HEAD',
-    proximalStump: 'DSB_STUMP_NECK_TORSO',
-    distalStump: 'DSB_STUMP_NECK_HEAD',
-    bone: 'head',
-  };
-  Object.entries(expectedHeadMetadata).forEach(([key, expected]) => {
-    if (headSegment?.[key] !== expected) errors.push(`head_neck ${key} must be ${expected}`);
+  const segmentRecords = new Map();
+  Object.entries(ACTIVE_DAMAGE_SEGMENT_CONTRACTS).forEach(([segmentId, contract]) => {
+    const matches = (manifest?.segments ?? []).filter((entry) => entry?.segmentId === segmentId);
+    const segment = matches[0] ?? null;
+    if (matches.length !== 1) errors.push(`expected one ${segmentId} segment, found ${matches.length}`);
+    for (const key of ['attachedObject', 'detachedObject', 'proximalStump', 'distalStump', 'parentRegion', 'bone', 'fatal', 'detachedMassHint', 'colliderHint']) {
+      if (segment?.[key] !== contract[key]) errors.push(`${segmentId} ${key} must be ${contract[key]}`);
+    }
+    if (!objects.get(segment?.detachedObject)?.isMesh) errors.push(`${segmentId} detached object must be a rigid mesh`);
+    if (objects.get(segment?.detachedObject)?.isSkinnedMesh) errors.push(`${segmentId} detached object must not be skinned`);
+    if (!objects.get(segment?.attachedObject)?.isSkinnedMesh) errors.push(`${segmentId} attached object must be skinned`);
+    if (!objects.get(segment?.proximalStump)?.isSkinnedMesh) errors.push(`${segmentId} proximal stump must be skinned`);
+    if (objects.get(segment?.distalStump)?.parent !== objects.get(segment?.detachedObject)) errors.push(`${segmentId} distal stump must be parented to its detached object`);
+    if (!objects.has(segment?.bone)) errors.push(`${segmentId} animated bone is missing`);
+    if (segment) segmentRecords.set(segmentId, segment);
   });
-  if (headSegment?.fatal !== true) errors.push('head_neck must be fatal');
-  if (headSegment?.detachedMassHint !== 4.5) errors.push('head_neck detached mass must be 4.5');
-  if (headSegment?.colliderHint !== 'convex_hull') errors.push('head_neck collider hint must be convex_hull');
-  if (!objects.get(headSegment?.detachedObject)?.isMesh) errors.push('head_neck detached object must be a rigid mesh');
-  if (objects.get(headSegment?.detachedObject)?.isSkinnedMesh) errors.push('head_neck detached object must not be skinned');
-  if (!objects.get(headSegment?.attachedObject)?.isSkinnedMesh) errors.push('head_neck attached object must be skinned');
-  if (!objects.get(headSegment?.proximalStump)?.isSkinnedMesh) errors.push('head_neck proximal stump must be skinned');
-  if (objects.get(headSegment?.distalStump)?.parent !== objects.get(headSegment?.detachedObject)) errors.push('head_neck distal stump must be parented to the detached head');
-  if (!objects.has(headSegment?.bone)) errors.push('head_neck animated bone is missing');
 
   const expectedAnimations = [...(profile?.damageExpectedAnimationNames ?? [])];
   const manifestAnimationNames = (animationManifest?.animations ?? []).map((entry) => entry?.name).filter(Boolean);
@@ -109,7 +150,8 @@ export function validateDamageAsset({ manifest, root, profile, clips = [], anima
   if (errors.length) throw new Error(`Humanoid damage profile ${profile?.name ?? 'unknown'} failed validation: ${errors.join('; ')}`);
   return {
     objects,
-    headSegment,
+    segments: segmentRecords,
+    headSegment: segmentRecords.get('head_neck') ?? null,
     diagnostics: {
       enabled: true,
       manifestSchema: manifest.schema,
@@ -181,30 +223,66 @@ export class HumanoidDamageSegmentRuntime {
       animationManifest: adapter.animationManifest,
     });
     this.objects = this.validation.objects;
+    this.segmentStates = new Map();
+    for (const segmentId of adapter.profile.activeDamageSegmentIds ?? []) {
+      const manifestSegment = this.validation.segments.get(segmentId);
+      const contract = ACTIVE_DAMAGE_SEGMENT_CONTRACTS[segmentId];
+      if (!manifestSegment || !contract) continue;
+      const detachedObject = this.objects.get(manifestSegment.detachedObject);
+      this.segmentStates.set(segmentId, {
+        segmentId,
+        manifest: manifestSegment,
+        contract,
+        bone: this.objects.get(manifestSegment.bone),
+        attachedObject: this.objects.get(manifestSegment.attachedObject),
+        detachedObject,
+        proximalStump: this.objects.get(manifestSegment.proximalStump),
+        distalStump: this.objects.get(manifestSegment.distalStump),
+        detachedBodyIds: [...contract.detachedBodyIds],
+        authoredParent: detachedObject.parent,
+        authoredTransform: {
+          position: detachedObject.position.clone(),
+          quaternion: detachedObject.quaternion.clone(),
+          scale: detachedObject.scale.clone(),
+        },
+        boneToDetached: new THREE.Matrix4(),
+        lastBonePosition: new THREE.Vector3(),
+        lastBoneQuaternion: new THREE.Quaternion(),
+        proxyVelocity: new THREE.Vector3(),
+        proxyAngularVelocity: new THREE.Vector3(),
+        body: null,
+        collider: null,
+        colliderType: null,
+        fallbackColliderUsed: false,
+        spawnPositionError: null,
+        spawnRotationErrorDegrees: null,
+        inheritedLinearSpeed: 0,
+        inheritedAngularSpeed: 0,
+        bloodActivationCount: 0,
+        consequenceActivationCount: 0,
+      });
+    }
     this.headSegment = this.validation.headSegment;
-    this.headBone = this.objects.get(this.headSegment.bone);
-    this.attachedHead = this.objects.get(this.headSegment.attachedObject);
-    this.detachedHead = this.objects.get(this.headSegment.detachedObject);
-    this.torsoStump = this.objects.get(this.headSegment.proximalStump);
-    this.detachedHeadStump = this.objects.get(this.headSegment.distalStump);
-    this.authoredDetachedParent = this.detachedHead.parent;
-    this.authoredDetachedTransform = {
-      position: this.detachedHead.position.clone(),
-      quaternion: this.detachedHead.quaternion.clone(),
-      scale: this.detachedHead.scale.clone(),
-    };
-    this.headBoneToDetached = new THREE.Matrix4();
-    this.lastHeadPosition = new THREE.Vector3();
-    this.lastHeadQuaternion = new THREE.Quaternion();
-    this.headProxyVelocity = new THREE.Vector3();
-    this.headProxyAngularVelocity = new THREE.Vector3();
+    this.headState = this.segmentStates.get('head_neck');
+    this.headBone = this.headState.bone;
+    this.attachedHead = this.headState.attachedObject;
+    this.detachedHead = this.headState.detachedObject;
+    this.torsoStump = this.headState.proximalStump;
+    this.detachedHeadStump = this.headState.distalStump;
+    this.authoredDetachedParent = this.headState.authoredParent;
+    this.authoredDetachedTransform = this.headState.authoredTransform;
+    this.headBoneToDetached = this.headState.boneToDetached;
+    this.lastHeadPosition = this.headState.lastBonePosition;
+    this.lastHeadQuaternion = this.headState.lastBoneQuaternion;
+    this.headProxyVelocity = this.headState.proxyVelocity;
+    this.headProxyAngularVelocity = this.headState.proxyAngularVelocity;
     this.detachedBody = null;
     this.detachedCollider = null;
     this.colliderTypeUsed = null;
     this.detachedSegments = new Set();
     this.resetDiagnostics();
     this.configureDamageObjects();
-    this.captureHeadBinding();
+    this.captureSegmentBindings();
     this.applyIntactState();
   }
 
@@ -218,21 +296,35 @@ export class HumanoidDamageSegmentRuntime {
     this.inheritedAngularSpeed = 0;
     this.bloodActivationCount = 0;
     this.mortalityActivationCount = 0;
+    this.nonfatalConsequenceCount = 0;
     this.lastCause = null;
+    this.segmentStates.forEach((state) => {
+      state.spawnPositionError = null;
+      state.spawnRotationErrorDegrees = null;
+      state.inheritedLinearSpeed = 0;
+      state.inheritedAngularSpeed = 0;
+      state.bloodActivationCount = 0;
+      state.consequenceActivationCount = 0;
+      state.fallbackColliderUsed = false;
+    });
   }
 
   configureDamageObjects() {
     [...this.objects.values()].filter((object) => object.name?.startsWith('DSB_')).forEach(configureDamageObject);
   }
 
-  captureHeadBinding() {
+  captureSegmentBinding(state) {
     this.adapter.presentationRoot?.updateMatrixWorld?.(true);
     this.root.updateMatrixWorld(true);
-    this.headBone.updateMatrixWorld(true);
-    this.detachedHead.updateMatrixWorld(true);
-    this.headBoneToDetached.copy(this.headBone.matrixWorld).invert().multiply(this.detachedHead.matrixWorld);
-    this.headBone.getWorldPosition(this.lastHeadPosition);
-    this.headBone.getWorldQuaternion(this.lastHeadQuaternion);
+    state.bone.updateMatrixWorld(true);
+    state.detachedObject.updateMatrixWorld(true);
+    state.boneToDetached.copy(state.bone.matrixWorld).invert().multiply(state.detachedObject.matrixWorld);
+    state.bone.getWorldPosition(state.lastBonePosition);
+    state.bone.getWorldQuaternion(state.lastBoneQuaternion);
+  }
+
+  captureSegmentBindings() {
+    this.segmentStates.forEach((state) => this.captureSegmentBinding(state));
   }
 
   applyIntactState() {
@@ -248,34 +340,38 @@ export class HumanoidDamageSegmentRuntime {
   }
 
   captureAnimatedMotion(deltaSeconds) {
-    if (this.disposed || this.detachedSegments.has('head_neck') || !(deltaSeconds > 0)) return;
+    if (this.disposed || !(deltaSeconds > 0)) return;
     this.adapter.presentationRoot?.updateMatrixWorld?.(true);
     this.root.updateMatrixWorld(true);
-    const currentPosition = this.headBone.getWorldPosition(new THREE.Vector3());
-    const currentQuaternion = this.headBone.getWorldQuaternion(new THREE.Quaternion());
     const livingVelocity = finiteVector(this.actor?.livingVelocity);
-    this.headProxyVelocity.copy(currentPosition).sub(this.lastHeadPosition).multiplyScalar(1 / deltaSeconds).sub(livingVelocity);
-    clampVectorLength(this.headProxyVelocity, 3.5);
-    const deltaRotation = currentQuaternion.clone().multiply(this.lastHeadQuaternion.clone().invert()).normalize();
-    if (deltaRotation.w < 0) deltaRotation.set(-deltaRotation.x, -deltaRotation.y, -deltaRotation.z, -deltaRotation.w);
-    const angle = 2 * Math.acos(THREE.MathUtils.clamp(deltaRotation.w, -1, 1));
-    const sine = Math.sqrt(Math.max(0, 1 - deltaRotation.w * deltaRotation.w));
-    if (angle > 1e-6 && sine > 1e-6) this.headProxyAngularVelocity.set(deltaRotation.x / sine, deltaRotation.y / sine, deltaRotation.z / sine).multiplyScalar(angle / deltaSeconds);
-    else this.headProxyAngularVelocity.set(0, 0, 0);
-    clampVectorLength(this.headProxyAngularVelocity, 8);
-    this.lastHeadPosition.copy(currentPosition);
-    this.lastHeadQuaternion.copy(currentQuaternion);
+    this.segmentStates.forEach((state) => {
+      if (this.detachedSegments.has(state.segmentId)) return;
+      const currentPosition = state.bone.getWorldPosition(new THREE.Vector3());
+      const currentQuaternion = state.bone.getWorldQuaternion(new THREE.Quaternion());
+      state.proxyVelocity.copy(currentPosition).sub(state.lastBonePosition).multiplyScalar(1 / deltaSeconds).sub(livingVelocity);
+      clampVectorLength(state.proxyVelocity, 3.5);
+      const deltaRotation = currentQuaternion.clone().multiply(state.lastBoneQuaternion.clone().invert()).normalize();
+      if (deltaRotation.w < 0) deltaRotation.set(-deltaRotation.x, -deltaRotation.y, -deltaRotation.z, -deltaRotation.w);
+      const angle = 2 * Math.acos(THREE.MathUtils.clamp(deltaRotation.w, -1, 1));
+      const sine = Math.sqrt(Math.max(0, 1 - deltaRotation.w * deltaRotation.w));
+      if (angle > 1e-6 && sine > 1e-6) state.proxyAngularVelocity.set(deltaRotation.x / sine, deltaRotation.y / sine, deltaRotation.z / sine).multiplyScalar(angle / deltaSeconds);
+      else state.proxyAngularVelocity.set(0, 0, 0);
+      clampVectorLength(state.proxyAngularVelocity, 8);
+      state.lastBonePosition.copy(currentPosition);
+      state.lastBoneQuaternion.copy(currentQuaternion);
+    });
   }
 
   getSegmentWorldPoint(segmentId = 'head_neck', target = new THREE.Vector3()) {
-    if (segmentId !== 'head_neck') return null;
+    const state = this.segmentStates.get(segmentId);
+    if (!state) return null;
     this.adapter.prepareVisibleSurfaceFrame?.();
-    const bounds = getObjectWorldBounds(this.torsoStump);
-    return bounds.isEmpty() ? this.headBone.getWorldPosition(target) : bounds.getCenter(target);
+    const bounds = getObjectWorldBounds(state.proximalStump);
+    return bounds.isEmpty() ? state.bone.getWorldPosition(target) : bounds.getCenter(target);
   }
 
-  createColliderVertices(authoredWorldScale) {
-    const position = this.detachedHead.geometry?.attributes?.position;
+  createColliderVertices(state, authoredWorldScale) {
+    const position = state.detachedObject.geometry?.attributes?.position;
     if (!position || position.count < 4) return new Float32Array();
     const vertices = new Float32Array(position.count * 3);
     for (let index = 0; index < position.count; index += 1) {
@@ -287,7 +383,7 @@ export class HumanoidDamageSegmentRuntime {
     return vertices;
   }
 
-  createDetachedPhysics(position, quaternion, scale) {
+  createDetachedPhysics(state, position, quaternion, scale) {
     const bodyDescriptor = RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(position.x, position.y, position.z)
       .setRotation(quaternion)
@@ -295,168 +391,249 @@ export class HumanoidDamageSegmentRuntime {
       .setAngularDamping(1.15)
       .setCanSleep(true);
     const body = this.physics.world.createRigidBody(bodyDescriptor);
-    body.userData = { actor: this.actor, type: 'detached-segment', segmentId: 'head_neck' };
-    const vertices = this.createColliderVertices(scale);
-    let colliderDescriptor = this.headSegment.colliderHint === 'convex_hull' ? RAPIER.ColliderDesc.convexHull(vertices) : null;
+    body.userData = { actor: this.actor, type: 'detached-segment', segmentId: state.segmentId };
+    const vertices = this.createColliderVertices(state, scale);
+    let colliderDescriptor = state.manifest.colliderHint === 'convex_hull' ? RAPIER.ColliderDesc.convexHull(vertices) : null;
     let colliderType = 'convex_hull';
+    let fallbackColliderUsed = false;
     if (!colliderDescriptor) {
       const bounds = new THREE.Box3().makeEmpty();
       for (let index = 0; index < vertices.length; index += 3) bounds.expandByPoint(tmpPoint.set(vertices[index], vertices[index + 1], vertices[index + 2]));
       const size = bounds.getSize(new THREE.Vector3());
       const center = bounds.getCenter(new THREE.Vector3());
-      const radius = THREE.MathUtils.clamp(Math.max(size.x, size.y, size.z) * 0.42, 0.08, 0.22);
-      colliderDescriptor = RAPIER.ColliderDesc.ball(radius).setTranslation(center.x, center.y, center.z);
-      colliderType = 'ball-fallback';
+      if (state.segmentId === 'head_neck') {
+        const radius = THREE.MathUtils.clamp(Math.max(size.x, size.y, size.z) * 0.42, 0.08, 0.22);
+        colliderDescriptor = RAPIER.ColliderDesc.ball(radius).setTranslation(center.x, center.y, center.z);
+        colliderType = 'ball-fallback';
+      } else {
+        const half = size.multiplyScalar(0.5);
+        colliderDescriptor = RAPIER.ColliderDesc.cuboid(
+          THREE.MathUtils.clamp(half.x, 0.025, 0.3),
+          THREE.MathUtils.clamp(half.y, 0.025, 0.3),
+          THREE.MathUtils.clamp(half.z, 0.025, 0.3),
+        ).setTranslation(center.x, center.y, center.z);
+        colliderType = 'box-fallback';
+      }
+      fallbackColliderUsed = true;
       if (!this.warnedColliderFallback) {
         this.warnedColliderFallback = true;
-        console.warn('[HumanoidDamageSegmentRuntime] Convex hull generation failed for head_neck; using bounded ball fallback.');
+        console.warn(`[HumanoidDamageSegmentRuntime] Convex hull generation failed for ${state.segmentId}; using bounded ${colliderType}.`);
       }
     }
     colliderDescriptor
-      .setMass(this.headSegment.detachedMassHint)
+      .setMass(state.manifest.detachedMassHint)
       .setFriction(0.78)
       .setRestitution(0.025)
       .setCollisionGroups(DETACHED_COLLISION_GROUPS);
     const collider = this.physics.world.createCollider(colliderDescriptor, body);
     collider.userData = body.userData;
-    return { body, collider, colliderType };
+    return { body, collider, colliderType, fallbackColliderUsed };
   }
 
-  clampDetachedVelocities() {
-    const linear = this.detachedBody.linvel();
-    const angular = this.detachedBody.angvel();
+  clampDetachedVelocities(state) {
+    const linear = state.body.linvel();
+    const angular = state.body.angvel();
     const safeLinear = clampVectorLength(new THREE.Vector3(linear.x, linear.y, linear.z), MAXIMUM_DETACHED_LINEAR_SPEED);
     const safeAngular = clampVectorLength(new THREE.Vector3(angular.x, angular.y, angular.z), MAXIMUM_DETACHED_ANGULAR_SPEED);
-    this.detachedBody.setLinvel(safeLinear, true);
-    this.detachedBody.setAngvel(safeAngular, true);
-    this.inheritedLinearSpeed = safeLinear.length();
-    this.inheritedAngularSpeed = safeAngular.length();
+    state.body.setLinvel(safeLinear, true);
+    state.body.setAngvel(safeAngular, true);
+    state.inheritedLinearSpeed = safeLinear.length();
+    state.inheritedAngularSpeed = safeAngular.length();
   }
 
   requestDetachment({ segmentId, cause = 'unspecified', worldPoint = null, impulse = null, angularImpulse = null } = {}) {
-    this.requestedCount += 1;
-    if (!(this.adapter.profile.activeDamageSegmentIds ?? []).includes(segmentId)) {
-      return { accepted: false, segmentId, reason: 'unsupported-segment', detachedBodyCreated: false, mortalityTriggered: false, bloodTriggered: false };
+    this.requestedCount = incrementBounded(this.requestedCount);
+    const state = this.segmentStates.get(segmentId);
+    if (!(this.adapter.profile.activeDamageSegmentIds ?? []).includes(segmentId) || !state) {
+      return { accepted: false, segmentId, reason: 'unsupported-segment', detachedBodyCreated: false, detachedColliderCreated: false, fatal: false, mortalityTriggered: false, reactionTriggered: false, bloodTriggered: false };
     }
     if (this.detachedSegments.has(segmentId)) {
-      this.rejectedDuplicateCount += 1;
-      return { accepted: false, segmentId, reason: 'already-detached', detachedBodyCreated: false, mortalityTriggered: false, bloodTriggered: false };
+      this.rejectedDuplicateCount = incrementBounded(this.rejectedDuplicateCount);
+      return { accepted: false, segmentId, reason: 'already-detached', detachedBodyCreated: false, detachedColliderCreated: false, fatal: state.manifest.fatal === true, mortalityTriggered: false, reactionTriggered: false, bloodTriggered: false };
     }
 
     this.adapter.prepareVisibleSurfaceFrame?.();
-    const expectedWorldMatrix = this.headBone.matrixWorld.clone().multiply(this.headBoneToDetached);
+    const expectedWorldMatrix = state.bone.matrixWorld.clone().multiply(state.boneToDetached);
     const expectedPosition = new THREE.Vector3();
     const expectedQuaternion = new THREE.Quaternion();
     const expectedScale = new THREE.Vector3();
     expectedWorldMatrix.decompose(expectedPosition, expectedQuaternion, expectedScale);
     if (![...expectedPosition.toArray(), ...expectedQuaternion.toArray(), ...expectedScale.toArray()].every(Number.isFinite)) {
-      return { accepted: false, segmentId, reason: 'invalid-animated-transform', detachedBodyCreated: false, mortalityTriggered: false, bloodTriggered: false };
+      return { accepted: false, segmentId, reason: 'invalid-animated-transform', detachedBodyCreated: false, detachedColliderCreated: false, fatal: state.manifest.fatal === true, mortalityTriggered: false, reactionTriggered: false, bloodTriggered: false };
     }
 
-    const physicsPiece = this.createDetachedPhysics(expectedPosition, expectedQuaternion, expectedScale);
-    this.detachedBody = physicsPiece.body;
-    this.detachedCollider = physicsPiece.collider;
-    this.colliderTypeUsed = physicsPiece.colliderType;
-    this.hostScene.attach(this.detachedHead);
-    this.detachedHead.position.copy(expectedPosition);
-    this.detachedHead.quaternion.copy(expectedQuaternion);
-    this.detachedHead.scale.copy(expectedScale);
-    this.detachedHead.updateMatrixWorld(true);
+    const physicsPiece = this.createDetachedPhysics(state, expectedPosition, expectedQuaternion, expectedScale);
+    state.body = physicsPiece.body;
+    state.collider = physicsPiece.collider;
+    state.colliderType = physicsPiece.colliderType;
+    state.fallbackColliderUsed = physicsPiece.fallbackColliderUsed;
+    this.hostScene.attach(state.detachedObject);
+    state.detachedObject.position.copy(expectedPosition);
+    state.detachedObject.quaternion.copy(expectedQuaternion);
+    state.detachedObject.scale.copy(expectedScale);
+    state.detachedObject.updateMatrixWorld(true);
 
-    this.attachedHead.visible = false;
-    this.torsoStump.visible = true;
-    this.detachedHead.visible = true;
-    this.detachedHeadStump.visible = true;
+    state.attachedObject.visible = false;
+    state.proximalStump.visible = true;
+    state.detachedObject.visible = true;
+    state.distalStump.visible = true;
     this.detachedSegments.add(segmentId);
     this.lastCause = cause;
+    if (segmentId !== 'head_neck') this.actor?.disableDetachedSemanticBodies?.(state.detachedBodyIds);
 
-    const inheritedVelocity = finiteVector(this.actor?.livingVelocity).add(this.headProxyVelocity);
+    const semanticVelocity = this.actor?.getSemanticBodyVelocity?.(state.detachedBodyIds, new THREE.Vector3()) ?? new THREE.Vector3();
+    const inheritedVelocity = finiteVector(this.actor?.livingVelocity).add(state.proxyVelocity).add(semanticVelocity);
     clampVectorLength(inheritedVelocity, MAXIMUM_DETACHED_LINEAR_SPEED);
-    this.detachedBody.setLinvel(inheritedVelocity, true);
-    this.detachedBody.setAngvel(clampVectorLength(this.headProxyAngularVelocity.clone(), MAXIMUM_DETACHED_ANGULAR_SPEED), true);
+    state.body.setLinvel(inheritedVelocity, true);
+    state.body.setAngvel(clampVectorLength(state.proxyAngularVelocity.clone(), MAXIMUM_DETACHED_ANGULAR_SPEED), true);
     const requestedImpulse = finiteVector(impulse);
     const requestedAngularImpulse = finiteVector(angularImpulse);
-    if (requestedImpulse.lengthSq() > 0) this.detachedBody.applyImpulse(requestedImpulse, true);
-    if (requestedAngularImpulse.lengthSq() > 0) this.detachedBody.applyTorqueImpulse(requestedAngularImpulse, true);
-    this.clampDetachedVelocities();
+    if (requestedImpulse.lengthSq() > 0) state.body.applyImpulse(requestedImpulse, true);
+    if (requestedAngularImpulse.lengthSq() > 0) state.body.applyTorqueImpulse(requestedAngularImpulse, true);
+    this.clampDetachedVelocities(state);
     this.physics.world.propagateModifiedBodyPositionsToColliders();
 
-    const actualPosition = this.detachedHead.getWorldPosition(new THREE.Vector3());
-    const actualQuaternion = this.detachedHead.getWorldQuaternion(new THREE.Quaternion());
-    this.spawnPositionError = actualPosition.distanceTo(expectedPosition);
-    this.spawnRotationErrorDegrees = rotationErrorDegrees(actualQuaternion, expectedQuaternion);
-    this.acceptedCount += 1;
+    const actualPosition = state.detachedObject.getWorldPosition(new THREE.Vector3());
+    const actualQuaternion = state.detachedObject.getWorldQuaternion(new THREE.Quaternion());
+    state.spawnPositionError = actualPosition.distanceTo(expectedPosition);
+    state.spawnRotationErrorDegrees = rotationErrorDegrees(actualQuaternion, expectedQuaternion);
+    this.acceptedCount = incrementBounded(this.acceptedCount);
 
     const seamPoint = this.getSegmentWorldPoint(segmentId, new THREE.Vector3()) ?? finiteVector(worldPoint, expectedPosition);
     const bloodDirection = requestedImpulse.lengthSq() > 1e-8 ? requestedImpulse.clone().normalize() : expectedQuaternion ? new THREE.Vector3(0, 1, 0).applyQuaternion(expectedQuaternion) : new THREE.Vector3(0, 1, 0);
     const bloodTriggered = this.actor?.emitDetachmentBlood?.({ segmentId, cause, position: seamPoint, direction: bloodDirection }) === true;
-    if (bloodTriggered) this.bloodActivationCount += 1;
-    const mortalityTriggered = this.headSegment.fatal === true && this.actor?.requestFatalSegmentDetachment?.({ segmentId, cause, worldPoint: seamPoint }) === true;
-    if (mortalityTriggered) this.mortalityActivationCount += 1;
+    if (bloodTriggered) {
+      this.bloodActivationCount = incrementBounded(this.bloodActivationCount);
+      state.bloodActivationCount = incrementBounded(state.bloodActivationCount);
+    }
+    const mortalityTriggered = state.manifest.fatal === true && this.actor?.requestFatalSegmentDetachment?.({ segmentId, cause, worldPoint: seamPoint }) === true;
+    if (mortalityTriggered) this.mortalityActivationCount = incrementBounded(this.mortalityActivationCount);
+    const consequence = state.manifest.fatal === false
+      ? this.actor?.applyNonfatalSegmentDetachment?.({ segmentId, cause, worldPoint: seamPoint, direction: bloodDirection, detachedBodyIds: state.detachedBodyIds })
+      : null;
+    const consequenceTriggered = consequence?.accepted === true || consequence === true;
+    const reactionTriggered = consequence?.reactionTriggered === true;
+    if (consequenceTriggered) {
+      this.nonfatalConsequenceCount = incrementBounded(this.nonfatalConsequenceCount);
+      state.consequenceActivationCount = incrementBounded(state.consequenceActivationCount);
+    }
 
-    return { accepted: true, segmentId, reason: 'detached', detachedBodyCreated: true, mortalityTriggered, bloodTriggered };
+    if (segmentId === 'head_neck') {
+      this.detachedBody = state.body;
+      this.detachedCollider = state.collider;
+      this.colliderTypeUsed = state.colliderType;
+      this.spawnPositionError = state.spawnPositionError;
+      this.spawnRotationErrorDegrees = state.spawnRotationErrorDegrees;
+      this.inheritedLinearSpeed = state.inheritedLinearSpeed;
+      this.inheritedAngularSpeed = state.inheritedAngularSpeed;
+    }
+
+    return { accepted: true, segmentId, reason: 'detached', detachedBodyCreated: true, detachedColliderCreated: true, fatal: state.manifest.fatal === true, mortalityTriggered, reactionTriggered, bloodTriggered };
   }
 
   updateAfterPhysics() {
-    if (!this.detachedBody || !this.detachedHead) return;
-    const translation = this.detachedBody.translation();
-    const rotation = this.detachedBody.rotation();
-    this.detachedHead.position.set(translation.x, translation.y, translation.z);
-    this.detachedHead.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w).normalize();
-    this.detachedHead.updateMatrixWorld(true);
+    this.segmentStates.forEach((state) => {
+      if (!state.body) return;
+      const translation = state.body.translation();
+      const rotation = state.body.rotation();
+      state.detachedObject.position.set(translation.x, translation.y, translation.z);
+      state.detachedObject.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w).normalize();
+      state.detachedObject.updateMatrixWorld(true);
+    });
   }
 
-  removeDetachedPhysics() {
-    if (this.detachedCollider) this.physics.world.removeCollider(this.detachedCollider, false);
-    if (this.detachedBody) this.physics.world.removeRigidBody(this.detachedBody);
+  removeDetachedPhysics(state) {
+    if (state.collider) this.physics.world.removeCollider(state.collider, false);
+    if (state.body) this.physics.world.removeRigidBody(state.body);
+    state.collider = null;
+    state.body = null;
+    state.colliderType = null;
+    state.fallbackColliderUsed = false;
+  }
+
+  removeAllDetachedPhysics() {
+    this.segmentStates.forEach((state) => this.removeDetachedPhysics(state));
     this.detachedCollider = null;
     this.detachedBody = null;
     this.colliderTypeUsed = null;
   }
 
   reset() {
-    this.removeDetachedPhysics();
-    if (this.detachedHead.parent !== this.authoredDetachedParent) this.authoredDetachedParent.add(this.detachedHead);
-    this.detachedHead.position.copy(this.authoredDetachedTransform.position);
-    this.detachedHead.quaternion.copy(this.authoredDetachedTransform.quaternion);
-    this.detachedHead.scale.copy(this.authoredDetachedTransform.scale);
-    this.detachedHead.updateMatrixWorld(true);
+    const disabledBodyIds = [...new Set([...this.segmentStates.values()].flatMap((state) => state.detachedBodyIds))];
+    this.removeAllDetachedPhysics();
+    this.segmentStates.forEach((state) => {
+      if (state.detachedObject.parent !== state.authoredParent) state.authoredParent.add(state.detachedObject);
+      state.detachedObject.position.copy(state.authoredTransform.position);
+      state.detachedObject.quaternion.copy(state.authoredTransform.quaternion);
+      state.detachedObject.scale.copy(state.authoredTransform.scale);
+      state.detachedObject.updateMatrixWorld(true);
+    });
+    this.actor?.restoreDetachedSemanticBodies?.(disabledBodyIds);
     this.detachedSegments.clear();
     this.applyIntactState();
     this.resetDiagnostics();
-    this.captureHeadBinding();
+    this.captureSegmentBindings();
   }
 
   getDamageAssetDiagnostics() {
-    return { ...this.validation.diagnostics, intactStateValid: this.validateIntactState() || this.detachedSegments.has('head_neck') };
+    return { ...this.validation.diagnostics, intactStateValid: this.validateIntactState() || this.detachedSegments.size > 0 };
   }
 
   getDiagnostics() {
-    const detachedPosition = this.detachedBody?.translation?.();
-    const detachedQuaternion = this.detachedBody?.rotation?.();
+    const headPosition = this.headState.body?.translation?.();
+    const headQuaternion = this.headState.body?.rotation?.();
+    const perSegment = Object.fromEntries([...this.segmentStates].map(([segmentId, state]) => {
+      const position = state.body?.translation?.();
+      const quaternion = state.body?.rotation?.();
+      return [segmentId, {
+        segmentId,
+        detached: this.detachedSegments.has(segmentId),
+        attachedVisible: state.attachedObject.visible,
+        proximalStumpVisible: state.proximalStump.visible,
+        detachedVisible: state.detachedObject.visible,
+        distalStumpVisible: state.distalStump.visible,
+        rigidBodyCreated: Boolean(state.body),
+        colliderCreated: Boolean(state.collider),
+        colliderType: state.colliderType,
+        fallbackColliderUsed: state.fallbackColliderUsed,
+        spawnPositionError: state.spawnPositionError,
+        spawnRotationErrorDegrees: state.spawnRotationErrorDegrees,
+        inheritedLinearSpeed: state.inheritedLinearSpeed,
+        inheritedAngularSpeed: state.inheritedAngularSpeed,
+        bloodActivationCount: state.bloodActivationCount,
+        consequenceActivationCount: state.consequenceActivationCount,
+        detachedMass: state.body?.mass?.() ?? null,
+        detachedBodyIds: [...state.detachedBodyIds],
+        position: position ? [position.x, position.y, position.z] : null,
+        quaternion: quaternion ? [quaternion.x, quaternion.y, quaternion.z, quaternion.w] : null,
+      }];
+    }));
     return {
       requestedCount: this.requestedCount,
       acceptedCount: this.acceptedCount,
       rejectedDuplicateCount: this.rejectedDuplicateCount,
       detachedSegments: [...this.detachedSegments],
+      detachedRigidBodyCount: [...this.segmentStates.values()].filter((state) => state.body).length,
+      detachedColliderCount: [...this.segmentStates.values()].filter((state) => state.collider).length,
+      bloodActivationCount: this.bloodActivationCount,
+      mortalityActivationCount: this.mortalityActivationCount,
+      nonfatalConsequenceCount: this.nonfatalConsequenceCount,
+      disabledProxyBodyIds: [...(this.actor?.detachedSemanticBodyIds ?? [])],
+      detachedWoundTransferImplemented: false,
+      perSegment,
       headDetached: this.detachedSegments.has('head_neck'),
       attachedHeadVisible: this.attachedHead.visible,
       torsoStumpVisible: this.torsoStump.visible,
       detachedHeadVisible: this.detachedHead.visible,
       detachedHeadStumpVisible: this.detachedHeadStump.visible,
-      detachedRigidBodyCount: this.detachedBody ? 1 : 0,
-      detachedColliderCount: this.detachedCollider ? 1 : 0,
-      detachedHeadPosition: detachedPosition ? [detachedPosition.x, detachedPosition.y, detachedPosition.z] : null,
-      detachedHeadQuaternion: detachedQuaternion ? [detachedQuaternion.x, detachedQuaternion.y, detachedQuaternion.z, detachedQuaternion.w] : null,
-      spawnPositionError: this.spawnPositionError,
-      spawnRotationErrorDegrees: this.spawnRotationErrorDegrees,
-      inheritedLinearSpeed: this.inheritedLinearSpeed,
-      inheritedAngularSpeed: this.inheritedAngularSpeed,
-      bloodActivationCount: this.bloodActivationCount,
-      mortalityActivationCount: this.mortalityActivationCount,
-      detachedWoundTransferImplemented: false,
-      colliderTypeUsed: this.colliderTypeUsed,
-      detachedMass: this.detachedBody?.mass?.() ?? null,
+      detachedHeadPosition: headPosition ? [headPosition.x, headPosition.y, headPosition.z] : null,
+      detachedHeadQuaternion: headQuaternion ? [headQuaternion.x, headQuaternion.y, headQuaternion.z, headQuaternion.w] : null,
+      spawnPositionError: this.headState.spawnPositionError,
+      spawnRotationErrorDegrees: this.headState.spawnRotationErrorDegrees,
+      inheritedLinearSpeed: this.headState.inheritedLinearSpeed,
+      inheritedAngularSpeed: this.headState.inheritedAngularSpeed,
+      colliderTypeUsed: this.headState.colliderType,
+      detachedMass: this.headState.body?.mass?.() ?? null,
       lastCause: this.lastCause,
     };
   }

@@ -71,6 +71,10 @@ export class HumanoidCombatActor {
     this.bodies = new Map();
     this.colliders = new Map();
     this.colliderRegions = new Map();
+    this.detachedSemanticBodyIds = new Set();
+    this.detachedMotorBodyIds = new Set();
+    this.nonfatalDetachedSegments = new Set();
+    this.nonfatalSegmentConsequenceCount = 0;
     this.visuals = new Map();
     this.joints = [];
     this.vesselDebug = [];
@@ -142,9 +146,66 @@ export class HumanoidCombatActor {
   emitDetachmentBlood(request) { return this.detachmentBloodEmitter?.(request) === true; }
   requestDetachment(request = {}) {
     const result = this.visualAdapter?.requestDetachment?.(request);
-    return result ?? { accepted: false, segmentId: request.segmentId ?? null, reason: 'damage-runtime-not-ready', detachedBodyCreated: false, mortalityTriggered: false, bloodTriggered: false };
+    return result ?? { accepted: false, segmentId: request.segmentId ?? null, reason: 'damage-runtime-not-ready', detachedBodyCreated: false, detachedColliderCreated: false, fatal: false, mortalityTriggered: false, reactionTriggered: false, bloodTriggered: false };
   }
   getDetachmentWorldPoint(segmentId, target = new THREE.Vector3()) { return this.visualAdapter?.getDetachmentWorldPoint?.(segmentId, target) ?? null; }
+  isSemanticBodyDetached(bodyId) { return this.detachedSemanticBodyIds.has(bodyId); }
+  disableDetachedSemanticBodies(bodyIds = []) {
+    for (const bodyId of bodyIds) {
+      this.detachedSemanticBodyIds.add(bodyId);
+      this.detachedMotorBodyIds.add(bodyId);
+      const collider = this.colliders.get(bodyId);
+      collider?.setEnabled?.(false);
+      if (Number.isFinite(collider?.handle)) this.colliderRegions.delete(collider.handle);
+    }
+    this.woundSystem?.suppressBodyIds?.(bodyIds);
+    return [...this.detachedSemanticBodyIds];
+  }
+  restoreDetachedSemanticBodies(bodyIds = [...this.detachedSemanticBodyIds]) {
+    for (const bodyId of bodyIds) {
+      this.detachedSemanticBodyIds.delete(bodyId);
+      this.detachedMotorBodyIds.delete(bodyId);
+      const collider = this.colliders.get(bodyId);
+      collider?.setEnabled?.(true);
+      const config = this.bodies.get(bodyId)?.config;
+      if (Number.isFinite(collider?.handle) && config?.regionId) this.colliderRegions.set(collider.handle, config.regionId);
+    }
+    this.woundSystem?.restoreSuppressedBodyIds?.(bodyIds);
+    return [...this.detachedSemanticBodyIds];
+  }
+  getSemanticBodyVelocity(bodyIds = [], target = new THREE.Vector3()) {
+    target.set(0, 0, 0);
+    let count = 0;
+    for (const bodyId of bodyIds) {
+      const velocity = this.bodies.get(bodyId)?.body?.linvel?.();
+      if (![velocity?.x, velocity?.y, velocity?.z].every(Number.isFinite)) continue;
+      target.x += velocity.x;
+      target.y += velocity.y;
+      target.z += velocity.z;
+      count += 1;
+    }
+    return count > 0 ? target.multiplyScalar(1 / count) : target;
+  }
+  applyNonfatalSegmentDetachment({ segmentId, worldPoint = null, direction = null, detachedBodyIds = [] } = {}) {
+    if (!segmentId || this.nonfatalDetachedSegments.has(segmentId)) return { accepted: false, reactionTriggered: false };
+    this.nonfatalDetachedSegments.add(segmentId);
+    this.nonfatalSegmentConsequenceCount = Math.min(1_000_000, this.nonfatalSegmentConsequenceCount + 1);
+    detachedBodyIds.forEach((bodyId) => this.detachedMotorBodyIds.add(bodyId));
+    detachedBodyIds.forEach((bodyId) => {
+      const regionId = this.bodies.get(bodyId)?.config?.regionId ?? bodyId;
+      const state = this.regionState.get(regionId);
+      if (!state) return;
+      state.structural = Math.max(1.5, state.structural ?? 0);
+      state.motorWeakness = 1;
+      state.pain = Math.max(state.pain ?? 0, 1);
+    });
+    const reactionRegion = detachedBodyIds.find((bodyId) => bodyId.includes('forearm')) ?? detachedBodyIds[0] ?? segmentId;
+    const reactionDirection = direction?.isVector3 ? direction.clone() : new THREE.Vector3(reactionRegion.startsWith('left') ? -1 : 1, -0.2, 0.15);
+    if (reactionDirection.lengthSq() < 1e-8) reactionDirection.set(reactionRegion.startsWith('left') ? -1 : 1, -0.2, 0.15);
+    reactionDirection.normalize();
+    this.triggerReflex(reactionRegion, 0.92, reactionDirection, { point: worldPoint, force: 0.92, source: 'debug_segment_detachment', reactionKind: 'hurt' });
+    return { accepted: true, reactionTriggered: true };
+  }
 
   areAnatomyRegionsAdjacent(firstRegionId, secondRegionId) {
     if (!firstRegionId || !secondRegionId) return false;
@@ -182,6 +243,7 @@ export class HumanoidCombatActor {
   syncAnimationProxyBodies(adapter = this.visualAdapter) {
     if (!this.animationAuthorityReady || !adapter || this.ragdollActive) return;
     this.bodies.forEach((entry, bodyId) => {
+      if (this.detachedSemanticBodyIds.has(bodyId)) return;
       const pose = adapter.getProxyPose(bodyId);
       if (!pose) return;
       entry.body.setTranslation(pose.position, true);
@@ -372,6 +434,7 @@ export class HumanoidCombatActor {
     const baseRegionId = this.colliderRegions.get(collider?.handle);
     if (!baseRegionId) return null;
     const bodyId = collider.userData?.bodyId;
+    if (this.detachedSemanticBodyIds.has(bodyId)) return null;
     const bodyEntry = this.bodies.get(bodyId);
     if (!bodyEntry) return null;
     // Capture the collision-time body transform once. Director staging may run
@@ -587,7 +650,7 @@ export class HumanoidCombatActor {
   requestFatalSegmentDetachment({ segmentId, cause = 'segment-detachment' } = {}) {
     if (this.fatalSegmentDetachmentActive) return false;
     this.fatalSegmentDetachmentActive = true;
-    this.fatalSegmentDetachmentActivationCount += 1;
+    this.fatalSegmentDetachmentActivationCount = Math.min(1_000_000, this.fatalSegmentDetachmentActivationCount + 1);
     this.collapseFamily = 'neurological';
     this.collapseReason = `fatal-segment-detachment:${segmentId ?? 'unknown'}:${cause}`;
     this.motorStrength = Math.min(this.motorStrength, 0.02);
@@ -775,7 +838,9 @@ export class HumanoidCombatActor {
   }
 
   setEmbeddedWeapon(weapon) {
+    if (weapon?.entry?.bodyId && this.detachedSemanticBodyIds.has(weapon.entry.bodyId)) return false;
     this.activeEmbeddedWeapon = weapon;
+    return true;
   }
 
   beforePhysics(dt, playerPosition = null) {
@@ -828,6 +893,7 @@ export class HumanoidCombatActor {
   }
 
   applyBodyMotor(entry, bodyId, dt, playerPosition) {
+    if (this.detachedMotorBodyIds.has(bodyId)) return;
     const { body, config, restPosition, restQuaternion } = entry;
     if (!body.isDynamic() || this.motorStrength <= 0.001) return;
     const regionWeakness = this.regionState.get(config.regionId)?.motorWeakness ?? 0;
@@ -949,6 +1015,7 @@ export class HumanoidCombatActor {
     const groundY = this.environmentContactHints.groundY ?? 0;
     const wallX = this.environmentContactHints.wallX;
     this.bodies.forEach((entry, bodyId) => {
+      if (this.detachedSemanticBodyIds.has(bodyId)) return;
       const position = entry.body.translation();
       const velocity = entry.body.linvel();
       const speed = Math.hypot(velocity.x, velocity.y, velocity.z);
@@ -986,6 +1053,10 @@ export class HumanoidCombatActor {
       collapseReason: this.collapseReason,
       fatalSegmentDetachmentActive: this.fatalSegmentDetachmentActive,
       fatalSegmentDetachmentActivationCount: this.fatalSegmentDetachmentActivationCount,
+      disabledProxyBodyIds: [...this.detachedSemanticBodyIds],
+      disabledMotorBodyIds: [...this.detachedMotorBodyIds],
+      nonfatalDetachedSegments: [...this.nonfatalDetachedSegments],
+      nonfatalSegmentConsequenceCount: this.nonfatalSegmentConsequenceCount,
       corpseSleeping: this.corpseSleeping,
       ragdollActive: this.ragdollActive,
       ragdollForced: this.ragdollForced,
@@ -1034,6 +1105,10 @@ export class HumanoidCombatActor {
     if (this.disposed) return;
     this.woundSystem.resetFade?.();
     this.woundSystem.clear();
+    this.detachedSemanticBodyIds.clear();
+    this.detachedMotorBodyIds.clear();
+    this.nonfatalDetachedSegments.clear();
+    this.nonfatalSegmentConsequenceCount = 0;
     this.disposePhysicalBody();
     this.regionState.clear();
     this.balanceImpairment = 0;

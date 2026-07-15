@@ -136,6 +136,7 @@ export class CombatWoundSystem {
     this.scene = scene;
     this.maximumWounds = maximumWounds;
     this.wounds = [];
+    this.suppressedBodyIds = new Set();
     this.nextWoundId = 1;
     this.visualSlots = [];
     this.swordVisualSlots = [];
@@ -219,6 +220,26 @@ export class CombatWoundSystem {
   setDebugVisible(visible) {
     this.debugVisible = Boolean(visible);
     if (this.surfaceDebugRoot) this.surfaceDebugRoot.visible = this.debugVisible;
+  }
+
+  hideWoundVisual(wound) {
+    if (wound?.visualSlot) {
+      wound.visualSlot.puncture.visible = false;
+      wound.visualSlot.slash.visible = false;
+    }
+    if (wound?.swordVisualSlot) wound.swordVisualSlot.ribbon.visible = false;
+    if (wound) wound.detachmentVisualSuppressed = true;
+  }
+
+  suppressBodyIds(bodyIds = []) {
+    bodyIds.forEach((bodyId) => this.suppressedBodyIds.add(bodyId));
+    this.wounds.forEach((wound) => {
+      if (this.suppressedBodyIds.has(wound.bodyId)) this.hideWoundVisual(wound);
+    });
+  }
+
+  restoreSuppressedBodyIds(bodyIds = [...this.suppressedBodyIds]) {
+    bodyIds.forEach((bodyId) => this.suppressedBodyIds.delete(bodyId));
   }
 
   allocateVisual(woundId) {
@@ -1226,6 +1247,11 @@ export class CombatWoundSystem {
   }
 
   updateWoundVisual(wound) {
+    if (this.suppressedBodyIds.has(wound?.bodyId)) {
+      this.hideWoundVisual(wound);
+      return;
+    }
+    if (wound) wound.detachmentVisualSuppressed = false;
     if (wound?.visualFamily === 'sword') {
       this.updateSwordCutVisual(wound);
       return;
@@ -1331,6 +1357,7 @@ export class CombatWoundSystem {
     this.recentVariantHistory.slash.length = 0;
     this.punctureCoordinateDiagnostics?.splice(0);
     this.missingMaterialWarnings.clear();
+    this.suppressedBodyIds.clear();
     this.surfaceDebugRoot.visible = false;
   }
 
@@ -1344,6 +1371,7 @@ export class CombatWoundSystem {
       arterial: this.wounds.filter((entry) => entry.bleedingProfile.kind.includes('arterial')).length,
       swordCuts: this.wounds.filter((entry) => entry.visualFamily === 'sword').length,
       visibleSwordCuts: this.swordVisualSlots.filter((entry) => entry.ribbon.visible).length,
+      suppressedBodyIds: [...this.suppressedBodyIds],
       swordCutVisualLimit: this.swordVisualSlots.length,
       materialCloneCount: this.materialCloneCount,
       failedProjectionCount: this.failedProjectionCount,

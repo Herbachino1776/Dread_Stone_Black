@@ -309,6 +309,21 @@ export class CombatLabScene {
       angularImpulse,
     });
   }
+  debugDetachForearm(segmentId, sideSign) {
+    if (this.disposed) return { accepted: false, segmentId, reason: 'scene-disposed', detachedBodyCreated: false, detachedColliderCreated: false, fatal: false, mortalityTriggered: false, reactionTriggered: false, bloodTriggered: false };
+    const yaw = this.actor.visualRootYaw ?? this.actor.spawnYaw ?? 0;
+    const impulse = new THREE.Vector3(0.22 * sideSign, -0.08, 0.18).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    const angularImpulse = new THREE.Vector3(0.08, 0.12 * sideSign, -0.16 * sideSign).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    return this.actor.requestDetachment({
+      segmentId,
+      cause: 'combat_lab_debug',
+      worldPoint: this.actor.getDetachmentWorldPoint(segmentId, new THREE.Vector3()),
+      impulse,
+      angularImpulse,
+    });
+  }
+  debugDetachLeftForearm() { return this.debugDetachForearm('left_elbow', -1); }
+  debugDetachRightForearm() { return this.debugDetachForearm('right_elbow', 1); }
   toggleMortalityMode() {
     const next = this.actor.mortalityMode === 'normal' ? 'immortal_reactive' : 'normal';
     this.actor.setMortalityMode(next);

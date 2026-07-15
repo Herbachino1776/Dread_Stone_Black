@@ -493,7 +493,7 @@ test('deliberate sword tip contact reaches wound creation before presentation', 
     }
     const wound = actor.woundSystem.wounds[0];
     assert.equal(sword.lastContactPart, 'tip');
-    assert.equal(sword.contactState, 'surface_contact');
+    assert.equal(sword.contactState, 'penetrating', 'same-frame projected sword travel advances beyond surface contact without a second gesture');
     assert.equal(sword.punctureBeginCount, 1);
     assert.equal(sword.edgeDamageCount, 0);
     assert.ok(wound, 'tip contact created a wound before any presentation decision');

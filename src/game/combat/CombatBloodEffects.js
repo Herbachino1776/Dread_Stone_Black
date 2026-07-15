@@ -67,7 +67,7 @@ export class CombatBloodEffects {
 
   emitDetachment({ position, direction = null } = {}) {
     if (!position?.isVector3 || !position.toArray().every(Number.isFinite)) return false;
-    this.detachmentActivationCount += 1;
+    this.detachmentActivationCount = Math.min(1_000_000, this.detachmentActivationCount + 1);
     const outward = direction?.isVector3 ? direction.clone() : new THREE.Vector3(0, 1, 0);
     if (outward.lengthSq() < 1e-8) outward.set(0, 1, 0);
     outward.normalize();

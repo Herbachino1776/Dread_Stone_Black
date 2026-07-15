@@ -27,7 +27,7 @@ export class CombatLabDebugPanel {
     controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px';
     const definitions = [
       ['RESET R', () => this.reset()],
-      ['KNIFE K', () => this.restoreKnife()],
+      ['RESTORE KNIFE', () => this.restoreKnife()],
       ['DEBUG B', () => this.toggleDebug()],
       ['ANCHORS A', () => this.toggleWoundAnchors()],
       ['FREEZE P', () => this.toggleFreeze()],
@@ -47,6 +47,8 @@ export class CombatLabDebugPanel {
       ['RESERVE G', () => this.cycleBloodReserve()],
       ['MORTALITY X', () => this.toggleMortality()],
       ['DECAPITATE J', () => this.dungeon?.debugDecapitate?.()],
+      ['LEFT FOREARM K', () => this.dungeon?.debugDetachLeftForearm?.()],
+      ['RIGHT FOREARM L', () => this.dungeon?.debugDetachRightForearm?.()],
       ['CUT TEST 6', () => this.dungeon?.createDebugSlash?.()],
       ['WALK PAUSE 7', () => this.dungeon?.toggleWalkerLocomotion?.()],
       ['WALK STAB 8', () => this.dungeon?.forceWalkerQualifyingStab?.()],
@@ -57,7 +59,7 @@ export class CombatLabDebugPanel {
       ['LEG 4', () => this.triggerCollapse('leg_failure', false)],
       ['LOSS 5', () => this.triggerCollapse('blood_loss', true)],
       ['TORCH T', () => this.equipLight('torch')],
-      ['LANTERN L', () => this.equipLight('keepers_lantern')],
+      ['LANTERN', () => this.equipLight('keepers_lantern')],
     ];
     if (this.dungeon?.bloodLightingDebugEnabled) definitions.push(['BLOOD LIGHT', () => this.dungeon.cycleBloodLightingDebugMode?.()]);
     definitions.forEach(([label, action]) => {
@@ -77,9 +79,9 @@ export class CombatLabDebugPanel {
 
   bindKeyboard() {
     const keydown = (event) => {
-      if (event.repeat || event.target?.matches?.('input,textarea,select') || event.target?.isContentEditable) return;
+      if (this.dungeon?.disposed || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.target?.matches?.('input,textarea,select') || event.target?.isContentEditable) return;
       if (event.code === 'KeyR') this.reset();
-      if (event.code === 'KeyK') this.restoreKnife();
+      if (event.code === 'KeyK') this.dungeon?.debugDetachLeftForearm?.();
       if (event.code === 'KeyB') this.toggleDebug();
       if (event.code === 'KeyA') this.toggleWoundAnchors();
       if (event.code === 'KeyP') this.toggleFreeze();
@@ -89,6 +91,7 @@ export class CombatLabDebugPanel {
       if (event.code === 'KeyI') this.dungeon?.weaponController?.nudgeExtension?.(0.1);
       if (event.code === 'KeyU') this.dungeon?.weaponController?.nudgeExtension?.(-0.1);
       if (event.code === 'KeyJ') this.dungeon?.debugDecapitate?.();
+      if (event.code === 'KeyL') this.dungeon?.debugDetachRightForearm?.();
       if (event.code === 'Semicolon') this.dungeon?.weaponController?.nudgeAim?.(0.22, 0);
       if (event.code === 'Period') this.dungeon?.stepPhysics?.();
       if (event.code === 'KeyC') this.dungeon?.clearWounds?.();
@@ -108,7 +111,6 @@ export class CombatLabDebugPanel {
       if (event.code === 'Digit4') this.triggerCollapse('leg_failure', false);
       if (event.code === 'Digit5') this.triggerCollapse('blood_loss', true);
       if (event.code === 'KeyT') this.equipLight('torch');
-      if (event.code === 'KeyL') this.equipLight('keepers_lantern');
     };
     window.addEventListener('keydown', keydown);
     this.disposers.push(() => window.removeEventListener('keydown', keydown));
@@ -211,7 +213,7 @@ export class CombatLabDebugPanel {
       `pose ${JSON.stringify(actor.bodyPositions ?? {})}`,
       `ragdoll bones ${JSON.stringify(actor.visualAdapter?.ragdollBonePositions ?? {})}  bindings ${actor.visualAdapter?.ragdollBindingCount ?? 0}`,
       `damage asset ${damageAsset.enabled ? 'READY' : 'OFF'}  ${damageAsset.manifestSchema ?? '-'}  author ${damageAsset.authoringVersion ?? '-'} / ${damageAsset.authoringBuildId ?? '-'}`,
-      `head ${dismemberment.headDetached ? 'DETACHED' : 'INTACT'}  requests ${dismemberment.requestedCount ?? 0}/${dismemberment.acceptedCount ?? 0}  bodies ${dismemberment.detachedRigidBodyCount ?? 0}  colliders ${dismemberment.detachedColliderCount ?? 0}`,
+      `segments ${(dismemberment.detachedSegments ?? []).join(',') || 'INTACT'}  requests ${dismemberment.requestedCount ?? 0}/${dismemberment.acceptedCount ?? 0}  bodies ${dismemberment.detachedRigidBodyCount ?? 0}  colliders ${dismemberment.detachedColliderCount ?? 0}`,
       `spawn error ${(dismemberment.spawnPositionError ?? 0).toFixed(5)}m / ${(dismemberment.spawnRotationErrorDegrees ?? 0).toFixed(2)}deg  collider ${dismemberment.colliderTypeUsed ?? '-'}`,
       `detach mortality/blood ${dismemberment.mortalityActivationCount ?? 0}/${dismemberment.bloodActivationCount ?? 0}  wound transfer ${dismemberment.detachedWoundTransferImplemented ? 'READY' : 'LATER'}`,
       '',
@@ -247,7 +249,7 @@ export class CombatLabDebugPanel {
       `slash ${JSON.stringify(weapon.activeSlash ?? null)}`,
       '',
       'Grip handle, then up: thrust | down: withdraw | side: slash',
-      'Release: safe spring return | J debug decapitate | X mortality | B debug',
+      'Release: safe spring return | J head | K left forearm | L right forearm',
     ].join('\n');
   }
 

@@ -103,8 +103,8 @@ export const TESTMAN_DAMAGE_COMBAT_PROFILE = Object.freeze({
     'DSB_Death_ChestHold_LEFT_v001',
     'DSB_Death_Faceplant_LEFT_v001',
   ]),
-  activeDamageSegmentIds: Object.freeze(['head_neck']),
-  colliderFitNotes: 'Combat Lab-only Forge v3.8.1 damage visual. Head detachment is active; forearm and waist segments remain loaded but inactive.',
+  activeDamageSegmentIds: Object.freeze(['head_neck', 'left_elbow', 'right_elbow']),
+  colliderFitNotes: 'Combat Lab-only Forge v3.8.1 damage visual. Head and forearm debug detachment are active; waist remains loaded but inactive.',
 });
 
 export function getHumanoidProfileScale(profile) {
