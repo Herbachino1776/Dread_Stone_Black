@@ -49,6 +49,68 @@ export function applyWeaponRenderLayer(root, { layer, renderOrder, itemId, viewm
   });
 }
 
+export function captureWeaponMaterialLightingState(root) {
+  const materials = new Map();
+  root?.traverse?.((object) => {
+    const objectMaterials = Array.isArray(object.material) ? object.material : [object.material];
+    objectMaterials.filter(Boolean).forEach((material) => {
+      if (materials.has(material.uuid)) return;
+      materials.set(material.uuid, {
+        uuid: material.uuid,
+        color: material.color?.getHex?.() ?? null,
+        metalness: material.metalness ?? null,
+        roughness: material.roughness ?? null,
+        map: material.map?.uuid ?? null,
+        normalMap: material.normalMap?.uuid ?? null,
+        emissive: material.emissive?.getHex?.() ?? null,
+        emissiveIntensity: material.emissiveIntensity ?? null,
+        baseOutdoorEmissiveIntensity: material.userData?.baseOutdoorEmissiveIntensity ?? null,
+      });
+    });
+  });
+  return [...materials.values()].sort((a, b) => a.uuid.localeCompare(b.uuid));
+}
+
+export function weaponMaterialLightingStateChanged(before, after) {
+  return JSON.stringify(before) !== JSON.stringify(after);
+}
+
+export function getWeaponRenderLayer(root) {
+  let mask = root?.layers?.mask ?? 0;
+  let foundMesh = false;
+  root?.traverse?.((object) => {
+    if (!foundMesh && object.isMesh) {
+      mask = object.layers.mask;
+      foundMesh = true;
+    }
+  });
+  if (mask <= 0 || (mask & (mask - 1)) !== 0) return null;
+  return Math.log2(mask);
+}
+
+export function getWeaponWorldLightIntersectionStatus(root, scene) {
+  const meshMasks = new Set();
+  root?.traverse?.((object) => { if (object.isMesh) meshMasks.add(object.layers.mask); });
+  if (meshMasks.size === 0 && root?.layers) meshMasks.add(root.layers.mask);
+  const intersectingLights = [];
+  const registeredLights = scene?.userData?.outdoorLightSourceRegistry?.entries;
+  const inspectLight = (object) => {
+    if (!object?.isLight || !object.userData?.outdoorLightSource) return;
+    for (const mask of meshMasks) {
+      if ((mask & object.layers.mask) === 0) continue;
+      intersectingLights.push(object.name || object.type);
+      break;
+    }
+  };
+  if (registeredLights instanceof Map) registeredLights.forEach((entry) => inspectLight(entry.light));
+  else scene?.traverse?.(inspectLight);
+  intersectingLights.sort();
+  return {
+    intersects: intersectingLights.length > 0,
+    intersectingLights,
+  };
+}
+
 export function disposeOwnedWeaponVisual({ root = null, geometries = [], materials = [] } = {}) {
   geometries.forEach((geometry) => geometry.dispose());
   materials.forEach((material) => material.dispose());

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { enableWeaponViewmodelLightLayer } from '../combat/weapons/WeaponRenderLayers.js';
 
 export const OUTDOOR_LIGHT_OWNER = Object.freeze({
   WORLD: 'world',
@@ -42,6 +43,7 @@ export class OutdoorLightSourceRegistry {
     if (!light?.isLight) throw new Error('Outdoor light registry accepts THREE.Light instances only.');
     if (!name || !source) throw new Error('Outdoor light sources require explicit names and sources.');
     const entry = { light, name, type, owner, source, global: global === true };
+    enableWeaponViewmodelLightLayer(light);
     light.userData.outdoorLightSource = { name, type, owner, source, global: entry.global };
     this.entries.set(light.uuid, entry);
     return light;

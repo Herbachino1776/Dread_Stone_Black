@@ -37,7 +37,7 @@ function bodyLocalPoint(body, worldPoint) {
   return worldPoint.clone().sub(body.position).applyQuaternion(body.quaternion.clone().invert());
 }
 
-async function createSwordHarness({ tipHit = true } = {}) {
+async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, 390 / 702, 0.1, 100);
   camera.updateMatrixWorld(true);
@@ -109,7 +109,7 @@ async function createSwordHarness({ tipHit = true } = {}) {
     castWeaponTip(previousTip, currentTip) {
       this.castCount += 1;
       if (!this.tipHit) return null;
-      return { collider, time_of_impact: 0.5, normal1: { x: 0, y: 0, z: 1 } };
+      return { collider, time_of_impact: tipToi, normal1: { x: 0, y: 0, z: 1 } };
     },
     castSweptEdgeSphere() { this.edgeCastCount += 1; throw new Error('edge sweep must not run'); },
   };
@@ -141,7 +141,14 @@ function beginHarnessThrust(harness, extension = 0.012) {
 
 function stepAxial(controller, localZ, dt = FIXED_DT) {
   controller.deliberateInputVelocity.set(0, 0, localZ);
-  controller.beforePhysics(dt);
+  if (controller.entry) {
+    const worldEntry = controller.getEntryWorldPose();
+    const nextDepth = controller.penetrationDepth - localZ * 0.025;
+    controller.desiredTip.copy(worldEntry.point).addScaledVector(worldEntry.axis, nextDepth);
+    controller.desiredGrip.copy(controller.desiredTip).addScaledVector(worldEntry.axis, -controller.config.tipLength);
+    controller.desiredQuaternion.copy(worldEntry.quaternion);
+    controller.solveSwordImpalement(dt);
+  } else controller.beforePhysics(dt);
   controller.afterPhysics();
 }
 
@@ -207,6 +214,7 @@ test('actual sword tip displacement above both thresholds performs the only cont
 
 test('sword thrust recognition is independent of resolveSwordLeadingPart and pointer-local intent classification', async () => {
   assert.doesNotMatch(SwordWorldWeaponController.prototype.solveFreeSwordPose.toString(), /resolveSwordLeadingPart/);
+  assert.doesNotMatch(SwordWorldWeaponController.prototype.solveSwordImpalement.toString(), /SWORD_(PENETRATION|WITHDRAWAL)_RATE_METERS_PER_SECOND/, 'gripped depth is not advanced by fixed rate constants');
   const harness = await createSwordHarness();
   const { controller, director } = harness;
   try {
@@ -223,15 +231,18 @@ test('sword thrust recognition is independent of resolveSwordLeadingPart and poi
   }
 });
 
-test('one tip contact owns one wound before progressive fixed-axis penetration', async () => {
-  const harness = await createSwordHarness();
+test('one tip crossing consumes the collision-frame remainder and owns one projection-driven wound', async () => {
+  const harness = await createSwordHarness({ tipToi: 0.1 });
   const { controller, actor, director, physics } = harness;
   try {
-    const entry = beginHarnessThrust(harness);
+    const entry = beginHarnessThrust(harness, 0.2);
     assert.equal(controller.state, SWORD_IMPALEMENT_STATES.surfaceContact);
     assert.equal(controller.punctureBeginCount, 1);
     assert.equal(director.beginCalls.length, 1);
     assert.equal(entry.woundId, null);
+    assert.ok(Math.abs(controller.penetrationDepth - 0.18) < 1e-9, 'the remaining 90% of the 20 cm crossing becomes same-frame depth');
+    assert.equal(director.advanceCalls.length, 1);
+    assert.ok(Math.abs(director.advanceCalls[0].payload.deltaDepth - (controller.penetrationDepth - 0.004)) < 1e-9);
     const wound = director.rupture();
     assert.equal(entry.woundId, wound.id);
     assert.equal(entry.surfaceRuptured, true);
@@ -239,7 +250,9 @@ test('one tip contact owns one wound before progressive fixed-axis penetration',
     stepAxial(controller, -1);
     assert.equal(controller.state, SWORD_IMPALEMENT_STATES.penetrating);
     assert.ok(controller.penetrationDepth > initialDepth);
-    assert.equal(controller.penetrationDepth, initialDepth + SWORD_PENETRATION_RATE_METERS_PER_SECOND * FIXED_DT);
+    assert.ok(Math.abs(controller.penetrationDepth - (initialDepth + 0.025)) < 1e-9);
+    assert.ok(Math.abs(controller.desiredProjectedDepth - controller.penetrationDepth) < 1e-9);
+    assert.ok(Math.abs(controller.projectionError) < 1e-9);
     assert.equal(director.beginCalls.length, 1);
     assert.equal(controller.punctureBeginCount, 1);
     assert.equal(physics.castCount, 1, 'embedded ownership prevents all further collider searches');
@@ -296,6 +309,10 @@ test('release plants the sword on the owned animated body and projected reacquis
     assert.ok(controller.currentTip.distanceTo(after.point.clone().addScaledVector(after.axis, plantedDepth)) < 1e-9);
     assert.equal(actor.activeEmbeddedWeapon, controller);
     assert.equal(controller.acquireGrip(8, 195, 560, 100), true);
+    const reacquiredDepth = controller.penetrationDepth;
+    controller.applyGripGesture(8, 0, 0, 195, 560, 116);
+    controller.beforePhysics(FIXED_DT);
+    assert.ok(Math.abs(controller.penetrationDepth - reacquiredDepth) < 1e-9, 're-grab rebases the new gesture origin without moving the planted sword');
     stepAxial(controller, 1);
     assert.equal(controller.state, SWORD_IMPALEMENT_STATES.withdrawing);
     assert.ok(controller.penetrationDepth < plantedDepth);
@@ -336,19 +353,28 @@ test('a planted sword auto-extracts after a longer walk-away tether than the kni
 
 test('complete withdrawal is single-shot and rearming requires the full surface clearance', async () => {
   const harness = await createSwordHarness();
-  const { controller, actor, director } = harness;
+  const { controller, actor, body, director } = harness;
   try {
     beginHarnessThrust(harness);
     director.rupture();
     for (let frame = 0; frame < 10; frame += 1) stepAxial(controller, -1);
+    body.position.add(new THREE.Vector3(0.035, 0.012, -0.02));
+    body.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(16));
     for (let frame = 0; frame < 40 && controller.entry; frame += 1) stepAxial(controller, 1);
     assert.equal(controller.entry, null);
-    assert.equal(controller.state, SWORD_IMPALEMENT_STATES.returning);
+    assert.equal(controller.state, SWORD_IMPALEMENT_STATES.attacking);
     assert.equal(controller.extractionCount, 1);
     assert.equal(director.withdrawalCalls.length, 1);
     assert.equal(director.completionCalls.length, 1);
     assert.equal(actor.activeEmbeddedWeapon, null);
     assert.equal(controller.rearmReady, false);
+    assert.equal(controller.gripPointerId, 7, 'the held pointer remains authoritative after extraction');
+    assert.ok(controller.embeddedToFreePositionDiscontinuity <= 0.01);
+    assert.ok(THREE.MathUtils.radToDeg(controller.embeddedToFreeRotationDiscontinuity) <= 3);
+    controller.beforePhysics(FIXED_DT);
+    assert.notEqual(controller.state, SWORD_IMPALEMENT_STATES.returning);
+    assert.ok(controller.embeddedToFreePositionDiscontinuity <= 0.010001);
+    assert.ok(THREE.MathUtils.radToDeg(controller.embeddedToFreeRotationDiscontinuity) <= 3.0001);
     const gate = controller.rearmGate;
     const entryPoint = gate.localPoint.clone().applyQuaternion(gate.body.quaternion).add(gate.body.position);
     const entryAxis = gate.localAxis.clone().applyQuaternion(gate.body.quaternion).normalize();
@@ -490,6 +516,9 @@ test('sword diagnostics expose bounded impalement ownership and rate counters wi
     assert.equal(diagnostics.entryBody, 'upper_chest');
     assert.equal(diagnostics.entryRegion, 'upper_chest');
     assert.equal(diagnostics.maximumPenetrationDepth, SWORD_MAXIMUM_PENETRATION_DEPTH);
+    assert.equal(diagnostics.depthInputMode, 'desired-tip-entry-axis-projection');
+    assert.equal(diagnostics.desiredProjectedDepth, diagnostics.penetrationDepth);
+    assert.equal(diagnostics.projectionError, 0);
     assert.equal(diagnostics.penetrationRate, SWORD_PENETRATION_RATE_METERS_PER_SECOND);
     assert.equal(diagnostics.withdrawalRate, SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND);
     assert.equal(diagnostics.plantedAutoExtractionDistance, SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE);

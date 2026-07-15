@@ -11,7 +11,8 @@ import { WeaponContactRouter } from './weapons/WeaponContactRouter.js';
 import { bindWeaponPointerEvents, DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR, WeaponGestureOwnership } from './weapons/WeaponGestureOwnership.js';
 import { computeCameraRelativeWeaponPose, createWeaponPoseWorkspace, initializeCameraRelativeWeaponPose, rebaseWorldWeaponPoseToCamera } from './weapons/WeaponPoseWorkspace.js';
 import { createCuttingEdgePath, resolveCuttingEdgeSampleCount, sampleCuttingEdgeLocal, sweepCuttingEdge } from './weapons/SweptCuttingEdge.js';
-import { applyWeaponRenderLayer, cloneOwnedWeaponVisual, createCachedWeaponGlbLoader, disposeOwnedWeaponVisual } from './weapons/WeaponVisualAsset.js';
+import { applyWeaponRenderLayer, captureWeaponMaterialLightingState, cloneOwnedWeaponVisual, createCachedWeaponGlbLoader, disposeOwnedWeaponVisual, getWeaponRenderLayer, getWeaponWorldLightIntersectionStatus, weaponMaterialLightingStateChanged } from './weapons/WeaponVisualAsset.js';
+import { WEAPON_VIEWMODEL_LAYER, WEAPON_WORLD_LAYER } from './weapons/WeaponRenderLayers.js';
 import { physicsBodyLocalDirectionToWorld, physicsBodyLocalToWorld, worldDirectionToPhysicsBodyLocal } from './CombatCoordinateSpaces.js';
 
 const forwardLocal = new THREE.Vector3(0, 0, -1);
@@ -21,8 +22,8 @@ const knifeEdgeHeelLocal = new THREE.Vector3(-knifeBladeHalfWidth, 0, -0.006);
 const knifeEdgeShoulderLocal = new THREE.Vector3(-knifeBladeHalfWidth * 0.92, 0, -knifeBladeShoulder);
 const knifeEdgeTipLocal = new THREE.Vector3(0, 0, -KNIFE_COMBAT_CONFIG.bladeLength);
 const knifeCuttingEdgePath = createCuttingEdgePath([knifeEdgeHeelLocal, knifeEdgeShoulderLocal, knifeEdgeTipLocal]);
-export const COMBAT_KNIFE_VIEWMODEL_LAYER = 1;
-export const COMBAT_KNIFE_WORLD_LAYER = 0;
+export const COMBAT_KNIFE_VIEWMODEL_LAYER = WEAPON_VIEWMODEL_LAYER;
+export const COMBAT_KNIFE_WORLD_LAYER = WEAPON_WORLD_LAYER;
 export const KNIFE_RUNTIME_COMBAT_MODE = 'puncture_only';
 export const KNIFE_EDGE_COLLISION_RADIUS = KNIFE_COMBAT_CONFIG.bladeThickness * 0.5;
 export const KNIFE_EDGE_BASE_SAMPLE_COUNT = 3;
@@ -67,7 +68,7 @@ function setLine(line, start, end) {
 }
 
 export class WorldKnifeCombatController {
-  constructor({ app, scene, camera, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, bloodEffects = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, visualAssetLoader = loadOldWorkKnifeAsset, bindPointerInput = true } = {}) {
+  constructor({ app, scene, camera, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, bloodEffects = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, outdoorLightingDirector = null, visualAssetLoader = loadOldWorkKnifeAsset, bindPointerInput = true } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.scene = scene;
@@ -86,6 +87,7 @@ export class WorldKnifeCombatController {
     if (feedback) this.combatDirector.setCameraFeedback(feedback);
     this.weaponContactRouter = new WeaponContactRouter({ combatRouter, fallbackActor: actor, fallbackDirector: this.combatDirector, cameraFeedback: feedback });
     this.contactActivationProvider = contactActivationProvider;
+    this.outdoorLightingDirector = outdoorLightingDirector;
     this.visualAssetLoader = visualAssetLoader;
     this.bindPointerInput = bindPointerInput;
     this.config = KNIFE_COMBAT_CONFIG;
@@ -235,6 +237,9 @@ export class WorldKnifeCombatController {
     this.microVariation = 0;
     this.microActive = false;
     this.visualDepthMode = null;
+    this.currentRenderLayer = null;
+    this.transitionLightingDiscontinuityCount = 0;
+    this.outdoorMaterialRegistration = { status: outdoorLightingDirector ? 'pending' : 'unavailable', registered: false, eligibleMaterialCount: 0, ordinaryEmissiveScale: null };
     this.presentationReady = true;
     this.microLocalOffset = new THREE.Vector3();
     this.microWorldOffset = new THREE.Vector3();
@@ -275,6 +280,7 @@ export class WorldKnifeCombatController {
       this.visualGeometries.push(...visual.geometries);
       this.materials.push(...visual.materials);
       this.visualAssetState = 'loaded';
+      this.registerOutdoorMaterials(visual.root);
       this.applyVisualDepthMode();
       return this.visualAssetState;
     }).catch((error) => {
@@ -322,11 +328,21 @@ export class WorldKnifeCombatController {
     this.visual.add(bladeMesh);
     this.materials.push(wood, rust, darkRust);
     this.visualGeometries.push(handleGeometry, guardGeometry, blade);
+    this.registerOutdoorMaterials(this.visual);
+  }
+
+  registerOutdoorMaterials(root) {
+    if (!this.outdoorLightingDirector?.registerOrdinaryObject) return this.outdoorMaterialRegistration;
+    this.outdoorMaterialRegistration = this.outdoorLightingDirector.registerOrdinaryObject(root);
+    return this.outdoorMaterialRegistration;
   }
 
   applyVisualDepthMode() {
     const layer = this.entry ? COMBAT_KNIFE_WORLD_LAYER : COMBAT_KNIFE_VIEWMODEL_LAYER;
     const viewmodel = !this.entry;
+    const before = this.currentRenderLayer != null && this.currentRenderLayer !== layer
+      ? captureWeaponMaterialLightingState(this.visual)
+      : null;
     applyWeaponRenderLayer(this.visual, {
       layer,
       renderOrder: viewmodel ? COMBAT_KNIFE_RENDER_ORDER : 0,
@@ -334,6 +350,10 @@ export class WorldKnifeCombatController {
       viewmodel,
       configureMesh: (object) => { object.userData.combatKnifeViewmodel = viewmodel; },
     });
+    this.currentRenderLayer = layer;
+    if (before && weaponMaterialLightingStateChanged(before, captureWeaponMaterialLightingState(this.visual))) {
+      this.transitionLightingDiscontinuityCount = Math.min(1_000_000, this.transitionLightingDiscontinuityCount + 1);
+    }
   }
 
   syncVisualDepthMode() {
@@ -1238,6 +1258,7 @@ export class WorldKnifeCombatController {
   getDiagnostics() {
     const round = (v) => [v.x, v.y, v.z].map((value) => Number(value.toFixed(3)));
     const euler = new THREE.Euler().setFromQuaternion(this.actualQuaternion, 'YXZ');
+    const worldLightIntersectionStatus = getWeaponWorldLightIntersectionStatus(this.visual, this.scene);
     return {
       itemId: this.config.itemId,
       runtimeCombatMode: KNIFE_RUNTIME_COMBAT_MODE,
@@ -1267,6 +1288,13 @@ export class WorldKnifeCombatController {
       maximumPresentationOffset: Number(this.maximumPresentationOffset.toFixed(5)),
       presentationReady: this.presentationReady,
       visualDepthMode: this.visualDepthMode,
+      visualLayerMode: this.visualDepthMode,
+      currentRenderLayer: getWeaponRenderLayer(this.visual),
+      worldLightIntersectionStatus,
+      outdoorMaterialRegistrationStatus: this.outdoorMaterialRegistration.status,
+      currentOutdoorEmissiveScale: this.outdoorLightingDirector?.currentOrdinaryEmissiveScale ?? this.outdoorMaterialRegistration.ordinaryEmissiveScale ?? null,
+      transitionLightingDiscontinuityCount: this.transitionLightingDiscontinuityCount,
+      transitionLightingDiscontinuityCounter: this.transitionLightingDiscontinuityCount,
       visualAssetState: this.visualAssetState,
       microImpact: { kind: this.microResponse.kind, active: this.microActive, compression: Number(this.microCompression.toFixed(5)), recoil: Number(this.microRecoil.toFixed(5)), rollDegrees: Number(THREE.MathUtils.radToDeg(this.microRoll).toFixed(2)), twistDegrees: Number(THREE.MathUtils.radToDeg(this.microTwist).toFixed(2)) },
       tissueResistance: { phase: this.tissueResistanceSample.phase, effective: Number((this.tissueResistanceSample.effectiveResistance ?? 0).toFixed(3)), drag: Number((this.tissueResistanceSample.drag ?? 0).toFixed(3)), boneProximity: Number((this.tissueResistanceSample.boneProgress ?? 0).toFixed(3)) },

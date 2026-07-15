@@ -29,6 +29,14 @@ function blendProfile(a, b, amount) {
   return result;
 }
 
+function isEligibleOrdinaryMaterial(material) {
+  return Boolean(
+    material
+    && (material.isMeshStandardMaterial || material.isMeshLambertMaterial || material.isMeshPhongMaterial)
+    && !material.userData?.authoredLuminousMaterial
+  );
+}
+
 export function resolveOutdoorLightingProfile(phase) {
   const p = wrapPhase(phase);
   if (p < 0.3 || p >= 0.9) return blendProfile(OUTDOOR_LIGHTING_PROFILES.noon, OUTDOOR_LIGHTING_PROFILES.noon, 0);
@@ -123,6 +131,9 @@ export class OutdoorLightingDirector {
     this.foliageMaterials = [];
     this.contactMaterials = [];
     this.ordinaryMaterials = [];
+    this.ordinaryMaterialSet = new Set();
+    this.currentPresentationState = resolveOutdoorPresentationState(this.clock?.getSnapshot?.() ?? 0);
+    this.currentOrdinaryEmissiveScale = this.currentPresentationState.ordinaryEmissiveScale;
     this.torchDebug = {};
     const debugTokens = new Set((globalThis.location ? new URLSearchParams(globalThis.location.search).get('debug') ?? '' : '').split(','));
     if (globalThis.document && ['outdoor-lighting', 'outdoor-shadows', 'torch-lighting'].some((token) => debugTokens.has(token))) {
@@ -133,24 +144,60 @@ export class OutdoorLightingDirector {
   }
 
   bindSceneMaterials() {
-    const water = new Set(); const foliage = new Set(); const contacts = new Set(); const ordinary = new Set();
+    const water = new Set(); const foliage = new Set(); const contacts = new Set();
+    this.ordinaryMaterialSet.clear();
     this.scene.traverse((object) => {
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       materials.filter(Boolean).forEach((material) => {
         if (material.userData?.outdoorWater) water.add(material);
         if (material.userData?.outdoorFoliage) foliage.add(material);
         if (material.userData?.outdoorFoliageContact) contacts.add(material);
-        if (material.userData?.ordinaryOutdoorMaterial || ((material.isMeshStandardMaterial || material.isMeshLambertMaterial || material.isMeshPhongMaterial) && !material.userData?.authoredLuminousMaterial)) {
-          material.userData.ordinaryOutdoorMaterial = true;
-          material.userData.baseOutdoorEmissiveIntensity ??= material.emissiveIntensity ?? 0;
-          ordinary.add(material);
-        }
       });
     });
-    this.waterMaterials = [...water]; this.foliageMaterials = [...foliage]; this.contactMaterials = [...contacts]; this.ordinaryMaterials = [...ordinary];
+    this.waterMaterials = [...water]; this.foliageMaterials = [...foliage]; this.contactMaterials = [...contacts];
+    this.registerOrdinaryObject(this.scene);
     const unlitFoliageMaterials = findUnlitOutdoorFoliageMaterials(this.scene);
     if (unlitFoliageMaterials.length) throw new Error(`Outdoor foliage lighting violation: ${JSON.stringify(unlitFoliageMaterials)}`);
     Object.assign(this.scene.userData.outdoorLightingDirector, { waterMaterialCount: this.waterMaterials.length, foliageMaterialCount: this.foliageMaterials.length, contactMaterialCount: this.contactMaterials.length, ordinaryMaterialCount: this.ordinaryMaterials.length, unlitFoliageMaterials });
+  }
+
+  registerOrdinaryObject(root) {
+    const eligible = new Set();
+    let excludedLuminousMaterialCount = 0;
+    root?.traverse?.((object) => {
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.filter(Boolean).forEach((material) => {
+        if (material.userData?.authoredLuminousMaterial) {
+          excludedLuminousMaterialCount += 1;
+          return;
+        }
+        if (isEligibleOrdinaryMaterial(material)) eligible.add(material);
+      });
+    });
+    let newlyRegisteredMaterialCount = 0;
+    eligible.forEach((material) => {
+      material.userData ??= {};
+      material.userData.ordinaryOutdoorMaterial = true;
+      material.userData.baseOutdoorEmissiveIntensity ??= material.emissiveIntensity ?? 0;
+      if (!this.ordinaryMaterialSet.has(material)) {
+        this.ordinaryMaterialSet.add(material);
+        newlyRegisteredMaterialCount += 1;
+      }
+      material.emissiveIntensity = material.userData.baseOutdoorEmissiveIntensity * this.currentOrdinaryEmissiveScale;
+    });
+    this.ordinaryMaterials = [...this.ordinaryMaterialSet];
+    Object.assign(this.scene.userData.outdoorLightingDirector, {
+      ordinaryMaterialCount: this.ordinaryMaterials.length,
+      ordinaryEmissiveScale: this.currentOrdinaryEmissiveScale,
+    });
+    return {
+      status: eligible.size > 0 ? 'registered' : 'no-eligible-materials',
+      registered: eligible.size > 0,
+      eligibleMaterialCount: eligible.size,
+      newlyRegisteredMaterialCount,
+      excludedLuminousMaterialCount,
+      ordinaryEmissiveScale: this.currentOrdinaryEmissiveScale,
+    };
   }
 
   setTorchDebugState(state = {}) { this.torchDebug = state; }
@@ -158,6 +205,8 @@ export class OutdoorLightingDirector {
   update(player = null) {
     const clockState = this.clock.getSnapshot();
     const state = resolveOutdoorPresentationState(clockState);
+    this.currentPresentationState = state;
+    this.currentOrdinaryEmissiveScale = state.ordinaryEmissiveScale;
     this.hemisphere.color.copy(state.sky); this.hemisphere.groundColor.copy(state.ground); this.hemisphere.intensity = state.hemi;
     this.key.color.copy(state.key); this.key.intensity = state.sunIntensity;
     const shadowWasEnabled = this.key.castShadow;
@@ -203,7 +252,7 @@ export class OutdoorLightingDirector {
     const torch = this.torchDebug;
     const activeShadowCasters = Number(this.key.castShadow) + Number(Boolean(torch.castShadow));
     this.debug = { ...clockState, ...state, exposure: state.outdoorExposure, shadowMapSize: this.shadowMapSize, explorationShadowRadius: this.explorationShadowRadius, combatShadowRadius: this.combatShadowRadius, shadowRadius: this.shadowRadius, combatShadowFocused: this.combatShadowFocused, combatDistance, texelSize: texel, shadowBias: this.key.shadow.bias, shadowNormalBias: this.key.shadow.normalBias, shadowFilterRadius: this.key.shadow.radius, shadowFilter: 'PCFSoftShadowMap', snappedCenter: { x: cx, z: cz }, activeShadowCasters, torch, activeLights, anonymousCameraLightsDisabled, unregisteredWorldLightsDisabled };
-    Object.assign(this.scene.userData.outdoorLightingDirector, { activeRadius: this.shadowRadius, explorationShadowRadius: this.explorationShadowRadius, combatShadowRadius: this.combatShadowRadius, combatShadowFocused: this.combatShadowFocused, metersPerShadowTexel: texel, bias: this.key.shadow.bias, normalBias: this.key.shadow.normalBias, shadowFilterRadius: this.key.shadow.radius });
+    Object.assign(this.scene.userData.outdoorLightingDirector, { activeRadius: this.shadowRadius, explorationShadowRadius: this.explorationShadowRadius, combatShadowRadius: this.combatShadowRadius, combatShadowFocused: this.combatShadowFocused, metersPerShadowTexel: texel, bias: this.key.shadow.bias, normalBias: this.key.shadow.normalBias, shadowFilterRadius: this.key.shadow.radius, ordinaryEmissiveScale: this.currentOrdinaryEmissiveScale });
     if (this.debugPanel) {
       const lightLines = this.lightRegistry.getDiagnostics().map((light) => `${light.active ? '*' : '-'} ${light.name} ${light.type} owner=${light.owner} source=${light.source} intensity=${light.intensity.toFixed(3)} range=${light.range.toFixed(2)} pos=${light.position.x.toFixed(1)},${light.position.y.toFixed(1)},${light.position.z.toFixed(1)} shadow=${light.castShadow} ${light.global ? 'global' : 'local'}`);
       const spotOrigin = torch.spotlightOrigin ?? {};

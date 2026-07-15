@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { COMBAT_READABILITY_LIGHT_LAYER } from '../combat/CombatReadabilityLightLayer.js';
+import { WEAPON_VIEWMODEL_LAYER } from '../combat/weapons/WeaponRenderLayers.js';
 
 export class RendererHost {
   constructor({ root, shellHtml = null }) {
@@ -91,6 +92,11 @@ export class RendererHost {
       scene.fog = null;
       camera.layers.set(layer);
       this.renderer.render(scene, camera);
+      if (WEAPON_VIEWMODEL_LAYER !== layer) {
+        this.renderer.clearDepth();
+        camera.layers.set(WEAPON_VIEWMODEL_LAYER);
+        this.renderer.render(scene, camera);
+      }
     } finally {
       this.renderer.autoClear = previousAutoClear;
       camera.layers.mask = previousMask;
