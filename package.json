@@ -27,7 +27,7 @@
     "validate:no-player-arms": "node scripts/validate-no-player-arms.mjs",
     "audit:campfire-flame-alpha": "node scripts/audit-campfire-flame-alpha.mjs",
     "validate:player-fish-baseline": "node scripts/validate-player-fish-baseline.mjs",
-    "validate:combat": "node --test tests/combat-foundation.test.mjs tests/combat-walker.test.mjs tests/folsom-combat-walker.test.mjs tests/knife-wound-decals.test.mjs tests/slash-wound-visual.test.mjs tests/close-combat-torch-lighting.test.mjs tests/blood-chroma-material.test.mjs && node scripts/validate-combat.mjs"
+    "validate:combat": "node --test tests/combat-foundation.test.mjs tests/puncture-only-weapons.test.mjs tests/combat-walker.test.mjs tests/folsom-combat-walker.test.mjs tests/knife-wound-decals.test.mjs tests/slash-wound-visual.test.mjs tests/close-combat-torch-lighting.test.mjs tests/blood-chroma-material.test.mjs && node scripts/validate-combat.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",

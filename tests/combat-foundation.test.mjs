@@ -12,7 +12,7 @@ import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
-import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, KNIFE_EDGE_BASE_SAMPLE_COUNT, KNIFE_EDGE_COLLISION_RADIUS, KNIFE_EDGE_MAX_SAMPLE_COUNT, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveKnifeEdgeSampleCount, resolveSlashLeadingPart, sampleKnifeCuttingEdgeLocal } from '../src/game/combat/WorldKnifeCombatController.js';
+import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, KNIFE_EDGE_BASE_SAMPLE_COUNT, KNIFE_EDGE_COLLISION_RADIUS, KNIFE_EDGE_MAX_SAMPLE_COUNT, KNIFE_RUNTIME_COMBAT_MODE, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveKnifeEdgeSampleCount, resolveSlashLeadingPart, sampleKnifeCuttingEdgeLocal } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
 import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveAnimationPackManifest, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
@@ -24,7 +24,7 @@ import { Feedback } from '../src/game/Feedback.js';
 import { applyMeleeSpacingEnvelope, resolveMeleeSpacingEnvelope, resolveWeaponMicroResponse, sampleTissueResistanceCurve } from '../src/game/combat/CombatPresentation.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import { EDGE_DAMAGE_SCHEMA } from '../src/game/combat/weapons/EdgeDamageInteraction.js';
-import { DREADSTONE_SWORD_DIMENSIONS, DREADSTONE_SWORD_GLB_PATH, SWORD_CONTACT_PRIMITIVES, SWORD_EDGE_BASE_SAMPLE_COUNT, SWORD_EDGE_MAX_SAMPLE_COUNT, SWORD_VIEWMODEL_LAYER, SwordWorldWeaponController, classifySwordContact, resolveSwordEdgeSampleCount, resolveSwordLeadingPart } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
+import { DREADSTONE_SWORD_DIMENSIONS, DREADSTONE_SWORD_GLB_PATH, SWORD_CONTACT_PRIMITIVES, SWORD_EDGE_BASE_SAMPLE_COUNT, SWORD_EDGE_MAX_SAMPLE_COUNT, SWORD_MAXIMUM_PENETRATION_DEPTH, SWORD_PENETRATION_RATE_METERS_PER_SECOND, SWORD_RUNTIME_COMBAT_MODE, SWORD_THRUST_MIN_FORWARD_RATIO, SWORD_THRUST_MIN_FORWARD_SPEED, SWORD_THRUST_REARM_DISTANCE, SWORD_VIEWMODEL_LAYER, SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND, SwordWorldWeaponController, classifySwordContact, resolveSwordEdgeSampleCount, resolveSwordLeadingPart } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
 import { deriveSwordCutTrauma } from '../src/game/combat/SwordCutDamage.js';
 import { MAX_SWORD_CUT_SURFACE_SAMPLES, SWORD_CUT_TARGET_SAMPLE_SPACING } from '../src/game/combat/SwordCutWoundVisual.js';
 import { CombatBloodEffects } from '../src/game/combat/CombatBloodEffects.js';
@@ -39,6 +39,14 @@ test('authored sword dimensions drive complete weapon-neutral contact primitives
   assert.deepEqual(Object.keys(SWORD_CONTACT_PRIMITIVES), ['tip', 'leftEdge', 'rightEdge', 'flat', 'spine', 'guard', 'grip']);
   assert.equal(SWORD_CONTACT_PRIMITIVES.tip.point[2], DREADSTONE_SWORD_DIMENSIONS.tipZ);
   assert.equal(SWORD_CONTACT_PRIMITIVES.guard.points[0][0], -DREADSTONE_SWORD_DIMENSIONS.guardHalfSpan);
+  assert.equal(KNIFE_RUNTIME_COMBAT_MODE, 'puncture_only');
+  assert.equal(SWORD_RUNTIME_COMBAT_MODE, 'puncture_only');
+  assert.equal(SWORD_THRUST_MIN_FORWARD_SPEED, 0.16);
+  assert.equal(SWORD_THRUST_MIN_FORWARD_RATIO, 0.55);
+  assert.equal(SWORD_THRUST_REARM_DISTANCE, 0.05);
+  assert.equal(SWORD_PENETRATION_RATE_METERS_PER_SECOND, 0.48);
+  assert.equal(SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND, 0.62);
+  assert.equal(SWORD_MAXIMUM_PENETRATION_DEPTH, DREADSTONE_SWORD_DIMENSIONS.bladeLength - 0.06);
 });
 
 test('long sword edges adapt sampling and classify every authored contact family', () => {
@@ -776,11 +784,10 @@ test('sword thrusts use larger bound puncture decals from the authored puncture 
     bladeLength: DREADSTONE_SWORD_DIMENSIONS.bladeLength,
     bladeWidth: DREADSTONE_SWORD_DIMENSIONS.bladeWidth,
     bladeThickness: DREADSTONE_SWORD_DIMENSIONS.bladeThickness,
-    maximumPenetrationDepth: DREADSTONE_SWORD_DIMENSIONS.bladeLength,
+    maximumPenetrationDepth: SWORD_MAXIMUM_PENETRATION_DEPTH,
   };
   const intent = new MeleeIntentWeapon({ weaponId: weapon.id }).interpret({ ownerId: 12, controlState: 'attacking', localVelocity: new THREE.Vector3(0, 0, -1.2) });
-  const interaction = director.beginEdgeDamage({ weapon, intent, hit, point: worldPoint, localPoint: hit.localPoint, surfaceNormal: new THREE.Vector3(0, 0, 1), direction: new THREE.Vector3(0, 0, -1), travel: 0.045, depth: 0.04, severity: 0.72, edgeAlignment: 0.94, swingSpeed: 1.2, classification: 'thrust', part: 'tip' });
-  director.finishEdgeDamage(interaction.id);
+  const interaction = director.beginSwordPuncture({ weapon, intent, hit, entryPoint: worldPoint, surfaceNormal: new THREE.Vector3(0, 0, 1), direction: new THREE.Vector3(0, 0, -1), contactDirection: new THREE.Vector3(0, 0, -1), depth: 0.04, force: 1.2 });
   director.update(0.4);
   actor.woundSystem.update(1 / 60);
 
@@ -791,6 +798,7 @@ test('sword thrusts use larger bound puncture decals from the authored puncture 
   assert.equal(wound.bladeWidth, DREADSTONE_SWORD_DIMENSIONS.bladeWidth);
   assert.equal(wound.bladeThickness, DREADSTONE_SWORD_DIMENSIONS.bladeThickness);
   assert.equal(wound.puncturePresentationScale, SWORD_THRUST_PUNCTURE_PRESENTATION_SCALE);
+  assert.ok(wound.maximumDepth < SWORD_MAXIMUM_PENETRATION_DEPTH, 'the entry decal exists at rupture before maximum penetration');
   assert.equal(wound.decalFamily, 'puncture');
   assert.match(wound.decalVariantId, /^knife_puncture_/);
   assert.equal(validateSurfaceBinding(wound.surfaceBinding), true);
@@ -801,8 +809,8 @@ test('sword thrusts use larger bound puncture decals from the authored puncture 
   const knifeDimensions = derivePuncturePhysicalDimensions({ bladeWidth: KNIFE_COMBAT_CONFIG.bladeWidth, bladeThickness: KNIFE_COMBAT_CONFIG.bladeThickness, maximumPenetrationDepth: KNIFE_COMBAT_CONFIG.maximumPenetrationDepth, penetrationDepth: 0.04, impactSeverity: 0.72 });
   assert.ok(wound.visualSlot.puncture.scale.x > knifeDimensions.visualMajorMeters * KNIFE_PUNCTURE_PRESENTATION_SCALE);
   assert.ok(wound.visualSlot.puncture.scale.y > knifeDimensions.visualMinorMeters * KNIFE_PUNCTURE_PRESENTATION_SCALE);
-  assert.equal(interaction.result.edgeDamage.schema, EDGE_DAMAGE_SCHEMA);
-  assert.equal(interaction.result.edgeDamage.samples.length, 1, 'thrust presentation does not discard edge-damage diagnostics');
+  assert.equal(interaction.kind, 'sword_puncture');
+  assert.equal(interaction.result.edgeDamage, undefined, 'sword thrusts no longer enter the continuous edge-damage accumulator');
 
   director.dispose();
   actor.dispose();
@@ -872,7 +880,7 @@ test('sword controller loads the grip-origin GLB and directly follows owned worl
   assert.equal(scene.children.includes(sword.visual), false);
 });
 
-test('a deliberate sword sweep routes authored edge damage without persistent slash visuals', async () => {
+test('a deliberate lateral sword sweep is combat-silent in puncture-only mode', async () => {
   await initializeCombatPhysics();
   const physics = new CombatPhysicsWorld();
   const scene = new THREE.Scene();
@@ -891,11 +899,13 @@ test('a deliberate sword sweep routes authored edge damage without persistent sl
   sword.releaseGrip('test-complete');
   for (let step = 0; step < 18; step += 1) physics.stepSingle((dt) => { sword.beforePhysics(dt); actor.beforePhysics(dt); }, (dt) => sword.afterPhysicsStep(dt));
   const totalTrauma = [...actor.regionState.values()].reduce((sum, state) => sum + state.trauma, 0);
-  assert.ok(sword.edgeDamageCount >= 1);
-  assert.equal(sword.lastContactPart === 'leftEdge' || sword.lastContactPart === 'rightEdge', true);
-  assert.ok(totalTrauma > 0);
-  assert.ok(actor.woundSystem.wounds.length >= 1);
-  assert.ok(actor.woundSystem.wounds.every((wound) => wound.visualFamily === 'sword' && wound.visualSlot === null && wound.decalVariantId === null && wound.swordVisualSlot.ribbon.visible === false), 'swept sword cuts retain records without ribbons or knife decal chains');
+  assert.equal(sword.edgeDamageCount, 0);
+  assert.equal(sword.lastContactPart, 'none');
+  assert.equal(totalTrauma, 0);
+  assert.equal(actor.woundSystem.wounds.length, 0);
+  assert.ok(sword.suppressedNonTipContacts > 0);
+  assert.equal(sword.combatDirector.eventLog.length, 0, 'lateral sword motion schedules no hidden presentation or Combat Director work');
+  assert.equal(sword.combatDirector.queue.length, 0);
   sword.dispose();
   actor.dispose();
   physics.dispose();
@@ -1542,7 +1552,7 @@ test('a grip-owned deliberate world-space thrust punctures through the authorita
   knife.dispose(); actor.dispose(); physics.dispose();
 });
 
-test('a grip-owned deliberate lateral sweep creates an edge-led slash', async () => {
+test('a grip-owned deliberate lateral knife sweep is combat-silent in puncture-only mode', async () => {
   await initializeCombatPhysics();
   const physics = new CombatPhysicsWorld();
   const scene = new THREE.Scene();
@@ -1559,10 +1569,14 @@ test('a grip-owned deliberate lateral sweep creates an edge-led slash', async ()
     physics.stepSingle((dt) => { knife.beforePhysics(dt); actor.beforePhysics(dt); }, (dt) => knife.afterPhysicsStep(dt));
     knife.afterPhysics();
   }
-  assert.equal(knife.activeSlash?.part, 'edge');
-  assert.ok(['shallow_cut', 'deep_slash'].includes(knife.contactState));
-  assert.equal(knife.slashCount, 1);
-  assert.equal(actor.woundSystem.wounds.length, 1);
+  assert.equal(knife.activeSlash, null);
+  assert.equal(knife.slashCount, 0);
+  assert.equal(actor.woundSystem.wounds.length, 0);
+  assert.ok(knife.suppressedSlashAttempts > 0);
+  assert.equal(knife.attackEnabled, false);
+  assert.equal(knife.combatDirector.eventLog.length, 0, 'lateral knife motion schedules no hidden presentation or Combat Director work');
+  assert.equal(knife.combatDirector.queue.length, 0);
+  assert.equal(knife.getDiagnostics().runtimeCombatMode, 'puncture_only');
   knife.dispose(); actor.dispose(); physics.dispose();
 });
 

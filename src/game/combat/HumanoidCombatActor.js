@@ -466,17 +466,18 @@ export class HumanoidCombatActor {
     return wound;
   }
 
-  beginSwordThrustWound({ hit, point, surfaceNormal, direction, sample, edgeDamage, weaponProfile = null, weaponId = 'dreadstone_sword' } = {}) {
+  beginSwordThrustWound({ hit, point, surfaceNormal, direction, entryTangent = null, sample, edgeDamage, weaponProfile = null, weaponId = 'dreadstone_sword', embeddedWeaponId = null } = {}) {
     const wound = this.beginPunctureWound({
       hit,
       entryPoint: point,
       direction,
       surfaceNormal,
+      entryTangent,
       depth: sample?.depth,
       impactSeverity: sample?.severity,
       weaponProfile,
       weaponId,
-      embeddedWeaponId: null,
+      embeddedWeaponId,
       deferReaction: true,
       deferAudio: true,
     });

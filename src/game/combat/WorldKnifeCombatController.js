@@ -4,7 +4,7 @@ import { advancePenetrationDepth, clampWorkspacePoint, classifyKnifeContact, cla
 import { SLASH_CONFIG } from './CombatStage2Config.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from './KnifeControlState.js';
 import { CombatDirector } from './CombatDirector.js';
-import { isDamageIntent, MeleeIntentWeapon } from './MeleeIntentWeapon.js';
+import { isDamageIntent, MELEE_INTENTS, MeleeIntentWeapon } from './MeleeIntentWeapon.js';
 import { resolveWeaponMicroResponse, sampleTissueResistanceCurve } from './CombatPresentation.js';
 import { createWeaponContactScratch, getRigidBodyWorldPosition } from './weapons/WeaponContactScratch.js';
 import { WeaponContactRouter } from './weapons/WeaponContactRouter.js';
@@ -23,6 +23,7 @@ const knifeEdgeTipLocal = new THREE.Vector3(0, 0, -KNIFE_COMBAT_CONFIG.bladeLeng
 const knifeCuttingEdgePath = createCuttingEdgePath([knifeEdgeHeelLocal, knifeEdgeShoulderLocal, knifeEdgeTipLocal]);
 export const COMBAT_KNIFE_VIEWMODEL_LAYER = 1;
 export const COMBAT_KNIFE_WORLD_LAYER = 0;
+export const KNIFE_RUNTIME_COMBAT_MODE = 'puncture_only';
 export const KNIFE_EDGE_COLLISION_RADIUS = KNIFE_COMBAT_CONFIG.bladeThickness * 0.5;
 export const KNIFE_EDGE_BASE_SAMPLE_COUNT = 3;
 export const KNIFE_EDGE_MAX_SAMPLE_COUNT = 9;
@@ -196,6 +197,7 @@ export class WorldKnifeCombatController {
     this.activeSlash = null;
     this.lastContactPart = 'none';
     this.slashCount = 0;
+    this.suppressedSlashAttempts = 0;
     this.lastEdgeSampleCount = 0;
     this.penetrationDepth = 0;
     this.maximumDepthReached = 0;
@@ -582,7 +584,15 @@ export class WorldKnifeCombatController {
     // A physical draw cut can include inward pressure. Give the swept edge first
     // ownership only for a substantially tangential tip path; straight thrusts
     // remain tip-authoritative.
-    if (tangentialRatio >= 0.52 && this.resolveSweptEdgeContact(dt)) {
+    if (KNIFE_RUNTIME_COMBAT_MODE === 'puncture_only' && (this.intentState.intent === MELEE_INTENTS.slash || tangentialRatio >= 0.52)) {
+      this.suppressedSlashAttempts = Math.min(1_000_000, this.suppressedSlashAttempts + 1);
+      this.attackEnabled = false;
+      this.contactDamageReason = 'non-damaging:puncture-only-lateral-motion';
+      this.lastContactPart = 'none';
+      this.releaseSlashContact(dt, true);
+      return;
+    }
+    if (KNIFE_RUNTIME_COMBAT_MODE !== 'puncture_only' && tangentialRatio >= 0.52 && this.resolveSweptEdgeContact(dt)) {
       return;
     }
     this.releaseSlashContact(dt, false);
@@ -1230,6 +1240,8 @@ export class WorldKnifeCombatController {
     const euler = new THREE.Euler().setFromQuaternion(this.actualQuaternion, 'YXZ');
     return {
       itemId: this.config.itemId,
+      runtimeCombatMode: KNIFE_RUNTIME_COMBAT_MODE,
+      suppressedSlashAttempts: this.suppressedSlashAttempts,
       equipped: this.isEquipped(),
       state: this.state,
       contactState: this.contactState,

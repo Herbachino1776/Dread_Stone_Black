@@ -32,7 +32,7 @@ import { TESTMAN_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/com
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import { MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
 import { buildSkinnedTriangleInfluenceMetadata, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
-import { DREADSTONE_SWORD_DIMENSIONS, SwordWorldWeaponController } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
+import { DREADSTONE_SWORD_DIMENSIONS, SWORD_MAXIMUM_PENETRATION_DEPTH, SwordWorldWeaponController } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
 
 installKnifeWoundManifestForHeadlessTests(JSON.parse(readFileSync(
   new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url),
@@ -425,30 +425,24 @@ test('sword thrust punctures use the same transform-invariant world-space bindin
       bladeLength: DREADSTONE_SWORD_DIMENSIONS.bladeLength,
       bladeWidth: DREADSTONE_SWORD_DIMENSIONS.bladeWidth,
       bladeThickness: DREADSTONE_SWORD_DIMENSIONS.bladeThickness,
-      maximumPenetrationDepth: DREADSTONE_SWORD_DIMENSIONS.bladeLength,
+      maximumPenetrationDepth: SWORD_MAXIMUM_PENETRATION_DEPTH,
     };
     const intent = new MeleeIntentWeapon({ weaponId: weapon.id }).interpret({
       ownerId: 41,
       controlState: 'attacking',
       localVelocity: new THREE.Vector3(0, 0, -1.2),
     });
-    const interaction = director.beginEdgeDamage({
+    const interaction = director.beginSwordPuncture({
       weapon,
       intent,
       hit: runtime.hit,
-      point: runtime.collisionEntryWorld,
-      localPoint: runtime.hit.localPoint,
+      entryPoint: runtime.collisionEntryWorld,
       surfaceNormal: runtime.collisionNormalWorld,
       direction: runtime.collisionNormalWorld.clone().negate(),
-      travel: 0.045,
+      contactDirection: runtime.collisionNormalWorld.clone().negate(),
       depth: 0.04,
-      severity: 0.72,
-      edgeAlignment: 0.94,
-      swingSpeed: 1.2,
-      classification: 'thrust',
-      part: 'tip',
+      force: 1.2,
     });
-    director.finishEdgeDamage(interaction.id);
     director.update(0.4);
     runtime.actor.woundSystem.update(1 / 60);
     const wound = interaction.result.wound;
@@ -499,8 +493,9 @@ test('deliberate sword tip contact reaches wound creation before presentation', 
     }
     const wound = actor.woundSystem.wounds[0];
     assert.equal(sword.lastContactPart, 'tip');
-    assert.equal(sword.contactState, 'thrust');
-    assert.ok(sword.edgeDamageCount >= 1);
+    assert.equal(sword.contactState, 'surface_contact');
+    assert.equal(sword.punctureBeginCount, 1);
+    assert.equal(sword.edgeDamageCount, 0);
     assert.ok(wound, 'tip contact created a wound before any presentation decision');
     assert.equal(wound.interactionKind, 'sword_thrust');
     assert.equal(wound.surfaceBindingStatus, 'puncture_hidden_invalid_surface', 'headless actor has no visible surface, so display fails after creation');
