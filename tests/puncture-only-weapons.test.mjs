@@ -10,7 +10,7 @@ import {
   SWORD_IMPALEMENT_STATES,
   SWORD_MAXIMUM_PENETRATION_DEPTH,
   SWORD_PENETRATION_RATE_METERS_PER_SECOND,
-  SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE,
+  SWORD_RELEASE_EXTRACTION_DURATION,
   SWORD_RUNTIME_COMBAT_MODE,
   SWORD_THRUST_MIN_FORWARD_RATIO,
   SWORD_THRUST_MIN_FORWARD_SPEED,
@@ -61,7 +61,8 @@ async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
     disposed: false,
     bodies: new Map([['upper_chest', { body }]]),
     activeEmbeddedWeapon: null,
-    setEmbeddedWeapon(weapon) { this.activeEmbeddedWeapon = weapon; },
+    embeddedWeaponAssignments: [],
+    setEmbeddedWeapon(weapon) { this.activeEmbeddedWeapon = weapon; this.embeddedWeaponAssignments.push(weapon); },
     woundSystem: { markExtracted() {} },
   };
   const director = {
@@ -127,7 +128,7 @@ async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
     bindPointerInput: false,
   });
   await controller.visualLoadPromise;
-  return { controller, actor, body, collider, director, hit, physics, scene };
+  return { controller, actor, body, collider, director, hit, physics, scene, combatRouter };
 }
 
 function beginHarnessThrust(harness, extension = 0.012) {
@@ -288,61 +289,82 @@ test('rendered sword pose follows penetration depth and permits body traversal w
   }
 });
 
-test('release plants the sword on the owned animated body and projected reacquisition permits withdrawal', async () => {
+test('release at shallow depth begins one fast automatic withdrawal without planting or re-grab', async () => {
   const harness = await createSwordHarness();
-  const { controller, actor, body, director } = harness;
+  const { controller, actor, director } = harness;
   try {
-    beginHarnessThrust(harness);
+    const ownedEntry = beginHarnessThrust(harness);
     director.rupture();
-    for (let frame = 0; frame < 16; frame += 1) stepAxial(controller, -1);
-    const plantedDepth = controller.penetrationDepth;
-    controller.releaseGrip('test-planted-release');
-    assert.equal(controller.state, SWORD_IMPALEMENT_STATES.embedded);
-    assert.equal(controller.entry.planted, true);
-    const before = controller.getEntryWorldPose().point.clone();
-    body.position.add(new THREE.Vector3(0.18, 0.07, -0.11));
-    body.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.24);
-    controller.beforePhysics(FIXED_DT);
-    const after = controller.getEntryWorldPose();
-    assert.ok(after.point.distanceTo(before) > 0.2);
-    assert.equal(controller.penetrationDepth, plantedDepth);
-    assert.ok(controller.currentTip.distanceTo(after.point.clone().addScaledVector(after.axis, plantedDepth)) < 1e-9);
+    stepAxial(controller, -1);
+    const releaseDepth = controller.penetrationDepth;
+    const woundId = ownedEntry.woundId;
+    controller.releaseGrip('test-shallow-release');
+    assert.equal(controller.state, SWORD_IMPALEMENT_STATES.releaseWithdrawing);
+    assert.equal(controller.releaseWithdrawal.active, true);
+    assert.equal(controller.releaseWithdrawal.startDepth, releaseDepth);
+    assert.equal(controller.gripPointerId, null);
+    assert.equal(Object.hasOwn(controller.entry, 'planted'), false);
+    assert.equal(Object.hasOwn(controller.entry, 'plantedDesiredGrip'), false);
+    assert.equal(controller.acquireGrip(8, 195, 560, 100), false, 'the retiring sword release mode cannot be re-grabbed');
+    assert.equal(director.withdrawalCalls.length, 1, 'release begins withdrawal immediately and exactly once');
     assert.equal(actor.activeEmbeddedWeapon, controller);
-    assert.equal(controller.acquireGrip(8, 195, 560, 100), true);
-    const reacquiredDepth = controller.penetrationDepth;
-    controller.applyGripGesture(8, 0, 0, 195, 560, 116);
-    controller.beforePhysics(FIXED_DT);
-    assert.ok(Math.abs(controller.penetrationDepth - reacquiredDepth) < 1e-9, 're-grab rebases the new gesture origin without moving the planted sword');
-    stepAxial(controller, 1);
-    assert.equal(controller.state, SWORD_IMPALEMENT_STATES.withdrawing);
-    assert.ok(controller.penetrationDepth < plantedDepth);
+    const depths = [releaseDepth];
+    let elapsed = 0;
+    while (controller.entry && elapsed < 0.3) {
+      controller.beforePhysics(0.01);
+      controller.afterPhysics();
+      elapsed += 0.01;
+      depths.push(controller.penetrationDepth);
+    }
+    assert.ok(depths.every((depth, index) => index === 0 || depth <= depths[index - 1] + 1e-12), 'released depth decreases monotonically');
+    assert.ok(elapsed <= SWORD_RELEASE_EXTRACTION_DURATION + 0.01 + 1e-9);
+    assert.equal(controller.entry, null);
+    assert.equal(controller.state, SWORD_IMPALEMENT_STATES.returning);
+    assert.equal(controller.lastExtractionReason, 'released-auto-withdrawal');
+    assert.equal(ownedEntry.woundId, woundId, 'the original puncture wound remains authoritative after sword recovery');
     assert.equal(director.withdrawalCalls.length, 1);
+    assert.equal(director.completionCalls.length, 1);
+    assert.equal(actor.embeddedWeaponAssignments.filter((weapon) => weapon == null).length, 1);
+    assert.equal(actor.activeEmbeddedWeapon, null);
+    controller.beforePhysics(FIXED_DT);
+    assert.ok(controller.embeddedToFreePositionDiscontinuity <= 0.010001, 'automatic extraction blends into return without a position teleport');
+    assert.ok(THREE.MathUtils.radToDeg(controller.embeddedToFreeRotationDiscontinuity) <= 3.0001, 'automatic extraction blends into return without a rotation snap');
+    controller.beforePhysics(FIXED_DT);
+    assert.equal(director.withdrawalCalls.length, 1);
+    assert.equal(director.completionCalls.length, 1);
+    assert.equal(actor.embeddedWeaponAssignments.filter((weapon) => weapon == null).length, 1);
   } finally {
     controller.dispose();
   }
 });
 
-test('a planted sword auto-extracts after a longer walk-away tether than the knife', async () => {
-  assert.equal(SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE, 0.75);
-  assert.ok(SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE > KNIFE_COMBAT_CONFIG.forcedExtractionDistance);
+test('release at maximum depth completes in the same configured duration without pointer input', async () => {
+  assert.equal(SWORD_RELEASE_EXTRACTION_DURATION, 0.15);
   const harness = await createSwordHarness();
   const { controller, actor, director } = harness;
   try {
     beginHarnessThrust(harness);
     director.rupture();
-    for (let frame = 0; frame < 8; frame += 1) stepAxial(controller, -1);
-    controller.releaseGrip('test-planted-auto-extraction');
-    const releaseGrip = controller.entry.plantedDesiredGrip.clone();
-    controller.desiredGrip.copy(releaseGrip).add(new THREE.Vector3(SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE - 0.001, 0, 0));
-    assert.equal(controller.recallPlantedSwordIfSeparated(FIXED_DT), false, 'the longer sword tether preserves a nearby planted hold');
-    assert.ok(controller.entry);
-    controller.desiredGrip.x += 0.002;
-    assert.equal(controller.recallPlantedSwordIfSeparated(FIXED_DT), true, 'crossing the sword tether completes extraction');
+    for (let frame = 0; frame < 90 && controller.penetrationDepth < SWORD_MAXIMUM_PENETRATION_DEPTH; frame += 1) stepAxial(controller, -1);
+    assert.equal(controller.penetrationDepth, SWORD_MAXIMUM_PENETRATION_DEPTH);
+    controller.releaseGrip('test-maximum-depth-release');
+    assert.equal(controller.releaseWithdrawal.startDepth, SWORD_MAXIMUM_PENETRATION_DEPTH);
+    const depths = [controller.penetrationDepth];
+    let elapsed = 0;
+    while (controller.entry && elapsed < 0.3) {
+      controller.desiredTip.set(100, 100, 100);
+      controller.deliberateInputVelocity.set(100, 100, 100);
+      controller.beforePhysics(0.01);
+      controller.afterPhysics();
+      elapsed += 0.01;
+      depths.push(controller.penetrationDepth);
+    }
+    assert.ok(depths.every((depth, index) => index === 0 || depth <= depths[index - 1] + 1e-12));
+    assert.ok(elapsed <= SWORD_RELEASE_EXTRACTION_DURATION + 0.01 + 1e-9, 'maximum burial is not slower than shallow burial');
     assert.equal(controller.entry, null);
     assert.equal(controller.state, SWORD_IMPALEMENT_STATES.returning);
     assert.equal(controller.extractionCount, 1);
-    assert.equal(controller.automaticExtractionCount, 1);
-    assert.equal(controller.lastExtractionReason, 'walk-away-auto-extraction');
+    assert.equal(controller.lastExtractionReason, 'released-auto-withdrawal');
     assert.equal(director.withdrawalCalls.length, 1);
     assert.equal(director.completionCalls.length, 1);
     assert.equal(actor.activeEmbeddedWeapon, null);
@@ -387,6 +409,38 @@ test('complete withdrawal is single-shot and rearming requires the full surface 
     assert.equal(controller.rearmReady, true);
     assert.equal(controller.rearmCount, 1);
     assert.equal(controller.punctureBeginCount, 1);
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('held-thumb projection withdrawal and repeated controlled puncture ownership remain available', async () => {
+  const harness = await createSwordHarness();
+  const { controller, collider, combatRouter, director } = harness;
+  try {
+    beginHarnessThrust(harness);
+    director.rupture();
+    const advancedDepth = controller.penetrationDepth;
+    stepAxial(controller, -1);
+    assert.ok(controller.penetrationDepth > advancedDepth);
+    const withdrawalDepth = controller.penetrationDepth;
+    stepAxial(controller, 1);
+    assert.ok(controller.penetrationDepth < withdrawalDepth);
+    assert.equal(controller.gripPointerId, 7);
+    for (let frame = 0; frame < 40 && controller.entry; frame += 1) stepAxial(controller, 1);
+    const gate = controller.rearmGate;
+    const point = gate.localPoint.clone().applyQuaternion(gate.body.quaternion).add(gate.body.position);
+    const axis = gate.localAxis.clone().applyQuaternion(gate.body.quaternion).normalize();
+    controller.currentTip.copy(point).addScaledVector(axis, -SWORD_THRUST_REARM_DISTANCE);
+    controller.updateSwordRearmGate();
+    assert.equal(controller.rearmReady, true);
+    assert.equal(controller.gripPointerId, 7, 'control stays owned between punctures');
+    controller.desiredTip.copy(point).addScaledVector(axis, 0.04);
+    const routed = combatRouter.resolveCollider(collider, point);
+    assert.equal(controller.beginSwordPenetration({ routed, point, normal: axis.clone().negate(), contactDirection: axis }), true);
+    assert.equal(controller.punctureBeginCount, 2);
+    assert.equal(director.beginCalls.length, 2);
+    assert.equal(controller.gripPointerId, 7);
   } finally {
     controller.dispose();
   }
@@ -502,7 +556,7 @@ test('one sword puncture schedules one entry sequence and progressive depth adds
   director.dispose();
 });
 
-test('sword diagnostics expose bounded impalement ownership and rate counters without console logging', async () => {
+test('sword diagnostics expose projection and timed release ownership without planted runtime fields', async () => {
   const harness = await createSwordHarness();
   const { controller, director } = harness;
   try {
@@ -521,7 +575,12 @@ test('sword diagnostics expose bounded impalement ownership and rate counters wi
     assert.equal(diagnostics.projectionError, 0);
     assert.equal(diagnostics.penetrationRate, SWORD_PENETRATION_RATE_METERS_PER_SECOND);
     assert.equal(diagnostics.withdrawalRate, SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND);
-    assert.equal(diagnostics.plantedAutoExtractionDistance, SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE);
+    assert.equal(diagnostics.releaseExtractionDuration, SWORD_RELEASE_EXTRACTION_DURATION);
+    assert.equal('planted' in diagnostics, false);
+    assert.equal('plantedAutoExtractionDistance' in diagnostics, false);
+    assert.equal('automaticExtractionCount' in diagnostics, false);
+    assert.equal('recallPlantedSwordIfSeparated' in SwordWorldWeaponController.prototype, false);
+    assert.doesNotMatch(SwordWorldWeaponController.toString(), /plantedDesiredGrip|SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE|walk-away-auto-extraction/);
     assert.equal(diagnostics.punctureBeginCount, 1);
     assert.equal(diagnostics.punctureWoundId, 'sword-wound-1');
     assert.ok(diagnostics.suppressedNonTipContacts <= 1_000_000);
