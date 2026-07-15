@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "validated_at_utc": "2026-07-15T20:28:05Z",
+  "authoring_version": "3.8.0",
+  "authoring_build_id": "2026-07-15.segment-stump.3",
+  "source_topology_sha256": "96256fc3f56d95df7415cb7a85cc37ed87816274c909c0411bccaa98400fcd39",
+  "source_weight_sha256": "3cebdc992934e4a3fb4928a0ab9bb36050e720e9769cffccc2dd162cc8190630",
+  "gap_tolerance_m": 0.0005000000237487257,
+  "errors": [],
+  "warnings": [],
+  "generated_object_count": 19
+}
