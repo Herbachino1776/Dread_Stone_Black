@@ -10,6 +10,7 @@ import {
   SWORD_IMPALEMENT_STATES,
   SWORD_MAXIMUM_PENETRATION_DEPTH,
   SWORD_PENETRATION_RATE_METERS_PER_SECOND,
+  SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE,
   SWORD_RUNTIME_COMBAT_MODE,
   SWORD_THRUST_MIN_FORWARD_RATIO,
   SWORD_THRUST_MIN_FORWARD_SPEED,
@@ -263,9 +264,12 @@ test('rendered sword pose follows penetration depth and permits body traversal w
     controller.afterPhysics();
     assert.ok(controller.visual.position.distanceTo(controller.actualGrip) < 1e-9);
     const guardCenter = controller.actualGrip.clone().addScaledVector(worldEntry.axis, -DREADSTONE_SWORD_DIMENSIONS.guardCenterZ);
+    const guardBladeFacingEdge = guardCenter.clone().addScaledVector(worldEntry.axis, DREADSTONE_SWORD_DIMENSIONS.guardRadius);
     const guardDepth = guardCenter.clone().sub(worldEntry.point).dot(worldEntry.axis);
+    const guardEdgeDepth = guardBladeFacingEdge.clone().sub(worldEntry.point).dot(worldEntry.axis);
     assert.ok(guardDepth < 0, 'the guard remains outside the entry surface at maximum depth');
-    assert.equal(SWORD_MAXIMUM_PENETRATION_DEPTH, DREADSTONE_SWORD_DIMENSIONS.bladeLength - 0.06);
+    assert.ok(Math.abs(guardEdgeDepth) < 1e-9, 'maximum depth buries the full blade up to the blade-facing edge of the hand guard');
+    assert.equal(SWORD_MAXIMUM_PENETRATION_DEPTH, Math.abs(DREADSTONE_SWORD_DIMENSIONS.tipZ - (DREADSTONE_SWORD_DIMENSIONS.guardCenterZ - DREADSTONE_SWORD_DIMENSIONS.guardRadius)));
   } finally {
     controller.dispose();
   }
@@ -296,6 +300,35 @@ test('release plants the sword on the owned animated body and projected reacquis
     assert.equal(controller.state, SWORD_IMPALEMENT_STATES.withdrawing);
     assert.ok(controller.penetrationDepth < plantedDepth);
     assert.equal(director.withdrawalCalls.length, 1);
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('a planted sword auto-extracts after a longer walk-away tether than the knife', async () => {
+  assert.equal(SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE, 0.75);
+  assert.ok(SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE > KNIFE_COMBAT_CONFIG.forcedExtractionDistance);
+  const harness = await createSwordHarness();
+  const { controller, actor, director } = harness;
+  try {
+    beginHarnessThrust(harness);
+    director.rupture();
+    for (let frame = 0; frame < 8; frame += 1) stepAxial(controller, -1);
+    controller.releaseGrip('test-planted-auto-extraction');
+    const releaseGrip = controller.entry.plantedDesiredGrip.clone();
+    controller.desiredGrip.copy(releaseGrip).add(new THREE.Vector3(SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE - 0.001, 0, 0));
+    assert.equal(controller.recallPlantedSwordIfSeparated(FIXED_DT), false, 'the longer sword tether preserves a nearby planted hold');
+    assert.ok(controller.entry);
+    controller.desiredGrip.x += 0.002;
+    assert.equal(controller.recallPlantedSwordIfSeparated(FIXED_DT), true, 'crossing the sword tether completes extraction');
+    assert.equal(controller.entry, null);
+    assert.equal(controller.state, SWORD_IMPALEMENT_STATES.returning);
+    assert.equal(controller.extractionCount, 1);
+    assert.equal(controller.automaticExtractionCount, 1);
+    assert.equal(controller.lastExtractionReason, 'walk-away-auto-extraction');
+    assert.equal(director.withdrawalCalls.length, 1);
+    assert.equal(director.completionCalls.length, 1);
+    assert.equal(actor.activeEmbeddedWeapon, null);
   } finally {
     controller.dispose();
   }
@@ -459,6 +492,7 @@ test('sword diagnostics expose bounded impalement ownership and rate counters wi
     assert.equal(diagnostics.maximumPenetrationDepth, SWORD_MAXIMUM_PENETRATION_DEPTH);
     assert.equal(diagnostics.penetrationRate, SWORD_PENETRATION_RATE_METERS_PER_SECOND);
     assert.equal(diagnostics.withdrawalRate, SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND);
+    assert.equal(diagnostics.plantedAutoExtractionDistance, SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE);
     assert.equal(diagnostics.punctureBeginCount, 1);
     assert.equal(diagnostics.punctureWoundId, 'sword-wound-1');
     assert.ok(diagnostics.suppressedNonTipContacts <= 1_000_000);

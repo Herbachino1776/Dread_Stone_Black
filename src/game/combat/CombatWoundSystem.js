@@ -25,7 +25,7 @@ export const PUNCTURE_VISUAL_LIMITS = Object.freeze({
 });
 
 export const KNIFE_PUNCTURE_PRESENTATION_SCALE = 1.45;
-export const SWORD_THRUST_PUNCTURE_PRESENTATION_SCALE = 1.75;
+export const SWORD_THRUST_PUNCTURE_PRESENTATION_SCALE = 2.1875;
 export const PUNCTURE_DECAL_SCALE = KNIFE_PUNCTURE_PRESENTATION_SCALE;
 
 export const SLASH_VISUAL_WIDTH_LIMITS = Object.freeze({ shallow: [0.004, 0.01], deep: [0.008, 0.02], severeMaximum: 0.03 });

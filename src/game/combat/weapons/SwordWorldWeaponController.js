@@ -22,6 +22,7 @@ export const SWORD_THRUST_MIN_FORWARD_RATIO = 0.55;
 export const SWORD_THRUST_REARM_DISTANCE = 0.05;
 export const SWORD_PENETRATION_RATE_METERS_PER_SECOND = 0.48;
 export const SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND = 0.62;
+export const SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE = 0.75;
 
 // Authored v002 measurements. Collision intentionally does not inspect render triangles.
 export const DREADSTONE_SWORD_DIMENSIONS = Object.freeze({
@@ -45,7 +46,10 @@ export const DREADSTONE_SWORD_DIMENSIONS = Object.freeze({
 });
 
 export const SWORD_MAXIMUM_PENETRATION_DEPTH =
-  DREADSTONE_SWORD_DIMENSIONS.bladeLength - 0.06;
+  Math.abs(
+    DREADSTONE_SWORD_DIMENSIONS.tipZ
+    - (DREADSTONE_SWORD_DIMENSIONS.guardCenterZ - DREADSTONE_SWORD_DIMENSIONS.guardRadius),
+  );
 
 export const SWORD_IMPALEMENT_STATES = Object.freeze({
   ready: 'ready',
@@ -227,7 +231,10 @@ export class SwordWorldWeaponController {
     this.tissueResistanceSample = { phase: 'skin', effectiveResistance: 0.3, drag: 0, deflection: 0 };
     this.punctureBeginCount = 0;
     this.extractionCount = 0;
+    this.automaticExtractionCount = 0;
     this.rearmCount = 0;
+    this.lastPlantedSeparation = 0;
+    this.lastExtractionReason = null;
     this.tipSweepCount = 0;
     this.suppressedNonTipContacts = 0;
     this.activeEdgeDamage = null;
@@ -381,6 +388,7 @@ export class SwordWorldWeaponController {
     this.offensiveVelocity.set(0, 0, 0);
     if (this.entry && this.penetrationDepth > 0) {
       this.entry.planted = true;
+      this.entry.plantedDesiredGrip.copy(this.desiredGrip);
       this.state = SWORD_IMPALEMENT_STATES.embedded;
       this.contactState = 'embedded_hold';
       this.contactDamageReason = 'non-damaging:planted-embedded-hold';
@@ -586,6 +594,7 @@ export class SwordWorldWeaponController {
       withdrawalStarted: false,
       resistancePhase: null,
       planted: false,
+      plantedDesiredGrip: new THREE.Vector3(),
       worldPoint: new THREE.Vector3(),
       worldAxis: new THREE.Vector3(),
       worldBodyQuaternion: new THREE.Quaternion(),
@@ -629,6 +638,17 @@ export class SwordWorldWeaponController {
     this.updateDerivedPose();
   }
 
+  recallPlantedSwordIfSeparated(dt, worldEntry = this.getEntryWorldPose()) {
+    const entry = this.entry;
+    if (this.gripPointerId != null || !entry?.planted || !entry.plantedDesiredGrip || !worldEntry) return false;
+    this.lastPlantedSeparation = entry.plantedDesiredGrip.distanceTo(this.desiredGrip);
+    if (this.lastPlantedSeparation <= SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE) return false;
+    this.automaticExtractionCount = Math.min(1_000_000, this.automaticExtractionCount + 1);
+    this.completeSwordExtraction(worldEntry, 'walk-away-auto-extraction');
+    this.solveFreeSwordPose(dt, false);
+    return true;
+  }
+
   solveSwordImpalement(dt) {
     const entry = this.entry;
     this.thrustEligible = false;
@@ -643,6 +663,7 @@ export class SwordWorldWeaponController {
       return;
     }
     entry.planted = this.gripPointerId == null;
+    if (entry.planted && this.recallPlantedSwordIfSeparated(dt, worldEntry)) return;
     this.intentState = this.intentWeapon.interpret({ ownerId: this.gripPointerId, controlState: SWORD_IMPALEMENT_STATES.embedded, localVelocity: this.deliberateInputVelocity, embedded: true });
     if (!entry.surfaceRuptured) {
       this.state = SWORD_IMPALEMENT_STATES.surfaceContact;
@@ -716,7 +737,7 @@ export class SwordWorldWeaponController {
     return true;
   }
 
-  completeSwordExtraction(worldEntry = this.getEntryWorldPose()) {
+  completeSwordExtraction(worldEntry = this.getEntryWorldPose(), reason = 'fully-extracted') {
     const entry = this.entry;
     if (!entry) return false;
     this.beginSwordWithdrawal(worldEntry);
@@ -736,6 +757,7 @@ export class SwordWorldWeaponController {
     this.rearmReady = false;
     this.lastRearmClearance = 0;
     this.extractionCount = Math.min(1_000_000, this.extractionCount + 1);
+    this.lastExtractionReason = reason;
     this.attackEnabled = false;
     this.contactState = 'fully_extracted';
     this.contactDamageReason = 'non-damaging:awaiting-entry-surface-clearance';
@@ -1044,9 +1066,13 @@ export class SwordWorldWeaponController {
       penetrationRate: SWORD_PENETRATION_RATE_METERS_PER_SECOND,
       withdrawalRate: SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND,
       planted: Boolean(this.entry?.planted),
+      plantedSeparation: Number(this.lastPlantedSeparation.toFixed(4)),
+      plantedAutoExtractionDistance: SWORD_PLANTED_AUTO_EXTRACTION_DISTANCE,
       punctureWoundId: this.entry?.woundId ?? null,
       punctureBeginCount: this.punctureBeginCount,
       extractionCount: this.extractionCount,
+      automaticExtractionCount: this.automaticExtractionCount,
+      lastExtractionReason: this.lastExtractionReason,
       rearmCount: this.rearmCount,
       rearmReady: this.rearmReady,
       rearmClearance: Number(this.lastRearmClearance.toFixed(4)),
