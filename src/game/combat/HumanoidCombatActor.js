@@ -75,6 +75,7 @@ export class HumanoidCombatActor {
     this.joints = [];
     this.vesselDebug = [];
     this.eventSink = eventSink;
+    this.detachmentBloodEmitter = null;
     this.mortalityMode = mortalityMode;
     this.visualProfile = visualProfile;
     this.animationAuthorityReady = false;
@@ -98,6 +99,8 @@ export class HumanoidCombatActor {
     this.dyingElapsed = 0;
     this.collapseFamily = null;
     this.collapseReason = null;
+    this.fatalSegmentDetachmentActive = false;
+    this.fatalSegmentDetachmentActivationCount = 0;
     this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
     this.environmentContactHints = { groundY: this.spawnOffset.y, wallX: null };
     this.impactCooldowns = new Map();
@@ -135,6 +138,13 @@ export class HumanoidCombatActor {
   }
 
   setEventSink(eventSink) { this.eventSink = eventSink; this.physiology?.setEventSink?.(eventSink); }
+  setDetachmentBloodEmitter(emitter) { this.detachmentBloodEmitter = typeof emitter === 'function' ? emitter : null; }
+  emitDetachmentBlood(request) { return this.detachmentBloodEmitter?.(request) === true; }
+  requestDetachment(request = {}) {
+    const result = this.visualAdapter?.requestDetachment?.(request);
+    return result ?? { accepted: false, segmentId: request.segmentId ?? null, reason: 'damage-runtime-not-ready', detachedBodyCreated: false, mortalityTriggered: false, bloodTriggered: false };
+  }
+  getDetachmentWorldPoint(segmentId, target = new THREE.Vector3()) { return this.visualAdapter?.getDetachmentWorldPoint?.(segmentId, target) ?? null; }
 
   areAnatomyRegionsAdjacent(firstRegionId, secondRegionId) {
     if (!firstRegionId || !secondRegionId) return false;
@@ -155,7 +165,7 @@ export class HumanoidCombatActor {
   }
   setMortalityMode(mode) {
     this.mortalityMode = mode === COMBAT_MORTALITY_MODES.normal ? COMBAT_MORTALITY_MODES.normal : COMBAT_MORTALITY_MODES.immortalReactive;
-    if (this.isImmortalReactive() && ['dying', 'dead'].includes(this.lifeState)) this.recoverReactivePosture(true);
+    if (this.isImmortalReactive() && !this.fatalSegmentDetachmentActive && ['dying', 'dead'].includes(this.lifeState)) this.recoverReactivePosture(true);
   }
   isImmortalReactive() { return this.mortalityMode === COMBAT_MORTALITY_MODES.immortalReactive; }
   setAnimationAuthorityReady(adapter) {
@@ -574,9 +584,20 @@ export class HumanoidCombatActor {
     if (immediate) this.motorStrength = Math.min(this.motorStrength, family === 'neurological' ? 0.02 : 0.16);
   }
 
-  transitionLifeState(nextState, reason = 'trauma') {
+  requestFatalSegmentDetachment({ segmentId, cause = 'segment-detachment' } = {}) {
+    if (this.fatalSegmentDetachmentActive) return false;
+    this.fatalSegmentDetachmentActive = true;
+    this.fatalSegmentDetachmentActivationCount += 1;
+    this.collapseFamily = 'neurological';
+    this.collapseReason = `fatal-segment-detachment:${segmentId ?? 'unknown'}:${cause}`;
+    this.motorStrength = Math.min(this.motorStrength, 0.02);
+    if (this.lifeState === 'alive' || this.lifeState === 'incapacitated') this.transitionLifeState('dying', this.collapseReason, { forceFatal: true });
+    return true;
+  }
+
+  transitionLifeState(nextState, reason = 'trauma', { forceFatal = false } = {}) {
     if (!this.automaticMortality) return false;
-    if (this.isImmortalReactive() && (nextState === 'dying' || nextState === 'dead')) nextState = 'incapacitated';
+    if (this.isImmortalReactive() && !forceFatal && !this.fatalSegmentDetachmentActive && (nextState === 'dying' || nextState === 'dead')) nextState = 'incapacitated';
     else if (this.visualProfile.authoredDeathAnimations && nextState === 'incapacitated') nextState = 'dying';
     const order = { alive: 0, incapacitated: 1, dying: 2, dead: 3 };
     if (!(nextState in order) || order[nextState] <= order[this.lifeState]) return false;
@@ -769,7 +790,7 @@ export class HumanoidCombatActor {
       const deathDelay = this.collapseFamily === 'neurological' ? 0.22 : this.collapseFamily === 'neck_failure' ? 0.85 : 1.6;
       if (this.dyingElapsed >= deathDelay) this.transitionLifeState('dead', this.collapseReason ?? 'mortal-trauma');
     }
-    if (this.isImmortalReactive()) this.updateImmortalReactiveRecovery(dt);
+    if (this.isImmortalReactive() && !this.fatalSegmentDetachmentActive) this.updateImmortalReactiveRecovery(dt);
     const releaseRate = COLLAPSE_CONFIG.motorReleaseRates[this.collapseFamily] ?? COLLAPSE_CONFIG.motorReleaseRates.general_trauma;
     if (this.lifeState === 'incapacitated' && this.isImmortalReactive()) {
       const recoveryStarted = this.reactiveCollapseElapsed >= IMMORTAL_REACTIVE_CONFIG.recoveryDelaySeconds;
@@ -795,7 +816,7 @@ export class HumanoidCombatActor {
   }
 
   recoverReactivePosture(immediate = false) {
-    if (this.ragdollActive) return;
+    if (this.ragdollActive || this.fatalSegmentDetachmentActive) return;
     this.lifeState = 'alive';
     this.collapseFamily = null;
     this.collapseReason = null;
@@ -890,6 +911,7 @@ export class HumanoidCombatActor {
     this.updateVesselDebug();
     if (this.ragdollActive) this.visualAdapter?.updateRagdoll?.();
     else if (!this.visualProfile.animationAuthoritative) this.visualAdapter?.update();
+    this.visualAdapter?.updateDamageSegments?.();
     if (!this.visualProfile.animationAuthoritative || this.ragdollActive) this.woundSystem.update(1 / 60);
     this.updateBodyImpactFeedback();
     const speeds = [...this.bodies.values()].map((entry) => { const v = entry.body.linvel(); return Math.hypot(v.x, v.y, v.z); });
@@ -962,6 +984,8 @@ export class HumanoidCombatActor {
       settledSeconds: this.settledSeconds,
       collapseFamily: this.collapseFamily,
       collapseReason: this.collapseReason,
+      fatalSegmentDetachmentActive: this.fatalSegmentDetachmentActive,
+      fatalSegmentDetachmentActivationCount: this.fatalSegmentDetachmentActivationCount,
       corpseSleeping: this.corpseSleeping,
       ragdollActive: this.ragdollActive,
       ragdollForced: this.ragdollForced,
@@ -974,6 +998,8 @@ export class HumanoidCombatActor {
       bodyPositions,
       visualProfile: this.visualProfile.name,
       visualAdapter: this.visualAdapter?.getDiagnostics?.() ?? null,
+      damageAsset: this.visualAdapter?.damageSegmentRuntime?.getDamageAssetDiagnostics?.() ?? null,
+      dismemberment: this.visualAdapter?.damageSegmentRuntime?.getDiagnostics?.() ?? null,
       instanceId: this.instanceId,
       automaticMortality: this.automaticMortality,
     };
@@ -1026,6 +1052,8 @@ export class HumanoidCombatActor {
     this.reactiveCollapseElapsed = 0;
     this.collapseFamily = null;
     this.collapseReason = null;
+    this.fatalSegmentDetachmentActive = false;
+    this.fatalSegmentDetachmentActivationCount = 0;
     this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
     this.corpseSleeping = false;
     this.finalSettleEmitted = false;
@@ -1041,6 +1069,7 @@ export class HumanoidCombatActor {
     this.disposed = true;
     this.woundSystem.dispose();
     this.visualAdapter?.dispose();
+    this.detachmentBloodEmitter = null;
     this.disposePhysicalBody();
     Object.values(this.materials).forEach((entry) => entry.dispose?.());
     this.root.removeFromParent();

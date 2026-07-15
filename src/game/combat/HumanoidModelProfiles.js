@@ -64,6 +64,49 @@ export const TESTMAN_COMBAT_PROFILE = Object.freeze({
   colliderFitNotes: 'Animation-authoritative 1.82 m visual with bone-following semantic capsules/boxes; GLB bones are never driven from Rapier.',
 });
 
+export const TESTMAN_DAMAGE_COMBAT_PROFILE = Object.freeze({
+  ...TESTMAN_COMBAT_PROFILE,
+  name: 'testman_damage_v001_animation_authoritative',
+  assetPath: './assets/enemies/testman/damage/testman_damage_v001.glb',
+  damageManifestPath: './assets/enemies/testman/damage/testman_damage_v001.json',
+  animationManifestPath: './assets/enemies/testman/damage/testman_damage_v001_animpack.json',
+  rawHeight: 1.5228491691721973,
+  damageAuthoringVersion: '3.8.0',
+  damageAuthoringBuildId: '2026-07-15.segment-stump.3',
+  damageTopologyFingerprint: '96256fc3f56d95df7415cb7a85cc37ed87816274c909c0411bccaa98400fcd39',
+  damageWeightFingerprint: '3cebdc992934e4a3fb4928a0ab9bb36050e720e9769cffccc2dd162cc8190630',
+  damageRequiredObjects: Object.freeze([
+    'DSB_DAMAGE_RIG',
+    'DSB_BODY_CORE',
+    'DSB_ATTACHED_HEAD',
+    'DSB_ATTACHED_FOREARM_L',
+    'DSB_ATTACHED_FOREARM_R',
+    'DSB_SEGMENT_HEAD',
+    'DSB_STUMP_NECK_TORSO',
+    'DSB_STUMP_NECK_HEAD',
+    'DSB_SEGMENT_FOREARM_L',
+    'DSB_SEGMENT_FOREARM_R',
+    'DSB_STUMP_ELBOW_L_UPPER',
+    'DSB_STUMP_ELBOW_L_LOWER',
+    'DSB_STUMP_ELBOW_R_UPPER',
+    'DSB_STUMP_ELBOW_R_LOWER',
+    'DSB_SEGMENT_UPPER_BODY',
+    'DSB_SEGMENT_LOWER_BODY',
+    'DSB_STUMP_WAIST_UPPER',
+    'DSB_STUMP_WAIST_LOWER',
+    'DSB_SOCKET_ABDOMEN_VISCERA',
+  ]),
+  damageExpectedAnimationNames: Object.freeze([
+    'DSB_Walk_NORMAL_v001',
+    'DSB_Hurt_LEFT_Flank_v001',
+    'DSB_Hurt_RIGHT_Flank_v001',
+    'DSB_Death_ChestHold_LEFT_v001',
+    'DSB_Death_Faceplant_LEFT_v001',
+  ]),
+  activeDamageSegmentIds: Object.freeze(['head_neck']),
+  colliderFitNotes: 'Combat Lab-only Forge v3.8.1 damage visual. Head detachment is active; forearm and waist segments remain loaded but inactive.',
+});
+
 export function getHumanoidProfileScale(profile) {
   return profile.targetHeight / profile.rawHeight;
 }

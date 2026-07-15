@@ -5,7 +5,7 @@ import { HumanoidCombatActor } from './HumanoidCombatActor.js';
 import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
 import { resolveCombatMortalityMode } from './CombatMortality.js';
-import { TESTMAN_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { TESTMAN_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 import { CombatDirector } from './CombatDirector.js';
 import { MELEE_INTENTS } from './MeleeIntentWeapon.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
@@ -54,12 +54,13 @@ export class CombatLabScene {
     this.lightingMode = 'day';
     this.disposed = false;
     this.buildEnvironment();
-    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, visualProfile: TESTMAN_COMBAT_PROFILE, mortalityMode: resolveCombatMortalityMode(), eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, visualProfile: TESTMAN_DAMAGE_COMBAT_PROFILE, mortalityMode: resolveCombatMortalityMode(), eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
     this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: 'combat-lab-humanoid-player-blocker' });
     this.meleeSpacing = applyMeleeSpacingEnvelope(this.playerBlocker, { playerRadius: this.collision.playerRadius, readyReach: Math.abs(KNIFE_COMBAT_CONFIG.workspace.ready[2]) + KNIFE_COMBAT_CONFIG.bladeLength, gestureReach: KNIFE_COMBAT_CONFIG.workspace.thrustDistance, effectiveDepth: KNIFE_COMBAT_CONFIG.maximumPenetrationDepth });
     this.collision.addBlocker(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: 0, wallX: -2.65 });
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: 0, wallX: -2.65, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+    this.actor.setDetachmentBloodEmitter((request) => this.bloodEffects.emitDetachment(request));
     this.combatDirector = new CombatDirector({ actor: this.actor, bloodEffects: this.bloodEffects, feedbackSystem: this.feedbackSystem });
     this.combatRouter = new CombatActorRouter();
     this.combatRouter.register(this.actor, this.combatDirector);
@@ -296,6 +297,18 @@ export class CombatLabScene {
     return interaction;
   }
   clearBlood() { this.bloodEffects.clear(); }
+  debugDecapitate() {
+    const yaw = this.actor.visualRootYaw ?? this.actor.spawnYaw ?? 0;
+    const impulse = new THREE.Vector3(0.35, 1.05, 0.3).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    const angularImpulse = new THREE.Vector3(0.18, 0.32, -0.24).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    return this.actor.requestDetachment({
+      segmentId: 'head_neck',
+      cause: 'combat_lab_debug',
+      worldPoint: this.actor.getDetachmentWorldPoint('head_neck', new THREE.Vector3()),
+      impulse,
+      angularImpulse,
+    });
+  }
   toggleMortalityMode() {
     const next = this.actor.mortalityMode === 'normal' ? 'immortal_reactive' : 'normal';
     this.actor.setMortalityMode(next);

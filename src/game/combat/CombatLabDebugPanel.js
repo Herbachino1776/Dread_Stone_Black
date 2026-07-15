@@ -46,6 +46,7 @@ export class CombatLabDebugPanel {
       ['CONSC Y', () => this.cycleConsciousness()],
       ['RESERVE G', () => this.cycleBloodReserve()],
       ['MORTALITY X', () => this.toggleMortality()],
+      ['DECAPITATE J', () => this.dungeon?.debugDecapitate?.()],
       ['CUT TEST 6', () => this.dungeon?.createDebugSlash?.()],
       ['WALK PAUSE 7', () => this.dungeon?.toggleWalkerLocomotion?.()],
       ['WALK STAB 8', () => this.dungeon?.forceWalkerQualifyingStab?.()],
@@ -76,7 +77,7 @@ export class CombatLabDebugPanel {
 
   bindKeyboard() {
     const keydown = (event) => {
-      if (event.repeat || event.target?.matches?.('input,textarea,select')) return;
+      if (event.repeat || event.target?.matches?.('input,textarea,select') || event.target?.isContentEditable) return;
       if (event.code === 'KeyR') this.reset();
       if (event.code === 'KeyK') this.restoreKnife();
       if (event.code === 'KeyB') this.toggleDebug();
@@ -87,7 +88,7 @@ export class CombatLabDebugPanel {
       if (event.code === 'KeyM') this.togglePanel();
       if (event.code === 'KeyI') this.dungeon?.weaponController?.nudgeExtension?.(0.1);
       if (event.code === 'KeyU') this.dungeon?.weaponController?.nudgeExtension?.(-0.1);
-      if (event.code === 'KeyJ') this.dungeon?.weaponController?.nudgeAim?.(-0.22, 0);
+      if (event.code === 'KeyJ') this.dungeon?.debugDecapitate?.();
       if (event.code === 'Semicolon') this.dungeon?.weaponController?.nudgeAim?.(0.22, 0);
       if (event.code === 'Period') this.dungeon?.stepPhysics?.();
       if (event.code === 'KeyC') this.dungeon?.clearWounds?.();
@@ -158,6 +159,8 @@ export class CombatLabDebugPanel {
     const diagnostics = this.dungeon?.getDiagnostics?.() ?? {};
     const physics = diagnostics.physics ?? {};
     const actor = diagnostics.actor ?? {};
+    const damageAsset = actor.damageAsset ?? {};
+    const dismemberment = actor.dismemberment ?? {};
     const walker = diagnostics.walker ?? {};
     const routing = diagnostics.combatRouting ?? {};
     const weapon = diagnostics.weapon ?? {};
@@ -207,6 +210,10 @@ export class CombatLabDebugPanel {
       `trauma ${JSON.stringify(actor.regionalTrauma ?? {})}`,
       `pose ${JSON.stringify(actor.bodyPositions ?? {})}`,
       `ragdoll bones ${JSON.stringify(actor.visualAdapter?.ragdollBonePositions ?? {})}  bindings ${actor.visualAdapter?.ragdollBindingCount ?? 0}`,
+      `damage asset ${damageAsset.enabled ? 'READY' : 'OFF'}  ${damageAsset.manifestSchema ?? '-'}  author ${damageAsset.authoringVersion ?? '-'} / ${damageAsset.authoringBuildId ?? '-'}`,
+      `head ${dismemberment.headDetached ? 'DETACHED' : 'INTACT'}  requests ${dismemberment.requestedCount ?? 0}/${dismemberment.acceptedCount ?? 0}  bodies ${dismemberment.detachedRigidBodyCount ?? 0}  colliders ${dismemberment.detachedColliderCount ?? 0}`,
+      `spawn error ${(dismemberment.spawnPositionError ?? 0).toFixed(5)}m / ${(dismemberment.spawnRotationErrorDegrees ?? 0).toFixed(2)}deg  collider ${dismemberment.colliderTypeUsed ?? '-'}`,
+      `detach mortality/blood ${dismemberment.mortalityActivationCount ?? 0}/${dismemberment.bloodActivationCount ?? 0}  wound transfer ${dismemberment.detachedWoundTransferImplemented ? 'READY' : 'LATER'}`,
       '',
       `walker ${walker.enabled ? walker.state ?? 'waiting' : 'DISABLED'}  id ${walker.actorInstanceId ?? '-'}  generation ${walker.respawnGeneration ?? 0}  live ${walker.liveWalkers ?? 0}`,
       `walker pos ${JSON.stringify(walker.worldPosition ?? [])}  distance ${(walker.distanceToPlayer ?? 0).toFixed(2)}m  speed ${(walker.currentSpeed ?? 0).toFixed(2)}/${(walker.desiredSpeed ?? 0).toFixed(2)}/${(walker.maximumSpeed ?? 0).toFixed(2)}`,
@@ -240,7 +247,7 @@ export class CombatLabDebugPanel {
       `slash ${JSON.stringify(weapon.activeSlash ?? null)}`,
       '',
       'Grip handle, then up: thrust | down: withdraw | side: slash',
-      'Release: safe spring return | X mortality | B debug',
+      'Release: safe spring return | J debug decapitate | X mortality | B debug',
     ].join('\n');
   }
 

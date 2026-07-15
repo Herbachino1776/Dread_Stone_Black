@@ -28,7 +28,7 @@ import {
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { HumanoidGlbVisualAdapter, measureVisibleSkinnedBounds } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
-import { TESTMAN_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
+import { TESTMAN_COMBAT_PROFILE, TESTMAN_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import { MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
 import { buildSkinnedTriangleInfluenceMetadata, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
@@ -339,7 +339,7 @@ test('locked puncture triangle and barycentrics remain attached after hurt anima
   }
 });
 
-test('Combat Lab and Folsom stationary Testman share puncture binding function and options', async () => {
+test('Combat Lab damage Testman and Folsom Testman share puncture binding function and options', async () => {
   const lab = await CombatLabScene.create({ query: new URLSearchParams('walker=0') });
   const collision = new CollisionWorld({
     walkableRects: [{ minX: -18, maxX: 22, minZ: -20, maxZ: 18 }],
@@ -351,7 +351,7 @@ test('Combat Lab and Folsom stationary Testman share puncture binding function a
   const dungeon = { scene: new THREE.Scene(), collision, isPositionInFishingWater: () => false };
   const folsom = await FolsomCombatEncounter.create({ dungeon, query: new URLSearchParams('folsomWalker=0') });
   try {
-    assert.equal(lab.actor.visualProfile, TESTMAN_COMBAT_PROFILE);
+    assert.equal(lab.actor.visualProfile, TESTMAN_DAMAGE_COMBAT_PROFILE);
     assert.equal(folsom.actor.visualProfile, TESTMAN_COMBAT_PROFILE);
     assert.equal(lab.actor.woundSystem.bindPunctureSurface, folsom.actor.woundSystem.bindPunctureSurface);
     assert.equal(lab.actor.woundSystem.getPunctureSurfaceBindingOptions({ weaponFamily: 'knife' }), KNIFE_PUNCTURE_SURFACE_BINDING_OPTIONS);

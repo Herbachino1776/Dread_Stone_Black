@@ -7,6 +7,7 @@ import { buildSkinnedTriangleInfluenceMetadata, findClosestSkinnedSurface, recon
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 import { FULLY_OPAQUE_THRESHOLD, applyFadeOpacity, captureAndPrepareFadeMaterials, clampFadeOpacity, restoreFadeMaterials } from './MaterialFadeState.js';
 import { actorLocalToWorld as transformActorLocalToWorld, worldToActorLocal as transformWorldToActorLocal } from './CombatCoordinateSpaces.js';
+import { HumanoidDamageSegmentRuntime } from './HumanoidDamageSegmentRuntime.js';
 
 export const HUMANOID_GLB_PATH = CURRENT_HUMANOID_PROFILE.assetPath;
 export const HUMANOID_GLB_AUTHORED_HEIGHT = CURRENT_HUMANOID_PROFILE.rawHeight;
@@ -16,6 +17,7 @@ export const HUMANOID_GLB_BONE_MAP = CURRENT_HUMANOID_BONE_MAP;
 
 const cachedAssetPromises = new Map();
 const cachedAnimationManifestPromises = new Map();
+const cachedDamageManifestPromises = new Map();
 let assetLoadCount = 0;
 const CHARACTER_LIGHTING_MODES = new Set(['normal', 'no-cast-shadow', 'no-receive-shadow', 'no-normal-map', 'no-directional-shadow', 'linear-normal-map', 'tight-shadow-frustum']);
 
@@ -156,6 +158,21 @@ function loadCachedAnimationManifest(manifestPath) {
   return cachedAnimationManifestPromises.get(manifestPath);
 }
 
+function loadCachedDamageManifest(manifestPath) {
+  if (!manifestPath) return Promise.resolve(null);
+  if (!cachedDamageManifestPromises.has(manifestPath)) {
+    const promise = fetch(manifestPath).then((response) => {
+      if (!response.ok) throw new Error(`Damage manifest request failed (${response.status}): ${manifestPath}`);
+      return response.json();
+    }).catch((error) => {
+      cachedDamageManifestPromises.delete(manifestPath);
+      throw error;
+    });
+    cachedDamageManifestPromises.set(manifestPath, promise);
+  }
+  return cachedDamageManifestPromises.get(manifestPath);
+}
+
 export function resolveAnimationPackManifest(manifest, clips, profileName = 'humanoid-animation-pack') {
   if (!manifest || manifest.schema !== 'dreadstone.animation_pack.v1') throw new Error(`Humanoid GLB profile ${profileName} has an invalid animation manifest schema`);
   if (!Array.isArray(manifest.animations) || manifest.animations.length !== manifest.approved_animation_count) throw new Error(`Humanoid GLB profile ${profileName} has an invalid approved animation count`);
@@ -204,6 +221,9 @@ export class HumanoidGlbVisualAdapter {
     this.mixer = null;
     this.idleAction = null;
     this.animationManifest = null;
+    this.damageManifest = null;
+    this.damageSegmentRuntime = null;
+    this.loadedClips = [];
     this.animationPack = null;
     this.animationController = null;
     this.animationBones = new Map();
@@ -236,9 +256,10 @@ export class HumanoidGlbVisualAdapter {
   }
 
   async load() {
-    const [asset, animationManifest] = await Promise.all([
+    const [asset, animationManifest, damageManifest] = await Promise.all([
       loadCachedAsset(this.profile.assetPath),
       loadCachedAnimationManifest(this.profile.animationManifestPath),
+      loadCachedDamageManifest(this.profile.damageManifestPath),
     ]);
     if (this.disposed) return;
     if (animationManifest) {
@@ -247,13 +268,18 @@ export class HumanoidGlbVisualAdapter {
     }
     this.scene = clone(asset.scene);
     this.scene.name = 'humanoid-combat-glb-visual';
+    this.scene.visible = damageManifest ? false : true;
+    this.loadedClips = asset.animations ?? [];
+    this.damageManifest = damageManifest;
     if (this.isolateMaterials) this.ownedMaterials = isolateObjectMaterials(this.scene);
     this.scene.traverse((object) => {
       if (object.isBone) this.bones.set(object.name, object);
-      if (!object.isSkinnedMesh) return;
+      if (!object.isMesh) return;
       enableCombatReadabilityLightLayer(object);
-      this.skinnedMeshes.push(object);
-      if (object.skeleton && !this.skeletons.includes(object.skeleton)) this.skeletons.push(object.skeleton);
+      if (object.isSkinnedMesh) {
+        this.skinnedMeshes.push(object);
+        if (object.skeleton && !this.skeletons.includes(object.skeleton)) this.skeletons.push(object.skeleton);
+      }
       object.castShadow = true;
       object.receiveShadow = true;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
@@ -289,6 +315,17 @@ export class HumanoidGlbVisualAdapter {
     if (!this.skinnedMeshes.length || !this.skeletons.length) throw new Error(`Humanoid GLB has no SkinnedMesh/skeleton: ${this.profile.assetPath}`);
     if (this.profile.animationAuthoritative) {
       this.initializeAnimationAuthoritative(asset.animations ?? [], animationManifest);
+      if (damageManifest) {
+        this.damageSegmentRuntime = new HumanoidDamageSegmentRuntime({
+          actor: this.actor,
+          adapter: this,
+          loadedGlbRoot: this.scene,
+          damageManifest,
+          physicsWorld: this.actor.physics,
+          hostScene: this.actor.scene,
+        });
+        this.scene.visible = true;
+      }
       return;
     }
     this.scene.position.fromArray(this.profile.rootOffset);
@@ -461,6 +498,7 @@ export class HumanoidGlbVisualAdapter {
     else this.mixer.update(dt);
     this.presentationRoot.updateMatrixWorld(true);
     this.skeletons.forEach((skeleton) => skeleton.update());
+    this.damageSegmentRuntime?.captureAnimatedMotion?.(dt);
     this.actor.woundSystem?.update?.(dt);
     this.actor.syncAnimationProxyBodies(this);
     if (this.characterLightingPanel) this.updateCharacterLightingDiagnostics();
@@ -635,6 +673,18 @@ export class HumanoidGlbVisualAdapter {
     return bone ? bone.getWorldPosition(target) : null;
   }
 
+  requestDetachment(request) {
+    return this.damageSegmentRuntime?.requestDetachment?.(request) ?? null;
+  }
+
+  getDetachmentWorldPoint(segmentId, target = new THREE.Vector3()) {
+    return this.damageSegmentRuntime?.getSegmentWorldPoint?.(segmentId, target) ?? null;
+  }
+
+  updateDamageSegments() {
+    this.damageSegmentRuntime?.updateAfterPhysics?.();
+  }
+
   reset() {
     this.resetFade();
     if (this.profile.animationAuthoritative) {
@@ -646,9 +696,11 @@ export class HumanoidGlbVisualAdapter {
       if (this.presentationRoot) this.presentationRoot.rotation.set(0, this.basePresentationYaw, 0);
       this.presentationRoot?.updateMatrixWorld(true);
       this.skeletons.forEach((skeleton) => skeleton.update());
+      this.damageSegmentRuntime?.reset?.();
       this.actor.syncAnimationProxyBodies(this);
       return;
     }
+    this.damageSegmentRuntime?.reset?.();
     this.update();
   }
 
@@ -656,7 +708,39 @@ export class HumanoidGlbVisualAdapter {
     const rawSize = this.rawVisibleBounds?.getSize(new THREE.Vector3());
     const normalizedSize = this.normalizedVisibleBounds?.getSize(new THREE.Vector3());
     const ragdollBonePositions = Object.fromEntries(['pelvis', 'upper_chest', 'head'].map((id) => [id, this.animationBones.get(id)?.getWorldPosition(new THREE.Vector3()).toArray().map((value) => Number(value.toFixed(2))) ?? null]));
-    return { path: this.profile.assetPath, profileName: this.profile.name, animationAuthoritative: this.profile.animationAuthoritative === true, animationManifestPath: this.profile.animationManifestPath ?? null, manifestAnimationCount: this.animationPack?.entriesByName.size ?? 0, manifestAnimationNames: [...(this.animationPack?.entriesByName.keys() ?? [])], loadCount: assetLoadCount, cacheKeys: [...cachedAssetPromises.keys()], skinnedMeshCount: this.skinnedMeshes.length, skeletonCount: this.skeletons.length, mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length, missingMappedBones: [], bindOffsetCount: this.bindings.length, ragdollBindingCount: this.ragdollBindings.length, ragdollBonePositions, ragdoll: { ...this.ragdollDiagnostics }, mixerCount: this.mixer ? 1 : 0, materialCloneCount: this.materialCloneCount, idleClip: this.idleAction?.getClip?.().name ?? null, rawMeasuredVisibleHeight: rawSize?.y ?? null, normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight, normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null, groundY: this.actor.visualRootPosition.y, groundClearance: this.profile.groundClearance ?? null, height: this.profile.targetHeight, scale: this.uniformScale ?? getHumanoidProfileScale(this.profile), lighting: this.updateCharacterLightingDiagnostics(), animation: this.animationController?.getDiagnostics?.() ?? null };
+    return {
+      path: this.profile.assetPath,
+      profileName: this.profile.name,
+      animationAuthoritative: this.profile.animationAuthoritative === true,
+      animationManifestPath: this.profile.animationManifestPath ?? null,
+      damageManifestPath: this.profile.damageManifestPath ?? null,
+      manifestAnimationCount: this.animationPack?.entriesByName.size ?? 0,
+      manifestAnimationNames: [...(this.animationPack?.entriesByName.keys() ?? [])],
+      loadCount: assetLoadCount,
+      cacheKeys: [...cachedAssetPromises.keys()],
+      skinnedMeshCount: this.skinnedMeshes.length,
+      skeletonCount: this.skeletons.length,
+      mappedBoneCount: this.profile.animationAuthoritative ? Object.keys(this.profile.boneMap).length : this.bindings.length,
+      missingMappedBones: [],
+      bindOffsetCount: this.bindings.length,
+      ragdollBindingCount: this.ragdollBindings.length,
+      ragdollBonePositions,
+      ragdoll: { ...this.ragdollDiagnostics },
+      mixerCount: this.mixer ? 1 : 0,
+      materialCloneCount: this.materialCloneCount,
+      idleClip: this.idleAction?.getClip?.().name ?? null,
+      rawMeasuredVisibleHeight: rawSize?.y ?? null,
+      normalizedVisibleHeight: normalizedSize?.y ?? this.profile.targetHeight,
+      normalizedVisibleMinY: this.normalizedVisibleBounds?.min.y ?? null,
+      groundY: this.actor.visualRootPosition.y,
+      groundClearance: this.profile.groundClearance ?? null,
+      height: this.profile.targetHeight,
+      scale: this.uniformScale ?? getHumanoidProfileScale(this.profile),
+      lighting: this.updateCharacterLightingDiagnostics(),
+      animation: this.animationController?.getDiagnostics?.() ?? null,
+      damageAsset: this.damageSegmentRuntime?.getDamageAssetDiagnostics?.() ?? null,
+      dismemberment: this.damageSegmentRuntime?.getDiagnostics?.() ?? null,
+    };
   }
 
   get materialCloneCount() { return this.ownedMaterials.size; }
@@ -705,6 +789,8 @@ export class HumanoidGlbVisualAdapter {
 
   dispose() {
     this.disposed = true;
+    this.damageSegmentRuntime?.dispose?.();
+    this.damageSegmentRuntime = null;
     this.idleAction?.stop();
     this.mixer?.stopAllAction();
     if (this.scene && this.mixer) this.mixer.uncacheRoot(this.scene);
@@ -716,6 +802,8 @@ export class HumanoidGlbVisualAdapter {
     this.animationController = null;
     this.mixer = null;
     this.idleAction = null;
+    this.damageManifest = null;
+    this.loadedClips = [];
     this.animationBones.clear();
     this.pendingHurt = null;
     this.pendingDeath = null;

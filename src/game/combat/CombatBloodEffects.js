@@ -20,6 +20,7 @@ export class CombatBloodEffects {
     this.particles = Array.from({ length: BLOOD_EFFECT_CONFIG.maximumParticles }, () => ({ active: false, position: new THREE.Vector3(), velocity: new THREE.Vector3(), life: 0, lifetime: 0, woundId: null, kind: 'drop' }));
     this.decals = [];
     this.nextDecal = 0;
+    this.detachmentActivationCount = 0;
     this.fadePrepared = false;
     this.fadeMaterialBaselines = new Map();
     this.material = createBloodChromaMaterial({ usage: 'particle', sourceColor: BLOOD_COLOR_PALETTE.spray, color: 0xffffff, roughness: 0.78, metalness: 0.02, transparent: true, opacity: 1, depthWrite: false });
@@ -64,6 +65,26 @@ export class CombatBloodEffects {
     if (count >= 4) this.eventSink?.('blood_spray', { position: this.woundSystem.getWorldPose(wound)?.point, severity: wound?.severity ?? 0.3 });
   }
 
+  emitDetachment({ position, direction = null } = {}) {
+    if (!position?.isVector3 || !position.toArray().every(Number.isFinite)) return false;
+    this.detachmentActivationCount += 1;
+    const outward = direction?.isVector3 ? direction.clone() : new THREE.Vector3(0, 1, 0);
+    if (outward.lengthSq() < 1e-8) outward.set(0, 1, 0);
+    outward.normalize();
+    const tangent = new THREE.Vector3().crossVectors(outward, Math.abs(outward.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
+    const bitangent = new THREE.Vector3().crossVectors(outward, tangent).normalize();
+    const pattern = [[-0.3, 0.08], [0.28, -0.05], [-0.16, -0.22], [0.12, 0.26], [-0.38, -0.14], [0.36, 0.16], [0, -0.32], [0.05, 0.34]];
+    pattern.forEach(([side, lift], index) => {
+      const velocity = outward.clone().multiplyScalar(0.8 + index * 0.055)
+        .addScaledVector(tangent, side)
+        .addScaledVector(bitangent, lift)
+        .addScaledVector(new THREE.Vector3(0, 1, 0), 0.14);
+      this.spawnParticle(null, position, velocity, 'detachment');
+    });
+    this.eventSink?.('blood_spray', { position: position.clone(), severity: 0.82 });
+    return true;
+  }
+
   emitBurst(wound, count, kind, direction = null) {
     const pose = this.woundSystem.getWorldPose(wound);
     if (!pose || !wound || wound.bleedingProfile.kind === 'none') return;
@@ -85,9 +106,9 @@ export class CombatBloodEffects {
     particle.velocity.copy(velocity);
     particle.life = 0;
     particle.lifetime = BLOOD_EFFECT_CONFIG.maximumLifetime * (0.65 + Math.random() * 0.35);
-    particle.woundId = wound.id;
+    particle.woundId = wound?.id ?? 'segment-detachment';
     particle.kind = kind;
-    wound.bloodEmitted += 1;
+    if (wound) wound.bloodEmitted += 1;
   }
 
   update(dt) {
@@ -180,6 +201,7 @@ export class CombatBloodEffects {
     this.particles.forEach((particle) => { particle.active = false; particle.woundId = null; particle.life = 0; });
     this.decals.forEach((decal) => { decal.active = false; decal.mesh.visible = false; });
     this.nextDecal = 0;
+    this.detachmentActivationCount = 0;
     this.updateInstances();
   }
 
@@ -215,6 +237,7 @@ export class CombatBloodEffects {
       particles: this.particles.filter((particle) => particle.active).length,
       particleLimit: this.particles.length,
       decals: this.decals.filter((decal) => decal.active).length,
+      detachmentActivationCount: this.detachmentActivationCount,
       decalLimit: this.decals.length,
       approximateBytes: this.particles.length * 96 + this.decals.length * 48,
       particleMaterial: getBloodMaterialDiagnostics(this.material, { illumination }),
