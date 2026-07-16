@@ -252,17 +252,37 @@ for (const [label, Controller, itemId, switchOwnership] of [
     assert.ok(diagnostics.postExtractionPositionJump < 1e-9);
     assert.ok(diagnostics.postExtractionRotationJumpDegrees < 1e-7);
 
-    controller.beginFreePresentationContinuity();
-    controller.renderTargetLocalGrip.copy(root.position).add(new THREE.Vector3(0.1, 0.04, -0.06));
-    controller.renderTargetLocalQuaternion.copy(root.quaternion)
-      .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(20)))
-      .normalize();
-    controller.afterPhysics(1, 1 / 60);
-    const recovered = controller.getWeaponPresentationDiagnostics();
-    assert.ok(recovered.postExtractionPositionJump > 0);
-    assert.ok(recovered.postExtractionPositionJump <= 0.010001);
-    assert.ok(recovered.postExtractionRotationJumpDegrees > 0);
-    assert.ok(recovered.postExtractionRotationJumpDegrees <= 3.0001);
+    if (label === 'sword') {
+      const preservedPosition = root.getWorldPosition(new THREE.Vector3());
+      const preservedQuaternion = root.getWorldQuaternion(new THREE.Quaternion());
+      controller.desiredGrip.copy(preservedPosition).add(new THREE.Vector3(0.1, 0.04, -0.06));
+      controller.desiredQuaternion.copy(preservedQuaternion)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(20)))
+        .normalize();
+      controller.beginAuthoritativeExtractionContinuity(preservedPosition, preservedQuaternion);
+      assert.ok(controller.actualGrip.distanceTo(preservedPosition) < 1e-9);
+      assert.ok(controller.actualQuaternion.angleTo(preservedQuaternion) < 1e-9);
+      controller.applyFreeSwordAuthoritativePose(0.05);
+      controller.captureFreeRenderPose();
+      controller.afterPhysics(1, 0.05);
+      const unity = controller.getDiagnostics().swordPresentationUnity;
+      assert.ok(unity.tipError < 0.002);
+      assert.ok(unity.edgeError < 0.002);
+      controller.applyFreeSwordAuthoritativePose(0.05);
+      assert.equal(controller.extractionOffsetActive, false);
+    } else {
+      controller.beginFreePresentationContinuity();
+      controller.renderTargetLocalGrip.copy(root.position).add(new THREE.Vector3(0.1, 0.04, -0.06));
+      controller.renderTargetLocalQuaternion.copy(root.quaternion)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(20)))
+        .normalize();
+      controller.afterPhysics(1, 1 / 60);
+      const recovered = controller.getWeaponPresentationDiagnostics();
+      assert.ok(recovered.postExtractionPositionJump > 0);
+      assert.ok(recovered.postExtractionPositionJump <= 0.010001);
+      assert.ok(recovered.postExtractionRotationJumpDegrees > 0);
+      assert.ok(recovered.postExtractionRotationJumpDegrees <= 3.0001);
+    }
     controller.dispose();
     disposeWeaponViewmodelAnchor(viewmodelAnchor);
   });

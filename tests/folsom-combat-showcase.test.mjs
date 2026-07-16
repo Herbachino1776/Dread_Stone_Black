@@ -6,7 +6,7 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { FOLSOM_COMBAT_FOOTPRINT, FOLSOM_RAPIER_SUPPORT, FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { TESTMAN_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { FOLSOM_SHOWCASE_COMBAT_CONFIG } from '../src/game/combat/FolsomShowcaseCombatExtras.js';
-import { FolsomShowcaseSwordDismemberment } from '../src/game/combat/FolsomShowcaseSwordDismemberment.js';
+import { FOLSOM_SHOWCASE_VISIBLE_PHYSICAL_EDGE_TOLERANCE, FolsomShowcaseSwordDismemberment } from '../src/game/combat/FolsomShowcaseSwordDismemberment.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import { folsomDefinition } from '../src/game/locations/folsom.definition.js';
 import { buildDungeonCollision } from '../src/engine/dungeon-authoring/DungeonCollisionBuilder.js';
@@ -325,6 +325,46 @@ test('showcase sword uses authored neck and elbow seams and rejects badly aimed 
     }
     if (!entry.accepted && entry.segmentId && entry.bodyId !== 'left_hand') assert.equal(adapter.getDiagnostics().lastResult, 'rejected_seam_distance');
   });
+});
+
+test('showcase dismemberment rejects a ghost edge and accepts only the coincident visible blade', () => {
+  assert.equal(FOLSOM_SHOWCASE_VISIBLE_PHYSICAL_EDGE_TOLERANCE, 0.01);
+  const ghost = makeDamageActor('ghost-neck', { head_neck: new THREE.Vector3(0, 1.55, 0) });
+  const ghostAdapter = armedAdapter();
+  assert.equal(ghostAdapter.attemptContact({
+    controller: { config: { minimumAttackSpeed: 0.05 }, getScheduledVisiblePhysicalEdgeError: () => 0.0101 },
+    routed: { actor: ghost.actor, hit: { bodyId: 'neck', regionId: 'neck' } },
+    point: new THREE.Vector3(0, 1.55, 0),
+    edgeMotion: new THREE.Vector3(0.12, 0, 0),
+    primitiveName: 'leftEdge',
+    edgeSpeed: 1.2,
+    lateralRatio: 0.8,
+    swingTravel: 0.12,
+    deliberateSpeed: 1,
+  }), false);
+  assert.equal(ghost.requests.length, 0, 'a physical edge ahead of the visible edge cannot detach');
+  assert.equal(ghostAdapter.getDiagnostics().lastResult, 'rejected_visible_physical_edge_error');
+  assert.equal(ghostAdapter.getDiagnostics().rejectedPresentationErrorCount, 1);
+
+  for (const [bodyId, regionId, segmentId, seam] of [
+    ['neck', 'neck', 'head_neck', new THREE.Vector3(0, 1.55, 0)],
+    ['left_forearm', 'arm_left_bot', 'left_elbow', new THREE.Vector3(-0.42, 1.25, 0)],
+  ]) {
+    const visible = makeDamageActor(`visible-${segmentId}`, { [segmentId]: seam });
+    const visibleAdapter = armedAdapter();
+    assert.equal(visibleAdapter.attemptContact({
+      controller: { config: { minimumAttackSpeed: 0.05 }, getScheduledVisiblePhysicalEdgeError: () => 0.002 },
+      routed: { actor: visible.actor, hit: { bodyId, regionId } },
+      point: seam.clone(),
+      edgeMotion: new THREE.Vector3(0.12, 0, 0),
+      primitiveName: 'rightEdge',
+      edgeSpeed: 1.2,
+      lateralRatio: 0.8,
+      swingTravel: 0.12,
+      deliberateSpeed: 1,
+    }), true);
+    assert.equal(visible.requests[0].segmentId, segmentId);
+  }
 });
 
 test('dying actors remain eligible for accurate neck and elbow detachments only until grounded', () => {

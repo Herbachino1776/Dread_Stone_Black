@@ -3,6 +3,7 @@ import { FOLSOM_SHOWCASE_COMBAT_CONFIG } from './FolsomShowcaseCombatExtras.js';
 
 const VALID_EDGE_PRIMITIVES = new Set(['leftEdge', 'rightEdge']);
 const MAX_DIAGNOSTIC_COUNT = 1_000_000;
+export const FOLSOM_SHOWCASE_VISIBLE_PHYSICAL_EDGE_TOLERANCE = 0.01;
 const SEGMENT_BY_BODY_OR_REGION = Object.freeze({
   head: 'head_neck',
   face: 'head_neck',
@@ -89,6 +90,8 @@ export class FolsomShowcaseSwordDismemberment {
     this.rejectedIntentCount = 0;
     this.rejectedSeamDistanceCount = 0;
     this.rejectedRepeatCount = 0;
+    this.rejectedPresentationErrorCount = 0;
+    this.lastVisiblePhysicalEdgeError = 0;
   }
 
   beginGesture({ pointerId = null } = {}) {
@@ -155,6 +158,7 @@ export class FolsomShowcaseSwordDismemberment {
     if (kind === 'speed') this.rejectedSpeedCount = incrementBounded(this.rejectedSpeedCount);
     else if (kind === 'seam') this.rejectedSeamDistanceCount = incrementBounded(this.rejectedSeamDistanceCount);
     else if (kind === 'repeat') this.rejectedRepeatCount = incrementBounded(this.rejectedRepeatCount);
+    else if (kind === 'presentation') this.rejectedPresentationErrorCount = incrementBounded(this.rejectedPresentationErrorCount);
     else this.rejectedIntentCount = incrementBounded(this.rejectedIntentCount);
     this.lastResult = result;
     return false;
@@ -190,9 +194,11 @@ export class FolsomShowcaseSwordDismemberment {
     this.lastContactRegionId = hit?.regionId ?? null;
     this.lastCandidateSegmentId = resolveCandidateSegment(hit);
     this.lastSeamDistance = null;
+    this.lastVisiblePhysicalEdgeError = Math.max(0, Number(controller?.getScheduledVisiblePhysicalEdgeError?.()) || 0);
 
     if (!this.activeSwingId) return this.reject('intent', 'rejected_no_active_gesture');
     if (!VALID_EDGE_PRIMITIVES.has(primitiveName)) return this.reject('intent', 'rejected_non_edge_contact');
+    if (this.lastVisiblePhysicalEdgeError > FOLSOM_SHOWCASE_VISIBLE_PHYSICAL_EDGE_TOLERANCE) return this.reject('presentation', 'rejected_visible_physical_edge_error');
     if (!isFolsomShowcaseDismembermentTargetEligible(actor)) return this.reject('intent', 'rejected_target_not_contactable');
     if (this.actorsResolvedThisSwing.has(actorId)) return this.reject('repeat', 'rejected_actor_already_resolved');
     if (this.acceptedThisSwing >= this.config.maximumSwordDetachmentsPerGesture) return this.reject('repeat', 'rejected_gesture_actor_cap');
@@ -271,6 +277,9 @@ export class FolsomShowcaseSwordDismemberment {
       rejectedIntentCount: this.rejectedIntentCount,
       rejectedSeamDistanceCount: this.rejectedSeamDistanceCount,
       rejectedRepeatCount: this.rejectedRepeatCount,
+      rejectedPresentationErrorCount: this.rejectedPresentationErrorCount,
+      lastVisiblePhysicalEdgeError: Number(this.lastVisiblePhysicalEdgeError.toFixed(6)),
+      visiblePhysicalEdgeTolerance: FOLSOM_SHOWCASE_VISIBLE_PHYSICAL_EDGE_TOLERANCE,
       actorsResolvedThisSwing: [...this.actorsResolvedThisSwing].slice(0, this.config.maximumSwordDetachmentsPerGesture),
       actorCapPerGesture: this.config.maximumSwordDetachmentsPerGesture,
     };

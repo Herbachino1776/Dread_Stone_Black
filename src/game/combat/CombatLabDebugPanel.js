@@ -175,6 +175,7 @@ export class CombatLabDebugPanel {
     const weaponSelection = diagnostics.weapon ?? {};
     const activeWeapon = weaponSelection.active ?? weaponSelection;
     const mace = weaponSelection.mace ?? (activeWeapon.itemId === 'dreadstone_mace' ? activeWeapon : {});
+    const maceDirect = mace.maceDirectControl ?? {};
     const weapon = weaponSelection.knife ?? activeWeapon;
     const director = diagnostics.director ?? {};
     const spacing = diagnostics.meleeSpacing ?? {};
@@ -246,8 +247,9 @@ export class CombatLabDebugPanel {
       `directed event ${JSON.stringify(director.lastEvent ?? null)}`,
       '',
       `mace ${mace.maceEquipped ? 'EQUIPPED' : 'HOLSTERED'}  state ${mace.gestureState ?? 'unavailable'}  load ${((mace.loadProgress ?? 0) * 100).toFixed(1)}%`,
-      `mace load distance ${(mace.normalizedUpwardLoadDistance ?? 0).toFixed(4)}  up speed ${(mace.maximumUpwardGestureSpeed ?? 0).toFixed(3)}  down ${(mace.downwardCommitSpeed ?? 0).toFixed(3)}/${(mace.downwardCommitTravel ?? 0).toFixed(4)}`,
-      `mace swing ${mace.currentSwingId ?? '-'}  power ${(mace.swingPower ?? 0).toFixed(3)}  duration ${(mace.strikeDuration ?? 0).toFixed(3)}s  progress ${(mace.swingProgress ?? 0).toFixed(3)}`,
+      `mace travel up/down ${(maceDirect.accumulatedUpwardTravel ?? 0).toFixed(4)}/${(maceDirect.accumulatedDownwardTravel ?? 0).toFixed(4)}m  speed up/down ${(maceDirect.upwardHeadSpeed ?? 0).toFixed(3)}/${(maceDirect.downwardHeadSpeed ?? 0).toFixed(3)}m/s`,
+      `mace strike ${maceDirect.activeStrikeId ?? '-'}  qualified ${maceDirect.strikeQualified ? 'YES' : 'NO'}  power ${(mace.swingPower ?? 0).toFixed(3)}  resistance ${maceDirect.resistanceActive ? 'YES' : 'NO'}`,
+      `mace unity pos/rot/head ${(maceDirect.positionTrackingError ?? 0).toFixed(5)}m / ${(maceDirect.rotationTrackingErrorDegrees ?? 0).toFixed(3)}deg / ${(maceDirect.visualPhysicalHeadError ?? 0).toFixed(5)}m`,
       `mace contact ${mace.primitiveThatContacted ?? '-'} / ${mace.contactClassification ?? '-'}  actor ${mace.resolvedActorId ?? '-'}  region ${mace.impactRegion ?? '-'}`,
       `mace speed ${(mace.normalImpactSpeed ?? 0).toFixed(3)}m/s  mass ${(mace.effectiveMass ?? 0).toFixed(2)}kg  impulse ${(mace.estimatedImpulse ?? 0).toFixed(2)}Ns  energy ${(mace.estimatedEnergy ?? 0).toFixed(2)}J`,
       `mace point ${JSON.stringify(mace.impactPoint ?? null)}  damage ${(mace.actorDamageApplied ?? 0).toFixed(3)}  reaction ${mace.reactionEmitted ? 'YES' : 'NO'}  collapse ${mace.collapseRequested ? 'YES' : 'NO'}`,

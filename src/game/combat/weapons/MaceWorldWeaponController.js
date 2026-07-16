@@ -49,61 +49,57 @@ export const DREADMACE_CONTACT_PRIMITIVES = Object.freeze({
 
 export const MACE_GESTURE_STATES = Object.freeze({
   ready: 'ready',
+  held: 'held',
   loading: 'loading',
-  loaded: 'loaded',
-  smashing: 'smashing',
-  impactRecoil: 'impact_recoil',
-  followThrough: 'follow_through',
+  striking: 'striking',
+  impactResistance: 'impact_resistance',
   returning: 'returning',
 });
 
 export const DREADMACE_GESTURE_THRESHOLDS = Object.freeze({
-  loadStartDistance: 0.025,
-  fullLoadDistance: 0.085,
-  minimumQualifiedUpwardSpeed: 0.12,
-  fullQualifiedUpwardSpeed: 0.32,
-  minimumCommitLoad: 0.7,
-  minimumDownwardCommitTravel: 0.018,
-  minimumDownwardCommitSpeed: 0.28,
-  minimumDamagingHeadSpeed: 0.52,
+  loadStartTravel: 0.10,
+  fullLoadTravel: 0.34,
+  minimumUpwardSpeed: 0.22,
+  strongUpwardSpeed: 0.9,
+  loadMemorySeconds: 0.6,
+  minimumRecentLoadEnergy: 0.46,
+  minimumDownwardPhaseSpeed: 0.28,
+  minimumDownwardHeadSpeed: 0.65,
+  minimumTotalHeadSpeed: 0.82,
+  minimumDownwardStrikeTravel: 0.12,
+  minimumContactNormalSpeed: 0.52,
+  minimumContactNormalAlignment: 0.34,
+  safeResetHeadSpeed: 0.18,
+  meaningfulRearmRaiseTravel: 0.10,
+  safeResetRearmRaiseTravel: 0.08,
 });
 
 export const DREADMACE_WORLD_WEAPON_CONFIG = Object.freeze({
   itemId: 'dreadstone_mace',
   gripZone: Object.freeze({ minimumRadiusPx: 42, maximumRadiusPx: 78, viewportRatio: 0.09 }),
   workspace: Object.freeze({
-    ready: Object.freeze([0.29, -0.34, -0.58]),
-    min: Object.freeze([-0.18, -0.48, -0.95]),
-    max: Object.freeze([0.5, 0.3, -0.38]),
-    lateralSensitivity: 0.004,
-    verticalSensitivity: 0.004,
-    thrustSensitivity: 0.002,
-    lateralReach: 0.2,
-    verticalReach: 0.36,
-    thrustDistance: 0.34,
+    ready: Object.freeze([0.18, -0.30, -0.58]),
+    min: Object.freeze([-0.30, -0.46, -0.92]),
+    max: Object.freeze([0.42, 0.28, -0.38]),
+    lateralSensitivity: 1 / 260,
+    verticalSensitivity: 1 / 300,
+    thrustSensitivity: 1 / 900,
+    lateralReach: 0.50,
+    verticalReach: 0.60,
+    thrustDistance: 0.40,
   }),
-  loadedGrip: Object.freeze([0.18, 0.12, -0.49]),
-  loadedEuler: Object.freeze([1.05, -0.08, 0.08]),
-  finishGrip: Object.freeze([0.2, -0.3, -0.75]),
-  finishEuler: Object.freeze([-0.45, 0.08, -0.08]),
-  swingDuration: Object.freeze({ minimum: 0.18, maximum: 0.28 }),
-  recoilDuration: Object.freeze({ minimum: 0.07, maximum: 0.13 }),
-  followThroughDuration: 0.095,
-  returnDuration: 0.29,
+  directRotation: Object.freeze({ pitch: 0.34, yaw: -0.28, roll: -0.22 }),
+  impactResistanceDuration: Object.freeze({ minimum: 0.06, maximum: 0.13 }),
+  maximumTargetsPerStrike: 2,
+  returnDuration: 0.31,
 });
 
 const MACE_RENDER_ORDER = 10027;
 const EPSILON = 1e-6;
 const identityQuaternion = new THREE.Quaternion();
 const readyGrip = new THREE.Vector3().fromArray(DREADMACE_WORLD_WEAPON_CONFIG.workspace.ready);
-const loadedGrip = new THREE.Vector3().fromArray(DREADMACE_WORLD_WEAPON_CONFIG.loadedGrip);
-const finishGrip = new THREE.Vector3().fromArray(DREADMACE_WORLD_WEAPON_CONFIG.finishGrip);
-const loadedQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(...DREADMACE_WORLD_WEAPON_CONFIG.loadedEuler, 'YXZ'));
-const finishQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(...DREADMACE_WORLD_WEAPON_CONFIG.finishEuler, 'YXZ'));
-const heldLoadOffset = new THREE.Vector3().subVectors(loadedGrip, readyGrip);
 const heldFreeEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const heldFreeRotation = new THREE.Quaternion();
-const heldLoadRotation = new THREE.Quaternion();
 const loadDreadmaceAsset = createCachedWeaponGlbLoader(DREADMACE_GLB_PATH, 'Dreadmace');
 
 function smoothstep(value) {
@@ -148,46 +144,28 @@ export function resolveDreadmaceSweepSampleCount({ translationDistance = 0, angu
 export function computeDreadmaceGesturePower({ loadProgress = 0, downwardSpeed = 0, downwardTravel = 0, effectiveMass = DREADMACE_CONTACT_PRIMITIVES.mace_head.effectiveMass } = {}) {
   const load = THREE.MathUtils.clamp(loadProgress, 0, 1);
   const speed = THREE.MathUtils.clamp(downwardSpeed / 1.4, 0, 1);
-  const travel = THREE.MathUtils.clamp(downwardTravel / 0.075, 0, 1);
+  const travel = THREE.MathUtils.clamp(downwardTravel / DREADMACE_GESTURE_THRESHOLDS.minimumDownwardStrikeTravel, 0, 1);
   const mass = THREE.MathUtils.clamp(effectiveMass / DREADMACE_CONTACT_PRIMITIVES.mace_head.effectiveMass, 0, 1);
   return THREE.MathUtils.clamp(load * 0.5 + speed * 0.3 + travel * 0.15 + mass * 0.05, 0, 1);
 }
 
-export function sampleDreadmaceSmashArc(progress, power = 1, target = {}) {
-  const t = THREE.MathUtils.clamp(progress, 0, 1);
-  const eased = smoothstep(t);
-  const arc = Math.sin(Math.PI * t);
-  const grip = target.grip ?? new THREE.Vector3();
-  const quaternion = target.quaternion ?? new THREE.Quaternion();
-  const startGrip = target.startGrip ?? loadedGrip;
-  const startQuaternion = target.startQuaternion ?? loadedQuaternion;
-  grip.copy(startGrip).lerp(finishGrip, eased);
-  grip.y += arc * (0.035 + power * 0.02);
-  grip.z -= arc * (0.055 + power * 0.04);
-  quaternion.slerpQuaternions(startQuaternion, finishQuaternion, eased).normalize();
-  const head = target.head ?? new THREE.Vector3();
-  head.fromArray(DREADMACE_DIMENSIONS.headCenter).applyQuaternion(quaternion).add(grip);
-  return { grip, quaternion, head, progress: t, easedProgress: eased };
-}
-
-export function sampleDreadmaceHeldPose({ baselineGrip = readyGrip, baselineQuaternion = identityQuaternion, freeAimX = 0, freeAimY = 0, freeExtension = 0, loadProgress = 0 } = {}, grip = new THREE.Vector3(), quaternion = new THREE.Quaternion()) {
-  const t = smoothstep(loadProgress);
+export function sampleDreadmaceDirectPose({ baselineGrip = readyGrip, baselineQuaternion = identityQuaternion, aimX = 0, aimY = 0, extension = 0 } = {}, grip = new THREE.Vector3(), quaternion = new THREE.Quaternion()) {
+  const boundedAimX = THREE.MathUtils.clamp(aimX, -1, 1);
+  const boundedAimY = THREE.MathUtils.clamp(aimY, -1, 1);
   grip.copy(baselineGrip);
-  grip.x += THREE.MathUtils.clamp(freeAimX, -1, 1) * 0.18;
-  grip.y += THREE.MathUtils.clamp(freeAimY, -1, 1) * 0.11;
-  grip.z -= THREE.MathUtils.clamp(freeExtension, 0, DREADMACE_WORLD_WEAPON_CONFIG.workspace.thrustDistance) * 0.32;
-  grip.addScaledVector(heldLoadOffset, t);
+  grip.x += boundedAimX * DREADMACE_WORLD_WEAPON_CONFIG.workspace.lateralReach;
+  grip.y += boundedAimY * DREADMACE_WORLD_WEAPON_CONFIG.workspace.verticalReach;
+  grip.z -= THREE.MathUtils.clamp(extension, 0, DREADMACE_WORLD_WEAPON_CONFIG.workspace.thrustDistance);
   grip.x = THREE.MathUtils.clamp(grip.x, DREADMACE_WORLD_WEAPON_CONFIG.workspace.min[0], DREADMACE_WORLD_WEAPON_CONFIG.workspace.max[0]);
   grip.y = THREE.MathUtils.clamp(grip.y, DREADMACE_WORLD_WEAPON_CONFIG.workspace.min[1], DREADMACE_WORLD_WEAPON_CONFIG.workspace.max[1]);
   grip.z = THREE.MathUtils.clamp(grip.z, DREADMACE_WORLD_WEAPON_CONFIG.workspace.min[2], DREADMACE_WORLD_WEAPON_CONFIG.workspace.max[2]);
   heldFreeRotation.setFromEuler(heldFreeEuler.set(
-    THREE.MathUtils.clamp(freeAimY, -1, 1) * 0.1,
-    THREE.MathUtils.clamp(freeAimX, -1, 1) * -0.18,
-    THREE.MathUtils.clamp(freeAimX, -1, 1) * -0.14,
+    boundedAimY * DREADMACE_WORLD_WEAPON_CONFIG.directRotation.pitch,
+    boundedAimX * DREADMACE_WORLD_WEAPON_CONFIG.directRotation.yaw,
+    boundedAimX * DREADMACE_WORLD_WEAPON_CONFIG.directRotation.roll,
     'YXZ',
   ));
-  heldLoadRotation.slerpQuaternions(identityQuaternion, loadedQuaternion, t);
-  quaternion.copy(baselineQuaternion).multiply(heldFreeRotation).multiply(heldLoadRotation).normalize();
+  quaternion.copy(baselineQuaternion).multiply(heldFreeRotation).normalize();
   return { grip, quaternion };
 }
 
@@ -227,6 +205,8 @@ export class MaceWorldWeaponController {
     this.contactScratch = createWeaponContactScratch();
     this.localGrip = new THREE.Vector3().fromArray(this.config.workspace.ready);
     this.localQuaternion = new THREE.Quaternion();
+    this.targetLocalGrip = this.localGrip.clone();
+    this.targetLocalQuaternion = this.localQuaternion.clone();
     this.gestureBaselineGrip = this.localGrip.clone();
     this.gestureBaselineQuaternion = this.localQuaternion.clone();
     this.freeAimX = 0;
@@ -241,31 +221,36 @@ export class MaceWorldWeaponController {
     this.currentHeadCenter = new THREE.Vector3();
     this.previousHeadCenter = new THREE.Vector3();
     this.headCenterVelocity = new THREE.Vector3();
+    this.displayedGrip = new THREE.Vector3();
+    this.displayedQuaternion = new THREE.Quaternion();
+    this.displayedHeadCenter = new THREE.Vector3();
+    this.positionTrackingError = 0;
+    this.rotationTrackingErrorDegrees = 0;
+    this.visualPhysicalHeadError = 0;
     this.gripVelocity = new THREE.Vector3();
     this.angularVelocity = new THREE.Vector3();
     this.localHeadOffset = new THREE.Vector3().fromArray(DREADMACE_DIMENSIONS.headCenter);
     this.state = MACE_GESTURE_STATES.ready;
     this.elapsed = 0;
     this.lastPhysicsDt = 1 / 60;
+    this.accumulatedUpwardTravel = 0;
+    this.accumulatedDownwardTravel = 0;
+    this.rearmUpwardTravel = 0;
+    this.upwardHeadSpeed = 0;
+    this.downwardHeadSpeed = 0;
+    this.loadEnergy = 0;
+    this.loadEnergyAge = 0;
+    this.lastQualifiedUpwardAt = null;
     this.loadProgress = 0;
     this.maximumLoadProgress = 0;
-    this.normalizedUpwardLoadDistance = 0;
-    this.maximumUpwardGestureSpeed = 0;
-    this.downwardCommitSpeed = 0;
-    this.downwardCommitTravel = 0;
-    this.minimumGestureClientY = 0;
     this.loadCompletedAt = null;
-    this.swingSerial = 0;
-    this.currentSwingId = null;
-    this.swingOwnerId = null;
+    this.strikeSerial = 0;
+    this.activeStrikeId = null;
+    this.strikeOwnerId = null;
+    this.strikeLoadEnergy = 0;
+    this.strikeQualified = false;
+    this.strikeSawSafeReset = false;
     this.swingPower = 0;
-    this.strikeDuration = 0;
-    this.swingElapsed = 0;
-    this.swingProgress = 0;
-    this.swingStartGrip = new THREE.Vector3();
-    this.swingStartQuaternion = new THREE.Quaternion();
-    this.swingStartHead = new THREE.Vector3();
-    this.swingJustCommitted = false;
     this.swingCommitCount = 0;
     this.resolvedActors = new Set();
     this.activeBluntInteractions = new Map();
@@ -273,9 +258,10 @@ export class MaceWorldWeaponController {
     this.returnElapsed = 0;
     this.returnStartGrip = new THREE.Vector3();
     this.returnStartQuaternion = new THREE.Quaternion();
-    this.phaseElapsed = 0;
-    this.phaseStartGrip = new THREE.Vector3();
-    this.phaseStartQuaternion = new THREE.Quaternion();
+    this.resistanceElapsed = 0;
+    this.resistanceDuration = 0;
+    this.resistancePositionOffset = new THREE.Vector3();
+    this.resistanceRotationOffset = new THREE.Quaternion();
     this.impactEnergy = 0;
     this.impactResistance = 1;
     this.impactResponseStrength = 0;
@@ -385,6 +371,8 @@ export class MaceWorldWeaponController {
     initializeCameraRelativeWeaponPose({ camera: this.camera, workspace: this.config.workspace, poseWorkspace: this.poseWorkspace, actualGrip: this.actualGrip, previousGrip: this.previousGrip, desiredGrip: this.desiredGrip, actualQuaternion: this.actualQuaternion, previousQuaternion: this.previousQuaternion, desiredQuaternion: this.desiredQuaternion });
     this.localGrip.fromArray(this.config.workspace.ready);
     this.localQuaternion.identity();
+    this.targetLocalGrip.copy(this.localGrip);
+    this.targetLocalQuaternion.copy(this.localQuaternion);
     this.gestureBaselineGrip.copy(this.localGrip);
     this.gestureBaselineQuaternion.copy(this.localQuaternion);
     this.applyLocalPoseToWorld();
@@ -426,83 +414,44 @@ export class MaceWorldWeaponController {
   }
 
   acquireGrip(pointerId, clientX, clientY, timeMs = performance.now()) {
-    if (!this.isEquipped() || ![MACE_GESTURE_STATES.ready, MACE_GESTURE_STATES.loading, MACE_GESTURE_STATES.loaded].includes(this.state) || !this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
-    this.minimumGestureClientY = clientY;
+    if (!this.isEquipped() || !this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
     this.gestureBaselineGrip.copy(this.localGrip);
     this.gestureBaselineQuaternion.copy(this.localQuaternion);
+    this.targetLocalGrip.copy(this.localGrip);
+    this.targetLocalQuaternion.copy(this.localQuaternion);
     this.freeAimX = 0;
     this.freeAimY = 0;
     this.freeExtension = 0;
-    this.normalizedUpwardLoadDistance = 0;
-    this.maximumUpwardGestureSpeed = 0;
-    this.downwardCommitSpeed = 0;
-    this.downwardCommitTravel = 0;
-    this.loadProgress = 0;
-    this.maximumLoadProgress = 0;
-    this.loadCompletedAt = null;
+    this.resetMotionHistory();
+    this.clearStrikeToken();
+    this.resistanceElapsed = 0;
+    this.resistanceDuration = 0;
+    this.resistancePositionOffset.set(0, 0, 0);
+    this.resistanceRotationOffset.identity();
+    this.transitionState(MACE_GESTURE_STATES.held);
     return true;
   }
 
   applyGripGesture(pointerId, deltaX, deltaY, clientX, clientY, timeMs = performance.now()) {
-    if (pointerId !== this.gripPointerId || ![MACE_GESTURE_STATES.ready, MACE_GESTURE_STATES.loading, MACE_GESTURE_STATES.loaded].includes(this.state)) return false;
-    const rect = this.viewport?.getBoundingClientRect?.() ?? { width: 1, height: 1 };
-    const viewportHeight = Math.max(1, rect.height || 1);
-    const previousY = this.gestureOwnership.lastPoint.y;
-    const previousTime = this.gestureOwnership.lastTimeMs;
-    const rawDt = THREE.MathUtils.clamp((timeMs - previousTime) / 1000 || 1 / 60, 0.008, 0.35);
-    const stepY = clientY - previousY;
+    if (pointerId !== this.gripPointerId || this.state === MACE_GESTURE_STATES.returning) return false;
     const sample = this.gestureOwnership.update(pointerId, deltaX, deltaY, clientX, clientY, timeMs, this.freeExtension);
     if (!sample) return false;
     this.freeAimX = sample.aimX;
     this.freeAimY = sample.aimY;
     this.freeExtension = sample.extension;
-    const normalizedUpwardSpeed = Math.max(0, -stepY / viewportHeight / rawDt);
-    this.maximumUpwardGestureSpeed = Math.max(this.maximumUpwardGestureSpeed, normalizedUpwardSpeed);
-    this.minimumGestureClientY = Math.min(this.minimumGestureClientY, clientY);
-    this.normalizedUpwardLoadDistance = Math.max(this.normalizedUpwardLoadDistance, (this.gestureOwnership.startPoint.y - this.minimumGestureClientY) / viewportHeight);
-    const distanceProgress = THREE.MathUtils.clamp(
-      (this.normalizedUpwardLoadDistance - DREADMACE_GESTURE_THRESHOLDS.loadStartDistance)
-      / (DREADMACE_GESTURE_THRESHOLDS.fullLoadDistance - DREADMACE_GESTURE_THRESHOLDS.loadStartDistance),
-      0,
-      1,
-    );
-    const speedQualification = THREE.MathUtils.clamp(
-      (this.maximumUpwardGestureSpeed - DREADMACE_GESTURE_THRESHOLDS.minimumQualifiedUpwardSpeed)
-      / (DREADMACE_GESTURE_THRESHOLDS.fullQualifiedUpwardSpeed - DREADMACE_GESTURE_THRESHOLDS.minimumQualifiedUpwardSpeed),
-      0,
-      1,
-    );
-    this.loadProgress = distanceProgress * speedQualification;
-    this.maximumLoadProgress = Math.max(this.maximumLoadProgress, this.loadProgress);
-    if (this.normalizedUpwardLoadDistance >= DREADMACE_GESTURE_THRESHOLDS.loadStartDistance && speedQualification > 0) this.transitionState(MACE_GESTURE_STATES.loading);
-    if (this.loadProgress >= 0.98) {
-      this.transitionState(MACE_GESTURE_STATES.loaded);
-      this.loadCompletedAt ??= this.elapsed;
-    }
-    const downwardSpeed = Math.max(0, stepY / viewportHeight / rawDt);
-    const downwardTravel = Math.max(0, (clientY - this.minimumGestureClientY) / viewportHeight);
-    this.downwardCommitSpeed = Math.max(this.downwardCommitSpeed, downwardSpeed);
-    this.downwardCommitTravel = Math.max(this.downwardCommitTravel, downwardTravel);
-    if (this.maximumLoadProgress >= DREADMACE_GESTURE_THRESHOLDS.minimumCommitLoad
-      && downwardSpeed >= DREADMACE_GESTURE_THRESHOLDS.minimumDownwardCommitSpeed
-      && downwardTravel >= DREADMACE_GESTURE_THRESHOLDS.minimumDownwardCommitTravel) {
-      this.commitSmash({ loadProgress: this.maximumLoadProgress, downwardSpeed, downwardTravel });
-    }
     return true;
   }
 
-  commitSmash({ loadProgress = this.maximumLoadProgress, downwardSpeed = this.downwardCommitSpeed, downwardTravel = this.downwardCommitTravel } = {}) {
-    if (![MACE_GESTURE_STATES.loading, MACE_GESTURE_STATES.loaded].includes(this.state)
-      || loadProgress < DREADMACE_GESTURE_THRESHOLDS.minimumCommitLoad
-      || downwardSpeed < DREADMACE_GESTURE_THRESHOLDS.minimumDownwardCommitSpeed
-      || downwardTravel < DREADMACE_GESTURE_THRESHOLDS.minimumDownwardCommitTravel) return false;
-    this.swingPower = computeDreadmaceGesturePower({ loadProgress, downwardSpeed, downwardTravel });
-    this.strikeDuration = THREE.MathUtils.lerp(this.config.swingDuration.maximum, this.config.swingDuration.minimum, this.swingPower);
-    this.swingElapsed = 0;
-    this.swingProgress = 0;
-    this.swingSerial += 1;
-    this.currentSwingId = `dreadmace-swing-${this.swingSerial}`;
-    this.swingOwnerId = this.gripPointerId ?? this.currentSwingId;
+  beginPlayerAuthoredStrike() {
+    if (this.gripPointerId == null || this.activeStrikeId || this.loadEnergy < DREADMACE_GESTURE_THRESHOLDS.minimumRecentLoadEnergy) return false;
+    this.strikeSerial += 1;
+    this.activeStrikeId = `dreadmace-strike-${this.strikeSerial}`;
+    this.strikeOwnerId = this.gripPointerId;
+    this.strikeLoadEnergy = this.loadEnergy;
+    this.accumulatedDownwardTravel = 0;
+    this.rearmUpwardTravel = 0;
+    this.strikeQualified = false;
+    this.strikeSawSafeReset = false;
     this.swingCommitCount += 1;
     this.resolvedActors.clear();
     this.resolvedActorId = null;
@@ -510,36 +459,71 @@ export class MaceWorldWeaponController {
     this.lastContactPrimitive = null;
     this.lastContactClassification = null;
     this.lastBluntImpactRecord = null;
-    // The displayed local pose is the commitment boundary. Pointer data that
-    // arrived after the last rendered frame must not replace it with a fresh
-    // canonical loaded pose before the solver takes ownership.
-    this.swingStartGrip.copy(this.localGrip);
-    this.swingStartQuaternion.copy(this.localQuaternion);
-    this.swingStartHead.copy(this.localHeadOffset).applyQuaternion(this.swingStartQuaternion).add(this.swingStartGrip);
-    this.swingJustCommitted = true;
-    this.transitionState(MACE_GESTURE_STATES.smashing);
+    this.transitionState(MACE_GESTURE_STATES.striking);
     return true;
+  }
+
+  clearStrikeToken() {
+    this.activeStrikeId = null;
+    this.strikeOwnerId = null;
+    this.strikeLoadEnergy = 0;
+    this.strikeQualified = false;
+    this.strikeSawSafeReset = false;
+    this.accumulatedDownwardTravel = 0;
+    this.rearmUpwardTravel = 0;
+    this.resolvedActors.clear();
+    this.resolvedActorId = null;
+  }
+
+  resetMotionHistory() {
+    this.accumulatedUpwardTravel = 0;
+    this.accumulatedDownwardTravel = 0;
+    this.rearmUpwardTravel = 0;
+    this.upwardHeadSpeed = 0;
+    this.downwardHeadSpeed = 0;
+    this.loadEnergy = 0;
+    this.loadEnergyAge = 0;
+    this.lastQualifiedUpwardAt = null;
+    this.loadProgress = 0;
+    this.maximumLoadProgress = 0;
+    this.loadCompletedAt = null;
   }
 
   releaseGrip(reason = 'pointer-release') {
     if (this.gripPointerId == null) return;
     this.gestureOwnership.release();
-    if ([MACE_GESTURE_STATES.smashing, MACE_GESTURE_STATES.impactRecoil, MACE_GESTURE_STATES.followThrough].includes(this.state)) return;
-    if (this.state !== MACE_GESTURE_STATES.returning) this.beginReturn(reason);
+    this.clearStrikeToken();
+    this.resetMotionHistory();
+    this.beginReturn(reason);
   }
 
   beginReturn(_reason = 'safe-return') {
     this.returnElapsed = 0;
     this.returnStartGrip.copy(this.localGrip);
     this.returnStartQuaternion.copy(this.localQuaternion);
+    this.targetLocalGrip.fromArray(this.config.workspace.ready);
+    this.targetLocalQuaternion.identity();
     this.transitionState(MACE_GESTURE_STATES.returning);
   }
 
-  beginFollowThrough() {
-    this.phaseElapsed = 0;
-    this.phaseStartGrip.copy(this.localGrip);
-    this.phaseStartQuaternion.copy(this.localQuaternion);
-    this.transitionState(MACE_GESTURE_STATES.followThrough);
+  beginImpactResistance(metrics) {
+    const energyResponse = THREE.MathUtils.clamp(metrics.estimatedEnergy / 100, 0, 1);
+    const resistanceResponse = THREE.MathUtils.clamp((this.impactResistance - 0.35) / 1.95, 0, 1);
+    const response = THREE.MathUtils.clamp(this.impactResponseStrength * (0.7 + resistanceResponse * 0.3), 0, 1);
+    this.resistanceElapsed = 0;
+    this.resistanceDuration = THREE.MathUtils.lerp(
+      this.config.impactResistanceDuration.minimum,
+      this.config.impactResistanceDuration.maximum,
+      Math.max(energyResponse * 0.7, response),
+    );
+    const localOpposition = this.sweepScratch.point.copy(this.headCenterVelocity);
+    if (localOpposition.lengthSq() > EPSILON) localOpposition.normalize().negate();
+    else localOpposition.set(0, 1, 1).normalize();
+    this.camera?.getWorldQuaternion?.(this.contactScratch.inverseQuaternion);
+    localOpposition.applyQuaternion(this.contactScratch.inverseQuaternion.invert());
+    this.resistancePositionOffset.copy(localOpposition).multiplyScalar(0.018 + response * 0.027);
+    this.resistanceRotationOffset.setFromAxisAngle(this.sweepScratch.axis.set(1, 0, 0), -0.04 - response * 0.07);
+    this.transitionState(MACE_GESTURE_STATES.impactResistance);
   }
 
   transitionState(nextState) {
@@ -555,56 +539,6 @@ export class MaceWorldWeaponController {
   }
 
   updateGestureState(dt) {
-    if (this.state === MACE_GESTURE_STATES.ready) {
-      if (this.gripPointerId != null) sampleDreadmaceHeldPose({ baselineGrip: this.gestureBaselineGrip, baselineQuaternion: this.gestureBaselineQuaternion, freeAimX: this.freeAimX, freeAimY: this.freeAimY, freeExtension: this.freeExtension, loadProgress: 0 }, this.localGrip, this.localQuaternion);
-      else {
-        this.localGrip.fromArray(this.config.workspace.ready);
-        this.localQuaternion.identity();
-      }
-      return;
-    }
-    if ([MACE_GESTURE_STATES.loading, MACE_GESTURE_STATES.loaded].includes(this.state)) {
-      sampleDreadmaceHeldPose({ baselineGrip: this.gestureBaselineGrip, baselineQuaternion: this.gestureBaselineQuaternion, freeAimX: this.freeAimX, freeAimY: this.freeAimY, freeExtension: this.freeExtension, loadProgress: this.maximumLoadProgress }, this.localGrip, this.localQuaternion);
-      return;
-    }
-    if (this.state === MACE_GESTURE_STATES.smashing) {
-      let sampledProgress;
-      if (this.swingJustCommitted) {
-        this.swingJustCommitted = false;
-        this.swingElapsed += Math.min(dt, 0.003);
-        sampledProgress = 0;
-      } else this.swingElapsed += dt;
-      this.swingProgress = THREE.MathUtils.clamp(this.swingElapsed / Math.max(EPSILON, this.strikeDuration), 0, 1);
-      sampleDreadmaceSmashArc(sampledProgress ?? this.swingProgress, this.swingPower, { grip: this.localGrip, quaternion: this.localQuaternion, head: this.contactScratch.point, startGrip: this.swingStartGrip, startQuaternion: this.swingStartQuaternion });
-      if ((sampledProgress ?? this.swingProgress) >= 1) this.beginFollowThrough();
-      return;
-    }
-    if (this.state === MACE_GESTURE_STATES.impactRecoil) {
-      this.phaseElapsed += dt;
-      const energyResponse = THREE.MathUtils.clamp(this.impactEnergy / 100, 0, 1);
-      const resistanceResponse = THREE.MathUtils.clamp((this.impactResistance - 0.35) / 1.95, 0, 1);
-      const response = THREE.MathUtils.clamp(this.impactResponseStrength * (0.7 + resistanceResponse * 0.3), 0, 1);
-      const duration = THREE.MathUtils.lerp(this.config.recoilDuration.minimum, this.config.recoilDuration.maximum, Math.max(energyResponse * 0.7, response));
-      const t = THREE.MathUtils.clamp(this.phaseElapsed / duration, 0, 1);
-      const pulse = Math.sin(Math.PI * t);
-      this.localGrip.copy(this.phaseStartGrip);
-      this.localGrip.y += 0.025 * response * pulse;
-      this.localGrip.z += 0.045 * response * pulse;
-      this.localQuaternion.copy(this.phaseStartQuaternion).multiply(this.sweepScratch.quaternion0.setFromAxisAngle(this.sweepScratch.axis.set(1, 0, 0), 0.11 * response * pulse)).normalize();
-      if (t >= 1) this.beginFollowThrough();
-      return;
-    }
-    if (this.state === MACE_GESTURE_STATES.followThrough) {
-      this.phaseElapsed += dt;
-      const t = smoothstep(this.phaseElapsed / this.config.followThroughDuration);
-      const followGrip = this.contactScratch.point.fromArray(this.config.finishGrip);
-      followGrip.add(this.contactScratch.correction.set(0.015, -0.055, -0.035));
-      const followQuaternion = this.contactScratch.inverseQuaternion.setFromEuler(this.poseWorkspace.localEuler.set(-0.58, 0.1, -0.1, 'YXZ'));
-      this.localGrip.copy(this.phaseStartGrip).lerp(followGrip, t);
-      this.localQuaternion.slerpQuaternions(this.phaseStartQuaternion, followQuaternion, t).normalize();
-      if (this.phaseElapsed >= this.config.followThroughDuration) this.beginReturn('follow-through-complete');
-      return;
-    }
     if (this.state === MACE_GESTURE_STATES.returning) {
       this.returnElapsed += dt;
       const t = criticallyDampedMaceReturnProgress(this.returnElapsed, this.config.returnDuration);
@@ -614,13 +548,32 @@ export class MaceWorldWeaponController {
         this.transitionState(MACE_GESTURE_STATES.ready);
         this.localGrip.fromArray(this.config.workspace.ready);
         this.localQuaternion.identity();
-        this.swingOwnerId = null;
-        this.loadProgress = 0;
-        this.maximumLoadProgress = 0;
+        this.targetLocalGrip.copy(this.localGrip);
+        this.targetLocalQuaternion.copy(this.localQuaternion);
+        this.resetMotionHistory();
         this.freeAimX = 0;
         this.freeAimY = 0;
         this.freeExtension = 0;
       }
+      return;
+    }
+    if (this.gripPointerId == null) return;
+    sampleDreadmaceDirectPose({
+      baselineGrip: this.gestureBaselineGrip,
+      baselineQuaternion: this.gestureBaselineQuaternion,
+      aimX: this.freeAimX,
+      aimY: this.freeAimY,
+      extension: this.freeExtension,
+    }, this.targetLocalGrip, this.targetLocalQuaternion);
+    this.localGrip.copy(this.targetLocalGrip);
+    this.localQuaternion.copy(this.targetLocalQuaternion);
+    if (this.state === MACE_GESTURE_STATES.impactResistance) {
+      this.resistanceElapsed += dt;
+      const progress = THREE.MathUtils.clamp(this.resistanceElapsed / Math.max(EPSILON, this.resistanceDuration), 0, 1);
+      const weight = (1 - smoothstep(progress));
+      this.localGrip.addScaledVector(this.resistancePositionOffset, weight);
+      this.localQuaternion.multiply(this.sweepScratch.quaternion0.slerpQuaternions(identityQuaternion, this.resistanceRotationOffset, weight)).normalize();
+      if (progress >= 1) this.transitionState(this.activeStrikeId ? MACE_GESTURE_STATES.striking : this.loadEnergy > 0 ? MACE_GESTURE_STATES.loading : MACE_GESTURE_STATES.held);
     }
   }
 
@@ -648,6 +601,77 @@ export class MaceWorldWeaponController {
     this.headCenterVelocity.copy(this.gripVelocity).add(this.sweepScratch.cross.copy(this.angularVelocity).cross(offset));
   }
 
+  updateMotionHistory(dt) {
+    const safeDt = Math.max(EPSILON, dt);
+    const actualVerticalTravel = this.currentHeadCenter.y - this.previousHeadCenter.y;
+    this.upwardHeadSpeed = Math.max(0, this.headCenterVelocity.y);
+    this.downwardHeadSpeed = Math.max(0, -this.headCenterVelocity.y);
+    const totalHeadSpeed = this.headCenterVelocity.length();
+    const pointerOwned = this.gripPointerId != null;
+    const resistanceActive = this.state === MACE_GESTURE_STATES.impactResistance;
+    const qualifiedUpward = pointerOwned
+      && !resistanceActive
+      && actualVerticalTravel > 0
+      && this.upwardHeadSpeed >= DREADMACE_GESTURE_THRESHOLDS.minimumUpwardSpeed;
+    if (qualifiedUpward) {
+      const speedQualification = THREE.MathUtils.clamp(
+        (this.upwardHeadSpeed - DREADMACE_GESTURE_THRESHOLDS.minimumUpwardSpeed)
+        / (DREADMACE_GESTURE_THRESHOLDS.strongUpwardSpeed - DREADMACE_GESTURE_THRESHOLDS.minimumUpwardSpeed),
+        0,
+        1,
+      );
+      const contribution = actualVerticalTravel * THREE.MathUtils.lerp(0.25, 1, speedQualification);
+      this.accumulatedUpwardTravel = Math.min(DREADMACE_GESTURE_THRESHOLDS.fullLoadTravel * 1.25, this.accumulatedUpwardTravel + contribution);
+      this.lastQualifiedUpwardAt = this.elapsed;
+      this.loadEnergyAge = 0;
+      if (this.activeStrikeId) this.rearmUpwardTravel += actualVerticalTravel;
+    } else if (pointerOwned) {
+      this.accumulatedUpwardTravel *= Math.exp(-safeDt / DREADMACE_GESTURE_THRESHOLDS.loadMemorySeconds);
+      this.loadEnergyAge = this.lastQualifiedUpwardAt == null ? 0 : Math.min(DREADMACE_GESTURE_THRESHOLDS.loadMemorySeconds * 4, this.elapsed - this.lastQualifiedUpwardAt);
+    }
+    this.loadEnergy = THREE.MathUtils.clamp(
+      (this.accumulatedUpwardTravel - DREADMACE_GESTURE_THRESHOLDS.loadStartTravel)
+      / (DREADMACE_GESTURE_THRESHOLDS.fullLoadTravel - DREADMACE_GESTURE_THRESHOLDS.loadStartTravel),
+      0,
+      1,
+    );
+    this.loadProgress = this.loadEnergy;
+    this.maximumLoadProgress = this.loadEnergy;
+    if (this.loadEnergy >= 0.999) this.loadCompletedAt ??= this.elapsed;
+    else this.loadCompletedAt = null;
+
+    if (!pointerOwned || resistanceActive) {
+      this.strikeQualified = false;
+      return;
+    }
+    if (this.activeStrikeId && totalHeadSpeed <= DREADMACE_GESTURE_THRESHOLDS.safeResetHeadSpeed) this.strikeSawSafeReset = true;
+    if (this.activeStrikeId && qualifiedUpward) {
+      const rearmed = this.rearmUpwardTravel >= DREADMACE_GESTURE_THRESHOLDS.meaningfulRearmRaiseTravel
+        || (this.strikeSawSafeReset && this.rearmUpwardTravel >= DREADMACE_GESTURE_THRESHOLDS.safeResetRearmRaiseTravel);
+      if (rearmed) {
+        this.clearStrikeToken();
+        this.transitionState(this.loadEnergy > 0 ? MACE_GESTURE_STATES.loading : MACE_GESTURE_STATES.held);
+      }
+    }
+    if (!this.activeStrikeId
+      && this.loadEnergy >= DREADMACE_GESTURE_THRESHOLDS.minimumRecentLoadEnergy
+      && this.downwardHeadSpeed >= DREADMACE_GESTURE_THRESHOLDS.minimumDownwardPhaseSpeed) {
+      this.beginPlayerAuthoredStrike();
+    }
+    if (this.activeStrikeId && actualVerticalTravel < 0) this.accumulatedDownwardTravel += -actualVerticalTravel;
+    this.strikeQualified = Boolean(
+      this.activeStrikeId
+      && this.loadEnergy >= DREADMACE_GESTURE_THRESHOLDS.minimumRecentLoadEnergy
+      && this.downwardHeadSpeed >= DREADMACE_GESTURE_THRESHOLDS.minimumDownwardHeadSpeed
+      && totalHeadSpeed >= DREADMACE_GESTURE_THRESHOLDS.minimumTotalHeadSpeed
+      && this.accumulatedDownwardTravel >= DREADMACE_GESTURE_THRESHOLDS.minimumDownwardStrikeTravel
+    );
+    this.swingPower = computeDreadmaceGesturePower({ loadProgress: this.loadEnergy, downwardSpeed: this.downwardHeadSpeed, downwardTravel: this.accumulatedDownwardTravel });
+    if (this.state !== MACE_GESTURE_STATES.impactResistance) {
+      this.transitionState(this.activeStrikeId ? MACE_GESTURE_STATES.striking : this.loadEnergy > 0 ? MACE_GESTURE_STATES.loading : MACE_GESTURE_STATES.held);
+    }
+  }
+
   beforePhysics(dt) {
     this.lastPhysicsDt = Math.max(0, Number(dt) || 0);
     this.elapsed += this.lastPhysicsDt;
@@ -665,7 +689,10 @@ export class MaceWorldWeaponController {
     this.updateGestureState(this.lastPhysicsDt);
     this.applyLocalPoseToWorld();
     this.updateKinematics(this.lastPhysicsDt);
-    if (this.state === MACE_GESTURE_STATES.smashing && (this.contactActivationProvider?.() ?? true)) this.resolveSmashContact();
+    this.updateMotionHistory(this.lastPhysicsDt);
+    if (this.strikeQualified
+      && this.state !== MACE_GESTURE_STATES.impactResistance
+      && (this.contactActivationProvider?.() ?? true)) this.resolveSmashContact();
   }
 
   getPrimitiveCenterVelocity(primitive, target = this.sweepScratch.primitiveVelocity) {
@@ -711,7 +738,7 @@ export class MaceWorldWeaponController {
   }
 
   resolveSmashContact() {
-    if (!this.physics || this.headCenterVelocity.length() < DREADMACE_GESTURE_THRESHOLDS.minimumDamagingHeadSpeed) return false;
+    if (!this.physics || !this.activeStrikeId || !this.strikeQualified || this.resolvedActors.size >= this.config.maximumTargetsPerStrike) return false;
     this.lastSweepSampleCount = 0;
     const positionsPrepared = this.physics.prepareWeaponSweepBatch?.() === true;
     const priority = { mace_head: 0, haft: 1, grip: 2, pommel: 3 };
@@ -746,11 +773,18 @@ export class MaceWorldWeaponController {
       actorVelocity: this.sweepScratch.actorVelocity,
       effectiveMass: candidate.primitive.effectiveMass,
       primitive: candidate.name,
-      loadProgress: this.maximumLoadProgress,
+      loadProgress: this.loadEnergy,
       gesturePower: this.swingPower,
     });
+    const relativeSpeed = metrics.actorRelativeVelocity.length();
+    const normalAlignment = relativeSpeed > EPSILON ? metrics.normalImpactSpeed / relativeSpeed : 0;
+    const damaging = candidate.name === 'mace_head'
+      && this.strikeQualified
+      && metrics.normalImpactSpeed >= DREADMACE_GESTURE_THRESHOLDS.minimumContactNormalSpeed
+      && normalAlignment >= DREADMACE_GESTURE_THRESHOLDS.minimumContactNormalAlignment;
+    const impactClassification = damaging ? metrics.classification : BLUNT_IMPACT_CLASSIFICATIONS.nonDamagingContact;
     this.lastContactPrimitive = candidate.name;
-    this.lastContactClassification = metrics.classification;
+    this.lastContactClassification = impactClassification;
     this.lastNormalImpactSpeed = metrics.normalImpactSpeed;
     this.lastEffectiveMass = metrics.effectiveMass;
     this.lastEstimatedImpulse = metrics.estimatedImpulse;
@@ -759,43 +793,38 @@ export class MaceWorldWeaponController {
     this.lastImpactRegion = routed.hit.regionId;
     this.impactEnergy = metrics.estimatedEnergy;
     this.impactResistance = THREE.MathUtils.clamp(routed.hit.region?.hardStructureResistance ?? routed.hit.region?.softTissueResistance ?? 1, 0.35, 2.3);
-    this.impactResponseStrength = metrics.classification === BLUNT_IMPACT_CLASSIFICATIONS.heavySmash
+    this.impactResponseStrength = impactClassification === BLUNT_IMPACT_CLASSIFICATIONS.heavySmash
       ? 1
-      : metrics.classification === BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt
+      : impactClassification === BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt
         ? 0.72
-        : metrics.classification === BLUNT_IMPACT_CLASSIFICATIONS.haftContact
-          ? 0.34
-          : metrics.classification === BLUNT_IMPACT_CLASSIFICATIONS.nonDamagingContact ? 0.14 : 0.2;
-    if (metrics.classification === BLUNT_IMPACT_CLASSIFICATIONS.nonDamagingContact) {
+        : 0.18;
+    this.resolvedActors.add(actorId);
+    this.resolvedActorId = actorId;
+    if (!damaging) {
       this.lastBluntImpactRecord = createBluntImpactInteraction({
-        interactionId: `${this.currentSwingId}:non-damaging`, weaponId: this.config.itemId, weaponFamily: 'mace', primitive: candidate.name,
+        interactionId: `${this.activeStrikeId}:non-damaging`, weaponId: this.config.itemId, weaponFamily: 'mace', primitive: candidate.name,
         actorId, bodyId: routed.hit.bodyId, regionId: routed.hit.regionId, worldPoint: candidate.point, worldNormal: normal,
         impactDirection: metrics.impactDirection, headCenterVelocity: this.headCenterVelocity, contactCenterVelocity: metrics.contactCenterVelocity, actorRelativeVelocity: metrics.actorRelativeVelocity,
         normalImpactSpeed: metrics.normalImpactSpeed, tangentialSpeed: metrics.tangentialSpeed, effectiveMass: metrics.effectiveMass,
-        estimatedImpulse: metrics.estimatedImpulse, estimatedEnergy: metrics.estimatedEnergy, loadProgress: this.maximumLoadProgress,
-        gesturePower: this.swingPower, impactRadiusEstimate: candidate.primitive.impactRadiusEstimate, classification: metrics.classification, startedAt: this.elapsed,
+        estimatedImpulse: metrics.estimatedImpulse, estimatedEnergy: metrics.estimatedEnergy, loadProgress: this.loadEnergy,
+        gesturePower: this.swingPower, impactRadiusEstimate: candidate.primitive.impactRadiusEstimate, classification: impactClassification, startedAt: this.elapsed,
       });
     } else {
-      const intent = Object.freeze({ weaponId: this.config.itemId, intent: MELEE_INTENTS.smash, ownerId: this.swingOwnerId ?? this.currentSwingId, speed: primitiveVelocity.length(), intentional: true, damaging: true, reason: 'owned-loaded-downward-smash' });
+      const intent = Object.freeze({ weaponId: this.config.itemId, intent: MELEE_INTENTS.smash, ownerId: this.strikeOwnerId ?? this.activeStrikeId, speed: primitiveVelocity.length(), intentional: true, damaging: true, reason: 'owned-player-authored-downward-smash' });
       const interaction = routed.director?.resolveBluntImpact?.({
         weapon: this.weaponDefinition, intent, hit: routed.hit, primitive: candidate.name, worldPoint: candidate.point, worldNormal: normal,
         impactDirection: metrics.impactDirection, headCenterVelocity: this.headCenterVelocity, contactCenterVelocity: metrics.contactCenterVelocity, actorRelativeVelocity: metrics.actorRelativeVelocity,
         normalImpactSpeed: metrics.normalImpactSpeed, tangentialSpeed: metrics.tangentialSpeed, effectiveMass: metrics.effectiveMass,
-        estimatedImpulse: metrics.estimatedImpulse, estimatedEnergy: metrics.estimatedEnergy, loadProgress: this.maximumLoadProgress,
-        gesturePower: this.swingPower, impactRadiusEstimate: candidate.primitive.impactRadiusEstimate, classification: metrics.classification, weaponAdapter: this,
+        estimatedImpulse: metrics.estimatedImpulse, estimatedEnergy: metrics.estimatedEnergy, loadProgress: this.loadEnergy,
+        gesturePower: this.swingPower, impactRadiusEstimate: candidate.primitive.impactRadiusEstimate, classification: impactClassification, weaponAdapter: this,
       });
       if (interaction) {
         this.activeBluntInteractions.set(interaction.id, routed.director);
-        this.resolvedActors.add(actorId);
-        this.resolvedActorId = actorId;
         this.lastBluntImpactRecord = interaction.result.bluntImpact;
         this.feedbackCount += 1;
       }
     }
-    this.phaseElapsed = 0;
-    this.phaseStartGrip.copy(this.localGrip);
-    this.phaseStartQuaternion.copy(this.localQuaternion);
-    this.transitionState(metrics.classification === BLUNT_IMPACT_CLASSIFICATIONS.glancingBlunt ? MACE_GESTURE_STATES.followThrough : MACE_GESTURE_STATES.impactRecoil);
+    this.beginImpactResistance(metrics);
     return true;
   }
 
@@ -808,6 +837,16 @@ export class MaceWorldWeaponController {
       return;
     }
     this.presentation.writeViewmodelPose(this.localGrip, this.localQuaternion);
+    this.visual.getWorldPosition(this.displayedGrip);
+    this.visual.getWorldQuaternion(this.displayedQuaternion);
+    this.displayedHeadCenter.copy(this.localHeadOffset).applyQuaternion(this.displayedQuaternion).add(this.displayedGrip);
+    this.positionTrackingError = this.localGrip.distanceTo(this.targetLocalGrip);
+    this.rotationTrackingErrorDegrees = THREE.MathUtils.radToDeg(this.localQuaternion.angleTo(this.targetLocalQuaternion));
+    if (this.viewmodelAnchor && this.visual.parent === this.viewmodelAnchor) {
+      const displayedLocalHead = this.contactScratch.point.copy(this.localHeadOffset).applyQuaternion(this.visual.quaternion).add(this.visual.position);
+      const physicalLocalHead = this.contactScratch.correction.copy(this.localHeadOffset).applyQuaternion(this.localQuaternion).add(this.localGrip);
+      this.visualPhysicalHeadError = displayedLocalHead.distanceTo(physicalLocalHead);
+    } else this.visualPhysicalHeadError = this.displayedHeadCenter.distanceTo(this.currentHeadCenter);
     this.debugHead.position.copy(this.currentHeadCenter);
   }
 
@@ -819,7 +858,9 @@ export class MaceWorldWeaponController {
   cancelTarget(actor, reason = 'target-cancelled') {
     const actorId = actor?.instanceId ?? actor?.id;
     if (!actorId || this.resolvedActorId !== actorId) return false;
-    this.beginReturn(reason);
+    this.clearStrikeToken();
+    if (this.gripPointerId == null) this.beginReturn(reason);
+    else this.transitionState(this.loadEnergy > 0 ? MACE_GESTURE_STATES.loading : MACE_GESTURE_STATES.held);
     return true;
   }
 
@@ -862,20 +903,13 @@ export class MaceWorldWeaponController {
     this.activeBluntInteractions.clear();
     this.gestureOwnership.release();
     this.state = MACE_GESTURE_STATES.ready;
-    this.loadProgress = 0;
-    this.maximumLoadProgress = 0;
-    this.normalizedUpwardLoadDistance = 0;
-    this.maximumUpwardGestureSpeed = 0;
-    this.downwardCommitSpeed = 0;
-    this.downwardCommitTravel = 0;
-    this.loadCompletedAt = null;
-    this.swingOwnerId = null;
-    this.swingElapsed = 0;
-    this.swingProgress = 0;
-    this.phaseElapsed = 0;
+    this.resetMotionHistory();
+    this.clearStrikeToken();
     this.returnElapsed = 0;
-    this.resolvedActors.clear();
-    this.resolvedActorId = null;
+    this.resistanceElapsed = 0;
+    this.resistanceDuration = 0;
+    this.resistancePositionOffset.set(0, 0, 0);
+    this.resistanceRotationOffset.identity();
     this.lastContactPrimitive = null;
     this.lastContactClassification = reason;
     this.lastNormalImpactSpeed = 0;
@@ -892,6 +926,8 @@ export class MaceWorldWeaponController {
     this.lastSweepSampleCount = 0;
     this.localGrip.fromArray(this.config.workspace.ready);
     this.localQuaternion.identity();
+    this.targetLocalGrip.copy(this.localGrip);
+    this.targetLocalQuaternion.copy(this.localQuaternion);
     this.freeAimX = 0;
     this.freeAimY = 0;
     this.freeExtension = 0;
@@ -900,7 +936,6 @@ export class MaceWorldWeaponController {
   reset() {
     const equipped = this.isEquipped();
     this.cancel('reset');
-    this.currentSwingId = null;
     this.rejectedRepeatContactCount = 0;
     this.maximumObservedSweepSampleCount = 0;
     this.initializePose();
@@ -918,21 +953,19 @@ export class MaceWorldWeaponController {
       freeAimX: Number(this.freeAimX.toFixed(4)),
       freeAimY: Number(this.freeAimY.toFixed(4)),
       freeExtension: Number(this.freeExtension.toFixed(4)),
-      loadOverlayProgress: Number(this.maximumLoadProgress.toFixed(4)),
+      loadOverlayProgress: Number(this.loadEnergy.toFixed(4)),
       lastStateTransition: this.lastStateTransition,
       lastTransitionPositionJump: Number(this.lastTransitionPositionJump.toFixed(6)),
       lastTransitionRotationJumpDegrees: Number(this.lastTransitionRotationJumpDegrees.toFixed(4)),
       loadProgress: Number(this.loadProgress.toFixed(4)),
       maximumLoadProgress: Number(this.maximumLoadProgress.toFixed(4)),
-      normalizedUpwardLoadDistance: Number(this.normalizedUpwardLoadDistance.toFixed(4)),
-      maximumUpwardGestureSpeed: Number(this.maximumUpwardGestureSpeed.toFixed(4)),
+      accumulatedUpwardTravel: Number(this.accumulatedUpwardTravel.toFixed(4)),
+      upwardHeadSpeed: Number(this.upwardHeadSpeed.toFixed(4)),
       loadCompletionTime: this.loadCompletedAt,
-      downwardCommitSpeed: Number(this.downwardCommitSpeed.toFixed(4)),
-      downwardCommitTravel: Number(this.downwardCommitTravel.toFixed(4)),
-      currentSwingId: this.currentSwingId,
+      downwardCommitSpeed: Number(this.downwardHeadSpeed.toFixed(4)),
+      downwardCommitTravel: Number(this.accumulatedDownwardTravel.toFixed(4)),
+      currentSwingId: this.activeStrikeId,
       swingPower: Number(this.swingPower.toFixed(4)),
-      swingProgress: Number(this.swingProgress.toFixed(4)),
-      strikeDuration: Number(this.strikeDuration.toFixed(4)),
       swingCommitCount: this.swingCommitCount,
       primitiveThatContacted: this.lastContactPrimitive,
       resolvedActorId: this.resolvedActorId,
@@ -962,6 +995,28 @@ export class MaceWorldWeaponController {
       worldLightIntersectionStatus: getWeaponWorldLightIntersectionStatus(this.visual, this.scene),
       outdoorMaterialRegistrationStatus: this.outdoorMaterialRegistration.status,
       weaponPresentation: this.getWeaponPresentationDiagnostics(),
+      maceDirectControl: {
+        state: this.state,
+        pointerOwned: this.gripPointerId != null,
+        localGrip: this.localGrip.toArray().map((value) => Number(value.toFixed(6))),
+        targetLocalGrip: this.targetLocalGrip.toArray().map((value) => Number(value.toFixed(6))),
+        positionTrackingError: Number(this.positionTrackingError.toFixed(6)),
+        rotationTrackingErrorDegrees: Number(this.rotationTrackingErrorDegrees.toFixed(4)),
+        headVelocity: this.headCenterVelocity.toArray().map((value) => Number(value.toFixed(4))),
+        upwardHeadSpeed: Number(this.upwardHeadSpeed.toFixed(4)),
+        downwardHeadSpeed: Number(this.downwardHeadSpeed.toFixed(4)),
+        accumulatedUpwardTravel: Number(this.accumulatedUpwardTravel.toFixed(4)),
+        accumulatedDownwardTravel: Number(this.accumulatedDownwardTravel.toFixed(4)),
+        loadEnergy: Number(this.loadEnergy.toFixed(4)),
+        loadEnergyAge: Number(this.loadEnergyAge.toFixed(4)),
+        activeStrikeId: this.activeStrikeId,
+        strikeQualified: this.strikeQualified,
+        strikeResolvedActorIds: [...this.resolvedActors].slice(0, this.config.maximumTargetsPerStrike),
+        lastImpactClassification: this.lastContactClassification,
+        lastImpactEnergy: Number(this.lastEstimatedEnergy.toFixed(4)),
+        resistanceActive: this.state === MACE_GESTURE_STATES.impactResistance,
+        visualPhysicalHeadError: Number(this.visualPhysicalHeadError.toFixed(6)),
+      },
       completedBluntImpact: record ? {
         schema: record.schema,
         interactionId: record.interactionId,

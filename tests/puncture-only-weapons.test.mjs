@@ -10,6 +10,7 @@ import {
   SWORD_IMPALEMENT_STATES,
   SWORD_MAXIMUM_PENETRATION_DEPTH,
   SWORD_PENETRATION_RATE_METERS_PER_SECOND,
+  SWORD_EXTRACTION_CONTINUITY_DURATION,
   SWORD_RELEASE_EXTRACTION_DURATION,
   SWORD_RUNTIME_COMBAT_MODE,
   SWORD_THRUST_MIN_FORWARD_RATIO,
@@ -128,7 +129,7 @@ async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
     bindPointerInput: false,
   });
   await controller.visualLoadPromise;
-  return { controller, actor, body, collider, director, hit, physics, scene, combatRouter };
+  return { controller, actor, body, collider, director, hit, physics, scene, camera, combatRouter };
 }
 
 function beginHarnessThrust(harness, extension = 0.012) {
@@ -208,6 +209,72 @@ test('actual sword tip displacement above both thresholds performs the only cont
     assert.equal(controller.thrustEligible, true);
     assert.equal(physics.castCount, 1);
     assert.equal(physics.edgeCastCount, 0);
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('free sword display, physical pose, collision primitives, and thumb response are one authority', async () => {
+  const harness = await createSwordHarness({ tipHit: false });
+  const { controller } = harness;
+  try {
+    controller.acquireGrip(7, 195, 560, 0);
+    controller.applyGripGesture(7, 90, -35, 285, 525, 40);
+    controller.beforePhysics(FIXED_DT);
+    controller.afterPhysics(1, FIXED_DT);
+    const diagnostics = controller.getDiagnostics().swordPresentationUnity;
+    assert.deepEqual(diagnostics.authoritativeLocalGrip, diagnostics.displayedLocalGrip);
+    assert.equal(diagnostics.positionError, 0);
+    assert.equal(diagnostics.rotationErrorDegrees, 0);
+    assert.ok(diagnostics.tipError < 0.002);
+    assert.ok(diagnostics.edgeError < 0.002);
+    for (const primitive of Object.values(controller.primitives)) {
+      const displayedStart = primitive.path.points[0].clone().applyQuaternion(controller.displayedWorldQuaternion).add(controller.displayedWorldGrip);
+      const displayedEnd = primitive.path.points.at(-1).clone().applyQuaternion(controller.displayedWorldQuaternion).add(controller.displayedWorldGrip);
+      assert.ok(displayedStart.distanceTo(primitive.currentStart) < 1e-9);
+      assert.ok(displayedEnd.distanceTo(primitive.currentEnd) < 1e-9);
+    }
+    const source = SwordWorldWeaponController.toString();
+    assert.doesNotMatch(source, /presentationContinuityActive|SWORD_CONTINUITY_POSITION_STEP|SWORD_CONTINUITY_ROTATION_STEP|renderTargetLocal/);
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('extraction continuity is an authoritative non-stacking offset with immediate thumb response', async () => {
+  assert.equal(SWORD_EXTRACTION_CONTINUITY_DURATION, 0.1);
+  const harness = await createSwordHarness({ tipHit: false });
+  const { controller, camera } = harness;
+  try {
+    controller.computeDesiredPose();
+    const canonicalPosition = controller.desiredGrip.clone();
+    const canonicalQuaternion = controller.desiredQuaternion.clone();
+    const preservedPosition = canonicalPosition.clone().add(new THREE.Vector3(0.08, 0.03, -0.04));
+    const preservedQuaternion = canonicalQuaternion.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(18)));
+    controller.beginAuthoritativeExtractionContinuity(preservedPosition, preservedQuaternion);
+    assert.ok(controller.actualGrip.distanceTo(preservedPosition) < 1e-9, 'the embedded world pose survives world-to-viewmodel conversion');
+    assert.ok(controller.actualQuaternion.angleTo(preservedQuaternion) < 1e-9);
+    controller.afterPhysics(1, 0);
+    assert.ok(controller.getDiagnostics().swordPresentationUnity.tipError < 0.002);
+
+    controller.applyFreeSwordAuthoritativePose(0.02);
+    const beforeInput = controller.actualGrip.clone();
+    controller.desiredGrip.x += 0.06;
+    controller.applyFreeSwordAuthoritativePose(0);
+    assert.ok(Math.abs(controller.actualGrip.x - beforeInput.x - 0.06) < 1e-9, 'new thumb input remains one-to-one during offset decay');
+    controller.captureFreeRenderPose();
+    controller.afterPhysics(1, 0.02);
+    assert.ok(controller.getDiagnostics().swordPresentationUnity.edgeError < 0.002);
+    controller.applyFreeSwordAuthoritativePose(0.08);
+    assert.equal(controller.extractionOffsetActive, false);
+    assert.ok(controller.actualGrip.distanceTo(controller.desiredGrip) < 1e-9);
+    assert.ok(controller.actualQuaternion.angleTo(controller.desiredQuaternion) < 1e-9);
+
+    const replacementPreserved = controller.desiredGrip.clone().add(new THREE.Vector3(0.025, 0, 0));
+    controller.beginAuthoritativeExtractionContinuity(replacementPreserved, controller.desiredQuaternion);
+    assert.ok(Math.abs(controller.extractionPositionOffset.length() - 0.025) < 1e-9, 'a fresh extraction replaces rather than stacks the prior offset');
+    assert.equal(controller.extractionCycleCount, 2);
+    assert.ok(camera.worldToLocal(controller.actualGrip.clone()).distanceTo(controller.renderLocalGrip) < 1e-9);
   } finally {
     controller.dispose();
   }
@@ -441,6 +508,66 @@ test('held-thumb projection withdrawal and repeated controlled puncture ownershi
     assert.equal(controller.punctureBeginCount, 2);
     assert.equal(director.beginCalls.length, 2);
     assert.equal(controller.gripPointerId, 7);
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('ten continuous-hold impalement cycles retain rearm, immediate response, and presentation unity', async () => {
+  const harness = await createSwordHarness();
+  const { controller, collider, combatRouter, director, physics } = harness;
+  const offsetMagnitudes = [];
+  try {
+    beginHarnessThrust(harness);
+    physics.tipHit = false;
+    for (let cycle = 0; cycle < 10; cycle += 1) {
+      director.rupture(cycle);
+      stepAxial(controller, -1);
+      for (let frame = 0; frame < 80 && controller.entry; frame += 1) stepAxial(controller, 1);
+      assert.equal(controller.entry, null, `cycle ${cycle + 1} fully extracts`);
+      assert.equal(controller.gripPointerId, 7, `cycle ${cycle + 1} keeps the original thumb`);
+      assert.equal(controller.extractionCount, cycle + 1);
+      offsetMagnitudes.push(controller.extractionPositionOffset.length());
+      controller.captureFreeRenderPose();
+      controller.afterPhysics(1, 0);
+      let unity = controller.getDiagnostics().swordPresentationUnity;
+      assert.ok(unity.tipError < 0.005, `cycle ${cycle + 1} tip unity`);
+      assert.ok(unity.edgeError < 0.01, `cycle ${cycle + 1} edge unity`);
+      assert.equal(controller.getWeaponPresentationDiagnostics().visibleAuthoritativeRootCount, 1);
+
+      const beforeLateral = controller.actualGrip.clone();
+      controller.desiredGrip.x += cycle % 2 === 0 ? 0.03 : -0.03;
+      controller.applyFreeSwordAuthoritativePose(0);
+      assert.ok(Math.abs(controller.actualGrip.x - beforeLateral.x - (cycle % 2 === 0 ? 0.03 : -0.03)) < 1e-9, `cycle ${cycle + 1} has no response delay`);
+      controller.updateDerivedPose();
+      controller.updatePrimitiveEndpoints();
+      controller.captureFreeRenderPose();
+      controller.afterPhysics(1, 0);
+      unity = controller.getDiagnostics().swordPresentationUnity;
+      assert.ok(unity.tipError < 0.005);
+      assert.ok(unity.edgeError < 0.01);
+
+      controller.applyFreeSwordAuthoritativePose(SWORD_EXTRACTION_CONTINUITY_DURATION);
+      controller.updateDerivedPose();
+      const gate = controller.rearmGate;
+      const point = gate.localPoint.clone().applyQuaternion(gate.body.quaternion).add(gate.body.position);
+      const axis = gate.localAxis.clone().applyQuaternion(gate.body.quaternion).normalize();
+      controller.currentTip.copy(point).addScaledVector(axis, -SWORD_THRUST_REARM_DISTANCE);
+      controller.updateSwordRearmGate();
+      assert.equal(controller.rearmReady, true, `cycle ${cycle + 1} rearms`);
+      assert.equal(controller.rearmCount, cycle + 1);
+
+      if (cycle < 9) {
+        const routed = combatRouter.resolveCollider(collider, point);
+        assert.equal(controller.beginSwordPenetration({ routed, point, normal: axis.clone().negate(), contactDirection: axis }), true);
+        assert.equal(controller.punctureBeginCount, cycle + 2);
+      }
+    }
+    assert.ok(offsetMagnitudes.every((magnitude) => Number.isFinite(magnitude) && magnitude < 1.25));
+    assert.equal(controller.extractionCycleCount, 10, 'each extraction replaces one offset without stacking');
+    const unity = controller.getDiagnostics().swordPresentationUnity;
+    assert.equal(unity.maximumTipError, 0);
+    assert.equal(unity.maximumEdgeError, 0);
   } finally {
     controller.dispose();
   }

@@ -27,6 +27,7 @@ export const SWORD_THRUST_REARM_DISTANCE = 0.05;
 export const SWORD_PENETRATION_RATE_METERS_PER_SECOND = 0.48;
 export const SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND = 0.62;
 export const SWORD_RELEASE_EXTRACTION_DURATION = 0.15;
+export const SWORD_EXTRACTION_CONTINUITY_DURATION = 0.1;
 
 // Authored v002 measurements. Collision intentionally does not inspect render triangles.
 export const DREADSTONE_SWORD_DIMENSIONS = Object.freeze({
@@ -99,10 +100,9 @@ const SWORD_WORLD_LAYER = WEAPON_WORLD_LAYER;
 const SWORD_KINEMATIC_EPSILON = 1e-6;
 const SWORD_INITIAL_PUNCTURE_DEPTH = 0.004;
 const SWORD_EXTRACTION_CLEARANCE = -0.04;
-const SWORD_CONTINUITY_POSITION_STEP = 0.01;
-const SWORD_CONTINUITY_ROTATION_STEP = THREE.MathUtils.degToRad(3);
 const localForward = new THREE.Vector3(0, 0, -1);
 const localRight = new THREE.Vector3(1, 0, 0);
+const identityQuaternion = new THREE.Quaternion();
 const loadDreadstoneSwordAsset = createCachedWeaponGlbLoader(DREADSTONE_SWORD_GLB_PATH, 'Dreadstone Sword');
 
 const primitivePaths = Object.freeze(Object.fromEntries(
@@ -203,9 +203,35 @@ export class SwordWorldWeaponController {
     this.previousQuaternion = new THREE.Quaternion();
     this.renderLocalGrip = new THREE.Vector3();
     this.renderLocalQuaternion = new THREE.Quaternion();
-    this.renderTargetLocalGrip = new THREE.Vector3();
-    this.renderTargetLocalQuaternion = new THREE.Quaternion();
-    this.presentationContinuityActive = false;
+    this.authoritativeLocalGrip = new THREE.Vector3();
+    this.authoritativeLocalQuaternion = new THREE.Quaternion();
+    this.displayedLocalGrip = new THREE.Vector3();
+    this.displayedLocalQuaternion = new THREE.Quaternion();
+    this.displayedWorldGrip = new THREE.Vector3();
+    this.displayedWorldQuaternion = new THREE.Quaternion();
+    this.authoritativeTip = new THREE.Vector3();
+    this.displayedTip = new THREE.Vector3();
+    this.presentationPositionError = 0;
+    this.presentationRotationErrorDegrees = 0;
+    this.presentationTipError = 0;
+    this.maximumPresentationTipError = 0;
+    this.presentationEdgeError = 0;
+    this.maximumPresentationEdgeError = 0;
+    this.extractionPositionOffset = new THREE.Vector3();
+    this.extractionQuaternionOffset = new THREE.Quaternion();
+    this.extractionOffsetActive = false;
+    this.extractionOffsetAge = 0;
+    this.extractionCycleCount = 0;
+    this.continuityScratch = {
+      preservedLocalGrip: new THREE.Vector3(),
+      canonicalLocalGrip: new THREE.Vector3(),
+      correctedLocalGrip: new THREE.Vector3(),
+      cameraQuaternion: new THREE.Quaternion(),
+      preservedLocalQuaternion: new THREE.Quaternion(),
+      canonicalLocalQuaternion: new THREE.Quaternion(),
+      correctedLocalQuaternion: new THREE.Quaternion(),
+      decayedQuaternionOffset: new THREE.Quaternion(),
+    };
     this.desiredTip = new THREE.Vector3();
     this.currentTip = new THREE.Vector3();
     this.previousTip = new THREE.Vector3();
@@ -238,7 +264,6 @@ export class SwordWorldWeaponController {
     this.lastPhysicsDt = 1 / 60;
     this.elapsed = 0;
     this.contactCooldownUntil = 0;
-    this.resistanceKick = 0;
     this.visibleCollisionError = 0;
     this.entry = null;
     this.penetrationDepth = 0;
@@ -378,26 +403,37 @@ export class SwordWorldWeaponController {
     this.captureFreeRenderPose(true);
   }
 
-  captureFreeRenderPose(force = false) {
+  captureFreeRenderPose() {
     if (this.entry || !this.camera) return false;
     this.camera.updateMatrixWorld(true);
-    this.renderTargetLocalGrip.copy(this.actualGrip);
-    this.camera.worldToLocal(this.renderTargetLocalGrip);
-    this.camera.getWorldQuaternion(this.contactScratch.inverseQuaternion);
-    this.renderTargetLocalQuaternion.copy(this.contactScratch.inverseQuaternion).invert().multiply(this.actualQuaternion).normalize();
-    if (force || !this.presentationContinuityActive) {
-      this.renderLocalGrip.copy(this.renderTargetLocalGrip);
-      this.renderLocalQuaternion.copy(this.renderTargetLocalQuaternion);
-    }
+    this.authoritativeLocalGrip.copy(this.actualGrip);
+    this.camera.worldToLocal(this.authoritativeLocalGrip);
+    this.camera.getWorldQuaternion(this.continuityScratch.cameraQuaternion);
+    this.authoritativeLocalQuaternion.copy(this.continuityScratch.cameraQuaternion).invert().multiply(this.actualQuaternion).normalize();
+    this.renderLocalGrip.copy(this.authoritativeLocalGrip);
+    this.renderLocalQuaternion.copy(this.authoritativeLocalQuaternion);
     return true;
   }
 
-  beginFreePresentationContinuity() {
-    if (!this.viewmodelAnchor || this.visual.parent !== this.viewmodelAnchor) return false;
-    this.renderLocalGrip.copy(this.visual.position);
-    this.renderLocalQuaternion.copy(this.visual.quaternion).normalize();
-    this.presentationContinuityActive = true;
-    this.captureFreeRenderPose(false);
+  beginAuthoritativeExtractionContinuity(worldPosition, worldQuaternion) {
+    if (!this.camera || !worldPosition || !worldQuaternion) return false;
+    const scratch = this.continuityScratch;
+    this.camera.updateMatrixWorld(true);
+    scratch.preservedLocalGrip.copy(worldPosition);
+    this.camera.worldToLocal(scratch.preservedLocalGrip);
+    scratch.canonicalLocalGrip.copy(this.desiredGrip);
+    this.camera.worldToLocal(scratch.canonicalLocalGrip);
+    this.camera.getWorldQuaternion(scratch.cameraQuaternion);
+    scratch.preservedLocalQuaternion.copy(scratch.cameraQuaternion).invert().multiply(worldQuaternion).normalize();
+    scratch.canonicalLocalQuaternion.copy(scratch.cameraQuaternion).invert().multiply(this.desiredQuaternion).normalize();
+    this.extractionPositionOffset.subVectors(scratch.preservedLocalGrip, scratch.canonicalLocalGrip);
+    this.extractionQuaternionOffset.copy(scratch.canonicalLocalQuaternion).invert().multiply(scratch.preservedLocalQuaternion).normalize();
+    this.extractionOffsetAge = 0;
+    this.extractionOffsetActive = this.extractionPositionOffset.lengthSq() > 1e-12
+      || this.extractionQuaternionOffset.angleTo(identityQuaternion) > 1e-8;
+    this.extractionCycleCount = Math.min(1_000_000, this.extractionCycleCount + 1);
+    this.applyFreeSwordAuthoritativePose(0);
+    this.captureFreeRenderPose();
     return true;
   }
 
@@ -535,12 +571,12 @@ export class SwordWorldWeaponController {
     else this.solveFreeSwordPose(dt, contactActive);
     this.updatePrimitiveEndpoints();
     if (!this.entry) {
+      this.captureFreeRenderPose();
       const deliberateEnergy = this.lastFrameVelocity >= this.config.minimumAttackSpeed;
       const intentionalState = [SWORD_IMPALEMENT_STATES.attacking, SWORD_IMPALEMENT_STATES.surfaceContact].includes(this.state);
       this.edgeSweepObserver?.update?.({ controller: this, dt, contactActive, deliberateEnergy, intentionalState, embedded: false });
     }
     this.applyVisualLayer();
-    if (!this.entry) this.captureFreeRenderPose();
   }
 
   updateTipKinematics(dt) {
@@ -553,11 +589,41 @@ export class SwordWorldWeaponController {
     this.forwardRatio = this.forwardSpeed / Math.max(this.actualTipSpeed, SWORD_KINEMATIC_EPSILON);
   }
 
+  applyFreeSwordAuthoritativePose(dt) {
+    if (!this.extractionOffsetActive) {
+      this.actualGrip.copy(this.desiredGrip);
+      this.actualQuaternion.copy(this.desiredQuaternion);
+      return;
+    }
+    const scratch = this.continuityScratch;
+    this.extractionOffsetAge = Math.min(SWORD_EXTRACTION_CONTINUITY_DURATION, this.extractionOffsetAge + Math.max(0, Number(dt) || 0));
+    const progress = THREE.MathUtils.clamp(this.extractionOffsetAge / SWORD_EXTRACTION_CONTINUITY_DURATION, 0, 1);
+    const easedProgress = progress * progress * (3 - 2 * progress);
+    const offsetWeight = 1 - easedProgress;
+    this.camera.updateMatrixWorld(true);
+    scratch.canonicalLocalGrip.copy(this.desiredGrip);
+    this.camera.worldToLocal(scratch.canonicalLocalGrip);
+    this.camera.getWorldQuaternion(scratch.cameraQuaternion);
+    scratch.canonicalLocalQuaternion.copy(scratch.cameraQuaternion).invert().multiply(this.desiredQuaternion).normalize();
+    scratch.correctedLocalGrip.copy(scratch.canonicalLocalGrip).addScaledVector(this.extractionPositionOffset, offsetWeight);
+    scratch.decayedQuaternionOffset.slerpQuaternions(identityQuaternion, this.extractionQuaternionOffset, offsetWeight).normalize();
+    scratch.correctedLocalQuaternion.copy(scratch.canonicalLocalQuaternion).multiply(scratch.decayedQuaternionOffset).normalize();
+    this.actualGrip.copy(scratch.correctedLocalGrip);
+    this.camera.localToWorld(this.actualGrip);
+    this.actualQuaternion.copy(scratch.cameraQuaternion).multiply(scratch.correctedLocalQuaternion).normalize();
+    if (progress >= 1) {
+      this.extractionOffsetActive = false;
+      this.measureEmbeddedToFreeContinuity = false;
+      this.extractionPositionOffset.set(0, 0, 0);
+      this.extractionQuaternionOffset.identity();
+      this.presentation.endExtractionContinuity();
+    }
+  }
+
   solveFreeSwordPose(dt, contactActive) {
     // Free-space tracking stays direct. The authored point displacement, rather
     // than pointer-leading-part classification, owns thrust recognition.
-    this.actualGrip.copy(this.desiredGrip);
-    this.actualQuaternion.copy(this.desiredQuaternion);
+    this.applyFreeSwordAuthoritativePose(dt);
     this.updateDerivedPose();
     this.updateTipKinematics(dt);
     this.updateSwordRearmGate(true);
@@ -666,6 +732,11 @@ export class SwordWorldWeaponController {
       },
     });
     if (!interaction) return false;
+    this.extractionOffsetActive = false;
+    this.extractionOffsetAge = 0;
+    this.extractionPositionOffset.set(0, 0, 0);
+    this.extractionQuaternionOffset.identity();
+    this.presentation.endExtractionContinuity();
     this.entry = {
       actor: routed.actor,
       director: routed.director,
@@ -941,8 +1012,7 @@ export class SwordWorldWeaponController {
       this.state = SWORD_IMPALEMENT_STATES.returning;
     }
     this.applyVisualLayer();
-    this.beginFreePresentationContinuity();
-    this.resistanceKick = 0;
+    this.beginAuthoritativeExtractionContinuity(transitionPosition, transitionQuaternion);
     this.embeddedToFreePositionDiscontinuity = transitionPosition.distanceTo(this.actualGrip);
     this.embeddedToFreeRotationDiscontinuity = transitionQuaternion.angleTo(this.actualQuaternion);
     return true;
@@ -997,10 +1067,13 @@ export class SwordWorldWeaponController {
     this.contactDamageReason = `non-damaging:${reason}`;
     this.gestureOwnership.release();
     this.measureEmbeddedToFreeContinuity = false;
-    this.presentationContinuityActive = false;
+    this.extractionOffsetActive = false;
+    this.extractionOffsetAge = 0;
+    this.extractionPositionOffset.set(0, 0, 0);
+    this.extractionQuaternionOffset.identity();
     this.presentation.endExtractionContinuity();
     this.applyVisualLayer();
-    if (entry) this.beginFreePresentationContinuity();
+    if (entry) this.captureFreeRenderPose();
     this.penetrationAudioGate.reset();
   }
 
@@ -1126,47 +1199,99 @@ export class SwordWorldWeaponController {
       this.presentation.detachHidden();
       return;
     }
-    this.resistanceKick *= Math.exp(-24 * Math.max(0, Number(frameDelta) || 0));
     if (this.entry) {
       this.presentation.writeWorldPose(this.actualGrip, this.actualQuaternion);
       this.visibleCollisionError = this.visual.getWorldPosition(this.contactScratch.correction).distanceTo(this.actualGrip);
+      this.measureSwordPresentationUnity();
       return;
     }
-    let extractionContinuityCompleted = false;
-    if (this.presentationContinuityActive) {
-      const renderDt = Math.max(0, Math.min(0.05, Number(frameDelta) || 0));
-      const response = 1 - Math.exp(-renderDt * 16);
-      const remainingDistance = this.renderLocalGrip.distanceTo(this.renderTargetLocalGrip);
-      const positionJump = Math.min(remainingDistance, SWORD_CONTINUITY_POSITION_STEP, remainingDistance * response);
-      if (remainingDistance > 1e-12) this.renderLocalGrip.lerp(this.renderTargetLocalGrip, positionJump / remainingDistance);
-      const remainingAngle = this.renderLocalQuaternion.angleTo(this.renderTargetLocalQuaternion);
-      const rotationJump = Math.min(remainingAngle, SWORD_CONTINUITY_ROTATION_STEP, remainingAngle * response);
-      if (remainingAngle > 1e-12) this.renderLocalQuaternion.slerp(this.renderTargetLocalQuaternion, rotationJump / remainingAngle).normalize();
-      this.embeddedToFreePositionDiscontinuity = Math.max(this.embeddedToFreePositionDiscontinuity, positionJump);
-      this.embeddedToFreeRotationDiscontinuity = Math.max(this.embeddedToFreeRotationDiscontinuity, rotationJump);
-      this.presentation.recordPostExtractionPoseJump(positionJump, THREE.MathUtils.radToDeg(rotationJump));
-      if (remainingDistance <= 1e-4 && remainingAngle <= THREE.MathUtils.degToRad(0.05)) {
-        this.renderLocalGrip.copy(this.renderTargetLocalGrip);
-        this.renderLocalQuaternion.copy(this.renderTargetLocalQuaternion);
-        this.presentationContinuityActive = false;
-        this.measureEmbeddedToFreeContinuity = false;
-        extractionContinuityCompleted = true;
+    this.presentation.writeViewmodelPose(this.renderLocalGrip, this.renderLocalQuaternion);
+    this.visibleCollisionError = 0;
+    this.measureSwordPresentationUnity();
+  }
+
+  measureSwordPresentationUnity() {
+    if (!this.camera || !this.visual) return null;
+    if (!this.entry && this.viewmodelAnchor && this.visual.parent === this.viewmodelAnchor) {
+      this.authoritativeLocalGrip.copy(this.renderLocalGrip);
+      this.authoritativeLocalQuaternion.copy(this.renderLocalQuaternion);
+      this.displayedLocalGrip.copy(this.visual.position);
+      this.displayedLocalQuaternion.copy(this.visual.quaternion);
+      deriveBladeTip(this.authoritativeLocalGrip, this.authoritativeLocalQuaternion, this.config.tipLength, this.authoritativeTip);
+      deriveBladeTip(this.displayedLocalGrip, this.displayedLocalQuaternion, this.config.tipLength, this.displayedTip);
+      this.presentationPositionError = this.authoritativeLocalGrip.distanceTo(this.displayedLocalGrip);
+      this.presentationRotationErrorDegrees = THREE.MathUtils.radToDeg(this.authoritativeLocalQuaternion.angleTo(this.displayedLocalQuaternion));
+      this.presentationTipError = this.authoritativeTip.distanceTo(this.displayedTip);
+      let edgeError = 0;
+      for (const name of ['leftEdge', 'rightEdge']) {
+        const path = this.primitives[name].path.points;
+        for (const point of [path[0], path.at(-1)]) {
+          const physical = this.contactScratch.edgeMotion.copy(point).applyQuaternion(this.authoritativeLocalQuaternion).add(this.authoritativeLocalGrip);
+          const displayed = this.contactScratch.correction.copy(point).applyQuaternion(this.displayedLocalQuaternion).add(this.displayedLocalGrip);
+          edgeError = Math.max(edgeError, physical.distanceTo(displayed));
+        }
+      }
+      this.presentationEdgeError = edgeError;
+      this.maximumPresentationTipError = Math.max(this.maximumPresentationTipError, this.presentationTipError);
+      this.maximumPresentationEdgeError = Math.max(this.maximumPresentationEdgeError, edgeError);
+      return edgeError;
+    }
+    this.camera.updateMatrixWorld(true);
+    this.authoritativeLocalGrip.copy(this.actualGrip);
+    this.camera.worldToLocal(this.authoritativeLocalGrip);
+    this.camera.getWorldQuaternion(this.contactScratch.inverseQuaternion);
+    this.authoritativeLocalQuaternion.copy(this.contactScratch.inverseQuaternion).invert().multiply(this.actualQuaternion).normalize();
+    this.visual.getWorldPosition(this.displayedWorldGrip);
+    this.displayedLocalGrip.copy(this.displayedWorldGrip);
+    this.camera.worldToLocal(this.displayedLocalGrip);
+    this.visual.getWorldQuaternion(this.displayedWorldQuaternion);
+    this.displayedLocalQuaternion.copy(this.contactScratch.inverseQuaternion).invert().multiply(this.displayedWorldQuaternion).normalize();
+    deriveBladeTip(this.actualGrip, this.actualQuaternion, this.config.tipLength, this.authoritativeTip);
+    deriveBladeTip(this.displayedWorldGrip, this.displayedWorldQuaternion, this.config.tipLength, this.displayedTip);
+    this.presentationPositionError = this.authoritativeLocalGrip.distanceTo(this.displayedLocalGrip);
+    this.presentationRotationErrorDegrees = THREE.MathUtils.radToDeg(this.authoritativeLocalQuaternion.angleTo(this.displayedLocalQuaternion));
+    this.presentationTipError = this.authoritativeTip.distanceTo(this.displayedTip);
+    this.maximumPresentationTipError = Math.max(this.maximumPresentationTipError, this.presentationTipError);
+    let edgeError = 0;
+    for (const name of ['leftEdge', 'rightEdge']) {
+      const path = this.primitives[name].path.points;
+      for (const point of [path[0], path.at(-1)]) {
+        const physical = this.contactScratch.edgeMotion.copy(point).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+        const displayed = this.contactScratch.correction.copy(point).applyQuaternion(this.displayedWorldQuaternion).add(this.displayedWorldGrip);
+        edgeError = Math.max(edgeError, physical.distanceTo(displayed));
       }
     }
-    const renderGrip = this.contactScratch.point.copy(this.renderLocalGrip)
-      .add(this.contactScratch.correction.set(0, 0, this.resistanceKick).applyQuaternion(this.renderLocalQuaternion));
-    this.presentation.writeViewmodelPose(renderGrip, this.renderLocalQuaternion);
-    if (extractionContinuityCompleted) this.presentation.endExtractionContinuity();
-    this.visibleCollisionError = renderGrip.distanceTo(this.renderLocalGrip);
+    this.presentationEdgeError = edgeError;
+    this.maximumPresentationEdgeError = Math.max(this.maximumPresentationEdgeError, edgeError);
+    return this.presentationEdgeError;
+  }
+
+  getScheduledVisiblePhysicalEdgeError() {
+    if (!this.camera || this.entry) return this.presentationEdgeError;
+    this.camera.updateMatrixWorld(true);
+    this.displayedWorldGrip.copy(this.renderLocalGrip);
+    this.camera.localToWorld(this.displayedWorldGrip);
+    this.camera.getWorldQuaternion(this.displayedWorldQuaternion);
+    this.displayedWorldQuaternion.multiply(this.renderLocalQuaternion).normalize();
+    let edgeError = 0;
+    for (const name of ['leftEdge', 'rightEdge']) {
+      const path = this.primitives[name].path.points;
+      for (const point of [path[0], path.at(-1)]) {
+        const physical = this.contactScratch.edgeMotion.copy(point).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+        const displayed = this.contactScratch.correction.copy(point).applyQuaternion(this.displayedWorldQuaternion).add(this.displayedWorldGrip);
+        edgeError = Math.max(edgeError, physical.distanceTo(displayed));
+      }
+    }
+    this.presentationEdgeError = edgeError;
+    this.maximumPresentationEdgeError = Math.max(this.maximumPresentationEdgeError, edgeError);
+    return edgeError;
   }
 
   afterPhysicsStep(dt = 0) {
     if (this.ownsCombatDirector) this.combatDirector.update(dt);
   }
 
-  onCombatResistance(payload = {}) {
-    this.resistanceKick = Math.max(this.resistanceKick, Math.min(0.018, (payload.intensity ?? 0) * 0.012));
-  }
+  onCombatResistance() {}
 
   onCombatRecovery() {
     if (!this.entry && this.state === SWORD_IMPALEMENT_STATES.surfaceContact && this.gripPointerId != null) this.state = SWORD_IMPALEMENT_STATES.attacking;
@@ -1266,10 +1391,13 @@ export class SwordWorldWeaponController {
     this.deliberateInputVelocity.set(0, 0, 0);
     this.offensiveVelocity.set(0, 0, 0);
     this.measureEmbeddedToFreeContinuity = false;
-    this.presentationContinuityActive = false;
+    this.extractionOffsetActive = false;
+    this.extractionOffsetAge = 0;
+    this.extractionPositionOffset.set(0, 0, 0);
+    this.extractionQuaternionOffset.identity();
     this.presentation.endExtractionContinuity();
     this.applyVisualLayer();
-    if (entry) this.beginFreePresentationContinuity();
+    if (entry) this.captureFreeRenderPose();
     this.penetrationAudioGate.reset();
   }
 
@@ -1282,6 +1410,9 @@ export class SwordWorldWeaponController {
 
   getDiagnostics() {
     const worldLightIntersectionStatus = getWeaponWorldLightIntersectionStatus(this.visual, this.scene);
+    const extractionProgress = THREE.MathUtils.clamp(this.extractionOffsetAge / SWORD_EXTRACTION_CONTINUITY_DURATION, 0, 1);
+    const extractionOffsetWeight = this.extractionOffsetActive ? 1 - extractionProgress * extractionProgress * (3 - 2 * extractionProgress) : 0;
+    this.continuityScratch.decayedQuaternionOffset.slerpQuaternions(identityQuaternion, this.extractionQuaternionOffset, extractionOffsetWeight).normalize();
     return {
       itemId: this.config.itemId,
       equipped: this.isEquipped(),
@@ -1345,6 +1476,24 @@ export class SwordWorldWeaponController {
       penetrationAudio: this.penetrationAudioGate.getDiagnostics(),
       edgeSweepObserver: this.edgeSweepObserver?.getDiagnostics?.() ?? null,
       weaponPresentation: this.getWeaponPresentationDiagnostics(),
+      swordPresentationUnity: {
+        authoritativeLocalGrip: this.authoritativeLocalGrip.toArray().map((value) => Number(value.toFixed(6))),
+        displayedLocalGrip: this.displayedLocalGrip.toArray().map((value) => Number(value.toFixed(6))),
+        authoritativeTip: this.authoritativeTip.toArray().map((value) => Number(value.toFixed(6))),
+        displayedTip: this.displayedTip.toArray().map((value) => Number(value.toFixed(6))),
+        positionError: Number(this.presentationPositionError.toFixed(6)),
+        rotationErrorDegrees: Number(this.presentationRotationErrorDegrees.toFixed(4)),
+        tipError: Number(this.presentationTipError.toFixed(6)),
+        maximumTipError: Number(this.maximumPresentationTipError.toFixed(6)),
+        edgeError: Number(this.presentationEdgeError.toFixed(6)),
+        maximumEdgeError: Number(this.maximumPresentationEdgeError.toFixed(6)),
+        extractionOffsetActive: this.extractionOffsetActive,
+        extractionOffsetPositionMagnitude: Number((this.extractionPositionOffset.length() * extractionOffsetWeight).toFixed(6)),
+        extractionOffsetRotationDegrees: Number(THREE.MathUtils.radToDeg(identityQuaternion.angleTo(this.continuityScratch.decayedQuaternionOffset)).toFixed(4)),
+        extractionOffsetAge: Number(this.extractionOffsetAge.toFixed(4)),
+        extractionCycleCount: this.extractionCycleCount,
+        rejectedDismembermentPresentationErrorCount: this.edgeSweepObserver?.getDiagnostics?.().rejectedPresentationErrorCount ?? 0,
+      },
     };
   }
 
