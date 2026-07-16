@@ -62,12 +62,22 @@ const isInsideBounds = (position, bounds, margin = 0) => Boolean(position
   && position.z >= bounds.minZ + margin
   && position.z <= bounds.maxZ - margin);
 
-export function isFolsomCombatActorRelevant(actor, walkerController = null, stationaryDeathController = null) {
+export function isFolsomCombatActorLiving(actor, walkerController = null, stationaryDeathController = null) {
   if (!actor || actor.disposed || actor.lifeState !== 'alive') return false;
   if (actor === stationaryDeathController?.actor && [WALKER_STATES.losingConsciousness, WALKER_STATES.grounded].includes(stationaryDeathController.state)) return false;
   if (actor !== walkerController?.actor) return true;
   return ![WALKER_STATES.losingConsciousness, WALKER_STATES.grounded, WALKER_STATES.disposed, WALKER_STATES.respawning].includes(walkerController.state);
 }
+
+export function isFolsomCombatActorContactable(actor, walkerController = null, stationaryDeathController = null) {
+  if (!actor || actor.disposed || !['alive', 'dying'].includes(actor.lifeState)) return false;
+  if (actor.combatContactState === 'grounded' || actor.combatContactState === 'disposed') return false;
+  if (actor === stationaryDeathController?.actor) return stationaryDeathController.state !== WALKER_STATES.grounded;
+  if (actor !== walkerController?.actor) return true;
+  return ![WALKER_STATES.grounded, WALKER_STATES.disposed, WALKER_STATES.respawning].includes(walkerController.state);
+}
+
+export const isFolsomCombatActorRelevant = isFolsomCombatActorLiving;
 
 export class FolsomCombatEncounter {
   static async create(options = {}) {
@@ -152,6 +162,7 @@ export class FolsomCombatEncounter {
     const spawnYaw = Math.atan2(this.playerSpawn.x - this.spawnPosition.x, this.playerSpawn.z - this.spawnPosition.z);
     this.actor = this.createDamageProfileActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw, mortalityMode: resolveCombatMortalityMode(), automaticMortality: false, isolateVisualMaterials: true, acceptedCombatAudio: this.acceptedCombatAudio, eventSink: (event, payload) => this.handleStationaryCombatEvent(event, payload) });
     this.actor.root.name = `folsom-testman-stationary-${this.waveGeneration}`;
+    this.actor.combatContactState = 'alive';
     this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: `folsom-testman-stationary-blocker-${this.waveGeneration}` });
     this.meleeSpacing = this.applyActorMeleeSpacing(this.playerBlocker);
     this.dungeon.collision?.addBlocker?.(this.playerBlocker);
@@ -165,6 +176,7 @@ export class FolsomCombatEncounter {
       actor: this.actor,
       groundY: this.groundY,
       onDeathStarted: (actor) => this.releaseStationaryDeathCollisionOwnership(actor),
+      onGrounded: (actor) => this.finalizeStationaryDeathContactOwnership(actor),
     });
     return this.actor;
   }
@@ -284,13 +296,23 @@ export class FolsomCombatEncounter {
     else this.feedbackSystem.emit(event, { ...payload, owner });
   }
 
-  getActiveCombatActors() {
-    const stationary = isFolsomCombatActorRelevant(this.actor, null, this.stationaryDeathController) ? [this.actor] : [];
+  getLivingCombatActors() {
+    const stationary = isFolsomCombatActorLiving(this.actor, null, this.stationaryDeathController) ? [this.actor] : [];
     const walkers = this.getWalkerControllers()
       .map((controller) => controller.actor)
-      .filter((actor, index) => isFolsomCombatActorRelevant(actor, this.getWalkerControllers()[index], null));
+      .filter((actor, index) => isFolsomCombatActorLiving(actor, this.getWalkerControllers()[index], null));
     return [...stationary, ...walkers];
   }
+
+  getContactableCombatActors() {
+    const stationary = isFolsomCombatActorContactable(this.actor, null, this.stationaryDeathController) ? [this.actor] : [];
+    const controllers = this.getWalkerControllers();
+    const walkers = controllers.map((controller) => controller.actor)
+      .filter((actor, index) => isFolsomCombatActorContactable(actor, controllers[index], null));
+    return [...stationary, ...walkers];
+  }
+
+  getActiveCombatActors() { return this.getLivingCombatActors(); }
 
   getWalkerControllers() {
     return [this.walkerController, ...(this.showcaseExtras?.getWalkerControllers?.() ?? [])].filter(Boolean);
@@ -299,9 +321,16 @@ export class FolsomCombatEncounter {
   releaseStationaryDeathCollisionOwnership(actor = this.actor) {
     if (!actor || actor !== this.actor || this.stationaryDeathCollisionReleased) return false;
     this.stationaryDeathCollisionReleased = true;
+    actor.combatContactState = 'dying';
+    this.dungeon.collision?.removeBlocker?.(this.playerBlocker);
+    return true;
+  }
+
+  finalizeStationaryDeathContactOwnership(actor = this.actor) {
+    if (!actor || actor !== this.actor || actor.combatContactState === 'grounded') return false;
+    actor.combatContactState = 'grounded';
     this.combatRouter.unregister(actor);
     actor.colliders?.forEach?.((collider) => collider.setEnabled?.(false));
-    this.dungeon.collision?.removeBlocker?.(this.playerBlocker);
     return true;
   }
 
@@ -309,7 +338,7 @@ export class FolsomCombatEncounter {
     if (!player?.position) return null;
     let selected = null;
     let selectedDistance = Infinity;
-    for (const actor of this.getActiveCombatActors()) {
+    for (const actor of this.getLivingCombatActors()) {
       const pelvis = actor.getBodyWorldPosition('pelvis');
       const distance = player.position.distanceTo(pelvis);
       if (distance < selectedDistance) {
@@ -321,8 +350,13 @@ export class FolsomCombatEncounter {
   }
 
   isPlayerInCombatRange(player = this.player) {
-    const actor = this.getPriorityCombatActor(player);
-    this.combatActiveActor = actor && player?.position?.distanceTo(actor.getBodyWorldPosition('pelvis')) <= FOLSOM_COMBAT_RANGE ? actor : null;
+    let actor = null;
+    let distance = Infinity;
+    for (const candidate of this.getContactableCombatActors()) {
+      const candidateDistance = player?.position?.distanceTo(candidate.getBodyWorldPosition('pelvis')) ?? Infinity;
+      if (candidateDistance < distance) { actor = candidate; distance = candidateDistance; }
+    }
+    this.combatActiveActor = actor && distance <= FOLSOM_COMBAT_RANGE ? actor : null;
     return Boolean(this.combatActiveActor);
   }
 
@@ -436,6 +470,7 @@ export class FolsomCombatEncounter {
     const actor = this.actor;
     if (!actor) return false;
     this.weaponController?.cancelTarget?.(actor, reason);
+    actor.combatContactState = 'disposed';
     this.feedbackSystem?.stopOwnerVocal?.(actor.instanceId);
     this.combatRouter.unregister(actor);
     this.dungeon.collision?.removeBlocker?.(this.playerBlocker);
@@ -485,7 +520,7 @@ export class FolsomCombatEncounter {
     const combatShadowTarget = this.priorityCombatActor?.getBodyWorldPosition?.('upper_chest');
     if (combatShadowTarget) this.scene.userData.activeCombatShadowTarget = combatShadowTarget;
     else delete this.scene.userData.activeCombatShadowTarget;
-    this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha);
+    this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha, deltaSeconds);
   }
 
   reset(player = this.player, { preserveWaveGeneration = false, reason = 'encounter-reset' } = {}) {
@@ -556,7 +591,8 @@ export class FolsomCombatEncounter {
       folsomShowcase: {
         enabled: this.showcaseEnabled,
         totalActorCount: ownedActors.length,
-        livingActorCount: this.getActiveCombatActors().length,
+        livingActorCount: this.getLivingCombatActors().length,
+        contactableActorCount: this.getContactableCombatActors().length,
         additionalWalkerCount: this.showcaseExtras?.getActors?.().length ?? 0,
         damageProfileActorCount: ownedActors.filter((actor) => actor.visualProfile === TESTMAN_DAMAGE_COMBAT_PROFILE).length,
         maceChestPresent,

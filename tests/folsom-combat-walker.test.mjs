@@ -216,9 +216,10 @@ test('authored Folsom spawn completes its death state without procedural collaps
   controller.forceQualifyingStab('abdomen');
   assert.equal(controller.state, WALKER_STATES.losingConsciousness);
   assert.equal(encounter.stationaryDeathCollisionReleased, true);
-  assert.equal(encounter.combatRouter.getDirector(actor), null);
-  assert.equal(encounter.getActiveCombatActors().includes(actor), false);
-  assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);
+  assert.equal(encounter.combatRouter.getDirector(actor), encounter.combatDirector);
+  assert.equal(encounter.getLivingCombatActors().includes(actor), false);
+  assert.equal(encounter.getContactableCombatActors().includes(actor), true);
+  assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled()), true);
   assert.equal(collision.blockerRects.includes(encounter.playerBlocker), false);
   assert.equal(cancelledTargets.length, 0, 'death collision release does not pull a planted knife out of the animated body');
 
@@ -247,7 +248,7 @@ test('authored Folsom spawn completes its death state without procedural collaps
   encounter.dispose();
 });
 
-test('dying Folsom walker releases player and combat collision immediately', async () => {
+test('dying Folsom walker releases player blocking but keeps weapon contact until grounded', async () => {
   const { encounter, collision } = await createEncounter();
   const controller = encounter.walkerController;
   const actor = controller.actor;
@@ -265,11 +266,16 @@ test('dying Folsom walker releases player and combat collision immediately', asy
 
   assert.equal(controller.state, WALKER_STATES.losingConsciousness);
   assert.equal(controller.deathCollisionReleased, true);
-  assert.equal(encounter.combatRouter.getDirector(actor), null);
-  assert.equal(encounter.getActiveCombatActors().includes(actor), false);
-  assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);
+  assert.equal(encounter.combatRouter.getDirector(actor), controller.director);
+  assert.equal(encounter.getLivingCombatActors().includes(actor), false);
+  assert.equal(encounter.getContactableCombatActors().includes(actor), true);
+  assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled()), true);
   assert.equal(collision.blockerRects.includes(blocker), false);
   assert.equal(cancelledTargets.length, 0, 'walker death collision release preserves an implanted weapon until disposal');
+  controller.holdGroundedPose();
+  assert.equal(encounter.combatRouter.getDirector(actor), null);
+  assert.equal(encounter.getContactableCombatActors().includes(actor), false);
+  assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);
   encounter.dispose();
 });
 

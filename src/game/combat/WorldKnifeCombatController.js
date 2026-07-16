@@ -16,8 +16,11 @@ import { WEAPON_VIEWMODEL_LAYER, WEAPON_WORLD_LAYER } from './weapons/WeaponRend
 import { physicsBodyLocalDirectionToWorld, physicsBodyLocalToWorld, worldDirectionToPhysicsBodyLocal } from './CombatCoordinateSpaces.js';
 import { OLD_WORK_KNIFE_PIERCING_AUDIO_PROFILE } from './CombatAcceptedAudioSystem.js';
 import { PenetrationAudioGate } from './weapons/PenetrationAudioGate.js';
+import { WeaponPresentationRuntime } from './weapons/WeaponViewmodelAnchor.js';
 
 const forwardLocal = new THREE.Vector3(0, 0, -1);
+const KNIFE_PRESENTATION_POSITION_STEP = 0.01;
+const KNIFE_PRESENTATION_ROTATION_STEP = THREE.MathUtils.degToRad(3);
 const knifeBladeHalfWidth = KNIFE_COMBAT_CONFIG.bladeWidth * 0.5;
 const knifeBladeShoulder = KNIFE_COMBAT_CONFIG.bladeLength * 0.78;
 const knifeEdgeHeelLocal = new THREE.Vector3(-knifeBladeHalfWidth, 0, -0.006);
@@ -70,11 +73,12 @@ function setLine(line, start, end) {
 }
 
 export class WorldKnifeCombatController {
-  constructor({ app, scene, camera, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, bloodEffects = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, outdoorLightingDirector = null, visualAssetLoader = loadOldWorkKnifeAsset, bindPointerInput = true } = {}) {
+  constructor({ app, scene, camera, viewmodelAnchor = null, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, bloodEffects = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, outdoorLightingDirector = null, visualAssetLoader = loadOldWorkKnifeAsset, bindPointerInput = true } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.scene = scene;
     this.camera = camera;
+    this.viewmodelAnchor = viewmodelAnchor;
     this.player = player;
     this.actor = actor;
     this.physics = physics;
@@ -136,6 +140,11 @@ export class WorldKnifeCombatController {
     this.actualQuaternion = new THREE.Quaternion();
     this.visualGrip = new THREE.Vector3();
     this.visualQuaternion = new THREE.Quaternion();
+    this.renderLocalGrip = new THREE.Vector3();
+    this.renderLocalQuaternion = new THREE.Quaternion();
+    this.renderTargetLocalGrip = new THREE.Vector3();
+    this.renderTargetLocalQuaternion = new THREE.Quaternion();
+    this.presentationContinuityActive = false;
     this.previousQuaternion = new THREE.Quaternion();
     this.bladeForward = new THREE.Vector3(0, 0, -1);
     this.previousTip = new THREE.Vector3();
@@ -251,6 +260,8 @@ export class WorldKnifeCombatController {
     this.disposers = [];
     this.disposed = false;
     this.buildVisual();
+    this.presentation = new WeaponPresentationRuntime({ itemId: this.config.itemId, root: this.visual, scene: this.scene, camera: this.camera, viewmodelAnchor: this.viewmodelAnchor });
+    this.presentation.recordLayer(COMBAT_KNIFE_VIEWMODEL_LAYER);
     this.weaponLayers = Object.freeze({
       visual: Object.freeze({ kind: 'visual', root: this.visual }),
       collision: Object.freeze({ kind: 'collision', controller: this }),
@@ -270,7 +281,6 @@ export class WorldKnifeCombatController {
     this.visual.name = 'old-work-knife-authoritative-world-weapon';
     this.visualDepthMode = 'viewmodel';
     this.applyVisualDepthMode();
-    this.scene.add(this.visual);
     this.visualLoadPromise = this.visualAssetLoader().then((source) => {
       const visual = cloneOwnedWeaponVisual(source);
       if (this.disposed) {
@@ -354,6 +364,9 @@ export class WorldKnifeCombatController {
       configureMesh: (object) => { object.userData.combatKnifeViewmodel = viewmodel; },
     });
     this.currentRenderLayer = layer;
+    this.presentation?.recordLayer?.(layer);
+    if (this.entry) this.presentation?.transitionToWorld?.({ preserveWorld: true });
+    else if (this.visual?.visible !== false) this.presentation?.transitionToViewmodel?.({ preserveWorld: true, extraction: this.presentation?.presentationMode === 'world' });
     if (before && weaponMaterialLightingStateChanged(before, captureWeaponMaterialLightingState(this.visual))) {
       this.transitionLightingDiscontinuityCount = Math.min(1_000_000, this.transitionLightingDiscontinuityCount + 1);
     }
@@ -419,6 +432,30 @@ export class WorldKnifeCombatController {
     this.updateDerivedPose(true);
     this.lastSweep.from.copy(this.currentTip);
     this.lastSweep.to.copy(this.currentTip);
+    this.captureFreeRenderPose(true);
+  }
+
+  captureFreeRenderPose(force = false) {
+    if (this.entry || !this.camera) return false;
+    this.camera.updateMatrixWorld(true);
+    this.renderTargetLocalGrip.copy(this.actualGrip);
+    this.camera.worldToLocal(this.renderTargetLocalGrip);
+    this.camera.getWorldQuaternion(this.slashScratch.inverseQuaternion);
+    this.renderTargetLocalQuaternion.copy(this.slashScratch.inverseQuaternion).invert().multiply(this.actualQuaternion).normalize();
+    if (force || !this.presentationContinuityActive) {
+      this.renderLocalGrip.copy(this.renderTargetLocalGrip);
+      this.renderLocalQuaternion.copy(this.renderTargetLocalQuaternion);
+    }
+    return true;
+  }
+
+  beginFreePresentationContinuity() {
+    if (!this.viewmodelAnchor || this.visual.parent !== this.viewmodelAnchor) return false;
+    this.renderLocalGrip.copy(this.visual.position);
+    this.renderLocalQuaternion.copy(this.visual.quaternion).normalize();
+    this.presentationContinuityActive = true;
+    this.captureFreeRenderPose(false);
+    return true;
   }
 
   rebaseFreeWeaponToCamera() {
@@ -549,6 +586,7 @@ export class WorldKnifeCombatController {
       if (this.entry || this.gripPointerId != null || this.state !== KNIFE_CONTROL_STATES.ready) this.cancel('weapon-unequipped');
       return;
     }
+    this.presentation.recordPhysicalCameraMatrix();
     const combatContactActive = this.contactActivationProvider?.() ?? true;
     if (this.wasCombatContactActive && !combatContactActive && this.gripPointerId != null) this.releaseGrip('combat-range-exit');
     this.wasCombatContactActive = combatContactActive;
@@ -564,6 +602,7 @@ export class WorldKnifeCombatController {
     else this.solveFreePose(dt);
     this.syncVisualDepthMode();
     this.updateDerivedPose();
+    if (!this.entry) this.captureFreeRenderPose();
   }
 
   solveFreePose(dt) {
@@ -1005,6 +1044,7 @@ export class WorldKnifeCombatController {
     this.penetrationDepth = 0;
     entry?.actor?.setEmbeddedWeapon?.(null);
     this.syncVisualDepthMode();
+    this.beginFreePresentationContinuity();
     if (this.gripPointerId == null) {
       this.state = KNIFE_CONTROL_STATES.returning;
       this.returnElapsed = 0;
@@ -1076,18 +1116,49 @@ export class WorldKnifeCombatController {
     }
   }
 
-  afterPhysics() {
-    if (!this.visual.visible) return;
-    this.updateMicroPresentation(this.lastPhysicsDt);
+  afterPhysics(_alpha = 1, frameDelta = this.lastPhysicsDt) {
+    this.presentation.beginRenderFrame();
+    const equipped = this.isEquipped();
+    this.visual.visible = equipped;
+    if (!equipped) {
+      if (this.entry || this.gripPointerId != null || this.state !== KNIFE_CONTROL_STATES.ready) this.cancel('weapon-unequipped');
+      this.presentation.detachHidden();
+      return;
+    }
+    const renderDt = Math.max(0, Math.min(0.05, Number(frameDelta) || 0));
+    this.updateMicroPresentation(renderDt);
+    let extractionContinuityCompleted = false;
+    if (this.presentationContinuityActive && !this.entry) {
+      const response = 1 - Math.exp(-renderDt * 16);
+      const remainingDistance = this.renderLocalGrip.distanceTo(this.renderTargetLocalGrip);
+      const positionJump = Math.min(remainingDistance, KNIFE_PRESENTATION_POSITION_STEP, remainingDistance * response);
+      if (remainingDistance > 1e-12) this.renderLocalGrip.lerp(this.renderTargetLocalGrip, positionJump / remainingDistance);
+      const remainingAngle = this.renderLocalQuaternion.angleTo(this.renderTargetLocalQuaternion);
+      const rotationJump = Math.min(remainingAngle, KNIFE_PRESENTATION_ROTATION_STEP, remainingAngle * response);
+      if (remainingAngle > 1e-12) this.renderLocalQuaternion.slerp(this.renderTargetLocalQuaternion, rotationJump / remainingAngle).normalize();
+      this.presentation.recordPostExtractionPoseJump(positionJump, THREE.MathUtils.radToDeg(rotationJump));
+      if (this.renderLocalGrip.distanceToSquared(this.renderTargetLocalGrip) <= 1e-8 && this.renderLocalQuaternion.angleTo(this.renderTargetLocalQuaternion) <= THREE.MathUtils.degToRad(0.05)) {
+        this.renderLocalGrip.copy(this.renderTargetLocalGrip);
+        this.renderLocalQuaternion.copy(this.renderTargetLocalQuaternion);
+        this.presentationContinuityActive = false;
+        extractionContinuityCompleted = true;
+      }
+    }
     this.visualGrip.copy(this.actualGrip);
     this.visualQuaternion.copy(this.actualQuaternion);
     if (!this.entry) {
       this.visualGrip.add(this.microWorldOffset);
       this.visualQuaternion.multiply(this.microQuaternion).normalize();
     }
-    this.visual.position.copy(this.visualGrip);
-    this.visual.quaternion.copy(this.visualQuaternion);
-    this.visibleCollisionError = this.visual.position.distanceTo(this.actualGrip);
+    if (this.entry) this.presentation.writeWorldPose(this.visualGrip, this.visualQuaternion);
+    else {
+      const localGrip = this.slashScratch.point.copy(this.renderLocalGrip)
+        .add(this.slashScratch.correction.copy(this.microLocalOffset).applyQuaternion(this.renderLocalQuaternion));
+      const localQuaternion = this.slashScratch.inverseQuaternion.copy(this.renderLocalQuaternion).multiply(this.microQuaternion).normalize();
+      this.presentation.writeViewmodelPose(localGrip, localQuaternion);
+    }
+    if (extractionContinuityCompleted) this.presentation.endExtractionContinuity();
+    this.visibleCollisionError = this.visualGrip.distanceTo(this.actualGrip);
     this.maximumPresentationOffset = Math.max(this.maximumPresentationOffset, this.visibleCollisionError);
     this.updateDebug();
   }
@@ -1127,6 +1198,7 @@ export class WorldKnifeCombatController {
   }
 
   getActiveToolId() { return this.isEquipped() ? this.config.itemId : null; }
+  getWeaponPresentationDiagnostics() { return this.presentation.getDiagnostics({ equippedItemId: this.isEquipped() ? this.config.itemId : null }); }
 
   getProjectedGrabPoint(viewport = this.viewport) { return this.getProjectedGripZone(viewport); }
 
@@ -1209,6 +1281,9 @@ export class WorldKnifeCombatController {
   }
 
   cancel(reason = 'cancelled') {
+    const wasEmbedded = Boolean(this.entry);
+    this.presentationContinuityActive = false;
+    this.presentation.endExtractionContinuity();
     if (this.entry) {
       if (this.entry.directorInteractionId) {
         this.entry.director.beginWithdrawal(this.entry.directorInteractionId, { releaseSeverity: 0, direction: null, position: this.currentTip });
@@ -1233,6 +1308,7 @@ export class WorldKnifeCombatController {
     this.intentWeapon.reset();
     this.intentState = this.intentWeapon.current;
     this.penetrationAudioGate.reset();
+    if (wasEmbedded) this.beginFreePresentationContinuity();
   }
 
   cancelTarget(actor, reason = 'target-disposed') {
@@ -1319,6 +1395,7 @@ export class WorldKnifeCombatController {
       activeSlash: this.activeSlash ? { regionId: this.activeSlash.regionId, part: this.activeSlash.part, duration: Number(this.activeSlash.duration.toFixed(3)), travel: Number(this.activeSlash.travel.toFixed(3)), pendingTravel: Number(this.activeSlash.pendingTravel.toFixed(3)), extensionCommitCount: this.activeSlash.extensionCommitCount, edgeAnchorT: Number(this.activeSlash.edgeAnchorT.toFixed(3)), edgeSampleCount: this.lastEdgeSampleCount, woundId: this.activeSlash.woundId } : null,
       slashCount: this.slashCount,
       penetrationAudio: this.penetrationAudioGate.getDiagnostics(),
+      weaponPresentation: this.getWeaponPresentationDiagnostics(),
     };
   }
 

@@ -462,7 +462,11 @@ export class HumanoidCombatActor {
   }
 
   beginPunctureWound({ hit, entryPoint, direction, surfaceNormal = null, entryTangent = null, depth = 0.004, impactSeverity = 0, weaponProfile = null, hardContact = false, weaponId = 'old_work_knife', embeddedWeaponId = weaponId, deferReaction = false, deferAudio = false } = {}) {
+    const targetLifeStateAtCreation = this.lifeState;
     const wound = this.woundSystem.createPuncture({ hit, entryPoint, axis: direction, surfaceNormal, entryTangent, depth, impactSeverity, weaponProfile, weaponId, hardStructureContact: hardContact, embeddedWeaponId, createdTime: this.elapsed });
+    wound.targetLifeStateAtCreation = targetLifeStateAtCreation;
+    wound.targetWasDeadAtCreation = targetLifeStateAtCreation === 'dead';
+    wound.weaponFamily = weaponProfile?.family ?? (weaponId === 'dreadstone_sword' ? 'sword' : weaponId === 'old_work_knife' ? 'knife' : null);
     const state = this.regionState.get(hit.regionId);
     if (state) state.wounds = (state.wounds ?? 0) + 1;
     this.physiology.onWoundCreated(wound);
@@ -716,6 +720,10 @@ export class HumanoidCombatActor {
   requestFatalSegmentDetachment({ segmentId, cause = 'segment-detachment' } = {}) {
     if (this.fatalSegmentDetachmentActive) return false;
     this.fatalSegmentDetachmentActive = true;
+    if (this.lifeState === 'dying' || this.lifeState === 'dead') {
+      this.motorStrength = Math.min(this.motorStrength, 0.02);
+      return false;
+    }
     this.fatalSegmentDetachmentActivationCount = Math.min(1_000_000, this.fatalSegmentDetachmentActivationCount + 1);
     this.collapseFamily = 'neurological';
     this.collapseReason = `fatal-segment-detachment:${segmentId ?? 'unknown'}:${cause}`;

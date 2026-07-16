@@ -156,6 +156,38 @@ test('all four Folsom actors own independent death, voice, corpse cleanup, and w
   assert.equal(collision.blockerRects.filter((entry) => entry.type === 'combatActor').length, 0);
 });
 
+test('stationary Testman and all three walkers share corrected two-hit sword thrust mortality', async () => {
+  const { encounter } = await createShowcaseEncounter();
+  const slots = [
+    { actor: encounter.actor, controller: encounter.stationaryDeathController },
+    ...encounter.getWalkerControllers().map((controller) => ({ actor: controller.actor, controller })),
+  ];
+  for (const [actorIndex, { actor, controller }] of slots.entries()) {
+    for (let hitIndex = 0; hitIndex < 10; hitIndex += 1) {
+      const wound = {
+        id: `folsom-sword-${actorIndex}-${hitIndex}`,
+        interactionKind: 'sword_thrust',
+        weaponId: 'dreadstone_sword',
+        weaponFamily: 'sword',
+        deliberateStab: true,
+        surfaceRuptured: true,
+        regionId: 'upper_chest',
+        maximumDepth: 0.08,
+        targetLifeStateAtCreation: 'alive',
+        targetWasDeadAtCreation: false,
+      };
+      const accepted = controller.lethality.evaluate([wound]);
+      if (accepted.length) controller.handleQualifyingStabChange();
+    }
+    assert.equal(controller.lethality.criticalStabCount, 2);
+    assert.equal(controller.lethality.locked, true);
+    assert.equal(actor.lifeState, 'dying');
+  }
+  assert.equal(encounter.getLivingCombatActors().length, 0);
+  assert.equal(encounter.getContactableCombatActors().length, 4);
+  encounter.dispose();
+});
+
 test('fatal authored head consequences enter the existing Folsom corpse lifecycle', async () => {
   const { encounter } = await createShowcaseEncounter();
   const stationary = encounter.actor;
@@ -165,12 +197,14 @@ test('fatal authored head consequences enter the existing Folsom corpse lifecycl
   encounter.stationaryDeathController.prepareFrame(0.01);
   assert.equal(stationary.lifeState, 'dying');
   assert.equal(encounter.stationaryDeathController.state, 'LOSING_CONSCIOUSNESS');
-  assert.equal(encounter.combatRouter.getDirector(stationary), null);
+  assert.equal(encounter.combatRouter.getDirector(stationary), encounter.combatDirector);
+  assert.equal(encounter.getContactableCombatActors().includes(stationary), true);
   assert.equal(walker.requestFatalSegmentDetachment({ segmentId: 'head_neck', cause: 'test' }), true);
   walkerController.prepareFrame(0.01, encounter.player);
   assert.equal(walker.lifeState, 'dying');
   assert.equal(walkerController.state, 'LOSING_CONSCIOUSNESS');
-  assert.equal(encounter.combatRouter.getDirector(walker), null);
+  assert.equal(encounter.combatRouter.getDirector(walker), walkerController.director);
+  assert.equal(encounter.getContactableCombatActors().includes(walker), true);
   encounter.dispose();
 });
 
@@ -291,6 +325,50 @@ test('showcase sword uses authored neck and elbow seams and rejects badly aimed 
     }
     if (!entry.accepted && entry.segmentId && entry.bodyId !== 'left_hand') assert.equal(adapter.getDiagnostics().lastResult, 'rejected_seam_distance');
   });
+});
+
+test('dying actors remain eligible for accurate neck and elbow detachments only until grounded', () => {
+  const neck = makeDamageActor('dying-neck', { head_neck: new THREE.Vector3(0, 1.55, 0) });
+  neck.actor.lifeState = 'dying';
+  neck.actor.combatContactState = 'dying';
+  assert.equal(attempt(armedAdapter(), neck, {
+    bodyId: 'neck',
+    regionId: 'neck',
+    point: new THREE.Vector3(0.08, 1.55, 0),
+  }), true);
+  assert.equal(neck.requests.length, 1);
+  assert.equal(neck.requests[0].segmentId, 'head_neck');
+
+  const elbow = makeDamageActor('dying-elbow', { left_elbow: new THREE.Vector3(-0.42, 1.25, 0) });
+  elbow.actor.lifeState = 'dying';
+  elbow.actor.combatContactState = 'dying';
+  const elbowAdapter = armedAdapter();
+  assert.equal(attempt(elbowAdapter, elbow, {
+    bodyId: 'left_forearm',
+    regionId: 'arm_left_bot',
+    point: new THREE.Vector3(-0.36, 1.25, 0),
+  }), true);
+  assert.equal(elbow.requests[0].segmentId, 'left_elbow');
+  assert.equal(attempt(elbowAdapter, elbow, {
+    bodyId: 'left_forearm',
+    regionId: 'arm_left_bot',
+    point: new THREE.Vector3(-0.36, 1.25, 0),
+  }), false, 'one swing cannot repeat a segment consequence on the same actor');
+
+  for (const state of [
+    { lifeState: 'dead', combatContactState: 'grounded' },
+    { lifeState: 'dying', combatContactState: 'grounded' },
+    { lifeState: 'dead', combatContactState: 'disposed', disposed: true },
+  ]) {
+    const grounded = makeDamageActor(`ineligible-${state.combatContactState}`, { head_neck: new THREE.Vector3(0, 1.55, 0) });
+    Object.assign(grounded.actor, state);
+    assert.equal(attempt(armedAdapter(), grounded, {
+      bodyId: 'neck',
+      regionId: 'neck',
+      point: new THREE.Vector3(0.08, 1.55, 0),
+    }), false);
+    assert.equal(grounded.requests.length, 0);
+  }
 });
 
 test('showcase sword resolves once per actor and caps a gesture at two actors', () => {

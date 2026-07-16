@@ -67,7 +67,11 @@ async function createRuntimeFixture({ livingVelocity = new THREE.Vector3() } = {
     reactionCount: 0,
     lifeState: 'alive',
     detachedSemanticBodyIds: new Set(),
-    requestFatalSegmentDetachment() { this.mortalityCount += 1; return true; },
+    requestFatalSegmentDetachment() {
+      if (this.lifeState === 'dying' || this.lifeState === 'dead') return false;
+      this.mortalityCount += 1;
+      return true;
+    },
     emitDetachmentBlood() { this.bloodCount += 1; return true; },
     disableDetachedSemanticBodies(bodyIds) { bodyIds.forEach((bodyId) => this.detachedSemanticBodyIds.add(bodyId)); },
     restoreDetachedSemanticBodies(bodyIds) { bodyIds.forEach((bodyId) => this.detachedSemanticBodyIds.delete(bodyId)); },
@@ -374,6 +378,34 @@ test('detachment ownership is single-shot for body, mortality, and blood', async
     assert.equal(fixture.actor.bloodCount, 1);
     assert.equal(diagnostics.detachedWoundTransferImplemented, false);
   } finally { fixture.dispose(); }
+});
+
+test('head and forearm detachment stay physical during dying without a second mortality transition', async () => {
+  const headFixture = await createRuntimeFixture();
+  try {
+    headFixture.actor.lifeState = 'dying';
+    const result = detach(headFixture.runtime);
+    const diagnostics = headFixture.runtime.getDiagnostics();
+    assert.equal(result.accepted, true);
+    assert.equal(result.mortalityTriggered, false);
+    assert.equal(headFixture.actor.lifeState, 'dying');
+    assert.equal(headFixture.actor.mortalityCount, 0);
+    assert.equal(headFixture.actor.bloodCount, 1);
+    assert.equal(diagnostics.detachedRigidBodyCount, 1);
+    assert.equal(diagnostics.mortalityActivationCount, 0);
+  } finally { headFixture.dispose(); }
+
+  const armFixture = await createRuntimeFixture();
+  try {
+    armFixture.actor.lifeState = 'dying';
+    const result = detachSegment(armFixture.runtime, 'left_elbow');
+    assert.equal(result.accepted, true);
+    assert.equal(result.fatal, false);
+    assert.equal(result.mortalityTriggered, false);
+    assert.equal(armFixture.actor.lifeState, 'dying');
+    assert.equal(armFixture.actor.mortalityCount, 0);
+    assert.equal(armFixture.actor.nonfatalCount, 1);
+  } finally { armFixture.dispose(); }
 });
 
 test('forearm requests are independently single-shot, nonfatal, and consequence-bounded', async () => {

@@ -3,10 +3,11 @@ import { COMBAT_LAB_WALKER_CONFIG, WALKER_STATES, WalkerVitalStabPolicy } from '
 const LIVING_STATE = WALKER_STATES.nearPlayer;
 
 export class AuthoredHumanoidDeathController {
-  constructor({ actor, config = COMBAT_LAB_WALKER_CONFIG, onDeathStarted = null } = {}) {
+  constructor({ actor, config = COMBAT_LAB_WALKER_CONFIG, onDeathStarted = null, onGrounded = null } = {}) {
     this.actor = actor;
     this.config = config;
     this.onDeathStarted = onDeathStarted;
+    this.onGrounded = onGrounded;
     this.state = LIVING_STATE;
     this.stateElapsed = 0;
     this.deathDurationSeconds = config.deathCollapseSeconds;
@@ -50,7 +51,7 @@ export class AuthoredHumanoidDeathController {
     const result = this.actor.visualAdapter?.playDeathAnimation?.({ regionId, variation: this.lethality.criticalStabCount });
     this.selectedDeathName = result?.name ?? null;
     this.deathDurationSeconds = result?.durationSeconds ?? this.config.deathCollapseSeconds;
-    this.actor.transitionLifeState?.('dying', 'authored-stationary-vital-stab', { externalCommit: true, presentationHandled: true });
+    this.actor.transitionLifeState?.('dying', 'authored-stationary-vital-stab', { externalCommit: true, forceFatal: true, presentationHandled: true });
     this.state = WALKER_STATES.losingConsciousness;
     this.stateElapsed = 0;
     this.onDeathStarted?.(this.actor);
@@ -66,6 +67,7 @@ export class AuthoredHumanoidDeathController {
     if (this.state !== WALKER_STATES.losingConsciousness) return false;
     this.actor?.transitionLifeState?.('dead', 'authored-stationary-grounded', { externalCommit: true, presentationHandled: true });
     this.state = WALKER_STATES.grounded;
+    this.onGrounded?.(this.actor);
     return true;
   }
 

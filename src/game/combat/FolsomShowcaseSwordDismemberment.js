@@ -34,6 +34,14 @@ function hasValidatedSegmentRuntime(actor, segmentId) {
     && runtime?.segmentStates?.has?.(segmentId));
 }
 
+export function isFolsomShowcaseDismembermentTargetEligible(actor) {
+  return Boolean(actor
+    && !actor.disposed
+    && ['alive', 'dying'].includes(actor.lifeState)
+    && actor.combatContactState !== 'grounded'
+    && actor.combatContactState !== 'disposed');
+}
+
 function edgeCenter(primitive, previous, target) {
   return target.addVectors(
     previous ? primitive.previousStart : primitive.currentStart,
@@ -185,7 +193,7 @@ export class FolsomShowcaseSwordDismemberment {
 
     if (!this.activeSwingId) return this.reject('intent', 'rejected_no_active_gesture');
     if (!VALID_EDGE_PRIMITIVES.has(primitiveName)) return this.reject('intent', 'rejected_non_edge_contact');
-    if (!actor || actor.lifeState !== 'alive') return this.reject('intent', 'rejected_target_not_alive');
+    if (!isFolsomShowcaseDismembermentTargetEligible(actor)) return this.reject('intent', 'rejected_target_not_contactable');
     if (this.actorsResolvedThisSwing.has(actorId)) return this.reject('repeat', 'rejected_actor_already_resolved');
     if (this.acceptedThisSwing >= this.config.maximumSwordDetachmentsPerGesture) return this.reject('repeat', 'rejected_gesture_actor_cap');
     if (!(edgeSpeed >= this.config.minimumSwordEdgeSpeed)) return this.reject('speed', 'rejected_edge_speed');

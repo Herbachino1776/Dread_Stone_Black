@@ -44,8 +44,42 @@ export const COMBAT_LAB_WALKER_CONFIG = Object.freeze({
   spawnCandidateCount: 12,
 });
 
-const VITAL_REGIONS = new Set(['upper_chest', 'lower_chest', 'abdomen', 'neck']);
+const VITAL_REGIONS = new Set(['head', 'face', 'skull', 'neck', 'upper_chest', 'lower_chest', 'abdomen']);
 const SWORD_CRITICAL_REGIONS = new Set(['head', 'face', 'skull', 'neck', 'upper_chest', 'lower_chest']);
+const SWORD_WEAPON_IDS = new Set(['dreadstone_sword']);
+
+export const FOLSOM_PIERCING_LETHALITY_CONFIG = Object.freeze({
+  acceptedInteractionKinds: Object.freeze(['puncture', 'sword_thrust']),
+  terminalCreditThreshold: 2,
+  knife: Object.freeze({
+    qualifyingDepthByRegion: Object.freeze({
+      neck: COMBAT_LAB_WALKER_CONFIG.neckQualifyingDepth,
+      upper_chest: COMBAT_LAB_WALKER_CONFIG.torsoQualifyingDepth,
+      lower_chest: COMBAT_LAB_WALKER_CONFIG.torsoQualifyingDepth,
+      abdomen: COMBAT_LAB_WALKER_CONFIG.torsoQualifyingDepth,
+    }),
+  }),
+  sword: Object.freeze({
+    qualifyingDepthByRegion: Object.freeze({
+      head: 0.065,
+      face: 0.065,
+      skull: 0.065,
+      neck: 0.065,
+      upper_chest: 0.075,
+      lower_chest: 0.075,
+      abdomen: 0.085,
+    }),
+    decisiveDepthByRegion: Object.freeze({
+      head: 0.1,
+      face: 0.1,
+      skull: 0.1,
+      neck: 0.1,
+      upper_chest: 0.125,
+      lower_chest: 0.125,
+      abdomen: Number.POSITIVE_INFINITY,
+    }),
+  }),
+});
 const LIVING_MOVEMENT_STATES = new Set([
   WALKER_STATES.spawning,
   WALKER_STATES.blendingToWalk,
@@ -76,10 +110,27 @@ const moveToward = (current, target, maximumDelta) => current < target ? Math.mi
 const angleDelta = (from, to) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
 const moveAngleToward = (current, target, maximumDelta) => current + THREE.MathUtils.clamp(angleDelta(current, target), -maximumDelta, maximumDelta);
 
+export function isAcceptedPiercingWound(wound) {
+  return Boolean(wound
+    && FOLSOM_PIERCING_LETHALITY_CONFIG.acceptedInteractionKinds.includes(wound.interactionKind)
+    && wound.deliberateStab === true
+    && wound.surfaceRuptured === true
+    && Number.isFinite(wound.maximumDepth)
+    && VITAL_REGIONS.has(wound.regionId)
+    && wound.targetLifeStateAtCreation !== 'dead'
+    && wound.targetWasDeadAtCreation !== true);
+}
+
+function isSwordPiercingWound(wound) {
+  return wound?.interactionKind === 'sword_thrust'
+    && (SWORD_WEAPON_IDS.has(wound.weaponId) || wound.weaponFamily === 'sword');
+}
+
 export class WalkerVitalStabPolicy {
-  constructor({ torsoDepth = COMBAT_LAB_WALKER_CONFIG.torsoQualifyingDepth, neckDepth = COMBAT_LAB_WALKER_CONFIG.neckQualifyingDepth } = {}) {
+  constructor({ torsoDepth = COMBAT_LAB_WALKER_CONFIG.torsoQualifyingDepth, neckDepth = COMBAT_LAB_WALKER_CONFIG.neckQualifyingDepth, config = FOLSOM_PIERCING_LETHALITY_CONFIG } = {}) {
     this.torsoDepth = torsoDepth;
     this.neckDepth = neckDepth;
+    this.config = config;
     this.countedWoundIds = new Set();
     this.countedWoundWeights = new Map();
     this.lastQualifyingRegion = null;
@@ -89,11 +140,19 @@ export class WalkerVitalStabPolicy {
   }
 
   resolveQualifyingWeight(wound) {
-    if (!wound || this.countedWoundIds.has(wound.id)) return 0;
-    if (wound.interactionKind === 'puncture' && wound.deliberateStab === true && wound.surfaceRuptured === true) {
-      if (!VITAL_REGIONS.has(wound.regionId)) return 0;
-      const threshold = wound.regionId === 'neck' ? this.neckDepth : this.torsoDepth;
-      return Number.isFinite(wound.maximumDepth) && wound.maximumDepth >= threshold ? 1 : 0;
+    if (!wound) return 0;
+    if (isAcceptedPiercingWound(wound)) {
+      if (wound.interactionKind === 'sword_thrust') {
+        if (!isSwordPiercingWound(wound)) return 0;
+        const qualifyingDepth = this.config.sword.qualifyingDepthByRegion[wound.regionId];
+        const decisiveDepth = this.config.sword.decisiveDepthByRegion[wound.regionId];
+        if (!Number.isFinite(qualifyingDepth) || wound.maximumDepth < qualifyingDepth) return 0;
+        return wound.maximumDepth >= decisiveDepth ? 2 : 1;
+      }
+      const configuredThreshold = this.config.knife.qualifyingDepthByRegion[wound.regionId];
+      if (!Number.isFinite(configuredThreshold)) return 0;
+      const threshold = wound.regionId === 'neck' ? this.neckDepth : configuredThreshold;
+      return Number.isFinite(threshold) && wound.maximumDepth >= threshold ? 1 : 0;
     }
     if (wound.interactionKind !== 'sword_cut' || wound.physiologyRegistered !== true) return 0;
     const score = Number(wound.swordLethality) || 0;
@@ -119,14 +178,16 @@ export class WalkerVitalStabPolicy {
     const newlyQualified = [];
     for (const wound of wounds) {
       const weight = this.resolveQualifyingWeight(wound);
-      if (weight <= 0) continue;
+      const previousWeight = this.countedWoundWeights.get(wound?.id) ?? 0;
+      const addedWeight = Math.max(0, weight - previousWeight);
+      if (addedWeight <= 0) continue;
       this.countedWoundIds.add(wound.id);
       this.countedWoundWeights.set(wound.id, weight);
-      this.criticalStabCount += weight;
+      this.criticalStabCount += addedWeight;
       this.lastQualifyingRegion = wound.impactedRegionIds?.find((regionId) => SWORD_CRITICAL_REGIONS.has(regionId)) ?? wound.regionId;
       this.lastQualifyingDepth = wound.maximumDepth;
       newlyQualified.push(wound);
-      if (this.criticalStabCount >= 2) {
+      if (this.criticalStabCount >= this.config.terminalCreditThreshold) {
         this.locked = true;
         break;
       }
@@ -137,7 +198,7 @@ export class WalkerVitalStabPolicy {
   forceQualifyingStab(regionId = 'upper_chest', depth = this.torsoDepth + 0.01) {
     if (this.locked) return null;
     const id = `walker_debug_wound_${this.criticalStabCount + 1}`;
-    const wound = { id, interactionKind: 'puncture', deliberateStab: true, surfaceRuptured: true, regionId, maximumDepth: depth };
+    const wound = { id, interactionKind: 'puncture', deliberateStab: true, surfaceRuptured: true, regionId, maximumDepth: depth, targetLifeStateAtCreation: 'alive', targetWasDeadAtCreation: false };
     return this.evaluate([wound])[0] ?? null;
   }
 
@@ -200,6 +261,7 @@ export class CombatLabWalkerController {
     this.lethality = new WalkerVitalStabPolicy();
     this.reactionResumeState = WALKER_STATES.approaching;
     this.deathCollisionReleased = false;
+    this.offensiveContactEnabled = false;
     this.collapseDirection = 1;
     this.deathInitialSpeed = 0;
     this.deathDurationSeconds = config.deathCollapseSeconds;
@@ -360,6 +422,8 @@ export class CombatLabWalkerController {
     this.desiredSpeed = 0;
     this.velocity.set(0, 0, 0);
     this.deathCollisionReleased = false;
+    this.offensiveContactEnabled = true;
+    this.actor.combatContactState = 'alive';
     this.collapseDirection = 1;
     this.deathInitialSpeed = 0;
     this.deathDurationSeconds = this.config.deathCollapseSeconds;
@@ -440,6 +504,7 @@ export class CombatLabWalkerController {
     this.selectedDeathName = animation?.activeAction?.getClip?.()?.name ?? animation?.activeAnimation ?? null;
     this.deathDurationSeconds = animation?.activeAction?.getClip?.()?.duration ?? this.config.deathCollapseSeconds;
     this.setState(WALKER_STATES.losingConsciousness);
+    this.actor.combatContactState = 'dying';
     this.releaseDeathCollisionOwnership();
     return true;
   }
@@ -532,8 +597,9 @@ export class CombatLabWalkerController {
       const death = this.actor.visualAdapter?.playDeathAnimation?.({ regionId: region, variation: this.respawnGeneration });
       this.deathDurationSeconds = death?.durationSeconds ?? this.config.deathCollapseSeconds;
       this.selectedDeathName = death?.name ?? null;
-      this.actor.transitionLifeState?.('dying', 'authored-walker-vital-stab', { externalCommit: true, presentationHandled: true });
+      this.actor.transitionLifeState?.('dying', 'authored-walker-vital-stab', { externalCommit: true, forceFatal: true, presentationHandled: true });
       this.setState(WALKER_STATES.losingConsciousness);
+      this.actor.combatContactState = 'dying';
       this.releaseDeathCollisionOwnership();
     }
   }
@@ -551,7 +617,8 @@ export class CombatLabWalkerController {
     this.velocity.set(0, 0, 0);
     this.actor.transitionLifeState?.('dead', 'authored-walker-grounded', { externalCommit: true, presentationHandled: true });
     this.setState(WALKER_STATES.grounded);
-    this.releaseDeathCollisionOwnership();
+    this.actor.combatContactState = 'grounded';
+    this.finalizeDeathContactOwnership();
     return true;
   }
 
@@ -562,20 +629,28 @@ export class CombatLabWalkerController {
   releaseDeathCollisionOwnership() {
     if (!this.actor || this.deathCollisionReleased) return;
     this.deathCollisionReleased = true;
+    if (this.playerBlocker) this.collision?.removeBlocker?.(this.playerBlocker);
+  }
+
+  finalizeDeathContactOwnership() {
+    if (!this.actor || !this.offensiveContactEnabled) return false;
+    this.offensiveContactEnabled = false;
     if (this.routingRegistered) this.combatRouter?.unregister?.(this.actor);
     this.routingRegistered = false;
     this.actor.colliders?.forEach?.((collider) => collider.setEnabled?.(false));
-    if (this.playerBlocker) this.collision?.removeBlocker?.(this.playerBlocker);
+    return true;
   }
 
   disposeWalker({ respawn = true } = {}) {
     const actor = this.actor;
     if (!actor) return false;
     this.beforeActorDisposal?.(actor, 'walker-dispose');
+    actor.combatContactState = 'disposed';
     const feedbackOwner = this.environment.getFeedbackOwner?.(this.respawnGeneration, actor) ?? actor.instanceId;
     this.feedbackSystem?.stopOwnerVocal?.(feedbackOwner);
     if (this.routingRegistered) this.combatRouter?.unregister?.(actor);
     this.routingRegistered = false;
+    this.offensiveContactEnabled = false;
     if (this.playerBlocker) this.collision?.removeBlocker?.(this.playerBlocker);
     const before = {
       actorInstanceId: actor.instanceId,
@@ -655,6 +730,7 @@ export class CombatLabWalkerController {
       deathDurationSeconds: this.deathDurationSeconds,
       deathProgress: Number(deathProgress.toFixed(3)),
       deathCollisionReleased: this.deathCollisionReleased,
+      offensiveContactEnabled: this.offensiveContactEnabled,
       finalPoseHeld: this.state === WALKER_STATES.grounded && animation?.finalPoseHeld === true,
       ragdollActive: this.actor?.ragdollActive === true,
       actorInstanceId: this.actor?.instanceId ?? null,

@@ -8,6 +8,7 @@ import { createWeaponPoseWorkspace, initializeCameraRelativeWeaponPose, rebaseWo
 import { applyWeaponRenderLayer, cloneOwnedWeaponVisual, createCachedWeaponGlbLoader, disposeOwnedWeaponVisual, getWeaponRenderLayer, getWeaponWorldLightIntersectionStatus } from './WeaponVisualAsset.js';
 import { WEAPON_VIEWMODEL_LAYER } from './WeaponRenderLayers.js';
 import { BLUNT_IMPACT_CLASSIFICATIONS, createBluntImpactInteraction, estimateBluntImpactMetrics } from './BluntImpactInteraction.js';
+import { WeaponPresentationRuntime } from './WeaponViewmodelAnchor.js';
 
 export const DREADMACE_GLB_PATH = './assets/weapons/melee/dreadmacev001_mobile_1k.glb';
 export const MACE_VIEWMODEL_LAYER = WEAPON_VIEWMODEL_LAYER;
@@ -88,7 +89,7 @@ export const DREADMACE_WORLD_WEAPON_CONFIG = Object.freeze({
   swingDuration: Object.freeze({ minimum: 0.18, maximum: 0.28 }),
   recoilDuration: Object.freeze({ minimum: 0.07, maximum: 0.13 }),
   followThroughDuration: 0.095,
-  returnDuration: 0.22,
+  returnDuration: 0.29,
 });
 
 const MACE_RENDER_ORDER = 10027;
@@ -99,6 +100,10 @@ const loadedGrip = new THREE.Vector3().fromArray(DREADMACE_WORLD_WEAPON_CONFIG.l
 const finishGrip = new THREE.Vector3().fromArray(DREADMACE_WORLD_WEAPON_CONFIG.finishGrip);
 const loadedQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(...DREADMACE_WORLD_WEAPON_CONFIG.loadedEuler, 'YXZ'));
 const finishQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(...DREADMACE_WORLD_WEAPON_CONFIG.finishEuler, 'YXZ'));
+const heldLoadOffset = new THREE.Vector3().subVectors(loadedGrip, readyGrip);
+const heldFreeEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+const heldFreeRotation = new THREE.Quaternion();
+const heldLoadRotation = new THREE.Quaternion();
 const loadDreadmaceAsset = createCachedWeaponGlbLoader(DREADMACE_GLB_PATH, 'Dreadmace');
 
 function smoothstep(value) {
@@ -154,28 +159,53 @@ export function sampleDreadmaceSmashArc(progress, power = 1, target = {}) {
   const arc = Math.sin(Math.PI * t);
   const grip = target.grip ?? new THREE.Vector3();
   const quaternion = target.quaternion ?? new THREE.Quaternion();
-  grip.copy(loadedGrip).lerp(finishGrip, eased);
+  const startGrip = target.startGrip ?? loadedGrip;
+  const startQuaternion = target.startQuaternion ?? loadedQuaternion;
+  grip.copy(startGrip).lerp(finishGrip, eased);
   grip.y += arc * (0.035 + power * 0.02);
   grip.z -= arc * (0.055 + power * 0.04);
-  quaternion.slerpQuaternions(loadedQuaternion, finishQuaternion, eased).normalize();
+  quaternion.slerpQuaternions(startQuaternion, finishQuaternion, eased).normalize();
   const head = target.head ?? new THREE.Vector3();
   head.fromArray(DREADMACE_DIMENSIONS.headCenter).applyQuaternion(quaternion).add(grip);
   return { grip, quaternion, head, progress: t, easedProgress: eased };
 }
 
-function sampleLoadPose(progress, grip, quaternion) {
-  const t = smoothstep(progress);
-  grip.copy(readyGrip).lerp(loadedGrip, t);
-  quaternion.slerpQuaternions(identityQuaternion, loadedQuaternion, t).normalize();
+export function sampleDreadmaceHeldPose({ baselineGrip = readyGrip, baselineQuaternion = identityQuaternion, freeAimX = 0, freeAimY = 0, freeExtension = 0, loadProgress = 0 } = {}, grip = new THREE.Vector3(), quaternion = new THREE.Quaternion()) {
+  const t = smoothstep(loadProgress);
+  grip.copy(baselineGrip);
+  grip.x += THREE.MathUtils.clamp(freeAimX, -1, 1) * 0.18;
+  grip.y += THREE.MathUtils.clamp(freeAimY, -1, 1) * 0.11;
+  grip.z -= THREE.MathUtils.clamp(freeExtension, 0, DREADMACE_WORLD_WEAPON_CONFIG.workspace.thrustDistance) * 0.32;
+  grip.addScaledVector(heldLoadOffset, t);
+  grip.x = THREE.MathUtils.clamp(grip.x, DREADMACE_WORLD_WEAPON_CONFIG.workspace.min[0], DREADMACE_WORLD_WEAPON_CONFIG.workspace.max[0]);
+  grip.y = THREE.MathUtils.clamp(grip.y, DREADMACE_WORLD_WEAPON_CONFIG.workspace.min[1], DREADMACE_WORLD_WEAPON_CONFIG.workspace.max[1]);
+  grip.z = THREE.MathUtils.clamp(grip.z, DREADMACE_WORLD_WEAPON_CONFIG.workspace.min[2], DREADMACE_WORLD_WEAPON_CONFIG.workspace.max[2]);
+  heldFreeRotation.setFromEuler(heldFreeEuler.set(
+    THREE.MathUtils.clamp(freeAimY, -1, 1) * 0.1,
+    THREE.MathUtils.clamp(freeAimX, -1, 1) * -0.18,
+    THREE.MathUtils.clamp(freeAimX, -1, 1) * -0.14,
+    'YXZ',
+  ));
+  heldLoadRotation.slerpQuaternions(identityQuaternion, loadedQuaternion, t);
+  quaternion.copy(baselineQuaternion).multiply(heldFreeRotation).multiply(heldLoadRotation).normalize();
   return { grip, quaternion };
 }
 
+export function criticallyDampedMaceReturnProgress(elapsed, duration) {
+  const normalized = THREE.MathUtils.clamp(elapsed / Math.max(EPSILON, duration), 0, 1);
+  const x = normalized * 7;
+  const raw = 1 - Math.exp(-x) * (1 + x);
+  const end = 1 - Math.exp(-7) * 8;
+  return normalized >= 1 ? 1 : raw / end;
+}
+
 export class MaceWorldWeaponController {
-  constructor({ app, scene, camera, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, outdoorLightingDirector = null, visualAssetLoader = loadDreadmaceAsset, bindPointerInput = true } = {}) {
+  constructor({ app, scene, camera, viewmodelAnchor = null, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, outdoorLightingDirector = null, visualAssetLoader = loadDreadmaceAsset, bindPointerInput = true } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.scene = scene;
     this.camera = camera;
+    this.viewmodelAnchor = viewmodelAnchor;
     this.player = player;
     this.actor = actor;
     this.physics = physics;
@@ -197,6 +227,11 @@ export class MaceWorldWeaponController {
     this.contactScratch = createWeaponContactScratch();
     this.localGrip = new THREE.Vector3().fromArray(this.config.workspace.ready);
     this.localQuaternion = new THREE.Quaternion();
+    this.gestureBaselineGrip = this.localGrip.clone();
+    this.gestureBaselineQuaternion = this.localQuaternion.clone();
+    this.freeAimX = 0;
+    this.freeAimY = 0;
+    this.freeExtension = 0;
     this.desiredGrip = new THREE.Vector3();
     this.actualGrip = new THREE.Vector3();
     this.previousGrip = new THREE.Vector3();
@@ -227,6 +262,10 @@ export class MaceWorldWeaponController {
     this.strikeDuration = 0;
     this.swingElapsed = 0;
     this.swingProgress = 0;
+    this.swingStartGrip = new THREE.Vector3();
+    this.swingStartQuaternion = new THREE.Quaternion();
+    this.swingStartHead = new THREE.Vector3();
+    this.swingJustCommitted = false;
     this.swingCommitCount = 0;
     this.resolvedActors = new Set();
     this.activeBluntInteractions = new Map();
@@ -253,6 +292,9 @@ export class MaceWorldWeaponController {
     this.rejectedRepeatContactCount = 0;
     this.lastSweepSampleCount = 0;
     this.maximumObservedSweepSampleCount = 0;
+    this.lastStateTransition = 'initialized->ready';
+    this.lastTransitionPositionJump = 0;
+    this.lastTransitionRotationJumpDegrees = 0;
     this.outdoorMaterialRegistration = { status: outdoorLightingDirector ? 'pending' : 'unavailable', registered: false, eligibleMaterialCount: 0 };
     this.colliderFilter = (collider) => this.weaponContactRouter.ownsCollider(collider);
     this.sweepScratch = {
@@ -267,6 +309,8 @@ export class MaceWorldWeaponController {
     this.disposed = false;
     this.debugVisible = false;
     this.buildVisual();
+    this.presentation = new WeaponPresentationRuntime({ itemId: this.config.itemId, root: this.visual, scene: this.scene, camera: this.camera, viewmodelAnchor: this.viewmodelAnchor });
+    this.presentation.recordLayer(MACE_VIEWMODEL_LAYER);
     this.buildDebug();
     this.initializePose();
     if (bindPointerInput) this.bindInput();
@@ -278,7 +322,6 @@ export class MaceWorldWeaponController {
     this.visualGeometries = [];
     this.visualMaterials = [];
     this.visualAssetState = 'loading';
-    this.scene?.add?.(this.visual);
     this.visualLoadPromise = this.visualAssetLoader().then((source) => {
       const owned = cloneOwnedWeaponVisual(source);
       if (this.disposed) { disposeOwnedWeaponVisual(owned); return 'disposed'; }
@@ -325,6 +368,7 @@ export class MaceWorldWeaponController {
         object.userData.combatMaceViewmodel = true;
       },
     });
+    this.presentation?.recordLayer?.(MACE_VIEWMODEL_LAYER);
   }
 
   buildDebug() {
@@ -341,11 +385,13 @@ export class MaceWorldWeaponController {
     initializeCameraRelativeWeaponPose({ camera: this.camera, workspace: this.config.workspace, poseWorkspace: this.poseWorkspace, actualGrip: this.actualGrip, previousGrip: this.previousGrip, desiredGrip: this.desiredGrip, actualQuaternion: this.actualQuaternion, previousQuaternion: this.previousQuaternion, desiredQuaternion: this.desiredQuaternion });
     this.localGrip.fromArray(this.config.workspace.ready);
     this.localQuaternion.identity();
+    this.gestureBaselineGrip.copy(this.localGrip);
+    this.gestureBaselineQuaternion.copy(this.localQuaternion);
     this.applyLocalPoseToWorld();
     this.previousGrip.copy(this.actualGrip);
     this.previousQuaternion.copy(this.actualQuaternion);
     this.previousHeadCenter.copy(this.currentHeadCenter);
-    this.syncVisual();
+    this.syncVisual(0);
   }
 
   bindInput() {
@@ -382,6 +428,11 @@ export class MaceWorldWeaponController {
   acquireGrip(pointerId, clientX, clientY, timeMs = performance.now()) {
     if (!this.isEquipped() || ![MACE_GESTURE_STATES.ready, MACE_GESTURE_STATES.loading, MACE_GESTURE_STATES.loaded].includes(this.state) || !this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
     this.minimumGestureClientY = clientY;
+    this.gestureBaselineGrip.copy(this.localGrip);
+    this.gestureBaselineQuaternion.copy(this.localQuaternion);
+    this.freeAimX = 0;
+    this.freeAimY = 0;
+    this.freeExtension = 0;
     this.normalizedUpwardLoadDistance = 0;
     this.maximumUpwardGestureSpeed = 0;
     this.downwardCommitSpeed = 0;
@@ -400,7 +451,11 @@ export class MaceWorldWeaponController {
     const previousTime = this.gestureOwnership.lastTimeMs;
     const rawDt = THREE.MathUtils.clamp((timeMs - previousTime) / 1000 || 1 / 60, 0.008, 0.35);
     const stepY = clientY - previousY;
-    this.gestureOwnership.update(pointerId, deltaX, deltaY, clientX, clientY, timeMs, 0);
+    const sample = this.gestureOwnership.update(pointerId, deltaX, deltaY, clientX, clientY, timeMs, this.freeExtension);
+    if (!sample) return false;
+    this.freeAimX = sample.aimX;
+    this.freeAimY = sample.aimY;
+    this.freeExtension = sample.extension;
     const normalizedUpwardSpeed = Math.max(0, -stepY / viewportHeight / rawDt);
     this.maximumUpwardGestureSpeed = Math.max(this.maximumUpwardGestureSpeed, normalizedUpwardSpeed);
     this.minimumGestureClientY = Math.min(this.minimumGestureClientY, clientY);
@@ -419,9 +474,9 @@ export class MaceWorldWeaponController {
     );
     this.loadProgress = distanceProgress * speedQualification;
     this.maximumLoadProgress = Math.max(this.maximumLoadProgress, this.loadProgress);
-    if (this.normalizedUpwardLoadDistance >= DREADMACE_GESTURE_THRESHOLDS.loadStartDistance && speedQualification > 0) this.state = MACE_GESTURE_STATES.loading;
+    if (this.normalizedUpwardLoadDistance >= DREADMACE_GESTURE_THRESHOLDS.loadStartDistance && speedQualification > 0) this.transitionState(MACE_GESTURE_STATES.loading);
     if (this.loadProgress >= 0.98) {
-      this.state = MACE_GESTURE_STATES.loaded;
+      this.transitionState(MACE_GESTURE_STATES.loaded);
       this.loadCompletedAt ??= this.elapsed;
     }
     const downwardSpeed = Math.max(0, stepY / viewportHeight / rawDt);
@@ -455,8 +510,14 @@ export class MaceWorldWeaponController {
     this.lastContactPrimitive = null;
     this.lastContactClassification = null;
     this.lastBluntImpactRecord = null;
-    this.state = MACE_GESTURE_STATES.smashing;
-    sampleDreadmaceSmashArc(0, this.swingPower, { grip: this.localGrip, quaternion: this.localQuaternion, head: this.contactScratch.point });
+    // The displayed local pose is the commitment boundary. Pointer data that
+    // arrived after the last rendered frame must not replace it with a fresh
+    // canonical loaded pose before the solver takes ownership.
+    this.swingStartGrip.copy(this.localGrip);
+    this.swingStartQuaternion.copy(this.localQuaternion);
+    this.swingStartHead.copy(this.localHeadOffset).applyQuaternion(this.swingStartQuaternion).add(this.swingStartGrip);
+    this.swingJustCommitted = true;
+    this.transitionState(MACE_GESTURE_STATES.smashing);
     return true;
   }
 
@@ -471,31 +532,51 @@ export class MaceWorldWeaponController {
     this.returnElapsed = 0;
     this.returnStartGrip.copy(this.localGrip);
     this.returnStartQuaternion.copy(this.localQuaternion);
-    this.state = MACE_GESTURE_STATES.returning;
+    this.transitionState(MACE_GESTURE_STATES.returning);
   }
 
   beginFollowThrough() {
     this.phaseElapsed = 0;
     this.phaseStartGrip.copy(this.localGrip);
     this.phaseStartQuaternion.copy(this.localQuaternion);
-    this.state = MACE_GESTURE_STATES.followThrough;
+    this.transitionState(MACE_GESTURE_STATES.followThrough);
+  }
+
+  transitionState(nextState) {
+    if (this.state === nextState) return false;
+    const previousState = this.state;
+    const beforeGrip = this.localGrip.clone();
+    const beforeQuaternion = this.localQuaternion.clone();
+    this.state = nextState;
+    this.lastStateTransition = `${previousState}->${nextState}`;
+    this.lastTransitionPositionJump = beforeGrip.distanceTo(this.localGrip);
+    this.lastTransitionRotationJumpDegrees = THREE.MathUtils.radToDeg(beforeQuaternion.angleTo(this.localQuaternion));
+    return true;
   }
 
   updateGestureState(dt) {
     if (this.state === MACE_GESTURE_STATES.ready) {
-      this.localGrip.fromArray(this.config.workspace.ready);
-      this.localQuaternion.identity();
+      if (this.gripPointerId != null) sampleDreadmaceHeldPose({ baselineGrip: this.gestureBaselineGrip, baselineQuaternion: this.gestureBaselineQuaternion, freeAimX: this.freeAimX, freeAimY: this.freeAimY, freeExtension: this.freeExtension, loadProgress: 0 }, this.localGrip, this.localQuaternion);
+      else {
+        this.localGrip.fromArray(this.config.workspace.ready);
+        this.localQuaternion.identity();
+      }
       return;
     }
     if ([MACE_GESTURE_STATES.loading, MACE_GESTURE_STATES.loaded].includes(this.state)) {
-      sampleLoadPose(this.maximumLoadProgress, this.localGrip, this.localQuaternion);
+      sampleDreadmaceHeldPose({ baselineGrip: this.gestureBaselineGrip, baselineQuaternion: this.gestureBaselineQuaternion, freeAimX: this.freeAimX, freeAimY: this.freeAimY, freeExtension: this.freeExtension, loadProgress: this.maximumLoadProgress }, this.localGrip, this.localQuaternion);
       return;
     }
     if (this.state === MACE_GESTURE_STATES.smashing) {
-      this.swingElapsed += dt;
+      let sampledProgress;
+      if (this.swingJustCommitted) {
+        this.swingJustCommitted = false;
+        this.swingElapsed += Math.min(dt, 0.003);
+        sampledProgress = 0;
+      } else this.swingElapsed += dt;
       this.swingProgress = THREE.MathUtils.clamp(this.swingElapsed / Math.max(EPSILON, this.strikeDuration), 0, 1);
-      sampleDreadmaceSmashArc(this.swingProgress, this.swingPower, { grip: this.localGrip, quaternion: this.localQuaternion, head: this.contactScratch.point });
-      if (this.swingProgress >= 1) this.beginFollowThrough();
+      sampleDreadmaceSmashArc(sampledProgress ?? this.swingProgress, this.swingPower, { grip: this.localGrip, quaternion: this.localQuaternion, head: this.contactScratch.point, startGrip: this.swingStartGrip, startQuaternion: this.swingStartQuaternion });
+      if ((sampledProgress ?? this.swingProgress) >= 1) this.beginFollowThrough();
       return;
     }
     if (this.state === MACE_GESTURE_STATES.impactRecoil) {
@@ -526,16 +607,19 @@ export class MaceWorldWeaponController {
     }
     if (this.state === MACE_GESTURE_STATES.returning) {
       this.returnElapsed += dt;
-      const t = smoothstep(this.returnElapsed / this.config.returnDuration);
+      const t = criticallyDampedMaceReturnProgress(this.returnElapsed, this.config.returnDuration);
       this.localGrip.copy(this.returnStartGrip).lerp(this.contactScratch.point.fromArray(this.config.workspace.ready), t);
       this.localQuaternion.slerpQuaternions(this.returnStartQuaternion, identityQuaternion, t).normalize();
       if (this.returnElapsed >= this.config.returnDuration) {
-        this.state = MACE_GESTURE_STATES.ready;
+        this.transitionState(MACE_GESTURE_STATES.ready);
         this.localGrip.fromArray(this.config.workspace.ready);
         this.localQuaternion.identity();
         this.swingOwnerId = null;
         this.loadProgress = 0;
         this.maximumLoadProgress = 0;
+        this.freeAimX = 0;
+        this.freeAimY = 0;
+        this.freeExtension = 0;
       }
     }
   }
@@ -573,6 +657,7 @@ export class MaceWorldWeaponController {
       if (this.gripPointerId != null || this.state !== MACE_GESTURE_STATES.ready) this.cancel('weapon-unequipped');
       return;
     }
+    this.presentation.recordPhysicalCameraMatrix();
     rebaseWorldWeaponPoseToCamera(this.poseRebaseRequest);
     this.previousGrip.copy(this.actualGrip);
     this.previousQuaternion.copy(this.actualQuaternion);
@@ -581,7 +666,6 @@ export class MaceWorldWeaponController {
     this.applyLocalPoseToWorld();
     this.updateKinematics(this.lastPhysicsDt);
     if (this.state === MACE_GESTURE_STATES.smashing && (this.contactActivationProvider?.() ?? true)) this.resolveSmashContact();
-    this.syncVisual();
   }
 
   getPrimitiveCenterVelocity(primitive, target = this.sweepScratch.primitiveVelocity) {
@@ -711,18 +795,23 @@ export class MaceWorldWeaponController {
     this.phaseElapsed = 0;
     this.phaseStartGrip.copy(this.localGrip);
     this.phaseStartQuaternion.copy(this.localQuaternion);
-    this.state = metrics.classification === BLUNT_IMPACT_CLASSIFICATIONS.glancingBlunt ? MACE_GESTURE_STATES.followThrough : MACE_GESTURE_STATES.impactRecoil;
+    this.transitionState(metrics.classification === BLUNT_IMPACT_CLASSIFICATIONS.glancingBlunt ? MACE_GESTURE_STATES.followThrough : MACE_GESTURE_STATES.impactRecoil);
     return true;
   }
 
-  syncVisual() {
-    this.visual.position.copy(this.actualGrip);
-    this.visual.quaternion.copy(this.actualQuaternion);
-    this.visual.updateMatrixWorld(true);
+  syncVisual(_frameDelta = this.lastPhysicsDt) {
+    this.presentation.beginRenderFrame();
+    const equipped = this.isEquipped();
+    this.visual.visible = equipped;
+    if (!equipped) {
+      this.presentation.detachHidden();
+      return;
+    }
+    this.presentation.writeViewmodelPose(this.localGrip, this.localQuaternion);
     this.debugHead.position.copy(this.currentHeadCenter);
   }
 
-  afterPhysics() { this.syncVisual(); }
+  afterPhysics(_alpha = 1, frameDelta = this.lastPhysicsDt) { this.syncVisual(frameDelta); }
   afterPhysicsStep() {}
   onCombatResistance() {}
   onCombatRecovery(_payload, interaction) { if (interaction?.id) this.activeBluntInteractions.delete(interaction.id); }
@@ -735,6 +824,7 @@ export class MaceWorldWeaponController {
   }
 
   getActiveToolId() { return this.isEquipped() ? this.config.itemId : null; }
+  getWeaponPresentationDiagnostics() { return this.presentation.getDiagnostics({ equippedItemId: this.isEquipped() ? this.config.itemId : null }); }
 
   projectGrip() {
     if (!this.camera || !this.viewport) return null;
@@ -802,6 +892,9 @@ export class MaceWorldWeaponController {
     this.lastSweepSampleCount = 0;
     this.localGrip.fromArray(this.config.workspace.ready);
     this.localQuaternion.identity();
+    this.freeAimX = 0;
+    this.freeAimY = 0;
+    this.freeExtension = 0;
   }
 
   reset() {
@@ -822,6 +915,13 @@ export class MaceWorldWeaponController {
       maceEquipped: this.isEquipped(),
       state: this.state,
       gestureState: this.state,
+      freeAimX: Number(this.freeAimX.toFixed(4)),
+      freeAimY: Number(this.freeAimY.toFixed(4)),
+      freeExtension: Number(this.freeExtension.toFixed(4)),
+      loadOverlayProgress: Number(this.maximumLoadProgress.toFixed(4)),
+      lastStateTransition: this.lastStateTransition,
+      lastTransitionPositionJump: Number(this.lastTransitionPositionJump.toFixed(6)),
+      lastTransitionRotationJumpDegrees: Number(this.lastTransitionRotationJumpDegrees.toFixed(4)),
       loadProgress: Number(this.loadProgress.toFixed(4)),
       maximumLoadProgress: Number(this.maximumLoadProgress.toFixed(4)),
       normalizedUpwardLoadDistance: Number(this.normalizedUpwardLoadDistance.toFixed(4)),
@@ -861,6 +961,7 @@ export class MaceWorldWeaponController {
       currentRenderLayer: getWeaponRenderLayer(this.visual),
       worldLightIntersectionStatus: getWeaponWorldLightIntersectionStatus(this.visual, this.scene),
       outdoorMaterialRegistrationStatus: this.outdoorMaterialRegistration.status,
+      weaponPresentation: this.getWeaponPresentationDiagnostics(),
       completedBluntImpact: record ? {
         schema: record.schema,
         interactionId: record.interactionId,

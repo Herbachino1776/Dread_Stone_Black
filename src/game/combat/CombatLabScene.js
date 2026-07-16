@@ -174,7 +174,7 @@ export class CombatLabScene {
     this.actor.afterPhysics(this.physics.interpolationAlpha);
     this.walkerController?.afterPhysics(this.physics.interpolationAlpha);
     this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
-    this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha);
+    this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha, deltaSeconds);
   }
 
   updateOutdoorPresentation() {}

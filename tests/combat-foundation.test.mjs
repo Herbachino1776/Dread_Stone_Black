@@ -827,6 +827,60 @@ test('sword thrusts use larger bound puncture decals from the authored puncture 
   fixture.mesh.material.dispose();
 });
 
+test('knife and sword punctures remain available during dying without replaying mortality', async () => {
+  await initializeCombatPhysics();
+  const physics = new CombatPhysicsWorld();
+  const scene = new THREE.Scene();
+  let deathTransitionCount = 0;
+  const acceptedCombatAudio = {
+    registerActor() {},
+    unregisterActor() {},
+    handleLifeStateTransition: (_actor, transition) => {
+      if (transition.nextState === 'dying') deathTransitionCount += 1;
+      return true;
+    },
+    shouldSuppressSynthesizedDeathVocal: () => true,
+  };
+  const actor = new HumanoidCombatActor({ physics, scene, acceptedCombatAudio });
+  const director = new CombatDirector({ actor });
+  assert.equal(actor.transitionLifeState('dying', 'test-falling-window', { externalCommit: true, forceFatal: true }), true);
+  assert.equal(deathTransitionCount, 1);
+  const { hit, worldPoint } = makeHit(actor, 'upper_chest');
+  const stabIntent = new MeleeIntentWeapon({ weaponId: 'old_work_knife' }).interpret({ ownerId: 91, controlState: 'attacking', localVelocity: new THREE.Vector3(0, 0, -1.1) });
+  const knife = director.beginPuncture({
+    weapon: { id: 'old_work_knife', family: 'knife' },
+    intent: stabIntent,
+    hit,
+    entryPoint: worldPoint,
+    surfaceNormal: new THREE.Vector3(0, 0, 1),
+    direction: new THREE.Vector3(0, 0, -1),
+    depth: 0.05,
+    force: 1,
+  });
+  const sword = director.beginSwordPuncture({
+    weapon: { id: 'dreadstone_sword', family: 'sword' },
+    intent: { ...stabIntent, weaponId: 'dreadstone_sword' },
+    hit,
+    entryPoint: worldPoint.clone().add(new THREE.Vector3(0.02, 0, 0)),
+    surfaceNormal: new THREE.Vector3(0, 0, 1),
+    direction: new THREE.Vector3(0, 0, -1),
+    contactDirection: new THREE.Vector3(0, 0, -1),
+    depth: 0.08,
+    force: 1.2,
+  });
+  director.update(0.4);
+  assert.equal(knife.result.wound?.interactionKind, 'puncture');
+  assert.equal(sword.result.wound?.interactionKind, 'sword_thrust');
+  assert.equal(knife.result.wound?.targetLifeStateAtCreation, 'dying');
+  assert.equal(sword.result.wound?.targetLifeStateAtCreation, 'dying');
+  assert.equal(actor.lifeState, 'dying');
+  assert.equal(actor.transitionLifeState('dying', 'duplicate-terminal-request', { externalCommit: true, forceFatal: true }), false);
+  assert.equal(deathTransitionCount, 1, 'the accepted death transition remains one-shot');
+  director.dispose();
+  actor.dispose();
+  physics.dispose();
+});
+
 test('normal humanoids survive glancing sword contact but repeated committed chest cuts become lethal', async () => {
   const { actor, physics } = await createActor();
   const director = new CombatDirector({ actor });

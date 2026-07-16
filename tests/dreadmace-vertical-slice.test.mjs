@@ -19,12 +19,15 @@ import {
   DREADMACE_GESTURE_THRESHOLDS,
   DREADMACE_GLB_PATH,
   DREADMACE_MAX_SWEEP_SAMPLE_COUNT,
+  DREADMACE_WORLD_WEAPON_CONFIG,
   MACE_GESTURE_STATES,
   MACE_VIEWMODEL_LAYER,
   MaceWorldWeaponController,
   applyDreadmaceAssetCorrection,
   computeDreadmaceGesturePower,
+  criticallyDampedMaceReturnProgress,
   resolveDreadmaceSweepSampleCount,
+  sampleDreadmaceHeldPose,
   sampleDreadmaceSmashArc,
 } from '../src/game/combat/weapons/MaceWorldWeaponController.js';
 import {
@@ -191,6 +194,77 @@ test('loaded downward commitment happens once and release cannot cancel the solv
   assert.equal(controller.gripPointerId, null);
   controller.beforePhysics(1 / 60);
   assert.ok(controller.swingProgress > 0);
+  controller.dispose();
+});
+
+test('free held aim stays loose under the additive load overlay and acquire preserves the displayed pose', async () => {
+  const controller = makeController();
+  await controller.visualLoadPromise;
+  controller.localGrip.set(0.23, -0.2, -0.63);
+  controller.localQuaternion.setFromEuler(new THREE.Euler(0.08, -0.04, 0.03));
+  const displayedGrip = controller.localGrip.clone();
+  const displayedQuaternion = controller.localQuaternion.clone();
+  assert.equal(controller.acquireGrip(3, 200, 520, 0), true);
+  controller.beforePhysics(0);
+  assert.ok(controller.localGrip.distanceTo(displayedGrip) < 1e-12);
+  assert.ok(controller.localQuaternion.angleTo(displayedQuaternion) < 1e-12);
+
+  controller.applyGripGesture(3, 60, -35, 260, 485, 80);
+  controller.beforePhysics(1 / 60);
+  assert.ok(controller.freeAimX > 0);
+  assert.ok(controller.freeAimY > 0);
+  assert.ok(controller.freeExtension > 0);
+  assert.ok(controller.localGrip.x > displayedGrip.x, 'lateral thumb movement changes the held grip');
+  assert.ok(controller.localGrip.y > displayedGrip.y, 'moderate upward movement changes free vertical placement');
+  assert.ok(controller.loadProgress > 0, 'the same upward movement contributes to loading');
+
+  const unloaded = sampleDreadmaceHeldPose({
+    baselineGrip: displayedGrip,
+    baselineQuaternion: displayedQuaternion,
+    freeAimX: controller.freeAimX,
+    freeAimY: controller.freeAimY,
+    freeExtension: controller.freeExtension,
+    loadProgress: 0,
+  });
+  const loaded = sampleDreadmaceHeldPose({
+    baselineGrip: displayedGrip,
+    baselineQuaternion: displayedQuaternion,
+    freeAimX: controller.freeAimX,
+    freeAimY: controller.freeAimY,
+    freeExtension: controller.freeExtension,
+    loadProgress: 1,
+  });
+  assert.ok(Math.abs((loaded.grip.x - unloaded.grip.x) - (DREADMACE_WORLD_WEAPON_CONFIG.loadedGrip[0] - DREADMACE_WORLD_WEAPON_CONFIG.workspace.ready[0])) < 1e-12);
+  assert.ok(loaded.grip.x > DREADMACE_WORLD_WEAPON_CONFIG.workspace.min[0], 'load remains an overlay instead of pinning lateral aim to one coordinate');
+  controller.dispose();
+});
+
+test('mace commitment and recovery phases begin from their actual preceding poses', async () => {
+  const controller = makeController();
+  await controller.visualLoadPromise;
+  controller.acquireGrip(4, 300, 520, 0);
+  controller.applyGripGesture(4, 34, -70, 334, 450, 180);
+  controller.beforePhysics(1 / 60);
+  const displayedGrip = controller.localGrip.clone();
+  const displayedQuaternion = controller.localQuaternion.clone();
+  controller.applyGripGesture(4, 36, -42, 336, 478, 210);
+  assert.equal(controller.state, MACE_GESTURE_STATES.smashing);
+  assert.ok(controller.swingStartGrip.distanceTo(displayedGrip) < 1e-12);
+  assert.ok(THREE.MathUtils.radToDeg(controller.swingStartQuaternion.angleTo(displayedQuaternion)) < 1e-9);
+  controller.beforePhysics(1 / 60);
+  assert.ok(controller.localGrip.distanceTo(displayedGrip) < 0.005);
+  assert.ok(THREE.MathUtils.radToDeg(controller.localQuaternion.angleTo(displayedQuaternion)) < 1.5);
+
+  for (let frame = 0; frame < 120 && controller.state !== MACE_GESTURE_STATES.returning; frame += 1) controller.beforePhysics(1 / 120);
+  assert.equal(controller.state, MACE_GESTURE_STATES.returning);
+  const returnStartGrip = controller.returnStartGrip.clone();
+  const returnStartQuaternion = controller.returnStartQuaternion.clone();
+  assert.ok(controller.localGrip.distanceTo(returnStartGrip) < 1e-12);
+  assert.ok(controller.localQuaternion.angleTo(returnStartQuaternion) < 1e-12);
+  assert.equal(controller.config.returnDuration, 0.29);
+  const halfAt60 = criticallyDampedMaceReturnProgress(0.145, controller.config.returnDuration);
+  const halfAt120 = criticallyDampedMaceReturnProgress(29 / 200, controller.config.returnDuration);
+  assert.ok(Math.abs(halfAt60 - halfAt120) < 1e-12, 'time-based return is independent of render step size');
   controller.dispose();
 });
 
