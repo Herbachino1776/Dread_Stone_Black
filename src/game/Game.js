@@ -64,7 +64,14 @@ export class Game {
     this.gameState = this.saveHost.loadInitialState();
     const savedEquipment = this.gameState.getEquipmentSnapshot() ?? startingEquipment;
     const developmentLoadoutEnabled = import.meta.env.DEV && ((query.get('area') === 'north-road' && query.get('devLoadout') === '1') || this.combatLabEnabled);
-    const developmentItems = ['old_work_knife', 'wood_axe', 'fishing_rod', 'torch', 'keepers_lantern'];
+    const developmentItems = [
+      'old_work_knife',
+      'wood_axe',
+      'fishing_rod',
+      'torch',
+      'keepers_lantern',
+      ...(this.combatLabEnabled ? ['dreadstone_sword', 'dreadstone_mace'] : []),
+    ];
     this.devEphemeralEquipmentIds = new Set(developmentLoadoutEnabled ? developmentItems.filter((itemId) => !(savedEquipment.acquiredItemIds ?? []).includes(itemId)) : []);
     const runtimeStartingEquipment = developmentLoadoutEnabled ? {
       ...savedEquipment,

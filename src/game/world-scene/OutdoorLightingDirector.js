@@ -200,6 +200,19 @@ export class OutdoorLightingDirector {
     };
   }
 
+  unregisterOrdinaryObject(root) {
+    const removed = new Set();
+    root?.traverse?.((object) => {
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.filter(Boolean).forEach((material) => {
+        if (this.ordinaryMaterialSet.delete(material)) removed.add(material);
+      });
+    });
+    this.ordinaryMaterials = [...this.ordinaryMaterialSet];
+    Object.assign(this.scene.userData.outdoorLightingDirector, { ordinaryMaterialCount: this.ordinaryMaterials.length });
+    return { removedMaterialCount: removed.size, ordinaryMaterialCount: this.ordinaryMaterials.length };
+  }
+
   setTorchDebugState(state = {}) { this.torchDebug = state; }
 
   update(player = null) {

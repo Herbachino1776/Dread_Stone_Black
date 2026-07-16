@@ -55,6 +55,21 @@ export class CombatPhysiology {
     }
   }
 
+  onBluntImpact({ hit, impact, severity = 0 } = {}) {
+    if (!hit?.regionId || !impact) return;
+    this.painLoad = THREE.MathUtils.clamp(this.painLoad + severity * hit.region.painResponse * 0.45, 0, 2.5);
+    if (['upper_chest', 'lower_chest', 'abdomen'].includes(hit.regionId)) {
+      const interruption = THREE.MathUtils.clamp(impact.estimatedEnergy / 180 + severity * 0.06, 0, 0.78);
+      this.breathingIntegrity = Math.max(0.2, this.breathingIntegrity - interruption * 0.18);
+      this.interruptBreathing({ severity: interruption, depth: 0 });
+    }
+    if (['skull', 'head', 'face'].includes(hit.regionId)) {
+      const alignment = impact.normalImpactSpeed / Math.max(1e-6, Math.hypot(impact.normalImpactSpeed, impact.tangentialSpeed));
+      const neurologicalLoss = THREE.MathUtils.clamp(impact.estimatedEnergy / 190, 0, 0.72) * THREE.MathUtils.lerp(0.35, 1, alignment);
+      this.neurologicalIntegrity = Math.max(0, this.neurologicalIntegrity - neurologicalLoss);
+    }
+  }
+
   onWoundCreated(wound) {
     if (!wound) return;
     this.registeredWoundIds.add(wound.id);

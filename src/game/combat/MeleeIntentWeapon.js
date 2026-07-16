@@ -1,12 +1,13 @@
 export const MELEE_INTENTS = Object.freeze({
   stab: 'stab',
   slash: 'slash',
+  smash: 'smash',
   withdraw: 'withdraw',
   idle: 'idle',
   invalid: 'invalid',
 });
 
-const DAMAGING_INTENTS = new Set([MELEE_INTENTS.stab, MELEE_INTENTS.slash]);
+const DAMAGING_INTENTS = new Set([MELEE_INTENTS.stab, MELEE_INTENTS.slash, MELEE_INTENTS.smash]);
 
 export class MeleeIntentWeapon {
   constructor({ weaponId, minimumIntentSpeed = 0.035, slashBias = 0.52 } = {}) {

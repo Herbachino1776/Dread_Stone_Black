@@ -9,6 +9,7 @@ import { PhysicalToolActionController } from '../physical-tools/PhysicalToolActi
 import { PhysicalToolViewmodel } from '../physical-tools/PhysicalToolViewmodel.js';
 import { WorldKnifeCombatController } from '../combat/WorldKnifeCombatController.js';
 import { SwordWorldWeaponController } from '../combat/weapons/SwordWorldWeaponController.js';
+import { MaceWorldWeaponController } from '../combat/weapons/MaceWorldWeaponController.js';
 
 const ROD_VIEWMODEL_LIGHTING = Object.freeze({
   skyColor: 0xffe2b8,
@@ -80,8 +81,10 @@ export class FirstPersonViewmodelHost {
     this.dungeon = session?.dungeon;
     this.combatKnifeController?.dispose?.();
     this.combatSwordController?.dispose?.();
+    this.combatMaceController?.dispose?.();
     this.combatKnifeController = null;
     this.combatSwordController = null;
+    this.combatMaceController = null;
     this.combatWeaponController = null;
     this.combatRuntime = null;
     this.combatActivationProvider = null;
@@ -101,7 +104,10 @@ export class FirstPersonViewmodelHost {
     const contactActivationProvider = this.dungeon?.isCombatLab ? () => true : combatRuntime ? () => combatRuntime.isPlayerInCombatRange(this.player) : () => false;
     this.combatKnifeController = new WorldKnifeCombatController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, bloodEffects: combatRuntime?.bloodEffects ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: this.dungeon?.isCombatLab === true });
     this.combatSwordController = new SwordWorldWeaponController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: true });
-    const controllers = [this.combatKnifeController, this.combatSwordController];
+    this.combatMaceController = this.dungeon?.isCombatLab === true
+      ? new MaceWorldWeaponController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: true })
+      : null;
+    const controllers = [this.combatKnifeController, this.combatSwordController, this.combatMaceController].filter(Boolean);
     const active = () => controllers.find((controller) => controller?.isEquipped?.()) ?? this.combatKnifeController;
     this.combatWeaponController = {
       beforePhysics: (dt) => controllers.forEach((controller) => controller?.beforePhysics?.(dt)),
@@ -113,16 +119,18 @@ export class FirstPersonViewmodelHost {
       nudgeExtension: (delta) => active()?.nudgeExtension?.(delta),
       nudgeAim: (deltaX, deltaY) => active()?.nudgeAim?.(deltaX, deltaY),
       setDebugVisible: (visible) => controllers.forEach((controller) => controller?.setDebugVisible?.(visible)),
-      getDiagnostics: () => ({ active: active()?.getDiagnostics?.() ?? null, knife: this.combatKnifeController?.getDiagnostics?.() ?? null, sword: this.combatSwordController?.getDiagnostics?.() ?? null }),
+      getDiagnostics: () => ({ active: active()?.getDiagnostics?.() ?? null, knife: this.combatKnifeController?.getDiagnostics?.() ?? null, sword: this.combatSwordController?.getDiagnostics?.() ?? null, mace: this.combatMaceController?.getDiagnostics?.() ?? null }),
     };
     combatRuntime?.attachWeaponController?.(this.combatWeaponController);
     this.combatRuntime = combatRuntime;
   }
 
   createToolInputViewmodel() {
-    const active = () => this.combatSwordController?.isEquipped?.()
-      ? this.combatSwordController
-      : this.combatKnifeController?.isEquipped?.() ? this.combatKnifeController : this.physicalToolViewmodel;
+    const active = () => this.combatMaceController?.isEquipped?.()
+      ? this.combatMaceController
+      : this.combatSwordController?.isEquipped?.()
+        ? this.combatSwordController
+        : this.combatKnifeController?.isEquipped?.() ? this.combatKnifeController : this.physicalToolViewmodel;
     return {
       getActiveToolId: () => active()?.getActiveToolId?.() ?? null,
       projectGrabHit: (...args) => active()?.projectGrabHit?.(...args) ?? false,
@@ -154,6 +162,8 @@ export class FirstPersonViewmodelHost {
       this.combatKnifeController?.afterPhysics?.();
       this.combatSwordController?.beforePhysics?.(deltaSeconds);
       this.combatSwordController?.afterPhysics?.();
+      this.combatMaceController?.beforePhysics?.(deltaSeconds);
+      this.combatMaceController?.afterPhysics?.();
     }
     this.castingController?.update(deltaSeconds);
     return this.getDebugSummary(context);
@@ -226,6 +236,7 @@ export class FirstPersonViewmodelHost {
       physicalToolId: this.toolInputViewmodel?.getActiveToolId?.() ?? null,
       combatKnife: this.combatKnifeController?.getDiagnostics?.() ?? null,
       combatSword: this.combatSwordController?.getDiagnostics?.() ?? null,
+      combatMace: this.combatMaceController?.getDiagnostics?.() ?? null,
     };
   }
 
@@ -238,6 +249,7 @@ export class FirstPersonViewmodelHost {
     this.physicalToolActionController?.dispose?.();
     this.combatKnifeController?.dispose?.();
     this.combatSwordController?.dispose?.();
+    this.combatMaceController?.dispose?.();
     this.physicalToolViewmodel?.dispose?.();
     this.keepersLanternViewmodel?.dispose?.();
     this.sceneSessionHost?.setLanternRevealEmitterProvider?.(null);
@@ -249,6 +261,7 @@ export class FirstPersonViewmodelHost {
     this.physicalToolActionController = null;
     this.combatKnifeController = null;
     this.combatSwordController = null;
+    this.combatMaceController = null;
     this.combatWeaponController = null;
     this.combatRuntime = null;
     this.toolInputViewmodel = null;

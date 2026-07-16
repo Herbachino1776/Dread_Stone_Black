@@ -11,6 +11,7 @@ const POCKETS = Object.freeze([
 
 const ITEM_DETAILS = Object.freeze({
   dreadstone_sword: { type: 'Sword', damage: 'Physical', weight: '1.4', icon: '⚔' },
+  dreadstone_mace: { type: 'Mace · Right Hand', damage: 'Blunt', weight: '5.4', icon: '◆' },
   wood_axe: { type: 'Axe', damage: '6–10', weight: '2.0', icon: '🪓' },
   fishing_rod: { type: 'Tool', damage: '2', weight: '1.5', icon: '╱' },
   wood: { type: 'Material', restore: null, icon: '▰' },
@@ -136,7 +137,7 @@ export class EquipmentPanel {
         const isEquipped = this.equipmentRuntime.getEquippedWeaponProfile().id === weapon.id;
         const nextWeaponId = isEquipped ? 'unarmed' : weapon.id;
         this.equipmentRuntime.equip(EQUIPMENT_SLOTS.tool, null);
-        if (['wood_axe', 'fishing_rod', 'dreadstone_sword'].includes(weapon.id)) {
+        if (['wood_axe', 'fishing_rod', 'dreadstone_sword', 'dreadstone_mace'].includes(weapon.id)) {
           this.survivalInventory.equipWeapon(isEquipped ? null : weapon.id);
         } else {
           this.equipmentRuntime.equip(EQUIPMENT_SLOTS.weapon, nextWeaponId);

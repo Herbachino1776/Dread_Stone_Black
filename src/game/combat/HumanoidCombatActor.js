@@ -9,6 +9,7 @@ import { HumanoidGlbVisualAdapter } from './HumanoidGlbVisualAdapter.js';
 import { CURRENT_HUMANOID_PROFILE } from './HumanoidModelProfiles.js';
 import { getKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
 import { deriveSwordCutTrauma } from './SwordCutDamage.js';
+import { BLUNT_IMPACT_CLASSIFICATIONS, deriveBluntImpactTrauma } from './weapons/BluntImpactInteraction.js';
 import { capturePhysicsBodyTransform, worldToPhysicsBodyLocal } from './CombatCoordinateSpaces.js';
 
 const BODY_COLLISION_GROUPS = 0x00020001;
@@ -99,6 +100,7 @@ export class HumanoidCombatActor {
     this.lifeState = 'alive';
     this.activeEmbeddedWeapon = null;
     this.lastReaction = null;
+    this.lastBluntImpact = null;
     this.settledSeconds = 0;
     this.dyingElapsed = 0;
     this.collapseFamily = null;
@@ -610,6 +612,67 @@ export class HumanoidCombatActor {
     return wound;
   }
 
+  applyBluntImpact({ hit, impact } = {}) {
+    const classification = impact?.classification;
+    if (!hit?.region || !impact || this.lifeState === 'dead' || classification === BLUNT_IMPACT_CLASSIFICATIONS.nonDamagingContact) {
+      return { accepted: false, damageApplied: 0, reactionEmitted: false, collapseRequested: false };
+    }
+    const traumaProfile = deriveBluntImpactTrauma({ impact, region: hit.region });
+    const damageApplied = traumaProfile.trauma;
+    if (damageApplied <= 0) return { accepted: false, damageApplied: 0, reactionEmitted: false, collapseRequested: false };
+    const state = this.regionState.get(hit.regionId) ?? { trauma: 0, pain: 0, structural: 0, motorWeakness: 0, maximumDepth: 0, wounds: 0 };
+    state.trauma += damageApplied;
+    state.pain += damageApplied * hit.region.painResponse;
+    state.structural += damageApplied * hit.region.structuralImportance * (impact.primitive === 'mace_head' ? 1.15 : 0.58);
+    state.motorWeakness = Math.min(0.98, state.motorWeakness + damageApplied * (hit.regionId.includes('leg') || hit.regionId.includes('arm') ? 0.3 : 0.14));
+    this.regionState.set(hit.regionId, state);
+    this.balanceImpairment += damageApplied * hit.region.balanceImpact;
+    this.consciousnessImpairment = Math.max(this.consciousnessImpairment, damageApplied * hit.region.consciousnessImpact);
+    const impulseDirection = impact.impactDirection?.clone?.() ?? new THREE.Vector3(0, 0, -1);
+    if (impulseDirection.lengthSq() < 1e-8) impulseDirection.set(0, 0, -1);
+    impulseDirection.normalize();
+    const bodyImpulse = Math.min(1.1, 0.035 + impact.estimatedImpulse * (impact.primitive === 'mace_head' ? 0.035 : 0.012));
+    hit.body?.applyImpulseAtPoint?.(impulseDirection.clone().multiplyScalar(bodyImpulse), impact.worldPoint, true);
+    const headImpact = ['head', 'face', 'skull'].includes(hit.regionId);
+    const torsoImpact = ['neck', 'upper_chest', 'lower_chest', 'abdomen', 'pelvis'].includes(hit.regionId);
+    const legImpact = hit.regionId.includes('thigh') || hit.regionId.includes('leg') || hit.regionId.includes('foot');
+    this.physiology?.onBluntImpact?.({ hit, impact, severity: damageApplied });
+    let collapseRequested = false;
+    if (headImpact && damageApplied >= 1.9) {
+      collapseRequested = true;
+      this.requestCollapse('neurological', { immediate: true, lethal: damageApplied >= HUMANOID_DURABILITY_CONFIG.criticalDyingThreshold, regionId: hit.regionId });
+    } else if (torsoImpact && damageApplied >= 2.25) {
+      collapseRequested = true;
+      this.requestCollapse(hit.regionId === 'neck' ? 'neck_failure' : 'chest_fold', { immediate: hit.regionId === 'neck', lethal: damageApplied >= 5.2, regionId: hit.regionId });
+    } else if (legImpact && damageApplied >= 2.45) {
+      collapseRequested = true;
+      this.requestCollapse('leg_failure', { immediate: false, lethal: false, regionId: hit.regionId });
+    }
+    this.lastBluntImpact = {
+      schema: impact.schema,
+      interactionId: impact.interactionId,
+      primitive: impact.primitive,
+      classification,
+      bodyId: hit.bodyId,
+      regionId: hit.regionId,
+      damageApplied,
+      deformationFootprint: {
+        point: impact.worldPoint.clone(),
+        normal: impact.worldNormal.clone(),
+        radius: impact.impactRadiusEstimate,
+        direction: impact.impactDirection.clone(),
+        energy: impact.estimatedEnergy,
+        impulse: impact.estimatedImpulse,
+        region: hit.regionId,
+        skullOrHead: headImpact,
+      },
+      deformationApplied: false,
+      detachmentApplied: false,
+    };
+    this.evaluateLifeState();
+    return { accepted: true, damageApplied, reactionEmitted: true, collapseRequested, deformationApplied: false, detachmentApplied: false };
+  }
+
   onWeaponExtracted(woundId, { releaseSeverity = 0, direction = null } = {}) {
     const wound = this.woundSystem.markExtracted(woundId, { releaseSeverity, direction });
     if (wound) {
@@ -1066,6 +1129,15 @@ export class HumanoidCombatActor {
       reflex: { regionId: this.reflex.regionId, intensity: this.reflex.intensity, time: this.reflex.time },
       regionalTrauma: Object.fromEntries([...this.regionState.entries()].filter(([, value]) => value.trauma > 0.001).map(([id, value]) => [id, Number(value.trauma.toFixed(3))])),
       lastReaction: this.lastReaction ? { regionId: this.lastReaction.regionId, severity: this.lastReaction.severity, hardContact: this.lastReaction.hardContact } : null,
+      lastBluntImpact: this.lastBluntImpact ? {
+        ...this.lastBluntImpact,
+        deformationFootprint: {
+          ...this.lastBluntImpact.deformationFootprint,
+          point: this.lastBluntImpact.deformationFootprint.point.toArray(),
+          normal: this.lastBluntImpact.deformationFootprint.normal.toArray(),
+          direction: this.lastBluntImpact.deformationFootprint.direction.toArray(),
+        },
+      } : null,
       bodyPositions,
       visualProfile: this.visualProfile.name,
       visualAdapter: this.visualAdapter?.getDiagnostics?.() ?? null,
@@ -1122,6 +1194,7 @@ export class HumanoidCombatActor {
     this.ragdollPhysicsFrames = 0;
     this.ragdollStabilizationElapsed = 0;
     this.lastReaction = null;
+    this.lastBluntImpact = null;
     this.settledSeconds = 0;
     this.dyingElapsed = 0;
     this.reactiveCollapseElapsed = 0;

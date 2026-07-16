@@ -27,7 +27,10 @@ export class CombatLabDebugPanel {
     controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px';
     const definitions = [
       ['RESET R', () => this.reset()],
-      ['RESTORE KNIFE', () => this.restoreKnife()],
+      ['EQUIP KNIFE', () => this.restoreKnife()],
+      ['EQUIP SWORD', () => this.equipWeapon('dreadstone_sword')],
+      ['EQUIP MACE', () => this.equipWeapon('dreadstone_mace')],
+      ['UNARMED', () => this.equipWeapon('unarmed')],
       ['DEBUG B', () => this.toggleDebug()],
       ['ANCHORS A', () => this.toggleWoundAnchors()],
       ['FREEZE P', () => this.toggleFreeze()],
@@ -121,6 +124,10 @@ export class CombatLabDebugPanel {
     if (!this.equipmentRuntime?.hasItem?.('old_work_knife')) this.equipmentRuntime?.acquireItem?.('old_work_knife', { source: 'combat_lab_ephemeral' });
     this.equipmentRuntime?.equip?.('tool', 'old_work_knife');
   }
+  equipWeapon(itemId) {
+    if (!this.equipmentRuntime?.hasItem?.(itemId)) this.equipmentRuntime?.acquireItem?.(itemId, { source: 'combat_lab_ephemeral' });
+    this.equipmentRuntime?.equip?.('weapon', itemId);
+  }
   toggleDebug() {
     this.debugVisible = !this.debugVisible;
     this.dungeon?.actor?.setDebugVisible?.(this.debugVisible);
@@ -165,7 +172,10 @@ export class CombatLabDebugPanel {
     const dismemberment = actor.dismemberment ?? {};
     const walker = diagnostics.walker ?? {};
     const routing = diagnostics.combatRouting ?? {};
-    const weapon = diagnostics.weapon ?? {};
+    const weaponSelection = diagnostics.weapon ?? {};
+    const activeWeapon = weaponSelection.active ?? weaponSelection;
+    const mace = weaponSelection.mace ?? (activeWeapon.itemId === 'dreadstone_mace' ? activeWeapon : {});
+    const weapon = weaponSelection.knife ?? activeWeapon;
     const director = diagnostics.director ?? {};
     const spacing = diagnostics.meleeSpacing ?? {};
     const blood = diagnostics.blood ?? {};
@@ -231,6 +241,14 @@ export class CombatLabDebugPanel {
       `extraction reaction attempted ${director.extractionReactionAttempted || reaction.extractionAttemptedToTrigger ? 'YES' : 'NO'}`,
       `spacing center ${(spacing.minimumCenterDistance ?? 0).toFixed(3)}m  load ${(spacing.loadingClearance ?? 0).toFixed(3)}m  full depth ${(spacing.fullGestureDepth ?? 0).toFixed(3)}m`,
       `directed event ${JSON.stringify(director.lastEvent ?? null)}`,
+      '',
+      `mace ${mace.maceEquipped ? 'EQUIPPED' : 'HOLSTERED'}  state ${mace.gestureState ?? 'unavailable'}  load ${((mace.loadProgress ?? 0) * 100).toFixed(1)}%`,
+      `mace load distance ${(mace.normalizedUpwardLoadDistance ?? 0).toFixed(4)}  up speed ${(mace.maximumUpwardGestureSpeed ?? 0).toFixed(3)}  down ${(mace.downwardCommitSpeed ?? 0).toFixed(3)}/${(mace.downwardCommitTravel ?? 0).toFixed(4)}`,
+      `mace swing ${mace.currentSwingId ?? '-'}  power ${(mace.swingPower ?? 0).toFixed(3)}  duration ${(mace.strikeDuration ?? 0).toFixed(3)}s  progress ${(mace.swingProgress ?? 0).toFixed(3)}`,
+      `mace contact ${mace.primitiveThatContacted ?? '-'} / ${mace.contactClassification ?? '-'}  actor ${mace.resolvedActorId ?? '-'}  region ${mace.impactRegion ?? '-'}`,
+      `mace speed ${(mace.normalImpactSpeed ?? 0).toFixed(3)}m/s  mass ${(mace.effectiveMass ?? 0).toFixed(2)}kg  impulse ${(mace.estimatedImpulse ?? 0).toFixed(2)}Ns  energy ${(mace.estimatedEnergy ?? 0).toFixed(2)}J`,
+      `mace point ${JSON.stringify(mace.impactPoint ?? null)}  damage ${(mace.actorDamageApplied ?? 0).toFixed(3)}  reaction ${mace.reactionEmitted ? 'YES' : 'NO'}  collapse ${mace.collapseRequested ? 'YES' : 'NO'}`,
+      `mace feedback ${mace.feedbackCount ?? 0}  rejected repeat ${mace.rejectedRepeatContactCount ?? 0}  sweep ${mace.sweepSampleCount ?? 0}/${mace.maximumSweepSampleCount ?? 0}`,
       '',
       `knife ${weapon.equipped ? 'EQUIPPED' : 'HOLSTERED'}  ${weapon.state ?? 'unavailable'}`,
       `reason ${weapon.reason ?? '-'}  intent ${weapon.intent ?? '-'} (${weapon.intentReason ?? '-'})`,

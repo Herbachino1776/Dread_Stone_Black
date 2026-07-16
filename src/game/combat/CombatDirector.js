@@ -1,8 +1,9 @@
 import { isDamageIntent, MELEE_INTENTS } from './MeleeIntentWeapon.js';
 import { COMBAT_PRESENTATION_CONFIG, deterministicCombatVariation, getImpactMemoryChannel } from './CombatPresentation.js';
 import { appendEdgeDamageSample, createEdgeDamageInteraction, finishEdgeDamageInteraction } from './weapons/EdgeDamageInteraction.js';
+import { completeBluntImpactInteraction, createBluntImpactInteraction, deriveBluntImpactTrauma } from './weapons/BluntImpactInteraction.js';
 
-const AUTHORED_REACTION_KINDS = Object.freeze({ punctureEntry: 'puncture_entry', slash: 'slash' });
+const AUTHORED_REACTION_KINDS = Object.freeze({ punctureEntry: 'puncture_entry', slash: 'slash', bluntImpact: 'blunt_impact' });
 
 export const PENETRATION_STAGES = Object.freeze({
   approach: 'approach',
@@ -22,6 +23,7 @@ export const COMBAT_DIRECTOR_EVENTS = Object.freeze({
   tissue: 'tissue',
   wound: 'wound',
   edgeDamage: 'edge_damage',
+  bluntImpact: 'blunt_impact',
   reaction: 'reaction',
   blood: 'blood',
   audio: 'audio',
@@ -93,6 +95,7 @@ export class CombatDirector {
     this.subscribe(COMBAT_DIRECTOR_EVENTS.tissue, (event) => this.applyTissueEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.wound, (event) => this.applyWoundEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.edgeDamage, (event) => this.applyEdgeDamageEvent(event));
+    this.subscribe(COMBAT_DIRECTOR_EVENTS.bluntImpact, (event) => this.applyBluntImpactEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.reaction, (event) => this.applyReactionEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.blood, (event) => this.applyBloodEvent(event));
     this.subscribe(COMBAT_DIRECTOR_EVENTS.audio, (event) => this.feedbackSystem?.emitAudio?.(event.payload.cue, event.payload) ?? this.feedbackSystem?.emit?.(event.payload.cue, { ...event.payload, haptics: false }));
@@ -341,6 +344,57 @@ export class CombatDirector {
     return true;
   }
 
+  resolveBluntImpact({ weapon, intent, hit, primitive = 'grip', worldPoint, worldNormal, impactDirection, headCenterVelocity, contactCenterVelocity = headCenterVelocity, actorRelativeVelocity, normalImpactSpeed = 0, tangentialSpeed = 0, effectiveMass = 0, estimatedImpulse = 0, estimatedEnergy = 0, loadProgress = 0, gesturePower = 0, impactRadiusEstimate = 0, classification = 'non_damaging_contact', weaponAdapter = null } = {}) {
+    const interaction = this.createInteraction({ kind: 'blunt_impact', weapon, intent, target: hit, weaponAdapter });
+    if (!interaction || intent.intent !== MELEE_INTENTS.smash) {
+      if (interaction) this.cancelInteraction(interaction.id, 'invalid-blunt-impact-intent');
+      return null;
+    }
+    const record = createBluntImpactInteraction({
+      interactionId: interaction.id,
+      weaponId: interaction.weapon.id,
+      weaponFamily: interaction.weapon.family,
+      primitive,
+      actorId: hit?.actor?.instanceId ?? hit?.actor?.id ?? this.actor?.instanceId ?? this.actor?.id ?? null,
+      bodyId: hit?.bodyId ?? null,
+      regionId: hit?.regionId ?? null,
+      worldPoint,
+      worldNormal,
+      impactDirection,
+      headCenterVelocity,
+      contactCenterVelocity,
+      actorRelativeVelocity,
+      normalImpactSpeed,
+      tangentialSpeed,
+      effectiveMass,
+      estimatedImpulse,
+      estimatedEnergy,
+      loadProgress,
+      gesturePower,
+      impactRadiusEstimate,
+      classification,
+      startedAt: this.time,
+    });
+    const trauma = deriveBluntImpactTrauma({ impact: record, region: hit?.region });
+    const reactionSeverity = Math.max(0.08, Math.min(1.35, trauma.trauma * 0.32 + normalImpactSpeed * 0.035));
+    const cameraIntensity = classification === 'heavy_smash'
+      ? Math.min(0.017, 0.009 + estimatedEnergy / 18000)
+      : classification === 'haft_contact'
+        ? Math.min(0.005, 0.002 + estimatedEnergy / 24000)
+        : Math.min(0.011, 0.003 + estimatedEnergy / 18000);
+    interaction.result.bluntImpact = record;
+    interaction.context = { hit, record, trauma };
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, 0, { stage: PENETRATION_STAGES.surfaceContact });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.bluntImpact, 0, { hit, record });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.reaction, 0.006, { hit, point: cloneVector(worldPoint), direction: cloneVector(impactDirection), depth: 0, force: Math.min(2, estimatedImpulse / 12), severity: reactionSeverity, source: `directed_mace_${classification}`, reactionKind: AUTHORED_REACTION_KINDS.bluntImpact });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.audio, 0.01, { cue: 'blunt_contact', position: cloneVector(worldPoint), severity: Math.min(1.25, 0.2 + estimatedEnergy / 85), owner: `mace:${record.interactionId}` });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.camera, 0.014, { durationMs: classification === 'heavy_smash' ? 145 : classification === 'haft_contact' ? 85 : 110, intensity: cameraIntensity, direction: cloneVector(impactDirection), polarity: -1, damping: classification === 'heavy_smash' ? 22 : 19 });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.haptic, 0.018, { cue: classification === 'heavy_smash' ? 'hard_contact' : 'surface_contact' });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.lifecycle, 0.095, { stage: PENETRATION_STAGES.recovery });
+    this.schedule(interaction.id, COMBAT_DIRECTOR_EVENTS.recovery, 0.095, { reason: 'blunt-impact-complete' });
+    return interaction;
+  }
+
   beginWithdrawal(interactionId, { direction = null, releaseSeverity = 0, position = null } = {}) {
     const interaction = this.getActiveInteraction(interactionId);
     if (!interaction) return null;
@@ -555,6 +609,13 @@ export class CombatDirector {
       interaction.result.wound = this.actor?.finishSwordThrustWound?.(interaction.result.woundId) ?? interaction.result.wound;
     }
     if (payload.action === 'finish') finishEdgeDamageInteraction(edgeDamage, { interrupted: payload.interrupted, completedAt: time });
+  }
+
+  applyBluntImpactEvent({ interaction, payload, time }) {
+    const record = payload.record;
+    const actorResult = this.actor?.applyBluntImpact?.({ hit: payload.hit, impact: record }) ?? { accepted: false, damageApplied: 0, reactionEmitted: false, collapseRequested: false };
+    interaction.result.bluntActorResult = actorResult;
+    completeBluntImpactInteraction(record, { completedAt: time, actorResult });
   }
 
   applyWoundEvent({ interaction, payload }) {

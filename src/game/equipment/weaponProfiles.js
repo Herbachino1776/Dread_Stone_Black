@@ -50,5 +50,19 @@ export const weaponProfiles = createWeaponProfileRegistry([
     staminaCost: 4,
     hitReactionType: 'heavy_stagger',
     tags: ['weapon', 'melee', 'sword', 'physical-melee', 'field-survival'],
+  },
+  {
+    id: 'dreadstone_mace',
+    displayName: 'Dreadmace',
+    description: 'A grip-centered physical mace built for a loaded downward smash.',
+    weaponType: 'mace',
+    damage: 22,
+    attackRange: 2.85,
+    attackCooldown: 1.08,
+    windupTime: 0.16,
+    recoveryTime: 0.42,
+    staminaCost: 6,
+    hitReactionType: 'heavy_stagger',
+    tags: ['weapon', 'melee', 'mace', 'blunt', 'physical-melee', 'combat-lab'],
   }
 ]);
