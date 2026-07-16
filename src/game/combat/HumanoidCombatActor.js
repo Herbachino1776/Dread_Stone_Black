@@ -720,7 +720,7 @@ export class HumanoidCombatActor {
     this.collapseFamily = 'neurological';
     this.collapseReason = `fatal-segment-detachment:${segmentId ?? 'unknown'}:${cause}`;
     this.motorStrength = Math.min(this.motorStrength, 0.02);
-    if (this.lifeState === 'alive' || this.lifeState === 'incapacitated') this.transitionLifeState('dying', this.collapseReason, { forceFatal: true });
+    if (this.lifeState === 'alive' || this.lifeState === 'incapacitated') this.transitionLifeState('dying', this.collapseReason, { forceFatal: true, externalCommit: true });
     return true;
   }
 

@@ -15,10 +15,22 @@ export class AuthoredHumanoidDeathController {
   }
 
   prepareFrame(deltaSeconds) {
+    this.synchronizeFatalSegmentDetachment();
     if (this.state !== WALKER_STATES.losingConsciousness) return;
     this.stateElapsed += Math.max(0, Math.min(0.05, Number(deltaSeconds) || 0));
     const animationState = this.actor?.visualAdapter?.animationController?.state;
     if (animationState === 'DEAD' || this.stateElapsed >= this.deathDurationSeconds + 0.15) this.holdGroundedPose();
+  }
+
+  synchronizeFatalSegmentDetachment() {
+    if (this.state !== LIVING_STATE || this.actor?.fatalSegmentDetachmentActive !== true || this.actor?.lifeState !== 'dying') return false;
+    const animation = this.actor.visualAdapter?.animationController;
+    this.selectedDeathName = animation?.activeAction?.getClip?.()?.name ?? animation?.activeAnimation ?? null;
+    this.deathDurationSeconds = animation?.activeAction?.getClip?.()?.duration ?? this.config.deathCollapseSeconds;
+    this.state = WALKER_STATES.losingConsciousness;
+    this.stateElapsed = 0;
+    this.onDeathStarted?.(this.actor);
+    return true;
   }
 
   beforePhysics() {

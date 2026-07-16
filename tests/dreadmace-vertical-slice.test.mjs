@@ -128,11 +128,11 @@ test('deterministic semantic primitives fit the inspected mace and contain no bl
   assert.ok(Object.values(DREADMACE_CONTACT_PRIMITIVES).every((primitive) => !['cutting_edge', 'puncture_tip', 'triangle_mesh'].includes(primitive.kind)));
 });
 
-test('Dreadmace is an independent right-hand Combat Lab profile and is absent from Folsom', () => {
+test('Dreadmace is an independent right-hand profile awarded by the Folsom courtyard chest', () => {
   assert.equal(weaponProfiles.dreadstone_mace.displayName, 'Dreadmace');
   assert.equal(weaponProfiles.dreadstone_mace.weaponType, 'mace');
   assert.equal(equipmentRegistry.items.dreadstone_mace.slot, 'weapon');
-  assert.equal(equipmentRegistry.items.dreadstone_mace.source, 'combat_lab_ephemeral');
+  assert.equal(equipmentRegistry.items.dreadstone_mace.source, 'folsom_courtyard_mace_chest');
   assert.ok(weaponProfiles.old_work_knife == null, 'knife remains a tool rather than being replaced in the weapon registry');
   assert.ok(weaponProfiles.dreadstone_sword);
   const gameSource = readFileSync(new URL('../src/game/Game.js', import.meta.url), 'utf8');
@@ -141,7 +141,8 @@ test('Dreadmace is an independent right-hand Combat Lab profile and is absent fr
   assert.match(gameSource, /combatLabEnabled \? \['dreadstone_sword', 'dreadstone_mace'\]/);
   assert.match(panelSource, /EQUIP MACE/);
   assert.doesNotMatch(panelSource, /KeyD.*dreadstone_mace|dreadstone_mace.*KeyD/);
-  assert.doesNotMatch(folsomSource, /dreadstone_mace/);
+  assert.match(folsomSource, /folsom_courtyard_mace_chest/);
+  assert.match(folsomSource, /itemId: 'dreadstone_mace'/);
 });
 
 test('upward deliberate travel loads continuously, drift stays partial, and release returns without damage', async () => {

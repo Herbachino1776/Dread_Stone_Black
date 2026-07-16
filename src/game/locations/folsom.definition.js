@@ -429,6 +429,7 @@ export const folsomDefinition = Object.freeze({
   ],
   outdoorChests: [
     { id: 'folsom_courtyard_sword_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Courtyard Sword Chest', position: { x: 2.8, y: 0.02, z: -6 }, itemId: 'dreadstone_sword', acquiredMessage: 'Dreadstone Sword Acquired.', tags: ['courtyard', 'combat-proof', 'immediate-use'] },
+    { id: 'folsom_courtyard_mace_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Courtyard Mace Chest', position: { x: 3, y: 0.188, z: -1.5 }, itemId: 'dreadstone_mace', acquiredMessage: 'Dreadmace Acquired.', tags: ['courtyard', 'combat-showcase', 'immediate-use'] },
     { id: 'folsom_fishing_rod_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Pond-Side Fishing Chest', position: { x: -12, y: -0.015, z: -43 }, itemId: 'fishing_rod', acquiredMessage: 'Rod A1 Acquired.', tags: ['pond', 'starter-loop'] },
     { id: 'folsom_wood_axe_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Shed Axe Chest', position: { x: -37.4, y: 0.188, z: -28.2 }, itemId: 'wood_axe', acquiredMessage: 'Wood Axe Acquired.', tags: ['tool-shed', 'shed-reward', 'starter-loop'] },
     { id: 'folsom_flint_stick_chest', bodyMaterial: 'agedWood', strapMaterial: 'rustedIron', label: 'Work Yard Flint Chest', position: { x: -22, y: -0.343, z: -39 }, itemId: 'flint_stick', acquiredMessage: 'Flint Stick Acquired.', tags: ['work-yard', 'starter-loop'] },

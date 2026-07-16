@@ -10,6 +10,7 @@ import { PhysicalToolViewmodel } from '../physical-tools/PhysicalToolViewmodel.j
 import { WorldKnifeCombatController } from '../combat/WorldKnifeCombatController.js';
 import { SwordWorldWeaponController } from '../combat/weapons/SwordWorldWeaponController.js';
 import { MaceWorldWeaponController } from '../combat/weapons/MaceWorldWeaponController.js';
+import { FolsomShowcaseSwordDismemberment } from '../combat/FolsomShowcaseSwordDismemberment.js';
 
 const ROD_VIEWMODEL_LIGHTING = Object.freeze({
   skyColor: 0xffe2b8,
@@ -18,6 +19,10 @@ const ROD_VIEWMODEL_LIGHTING = Object.freeze({
   keyColor: 0xffd0a0,
   keyIntensity: 2.1,
 });
+
+export function resolveSupportedCombatRuntime(dungeon) {
+  return dungeon?.isCombatLab === true ? dungeon : dungeon?.combatEncounter ?? null;
+}
 
 export class FirstPersonViewmodelHost {
   constructor({ app, sceneSessionHost, equipmentRuntime, inventoryBridge = null, gameState = null, hudHost = null, inputHost = null, feedback = null, audioRuntime = null } = {}) {
@@ -100,11 +105,14 @@ export class FirstPersonViewmodelHost {
   }
 
   initializeCombatKnifeRuntime() {
-    const combatRuntime = this.dungeon?.isCombatLab ? this.dungeon : this.dungeon?.combatEncounter;
+    const combatRuntime = resolveSupportedCombatRuntime(this.dungeon);
     const contactActivationProvider = this.dungeon?.isCombatLab ? () => true : combatRuntime ? () => combatRuntime.isPlayerInCombatRange(this.player) : () => false;
+    const swordEdgeSweepObserver = this.dungeon?.isCombatLab !== true && combatRuntime?.showcaseEnabled === true
+      ? new FolsomShowcaseSwordDismemberment({ enabled: true })
+      : null;
     this.combatKnifeController = new WorldKnifeCombatController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, bloodEffects: combatRuntime?.bloodEffects ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: this.dungeon?.isCombatLab === true });
-    this.combatSwordController = new SwordWorldWeaponController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: true });
-    this.combatMaceController = this.dungeon?.isCombatLab === true
+    this.combatSwordController = new SwordWorldWeaponController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, edgeSweepObserver: swordEdgeSweepObserver, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: true });
+    this.combatMaceController = combatRuntime
       ? new MaceWorldWeaponController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: true })
       : null;
     const controllers = [this.combatKnifeController, this.combatSwordController, this.combatMaceController].filter(Boolean);

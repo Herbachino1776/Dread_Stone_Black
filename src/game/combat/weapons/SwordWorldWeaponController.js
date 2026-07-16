@@ -155,7 +155,7 @@ function makePrimitiveRuntime(name) {
 }
 
 export class SwordWorldWeaponController {
-  constructor({ app, scene, camera, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, outdoorLightingDirector = null, visualAssetLoader = loadDreadstoneSwordAsset, bindPointerInput = true } = {}) {
+  constructor({ app, scene, camera, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, edgeSweepObserver = null, outdoorLightingDirector = null, visualAssetLoader = loadDreadstoneSwordAsset, bindPointerInput = true } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.scene = scene;
@@ -171,6 +171,7 @@ export class SwordWorldWeaponController {
     this.ownsCombatDirector = combatDirector == null;
     this.weaponContactRouter = new WeaponContactRouter({ combatRouter, fallbackActor: actor, fallbackDirector: this.combatDirector, cameraFeedback: feedback });
     this.contactActivationProvider = contactActivationProvider;
+    this.edgeSweepObserver = edgeSweepObserver;
     this.outdoorLightingDirector = outdoorLightingDirector;
     this.visualAssetLoader = visualAssetLoader;
     this.config = SWORD_WORLD_WEAPON_CONFIG;
@@ -414,6 +415,7 @@ export class SwordWorldWeaponController {
   acquireGrip(pointerId, clientX, clientY, timeMs = performance.now()) {
     if (!this.isEquipped() || this.entry || !this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
     if (this.state !== SWORD_IMPALEMENT_STATES.returning) this.state = SWORD_IMPALEMENT_STATES.ready;
+    this.edgeSweepObserver?.beginGesture?.({ pointerId, controller: this });
     return true;
   }
 
@@ -434,6 +436,7 @@ export class SwordWorldWeaponController {
   releaseGrip(reason = 'pointer-release') {
     if (this.gripPointerId == null && !this.entry && this.state === SWORD_IMPALEMENT_STATES.ready) return;
     if (this.releaseWithdrawal.active) return;
+    this.edgeSweepObserver?.endGesture?.(reason);
     this.gestureOwnership.release();
     this.finishActiveEdgeDamage(reason !== 'pointer-release');
     this.attackEnabled = false;
@@ -566,6 +569,11 @@ export class SwordWorldWeaponController {
     if (this.entry) this.solveSwordImpalement(dt);
     else this.solveFreeSwordPose(dt, contactActive);
     this.updatePrimitiveEndpoints();
+    if (!this.entry) {
+      const deliberateEnergy = this.lastFrameVelocity >= this.config.minimumAttackSpeed;
+      const intentionalState = [SWORD_IMPALEMENT_STATES.attacking, SWORD_IMPALEMENT_STATES.surfaceContact].includes(this.state);
+      this.edgeSweepObserver?.update?.({ controller: this, dt, contactActive, deliberateEnergy, intentionalState, embedded: false });
+    }
     this.applyVisualLayer();
   }
 
@@ -1227,6 +1235,7 @@ export class SwordWorldWeaponController {
     this.desiredProjectedDepth = 0;
     this.rawDesiredProjectedDepth = 0;
     this.projectionError = 0;
+    this.edgeSweepObserver?.endGesture?.(reason);
     this.gestureOwnership.release();
     this.finishActiveEdgeDamage(true);
     this.aimX = 0;
@@ -1257,6 +1266,7 @@ export class SwordWorldWeaponController {
   reset() {
     this.cancel('reset');
     this.intentWeapon.reset();
+    this.edgeSweepObserver?.reset?.();
     this.initializePose();
   }
 
@@ -1323,6 +1333,7 @@ export class SwordWorldWeaponController {
       assetPath: DREADSTONE_SWORD_GLB_PATH,
       dimensions: DREADSTONE_SWORD_DIMENSIONS,
       penetrationAudio: this.penetrationAudioGate.getDiagnostics(),
+      edgeSweepObserver: this.edgeSweepObserver?.getDiagnostics?.() ?? null,
     };
   }
 
@@ -1332,6 +1343,7 @@ export class SwordWorldWeaponController {
     this.disposed = true;
     this.disposers.forEach((dispose) => dispose?.());
     this.disposers = [];
+    this.edgeSweepObserver?.dispose?.();
     if (this.ownsCombatDirector) this.combatDirector.dispose();
     disposeOwnedWeaponVisual({ root: this.visual, geometries: this.visualGeometries, materials: this.visualMaterials });
   }

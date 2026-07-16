@@ -590,7 +590,7 @@ test('Combat Lab scene methods forward head and side-aware forearm requests thro
   assert.equal(requests.every((request) => request.cause === 'combat_lab_debug'), true);
 });
 
-test('damage profile remains Combat Lab-only while puncture-only weapon modes stay locked', () => {
+test('damage profile is validated for Combat Lab and Folsom while puncture-only weapon modes stay locked', () => {
   assert.equal(TESTMAN_COMBAT_PROFILE.assetPath, './assets/enemies/testman/testman_animpack_v002.glb');
   assert.equal(TESTMAN_DAMAGE_COMBAT_PROFILE.assetPath, './assets/enemies/testman/damage/testman_damage_v001.glb');
   assert.notEqual(TESTMAN_DAMAGE_COMBAT_PROFILE, TESTMAN_COMBAT_PROFILE);
@@ -602,10 +602,13 @@ test('damage profile remains Combat Lab-only while puncture-only weapon modes st
   const walkerSource = readFileSync(new URL('../src/game/combat/CombatLabWalkerController.js', import.meta.url), 'utf8');
   assert.match(walkerSource, /visualProfile: TESTMAN_COMBAT_PROFILE/);
   const folsomSource = readFileSync(new URL('../src/game/combat/FolsomCombatEncounter.js', import.meta.url), 'utf8');
-  assert.match(folsomSource, /this\.modelProfile = TESTMAN_COMBAT_PROFILE/);
-  assert.doesNotMatch(folsomSource, /TESTMAN_DAMAGE_COMBAT_PROFILE/);
+  assert.match(folsomSource, /this\.modelProfile = TESTMAN_DAMAGE_COMBAT_PROFILE/);
+  assert.match(folsomSource, /createDamageProfileActor/);
   for (const relativePath of ['../src/game/combat/WorldKnifeCombatController.js', '../src/game/combat/weapons/SwordWorldWeaponController.js']) {
     const weaponSource = readFileSync(new URL(relativePath, import.meta.url), 'utf8');
     assert.doesNotMatch(weaponSource, /requestDetachment|debugDetach|activeDamageSegmentIds/, `${relativePath} must not trigger structural detachment`);
   }
+  const showcaseSource = readFileSync(new URL('../src/game/combat/FolsomShowcaseSwordDismemberment.js', import.meta.url), 'utf8');
+  assert.match(showcaseSource, /cause: 'folsom_showcase_sword_sweep'/);
+  assert.match(showcaseSource, /actor\.requestDetachment/);
 });

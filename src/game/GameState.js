@@ -45,7 +45,7 @@ const FOLSOM_GROWTH_WORLD_KEYS = Object.freeze({
 });
 
 const DEFAULT_FIELD_SURVIVAL_STATE = Object.freeze({
-  inventory: { wood_axe: false, fishing_rod: false, dreadstone_sword: false, wood: 0, raw_fish: 0, cooked_fish: 0, torch: false },
+  inventory: { wood_axe: false, fishing_rod: false, dreadstone_sword: false, dreadstone_mace: false, wood: 0, raw_fish: 0, cooked_fish: 0, torch: false },
   fishStacks: { raw_fish: [], cooked_fish: [] },
   keyItems: { flint_stick: false },
   equipment: { owned: {}, equippedTool: null, equippedItem: null, equippedOffhand: null },
@@ -379,6 +379,7 @@ export class GameState {
     if (normalizedItemId === 'wood_axe') this.acquireFieldTool('wood_axe');
     if (normalizedItemId === 'fishing_rod') this.acquireFieldTool('fishing_rod');
     if (normalizedItemId === 'dreadstone_sword') this.acquireFieldTool('dreadstone_sword');
+    if (normalizedItemId === 'dreadstone_mace') this.acquireFieldTool('dreadstone_mace');
     if (['torch', 'keepers_lantern'].includes(normalizedItemId)) this.acquireFieldOffhand(normalizedItemId);
     this.saveFieldSurvivalState();
     return true;
@@ -572,6 +573,7 @@ export class GameState {
         wood_axe: Boolean(source.inventory?.wood_axe || source.inventory?.field_axe),
         fishing_rod: Boolean(source.inventory?.fishing_rod || source.equipment?.owned?.fishing_rod),
         dreadstone_sword: Boolean(source.inventory?.dreadstone_sword || source.equipment?.owned?.dreadstone_sword),
+        dreadstone_mace: Boolean(source.inventory?.dreadstone_mace || source.equipment?.owned?.dreadstone_mace),
         wood: Math.max(0, Number(source.inventory?.wood) || 0),
         raw_fish: Math.max(0, Number(source.inventory?.raw_fish) || 0),
         cooked_fish: Math.max(0, Number(source.inventory?.cooked_fish) || 0),
@@ -588,10 +590,11 @@ export class GameState {
           ...(source.inventory?.field_axe || source.inventory?.wood_axe ? { wood_axe: true } : {}),
           ...(source.inventory?.fishing_rod || source.equipment?.owned?.fishing_rod ? { fishing_rod: true } : {}),
           ...(source.inventory?.dreadstone_sword || source.equipment?.owned?.dreadstone_sword ? { dreadstone_sword: true } : {}),
+          ...(source.inventory?.dreadstone_mace || source.equipment?.owned?.dreadstone_mace ? { dreadstone_mace: true } : {}),
           ...(source.inventory?.torch || source.equipment?.owned?.torch ? { torch: true } : {}),
           ...(source.inventory?.keepers_lantern || source.equipment?.owned?.keepers_lantern ? { keepers_lantern: true } : {}),
         },
-        equippedTool: source.equipment?.equippedTool === 'field_axe' ? 'wood_axe' : (['wood_axe', 'fishing_rod', 'dreadstone_sword'].includes(source.equipment?.equippedTool) ? source.equipment.equippedTool : null),
+        equippedTool: source.equipment?.equippedTool === 'field_axe' ? 'wood_axe' : (['wood_axe', 'fishing_rod', 'dreadstone_sword', 'dreadstone_mace'].includes(source.equipment?.equippedTool) ? source.equipment.equippedTool : null),
         equippedItem: ['wood', 'raw_fish', 'cooked_fish'].includes(source.equipment?.equippedItem) && Math.max(0, Number(source.inventory?.[source.equipment.equippedItem]) || 0) > 0 ? source.equipment.equippedItem : null,
         equippedOffhand: ['torch', 'keepers_lantern'].includes(source.equipment?.equippedOffhand)
           && Boolean(source.inventory?.[source.equipment.equippedOffhand] || source.equipment?.owned?.[source.equipment.equippedOffhand])

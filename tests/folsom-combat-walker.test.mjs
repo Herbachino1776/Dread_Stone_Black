@@ -21,12 +21,14 @@ function createFolsomCollision(blockerRects = []) {
   });
 }
 
-async function createEncounter({ yaw = 0, query = new URLSearchParams(), blockerRects = [] } = {}) {
+async function createEncounter({ yaw = 0, query = null, blockerRects = [] } = {}) {
   const scene = new THREE.Scene();
   const collision = createFolsomCollision(blockerRects);
   const player = { position: new THREE.Vector3(-2, 1.71, -4), yaw };
   const dungeon = { scene, collision, isPositionInFishingWater: () => false };
-  const encounter = await FolsomCombatEncounter.create({ dungeon, player, query });
+  const resolvedQuery = query ?? new URLSearchParams('folsomShowcase=0');
+  if (!resolvedQuery.has('folsomShowcase')) resolvedQuery.set('folsomShowcase', '0');
+  const encounter = await FolsomCombatEncounter.create({ dungeon, player, query: resolvedQuery });
   return { scene, collision, player, dungeon, encounter };
 }
 
@@ -235,10 +237,12 @@ test('authored Folsom spawn completes its death state without procedural collaps
   assert.equal(collision.blockerRects.includes(encounter.playerBlocker), false);
 
   encounter.reset(player);
-  assert.equal(controller.state, WALKER_STATES.nearPlayer);
+  assert.notEqual(encounter.actor, actor);
+  assert.equal(encounter.stationaryDeathController.state, WALKER_STATES.nearPlayer);
   assert.equal(encounter.stationaryDeathCollisionReleased, false);
-  assert.equal(encounter.combatRouter.getDirector(actor), encounter.combatDirector);
-  assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled()), true);
+  assert.equal(encounter.combatRouter.getDirector(actor), null);
+  assert.equal(encounter.combatRouter.getDirector(encounter.actor), encounter.combatDirector);
+  assert.equal([...encounter.actor.colliders.values()].every((collider) => collider.isEnabled()), true);
   assert.equal(collision.blockerRects.includes(encounter.playerBlocker), true);
   encounter.dispose();
 });
@@ -376,7 +380,9 @@ test('two dead enemies fade-despawn at ten seconds and a fresh wave of two retur
   assert.equal(encounter.walkerController.actor?.instanceId ?? null, null);
   encounter.updateEnemyWaveLifecycle(0.05);
   assert.equal(encounter.waveGeneration, 2);
-  assert.equal(stationaryActor.root.visible, true);
+  assert.equal(stationaryActor.disposed, true);
+  assert.notEqual(encounter.actor, stationaryActor);
+  assert.equal(encounter.actor.root.visible, true);
   assert.ok(encounter.walkerController.actor);
   assert.notEqual(encounter.walkerController.actor.instanceId, firstWalkerInstanceId);
   assert.equal(encounter.getActiveCombatActors().length, 2);

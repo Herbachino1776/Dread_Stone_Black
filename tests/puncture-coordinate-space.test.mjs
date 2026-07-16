@@ -349,10 +349,10 @@ test('Combat Lab damage Testman and Folsom Testman share puncture binding functi
     sourceLocationId: 'folsom',
   });
   const dungeon = { scene: new THREE.Scene(), collision, isPositionInFishingWater: () => false };
-  const folsom = await FolsomCombatEncounter.create({ dungeon, query: new URLSearchParams('folsomWalker=0') });
+  const folsom = await FolsomCombatEncounter.create({ dungeon, query: new URLSearchParams('folsomWalker=0&folsomShowcase=0') });
   try {
     assert.equal(lab.actor.visualProfile, TESTMAN_DAMAGE_COMBAT_PROFILE);
-    assert.equal(folsom.actor.visualProfile, TESTMAN_COMBAT_PROFILE);
+    assert.equal(folsom.actor.visualProfile, TESTMAN_DAMAGE_COMBAT_PROFILE);
     assert.equal(lab.actor.woundSystem.bindPunctureSurface, folsom.actor.woundSystem.bindPunctureSurface);
     assert.equal(lab.actor.woundSystem.getPunctureSurfaceBindingOptions({ weaponFamily: 'knife' }), KNIFE_PUNCTURE_SURFACE_BINDING_OPTIONS);
     assert.equal(folsom.actor.woundSystem.getPunctureSurfaceBindingOptions({ weaponFamily: 'knife' }), KNIFE_PUNCTURE_SURFACE_BINDING_OPTIONS);

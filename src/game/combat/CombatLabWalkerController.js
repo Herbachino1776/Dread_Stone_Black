@@ -242,6 +242,23 @@ export class CombatLabWalkerController {
     if (!playerPosition || this.environment.canSpawnForPlayer?.(player, playerPosition) === false) return null;
     const forwardCone = this.environment.spawnMode === 'forwardCone';
     const facingYaw = this.resolvePlayerFacingYaw(player);
+    const preferredCandidates = this.environment.getSpawnCandidates?.({
+      player,
+      playerPosition,
+      facingYaw,
+      generation: this.respawnGeneration,
+      controller: this,
+    }) ?? [];
+    for (const value of preferredCandidates) {
+      const candidate = value?.isVector3
+        ? this.spawnCandidate.copy(value)
+        : Array.isArray(value)
+          ? this.spawnCandidate.fromArray(value)
+          : this.spawnCandidate.set(value?.x ?? 0, value?.y ?? 0, value?.z ?? 0);
+      const ground = this.sampleGround(candidate);
+      if (ground) candidate.y = ground.y;
+      if (this.isSpawnCandidateValid(candidate, playerPosition, player)) return candidate.clone();
+    }
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     const side = this.respawnGeneration % 2 ? -1 : 1;
     const forwardAngles = [18, 24, 12, 29, 21, 15].map((degrees) => THREE.MathUtils.degToRad(degrees));
@@ -363,7 +380,7 @@ export class CombatLabWalkerController {
 
   handleActorEvent(event, payload = {}) {
     if (!this.actor || this.actor.disposed) return;
-    const owner = this.actor.instanceId;
+    const owner = this.environment.getFeedbackOwner?.(this.respawnGeneration, this.actor) ?? this.actor.instanceId;
     if (event === 'final_exhale') this.feedbackSystem?.stopOwnerVocal?.(owner);
     if (this.director) this.director.forwardFeedbackEvent(event, { ...payload, owner });
     else this.eventSink?.(event, { ...payload, owner });
@@ -379,6 +396,7 @@ export class CombatLabWalkerController {
       }
       return;
     }
+    this.synchronizeFatalSegmentDetachment();
     this.stateElapsed += dt;
     if (this.state === WALKER_STATES.grounded) {
       this.currentSpeed = 0;
@@ -412,6 +430,18 @@ export class CombatLabWalkerController {
     if (!playerPosition) return;
     this.updateLivingState(dt, playerPosition);
     this.assertBoundedState();
+  }
+
+  synchronizeFatalSegmentDetachment() {
+    if (!this.actor || !LIVING_MOVEMENT_STATES.has(this.state) || this.actor.fatalSegmentDetachmentActive !== true || this.actor.lifeState !== 'dying') return false;
+    this.desiredSpeed = 0;
+    this.deathInitialSpeed = this.currentSpeed;
+    const animation = this.actor.visualAdapter?.animationController;
+    this.selectedDeathName = animation?.activeAction?.getClip?.()?.name ?? animation?.activeAnimation ?? null;
+    this.deathDurationSeconds = animation?.activeAction?.getClip?.()?.duration ?? this.config.deathCollapseSeconds;
+    this.setState(WALKER_STATES.losingConsciousness);
+    this.releaseDeathCollisionOwnership();
+    return true;
   }
 
   updateLivingState(dt, playerPosition) {
@@ -542,6 +572,8 @@ export class CombatLabWalkerController {
     const actor = this.actor;
     if (!actor) return false;
     this.beforeActorDisposal?.(actor, 'walker-dispose');
+    const feedbackOwner = this.environment.getFeedbackOwner?.(this.respawnGeneration, actor) ?? actor.instanceId;
+    this.feedbackSystem?.stopOwnerVocal?.(feedbackOwner);
     if (this.routingRegistered) this.combatRouter?.unregister?.(actor);
     this.routingRegistered = false;
     if (this.playerBlocker) this.collision?.removeBlocker?.(this.playerBlocker);

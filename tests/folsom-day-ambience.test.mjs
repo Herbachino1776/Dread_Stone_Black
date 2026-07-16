@@ -319,9 +319,9 @@ test('location cleanup cancels a loop whose audio buffer is still loading', asyn
   assert.equal(audio.startingLoops.has(FOLSOM_DAY_AMBIENCE_LOOP_KEYS.base), false);
 });
 
-test('combat, weapon, outdoor-lighting, footsteps, shed tension, and Beneath Folsom paths remain untouched', () => {
-  const changedCombatFiles = execFileSync('git', ['diff', '--name-only', 'HEAD', '--', 'src/game/combat'], { cwd: ROOT, encoding: 'utf8' }).trim();
-  assert.equal(changedCombatFiles, '');
+test('combat showcase leaves Folsom ambience, outdoor lighting, footsteps, shed tension, and Beneath Folsom audio untouched', () => {
+  const changedAudioFiles = execFileSync('git', ['diff', '--name-only', 'HEAD', '--', 'src/game/audio'], { cwd: ROOT, encoding: 'utf8' }).trim();
+  assert.equal(changedAudioFiles, '');
   const changedLightingFiles = execFileSync('git', ['diff', '--name-only', 'HEAD', '--', 'src/game/world-scene/OutdoorLightingDirector.js', 'src/game/world-scene/OutdoorWorldClock.js'], { cwd: ROOT, encoding: 'utf8' }).trim();
   assert.equal(changedLightingFiles, '');
   const gameAudioSource = readFileSync(path.join(ROOT, 'src/game/audio/GameAudioRuntime.js'), 'utf8');

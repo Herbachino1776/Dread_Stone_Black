@@ -38,8 +38,8 @@ export const equipmentRegistry = Object.freeze({
       type: 'weapon',
       slot: 'weapon',
       weaponProfileId: 'dreadstone_mace',
-      tags: ['weapon', 'mace', 'blunt', 'physical-melee', 'combat-lab'],
-      source: 'combat_lab_ephemeral',
+      tags: ['weapon', 'mace', 'blunt', 'physical-melee', 'folsom'],
+      source: 'folsom_courtyard_mace_chest',
     }),
     flint_stick: Object.freeze({
       id: 'flint_stick',

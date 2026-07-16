@@ -10,7 +10,7 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
-import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
+import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE, TESTMAN_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
 import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, KNIFE_EDGE_BASE_SAMPLE_COUNT, KNIFE_EDGE_COLLISION_RADIUS, KNIFE_EDGE_MAX_SAMPLE_COUNT, KNIFE_RUNTIME_COMBAT_MODE, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveKnifeEdgeSampleCount, resolveSlashLeadingPart, sampleKnifeCuttingEdgeLocal } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
@@ -1299,27 +1299,28 @@ test('combat feedback guards unsupported haptics, cooldowns contact audio, and h
   feedback.dispose();
 });
 
-test('Folsom keeps the stationary Testman subject and adds one independently routed walker', async () => {
+test('Folsom keeps the stationary Testman subject and routes all three walkers independently', async () => {
   const scene = new THREE.Scene();
   const dungeon = { scene, collision: { sampleWalkableY: () => ({ y: 0.16 }), canStandAtFloorPosition: () => true, getIntersectingBlockers: () => [] } };
   const encounter = await FolsomCombatEncounter.create({ dungeon });
   const pelvis = encounter.actor.getBodyWorldPosition('pelvis');
   const playerSpawn = new THREE.Vector3(-2, 1.71, -4);
   assert.equal(Math.hypot(encounter.spawnPosition.x - playerSpawn.x, encounter.spawnPosition.z - playerSpawn.z), 10);
-  assert.equal(encounter.actor.visualProfile, TESTMAN_COMBAT_PROFILE);
-  assert.ok(scene.getObjectByName('folsom-testman-combat-subject'));
-  assert.equal(scene.children.filter((child) => child.name.includes('combat-subject')).length, 1);
+  assert.equal(encounter.actor.visualProfile, TESTMAN_DAMAGE_COMBAT_PROFILE);
+  assert.ok(scene.getObjectByName('folsom-testman-stationary-1'));
+  assert.equal(scene.children.filter((child) => child.name.startsWith('folsom-testman-stationary-')).length, 1);
   assert.equal(scene.getObjectByName('folsom-testman-raw-reference'), undefined);
   assert.ok(pelvis.x > 7 && pelvis.z < -3);
   assert.ok(encounter.walkerController.actor);
-  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
-  assert.equal(encounter.physics.world.bodies.len(), 37);
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
+  assert.equal(encounter.getActiveCombatActors().length, 4);
+  assert.equal(encounter.physics.world.bodies.len(), 73);
   encounter.reset();
-  assert.equal(encounter.physics.world.bodies.len(), 37);
-  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
-  assert.equal(scene.children.filter((child) => child.name.includes('combat-subject')).length, 1);
+  assert.equal(encounter.physics.world.bodies.len(), 73);
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
+  assert.equal(scene.children.filter((child) => child.name.startsWith('folsom-testman-stationary-')).length, 1);
   encounter.dispose();
-  assert.equal(scene.getObjectByName('folsom-testman-combat-subject'), undefined);
+  assert.equal(scene.children.some((child) => child.name.startsWith('folsom-testman-stationary-')), false);
   assert.equal(scene.children.some((child) => child.name.startsWith('folsom-authored-walker-')), false);
 });
 
