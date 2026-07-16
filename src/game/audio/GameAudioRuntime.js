@@ -12,6 +12,8 @@ const BUS_DEFAULTS = Object.freeze({
   machinery: 0.95,
   footsteps: 0.55,
   prybar: 0.95,
+  combat: 1,
+  voice: 1,
 });
 
 const DEFERRED_ONE_SHOT_MAX_AGE_MS = 3000;
@@ -52,6 +54,7 @@ export class GameAudioRuntime {
     this.warnedMissing = new Set();
     this.loggedEvents = new Set();
     this.oneShotNodes = new Set();
+    this.oneShotOwnerTokens = new Map();
     this.previousPlayerPosition = null;
     this.previousLocationId = null;
     this.previousLowerShrineZone = null;
@@ -183,6 +186,12 @@ export class GameAudioRuntime {
     }
     const context = this.ensureContext();
     if (!context) return false;
+    const owner = options.owner ?? null;
+    let ownerToken = null;
+    if (owner && options.cancellable === true) {
+      ownerToken = this.oneShotOwnerTokens.get(owner) ?? {};
+      this.oneShotOwnerTokens.set(owner, ownerToken);
+    }
     if (!this.isAudioRunning() && !options.skipDefer) {
       if (options.deferUntilUnlocked ?? cue.deferUntilUnlocked ?? true) {
         this.deferOneShot(cueId, options);
@@ -192,7 +201,14 @@ export class GameAudioRuntime {
       this.unlock({ reason: `one-shot:${cueId}` });
     }
     const buffer = await this.loadCue(cueId);
-    if (!buffer || this.muted || (!this.isAudioRunning() && !options.allowSuspendedStart)) return false;
+    if (!buffer || this.muted || ownerToken && this.oneShotOwnerTokens.get(owner) !== ownerToken || (!this.isAudioRunning() && !options.allowSuspendedStart)) return false;
+
+    const voiceGroup = options.voiceGroup ?? null;
+    const maximumVoices = Number.isFinite(options.maximumVoices) ? Math.max(1, Math.floor(options.maximumVoices)) : null;
+    if (voiceGroup && maximumVoices) {
+      const groupedNodes = [...this.oneShotNodes].filter((nodes) => nodes.voiceGroup === voiceGroup).sort((a, b) => a.startedAt - b.startedAt);
+      while (groupedNodes.length >= maximumVoices) this.stopOneShotNodes(groupedNodes.shift());
+    }
 
     const source = context.createBufferSource();
     const gain = context.createGain();
@@ -204,7 +220,7 @@ export class GameAudioRuntime {
     const category = options.category ?? cue.category ?? 'sfx';
     let output = this.busGains.get(category) ?? this.busGains.get('sfx') ?? this.masterGain;
     const useSpatial = options.spatial ?? cue.spatial;
-    const position = toVector3Like(options.position);
+    const position = toVector3Like(typeof options.positionProvider === 'function' ? options.positionProvider() : options.position);
     let panner = null;
     if (useSpatial && position) {
       panner = this.createPanner(cue, position);
@@ -215,16 +231,45 @@ export class GameAudioRuntime {
       gain.connect(output);
     }
 
-    const nodes = { source, gain, panner };
+    const nodes = { source, gain, panner, owner, ownerToken, voiceGroup, startedAt: context.currentTime };
     this.oneShotNodes.add(nodes);
-    source.onended = () => {
-      source.disconnect();
-      gain.disconnect();
-      panner?.disconnect();
-      this.oneShotNodes.delete(nodes);
-    };
+    source.onended = () => this.cleanupOneShotNodes(nodes);
     source.start();
     return true;
+  }
+
+  cleanupOneShotNodes(nodes) {
+    if (!nodes || !this.oneShotNodes.delete(nodes)) return;
+    nodes.source.disconnect?.();
+    nodes.gain.disconnect?.();
+    nodes.panner?.disconnect?.();
+  }
+
+  stopOneShotNodes(nodes) {
+    if (!nodes || !this.oneShotNodes.has(nodes)) return false;
+    try { nodes.source.stop(); } catch {}
+    this.cleanupOneShotNodes(nodes);
+    return true;
+  }
+
+  stopOneShotsByOwner(owner, { voiceGroup = null } = {}) {
+    if (!owner) return 0;
+    this.oneShotOwnerTokens.delete(owner);
+    let stopped = 0;
+    [...this.deferredOneShots.entries()].forEach(([key, entry]) => {
+      if (entry.options?.owner === owner && (!voiceGroup || entry.options?.voiceGroup === voiceGroup)) {
+        this.deferredOneShots.delete(key);
+        stopped += 1;
+      }
+    });
+    [...this.oneShotNodes]
+      .filter((nodes) => nodes.owner === owner && (!voiceGroup || nodes.voiceGroup === voiceGroup))
+      .forEach((nodes) => { if (this.stopOneShotNodes(nodes)) stopped += 1; });
+    return stopped;
+  }
+
+  getActiveOneShotCount(voiceGroup = null) {
+    return voiceGroup ? [...this.oneShotNodes].filter((nodes) => nodes.voiceGroup === voiceGroup).length : this.oneShotNodes.size;
   }
 
   async startLoop(cueId, key, options = {}) {
@@ -411,8 +456,9 @@ export class GameAudioRuntime {
 
   getOneShotDeferKey(cueId, options = {}) {
     const position = toVector3Like(options.position);
-    if (!position) return cueId;
-    return `${cueId}:${position.x.toFixed(2)},${position.y.toFixed(2)},${position.z.toFixed(2)}`;
+    const owner = options.owner ? `:${options.owner}` : '';
+    if (!position) return `${cueId}${owner}`;
+    return `${cueId}${owner}:${position.x.toFixed(2)},${position.y.toFixed(2)},${position.z.toFixed(2)}`;
   }
 
   clonePlaybackOptions(options = {}) {
@@ -613,13 +659,9 @@ export class GameAudioRuntime {
     this.pendingLoops.clear();
     this.deferredOneShots.clear();
     [...this.loops.keys()].forEach((key) => this.stopLoop(key, 0.05));
-    this.oneShotNodes.forEach(({ source, gain, panner }) => {
-      try { source.stop(); } catch {}
-      source.disconnect();
-      gain.disconnect();
-      panner?.disconnect();
-    });
+    [...this.oneShotNodes].forEach((nodes) => this.stopOneShotNodes(nodes));
     this.oneShotNodes.clear();
+    this.oneShotOwnerTokens.clear();
     this.context?.close?.();
     this.context = null;
     this.readiness = 'locked';

@@ -12,6 +12,7 @@ import { preloadKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
 import { CombatActorRouter } from './CombatActorRouter.js';
 import { COMBAT_LAB_WALKER_CONFIG, CombatLabWalkerController, WALKER_STATES } from './CombatLabWalkerController.js';
 import { AuthoredHumanoidDeathController } from './AuthoredHumanoidDeathController.js';
+import { CombatAcceptedAudioSystem } from './CombatAcceptedAudioSystem.js';
 
 const FOLSOM_AUTHORED_PLAYER_SPAWN = Object.freeze([-2, 1.71, -4]);
 const FOLSOM_TESTMAN_SPAWN_XZ = Object.freeze([8, -4]);
@@ -74,6 +75,7 @@ export class FolsomCombatEncounter {
     this.player = player ?? { position: new THREE.Vector3(...FOLSOM_AUTHORED_PLAYER_SPAWN), yaw: 0 };
     this.physics = new CombatPhysicsWorld();
     this.feedbackSystem = new CombatFeedbackSystem({ audioRuntime });
+    this.acceptedCombatAudio = new CombatAcceptedAudioSystem({ audioRuntime });
     this.combatRouter = new CombatActorRouter();
     this.weaponController = null;
     this.disposed = false;
@@ -88,7 +90,7 @@ export class FolsomCombatEncounter {
     this.groundY = Number.isFinite(sampledGround?.y) ? sampledGround.y : 0.16;
     const spawnOffset = new THREE.Vector3(this.spawnPosition.x, this.groundY, this.spawnPosition.z + 3.55);
     const spawnYaw = Math.atan2(this.playerSpawn.x - this.spawnPosition.x, this.playerSpawn.z - this.spawnPosition.z);
-    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw, visualProfile: this.modelProfile, mortalityMode: resolveCombatMortalityMode(), automaticMortality: false, isolateVisualMaterials: true, eventSink: (event, payload) => this.handleStationaryCombatEvent(event, payload) });
+    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw, visualProfile: this.modelProfile, mortalityMode: resolveCombatMortalityMode(), automaticMortality: false, isolateVisualMaterials: true, acceptedCombatAudio: this.acceptedCombatAudio, eventSink: (event, payload) => this.handleStationaryCombatEvent(event, payload) });
     this.actor.root.name = 'folsom-testman-combat-subject';
     this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: 'folsom-testman-combat-player-blocker' });
     this.meleeSpacing = this.applyActorMeleeSpacing(this.playerBlocker);
@@ -111,6 +113,7 @@ export class FolsomCombatEncounter {
       combatRouter: this.combatRouter,
       stationaryActor: this.actor,
       feedbackSystem: this.feedbackSystem,
+      acceptedCombatAudio: this.acceptedCombatAudio,
       playerProvider: () => this.player,
       enabled: this.query.get('folsomWalker') !== '0',
       query: this.query,
@@ -221,9 +224,10 @@ export class FolsomCombatEncounter {
   }
 
   handleStationaryCombatEvent(event, payload = {}) {
-    if (event === 'final_exhale') this.feedbackSystem.stopOwnerVocal('folsom-combat-stationary');
-    if (this.combatDirector) this.combatDirector.forwardFeedbackEvent(event, { ...payload, owner: 'folsom-combat-stationary' });
-    else this.feedbackSystem.emit(event, { ...payload, owner: 'folsom-combat-stationary' });
+    const owner = this.actor?.instanceId ?? 'folsom-combat-stationary-unbound';
+    if (event === 'final_exhale') this.feedbackSystem.stopOwnerVocal(owner);
+    if (this.combatDirector) this.combatDirector.forwardFeedbackEvent(event, { ...payload, owner });
+    else this.feedbackSystem.emit(event, { ...payload, owner });
   }
 
   getActiveCombatActors() {
@@ -371,6 +375,7 @@ export class FolsomCombatEncounter {
     this.actor.prepareFrame(deltaSeconds);
     this.walkerController?.actor?.prepareFrame(deltaSeconds);
     this.physics.step(deltaSeconds, (dt) => {
+      this.acceptedCombatAudio.update(dt);
       this.feedbackSystem.update(dt);
       this.weaponController?.beforePhysics?.(dt);
       this.combatDirector.update(dt);
@@ -397,6 +402,7 @@ export class FolsomCombatEncounter {
     if (this.disposed) return false;
     this.player = player ?? this.player;
     this.weaponController?.cancel?.(reason);
+    this.acceptedCombatAudio.reset();
     this.resetCorpseFade(this.actor, this.bloodEffects);
     this.resetCorpseFade(this.walkerController?.actor, this.walkerController?.bloodEffects);
     this.stationaryDeathController?.reset();
@@ -452,6 +458,7 @@ export class FolsomCombatEncounter {
       director: this.combatDirector.getDiagnostics(),
       blood: this.bloodEffects.getDiagnostics(),
       feedback: this.feedbackSystem.getDiagnostics(),
+      acceptedCombatAudio: this.acceptedCombatAudio.getDiagnostics({ actor: this.actor, penetrationAudioGate: this.weaponController?.penetrationAudioGate }),
       meleeSpacing: this.meleeSpacing,
       spawnPosition: this.spawnPosition.toArray(),
       groundY: this.groundY,
@@ -474,6 +481,7 @@ export class FolsomCombatEncounter {
     this.combatDirector.dispose();
     this.bloodEffects.dispose();
     this.actor.dispose();
+    this.acceptedCombatAudio.dispose();
     this.disposeSupportFloors();
     this.combatRouter.dispose();
     this.feedbackSystem.dispose();

@@ -183,6 +183,7 @@ export class CombatLabDebugPanel {
     const woundBloodMaterial = blood.authoredWoundMaterial ?? {};
     const bloodFactory = blood.materialFactory ?? {};
     const feedback = diagnostics.feedback ?? {};
+    const acceptedAudio = diagnostics.acceptedCombatAudio ?? {};
     const physiology = actor.physiology ?? {};
     const wounds = actor.wounds ?? {};
     const reaction = actor.visualAdapter?.reaction ?? {};
@@ -219,6 +220,8 @@ export class CombatLabDebugPanel {
         `blood warmups ${bloodFactory.warmupCount ?? 0}  warmup programs +${bloodFactory.lastWarmupProgramDelta ?? 0}`,
       ] : []),
       `audio ${feedback.activeVoices ?? 0} voices  haptic ${feedback.activeHapticEvents ?? 0}  event ${feedback.lastEvent ?? '-'}  mute ${feedback.muted ? 'YES' : 'NO'}`,
+      `accepted stab ${acceptedAudio.stabEmissionCount ?? 0}  cue ${acceptedAudio.stabLastCueId ?? '-'}  armed ${acceptedAudio.penetrationAudioArmed == null ? '-' : acceptedAudio.penetrationAudioArmed ? 'YES' : 'NO'}  rearms ${acceptedAudio.penetrationAudioRearmCount ?? 0}`,
+      `death sigh ${acceptedAudio.deathSighEmissionCount ?? 0}/${acceptedAudio.deathSighScheduledCount ?? 0}  pending ${acceptedAudio.pendingDelayedCueCount ?? 0}  actor ${acceptedAudio.deathSighLastActorId ?? '-'}  profile ${acceptedAudio.voiceProfile ?? '-'}`,
       `trauma ${JSON.stringify(actor.regionalTrauma ?? {})}`,
       `pose ${JSON.stringify(actor.bodyPositions ?? {})}`,
       `ragdoll bones ${JSON.stringify(actor.visualAdapter?.ragdollBonePositions ?? {})}  bindings ${actor.visualAdapter?.ragdollBindingCount ?? 0}`,

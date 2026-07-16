@@ -16,6 +16,7 @@ export const TESTMAN_BONE_MAP = Object.freeze({
 
 export const CURRENT_HUMANOID_PROFILE = Object.freeze({
   name: 'human_retro_256_combat',
+  voiceProfile: 'male_human',
   assetPath: './assets/models/npc/human/human_retro_256.glb',
   rawHeight: 84.771304,
   targetHeight: 2.06,
@@ -28,6 +29,7 @@ export const CURRENT_HUMANOID_PROFILE = Object.freeze({
 
 export const TESTMAN_COMBAT_PROFILE = Object.freeze({
   name: 'testman_animpack_v002_animation_authoritative',
+  voiceProfile: 'male_human',
   assetPath: './assets/enemies/testman/testman_animpack_v002.glb',
   animationManifestPath: './assets/enemies/testman/testman_animpack_v002.json',
   rawHeight: 4.835451218922911,

@@ -154,13 +154,14 @@ export class WalkerVitalStabPolicy {
 }
 
 export class CombatLabWalkerController {
-  constructor({ scene, physics, collision, combatRouter, stationaryActor, feedbackSystem = null, playerProvider = null, eventSink = null, beforeActorDisposal = null, enabled = true, query = null, actorFactory = null, config = COMBAT_LAB_WALKER_CONFIG, environment = null } = {}) {
+  constructor({ scene, physics, collision, combatRouter, stationaryActor, feedbackSystem = null, acceptedCombatAudio = null, playerProvider = null, eventSink = null, beforeActorDisposal = null, enabled = true, query = null, actorFactory = null, config = COMBAT_LAB_WALKER_CONFIG, environment = null } = {}) {
     this.scene = scene;
     this.physics = physics;
     this.collision = collision;
     this.combatRouter = combatRouter;
     this.stationaryActor = stationaryActor;
     this.feedbackSystem = feedbackSystem;
+    this.acceptedCombatAudio = acceptedCombatAudio;
     this.playerProvider = playerProvider;
     this.eventSink = eventSink;
     this.beforeActorDisposal = beforeActorDisposal;
@@ -323,7 +324,7 @@ export class CombatLabWalkerController {
     this.desiredYaw = targetYaw;
     this.position.copy(spawnPosition);
     const spawnOffset = new THREE.Vector3(spawnPosition.x, spawnPosition.y, spawnPosition.z + 3.55);
-    const actorOptions = { physics: this.physics, scene: this.scene, spawnOffset, spawnYaw: this.currentYaw, visualProfile: TESTMAN_COMBAT_PROFILE, automaticMortality: false, isolateVisualMaterials: true, eventSink: (event, payload) => this.handleActorEvent(event, payload) };
+    const actorOptions = { physics: this.physics, scene: this.scene, spawnOffset, spawnYaw: this.currentYaw, visualProfile: TESTMAN_COMBAT_PROFILE, automaticMortality: false, isolateVisualMaterials: true, acceptedCombatAudio: this.acceptedCombatAudio, eventSink: (event, payload) => this.handleActorEvent(event, payload) };
     this.actor = this.actorFactory ? this.actorFactory(actorOptions) : new HumanoidCombatActor(actorOptions);
     this.actor.root.name = this.environment.getActorName?.(this.respawnGeneration) ?? `combat-lab-authored-walker-${this.respawnGeneration}`;
     this.actor.setLivingRootTransform?.(this.position, this.currentYaw);
@@ -331,7 +332,7 @@ export class CombatLabWalkerController {
     const bloodGroundY = this.environment.getBloodGroundHeight?.(spawnPosition) ?? spawnPosition.y;
     const wallX = this.environment.getBloodWallX ? this.environment.getBloodWallX(spawnPosition) : -2.65;
     this.bloodEffects = new CombatBloodEffects({ scene: this.scene, woundSystem: this.actor.woundSystem, physiology: this.actor.physiology, groundY: bloodGroundY, wallX, eventSink: (event, payload) => this.handleActorEvent(event, payload) });
-    this.director = new CombatDirector({ actor: this.actor, bloodEffects: this.bloodEffects, feedbackSystem: this.feedbackSystem });
+    this.director = new CombatDirector({ actor: this.actor, bloodEffects: this.bloodEffects, feedbackSystem: this.feedbackSystem, acceptedCombatAudio: this.acceptedCombatAudio });
     this.combatRouter?.register?.(this.actor, this.director);
     this.routingRegistered = true;
     this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: this.environment.getBlockerName?.(this.respawnGeneration) ?? `combat-lab-walker-blocker-${this.respawnGeneration}` });
@@ -362,7 +363,7 @@ export class CombatLabWalkerController {
 
   handleActorEvent(event, payload = {}) {
     if (!this.actor || this.actor.disposed) return;
-    const owner = this.environment.getFeedbackOwner?.(this.respawnGeneration) ?? `combat-lab-walker-${this.respawnGeneration}`;
+    const owner = this.actor.instanceId;
     if (event === 'final_exhale') this.feedbackSystem?.stopOwnerVocal?.(owner);
     if (this.director) this.director.forwardFeedbackEvent(event, { ...payload, owner });
     else this.eventSink?.(event, { ...payload, owner });
@@ -501,6 +502,7 @@ export class CombatLabWalkerController {
       const death = this.actor.visualAdapter?.playDeathAnimation?.({ regionId: region, variation: this.respawnGeneration });
       this.deathDurationSeconds = death?.durationSeconds ?? this.config.deathCollapseSeconds;
       this.selectedDeathName = death?.name ?? null;
+      this.actor.transitionLifeState?.('dying', 'authored-walker-vital-stab', { externalCommit: true, presentationHandled: true });
       this.setState(WALKER_STATES.losingConsciousness);
       this.releaseDeathCollisionOwnership();
     }
@@ -517,6 +519,7 @@ export class CombatLabWalkerController {
     this.currentSpeed = 0;
     this.desiredSpeed = 0;
     this.velocity.set(0, 0, 0);
+    this.actor.transitionLifeState?.('dead', 'authored-walker-grounded', { externalCommit: true, presentationHandled: true });
     this.setState(WALKER_STATES.grounded);
     this.releaseDeathCollisionOwnership();
     return true;

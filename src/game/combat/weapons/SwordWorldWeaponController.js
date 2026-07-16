@@ -11,6 +11,8 @@ import { computeCameraRelativeWeaponPose, createWeaponPoseWorkspace, initializeC
 import { createCuttingEdgePath, createSweptCuttingEdgeScratch, resolveCuttingEdgeSampleCount, sweepCuttingEdge } from './SweptCuttingEdge.js';
 import { applyWeaponRenderLayer, captureWeaponMaterialLightingState, cloneOwnedWeaponVisual, createCachedWeaponGlbLoader, disposeOwnedWeaponVisual, getWeaponRenderLayer, getWeaponWorldLightIntersectionStatus, weaponMaterialLightingStateChanged } from './WeaponVisualAsset.js';
 import { WEAPON_VIEWMODEL_LAYER, WEAPON_WORLD_LAYER } from './WeaponRenderLayers.js';
+import { DREADSTONE_SWORD_PIERCING_AUDIO_PROFILE } from '../CombatAcceptedAudioSystem.js';
+import { PenetrationAudioGate } from './PenetrationAudioGate.js';
 
 export const DREADSTONE_SWORD_GLB_PATH = './assets/weapons/melee/dreadstone_sword_v002.glb';
 export const SWORD_VIEWMODEL_LAYER = WEAPON_VIEWMODEL_LAYER;
@@ -180,7 +182,9 @@ export class SwordWorldWeaponController {
       bladeThickness: DREADSTONE_SWORD_DIMENSIONS.bladeThickness,
       maximumPenetrationDepth: SWORD_MAXIMUM_PENETRATION_DEPTH,
       authoredDimensions: DREADSTONE_SWORD_DIMENSIONS,
+      piercingAudio: DREADSTONE_SWORD_PIERCING_AUDIO_PROFILE,
     });
+    this.penetrationAudioGate = new PenetrationAudioGate({ weaponId: this.config.itemId });
     this.intentWeapon = new MeleeIntentWeapon({ weaponId: this.config.itemId, minimumIntentSpeed: this.config.minimumAttackSpeed, slashBias: 0.58 });
     this.intentState = this.intentWeapon.current;
     this.gestureOwnership = new WeaponGestureOwnership(this.config.workspace);
@@ -680,6 +684,7 @@ export class SwordWorldWeaponController {
       depth: SWORD_INITIAL_PUNCTURE_DEPTH,
       force: this.actualTipSpeed,
       weaponAdapter: this,
+      penetrationAudioGate: this.penetrationAudioGate,
       onWoundCreated: (wound, directedInteraction) => {
         if (this.entry?.directorInteractionId !== directedInteraction.id) return;
         this.entry.woundId = wound?.id ?? null;
@@ -929,6 +934,7 @@ export class SwordWorldWeaponController {
     const transitionQuaternion = this.actualQuaternion.clone();
     this.beginSwordWithdrawal(worldEntry);
     entry.director.completeWithdrawal(entry.directorInteractionId, { releaseSeverity: this.maximumDepthReached, direction: worldEntry?.axis?.clone?.().negate?.(), position: worldEntry?.point ?? this.currentTip });
+    this.penetrationAudioGate.rearmAfterFullExtraction(entry.directorInteractionId);
     entry.actor?.setEmbeddedWeapon?.(null);
     this.rearmGate = {
       actor: entry.actor,
@@ -1012,6 +1018,7 @@ export class SwordWorldWeaponController {
     this.poseContinuity.active = false;
     this.measureEmbeddedToFreeContinuity = false;
     this.applyVisualLayer();
+    this.penetrationAudioGate.reset();
   }
 
   sweepPrimitive(primitive, positionsPrepared) {
@@ -1084,7 +1091,7 @@ export class SwordWorldWeaponController {
     const samePath = active && active.actor === routed.actor && (active.regionId === routed.hit.regionId || adjacentRegion) && active.classification === classification && active.lastPoint.distanceTo(point) <= 0.24;
     if (!samePath) {
       this.finishActiveEdgeDamage(false);
-      const interaction = routed.director.beginEdgeDamage({ weapon: this.weaponDefinition, intent: this.intentState, hit: routed.hit, point, localPoint: routed.hit.localPoint, surfaceNormal: normal, direction, travel, depth, severity, edgeAlignment, swingSpeed, classification, part, weaponAdapter: this });
+      const interaction = routed.director.beginEdgeDamage({ weapon: this.weaponDefinition, intent: this.intentState, hit: routed.hit, point, localPoint: routed.hit.localPoint, surfaceNormal: normal, direction, travel, depth, severity, edgeAlignment, swingSpeed, classification, part, weaponAdapter: this, penetrationAudioGate: this.penetrationAudioGate });
       if (!interaction) return;
       this.activeEdgeDamage = { actor: routed.actor, director: routed.director, interactionId: interaction.id, bodyId: routed.hit.bodyId, regionId: routed.hit.regionId, classification, part, hit: routed.hit, lastPoint: point.clone(), lastNormal: normal.clone(), lastDirection: direction.clone(), pendingTravel: 0, pendingSeverity: 0, pendingDepth: 0, pendingEdgeAlignment: 0, pendingSwingSpeed: 0, pendingSamples: 0 };
       this.edgeDamageCount += 1;
@@ -1244,6 +1251,7 @@ export class SwordWorldWeaponController {
     this.poseContinuity.localQuaternionOffset.identity();
     this.measureEmbeddedToFreeContinuity = false;
     this.applyVisualLayer();
+    this.penetrationAudioGate.reset();
   }
 
   reset() {
@@ -1314,6 +1322,7 @@ export class SwordWorldWeaponController {
       transitionLightingDiscontinuityCounter: this.transitionLightingDiscontinuityCount,
       assetPath: DREADSTONE_SWORD_GLB_PATH,
       dimensions: DREADSTONE_SWORD_DIMENSIONS,
+      penetrationAudio: this.penetrationAudioGate.getDiagnostics(),
     };
   }
 

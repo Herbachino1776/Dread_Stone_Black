@@ -50,7 +50,7 @@ function bodyQuaternion(rotation = [0, 0, 0]) {
 }
 
 export class HumanoidCombatActor {
-  constructor({ physics, scene, spawnOffset = new THREE.Vector3(), spawnYaw = 0, eventSink = null, mortalityMode = COMBAT_MORTALITY_MODES.normal, visualProfile = CURRENT_HUMANOID_PROFILE, automaticMortality = true, isolateVisualMaterials = false, instanceId = null } = {}) {
+  constructor({ physics, scene, spawnOffset = new THREE.Vector3(), spawnYaw = 0, eventSink = null, mortalityMode = COMBAT_MORTALITY_MODES.normal, visualProfile = CURRENT_HUMANOID_PROFILE, automaticMortality = true, isolateVisualMaterials = false, instanceId = null, acceptedCombatAudio = null } = {}) {
     this.physics = physics;
     this.scene = scene;
     this.instanceId = instanceId ?? `humanoid-${++humanoidActorInstanceSerial}`;
@@ -83,6 +83,9 @@ export class HumanoidCombatActor {
     this.detachmentBloodEmitter = null;
     this.mortalityMode = mortalityMode;
     this.visualProfile = visualProfile;
+    this.acceptedCombatAudio = acceptedCombatAudio;
+    this.acceptedCombatAudioState = null;
+    this.acceptedCombatAudio?.registerActor?.(this);
     this.animationAuthorityReady = false;
     this.ragdollActive = false;
     this.ragdollForced = false;
@@ -721,26 +724,35 @@ export class HumanoidCombatActor {
     return true;
   }
 
-  transitionLifeState(nextState, reason = 'trauma', { forceFatal = false } = {}) {
-    if (!this.automaticMortality) return false;
+  transitionLifeState(nextState, reason = 'trauma', { forceFatal = false, externalCommit = false, presentationHandled = false } = {}) {
+    if (!this.automaticMortality && !externalCommit) return false;
     if (this.isImmortalReactive() && !forceFatal && !this.fatalSegmentDetachmentActive && (nextState === 'dying' || nextState === 'dead')) nextState = 'incapacitated';
     else if (this.visualProfile.authoredDeathAnimations && nextState === 'incapacitated') nextState = 'dying';
     const order = { alive: 0, incapacitated: 1, dying: 2, dead: 3 };
     if (!(nextState in order) || order[nextState] <= order[this.lifeState]) return false;
+    const previousState = this.lifeState;
     this.lifeState = nextState;
     this.collapseReason ??= reason;
-    if (nextState === 'dying' && this.visualProfile.authoredDeathAnimations) {
+    const acceptedDeathRequested = this.acceptedCombatAudio?.handleLifeStateTransition?.(this, { previousState, nextState, reason }) === true;
+    if (nextState === 'dying' && this.visualProfile.authoredDeathAnimations && !presentationHandled) {
       this.visualAdapter?.playDeathAnimation?.({
         regionId: this.lastReaction?.regionId ?? this.collapseFamily ?? '',
         variation: this.lastReaction?.severity ?? 0,
       });
     } else if (!this.visualProfile.authoredDeathAnimations && ['incapacitated', 'dying', 'dead'].includes(nextState) && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll();
-    if (nextState === 'incapacitated') this.eventSink?.('unconscious', { position: this.getBodyWorldPosition('head'), severity: 0.6 });
-    if (nextState === 'dying') this.eventSink?.('shock_gasp', { position: this.getBodyWorldPosition('head'), severity: 0.9 });
+    if (nextState === 'incapacitated' && !this.acceptedCombatAudio?.shouldSuppressSynthesizedDeathVocal?.(this, 'unconscious')) this.eventSink?.('unconscious', { position: this.getBodyWorldPosition('head'), severity: 0.6 });
+    if (nextState === 'dying' && !acceptedDeathRequested && !this.acceptedCombatAudio?.shouldSuppressSynthesizedDeathVocal?.(this, 'shock_gasp')) this.eventSink?.('shock_gasp', { position: this.getBodyWorldPosition('head'), severity: 0.9 });
     if (nextState === 'dead') {
-      this.eventSink?.('final_exhale', { position: this.getBodyWorldPosition('head'), severity: 1, final: true });
+      if (!acceptedDeathRequested && !this.acceptedCombatAudio?.shouldSuppressSynthesizedDeathVocal?.(this, 'final_exhale')) this.eventSink?.('final_exhale', { position: this.getBodyWorldPosition('head'), severity: 1, final: true });
       this.activeEmbeddedWeapon?.state && (this.activeEmbeddedWeapon.reason = 'embedded-in-corpse');
     }
+    return true;
+  }
+
+  restoreLifeState(lifeState = 'alive') {
+    if (!['alive', 'incapacitated', 'dying', 'dead'].includes(lifeState)) return false;
+    this.lifeState = lifeState;
+    this.acceptedCombatAudio?.markRestoredLifeState?.(this, lifeState);
     return true;
   }
 
@@ -1145,6 +1157,7 @@ export class HumanoidCombatActor {
       dismemberment: this.visualAdapter?.damageSegmentRuntime?.getDiagnostics?.() ?? null,
       instanceId: this.instanceId,
       automaticMortality: this.automaticMortality,
+      acceptedCombatAudio: this.acceptedCombatAudio?.getDiagnostics?.({ actor: this }) ?? null,
     };
   }
 
@@ -1175,6 +1188,7 @@ export class HumanoidCombatActor {
 
   reset() {
     if (this.disposed) return;
+    this.acceptedCombatAudio?.resetActor?.(this);
     this.woundSystem.resetFade?.();
     this.woundSystem.clear();
     this.detachedSemanticBodyIds.clear();
@@ -1215,6 +1229,8 @@ export class HumanoidCombatActor {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.acceptedCombatAudio?.unregisterActor?.(this);
+    this.acceptedCombatAudio = null;
     this.woundSystem.dispose();
     this.visualAdapter?.dispose();
     this.detachmentBloodEmitter = null;

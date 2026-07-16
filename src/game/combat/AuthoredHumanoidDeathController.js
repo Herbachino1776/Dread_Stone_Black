@@ -38,6 +38,7 @@ export class AuthoredHumanoidDeathController {
     const result = this.actor.visualAdapter?.playDeathAnimation?.({ regionId, variation: this.lethality.criticalStabCount });
     this.selectedDeathName = result?.name ?? null;
     this.deathDurationSeconds = result?.durationSeconds ?? this.config.deathCollapseSeconds;
+    this.actor.transitionLifeState?.('dying', 'authored-stationary-vital-stab', { externalCommit: true, presentationHandled: true });
     this.state = WALKER_STATES.losingConsciousness;
     this.stateElapsed = 0;
     this.onDeathStarted?.(this.actor);
@@ -51,6 +52,7 @@ export class AuthoredHumanoidDeathController {
 
   holdGroundedPose() {
     if (this.state !== WALKER_STATES.losingConsciousness) return false;
+    this.actor?.transitionLifeState?.('dead', 'authored-stationary-grounded', { externalCommit: true, presentationHandled: true });
     this.state = WALKER_STATES.grounded;
     return true;
   }

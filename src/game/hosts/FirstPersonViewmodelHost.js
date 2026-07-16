@@ -110,6 +110,7 @@ export class FirstPersonViewmodelHost {
     const controllers = [this.combatKnifeController, this.combatSwordController, this.combatMaceController].filter(Boolean);
     const active = () => controllers.find((controller) => controller?.isEquipped?.()) ?? this.combatKnifeController;
     this.combatWeaponController = {
+      get penetrationAudioGate() { return active()?.penetrationAudioGate ?? null; },
       beforePhysics: (dt) => controllers.forEach((controller) => controller?.beforePhysics?.(dt)),
       afterPhysicsStep: (dt) => controllers.forEach((controller) => controller?.afterPhysicsStep?.(dt)),
       afterPhysics: (alpha) => controllers.forEach((controller) => controller?.afterPhysics?.(alpha)),

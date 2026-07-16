@@ -142,7 +142,14 @@ test('generic melee intent separates owned attacks from locomotion, return, and 
 });
 
 test('Combat Director executes successful melee interactions on one deterministic staged timeline', () => {
-  const director = new CombatDirector();
+  const actor = {
+    lifeState: 'alive',
+    physiology: { interruptBreathing() {} },
+    beginPunctureWound: () => ({ id: 'confirmed-director-wound' }),
+    applyPenetration: () => 0.1,
+    triggerReflex() {},
+  };
+  const director = new CombatDirector({ actor });
   const observed = [];
   director.subscribe('*', (event) => observed.push([event.time, event.sequence, event.type, event.payload.stage ?? event.payload.action ?? event.payload.cue]));
   const intent = { weaponId: 'future_spear', intent: MELEE_INTENTS.stab, ownerId: 9, speed: 1.2, intentional: true, damaging: true };

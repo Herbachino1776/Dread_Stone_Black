@@ -1,4 +1,76 @@
 export const AUDIO_CUE_MANIFEST = Object.freeze({
+  audio_system_combat_sword_stab_flesh_01_oneshot: {
+    path: './audio/combat/audio_system_combat_sword_stab_flesh_01_oneshot.wav',
+    category: 'combat', spatial: true, volume: 1, pitchVariation: 0.018, volumeVariation: 0.06, refDistance: 1.1, maxDistance: 20, rolloffFactor: 1.35,
+  },
+  audio_system_combat_sword_stab_flesh_02_oneshot: {
+    path: './audio/combat/audio_system_combat_sword_stab_flesh_02_oneshot.wav',
+    category: 'combat', spatial: true, volume: 1, pitchVariation: 0.018, volumeVariation: 0.06, refDistance: 1.1, maxDistance: 20, rolloffFactor: 1.35,
+  },
+  audio_system_combat_sword_stab_flesh_03_oneshot: {
+    path: './audio/combat/audio_system_combat_sword_stab_flesh_03_oneshot.wav',
+    category: 'combat', spatial: true, volume: 1, pitchVariation: 0.018, volumeVariation: 0.06, refDistance: 1.1, maxDistance: 20, rolloffFactor: 1.35,
+  },
+  audio_system_combat_sword_stab_flesh_04_oneshot: {
+    path: './audio/combat/audio_system_combat_sword_stab_flesh_04_oneshot.wav',
+    category: 'combat', spatial: true, volume: 1, pitchVariation: 0.018, volumeVariation: 0.06, refDistance: 1.1, maxDistance: 20, rolloffFactor: 1.35,
+  },
+  audio_system_combat_sword_stab_flesh_05_oneshot: {
+    path: './audio/combat/audio_system_combat_sword_stab_flesh_05_oneshot.wav',
+    category: 'combat', spatial: true, volume: 1, pitchVariation: 0.018, volumeVariation: 0.06, refDistance: 1.1, maxDistance: 20, rolloffFactor: 1.35,
+  },
+  audio_system_combat_sword_stab_flesh_06_oneshot: {
+    path: './audio/combat/audio_system_combat_sword_stab_flesh_06_oneshot.wav',
+    category: 'combat', spatial: true, volume: 1, pitchVariation: 0.018, volumeVariation: 0.06, refDistance: 1.1, maxDistance: 20, rolloffFactor: 1.35,
+  },
+  audio_system_combat_male_death_sigh_01_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_01_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_02_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_02_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_03_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_03_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_04_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_04_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_05_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_05_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_06_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_06_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_07_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_07_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_08_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_08_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_09_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_09_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_10_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_10_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_11_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_11_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
+  audio_system_combat_male_death_sigh_12_oneshot: {
+    path: './audio/combat/audio_system_combat_male_death_sigh_12_oneshot.wav',
+    category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
+  },
   audio_ch1_folsom_shed_growth_tension_loop: {
     path: './audio/growth/audio_ch1_folsom_shed_growth_tension_loop.wav',
     category: 'growth',

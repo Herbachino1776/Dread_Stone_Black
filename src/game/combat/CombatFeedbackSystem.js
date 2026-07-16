@@ -54,7 +54,7 @@ export class CombatFeedbackSystem {
     this.hapticEvents = this.hapticEvents.filter((entry) => this.elapsed - entry.time < 1);
   }
 
-  emit(event, { position = null, severity = 0.5, owner = 'combat-actor', force = false, audio = true, haptics = true } = {}) {
+  emit(event, { position = null, severity = 0.5, owner = 'unowned-combat-source', force = false, audio = true, haptics = true } = {}) {
     if (this.disposed || !EVENT_PROFILES[event]) return false;
     const cooldownKey = `${owner}:${event}`;
     if (!force && this.eventCooldowns.has(cooldownKey)) return false;
@@ -143,11 +143,11 @@ export class CombatFeedbackSystem {
     }
   }
 
-  stopOwnerVocal(owner = 'combat-actor') {
+  stopOwnerVocal(owner = 'unowned-combat-source') {
     [...this.activeVoices].filter((voice) => voice.owner === owner && voice.vocal).forEach((voice) => this.stopVoice(voice));
   }
 
-  stopOwner(owner = 'combat-actor') {
+  stopOwner(owner = 'unowned-combat-source') {
     [...this.activeVoices].filter((voice) => voice.owner === owner).forEach((voice) => this.stopVoice(voice));
   }
 

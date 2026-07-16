@@ -14,6 +14,8 @@ import { createCuttingEdgePath, resolveCuttingEdgeSampleCount, sampleCuttingEdge
 import { applyWeaponRenderLayer, captureWeaponMaterialLightingState, cloneOwnedWeaponVisual, createCachedWeaponGlbLoader, disposeOwnedWeaponVisual, getWeaponRenderLayer, getWeaponWorldLightIntersectionStatus, weaponMaterialLightingStateChanged } from './weapons/WeaponVisualAsset.js';
 import { WEAPON_VIEWMODEL_LAYER, WEAPON_WORLD_LAYER } from './weapons/WeaponRenderLayers.js';
 import { physicsBodyLocalDirectionToWorld, physicsBodyLocalToWorld, worldDirectionToPhysicsBodyLocal } from './CombatCoordinateSpaces.js';
+import { OLD_WORK_KNIFE_PIERCING_AUDIO_PROFILE } from './CombatAcceptedAudioSystem.js';
+import { PenetrationAudioGate } from './weapons/PenetrationAudioGate.js';
 
 const forwardLocal = new THREE.Vector3(0, 0, -1);
 const knifeBladeHalfWidth = KNIFE_COMBAT_CONFIG.bladeWidth * 0.5;
@@ -91,7 +93,8 @@ export class WorldKnifeCombatController {
     this.visualAssetLoader = visualAssetLoader;
     this.bindPointerInput = bindPointerInput;
     this.config = KNIFE_COMBAT_CONFIG;
-    this.weaponDefinition = Object.freeze({ id: this.config.itemId, family: 'knife', maximumPenetrationDepth: this.config.maximumPenetrationDepth });
+    this.weaponDefinition = Object.freeze({ id: this.config.itemId, family: 'knife', maximumPenetrationDepth: this.config.maximumPenetrationDepth, piercingAudio: OLD_WORK_KNIFE_PIERCING_AUDIO_PROFILE });
+    this.penetrationAudioGate = new PenetrationAudioGate({ weaponId: this.config.itemId });
     this.intentWeapon = new MeleeIntentWeapon({ weaponId: this.config.itemId, minimumIntentSpeed: 0.035, slashBias: 0.52 });
     this.intentState = this.intentWeapon.current;
     this.state = KNIFE_CONTROL_STATES.ready;
@@ -857,6 +860,7 @@ export class WorldKnifeCombatController {
       depth: 0.004,
       force: this.offensiveVelocity.length(),
       weaponAdapter: this,
+      penetrationAudioGate: this.penetrationAudioGate,
       onWoundCreated: (wound, directedInteraction) => {
         if (this.entry?.directorInteractionId === directedInteraction.id) this.entry.woundId = wound?.id ?? null;
       },
@@ -993,6 +997,7 @@ export class WorldKnifeCombatController {
     if (entry?.directorInteractionId) {
       this.beginDirectedWithdrawal(worldEntry);
       entry.director.completeWithdrawal(entry.directorInteractionId, { releaseSeverity: this.maximumDepthReached, direction: worldEntry?.axis?.clone?.().negate?.(), position: worldEntry?.point ?? this.currentTip });
+      this.penetrationAudioGate.rearmAfterFullExtraction(entry.directorInteractionId);
     }
     this.contactState = 'fully_extracted';
     this.reason = reason;
@@ -1227,6 +1232,7 @@ export class WorldKnifeCombatController {
     this.offensiveVelocity.set(0, 0, 0);
     this.intentWeapon.reset();
     this.intentState = this.intentWeapon.current;
+    this.penetrationAudioGate.reset();
   }
 
   cancelTarget(actor, reason = 'target-disposed') {
@@ -1312,6 +1318,7 @@ export class WorldKnifeCombatController {
       activeCombatActorId: this.entry?.actor?.instanceId ?? this.activeSlash?.actor?.instanceId ?? null,
       activeSlash: this.activeSlash ? { regionId: this.activeSlash.regionId, part: this.activeSlash.part, duration: Number(this.activeSlash.duration.toFixed(3)), travel: Number(this.activeSlash.travel.toFixed(3)), pendingTravel: Number(this.activeSlash.pendingTravel.toFixed(3)), extensionCommitCount: this.activeSlash.extensionCommitCount, edgeAnchorT: Number(this.activeSlash.edgeAnchorT.toFixed(3)), edgeSampleCount: this.lastEdgeSampleCount, woundId: this.activeSlash.woundId } : null,
       slashCount: this.slashCount,
+      penetrationAudio: this.penetrationAudioGate.getDiagnostics(),
     };
   }
 
