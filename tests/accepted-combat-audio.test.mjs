@@ -281,7 +281,9 @@ test('male voice metadata is explicit and detachment audio remains terminal-stat
   assert.match(segmentSource, /fatal:\s*false/);
 });
 
-test('accepted pass does not integrate Folsom daytime ambience', async () => {
-  const manifestSource = await readFile(`${repoRoot}/src/game/audio/audioCueManifest.js`, 'utf8');
-  assert.doesNotMatch(manifestSource, /folsom[^\n]*(?:daytime|day_ambience)|(?:daytime|day_ambience)[^\n]*folsom/i);
+test('accepted combat system remains independent from Folsom daytime ambience', async () => {
+  const acceptedAudioSource = await readFile(`${repoRoot}/src/game/combat/CombatAcceptedAudioSystem.js`, 'utf8');
+  const combatDirectorSource = await readFile(`${repoRoot}/src/game/combat/CombatDirector.js`, 'utf8');
+  assert.doesNotMatch(acceptedAudioSource, /folsom.*ambience|ambience.*folsom/i);
+  assert.doesNotMatch(combatDirectorSource, /folsom.*ambience|ambience.*folsom/i);
 });

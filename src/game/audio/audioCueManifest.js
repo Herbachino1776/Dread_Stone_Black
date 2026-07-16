@@ -71,6 +71,26 @@ export const AUDIO_CUE_MANIFEST = Object.freeze({
     path: './audio/combat/audio_system_combat_male_death_sigh_12_oneshot.wav',
     category: 'voice', spatial: true, volume: 1, pitchVariation: 0.02, volumeVariation: 0.08, refDistance: 1.5, maxDistance: 28, rolloffFactor: 1.2,
   },
+  audio_ch1_folsom_exterior_day_base_ambience_loop: {
+    path: './audio/ambience/audio_ch1_folsom_exterior_day_base_ambience_loop.wav',
+    category: 'ambience', loop: true, spatial: false, volume: 0.58,
+  },
+  audio_ch1_folsom_exterior_day_grass_texture_loop: {
+    path: './audio/ambience/audio_ch1_folsom_exterior_day_grass_texture_loop.wav',
+    category: 'ambience', loop: true, spatial: false, volume: 0.24,
+  },
+  audio_ch1_folsom_exterior_day_distant_life_01_oneshot: {
+    path: './audio/ambience/audio_ch1_folsom_exterior_day_distant_life_01_oneshot.wav',
+    category: 'ambience', spatial: true, volume: 0.48, pitchVariation: 0.018, volumeVariation: 0.08, refDistance: 3, maxDistance: 48, rolloffFactor: 0.8,
+  },
+  audio_ch1_folsom_exterior_day_distant_life_02_oneshot: {
+    path: './audio/ambience/audio_ch1_folsom_exterior_day_distant_life_02_oneshot.wav',
+    category: 'ambience', spatial: true, volume: 0.48, pitchVariation: 0.018, volumeVariation: 0.08, refDistance: 3, maxDistance: 48, rolloffFactor: 0.8,
+  },
+  audio_ch1_folsom_exterior_day_wood_settle_01_oneshot: {
+    path: './audio/ambience/audio_ch1_folsom_exterior_day_wood_settle_01_oneshot.wav',
+    category: 'ambience', spatial: true, volume: 0.42, pitchVariation: 0.025, volumeVariation: 0.1, refDistance: 2, maxDistance: 25, rolloffFactor: 1.05,
+  },
   audio_ch1_folsom_shed_growth_tension_loop: {
     path: './audio/growth/audio_ch1_folsom_shed_growth_tension_loop.wav',
     category: 'growth',

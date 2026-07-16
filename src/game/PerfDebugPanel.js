@@ -93,7 +93,7 @@ export class PerfDebugPanel {
     const info = this.renderer?.info;
     const size = new THREE.Vector2(); this.renderer?.getDrawingBufferSize?.(size);
     const avgMs = this.samples.reduce((sum, sample) => sum + sample.ms, 0) / Math.max(1, this.samples.length);
-    return { sessionAgeSeconds: (performance.now() - this.startedAt) / 1000, currentFps: 1000 / (this.samples.at(-1)?.ms ?? 16.7), avgFps: 1000 / avgMs, worstMs: Math.max(0, ...this.samples.map((x) => x.ms)), calls: info?.render?.calls ?? 0, tris: info?.render?.triangles ?? 0, geoms: info?.memory?.geometries ?? 0, textures: info?.memory?.textures ?? 0, objects, meshes, skinned, transparent, materials: materials.size, lights, shadows, dpr: this.renderer?.getPixelRatio?.() ?? window.devicePixelRatio, width: size.x, height: size.y, location: this.locationId ?? 'unknown', locationLoad: this.game.sceneSessionHost?.getLocationLoadDebugSummary?.() ?? null };
+    return { sessionAgeSeconds: (performance.now() - this.startedAt) / 1000, currentFps: 1000 / (this.samples.at(-1)?.ms ?? 16.7), avgFps: 1000 / avgMs, worstMs: Math.max(0, ...this.samples.map((x) => x.ms)), calls: info?.render?.calls ?? 0, tris: info?.render?.triangles ?? 0, geoms: info?.memory?.geometries ?? 0, textures: info?.memory?.textures ?? 0, objects, meshes, skinned, transparent, materials: materials.size, lights, shadows, dpr: this.renderer?.getPixelRatio?.() ?? window.devicePixelRatio, width: size.x, height: size.y, location: this.locationId ?? 'unknown', locationLoad: this.game.sceneSessionHost?.getLocationLoadDebugSummary?.() ?? null, audio: this.game.audioRuntime?.getDiagnostics?.() ?? null };
   }
 
   render(force = false) {
@@ -102,8 +102,10 @@ export class PerfDebugPanel {
     this.lastRender = now;
     const m = this.collect();
     const locationLoadLine = m.locationLoad ? `Location load: current ${m.locationLoad.currentLocationId ?? 'n/a'} / loaded ${(m.locationLoad.loadedLocationIds ?? []).join(',') || 'none'} / scene ${m.locationLoad.activeSceneDefinitionId ?? 'n/a'} / collision ${m.locationLoad.activeCollisionSourceId ?? 'n/a'} / routes ${m.locationLoad.routeRegistryLoaded ? 'yes' : 'no'} / lazy pending ${m.locationLoad.lazyLocationsPending ? 'yes' : 'no'}\n` : '';
+    const folsomAudio = m.audio?.folsomDayAmbience;
+    const audioLine = folsomAudio ? `Audio: ${folsomAudio.active ? 'Folsom day active' : 'Folsom day inactive'} / weight ${folsomAudio.dayWeight.toFixed(3)} -> ${folsomAudio.smoothedDayWeight.toFixed(3)} / loops ${Number(folsomAudio.baseLoopActive) + Number(folsomAudio.grassLoopActive)} / distant ${folsomAudio.distantLifeEmissionCount} / wood ${folsomAudio.woodSettleEmissionCount}\n` : '';
     const toggleLine = `foliage ${this.toggles.foliage ? 'on' : 'off'}, shadows ${this.toggles.shadows ? 'on' : 'off'}, water ${this.toggles.water ? 'on' : 'off'}, dprCap ${this.toggles.lowDpr ? 'on' : 'off'}`;
-    this.reportEl.textContent = `Location: ${m.location}\n${locationLoadLine}Session: ${m.sessionAgeSeconds.toFixed(1)}s\nFPS: ${m.currentFps.toFixed(0)} / avg ${m.avgFps.toFixed(0)} / worst ${m.worstMs.toFixed(1)}ms\nRenderer: ${m.calls} calls / ${m.tris} tris / ${m.geoms} geoms / ${m.textures} textures\nScene: ${m.objects} objects / ${m.meshes} meshes / ${m.skinned} skinned / ${m.transparent} transparent / ${m.materials} materials / ${m.lights} lights / ${m.shadows} shadows\nDPR: ${m.dpr.toFixed(2)}  Canvas: ${m.width}x${m.height}\nToggles: ${toggleLine}`;
+    this.reportEl.textContent = `Location: ${m.location}\n${locationLoadLine}${audioLine}Session: ${m.sessionAgeSeconds.toFixed(1)}s\nFPS: ${m.currentFps.toFixed(0)} / avg ${m.avgFps.toFixed(0)} / worst ${m.worstMs.toFixed(1)}ms\nRenderer: ${m.calls} calls / ${m.tris} tris / ${m.geoms} geoms / ${m.textures} textures\nScene: ${m.objects} objects / ${m.meshes} meshes / ${m.skinned} skinned / ${m.transparent} transparent / ${m.materials} materials / ${m.lights} lights / ${m.shadows} shadows\nDPR: ${m.dpr.toFixed(2)}  Canvas: ${m.width}x${m.height}\nToggles: ${toggleLine}`;
   }
 
   dispose() {

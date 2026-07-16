@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AUDIO_CUE_MANIFEST, getAudioCue } from './audioCueManifest.js';
+import { FolsomDayAmbienceRuntime } from './FolsomDayAmbienceRuntime.js';
 import { ensureSharedAudioContext, unlockSharedAudioContext } from './sharedAudioContext.js';
 
 const BUS_DEFAULTS = Object.freeze({
@@ -38,7 +39,7 @@ function randomAround(base, amount = 0) {
 }
 
 export class GameAudioRuntime {
-  constructor({ root = null } = {}) {
+  constructor({ root = null, random = Math.random } = {}) {
     this.root = root;
     this.context = null;
     this.readiness = 'locked';
@@ -49,6 +50,7 @@ export class GameAudioRuntime {
     this.buffers = new Map();
     this.loading = new Map();
     this.loops = new Map();
+    this.startingLoops = new Map();
     this.pendingLoops = new Map();
     this.deferredOneShots = new Map();
     this.warnedMissing = new Set();
@@ -61,6 +63,7 @@ export class GameAudioRuntime {
     this.underworksTensionPlayed = false;
     this.muted = false;
     this.paused = false;
+    this.folsomDayAmbience = new FolsomDayAmbienceRuntime({ audioRuntime: this, random });
     this.boundUnlock = (event) => this.unlock({ reason: event?.type ?? 'gesture' });
     this.boundVisibility = () => this.handleVisibilityChanged();
     this.unlockTargets = [];
@@ -287,6 +290,11 @@ export class GameAudioRuntime {
       this.pendingLoops.delete(key);
       return true;
     }
+    const starting = this.startingLoops.get(key);
+    if (starting) {
+      starting.options = this.cloneLoopStartOptions(options);
+      return false;
+    }
 
     const context = this.ensureContext();
     if (!context) return false;
@@ -295,8 +303,14 @@ export class GameAudioRuntime {
       this.unlock({ reason: `loop:${cueId}` });
       return false;
     }
+    const startRequest = { cueId, key, options: this.cloneLoopStartOptions(options) };
+    this.startingLoops.set(key, startRequest);
     const buffer = await this.loadCue(cueId);
-    if (!buffer || this.muted || this.loops.has(key) || (!this.isAudioRunning() && !options.allowSuspendedStart)) return false;
+    if (!buffer || this.muted || this.startingLoops.get(key) !== startRequest || this.loops.has(key) || (!this.isAudioRunning() && !startRequest.options.allowSuspendedStart)) {
+      if (this.startingLoops.get(key) === startRequest) this.startingLoops.delete(key);
+      return false;
+    }
+    const startOptions = startRequest.options;
 
     const source = context.createBufferSource();
     const gain = context.createGain();
@@ -305,10 +319,10 @@ export class GameAudioRuntime {
     gain.gain.value = 0;
     source.connect(gain);
 
-    const category = options.category ?? cue.category ?? 'ambience';
-    const position = toVector3Like(options.position);
+    const category = startOptions.category ?? cue.category ?? 'ambience';
+    const position = toVector3Like(startOptions.position);
     let panner = null;
-    if ((options.spatial ?? cue.spatial) && position) {
+    if ((startOptions.spatial ?? cue.spatial) && position) {
       panner = this.createPanner(cue, position);
       gain.connect(panner);
       panner.connect(this.busGains.get(category) ?? this.busGains.get('ambience') ?? this.masterGain);
@@ -322,16 +336,18 @@ export class GameAudioRuntime {
       source,
       gain,
       panner,
-      targetVolume: options.volume ?? cue.volume ?? 1,
+      targetVolume: startOptions.volume ?? cue.volume ?? 1,
     };
+    this.startingLoops.delete(key);
     this.loops.set(key, loop);
     this.pendingLoops.delete(key);
     source.start();
-    this.fadeGain(gain, loop.targetVolume, options.fadeSeconds ?? 0.8);
+    this.fadeGain(gain, loop.targetVolume, startOptions.fadeSeconds ?? 0.8);
     return true;
   }
 
   stopLoop(key, fadeSeconds = 0.5) {
+    this.startingLoops.delete(key);
     this.pendingLoops.delete(key);
     const loop = this.loops.get(key);
     if (!loop) return;
@@ -351,7 +367,12 @@ export class GameAudioRuntime {
   }
 
   stopLoopsWithPrefix(prefix, fadeSeconds = 0.4) {
-    [...this.loops.keys()].filter((key) => key.startsWith(prefix)).forEach((key) => this.stopLoop(key, fadeSeconds));
+    const keys = new Set([...this.loops.keys(), ...this.startingLoops.keys(), ...this.pendingLoops.keys()]);
+    [...keys].filter((key) => key.startsWith(prefix)).forEach((key) => this.stopLoop(key, fadeSeconds));
+  }
+
+  hasLoopOwnership(key) {
+    return this.loops.has(key) || this.startingLoops.has(key) || this.pendingLoops.has(key);
   }
 
   setLoopPosition(key, position) {
@@ -470,10 +491,22 @@ export class GameAudioRuntime {
     return clone;
   }
 
+  cloneLoopStartOptions(options = {}) {
+    const clone = this.clonePlaybackOptions(options);
+    if (options.allowSuspendedStart != null) clone.allowSuspendedStart = options.allowSuspendedStart;
+    return clone;
+  }
+
   update(deltaSeconds, { camera = null, player = null, dungeon = null, locationId = null, controls = null, paused = false } = {}) {
+    this.updateLocationChange(locationId);
+    this.folsomDayAmbience.update(deltaSeconds, {
+      player,
+      dungeon,
+      locationId,
+      paused: paused || this.paused,
+    });
     if (paused || this.paused) return;
     this.updateListener(camera);
-    this.updateLocationChange(locationId);
     this.updateShedGrowthLoop(player, dungeon, locationId);
     this.updateBlueFlameHall(player, dungeon, locationId);
     this.updateLowerShrineLanding(player, locationId);
@@ -505,6 +538,7 @@ export class GameAudioRuntime {
 
   updateLocationChange(locationId) {
     if (locationId === this.previousLocationId) return;
+    this.folsomDayAmbience.handleLocationChanged(locationId);
     this.stopLoopsWithPrefix('location:', 0.65);
     this.stopLoopsWithPrefix('folsom:', 0.45);
     this.stopLoopsWithPrefix('beneath:', 0.45);
@@ -515,6 +549,7 @@ export class GameAudioRuntime {
   }
 
   handleLocationTransition(locationId) {
+    this.folsomDayAmbience.handleLocationChanged(locationId);
     if (locationId === 'beneath-folsom') {
       this.play2D('audio_ch2_beneath_folsom_entry_stinger_oneshot');
     }
@@ -624,6 +659,27 @@ export class GameAudioRuntime {
     if (this.masterGain) this.fadeGain(this.masterGain, this.muted ? 0.0001 : BUS_DEFAULTS.master, 0.12);
   }
 
+  reset() {
+    this.folsomDayAmbience.reset();
+    this.previousPlayerPosition = null;
+    this.previousLowerShrineZone = null;
+    this.underworksTensionPlayed = false;
+  }
+
+  getDiagnostics() {
+    return {
+      readiness: this.readiness,
+      contextState: this.contextState,
+      muted: this.muted,
+      paused: this.paused,
+      activeLoopCount: this.loops.size,
+      pendingLoopCount: this.pendingLoops.size + this.startingLoops.size,
+      deferredOneShotCount: this.deferredOneShots.size,
+      activeOneShotCount: this.oneShotNodes.size,
+      folsomDayAmbience: this.folsomDayAmbience.getDiagnostics(),
+    };
+  }
+
   handleVisibilityChanged() {
     if (document.hidden) this.setPaused(true);
     else this.setPaused(false);
@@ -651,6 +707,7 @@ export class GameAudioRuntime {
   }
 
   dispose() {
+    this.folsomDayAmbience.dispose();
     this.unlockTargets.forEach(([target, eventName]) => {
       target.removeEventListener?.(eventName, this.boundUnlock, { capture: true });
     });
@@ -658,7 +715,9 @@ export class GameAudioRuntime {
     document.removeEventListener('visibilitychange', this.boundVisibility);
     this.pendingLoops.clear();
     this.deferredOneShots.clear();
-    [...this.loops.keys()].forEach((key) => this.stopLoop(key, 0.05));
+    const ownedLoopKeys = new Set([...this.loops.keys(), ...this.startingLoops.keys(), ...this.pendingLoops.keys()]);
+    [...ownedLoopKeys].forEach((key) => this.stopLoop(key, 0.05));
+    this.startingLoops.clear();
     [...this.oneShotNodes].forEach((nodes) => this.stopOneShotNodes(nodes));
     this.oneShotNodes.clear();
     this.oneShotOwnerTokens.clear();
