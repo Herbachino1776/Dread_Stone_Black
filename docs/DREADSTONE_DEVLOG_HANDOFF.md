@@ -1,40 +1,72 @@
 # Dreadstone Black 2.0 Development Handoff
 
-<!-- last_processed_sha: 8011cac64e6147e0c236f1571742e0a7277e2474 -->
+<!-- last_processed_sha: 37e5de438faadf588bf95199442e933b05251cac -->
 
 ## Current Handoff Snapshot
 
 ### Verified implementation
 
-- **Folsom piercing lethality was formalized and corrected:** `CombatLabWalkerController.js` now defines an explicit Folsom piercing-lethality configuration for accepted puncture and sword-thrust wounds. Deliberate, surface-rupturing sword thrusts from the Dreadstone sword can contribute one or two terminal credits based on region and depth; qualifying knife wounds retain region-specific depth thresholds. The policy tracks incremental wound weight so an existing wound can increase credit without being counted twice, and the terminal threshold remains two credits.
-- **Fatal authored deaths now force the fatal life-state transition:** Authored stationary and walker death controllers pass `forceFatal: true` when entering `dying`, reducing ambiguity when the triggering wound path has not already committed mortality. Head/face/skull were also added to the vital-region set used by accepted piercing evaluation.
-- **Dying actors remain weapon-contactable until grounded:** Folsom actors now distinguish living, dying/contactable, grounded, and disposed contact states. On death start, player-blocking collision is released, but combat routing and actor colliders remain active so accurately aimed sword follow-up cuts can still detach authored neck or elbow segments during the collapse. Combat routing and colliders are disabled when the actor reaches the grounded state. Detachment while already dying remains physical and can emit blood, but does not trigger a second mortality transition.
-- **Folsom encounter queries were split by purpose:** Encounter code now exposes separate living-actor and contactable-actor collections instead of treating death start as immediate removal from every combat query. Stationary and walker controllers participate in the same grounded-contact cleanup model.
-- **First-person weapon presentation gained a shared authoritative anchor:** A new `WeaponViewmodelAnchor.js` centralizes the camera-relative root, world-pose-preserving reparenting, presentation diagnostics, layer transitions, and continuity recovery used by knife, sword, and mace presentation. `FirstPersonViewmodelHost.js` and the three weapon controllers were updated around this ownership model. The implementation is designed to keep one visible authoritative weapon root, preserve exact world pose when knife/sword ownership moves between the viewmodel anchor and scene during embed/extraction, and bound post-extraction recovery movement.
-- **Knife and sword presentation paths were reworked:** `WorldKnifeCombatController.js` and `SwordWorldWeaponController.js` now use the shared viewmodel anchor and diagnostics rather than independently writing camera-relative transforms. The sword changes also align thrust presentation and ownership transitions with the new continuity model.
-- **Dreadmace handling and motion were polished:** `MaceWorldWeaponController.js` now separates loose free aim/extension from the additive load overlay, captures the displayed pose at grip acquisition and at commitment, starts return from the actual completed swing pose, and uses a time-based critically damped return. Combat Lab now passes frame delta into weapon `afterPhysics` presentation updates.
-- **Validation coverage expanded:** `validate:combat` now includes the new `tests/combat-showcase-polish.test.mjs`. Added and updated tests cover corrected two-hit sword-thrust mortality across all four Folsom actors, dying-versus-grounded contact eligibility, single-shot detachment consequences during dying, one-root weapon presentation, exact embed/extraction pose preservation, bounded continuity recovery, and Dreadmace free-aim/commitment/return continuity. These are verified test and script additions; this handoff does not claim that the tests or CI were executed successfully for the commit.
-- **Existing active systems remain in place:** The Folsom four-actor showcase, explicit sword-sweep dismemberment path, persistent Dreadmace reward, accepted stab/death audio, owner-scoped audio cleanup, and daytime ambience runtime remain part of the current development baseline.
+- **Mace control was changed from authored smash animation to direct physical control:** `src/game/combat/weapons/MaceWorldWeaponController.js` now derives the visible and collision pose directly from thumb-driven position/rotation, tracks real upward/downward head travel and velocity, and qualifies strikes from recent load energy, downward motion, total head speed, travel, and contact-normal alignment. The state model is now `ready`, `held`, `loading`, `striking`, `impact_resistance`, and `returning` rather than the prior loaded/smashing/follow-through sequence.
+- **Dreadmace strike ownership and rearming were hardened:** One active strike token governs a continuous downward action, resolved actors are capped per strike, resting contact and small vibration cannot mint another strike, and a meaningful physical raise is required to rearm. Solid impact preserves pointer ownership and enters a short impact-resistance state rather than releasing control.
+- **Visible, physical, and diagnostic mace poses now share one authority:** The controller records position, rotation, and visual-to-physical head tracking error. `CombatLabDebugPanel.js` exposes direct-control travel, speed, strike qualification, resistance, and unity diagnostics. The diff also makes the mace head the required earliest valid damaging primitive in the covered contact case.
+- **Sword free presentation was simplified to one authoritative pose:** `src/game/combat/weapons/SwordWorldWeaponController.js` removes the prior independently smoothed render target path. Free held pose, collision primitives, visible blade, and thumb response are derived from the same authoritative grip/quaternion. Presentation diagnostics now report tip/edge unity and extraction-cycle state.
+- **Sword extraction continuity became a non-stacking authoritative offset:** Embedded world pose is preserved when returning to the viewmodel, then a 0.1-second offset decays toward the current thumb-driven pose. New input remains one-to-one during decay, and a later extraction replaces rather than accumulates the previous offset.
+- **Folsom sword dismemberment now rejects visible/physical edge divergence:** `src/game/combat/FolsomShowcaseSwordDismemberment.js` adds a 0.01 m visible-to-physical edge tolerance. Neck/elbow detachment is rejected when the scheduled physical edge is too far from the visible blade, with dedicated rejection diagnostics.
+- **Regression coverage expanded:** `tests/dreadmace-vertical-slice.test.mjs`, `tests/puncture-only-weapons.test.mjs`, `tests/combat-showcase-polish.test.mjs`, and `tests/folsom-combat-showcase.test.mjs` were updated. Added assertions cover direct mace pose unity, physical strike/rearm behavior, retained thumb ownership, sword pose/collider unity, ten continuous-hold impalement/extraction cycles, non-stacking extraction offsets, and ghost-edge dismemberment rejection. These are verified test additions; this record does not claim that the tests or CI ran successfully.
+- **Previously active systems remain part of the baseline:** Folsom weighted piercing lethality, collapse-window contact, authored dying-state detachment, shared weapon viewmodel ownership, persistent Dreadmace reward, combat audio, and Folsom daytime ambience remain present unless superseded by the direct-control changes above.
 
 ### Important design decisions
 
-- Knife, sword, and mace remain separate combat interaction paths, but their first-person visual ownership now converges on one shared camera-relative anchor and continuity contract.
-- Actor death start releases navigation/player blocking immediately, while weapon contact remains available only through the authored collapse window; grounded or disposed actors are no longer combat-contactable.
-- Structural detachment remains constrained to the explicit Folsom showcase sword path. A dying actor may receive a valid physical detachment, but mortality activation is single-shot.
-- Piercing lethality is evidence-driven: interaction type, weapon family/id, deliberate-stab flag, rupture state, region, depth, and target state at wound creation are all checked before credit is granted.
-- Sword-thrust mortality uses weighted credits, allowing a decisive vital thrust to reach the two-credit terminal threshold while shallower qualifying thrusts require a second accepted hit.
-- Weapon embed/extraction changes parent ownership while preserving the same visual root and world pose; recovery toward the free held pose is bounded rather than snapping.
-- Folsom ambience positions continue to resolve from canonical authored location data, and combat audio remains owner-addressable for lifecycle cleanup.
+- Mace damage must come from measured player-driven physical movement and contact geometry, not a prerecorded smash arc.
+- The visible weapon, collision primitives, and gameplay pose must remain coincident; diagnostics and acceptance gates explicitly detect divergence.
+- A Dreadmace strike is a bounded tokenized action. Continued overlap, rest, or vibration cannot repeatedly damage; meaningful upward movement rearms the next strike.
+- Impact resistance preserves continuous grip ownership, allowing the player to feel/control the weapon through contact instead of transferring authority to an automatic recoil sequence.
+- Sword extraction continuity is an offset layered onto the current authoritative free pose, not a second pose controller. New thumb input remains immediate, and offsets never stack across cycles.
+- Folsom authored dismemberment requires both valid seam/gesture evidence and visible-to-physical blade agreement within 1 cm.
+- Actor contact lifetime and piercing lethality decisions from the prior checkpoint remain unchanged by this commit.
 
 ### Risks and next logical work
 
-- **Verified risk surface:** The new contact-state split touches combat routing, collider lifetime, death animation completion, segment detachment, planted weapon behavior, and actor disposal. Regressions could leave grounded corpses contactable, disable contact too early during collapse, or permit duplicate mortality/detachment consequences.
-- **Verified risk surface:** The shared presentation anchor changes transform ownership for all three held weapons. Camera motion, scene/viewmodel reparenting, depth/layer changes, equipment switching, location transitions, and disposal are the highest-risk paths for duplicate roots, pose jumps, stale anchors, or transform writes from more than one owner.
-- **Inference:** The new Folsom sword thresholds and weighted terminal credits are presentation/lethality tuning values rather than a demonstrated final balance. Manual playtesting is still needed across regions, depths, actor animations, frame rates, and repeated wound updates.
-- **Inference:** The Dreadmace pose and critically damped return changes are intended to improve visual continuity and control feel; automated pose assertions do not establish that the gesture feels correct in live play.
-- **Next logical work:** Run `npm run validate:combat` and the Folsom validation suite; manually verify all four showcase actors with shallow and decisive sword thrusts; cut neck/elbow seams during collapse and confirm contact ends exactly on grounding; test planted knife/sword extraction through death; exercise camera movement and weapon switching for knife, sword, and mace; inspect diagnostics for one authoritative root, zero duplicate roots, bounded recovery error, and complete cleanup after location exit or actor disposal.
+- **Verified risk surface:** Direct mace control changes gesture thresholds, state transitions, collision sweep timing, strike IDs, target caps, pointer ownership, resistance, rearm behavior, and diagnostics in one controller. Edge cases include low-frame-rate sweeps, rapid direction reversals, glancing haft/grip contacts, repeated solid contact, and rearming while still intersecting geometry.
+- **Verified risk surface:** Sword presentation no longer has the old render smoothing path. Camera movement, extraction, equipment switching, location transitions, and rapid repeated impalement cycles are the key paths for visible/collider divergence or transform discontinuity.
+- **Verified risk surface:** The 0.01 m Folsom edge-unity gate can reject valid-looking dismemberment if scheduling or frame interpolation produces transient error; conversely, its effectiveness depends on the diagnostic being sampled at the correct contact instant.
+- **Inference:** New mace travel/speed/load thresholds and workspace sensitivities are control-feel and balance values, not demonstrated final tuning. Automated tests cannot establish weight, resistance, or responsiveness in live play.
+- **Next logical work:** Run `npm run validate:combat` plus the focused mace, puncture, and Folsom suites. Manually test slow/fast raises, diagonal and glancing blows, repeated wall/body contact, frame-rate extremes, and strike rearming. Verify the mace head remains visually coincident with collision through impact resistance. Repeat sword stab/extract cycles while moving the camera and thumb, then confirm Folsom neck/elbow cuts accept the visible blade and reject ghost contacts without false negatives.
 
 ## Development History
+
+### 2026-07-16 17:58 EDT — Update through `37e5de4`
+
+**Scanned range:** after checkpoint `8011cac` through observed `main` HEAD `37e5de438faadf588bf95199442e933b05251cac`. The intervening `817f79c` commit (`docs(devlog): update through 8011cac`) was ignored as a devlog-only self-update. One development commit was included.
+
+**Included commits, chronological:**
+
+- `37e5de4` — Unify direct mace and sword control
+
+**Grouped development steps:**
+
+1. **Direct Dreadmace control and physical strike qualification**
+   - Reworked `src/game/combat/weapons/MaceWorldWeaponController.js` from an authored loaded/smash/follow-through arc to direct thumb-controlled position and rotation.
+   - Added measured upward/downward head travel, velocity, recent load energy, downward strike qualification, contact-normal checks, active strike tokens, per-strike target limits, impact resistance, and meaningful-raise rearming.
+   - Preserved grip ownership through solid impact and added visual/physical pose-unity diagnostics.
+
+2. **Sword presentation and extraction authority**
+   - Updated `src/game/combat/weapons/SwordWorldWeaponController.js` so free display pose, collision primitives, and thumb response use one authoritative transform.
+   - Replaced the previous free-presentation smoothing path with a 0.1-second non-stacking extraction continuity offset that preserves the embedded world pose while allowing immediate input.
+
+3. **Dismemberment presentation gate and diagnostics**
+   - Added `FOLSOM_SHOWCASE_VISIBLE_PHYSICAL_EDGE_TOLERANCE` in `src/game/combat/FolsomShowcaseSwordDismemberment.js`.
+   - Rejected authored neck/elbow detachment when visible and scheduled physical sword edges differ by more than 0.01 m.
+   - Added presentation-error rejection counts and last-error diagnostics.
+
+4. **Combat Lab diagnostics**
+   - Updated `src/game/combat/CombatLabDebugPanel.js` to display direct mace travel/speed, strike identity and qualification, impact resistance, and position/rotation/head unity errors.
+
+5. **Regression additions**
+   - Expanded `tests/dreadmace-vertical-slice.test.mjs` for direct physical movement, earliest damaging head contact, retained pointer ownership, strike-token rearm rules, and reset semantics.
+   - Expanded `tests/puncture-only-weapons.test.mjs` for free sword pose/collider unity, authoritative extraction continuity, and ten repeated continuous-hold impalement cycles.
+   - Updated `tests/combat-showcase-polish.test.mjs` for the revised presentation-continuity behavior.
+   - Expanded `tests/folsom-combat-showcase.test.mjs` to reject a ghost physical edge and accept coincident visible neck/elbow cuts. No test-run result is asserted by this record.
 
 ### 2026-07-16 14:00 EDT — Update through `8011cac`
 
