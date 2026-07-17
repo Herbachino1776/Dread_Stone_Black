@@ -19,8 +19,10 @@ import {
   DREADMACE_GESTURE_THRESHOLDS,
   DREADMACE_GLB_PATH,
   DREADMACE_MAX_SWEEP_SAMPLE_COUNT,
+  DREADMACE_READY_QUATERNION,
   DREADMACE_WORLD_WEAPON_CONFIG,
   MACE_GESTURE_STATES,
+  MACE_HAMMER_PHASES,
   MACE_VIEWMODEL_LAYER,
   MaceWorldWeaponController,
   applyDreadmaceAssetCorrection,
@@ -124,6 +126,24 @@ test('one explicit load-time correction preserves grip origin and imported -Z ac
   assert.equal(DREADMACE_ASSET_CORRECTION.runtimeActiveAxis, '-Z');
 });
 
+test('canonical mace ready pose angles the imported -Z head without separating visual and physical ownership', async () => {
+  const readyQuaternion = new THREE.Quaternion().fromArray(DREADMACE_READY_QUATERNION);
+  assert.ok(readyQuaternion.angleTo(new THREE.Quaternion()) > 0.4, 'ready rotation is intentionally non-identity');
+  const readyDirection = new THREE.Vector3(...DREADMACE_DIMENSIONS.runtimeActiveDirection).applyQuaternion(readyQuaternion);
+  assert.ok(readyDirection.y > 0.4, 'positive hammer pitch raises the imported -Z active axis');
+  assert.ok(readyDirection.dot(new THREE.Vector3(0, 0, -1)) < 0.95, 'head no longer aims straight into the horizon');
+
+  const controller = makeController();
+  await controller.visualLoadPromise;
+  controller.beforePhysics(1 / 60);
+  controller.afterPhysics();
+  assert.ok(controller.localQuaternion.angleTo(readyQuaternion) < 1e-12);
+  assert.ok(controller.displayedQuaternion.angleTo(controller.actualQuaternion) < 1e-7);
+  assert.ok(controller.displayedHeadCenter.distanceTo(controller.currentHeadCenter) < 1e-12);
+  assert.equal(controller.getDiagnostics().maceDirectControl.visualPhysicalHeadError, 0);
+  controller.dispose();
+});
+
 test('deterministic semantic primitives fit the inspected mace and contain no blade contacts', () => {
   assert.deepEqual(Object.keys(DREADMACE_CONTACT_PRIMITIVES), ['mace_head', 'haft', 'grip', 'pommel']);
   assert.equal(DREADMACE_CONTACT_PRIMITIVES.mace_head.kind, 'sphere');
@@ -216,6 +236,63 @@ test('Dreadmace load uses actual upward head travel, speed qualification, and de
   slow.dispose();
 });
 
+test('player-authored raises progressively cock the hammer and preserve unrestricted lateral grip placement', async () => {
+  const controller = makeController();
+  await controller.visualLoadPromise;
+  const orientation = DREADMACE_WORLD_WEAPON_CONFIG.hammerOrientation;
+  controller.acquireGrip(1, 300, 520, 0);
+  controller.beforePhysics(1 / 60);
+
+  const restPitch = controller.hammerPitch;
+  moveMace(controller, 1, 0, -20, 40, 0.08);
+  const smallPitch = controller.hammerPitch;
+  assert.ok(smallPitch > restPitch && smallPitch - restPitch < 0.2, 'small grip raise produces only a small rotation');
+  assert.ok(controller.hammerRaiseProgress > 0 && controller.hammerRaiseProgress < 0.2);
+
+  moveMace(controller, 1, 0, -70, 120, 0.18);
+  const halfPitch = controller.hammerPitch;
+  assert.ok(halfPitch > smallPitch && halfPitch < orientation.topPitch, 'half raise stays intermediate');
+  assert.ok(Math.abs(controller.hammerRaiseProgress - 0.5) < 1e-8);
+
+  moveMace(controller, 1, 0, -140, 260, 0.25);
+  assert.ok(controller.hammerPitch >= Math.PI * 0.5, 'full raise reaches a hammer-overhead orientation');
+  moveMace(controller, 1, 0, -210, 310, 0.05);
+  assert.ok(controller.hammerPitch > orientation.topPitch, 'strong complete raise carries over center');
+  assert.ok(controller.hammerPitch <= orientation.maximumTopPitch + 1e-12, 'over-center pitch stays bounded');
+
+  const overheadPitch = controller.hammerPitch;
+  moveMace(controller, 1, -400, -210, 350, 0.05);
+  assert.equal(controller.localGrip.x, DREADMACE_WORLD_WEAPON_CONFIG.workspace.min[0]);
+  assert.equal(controller.hammerPitch, overheadPitch);
+  moveMace(controller, 1, 400, -210, 390, 0.05);
+  assert.equal(controller.localGrip.x, DREADMACE_WORLD_WEAPON_CONFIG.workspace.max[0]);
+  assert.equal(controller.hammerPitch, overheadPitch);
+  controller.dispose();
+});
+
+test('cocked hold keeps overhead rotation independent of load-memory decay and remains laterally responsive', async () => {
+  const controller = makeController();
+  await controller.visualLoadPromise;
+  controller.acquireGrip(1, 300, 520, 0);
+  controller.beforePhysics(1 / 60);
+  moveMace(controller, 1, 0, -210, 50, 0.05);
+  controller.beforePhysics(1 / 60);
+  assert.equal(controller.hammerPhase, MACE_HAMMER_PHASES.cocked);
+  const cockedPitch = controller.hammerPitch;
+  const cockedGripY = controller.localGrip.y;
+  const loaded = controller.loadEnergy;
+  for (let frame = 0; frame < 90; frame += 1) controller.beforePhysics(1 / 60);
+  assert.ok(controller.loadEnergy < loaded);
+  assert.ok(controller.loadEnergy < DREADMACE_GESTURE_THRESHOLDS.minimumRecentLoadEnergy);
+  assert.equal(controller.hammerPitch, cockedPitch, 'load memory cannot lower a held hammer');
+  assert.equal(controller.localGrip.y, cockedGripY);
+  moveMace(controller, 1, 120, -210, 1700, 0.05);
+  assert.ok(controller.localGrip.x > DREADMACE_WORLD_WEAPON_CONFIG.workspace.ready[0]);
+  assert.equal(controller.localGrip.y, cockedGripY, 'cocked pose has no fixed top grip position');
+  assert.equal(controller.hammerPitch, cockedPitch);
+  controller.dispose();
+});
+
 test('left, center, right, and diagonal player-authored downward paths qualify without a canned arc', async () => {
   for (const [label, endX] of [['down-left', -200], ['straight-down', 0], ['down-right', 180], ['diagonal-down', 95]]) {
     const controller = makeController();
@@ -226,6 +303,7 @@ test('left, center, right, and diagonal player-authored downward paths qualify w
     const raisedHead = controller.currentHeadCenter.clone();
     moveMace(controller, 1, endX, 100, 100, 0.08);
     const motion = controller.currentHeadCenter.clone().sub(raisedHead);
+    assert.equal(controller.hammerPhase, MACE_HAMMER_PHASES.descending, label);
     assert.equal(controller.state, MACE_GESTURE_STATES.striking, label);
     assert.equal(controller.strikeQualified, true, label);
     assert.ok(motion.y < -DREADMACE_GESTURE_THRESHOLDS.minimumDownwardStrikeTravel, label);
@@ -237,6 +315,65 @@ test('left, center, right, and diagonal player-authored downward paths qualify w
   assert.doesNotMatch(source, /sampleDreadmaceSmashArc|loadedGrip|finishGrip|loadedEuler|finishEuler/);
   const pose = sampleDreadmaceDirectPose({ aimX: -1, aimY: 1, extension: 0.2 });
   assert.ok([...pose.grip.toArray(), ...pose.quaternion.toArray()].every(Number.isFinite));
+});
+
+test('downstroke pitch unwinds from captured top pose by grip travel and reverses upward without a snap', async () => {
+  const controller = makeController();
+  await controller.visualLoadPromise;
+  controller.acquireGrip(1, 300, 520, 0);
+  controller.beforePhysics(1 / 60);
+  moveMace(controller, 1, 0, -210, 50, 0.05);
+  controller.beforePhysics(1 / 60);
+  const topPitch = controller.hammerPitch;
+
+  moveMace(controller, 1, 0, -175, 100, 0.08);
+  assert.equal(controller.hammerPhase, MACE_HAMMER_PHASES.descending);
+  const earlyPitch = controller.hammerPitch;
+  const earlyProgress = controller.hammerDownstrokeProgress;
+  assert.ok(earlyPitch < topPitch && earlyProgress > 0 && earlyProgress < 0.5);
+  moveMace(controller, 1, 0, -140, 150, 0.08);
+  const middlePitch = controller.hammerPitch;
+  assert.ok(middlePitch < earlyPitch);
+  assert.ok(controller.hammerDownstrokeProgress > earlyProgress);
+  moveMace(controller, 1, 0, 100, 200, 0.08);
+  assert.ok(controller.hammerPitch < middlePitch);
+  assert.equal(controller.hammerDownstrokeProgress, 1);
+  assert.ok(Math.abs(controller.hammerPitch - DREADMACE_WORLD_WEAPON_CONFIG.hammerOrientation.impactPitch) < 1e-12);
+
+  controller.cancel();
+  controller.acquireGrip(2, 300, 520, 300);
+  controller.beforePhysics(1 / 60);
+  moveMace(controller, 2, 0, -210, 350, 0.05);
+  moveMace(controller, 2, 0, -175, 400, 0.08);
+  const beforeReverseQuaternion = controller.localQuaternion.clone();
+  const beforeReversePitch = controller.hammerPitch;
+  moveMace(controller, 2, 0, -190, 450, 0.08);
+  assert.equal(controller.hammerPhase, MACE_HAMMER_PHASES.raising);
+  assert.ok(controller.hammerPitch >= beforeReversePitch);
+  assert.ok(controller.localQuaternion.angleTo(beforeReverseQuaternion) < 0.08, 'upward reversal continues from the exact descending pose');
+  assert.ok(controller.swingCommitCount <= 2, 'reversal cannot duplicate a strike token');
+  controller.dispose();
+});
+
+test('authoritative hammer quaternion supplies angular head velocity to both presentation and swept physics', async () => {
+  const controller = makeController();
+  await controller.visualLoadPromise;
+  controller.acquireGrip(1, 300, 520, 0);
+  controller.beforePhysics(1 / 60);
+  moveMace(controller, 1, 0, -210, 50, 0.05);
+  moveMace(controller, 1, 80, -120, 100, 0.08);
+  assert.ok(controller.angularVelocity.length() > 1);
+  const expectedAngularContribution = controller.angularVelocity.clone().cross(
+    controller.localHeadOffset.clone().applyQuaternion(controller.actualQuaternion),
+  );
+  const measuredAngularContribution = controller.headCenterVelocity.clone().sub(controller.gripVelocity);
+  assert.ok(measuredAngularContribution.distanceTo(expectedAngularContribution) < 1e-9);
+  assert.ok(measuredAngularContribution.length() > 0.1, 'visible rotation materially moves the head');
+  controller.afterPhysics();
+  assert.ok(controller.displayedQuaternion.angleTo(controller.actualQuaternion) < 1e-7);
+  assert.ok(controller.displayedHeadCenter.distanceTo(controller.currentHeadCenter) < 1e-12);
+  assert.equal(controller.getDiagnostics().maceDirectControl.visualPhysicalHeadError, 0);
+  controller.dispose();
 });
 
 test('upward, lateral-only, and weak downward mace movement cannot become damaging smash motion', async () => {
@@ -294,6 +431,55 @@ test('held impact preserves pointer control; only release returns and reacquire 
   const halfAt60 = criticallyDampedMaceReturnProgress(0.155, controller.config.returnDuration);
   const halfAt120 = criticallyDampedMaceReturnProgress(31 / 200, controller.config.returnDuration);
   assert.ok(Math.abs(halfAt60 - halfAt120) < 1e-12);
+  controller.beforePhysics(1);
+  const readyQuaternion = new THREE.Quaternion().fromArray(DREADMACE_READY_QUATERNION);
+  assert.ok(controller.localQuaternion.angleTo(readyQuaternion) < 1e-12);
+  assert.ok(controller.localQuaternion.angleTo(new THREE.Quaternion()) > 0.4, 'safe return never targets identity');
+  controller.dispose();
+});
+
+test('projected lower-handle capsule is forgiving while rejecting head-only, distant, and blocked UI touches', async () => {
+  const controller = makeController();
+  await controller.visualLoadPromise;
+  controller.beforePhysics(1 / 60);
+  controller.afterPhysics();
+  const grip = controller.projectGrip();
+  assert.deepEqual(grip.localSegmentStart, [0, -0.006, 0.14]);
+  assert.deepEqual(grip.localSegmentEnd, [0, -0.014, -0.12]);
+  assert.equal(grip.radius, 50);
+  assert.equal(controller.projectGrabHit(grip.x, grip.y), true, 'mathematical grip origin remains compatible');
+  assert.equal(controller.projectGrabHit(grip.segmentStart.x, grip.segmentStart.y), true, 'lower handle is accepted');
+  assert.equal(controller.projectGrabHit(grip.segmentEnd.x, grip.segmentEnd.y), true, 'upper usable grip is accepted');
+
+  const segmentX = grip.segmentEnd.x - grip.segmentStart.x;
+  const segmentY = grip.segmentEnd.y - grip.segmentStart.y;
+  const segmentLength = Math.hypot(segmentX, segmentY);
+  const midpointX = (grip.segmentStart.x + grip.segmentEnd.x) * 0.5;
+  const midpointY = (grip.segmentStart.y + grip.segmentEnd.y) * 0.5;
+  const normalX = -segmentY / segmentLength;
+  const normalY = segmentX / segmentLength;
+  assert.equal(controller.projectGrabHit(midpointX + normalX * grip.radius * 0.8, midpointY + normalY * grip.radius * 0.8), true, 'near-handle margin is forgiving');
+  assert.equal(controller.projectGrabHit(midpointX + normalX * grip.radius * 2, midpointY + normalY * grip.radius * 2), false, 'far touch stays rejected');
+
+  const head = controller.getProjectedActivePoint();
+  assert.equal(controller.projectGrabHit(head.x, head.y), false, 'mace-head-only touch cannot acquire the grip');
+  const blockedSelectors = [];
+  for (const control of ['move', 'look']) {
+    controller.pointerDown({
+      pointerId: control,
+      clientX: grip.x,
+      clientY: grip.y,
+      timeStamp: 10,
+      target: { closest: (selector) => { blockedSelectors.push(selector); return { dataset: { control } }; } },
+    });
+    assert.equal(controller.gripPointerId, null, `${control} pad blocks weapon acquisition`);
+  }
+  assert.ok(blockedSelectors.every((selector) => selector.includes('[data-control="move"]') && selector.includes('[data-control="look"]')));
+  const diagnostics = controller.getDiagnostics().maceDirectControl;
+  assert.deepEqual(diagnostics.projectedGrabSegmentStart, grip.segmentStart);
+  assert.deepEqual(diagnostics.projectedGrabSegmentEnd, grip.segmentEnd);
+  assert.equal(diagnostics.projectedGrabRadius, grip.radius);
+  assert.equal(diagnostics.lastGrabAccepted, false);
   controller.dispose();
 });
 

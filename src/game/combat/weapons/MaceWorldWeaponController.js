@@ -56,9 +56,17 @@ export const MACE_GESTURE_STATES = Object.freeze({
   returning: 'returning',
 });
 
+export const MACE_HAMMER_PHASES = Object.freeze({
+  resting: 'resting',
+  raising: 'raising',
+  cocked: 'cocked',
+  descending: 'descending',
+  recovering: 'recovering',
+});
+
 export const DREADMACE_GESTURE_THRESHOLDS = Object.freeze({
   loadStartTravel: 0.10,
-  fullLoadTravel: 0.34,
+  fullLoadTravel: 0.42,
   minimumUpwardSpeed: 0.22,
   strongUpwardSpeed: 0.9,
   loadMemorySeconds: 0.6,
@@ -76,7 +84,13 @@ export const DREADMACE_GESTURE_THRESHOLDS = Object.freeze({
 
 export const DREADMACE_WORLD_WEAPON_CONFIG = Object.freeze({
   itemId: 'dreadstone_mace',
-  gripZone: Object.freeze({ minimumRadiusPx: 42, maximumRadiusPx: 78, viewportRatio: 0.09 }),
+  gripZone: Object.freeze({
+    minimumRadiusPx: 50,
+    maximumRadiusPx: 90,
+    viewportRatio: 0.105,
+    localSegmentStart: Object.freeze([0, -0.006, 0.14]),
+    localSegmentEnd: Object.freeze([0, -0.014, -0.12]),
+  }),
   workspace: Object.freeze({
     ready: Object.freeze([0.18, -0.30, -0.58]),
     min: Object.freeze([-0.30, -0.46, -0.92]),
@@ -88,7 +102,21 @@ export const DREADMACE_WORLD_WEAPON_CONFIG = Object.freeze({
     verticalReach: 0.60,
     thrustDistance: 0.40,
   }),
-  directRotation: Object.freeze({ pitch: 0.34, yaw: -0.28, roll: -0.22 }),
+  directRotation: Object.freeze({ yaw: -0.28, roll: -0.22 }),
+  hammerOrientation: Object.freeze({
+    restPitch: 0.42,
+    fullRaiseGripTravel: 0.28,
+    topPitch: 1.92,
+    maximumTopPitch: 2.08,
+    maximumSpeedOvershoot: 0.16,
+    overshootSpeedStart: 0.55,
+    overshootSpeedFull: 1.10,
+    fullDownstrokeGripTravel: 0.26,
+    impactPitch: -0.28,
+    motionSpeedThreshold: 0.025,
+    cockedProgressThreshold: 0.70,
+    maximumTrackedGripSpeed: 20,
+  }),
   impactResistanceDuration: Object.freeze({ minimum: 0.06, maximum: 0.13 }),
   maximumTargetsPerStrike: 2,
   returnDuration: 0.31,
@@ -98,6 +126,10 @@ const MACE_RENDER_ORDER = 10027;
 const EPSILON = 1e-6;
 const identityQuaternion = new THREE.Quaternion();
 const readyGrip = new THREE.Vector3().fromArray(DREADMACE_WORLD_WEAPON_CONFIG.workspace.ready);
+export const DREADMACE_READY_QUATERNION = Object.freeze(new THREE.Quaternion()
+  .setFromEuler(new THREE.Euler(DREADMACE_WORLD_WEAPON_CONFIG.hammerOrientation.restPitch, 0, 0, 'YXZ'))
+  .toArray());
+const readyQuaternion = new THREE.Quaternion().fromArray(DREADMACE_READY_QUATERNION);
 const heldFreeEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const heldFreeRotation = new THREE.Quaternion();
 const loadDreadmaceAsset = createCachedWeaponGlbLoader(DREADMACE_GLB_PATH, 'Dreadmace');
@@ -149,7 +181,7 @@ export function computeDreadmaceGesturePower({ loadProgress = 0, downwardSpeed =
   return THREE.MathUtils.clamp(load * 0.5 + speed * 0.3 + travel * 0.15 + mass * 0.05, 0, 1);
 }
 
-export function sampleDreadmaceDirectPose({ baselineGrip = readyGrip, baselineQuaternion = identityQuaternion, aimX = 0, aimY = 0, extension = 0 } = {}, grip = new THREE.Vector3(), quaternion = new THREE.Quaternion()) {
+export function sampleDreadmaceDirectPose({ baselineGrip = readyGrip, baselineQuaternion = readyQuaternion, baselineHammerPitch = DREADMACE_WORLD_WEAPON_CONFIG.hammerOrientation.restPitch, hammerPitch = DREADMACE_WORLD_WEAPON_CONFIG.hammerOrientation.restPitch, aimX = 0, aimY = 0, extension = 0 } = {}, grip = new THREE.Vector3(), quaternion = new THREE.Quaternion()) {
   const boundedAimX = THREE.MathUtils.clamp(aimX, -1, 1);
   const boundedAimY = THREE.MathUtils.clamp(aimY, -1, 1);
   grip.copy(baselineGrip);
@@ -160,7 +192,7 @@ export function sampleDreadmaceDirectPose({ baselineGrip = readyGrip, baselineQu
   grip.y = THREE.MathUtils.clamp(grip.y, DREADMACE_WORLD_WEAPON_CONFIG.workspace.min[1], DREADMACE_WORLD_WEAPON_CONFIG.workspace.max[1]);
   grip.z = THREE.MathUtils.clamp(grip.z, DREADMACE_WORLD_WEAPON_CONFIG.workspace.min[2], DREADMACE_WORLD_WEAPON_CONFIG.workspace.max[2]);
   heldFreeRotation.setFromEuler(heldFreeEuler.set(
-    boundedAimY * DREADMACE_WORLD_WEAPON_CONFIG.directRotation.pitch,
+    hammerPitch - baselineHammerPitch,
     boundedAimX * DREADMACE_WORLD_WEAPON_CONFIG.directRotation.yaw,
     boundedAimX * DREADMACE_WORLD_WEAPON_CONFIG.directRotation.roll,
     'YXZ',
@@ -204,7 +236,7 @@ export class MaceWorldWeaponController {
     this.poseWorkspace = createWeaponPoseWorkspace();
     this.contactScratch = createWeaponContactScratch();
     this.localGrip = new THREE.Vector3().fromArray(this.config.workspace.ready);
-    this.localQuaternion = new THREE.Quaternion();
+    this.localQuaternion = readyQuaternion.clone();
     this.targetLocalGrip = this.localGrip.clone();
     this.targetLocalQuaternion = this.localQuaternion.clone();
     this.gestureBaselineGrip = this.localGrip.clone();
@@ -227,6 +259,23 @@ export class MaceWorldWeaponController {
     this.positionTrackingError = 0;
     this.rotationTrackingErrorDegrees = 0;
     this.visualPhysicalHeadError = 0;
+    this.hammerPhase = MACE_HAMMER_PHASES.resting;
+    this.hammerRaiseProgress = 0;
+    this.hammerDownstrokeProgress = 0;
+    this.hammerPitch = this.config.hammerOrientation.restPitch;
+    this.hammerPitchTarget = this.hammerPitch;
+    this.hammerPeakPitch = this.hammerPitch;
+    this.hammerRaiseStartPitch = this.hammerPitch;
+    this.hammerDownstrokeStartPitch = this.hammerPitch;
+    this.hammerGestureBaselinePitch = this.hammerPitch;
+    this.hammerRaiseStartGripY = this.localGrip.y;
+    this.hammerPeakGripY = this.localGrip.y;
+    this.hammerDownstrokeStartGripY = this.localGrip.y;
+    this.hammerPreviousAuthoredGripY = this.localGrip.y;
+    this.hammerRaiseTravel = 0;
+    this.hammerDownstrokeTravel = 0;
+    this.hammerUpwardGripSpeed = 0;
+    this.hammerDownwardGripSpeed = 0;
     this.gripVelocity = new THREE.Vector3();
     this.angularVelocity = new THREE.Vector3();
     this.localHeadOffset = new THREE.Vector3().fromArray(DREADMACE_DIMENSIONS.headCenter);
@@ -258,6 +307,7 @@ export class MaceWorldWeaponController {
     this.returnElapsed = 0;
     this.returnStartGrip = new THREE.Vector3();
     this.returnStartQuaternion = new THREE.Quaternion();
+    this.returnStartHammerPitch = this.hammerPitch;
     this.resistanceElapsed = 0;
     this.resistanceDuration = 0;
     this.resistancePositionOffset = new THREE.Vector3();
@@ -281,6 +331,8 @@ export class MaceWorldWeaponController {
     this.lastStateTransition = 'initialized->ready';
     this.lastTransitionPositionJump = 0;
     this.lastTransitionRotationJumpDegrees = 0;
+    this.lastGrabDistanceToHandle = null;
+    this.lastGrabAccepted = false;
     this.outdoorMaterialRegistration = { status: outdoorLightingDirector ? 'pending' : 'unavailable', registered: false, eligibleMaterialCount: 0 };
     this.colliderFilter = (collider) => this.weaponContactRouter.ownsCollider(collider);
     this.sweepScratch = {
@@ -289,6 +341,10 @@ export class MaceWorldWeaponController {
       point0: new THREE.Vector3(), point1: new THREE.Vector3(), localPoint: new THREE.Vector3(),
       deltaQuaternion: new THREE.Quaternion(), axis: new THREE.Vector3(), offset: new THREE.Vector3(), cross: new THREE.Vector3(),
       actorVelocity: new THREE.Vector3(), primitiveVelocity: new THREE.Vector3(), normal: new THREE.Vector3(), point: new THREE.Vector3(), bodyCenter: new THREE.Vector3(),
+    };
+    this.grabScratch = {
+      worldStart: new THREE.Vector3(), worldEnd: new THREE.Vector3(), worldCenter: new THREE.Vector3(),
+      projectedStart: new THREE.Vector3(), projectedEnd: new THREE.Vector3(), projectedCenter: new THREE.Vector3(),
     };
     this.poseRebaseRequest = { camera: this.camera, poseWorkspace: this.poseWorkspace, anchored: false, positions: [this.actualGrip, this.previousGrip, this.desiredGrip, this.currentHeadCenter, this.previousHeadCenter], quaternions: [this.actualQuaternion, this.previousQuaternion, this.desiredQuaternion] };
     this.disposers = [];
@@ -370,7 +426,8 @@ export class MaceWorldWeaponController {
   initializePose() {
     initializeCameraRelativeWeaponPose({ camera: this.camera, workspace: this.config.workspace, poseWorkspace: this.poseWorkspace, actualGrip: this.actualGrip, previousGrip: this.previousGrip, desiredGrip: this.desiredGrip, actualQuaternion: this.actualQuaternion, previousQuaternion: this.previousQuaternion, desiredQuaternion: this.desiredQuaternion });
     this.localGrip.fromArray(this.config.workspace.ready);
-    this.localQuaternion.identity();
+    this.localQuaternion.copy(readyQuaternion);
+    this.resetHammerPose();
     this.targetLocalGrip.copy(this.localGrip);
     this.targetLocalQuaternion.copy(this.localQuaternion);
     this.gestureBaselineGrip.copy(this.localGrip);
@@ -417,6 +474,7 @@ export class MaceWorldWeaponController {
     if (!this.isEquipped() || !this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
     this.gestureBaselineGrip.copy(this.localGrip);
     this.gestureBaselineQuaternion.copy(this.localQuaternion);
+    this.hammerGestureBaselinePitch = this.hammerPitch;
     this.targetLocalGrip.copy(this.localGrip);
     this.targetLocalQuaternion.copy(this.localQuaternion);
     this.freeAimX = 0;
@@ -428,6 +486,7 @@ export class MaceWorldWeaponController {
     this.resistanceDuration = 0;
     this.resistancePositionOffset.set(0, 0, 0);
     this.resistanceRotationOffset.identity();
+    this.beginHammerGesture();
     this.transitionState(MACE_GESTURE_STATES.held);
     return true;
   }
@@ -489,6 +548,111 @@ export class MaceWorldWeaponController {
     this.loadCompletedAt = null;
   }
 
+  resetHammerPose() {
+    const readyY = this.config.workspace.ready[1];
+    this.hammerPhase = MACE_HAMMER_PHASES.resting;
+    this.hammerRaiseProgress = 0;
+    this.hammerDownstrokeProgress = 0;
+    this.hammerPitch = this.config.hammerOrientation.restPitch;
+    this.hammerPitchTarget = this.hammerPitch;
+    this.hammerPeakPitch = this.hammerPitch;
+    this.hammerRaiseStartPitch = this.hammerPitch;
+    this.hammerDownstrokeStartPitch = this.hammerPitch;
+    this.hammerGestureBaselinePitch = this.hammerPitch;
+    this.hammerRaiseStartGripY = readyY;
+    this.hammerPeakGripY = readyY;
+    this.hammerDownstrokeStartGripY = readyY;
+    this.hammerPreviousAuthoredGripY = readyY;
+    this.hammerRaiseTravel = 0;
+    this.hammerDownstrokeTravel = 0;
+    this.hammerUpwardGripSpeed = 0;
+    this.hammerDownwardGripSpeed = 0;
+  }
+
+  beginHammerGesture() {
+    const gripY = this.localGrip.y;
+    this.hammerRaiseProgress = 0;
+    this.hammerDownstrokeProgress = 0;
+    this.hammerRaiseTravel = 0;
+    this.hammerDownstrokeTravel = 0;
+    this.hammerUpwardGripSpeed = 0;
+    this.hammerDownwardGripSpeed = 0;
+    this.hammerRaiseStartGripY = gripY;
+    this.hammerPeakGripY = gripY;
+    this.hammerDownstrokeStartGripY = gripY;
+    this.hammerPreviousAuthoredGripY = gripY;
+    this.hammerRaiseStartPitch = this.hammerPitch;
+    this.hammerDownstrokeStartPitch = this.hammerPitch;
+    this.hammerPitchTarget = this.hammerPitch;
+    this.hammerPeakPitch = this.hammerPitch;
+    this.hammerPhase = this.hammerPitch >= this.config.hammerOrientation.topPitch * 0.85
+      ? MACE_HAMMER_PHASES.cocked
+      : this.hammerPitch <= this.config.hammerOrientation.restPitch + EPSILON
+        ? MACE_HAMMER_PHASES.resting
+        : MACE_HAMMER_PHASES.recovering;
+  }
+
+  updateHammerOrientation(authoredGripY, dt) {
+    const config = this.config.hammerOrientation;
+    const previousGripY = this.hammerPreviousAuthoredGripY;
+    const gripDeltaY = authoredGripY - previousGripY;
+    const safeDt = Math.max(EPSILON, dt);
+    this.hammerUpwardGripSpeed = THREE.MathUtils.clamp(Math.max(0, gripDeltaY / safeDt), 0, config.maximumTrackedGripSpeed);
+    this.hammerDownwardGripSpeed = THREE.MathUtils.clamp(Math.max(0, -gripDeltaY / safeDt), 0, config.maximumTrackedGripSpeed);
+    const raising = gripDeltaY > EPSILON && this.hammerUpwardGripSpeed >= config.motionSpeedThreshold;
+    const descending = gripDeltaY < -EPSILON && this.hammerDownwardGripSpeed >= config.motionSpeedThreshold;
+
+    if (raising) {
+      if (this.hammerPhase !== MACE_HAMMER_PHASES.raising) {
+        this.hammerPhase = MACE_HAMMER_PHASES.raising;
+        this.hammerRaiseStartGripY = previousGripY;
+        this.hammerRaiseStartPitch = this.hammerPitch;
+        this.hammerRaiseProgress = 0;
+        this.hammerRaiseTravel = 0;
+        this.hammerPeakPitch = this.hammerPitch;
+        this.hammerPeakGripY = previousGripY;
+      }
+      this.hammerRaiseTravel = Math.max(0, authoredGripY - this.hammerRaiseStartGripY);
+      this.hammerRaiseProgress = THREE.MathUtils.clamp(this.hammerRaiseTravel / config.fullRaiseGripTravel, 0, 1);
+      const speedQualification = THREE.MathUtils.clamp(
+        (this.hammerUpwardGripSpeed - config.overshootSpeedStart) / (config.overshootSpeedFull - config.overshootSpeedStart),
+        0,
+        1,
+      );
+      const upperRaiseWeight = smoothstep((this.hammerRaiseProgress - 0.70) / 0.30);
+      const overshoot = config.maximumSpeedOvershoot * speedQualification * upperRaiseWeight;
+      const raisedPitch = THREE.MathUtils.lerp(this.hammerRaiseStartPitch, config.topPitch, smoothstep(this.hammerRaiseProgress)) + overshoot;
+      this.hammerPitchTarget = THREE.MathUtils.clamp(raisedPitch, config.impactPitch, config.maximumTopPitch);
+      this.hammerPitch = Math.max(this.hammerPitch, this.hammerPitchTarget);
+      if (this.hammerPitch >= this.hammerPeakPitch) {
+        this.hammerPeakPitch = this.hammerPitch;
+        this.hammerPeakGripY = authoredGripY;
+      }
+    } else if (descending && (this.hammerPhase === MACE_HAMMER_PHASES.raising || this.hammerPhase === MACE_HAMMER_PHASES.cocked || this.hammerPhase === MACE_HAMMER_PHASES.descending)) {
+      if (this.hammerPhase !== MACE_HAMMER_PHASES.descending) {
+        this.hammerPhase = MACE_HAMMER_PHASES.descending;
+        this.hammerDownstrokeStartGripY = previousGripY;
+        this.hammerDownstrokeStartPitch = this.hammerPitch;
+        this.hammerDownstrokeProgress = 0;
+        this.hammerDownstrokeTravel = 0;
+      }
+      this.hammerDownstrokeTravel = Math.max(0, this.hammerDownstrokeStartGripY - authoredGripY);
+      this.hammerDownstrokeProgress = THREE.MathUtils.clamp(this.hammerDownstrokeTravel / config.fullDownstrokeGripTravel, 0, 1);
+      this.hammerPitchTarget = THREE.MathUtils.lerp(this.hammerDownstrokeStartPitch, config.impactPitch, smoothstep(this.hammerDownstrokeProgress));
+      this.hammerPitch = this.hammerPitchTarget;
+    } else if (this.hammerPhase === MACE_HAMMER_PHASES.raising && this.hammerRaiseProgress >= config.cockedProgressThreshold) {
+      this.hammerPhase = MACE_HAMMER_PHASES.cocked;
+      this.hammerPitchTarget = this.hammerPitch;
+    } else if (this.hammerPhase === MACE_HAMMER_PHASES.descending && this.hammerDownstrokeProgress >= 1) {
+      this.hammerPhase = MACE_HAMMER_PHASES.recovering;
+      this.hammerPitchTarget = this.hammerPitch;
+    }
+
+    this.hammerPitch = THREE.MathUtils.clamp(this.hammerPitch, config.impactPitch, config.maximumTopPitch);
+    this.hammerPitchTarget = THREE.MathUtils.clamp(this.hammerPitchTarget, config.impactPitch, config.maximumTopPitch);
+    this.hammerPreviousAuthoredGripY = authoredGripY;
+  }
+
   releaseGrip(reason = 'pointer-release') {
     if (this.gripPointerId == null) return;
     this.gestureOwnership.release();
@@ -501,8 +665,10 @@ export class MaceWorldWeaponController {
     this.returnElapsed = 0;
     this.returnStartGrip.copy(this.localGrip);
     this.returnStartQuaternion.copy(this.localQuaternion);
+    this.returnStartHammerPitch = this.hammerPitch;
     this.targetLocalGrip.fromArray(this.config.workspace.ready);
-    this.targetLocalQuaternion.identity();
+    this.targetLocalQuaternion.copy(readyQuaternion);
+    this.hammerPhase = MACE_HAMMER_PHASES.recovering;
     this.transitionState(MACE_GESTURE_STATES.returning);
   }
 
@@ -543,11 +709,15 @@ export class MaceWorldWeaponController {
       this.returnElapsed += dt;
       const t = criticallyDampedMaceReturnProgress(this.returnElapsed, this.config.returnDuration);
       this.localGrip.copy(this.returnStartGrip).lerp(this.contactScratch.point.fromArray(this.config.workspace.ready), t);
-      this.localQuaternion.slerpQuaternions(this.returnStartQuaternion, identityQuaternion, t).normalize();
+      this.localQuaternion.slerpQuaternions(this.returnStartQuaternion, readyQuaternion, t).normalize();
+      this.hammerPitch = THREE.MathUtils.lerp(this.returnStartHammerPitch, this.config.hammerOrientation.restPitch, t);
+      this.hammerPitchTarget = this.config.hammerOrientation.restPitch;
+      this.hammerPreviousAuthoredGripY = this.localGrip.y;
       if (this.returnElapsed >= this.config.returnDuration) {
         this.transitionState(MACE_GESTURE_STATES.ready);
         this.localGrip.fromArray(this.config.workspace.ready);
-        this.localQuaternion.identity();
+        this.localQuaternion.copy(readyQuaternion);
+        this.resetHammerPose();
         this.targetLocalGrip.copy(this.localGrip);
         this.targetLocalQuaternion.copy(this.localQuaternion);
         this.resetMotionHistory();
@@ -561,6 +731,18 @@ export class MaceWorldWeaponController {
     sampleDreadmaceDirectPose({
       baselineGrip: this.gestureBaselineGrip,
       baselineQuaternion: this.gestureBaselineQuaternion,
+      baselineHammerPitch: this.hammerGestureBaselinePitch,
+      hammerPitch: this.hammerPitch,
+      aimX: this.freeAimX,
+      aimY: this.freeAimY,
+      extension: this.freeExtension,
+    }, this.targetLocalGrip, this.targetLocalQuaternion);
+    this.updateHammerOrientation(this.targetLocalGrip.y, dt);
+    sampleDreadmaceDirectPose({
+      baselineGrip: this.gestureBaselineGrip,
+      baselineQuaternion: this.gestureBaselineQuaternion,
+      baselineHammerPitch: this.hammerGestureBaselinePitch,
+      hammerPitch: this.hammerPitch,
       aimX: this.freeAimX,
       aimY: this.freeAimY,
       extension: this.freeExtension,
@@ -869,15 +1051,58 @@ export class MaceWorldWeaponController {
 
   projectGrip() {
     if (!this.camera || !this.viewport) return null;
-    const projected = this.actualGrip.clone().project(this.camera);
     const rect = this.viewport.getBoundingClientRect();
     const radius = Math.max(this.config.gripZone.minimumRadiusPx, Math.min(this.config.gripZone.maximumRadiusPx, Math.min(rect.width, rect.height) * this.config.gripZone.viewportRatio));
-    return { x: rect.left + (projected.x * 0.5 + 0.5) * rect.width, y: rect.top + (-projected.y * 0.5 + 0.5) * rect.height, radius, toolId: this.config.itemId, kind: 'grip-input-capture' };
+    const start = this.grabScratch.worldStart.fromArray(this.config.gripZone.localSegmentStart).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+    const end = this.grabScratch.worldEnd.fromArray(this.config.gripZone.localSegmentEnd).applyQuaternion(this.actualQuaternion).add(this.actualGrip);
+    const center = this.grabScratch.worldCenter.copy(this.actualGrip);
+    const projectedStart = this.grabScratch.projectedStart.copy(start).project(this.camera);
+    const projectedEnd = this.grabScratch.projectedEnd.copy(end).project(this.camera);
+    const projectedCenter = this.grabScratch.projectedCenter.copy(center).project(this.camera);
+    const toScreen = (projected) => ({
+      x: rect.left + (projected.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (-projected.y * 0.5 + 0.5) * rect.height,
+      depth: projected.z,
+    });
+    const segmentStart = toScreen(projectedStart);
+    const segmentEnd = toScreen(projectedEnd);
+    const representativeCenter = toScreen(projectedCenter);
+    return {
+      ...representativeCenter,
+      radius,
+      segmentStart,
+      segmentEnd,
+      capsule: { start: segmentStart, end: segmentEnd, radius },
+      localSegmentStart: [...this.config.gripZone.localSegmentStart],
+      localSegmentEnd: [...this.config.gripZone.localSegmentEnd],
+      toolId: this.config.itemId,
+      kind: 'grip-input-capture',
+    };
   }
 
   getProjectedGrabPoint(viewport = this.viewport) { return this.getProjectedGripZone(viewport); }
   getProjectedGripZone(viewport = this.viewport) { if (viewport !== this.viewport) this.viewport = viewport; return this.isEquipped() ? this.projectGrip() : null; }
-  projectGrabHit(clientX, clientY, viewport = this.viewport) { const grip = this.getProjectedGripZone(viewport); return Boolean(grip && Math.hypot(clientX - grip.x, clientY - grip.y) <= grip.radius); }
+  projectGrabHit(clientX, clientY, viewport = this.viewport) {
+    const grip = this.getProjectedGripZone(viewport);
+    if (!grip) {
+      this.lastGrabDistanceToHandle = null;
+      this.lastGrabAccepted = false;
+      return false;
+    }
+    const start = grip.segmentStart;
+    const end = grip.segmentEnd;
+    const segmentX = end.x - start.x;
+    const segmentY = end.y - start.y;
+    const lengthSquared = segmentX * segmentX + segmentY * segmentY;
+    const projection = lengthSquared > EPSILON
+      ? THREE.MathUtils.clamp(((clientX - start.x) * segmentX + (clientY - start.y) * segmentY) / lengthSquared, 0, 1)
+      : 0;
+    const closestX = start.x + segmentX * projection;
+    const closestY = start.y + segmentY * projection;
+    this.lastGrabDistanceToHandle = THREE.MathUtils.clamp(Math.hypot(clientX - closestX, clientY - closestY), 0, 10000);
+    this.lastGrabAccepted = this.lastGrabDistanceToHandle <= grip.radius;
+    return this.lastGrabAccepted;
+  }
 
   getProjectedActivePoint(viewport = this.viewport) {
     if (!viewport || !this.isEquipped()) return null;
@@ -925,7 +1150,8 @@ export class MaceWorldWeaponController {
     this.feedbackCount = 0;
     this.lastSweepSampleCount = 0;
     this.localGrip.fromArray(this.config.workspace.ready);
-    this.localQuaternion.identity();
+    this.localQuaternion.copy(readyQuaternion);
+    this.resetHammerPose();
     this.targetLocalGrip.copy(this.localGrip);
     this.targetLocalQuaternion.copy(this.localQuaternion);
     this.freeAimX = 0;
@@ -944,6 +1170,7 @@ export class MaceWorldWeaponController {
 
   getDiagnostics() {
     const record = this.lastBluntImpactRecord;
+    const projectedGrip = this.isEquipped() ? this.projectGrip() : null;
     return {
       itemId: this.config.itemId,
       equipped: this.isEquipped(),
@@ -1016,6 +1243,25 @@ export class MaceWorldWeaponController {
         lastImpactEnergy: Number(this.lastEstimatedEnergy.toFixed(4)),
         resistanceActive: this.state === MACE_GESTURE_STATES.impactResistance,
         visualPhysicalHeadError: Number(this.visualPhysicalHeadError.toFixed(6)),
+        hammerPhase: this.hammerPhase,
+        hammerRaiseProgress: Number(this.hammerRaiseProgress.toFixed(4)),
+        hammerDownstrokeProgress: Number(this.hammerDownstrokeProgress.toFixed(4)),
+        hammerPitchRadians: Number(this.hammerPitch.toFixed(4)),
+        hammerPitchDegrees: Number(THREE.MathUtils.radToDeg(this.hammerPitch).toFixed(2)),
+        hammerPitchTargetRadians: Number(this.hammerPitchTarget.toFixed(4)),
+        hammerPeakPitchDegrees: Number(THREE.MathUtils.radToDeg(this.hammerPeakPitch).toFixed(2)),
+        hammerRaiseTravel: Number(this.hammerRaiseTravel.toFixed(4)),
+        hammerDownstrokeTravel: Number(this.hammerDownstrokeTravel.toFixed(4)),
+        hammerUpwardGripSpeed: Number(this.hammerUpwardGripSpeed.toFixed(4)),
+        hammerDownwardGripSpeed: Number(this.hammerDownwardGripSpeed.toFixed(4)),
+        readyPitchDegrees: Number(THREE.MathUtils.radToDeg(this.config.hammerOrientation.restPitch).toFixed(2)),
+        topPitchDegrees: Number(THREE.MathUtils.radToDeg(this.config.hammerOrientation.topPitch).toFixed(2)),
+        impactPitchDegrees: Number(THREE.MathUtils.radToDeg(this.config.hammerOrientation.impactPitch).toFixed(2)),
+        projectedGrabSegmentStart: projectedGrip?.segmentStart ?? null,
+        projectedGrabSegmentEnd: projectedGrip?.segmentEnd ?? null,
+        projectedGrabRadius: projectedGrip?.radius ?? 0,
+        lastGrabDistanceToHandle: this.lastGrabDistanceToHandle == null ? null : Number(this.lastGrabDistanceToHandle.toFixed(2)),
+        lastGrabAccepted: this.lastGrabAccepted,
       },
       completedBluntImpact: record ? {
         schema: record.schema,
