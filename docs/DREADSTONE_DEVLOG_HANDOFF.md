@@ -1,39 +1,68 @@
 # Dreadstone Black 2.0 Development Handoff
 
-<!-- last_processed_sha: 37e5de438faadf588bf95199442e933b05251cac -->
+<!-- last_processed_sha: c0fdbeab47b34033eb85114d63b7f15b539dba26 -->
 
 ## Current Handoff Snapshot
 
 ### Verified implementation
 
-- **Mace control was changed from authored smash animation to direct physical control:** `src/game/combat/weapons/MaceWorldWeaponController.js` now derives the visible and collision pose directly from thumb-driven position/rotation, tracks real upward/downward head travel and velocity, and qualifies strikes from recent load energy, downward motion, total head speed, travel, and contact-normal alignment. The state model is now `ready`, `held`, `loading`, `striking`, `impact_resistance`, and `returning` rather than the prior loaded/smashing/follow-through sequence.
-- **Dreadmace strike ownership and rearming were hardened:** One active strike token governs a continuous downward action, resolved actors are capped per strike, resting contact and small vibration cannot mint another strike, and a meaningful physical raise is required to rearm. Solid impact preserves pointer ownership and enters a short impact-resistance state rather than releasing control.
-- **Visible, physical, and diagnostic mace poses now share one authority:** The controller records position, rotation, and visual-to-physical head tracking error. `CombatLabDebugPanel.js` exposes direct-control travel, speed, strike qualification, resistance, and unity diagnostics. The diff also makes the mace head the required earliest valid damaging primitive in the covered contact case.
-- **Sword free presentation was simplified to one authoritative pose:** `src/game/combat/weapons/SwordWorldWeaponController.js` removes the prior independently smoothed render target path. Free held pose, collision primitives, visible blade, and thumb response are derived from the same authoritative grip/quaternion. Presentation diagnostics now report tip/edge unity and extraction-cycle state.
-- **Sword extraction continuity became a non-stacking authoritative offset:** Embedded world pose is preserved when returning to the viewmodel, then a 0.1-second offset decays toward the current thumb-driven pose. New input remains one-to-one during decay, and a later extraction replaces rather than accumulates the previous offset.
-- **Folsom sword dismemberment now rejects visible/physical edge divergence:** `src/game/combat/FolsomShowcaseSwordDismemberment.js` adds a 0.01 m visible-to-physical edge tolerance. Neck/elbow detachment is rejected when the scheduled physical edge is too far from the visible blade, with dedicated rejection diagnostics.
-- **Regression coverage expanded:** `tests/dreadmace-vertical-slice.test.mjs`, `tests/puncture-only-weapons.test.mjs`, `tests/combat-showcase-polish.test.mjs`, and `tests/folsom-combat-showcase.test.mjs` were updated. Added assertions cover direct mace pose unity, physical strike/rearm behavior, retained thumb ownership, sword pose/collider unity, ten continuous-hold impalement/extraction cycles, non-stacking extraction offsets, and ghost-edge dismemberment rejection. These are verified test additions; this record does not claim that the tests or CI ran successfully.
-- **Previously active systems remain part of the baseline:** Folsom weighted piercing lethality, collapse-window contact, authored dying-state detachment, shared weapon viewmodel ownership, persistent Dreadmace reward, combat audio, and Folsom daytime ambience remain present unless superseded by the direct-control changes above.
+- **The Dreadmace now has player-authored hammer rotation coupled to vertical grip movement:** `src/game/combat/weapons/MaceWorldWeaponController.js` introduces explicit hammer phases (`resting`, `raising`, `cocked`, `descending`, `recovering`) and derives hammer pitch from measured upward/downward grip travel rather than leaving pitch as a fixed direct-aim component. Raising progressively cocks the head overhead; the downstroke unwinds from the captured top pose toward an authored impact pitch.
+- **Hammer orientation remains part of the authoritative weapon transform:** The same quaternion drives visible presentation, collision primitives, head-center motion, angular velocity, swept-contact physics, and diagnostics. The ready pose is intentionally non-identity and angles the imported `-Z` active axis upward while preserving visual/physical unity.
+- **Vertical and lateral control are separated:** Hammer pitch is controlled by vertical grip travel, while yaw/roll continue to respond to lateral aim. A cocked hammer can remain overhead while the grip moves laterally, and load-memory decay does not lower the held weapon.
+- **Raise/downstroke continuity was hardened:** The controller captures phase-start pitch and grip positions, bounds speed-driven over-center overshoot, tracks raise/downstroke progress and travel, and continues from the current pose when motion reverses. Return and reset paths now target the canonical angled ready quaternion rather than identity.
+- **Grip acquisition now uses a projected handle capsule:** The screen-space grab target spans a configured lower-handle segment with a larger bounded radius instead of a circle around the grip origin. Near-handle touches are accepted; distant touches, head-only touches, and touches originating on movement/look controls are rejected. Grab geometry and last-attempt diagnostics were added.
+- **Gesture tuning changed:** Full-load travel increased from `0.34` m to `0.42` m, and the hammer-orientation configuration adds rest/top/maximum-top/impact pitches, raise/downstroke travel scales, overshoot speed thresholds, and motion thresholds. These values are implemented but not established as final feel tuning.
+- **Regression coverage expanded in `tests/dreadmace-vertical-slice.test.mjs`:** Added assertions cover the angled ready pose, progressive player-authored cocking, over-center bounds, lateral movement while cocked, independence from load-memory decay, downstroke pitch progression, reversal continuity, angular head velocity, visual/physical unity, safe return orientation, and projected-handle acquisition. This record verifies test additions only; it does not claim the suite or CI ran successfully.
+- **Previously active systems remain baseline:** Direct physical mace strike tokens/rearming, impact resistance with retained grip ownership, sword pose/extraction authority, Folsom edge-unity dismemberment gating, weighted piercing lethality, collapse-window contact, combat audio, Folsom ambience, and persistent Dreadmace progression remain present unless superseded above.
 
 ### Important design decisions
 
-- Mace damage must come from measured player-driven physical movement and contact geometry, not a prerecorded smash arc.
-- The visible weapon, collision primitives, and gameplay pose must remain coincident; diagnostics and acceptance gates explicitly detect divergence.
-- A Dreadmace strike is a bounded tokenized action. Continued overlap, rest, or vibration cannot repeatedly damage; meaningful upward movement rearms the next strike.
-- Impact resistance preserves continuous grip ownership, allowing the player to feel/control the weapon through contact instead of transferring authority to an automatic recoil sequence.
-- Sword extraction continuity is an offset layered onto the current authoritative free pose, not a second pose controller. New thumb input remains immediate, and offsets never stack across cycles.
-- Folsom authored dismemberment requires both valid seam/gesture evidence and visible-to-physical blade agreement within 1 cm.
-- Actor contact lifetime and piercing lethality decisions from the prior checkpoint remain unchanged by this commit.
+- Mace rotation is authored by the player’s actual vertical grip path. It is not a canned attack animation and is not driven by load-memory decay.
+- Visible orientation and physical orientation remain one authority. Rotational movement contributes directly to head velocity and swept collision behavior.
+- A raised/cocked pose is persistent while held; lateral placement must remain available without forcing the hammer down or snapping to a fixed top position.
+- Direction reversal must continue from the exact current pitch without creating duplicate strike ownership.
+- The safe ready/return pose is a canonical angled quaternion, not identity, because the imported mace’s active axis is `-Z`.
+- Grip acquisition should correspond to the visible usable handle, remain forgiving near that handle, and reject the mace head and UI-control touches.
+- Existing tokenized strike, meaningful-raise rearm, and retained-impact-control decisions remain in force.
 
 ### Risks and next logical work
 
-- **Verified risk surface:** Direct mace control changes gesture thresholds, state transitions, collision sweep timing, strike IDs, target caps, pointer ownership, resistance, rearm behavior, and diagnostics in one controller. Edge cases include low-frame-rate sweeps, rapid direction reversals, glancing haft/grip contacts, repeated solid contact, and rearming while still intersecting geometry.
-- **Verified risk surface:** Sword presentation no longer has the old render smoothing path. Camera movement, extraction, equipment switching, location transitions, and rapid repeated impalement cycles are the key paths for visible/collider divergence or transform discontinuity.
-- **Verified risk surface:** The 0.01 m Folsom edge-unity gate can reject valid-looking dismemberment if scheduling or frame interpolation produces transient error; conversely, its effectiveness depends on the diagnostic being sampled at the correct contact instant.
-- **Inference:** New mace travel/speed/load thresholds and workspace sensitivities are control-feel and balance values, not demonstrated final tuning. Automated tests cannot establish weight, resistance, or responsiveness in live play.
-- **Next logical work:** Run `npm run validate:combat` plus the focused mace, puncture, and Folsom suites. Manually test slow/fast raises, diagonal and glancing blows, repeated wall/body contact, frame-rate extremes, and strike rearming. Verify the mace head remains visually coincident with collision through impact resistance. Repeat sword stab/extract cycles while moving the camera and thumb, then confirm Folsom neck/elbow cuts accept the visible blade and reject ghost contacts without false negatives.
+- **Verified risk surface:** Hammer pitch now depends on frame-sampled grip deltas, phase transitions, speed thresholds, travel normalization, over-center overshoot, reversal handling, and return/reset behavior. Low frame rates, very fast pointer motion, micro-reversals near phase boundaries, and starting a new grip from a partially recovered pose can expose discontinuities or unexpected phase changes.
+- **Verified risk surface:** Rotational head velocity now materially affects swept contact. Incorrect angular velocity, pivot assumptions, or local-head offset handling could change strike qualification and collision ordering even when the grip path is unchanged.
+- **Verified risk surface:** The projected handle capsule depends on camera projection and the configured local handle segment. Extreme field of view, viewport changes, near-camera clipping, rotated poses, and mobile control overlays are the main acquisition edge cases.
+- **Inference:** The new `0.42` m full-load travel, pitch limits, overshoot, grab radius, and handle segment are control-feel values rather than proven final tuning. Automated assertions do not establish comfort, perceived weight, discoverability, or accidental-grab rates.
+- **Next logical work:** Run `npm run validate:combat` and the focused Dreadmace suite. Manually test slow, fast, partial, and over-center raises; paused cocked holds; lateral repositioning overhead; downstroke reversals; repeated wall/body impacts; release/return/reacquire; low-frame-rate sweeps; and touch acquisition across desktop/mobile viewport sizes. Confirm the visible head and collision head remain coincident and that angular motion produces expected—not inflated—impact energy.
 
 ## Development History
+
+### 2026-07-17 01:59 EDT — Update through `c0fdbea`
+
+**Scanned range:** after checkpoint `37e5de4` through observed `main` HEAD `c0fdbeab47b34033eb85114d63b7f15b539dba26`. The intervening `56acfd0` commit (`docs(devlog): update through 37e5de4`) was ignored as a devlog-only self-update. One development commit was included.
+
+**Included commits, chronological:**
+
+- `c0fdbea` — Add player-authored mace hammer rotation
+
+**Grouped development steps:**
+
+1. **Player-authored hammer orientation**
+   - Added `MACE_HAMMER_PHASES` and hammer-orientation state to `src/game/combat/weapons/MaceWorldWeaponController.js`.
+   - Coupled vertical grip travel to progressive raise, cocked hold, downstroke, recovery, and bounded speed-based over-center pitch.
+   - Captured phase-start pitch/grip values so descending and reversed motion continue from the current authoritative pose.
+
+2. **Authoritative rotational physics and safe pose lifecycle**
+   - Made the canonical ready quaternion non-identity and reused it for initialization, reset, direct-pose sampling, and return completion.
+   - Kept presentation, collision geometry, angular velocity, head-center velocity, and swept physics on the same quaternion.
+   - Added hammer phase, pitch, progress, travel, speed, and configured-angle diagnostics.
+
+3. **Projected handle acquisition**
+   - Replaced grip-origin circle hit testing with a projected screen-space capsule spanning configured local handle endpoints.
+   - Increased the bounded grip radius and added rejection for head-only/distant touches and movement/look UI controls.
+   - Added projected segment, radius, distance, and acceptance diagnostics.
+
+4. **Focused regression additions**
+   - Expanded `tests/dreadmace-vertical-slice.test.mjs` for canonical ready orientation, progressive raises, cocked lateral freedom, load-memory independence, downstroke/reversal continuity, rotational head velocity, visual/physical unity, safe return, and handle-capsule input behavior.
+   - No test execution or CI success is asserted by this record.
 
 ### 2026-07-16 17:58 EDT — Update through `37e5de4`
 
