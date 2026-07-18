@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CombatDirector } from '../CombatDirector.js';
 import { deriveBladeTip } from '../CombatMath.js';
-import { capturePhysicsBodyTransform, physicsBodyLocalDirectionToWorld, physicsBodyLocalToWorld, worldDirectionToPhysicsBodyLocal } from '../CombatCoordinateSpaces.js';
+import { capturePhysicsBodyTransform, worldDirectionToPhysicsBodyLocal } from '../CombatCoordinateSpaces.js';
 import { MELEE_INTENTS, MeleeIntentWeapon } from '../MeleeIntentWeapon.js';
 import { sampleTissueResistanceCurve } from '../CombatPresentation.js';
 import { createWeaponContactScratch, getRigidBodyWorldPosition } from './WeaponContactScratch.js';
@@ -236,6 +236,14 @@ export class SwordWorldWeaponController {
     this.desiredTip = new THREE.Vector3();
     this.currentTip = new THREE.Vector3();
     this.previousTip = new THREE.Vector3();
+    this.embeddedControlLocalGrip = new THREE.Vector3();
+    this.embeddedControlLocalQuaternion = new THREE.Quaternion();
+    this.embeddedControlCameraQuaternion = new THREE.Quaternion();
+    this.embeddedControlDelta = new THREE.Vector3();
+    this.embeddedControlRotationDelta = new THREE.Quaternion();
+    this.embeddedTargetGrip = new THREE.Vector3();
+    this.embeddedTargetQuaternion = new THREE.Quaternion();
+    this.embeddedTargetTip = new THREE.Vector3();
     this.bladeForward = new THREE.Vector3(0, 0, -1);
     this.tipDisplacement = new THREE.Vector3();
     this.tipVelocity = new THREE.Vector3();
@@ -760,11 +768,19 @@ export class SwordWorldWeaponController {
       surfaceRuptured: false,
       withdrawalStarted: false,
       resistancePhase: null,
-      worldPoint: new THREE.Vector3(),
-      worldAxis: new THREE.Vector3(),
-      worldBodyQuaternion: new THREE.Quaternion(),
-      worldSwordQuaternion: new THREE.Quaternion(),
+      targetLifeState: routed.actor?.lifeState ?? 'unknown',
+      corpseDetached: false,
+      worldPoint: point.clone(),
+      worldAxis: entryAxis.clone(),
+      worldSwordQuaternion: this.actualQuaternion.clone(),
       worldPose: { point: null, axis: null, quaternion: null },
+      controlLocalGripAtEntry: new THREE.Vector3(),
+      controlLocalQuaternionAtEntry: new THREE.Quaternion(),
+      controlLocalQuaternionAtEntryInverse: new THREE.Quaternion(),
+      cameraQuaternionAtEntry: new THREE.Quaternion(),
+      cameraQuaternionAtEntryInverse: new THREE.Quaternion(),
+      constrainedGripAtEntry: new THREE.Vector3(),
+      constrainedQuaternionAtEntry: new THREE.Quaternion(),
     };
     this.entry.worldPose.point = this.entry.worldPoint;
     this.entry.worldPose.axis = this.entry.worldAxis;
@@ -789,6 +805,7 @@ export class SwordWorldWeaponController {
     routed.actor?.setEmbeddedWeapon?.(this);
     const worldEntry = this.getEntryWorldPose();
     if (worldEntry) {
+      this.initializeEmbeddedPlayerControl(worldEntry);
       sampleTissueResistanceCurve({
         depth: this.penetrationDepth,
         surfaceThickness: this.entry.hit.region?.surfaceThickness,
@@ -818,28 +835,74 @@ export class SwordWorldWeaponController {
   }
 
   getEntryWorldPose(entry = this.entry) {
-    const body = entry?.body;
-    if (!body) return null;
-    const point = physicsBodyLocalToWorld(body, entry.localPoint, entry.worldPoint);
-    const axis = physicsBodyLocalDirectionToWorld(body, entry.localAxis, entry.worldAxis);
-    const rotation = body.rotation?.();
-    if (!point || !axis || !rotation) return null;
-    entry.worldBodyQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w).normalize();
-    entry.worldSwordQuaternion.copy(entry.worldBodyQuaternion).multiply(entry.localQuaternion).normalize();
-    return entry.worldPose;
+    return entry?.worldPose?.point && entry.worldPose.axis && entry.worldPose.quaternion
+      ? entry.worldPose
+      : null;
+  }
+
+  initializeEmbeddedPlayerControl(worldEntry) {
+    const entry = this.entry;
+    if (!entry || !worldEntry || !this.camera) return false;
+    this.camera.updateMatrixWorld(true);
+    this.camera.getWorldQuaternion(entry.cameraQuaternionAtEntry).normalize();
+    entry.cameraQuaternionAtEntryInverse.copy(entry.cameraQuaternionAtEntry).invert();
+    entry.controlLocalGripAtEntry.copy(this.desiredGrip);
+    this.camera.worldToLocal(entry.controlLocalGripAtEntry);
+    entry.controlLocalQuaternionAtEntry
+      .copy(entry.cameraQuaternionAtEntryInverse)
+      .multiply(this.desiredQuaternion)
+      .normalize();
+    entry.controlLocalQuaternionAtEntryInverse.copy(entry.controlLocalQuaternionAtEntry).invert();
+    entry.constrainedGripAtEntry
+      .copy(worldEntry.point)
+      .addScaledVector(worldEntry.axis, this.penetrationDepth - this.config.tipLength);
+    entry.constrainedQuaternionAtEntry.copy(worldEntry.quaternion).normalize();
+    return true;
+  }
+
+  computeEmbeddedPlayerTarget(entry = this.entry) {
+    if (!entry || !this.camera) return false;
+    this.camera.updateMatrixWorld(true);
+    this.embeddedControlLocalGrip.copy(this.desiredGrip);
+    this.camera.worldToLocal(this.embeddedControlLocalGrip);
+    this.embeddedControlDelta
+      .subVectors(this.embeddedControlLocalGrip, entry.controlLocalGripAtEntry)
+      .applyQuaternion(entry.cameraQuaternionAtEntry);
+    this.embeddedTargetGrip.copy(entry.constrainedGripAtEntry).add(this.embeddedControlDelta);
+
+    this.camera.getWorldQuaternion(this.embeddedControlCameraQuaternion).normalize();
+    this.embeddedControlLocalQuaternion
+      .copy(this.embeddedControlCameraQuaternion)
+      .invert()
+      .multiply(this.desiredQuaternion)
+      .normalize();
+    this.embeddedControlRotationDelta
+      .copy(this.embeddedControlLocalQuaternion)
+      .multiply(entry.controlLocalQuaternionAtEntryInverse)
+      .premultiply(entry.cameraQuaternionAtEntry)
+      .multiply(entry.cameraQuaternionAtEntryInverse)
+      .normalize();
+    this.embeddedTargetQuaternion
+      .copy(this.embeddedControlRotationDelta)
+      .multiply(entry.constrainedQuaternionAtEntry)
+      .normalize();
+    deriveBladeTip(this.embeddedTargetGrip, this.embeddedTargetQuaternion, this.config.tipLength, this.embeddedTargetTip);
+    return true;
   }
 
   applyPlayerAuthoritativeEmbeddedPose(worldEntry) {
-    this.actualQuaternion.copy(this.desiredQuaternion);
-    this.actualGrip.copy(this.desiredGrip);
+    if (!this.computeEmbeddedPlayerTarget()) return false;
+    this.actualQuaternion.copy(this.embeddedTargetQuaternion);
+    this.actualGrip.copy(this.embeddedTargetGrip);
     const axialCorrection = this.penetrationDepth - this.rawDesiredProjectedDepth;
     if (Math.abs(axialCorrection) > SWORD_KINEMATIC_EPSILON) this.actualGrip.addScaledVector(worldEntry.axis, axialCorrection);
     this.updateDerivedPose();
-    this.directControlTrackingErrorWhileEmbedded = this.actualGrip.distanceTo(this.desiredGrip);
+    this.directControlTrackingErrorWhileEmbedded = this.actualGrip.distanceTo(this.embeddedTargetGrip);
     this.maximumDirectControlTrackingErrorWhileEmbedded = Math.max(
       this.maximumDirectControlTrackingErrorWhileEmbedded,
       this.directControlTrackingErrorWhileEmbedded,
     );
+    return true;
   }
 
   isPenetratedTargetCollider(collider, entry = this.entry) {
@@ -906,15 +969,12 @@ export class SwordWorldWeaponController {
   solveSwordImpalement(dt) {
     const entry = this.entry;
     this.thrustEligible = false;
-    const actorBodyMissing = entry?.actor?.bodies instanceof Map && !entry.actor.bodies.has(entry.bodyId);
+    const actorBodyMissing = !entry?.corpseDetached && entry?.actor?.bodies instanceof Map && !entry.actor.bodies.has(entry.bodyId);
     if (!entry || entry.actor?.disposed || actorBodyMissing) {
       this.clearInvalidSwordTarget('target_removed');
       return;
     }
-    if (entry.actor?.lifeState && entry.actor.lifeState !== 'alive') {
-      this.clearInvalidSwordTarget('target_died');
-      return;
-    }
+    if (entry.actor?.lifeState && entry.actor.lifeState !== 'alive' && !entry.corpseDetached) this.detachSwordFromDeadTarget(entry.actor, entry.actor.lifeState);
     const worldEntry = this.getEntryWorldPose(entry);
     if (!worldEntry) {
       this.clearInvalidSwordTarget('target_removed');
@@ -926,7 +986,11 @@ export class SwordWorldWeaponController {
     }
     this.intentState = this.intentWeapon.interpret({ ownerId: this.gripPointerId, controlState: SWORD_IMPALEMENT_STATES.embedded, localVelocity: this.deliberateInputVelocity, embedded: true });
     const previousDepth = this.penetrationDepth;
-    this.rawDesiredProjectedDepth = this.desiredTip.clone().sub(worldEntry.point).dot(worldEntry.axis);
+    if (!this.computeEmbeddedPlayerTarget(entry)) {
+      this.clearInvalidSwordTarget('target_removed');
+      return;
+    }
+    this.rawDesiredProjectedDepth = this.contactScratch.edgeMotion.subVectors(this.embeddedTargetTip, worldEntry.point).dot(worldEntry.axis);
     this.desiredProjectedDepth = THREE.MathUtils.clamp(this.rawDesiredProjectedDepth, SWORD_EXTRACTION_CLEARANCE, SWORD_MAXIMUM_PENETRATION_DEPTH);
     const targetDepth = this.desiredProjectedDepth;
     const advancing = targetDepth > previousDepth + SWORD_KINEMATIC_EPSILON;
@@ -954,8 +1018,8 @@ export class SwordWorldWeaponController {
     if (advancing) {
       this.state = this.penetrationDepth < SWORD_MAXIMUM_PENETRATION_DEPTH ? SWORD_IMPALEMENT_STATES.penetrating : SWORD_IMPALEMENT_STATES.embedded;
       this.contactState = this.state;
-      this.contactDamageReason = 'damaging:projected-sword-penetration';
-      this.attackEnabled = true;
+      this.contactDamageReason = entry.corpseDetached ? 'non-damaging:corpse-embedded-motion' : 'damaging:projected-sword-penetration';
+      this.attackEnabled = !entry.corpseDetached;
     } else if (withdrawing) {
       this.state = SWORD_IMPALEMENT_STATES.withdrawing;
       this.contactState = SWORD_IMPALEMENT_STATES.withdrawing;
@@ -980,7 +1044,7 @@ export class SwordWorldWeaponController {
     this.updateTipKinematics(dt);
     this.projectionError = this.desiredProjectedDepth - this.penetrationDepth;
     const deltaDepth = Math.max(0, this.penetrationDepth - previousDepth);
-    if (deltaDepth > 0) {
+    if (deltaDepth > 0 && !entry.corpseDetached) {
       entry.director.advancePenetration(entry.directorInteractionId, {
         hit: entry.hit,
         entryPoint: worldEntry.point,
@@ -1026,7 +1090,7 @@ export class SwordWorldWeaponController {
       if (entry.woundId) entry.actor?.woundSystem?.markExtracted?.(entry.woundId, { releaseSeverity: 0, direction: null });
     }
     this.penetrationAudioGate.rearmAfterFullExtraction(entry.directorInteractionId);
-    if (entry.actor?.activeEmbeddedWeapon === this || entry.actor?.activeEmbeddedWeapon == null) entry.actor?.setEmbeddedWeapon?.(null);
+    if (entry.actor?.activeEmbeddedWeapon === this) entry.actor?.setEmbeddedWeapon?.(null);
     this.rearmGate = createRearmGate && resolvedWorldEntry
       ? {
         worldPoint: resolvedWorldEntry.point.clone(),
@@ -1339,9 +1403,29 @@ export class SwordWorldWeaponController {
     if (!this.entry && this.state === SWORD_IMPALEMENT_STATES.surfaceContact && this.gripPointerId != null) this.state = SWORD_IMPALEMENT_STATES.attacking;
   }
 
+  detachSwordFromDeadTarget(actor, nextState = actor?.lifeState ?? 'dead') {
+    const entry = this.entry;
+    if (!entry || entry.actor !== actor) return false;
+    entry.targetLifeState = nextState;
+    if (entry.corpseDetached) return true;
+    entry.corpseDetached = true;
+    entry.body = null;
+    if (actor.activeEmbeddedWeapon === this) actor.setEmbeddedWeapon?.(null);
+    this.initializeEmbeddedPlayerControl(this.getEntryWorldPose(entry));
+    entry.constrainedGripAtEntry.copy(this.actualGrip);
+    entry.constrainedQuaternionAtEntry.copy(this.actualQuaternion);
+    this.rawDesiredProjectedDepth = this.penetrationDepth;
+    this.desiredProjectedDepth = this.penetrationDepth;
+    this.projectionError = 0;
+    this.entryResistanceActive = false;
+    this.contactDamageReason = 'non-damaging:corpse-embedded-hold';
+    this.attackEnabled = false;
+    return true;
+  }
+
   cancelTarget(actor, reason = 'target-cancelled') {
     if (this.entry?.actor === actor) {
-      this.clearInvalidSwordTarget(actor?.lifeState && actor.lifeState !== 'alive' ? 'target_died' : 'target_removed');
+      this.clearInvalidSwordTarget('target_removed');
       return true;
     }
     if (this.activeEdgeDamage?.actor === actor) {
@@ -1354,7 +1438,7 @@ export class SwordWorldWeaponController {
 
   onTargetLifeStateChanged(actor, { nextState } = {}) {
     if (this.entry?.actor !== actor || !nextState || nextState === 'alive') return false;
-    return this.clearInvalidSwordTarget('target_died');
+    return this.detachSwordFromDeadTarget(actor, nextState);
   }
 
   getActiveToolId() { return this.isEquipped() ? this.config.itemId : null; }
@@ -1481,11 +1565,12 @@ export class SwordWorldWeaponController {
       lastClassification: this.lastClassification,
       ownedTargetActor: this.entry?.actor?.instanceId ?? this.entry?.actor?.id ?? null,
       embeddedTargetId: this.entry?.actor?.instanceId ?? this.entry?.actor?.id ?? null,
-      embeddedTargetLifeState: this.entry?.actor?.lifeState ?? null,
+      embeddedTargetLifeState: this.entry?.targetLifeState ?? this.entry?.actor?.lifeState ?? null,
+      corpseDetached: this.entry?.corpseDetached ?? false,
       penetrationActive: Boolean(this.entry),
       entryBody: this.entry?.bodyId ?? null,
       entryRegion: this.entry?.regionId ?? null,
-      depthInputMode: this.entry && this.gripPointerId != null ? 'desired-tip-entry-axis-projection' : 'free-pointer-tracking',
+      depthInputMode: this.entry && this.gripPointerId != null ? 'entry-anchored-thumb-delta-projection' : 'free-pointer-tracking',
       desiredProjectedDepth: Number(this.desiredProjectedDepth.toFixed(4)),
       rawDesiredProjectedDepth: Number(this.rawDesiredProjectedDepth.toFixed(4)),
       penetrationDepth: Number(this.penetrationDepth.toFixed(4)),
