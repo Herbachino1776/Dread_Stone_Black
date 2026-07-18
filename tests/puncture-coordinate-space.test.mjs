@@ -460,7 +460,7 @@ test('sword thrust punctures use the same transform-invariant world-space bindin
   }
 });
 
-test('deliberate sword tip contact reaches wound creation before presentation', async () => {
+test('deliberate sword tip contact creates the wound at knife-style surface entry before presentation', async () => {
   await initializeCombatPhysics();
   const physics = new CombatPhysicsWorld();
   const scene = new THREE.Scene();
@@ -484,7 +484,9 @@ test('deliberate sword tip contact reaches wound creation before presentation', 
   try {
     await sword.visualLoadPromise;
     sword.acquireGrip(42, 280, 470, 0);
+    let contactStep = 0;
     for (let step = 1; step <= 18 && actor.woundSystem.wounds.length === 0; step += 1) {
+      contactStep = step;
       sword.applyGripGesture(42, 0, -step * 5, 280, 470 - step * 5, step * 16);
       physics.stepSingle(
         (dt) => { sword.beforePhysics(dt); actor.beforePhysics(dt); },
@@ -493,13 +495,24 @@ test('deliberate sword tip contact reaches wound creation before presentation', 
     }
     const wound = actor.woundSystem.wounds[0];
     assert.equal(sword.lastContactPart, 'tip');
-    assert.equal(sword.contactState, 'penetrating', 'same-frame projected sword travel advances beyond surface contact without a second gesture');
+    assert.equal(sword.contactState, 'surface_contact', 'the first accepted contact establishes the same shallow puncture used by the knife');
+    const entryDepth = sword.penetrationDepth;
     assert.equal(sword.punctureBeginCount, 1);
     assert.equal(sword.edgeDamageCount, 0);
     assert.ok(wound, 'tip contact created a wound before any presentation decision');
     assert.equal(wound.interactionKind, 'sword_thrust');
     assert.equal(wound.surfaceBindingStatus, 'puncture_hidden_invalid_surface', 'headless actor has no visible surface, so display fails after creation');
     assert.equal(wound.visualSlot.puncture.visible, false);
+
+    for (let step = contactStep + 1; step <= contactStep + 6; step += 1) {
+      sword.applyGripGesture(42, 0, -step * 5, 280, 470 - step * 5, step * 16);
+      physics.stepSingle(
+        (dt) => { sword.beforePhysics(dt); actor.beforePhysics(dt); },
+        (dt) => sword.afterPhysicsStep(dt),
+      );
+    }
+    assert.equal(sword.contactState, 'embedded', 'continued thumb travel deepens the accepted puncture through the knife penetration solver');
+    assert.ok(sword.penetrationDepth > entryDepth, 'penetration advances after entry instead of using a sword-only collision-frame shortcut');
   } finally {
     sword.dispose();
     actor.dispose();

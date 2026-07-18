@@ -247,7 +247,7 @@ export class CombatLabDebugPanel {
       `spacing center ${(spacing.minimumCenterDistance ?? 0).toFixed(3)}m  load ${(spacing.loadingClearance ?? 0).toFixed(3)}m  full depth ${(spacing.fullGestureDepth ?? 0).toFixed(3)}m`,
       `directed event ${JSON.stringify(director.lastEvent ?? null)}`,
       '',
-      `sword ${sword.equipped ? 'EQUIPPED' : 'HOLSTERED'}  impalement ${sword.impalementState ?? 'unavailable'}  target ${sword.embeddedTargetId ?? '-'} (${sword.embeddedTargetLifeState ?? '-'})  corpse detached ${sword.corpseDetached ? 'YES' : 'NO'}`,
+      `sword ${sword.equipped ? 'EQUIPPED' : 'HOLSTERED'}  impalement ${sword.impalementState ?? 'unavailable'}  target ${sword.embeddedTargetId ?? '-'} (${sword.embeddedTargetLifeState ?? '-'})  knife-parity ${sword.depthInputMode === 'knife-parity-body-axis-projection' ? 'YES' : 'NO'}`,
       `sword depth ${(sword.penetrationDepth ?? 0).toFixed(3)}m  entry resistance ${sword.entryResistanceActive ? 'YES' : 'NO'}  extraction ${sword.extractionDetected ? 'YES' : 'NO'}  same-target suppression ${sword.sameTargetCollisionSuppressionActive ? 'YES' : 'NO'}`,
       `sword embedded tracking ${(sword.directControlTrackingErrorWhileEmbedded ?? 0).toFixed(5)}m  cleanup ${sword.lastImpalementCleanupReason ?? '-'}  cleanups ${sword.impalementCleanupCount ?? 0}`,
       '',

@@ -10,7 +10,7 @@ import { MELEE_INTENTS } from '../src/game/combat/MeleeIntentWeapon.js';
 import { weaponProfiles } from '../src/game/equipment/weaponProfiles.js';
 import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { KNIFE_RUNTIME_COMBAT_MODE } from '../src/game/combat/WorldKnifeCombatController.js';
-import { SWORD_ENTRY_RESISTANCE_DURATION, SWORD_RUNTIME_COMBAT_MODE } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
+import { SWORD_RUNTIME_COMBAT_MODE } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import {
   DREADMACE_ASSET_CORRECTION,
@@ -674,7 +674,6 @@ test('reset/disposal clears gesture state and registrations while preserving exi
   assert.equal(lighting.unregistered, 1);
   assert.equal(KNIFE_RUNTIME_COMBAT_MODE, 'puncture_only');
   assert.equal(SWORD_RUNTIME_COMBAT_MODE, 'puncture_only');
-  assert.equal(SWORD_ENTRY_RESISTANCE_DURATION, 0.09);
   const panelSource = readFileSync(new URL('../src/game/combat/CombatLabDebugPanel.js', import.meta.url), 'utf8');
   assert.match(panelSource, /KeyJ/);
   assert.match(panelSource, /KeyK/);
