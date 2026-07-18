@@ -1,39 +1,72 @@
 # Dreadstone Black 2.0 Development Handoff
 
-<!-- last_processed_sha: c0fdbeab47b34033eb85114d63b7f15b539dba26 -->
+<!-- last_processed_sha: 76c7ea885790c153ef710457174c80a847da7948 -->
 
 ## Current Handoff Snapshot
 
 ### Verified implementation
 
-- **The Dreadmace now has player-authored hammer rotation coupled to vertical grip movement:** `src/game/combat/weapons/MaceWorldWeaponController.js` introduces explicit hammer phases (`resting`, `raising`, `cocked`, `descending`, `recovering`) and derives hammer pitch from measured upward/downward grip travel rather than leaving pitch as a fixed direct-aim component. Raising progressively cocks the head overhead; the downstroke unwinds from the captured top pose toward an authored impact pitch.
-- **Hammer orientation remains part of the authoritative weapon transform:** The same quaternion drives visible presentation, collision primitives, head-center motion, angular velocity, swept-contact physics, and diagnostics. The ready pose is intentionally non-identity and angles the imported `-Z` active axis upward while preserving visual/physical unity.
-- **Vertical and lateral control are separated:** Hammer pitch is controlled by vertical grip travel, while yaw/roll continue to respond to lateral aim. A cocked hammer can remain overhead while the grip moves laterally, and load-memory decay does not lower the held weapon.
-- **Raise/downstroke continuity was hardened:** The controller captures phase-start pitch and grip positions, bounds speed-driven over-center overshoot, tracks raise/downstroke progress and travel, and continues from the current pose when motion reverses. Return and reset paths now target the canonical angled ready quaternion rather than identity.
-- **Grip acquisition now uses a projected handle capsule:** The screen-space grab target spans a configured lower-handle segment with a larger bounded radius instead of a circle around the grip origin. Near-handle touches are accepted; distant touches, head-only touches, and touches originating on movement/look controls are rejected. Grab geometry and last-attempt diagnostics were added.
-- **Gesture tuning changed:** Full-load travel increased from `0.34` m to `0.42` m, and the hammer-orientation configuration adds rest/top/maximum-top/impact pitches, raise/downstroke travel scales, overshoot speed thresholds, and motion thresholds. These values are implemented but not established as final feel tuning.
-- **Regression coverage expanded in `tests/dreadmace-vertical-slice.test.mjs`:** Added assertions cover the angled ready pose, progressive player-authored cocking, over-center bounds, lateral movement while cocked, independence from load-memory decay, downstroke pitch progression, reversal continuity, angular head velocity, visual/physical unity, safe return orientation, and projected-handle acquisition. This record verifies test additions only; it does not claim the suite or CI ran successfully.
-- **Previously active systems remain baseline:** Direct physical mace strike tokens/rearming, impact resistance with retained grip ownership, sword pose/extraction authority, Folsom edge-unity dismemberment gating, weighted piercing lethality, collapse-window contact, combat audio, Folsom ambience, and persistent Dreadmace progression remain present unless superseded above.
+- **Sword impalement now follows the shared knife-style depth model:** The final state in `src/game/combat/weapons/SwordWorldWeaponController.js` derives penetration/withdrawal rates, lateral bind distance, forced-extraction distance, and force transfer from `KNIFE_COMBAT_CONFIG`. Penetration depth is computed along the target body-local entry axis, with tissue resistance and authored hard-structure depth participating in advancement.
+- **Embedded swords can be released, remain planted, and be reacquired:** Grip acquisition no longer rejects an active impalement. Releasing an embedded sword leaves it planted rather than auto-withdrawing; reacquisition resumes embedded control. Extraction and invalid-target cleanup remain explicit.
+- **Embedded collision routing is selective:** Colliders belonging to the penetrated actor are suppressed during embedded movement to prevent repeated sticky self-collision, while other-target contact can still be resolved. Diagnostics count same-target suppression, other-target embedded contact, cleanup reasons, and tracking error.
+- **Life-state integration is explicit:** `HumanoidCombatActor.js` notifies an active embedded weapon when the target changes life state. The sword controller tracks target life state and cleanup behavior rather than relying only on generic disposal.
+- **Player/enemy trapping has a dedicated separation system:** New `src/game/ActorSeparation.js` supplies deterministic contact normals, stable blocker ordering, inward-motion rejection with tangential sliding, bounded player depenetration, and close-range enemy separation/hold/approach logic.
+- **Collision movement now treats combat actors separately from static world geometry:** `src/game/Collision.js` constrains actor-relative movement before/alongside world collision, can ignore actor blockers for standability checks, applies bounded overlap recovery, and exposes detailed movement diagnostics.
+- **Combat actors expose authoritative locomotion blockers:** Walker/actor code marks living combat volumes for player locomotion blocking and releases them through the existing death/contact lifecycle. Close enemies are prevented from continuing inward compression when minimum spacing is reached.
+- **Diagnostics and tests expanded:** `CombatLabDebugPanel.js` now reports sword impalement and actor-separation state. `tests/actor-separation.test.mjs` was added, and sword/combat/Folsom tests were expanded. These diffs verify test coverage changes only; they do not prove successful local or CI execution.
+- **Existing baseline remains:** Player-authored Dreadmace rotation, unified weapon presentation/physics, Folsom dismemberment gating, weighted piercing lethality, combat audio, Folsom ambience, and persistent Dreadmace progression remain active unless superseded above.
 
 ### Important design decisions
 
-- Mace rotation is authored by the player’s actual vertical grip path. It is not a canned attack animation and is not driven by load-memory decay.
-- Visible orientation and physical orientation remain one authority. Rotational movement contributes directly to head velocity and swept collision behavior.
-- A raised/cocked pose is persistent while held; lateral placement must remain available without forcing the hammer down or snapping to a fixed top position.
-- Direction reversal must continue from the exact current pitch without creating duplicate strike ownership.
-- The safe ready/return pose is a canonical angled quaternion, not identity, because the imported mace’s active axis is `-Z`.
-- Grip acquisition should correspond to the visible usable handle, remain forgiving near that handle, and reject the mace head and UI-control touches.
-- Existing tokenized strike, meaningful-raise rearm, and retained-impact-control decisions remain in force.
+- Sword impalement depth authority is target-body-axis projection with knife-parity resistance and extraction semantics, not unconstrained camera-space tracking.
+- Releasing an embedded sword should preserve a planted weapon that can be grabbed again; release is not automatic extraction.
+- The penetrated target’s own colliders must not repeatedly block the embedded sword, but unrelated targets remain valid collision candidates.
+- Actor separation must block only inward compression while preserving tangential escape, use deterministic normals for exact overlap, and cap depenetration per frame.
+- Living combat actors are authoritative locomotion blockers; blocker release remains tied to the actor life/contact lifecycle rather than visual presentation alone.
 
 ### Risks and next logical work
 
-- **Verified risk surface:** Hammer pitch now depends on frame-sampled grip deltas, phase transitions, speed thresholds, travel normalization, over-center overshoot, reversal handling, and return/reset behavior. Low frame rates, very fast pointer motion, micro-reversals near phase boundaries, and starting a new grip from a partially recovered pose can expose discontinuities or unexpected phase changes.
-- **Verified risk surface:** Rotational head velocity now materially affects swept contact. Incorrect angular velocity, pivot assumptions, or local-head offset handling could change strike qualification and collision ordering even when the grip path is unchanged.
-- **Verified risk surface:** The projected handle capsule depends on camera projection and the configured local handle segment. Extreme field of view, viewport changes, near-camera clipping, rotated poses, and mobile control overlays are the main acquisition edge cases.
-- **Inference:** The new `0.42` m full-load travel, pitch limits, overshoot, grab radius, and handle segment are control-feel values rather than proven final tuning. Automated assertions do not establish comfort, perceived weight, discoverability, or accidental-grab rates.
-- **Next logical work:** Run `npm run validate:combat` and the focused Dreadmace suite. Manually test slow, fast, partial, and over-center raises; paused cocked holds; lateral repositioning overhead; downstroke reversals; repeated wall/body impacts; release/return/reacquire; low-frame-rate sweeps; and touch acquisition across desktop/mobile viewport sizes. Confirm the visible head and collision head remain coincident and that angular motion produces expected—not inflated—impact energy.
+- **Verified risk surface:** Three consecutive sword commits replaced portions of the embedded-control model. The canonical behavior is the final `97d21dc` knife-parity implementation; any assumptions based on the earlier camera-relative or corpse-detached intermediate versions are stale.
+- **Verified risk surface:** Body-local entry axes and moving actor bodies can expose discontinuities if the body transform disappears, changes ownership, or detaches during death/dismemberment. Cleanup and rearm gates should be checked across those transitions.
+- **Verified risk surface:** Selective same-target collider suppression must not hide legitimate extraction or permit the sword to tunnel into adjacent geometry/actors while planted.
+- **Verified risk surface:** Actor separation now spans player movement, world collision, blocker metadata, walker motion, death-state release, exact-overlap fallback normals, and multiple simultaneous enemies. Ordering or stale blocker registration could create jitter, overcorrection, or new escape failures.
+- **Inference:** Knife-parity constants and the new separation clearances/iteration caps are implemented tuning values, not proof of final feel or stability under low frame rate and dense crowds.
+- **Next logical work:** Run the focused sword tests, `tests/actor-separation.test.mjs`, `npm run validate:combat`, and Folsom walker validation. Manually test planted release/regrab, slow and fast extraction, moving/dying/dismembered targets, adjacent-target contact while embedded, exact player/enemy overlap, diagonal escape, wall-plus-enemy pinches, multiple-enemy crowding, and blocker release during collapse. Confirm diagnostics show bounded correction without inward leakage or oscillation.
 
 ## Development History
+
+### 2026-07-18 14:00 EDT — Update through `76c7ea8`
+
+**Scanned range:** after checkpoint `c0fdbea` through observed `main` HEAD `76c7ea885790c153ef710457174c80a847da7948`. The intervening `99f3569` commit (`docs(devlog): update through c0fdbea`) was ignored as a devlog-only self-update. Four development commits were included.
+
+**Included commits, chronological:**
+
+- `dfa2155` — Fix sword impalement grab stickiness
+- `27a9916` — Fix sword impalement grab stickiness
+- `97d21dc` — Fix sword impalement grab stickiness
+- `76c7ea8` — Fix player trapping against close enemies
+
+**Grouped development steps:**
+
+1. **Sword impalement lifecycle and direct-control iteration**
+   - `src/game/combat/weapons/SwordWorldWeaponController.js` was repeatedly revised to remove released auto-withdrawal, permit reacquisition while embedded, add explicit impalement cleanup/extraction diagnostics, suppress repeat collisions against the penetrated target, and preserve collision checks against other targets.
+   - The intermediate corpse-detachment approach was superseded by the final knife-parity model in `97d21dc`: penetration/withdrawal rates and lateral bind/forced-extraction/force-transfer values now derive from `KNIFE_COMBAT_CONFIG`, depth is projected along the target body-local entry axis, and the sword may remain planted when released and be grabbed again.
+   - The final implementation restores live target-body anchoring via `physicsBodyLocalToWorld` / `physicsBodyLocalDirectionToWorld`, applies knife-style penetration advancement and tissue/hard-structure resistance, and keeps damage intent disabled for non-damaging planted/withdrawal states.
+   - `HumanoidCombatActor.js` notifies embedded weapons on life-state changes. Combat Lab diagnostics expose impalement state, target life state, knife-parity mode, depth, resistance, extraction, collision suppression, tracking error, and cleanup counters.
+
+2. **Sword regression coverage**
+   - `tests/puncture-only-weapons.test.mjs` and related combat tests were substantially expanded across the three sword commits to cover embedded reacquisition, planted release behavior, same-target suppression, external contact while embedded, extraction/cleanup, body-local anchoring, knife-parity depth control, and target life-state transitions.
+   - This record verifies that tests were added or changed; it does not claim they were executed successfully.
+
+3. **Authoritative player/enemy separation**
+   - Added `src/game/ActorSeparation.js` with deterministic horizontal fallback normals, authoritative combat-actor blocker filtering, player movement projection against actor volumes, bounded depenetration, stable blocker ordering, and close-range enemy separation/hold/approach resolution.
+   - `src/game/Collision.js` now separates world collision from actor collision, allows tangential sliding while blocking inward movement, applies bounded overlap recovery, and records movement/depenetration diagnostics.
+   - Combat actors and walker control were updated so living enemies expose locomotion blockers, release them through the existing death/contact lifecycle, and use explicit close-range separation rather than continuing to compress the player.
+   - `CombatLabDebugPanel.js` surfaces nearest-enemy distance, required clearance, overlap, correction vectors, constrained actor IDs, and movement-block reason.
+
+4. **Separation regression coverage**
+   - Added `tests/actor-separation.test.mjs` and updated combat, Folsom walker, Dreadmace, puncture-coordinate-space, puncture-only, and damage-segment tests for blocker filtering, diagonal/tangential movement, deterministic overlap recovery, multiple-enemy constraints, close-range walker separation, and death-state blocker release.
+   - No test execution or CI success is asserted by this record.
 
 ### 2026-07-17 01:59 EDT — Update through `c0fdbea`
 
