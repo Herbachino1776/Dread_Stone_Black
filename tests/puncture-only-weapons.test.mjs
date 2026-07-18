@@ -7,11 +7,13 @@ import { MELEE_INTENTS } from '../src/game/combat/MeleeIntentWeapon.js';
 import { KNIFE_RUNTIME_COMBAT_MODE } from '../src/game/combat/WorldKnifeCombatController.js';
 import {
   DREADSTONE_SWORD_DIMENSIONS,
+  SWORD_ENTRY_RESISTANCE_DURATION,
+  SWORD_ENTRY_RESISTANCE_MAXIMUM_LAG,
+  SWORD_ENTRY_RESISTANCE_MIN_FOLLOW,
   SWORD_IMPALEMENT_STATES,
   SWORD_MAXIMUM_PENETRATION_DEPTH,
   SWORD_PENETRATION_RATE_METERS_PER_SECOND,
   SWORD_EXTRACTION_CONTINUITY_DURATION,
-  SWORD_RELEASE_EXTRACTION_DURATION,
   SWORD_RUNTIME_COMBAT_MODE,
   SWORD_THRUST_MIN_FORWARD_RATIO,
   SWORD_THRUST_MIN_FORWARD_SPEED,
@@ -59,11 +61,20 @@ async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
   };
   const actor = {
     id: 'testman-owner',
+    instanceId: 'testman-owner',
     disposed: false,
+    lifeState: 'alive',
     bodies: new Map([['upper_chest', { body }]]),
+    colliders: new Map([['upper_chest', collider]]),
+    colliderRegions: new Map([[collider.handle, region]]),
     activeEmbeddedWeapon: null,
     embeddedWeaponAssignments: [],
     setEmbeddedWeapon(weapon) { this.activeEmbeddedWeapon = weapon; this.embeddedWeaponAssignments.push(weapon); },
+    transitionLifeState(nextState, reason = 'test-transition') {
+      const previousState = this.lifeState;
+      this.lifeState = nextState;
+      this.activeEmbeddedWeapon?.onTargetLifeStateChanged?.(this, { previousState, nextState, reason });
+    },
     woundSystem: { markExtracted() {} },
   };
   const director = {
@@ -73,6 +84,7 @@ async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
     withdrawalCalls: [],
     completionCalls: [],
     resistanceCalls: [],
+    contactCalls: [],
     cancelled: [],
     beginSwordPuncture(payload) {
       const interaction = { id: `sword-puncture-${this.nextId++}` };
@@ -89,9 +101,9 @@ async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
     beginWithdrawal(id, payload) { this.withdrawalCalls.push({ id, payload: { ...payload } }); return true; },
     completeWithdrawal(id, payload) { this.completionCalls.push({ id, payload: { ...payload } }); return true; },
     reportResistance(id, payload) { this.resistanceCalls.push({ id, payload: { ...payload } }); return true; },
+    reportContact(payload) { this.contactCalls.push(payload); return true; },
     cancelInteraction(id, reason) { this.cancelled.push({ id, reason }); return true; },
     beginEdgeDamage() { throw new Error('edge damage must remain dormant in puncture-only mode'); },
-    reportContact() { throw new Error('non-tip contact must remain silent in puncture-only mode'); },
   };
   const combatRouter = {
     ownsCollider: (candidate) => candidate === collider,
@@ -108,9 +120,9 @@ async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
     castCount: 0,
     edgeCastCount: 0,
     prepareWeaponSweepBatch: () => false,
-    castWeaponTip(previousTip, currentTip) {
+    castWeaponTip(previousTip, currentTip, _radius, predicate = null) {
       this.castCount += 1;
-      if (!this.tipHit) return null;
+      if (!this.tipHit || (predicate && !predicate(collider))) return null;
       return { collider, time_of_impact: tipToi, normal1: { x: 0, y: 0, z: 1 } };
     },
     castSweptEdgeSphere() { this.edgeCastCount += 1; throw new Error('edge sweep must not run'); },
@@ -318,13 +330,37 @@ test('one tip crossing consumes the collision-frame remainder and owns one proje
     stepAxial(controller, -1);
     assert.equal(controller.state, SWORD_IMPALEMENT_STATES.penetrating);
     assert.ok(controller.penetrationDepth > initialDepth);
-    assert.ok(Math.abs(controller.penetrationDepth - (initialDepth + 0.025)) < 1e-9);
-    assert.ok(Math.abs(controller.desiredProjectedDepth - controller.penetrationDepth) < 1e-9);
-    assert.ok(Math.abs(controller.projectionError) < 1e-9);
+    assert.ok(controller.penetrationDepth >= initialDepth + 0.025 * SWORD_ENTRY_RESISTANCE_MIN_FOLLOW);
+    assert.ok(controller.penetrationDepth < initialDepth + 0.025, 'entry resistance briefly trails only inward input');
+    assert.ok(controller.projectionError > 0 && controller.projectionError < 0.012);
+    assert.equal(controller.entryResistanceActive, true);
     assert.equal(director.beginCalls.length, 1);
     assert.equal(controller.punctureBeginCount, 1);
-    assert.equal(physics.castCount, 1, 'embedded ownership prevents all further collider searches');
+    assert.ok(physics.castCount > 1, 'embedded motion still searches for non-owned contacts');
+    assert.ok(controller.sameTargetCollisionSuppressionCount > 0, 'the owned interior overlap is filtered from those searches');
     assert.equal(actor.activeEmbeddedWeapon, controller);
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('entry resistance is bounded by both distance and time on a large thumb jump', async () => {
+  const harness = await createSwordHarness();
+  const { controller, director } = harness;
+  try {
+    beginHarnessThrust(harness);
+    director.rupture();
+    const worldEntry = controller.getEntryWorldPose();
+    controller.desiredTip.copy(worldEntry.point).addScaledVector(worldEntry.axis, SWORD_MAXIMUM_PENETRATION_DEPTH);
+    controller.desiredGrip.copy(controller.desiredTip).addScaledVector(worldEntry.axis, -controller.config.tipLength);
+    controller.desiredQuaternion.copy(worldEntry.quaternion);
+    controller.solveSwordImpalement(0.001);
+    assert.ok(controller.projectionError > 0);
+    assert.ok(controller.projectionError <= SWORD_ENTRY_RESISTANCE_MAXIMUM_LAG + 1e-12);
+    controller.solveSwordImpalement(SWORD_ENTRY_RESISTANCE_DURATION);
+    assert.equal(controller.entryResistanceActive, false);
+    assert.ok(Math.abs(controller.penetrationDepth - controller.desiredProjectedDepth) < 1e-12);
+    assert.ok(Math.abs(controller.projectionError) < 1e-12);
   } finally {
     controller.dispose();
   }
@@ -356,57 +392,42 @@ test('rendered sword pose follows penetration depth and permits body traversal w
   }
 });
 
-test('release at shallow depth begins one fast automatic withdrawal without planting or re-grab', async () => {
+test('release while embedded clears ownership immediately and re-grabs without a stale lock', async () => {
   const harness = await createSwordHarness();
   const { controller, actor, director } = harness;
   try {
     const ownedEntry = beginHarnessThrust(harness);
     director.rupture();
     stepAxial(controller, -1);
-    const releaseDepth = controller.penetrationDepth;
     const woundId = ownedEntry.woundId;
+    const releasePosition = controller.actualGrip.clone();
+    const releaseQuaternion = controller.actualQuaternion.clone();
     controller.releaseGrip('test-shallow-release');
-    assert.equal(controller.state, SWORD_IMPALEMENT_STATES.releaseWithdrawing);
-    assert.equal(controller.releaseWithdrawal.active, true);
-    assert.equal(controller.releaseWithdrawal.startDepth, releaseDepth);
-    assert.equal(controller.gripPointerId, null);
-    assert.equal(Object.hasOwn(controller.entry, 'planted'), false);
-    assert.equal(Object.hasOwn(controller.entry, 'plantedDesiredGrip'), false);
-    assert.equal(controller.acquireGrip(8, 195, 560, 100), false, 'the retiring sword release mode cannot be re-grabbed');
-    assert.equal(director.withdrawalCalls.length, 1, 'release begins withdrawal immediately and exactly once');
-    assert.equal(actor.activeEmbeddedWeapon, controller);
-    const depths = [releaseDepth];
-    let elapsed = 0;
-    while (controller.entry && elapsed < 0.3) {
-      controller.beforePhysics(0.01);
-      controller.afterPhysics();
-      elapsed += 0.01;
-      depths.push(controller.penetrationDepth);
-    }
-    assert.ok(depths.every((depth, index) => index === 0 || depth <= depths[index - 1] + 1e-12), 'released depth decreases monotonically');
-    assert.ok(elapsed <= SWORD_RELEASE_EXTRACTION_DURATION + 0.01 + 1e-9);
-    assert.equal(controller.entry, null);
     assert.equal(controller.state, SWORD_IMPALEMENT_STATES.returning);
-    assert.equal(controller.lastExtractionReason, 'released-auto-withdrawal');
+    assert.equal(controller.entry, null);
+    assert.equal(controller.penetrationDepth, 0);
+    assert.equal('releaseWithdrawal' in controller, false, 'release owns no delayed impalement timer');
+    assert.equal(controller.gripPointerId, null);
+    assert.equal(controller.lastExtractionReason, 'weapon_released');
+    assert.equal(controller.lastImpalementCleanupReason, 'weapon_released');
     assert.equal(ownedEntry.woundId, woundId, 'the original puncture wound remains authoritative after sword recovery');
     assert.equal(director.withdrawalCalls.length, 1);
     assert.equal(director.completionCalls.length, 1);
     assert.equal(actor.embeddedWeaponAssignments.filter((weapon) => weapon == null).length, 1);
     assert.equal(actor.activeEmbeddedWeapon, null);
-    controller.beforePhysics(FIXED_DT);
-    assert.ok(controller.embeddedToFreePositionDiscontinuity <= 0.010001, 'automatic extraction blends into return without a position teleport');
-    assert.ok(THREE.MathUtils.radToDeg(controller.embeddedToFreeRotationDiscontinuity) <= 3.0001, 'automatic extraction blends into return without a rotation snap');
-    controller.beforePhysics(FIXED_DT);
-    assert.equal(director.withdrawalCalls.length, 1);
-    assert.equal(director.completionCalls.length, 1);
-    assert.equal(actor.embeddedWeaponAssignments.filter((weapon) => weapon == null).length, 1);
+    assert.ok(controller.actualGrip.distanceTo(releasePosition) < 1e-9, 'release cleanup does not teleport the sword');
+    assert.ok(controller.actualQuaternion.angleTo(releaseQuaternion) < 1e-9);
+    assert.equal(controller.acquireGrip(8, 195, 560, 100), true, 'a new thumb can immediately reacquire the cleaned sword');
+    controller.desiredGrip.x += 0.04;
+    const beforeMove = controller.actualGrip.x;
+    controller.applyFreeSwordAuthoritativePose(0);
+    assert.ok(Math.abs(controller.actualGrip.x - beforeMove - 0.04) < 1e-9);
   } finally {
     controller.dispose();
   }
 });
 
-test('release at maximum depth completes in the same configured duration without pointer input', async () => {
-  assert.equal(SWORD_RELEASE_EXTRACTION_DURATION, 0.15);
+test('release at maximum depth uses the same immediate target-independent cleanup', async () => {
   const harness = await createSwordHarness();
   const { controller, actor, director } = harness;
   try {
@@ -415,23 +436,12 @@ test('release at maximum depth completes in the same configured duration without
     for (let frame = 0; frame < 90 && controller.penetrationDepth < SWORD_MAXIMUM_PENETRATION_DEPTH; frame += 1) stepAxial(controller, -1);
     assert.equal(controller.penetrationDepth, SWORD_MAXIMUM_PENETRATION_DEPTH);
     controller.releaseGrip('test-maximum-depth-release');
-    assert.equal(controller.releaseWithdrawal.startDepth, SWORD_MAXIMUM_PENETRATION_DEPTH);
-    const depths = [controller.penetrationDepth];
-    let elapsed = 0;
-    while (controller.entry && elapsed < 0.3) {
-      controller.desiredTip.set(100, 100, 100);
-      controller.deliberateInputVelocity.set(100, 100, 100);
-      controller.beforePhysics(0.01);
-      controller.afterPhysics();
-      elapsed += 0.01;
-      depths.push(controller.penetrationDepth);
-    }
-    assert.ok(depths.every((depth, index) => index === 0 || depth <= depths[index - 1] + 1e-12));
-    assert.ok(elapsed <= SWORD_RELEASE_EXTRACTION_DURATION + 0.01 + 1e-9, 'maximum burial is not slower than shallow burial');
     assert.equal(controller.entry, null);
+    assert.equal(controller.penetrationDepth, 0);
     assert.equal(controller.state, SWORD_IMPALEMENT_STATES.returning);
     assert.equal(controller.extractionCount, 1);
-    assert.equal(controller.lastExtractionReason, 'released-auto-withdrawal');
+    assert.equal(controller.lastExtractionReason, 'weapon_released');
+    assert.equal(controller.lastImpalementCleanupReason, 'weapon_released');
     assert.equal(director.withdrawalCalls.length, 1);
     assert.equal(director.completionCalls.length, 1);
     assert.equal(actor.activeEmbeddedWeapon, null);
@@ -465,8 +475,10 @@ test('complete withdrawal is single-shot and rearming requires the full surface 
     assert.ok(controller.embeddedToFreePositionDiscontinuity <= 0.010001);
     assert.ok(THREE.MathUtils.radToDeg(controller.embeddedToFreeRotationDiscontinuity) <= 3.0001);
     const gate = controller.rearmGate;
-    const entryPoint = gate.localPoint.clone().applyQuaternion(gate.body.quaternion).add(gate.body.position);
-    const entryAxis = gate.localAxis.clone().applyQuaternion(gate.body.quaternion).normalize();
+    const entryPoint = gate.worldPoint.clone();
+    const entryAxis = gate.worldAxis.clone();
+    assert.equal('actor' in gate, false, 'post-extraction rearm keeps no actor or corpse reference');
+    assert.equal('body' in gate, false);
     controller.currentTip.copy(entryPoint).addScaledVector(entryAxis, -(SWORD_THRUST_REARM_DISTANCE - 0.001));
     controller.updateSwordRearmGate();
     assert.equal(controller.rearmReady, false, '0.049 m of clearance cannot rearm');
@@ -496,8 +508,8 @@ test('held-thumb projection withdrawal and repeated controlled puncture ownershi
     assert.equal(controller.gripPointerId, 7);
     for (let frame = 0; frame < 40 && controller.entry; frame += 1) stepAxial(controller, 1);
     const gate = controller.rearmGate;
-    const point = gate.localPoint.clone().applyQuaternion(gate.body.quaternion).add(gate.body.position);
-    const axis = gate.localAxis.clone().applyQuaternion(gate.body.quaternion).normalize();
+    const point = gate.worldPoint.clone();
+    const axis = gate.worldAxis.clone();
     controller.currentTip.copy(point).addScaledVector(axis, -SWORD_THRUST_REARM_DISTANCE);
     controller.updateSwordRearmGate();
     assert.equal(controller.rearmReady, true);
@@ -550,8 +562,8 @@ test('ten continuous-hold impalement cycles retain rearm, immediate response, an
       controller.applyFreeSwordAuthoritativePose(SWORD_EXTRACTION_CONTINUITY_DURATION);
       controller.updateDerivedPose();
       const gate = controller.rearmGate;
-      const point = gate.localPoint.clone().applyQuaternion(gate.body.quaternion).add(gate.body.position);
-      const axis = gate.localAxis.clone().applyQuaternion(gate.body.quaternion).normalize();
+      const point = gate.worldPoint.clone();
+      const axis = gate.worldAxis.clone();
       controller.currentTip.copy(point).addScaledVector(axis, -SWORD_THRUST_REARM_DISTANCE);
       controller.updateSwordRearmGate();
       assert.equal(controller.rearmReady, true, `cycle ${cycle + 1} rearms`);
@@ -573,6 +585,144 @@ test('ten continuous-hold impalement cycles retain rearm, immediate response, an
   }
 });
 
+test('stab then lateral drag and outward thumb extraction stay authoritative while the living enemy remains', async () => {
+  const harness = await createSwordHarness();
+  const { controller, actor, director } = harness;
+  try {
+    beginHarnessThrust(harness);
+    director.rupture();
+    for (let frame = 0; frame < 8; frame += 1) stepAxial(controller, -1);
+    assert.equal(controller.entryResistanceActive, false, 'entry resistance expires instead of becoming an embedded drag');
+
+    const desiredLateral = controller.desiredGrip.clone().add(new THREE.Vector3(0.085, -0.025, 0));
+    controller.desiredGrip.copy(desiredLateral);
+    controller.desiredTip.add(new THREE.Vector3(0.085, -0.025, 0));
+    const desiredRotation = controller.desiredQuaternion.clone().multiply(
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(9)),
+    );
+    controller.desiredQuaternion.copy(desiredRotation);
+    controller.solveSwordImpalement(FIXED_DT);
+    assert.ok(Math.abs(controller.actualGrip.x - desiredLateral.x) < 1e-9, 'lateral thumb position is not replaced by the entry anchor');
+    assert.ok(Math.abs(controller.actualGrip.y - desiredLateral.y) < 1e-9);
+    assert.ok(controller.actualQuaternion.angleTo(desiredRotation) < 1e-9, 'embedded target rotation does not replace thumb rotation');
+
+    for (let frame = 0; frame < 80 && controller.entry; frame += 1) stepAxial(controller, 1);
+    assert.equal(controller.entry, null);
+    assert.equal(controller.lastImpalementCleanupReason, 'extracted');
+    assert.equal(controller.gripPointerId, 7);
+    assert.equal(actor.disposed, false);
+    assert.equal(actor.lifeState, 'alive');
+    assert.equal(actor.activeEmbeddedWeapon, null);
+
+    const freeBefore = controller.actualGrip.x;
+    controller.desiredGrip.x += 0.045;
+    controller.applyFreeSwordAuthoritativePose(0);
+    assert.ok(Math.abs(controller.actualGrip.x - freeBefore - 0.045) < 1e-9, 'normal direct response returns in the extraction frame');
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('target collapse clears the living attachment before corpse motion and despawn', async () => {
+  const harness = await createSwordHarness();
+  const { controller, actor, body, director } = harness;
+  try {
+    beginHarnessThrust(harness);
+    director.rupture();
+    stepAxial(controller, -1);
+    const embeddedPose = controller.actualGrip.clone();
+    actor.transitionLifeState('dying', 'fatal-test-stab');
+    assert.equal(controller.entry, null);
+    assert.equal(controller.lastImpalementCleanupReason, 'target_died');
+    assert.equal(controller.gripPointerId, 7);
+    assert.equal(actor.activeEmbeddedWeapon, null);
+    assert.equal(actor.disposed, false, 'the corpse owner remains in the scene');
+    assert.ok(controller.actualGrip.distanceTo(embeddedPose) < 1e-9, 'death cleanup does not teleport the sword');
+
+    body.position.add(new THREE.Vector3(0.8, -0.6, 0.5));
+    body.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(70));
+    const swordBeforeCorpseMotion = controller.actualGrip.clone();
+    controller.desiredGrip.add(new THREE.Vector3(-0.07, 0.03, 0.08));
+    controller.applyFreeSwordAuthoritativePose(0);
+    assert.ok(controller.actualGrip.distanceTo(swordBeforeCorpseMotion) > 0.1, 'thumb drag moves immediately while the corpse remains');
+    assert.ok(controller.actualGrip.distanceTo(body.position) > 0.1, 'corpse transform no longer drives sword position');
+
+    actor.transitionLifeState('dead', 'corpse-grounded');
+    actor.disposed = true;
+    assert.equal(controller.cleanupSwordImpalement('target_removed'), false, 'later corpse despawn cleanup is safely idempotent');
+    assert.equal(controller.gripPointerId, 7);
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('same-target interior contact is suppressed while outward motion and other contacts remain live', async () => {
+  const harness = await createSwordHarness();
+  const { controller, actor, collider, combatRouter, director, hit, physics } = harness;
+  const otherBody = createBody();
+  const otherCollider = { handle: 2 };
+  const worldCollider = { handle: 3 };
+  const otherActor = { id: 'other-enemy', instanceId: 'other-enemy', disposed: false };
+  const otherHit = { ...hit, body: otherBody, collider: otherCollider, bodyId: 'abdomen', regionId: 'abdomen' };
+  const otherDirector = { contactCalls: [], reportContact(payload) { this.contactCalls.push(payload); return true; } };
+  try {
+    beginHarnessThrust(harness);
+    director.rupture();
+    const initialDepth = controller.penetrationDepth;
+    stepAxial(controller, -1);
+    assert.ok(controller.penetrationDepth < controller.desiredProjectedDepth, 'inward entry movement receives only bounded transient resistance');
+    assert.ok(controller.penetrationDepth > initialDepth);
+    stepAxial(controller, 1);
+    assert.equal(controller.penetrationDepth, controller.desiredProjectedDepth, 'outward movement has no same-target resistance or snap-back');
+    assert.equal(controller.directControlTrackingErrorWhileEmbedded, 0);
+
+    combatRouter.ownsCollider = (candidate) => [collider, otherCollider, worldCollider].includes(candidate);
+    combatRouter.resolveCollider = (candidate) => candidate === otherCollider ? { actor: otherActor, director: otherDirector, hit: otherHit } : candidate === collider ? { actor, director, hit } : null;
+    assert.equal(controller.shouldResolveEmbeddedCollider(collider), false);
+    assert.equal(controller.shouldResolveEmbeddedCollider(otherCollider), true);
+    assert.equal(controller.shouldResolveEmbeddedCollider(worldCollider), true, 'the scoped suppression preserves any pre-existing world-contact predicate');
+
+    physics.castWeaponTip = function castOther(_previousTip, _currentTip, _radius, predicate) {
+      this.castCount += 1;
+      return predicate?.(otherCollider) ? { collider: otherCollider, time_of_impact: 0.4, normal1: { x: 0, y: 0, z: 1 } } : null;
+    };
+    controller.actualTipSpeed = 0.8;
+    controller.tipDisplacement.set(0, 0, -0.02);
+    assert.equal(controller.resolveEmbeddedExternalTipContact(), true);
+    assert.equal(otherDirector.contactCalls.length, 1, 'another actor retains a meaningful routed contact');
+    assert.equal(controller.otherTargetContactWhileEmbeddedCount, 1);
+    assert.ok(controller.sameTargetCollisionSuppressionCount > 0);
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('authoritative impalement cleanup is idempotent and clears the whole stab session once', async () => {
+  const harness = await createSwordHarness();
+  const { controller, actor, director } = harness;
+  try {
+    beginHarnessThrust(harness);
+    director.rupture();
+    stepAxial(controller, -1);
+    const assignmentsBefore = actor.embeddedWeaponAssignments.length;
+    assert.equal(controller.cleanupSwordImpalement('target_removed'), true);
+    assert.equal(controller.entry, null);
+    assert.equal(controller.penetrationDepth, 0);
+    assert.equal(controller.rearmGate, null);
+    assert.equal('releaseWithdrawal' in controller, false);
+    assert.equal(controller.entryResistanceActive, false);
+    assert.equal(actor.activeEmbeddedWeapon, null);
+    assert.equal(director.cancelled.length, 1);
+    assert.equal(controller.impalementCleanupCount, 1);
+    assert.equal(controller.cleanupSwordImpalement('target_removed'), false);
+    assert.equal(director.cancelled.length, 1);
+    assert.equal(actor.embeddedWeaponAssignments.length, assignmentsBefore + 1);
+    assert.equal(controller.impalementCleanupCount, 1);
+  } finally {
+    controller.dispose();
+  }
+});
+
 test('the first actor, body, region, and wound remain authoritative across neighboring collider motion', async () => {
   const harness = await createSwordHarness();
   const { controller, actor, director, physics } = harness;
@@ -588,7 +738,8 @@ test('the first actor, body, region, and wound remain authoritative across neigh
     assert.equal(controller.entry.regionId, 'upper_chest');
     assert.equal(controller.entry.woundId, ownedWound);
     assert.equal(controller.punctureBeginCount, 1);
-    assert.equal(physics.castCount, 1);
+    assert.ok(physics.castCount > 1);
+    assert.ok(controller.sameTargetCollisionSuppressionCount >= 12);
   } finally {
     controller.dispose();
   }
@@ -622,10 +773,15 @@ test('disposed embedded target clears safely without a replacement wound', async
   try {
     beginHarnessThrust(harness);
     director.rupture();
+    const positionBeforeDespawn = controller.actualGrip.clone();
     actor.disposed = true;
     controller.beforePhysics(FIXED_DT);
     assert.equal(controller.entry, null);
-    assert.equal(controller.state, SWORD_IMPALEMENT_STATES.ready);
+    assert.equal(controller.state, SWORD_IMPALEMENT_STATES.attacking);
+    assert.equal(controller.gripPointerId, 7, 'target removal cannot silently release the live thumb owner');
+    assert.equal(controller.lastImpalementCleanupReason, 'target_removed');
+    assert.equal(actor.activeEmbeddedWeapon, null);
+    assert.ok(controller.actualGrip.distanceTo(positionBeforeDespawn) < 0.1, 'despawn cleanup uses continuity instead of teleporting');
     assert.equal(controller.punctureBeginCount, 1);
     assert.equal(director.beginCalls.length, 1);
     assert.equal(director.cancelled.length, 1);
@@ -683,7 +839,7 @@ test('one sword puncture schedules one entry sequence and progressive depth adds
   director.dispose();
 });
 
-test('sword diagnostics expose projection and timed release ownership without planted runtime fields', async () => {
+test('sword diagnostics expose bounded entry resistance and authoritative impalement cleanup state', async () => {
   const harness = await createSwordHarness();
   const { controller, director } = harness;
   try {
@@ -698,11 +854,21 @@ test('sword diagnostics expose projection and timed release ownership without pl
     assert.equal(diagnostics.entryRegion, 'upper_chest');
     assert.equal(diagnostics.maximumPenetrationDepth, SWORD_MAXIMUM_PENETRATION_DEPTH);
     assert.equal(diagnostics.depthInputMode, 'desired-tip-entry-axis-projection');
-    assert.equal(diagnostics.desiredProjectedDepth, diagnostics.penetrationDepth);
-    assert.equal(diagnostics.projectionError, 0);
+    assert.ok(diagnostics.desiredProjectedDepth > diagnostics.penetrationDepth);
+    assert.ok(diagnostics.projectionError > 0 && diagnostics.projectionError < 0.012);
+    assert.equal(diagnostics.penetrationActive, true);
+    assert.equal(diagnostics.embeddedTargetId, 'testman-owner');
+    assert.equal(diagnostics.embeddedTargetLifeState, 'alive');
+    assert.equal(diagnostics.entryResistanceActive, true);
+    assert.equal(diagnostics.entryResistanceDuration, SWORD_ENTRY_RESISTANCE_DURATION);
+    assert.equal(diagnostics.entryResistanceMaximumLag, SWORD_ENTRY_RESISTANCE_MAXIMUM_LAG);
+    assert.equal(diagnostics.extractionDetected, false);
+    assert.equal(diagnostics.sameTargetCollisionSuppressionActive, true);
+    assert.ok(diagnostics.sameTargetCollisionSuppressionCount > 0);
+    assert.ok(diagnostics.directControlTrackingErrorWhileEmbedded < 0.012);
+    assert.equal(diagnostics.lastImpalementCleanupReason, null);
     assert.equal(diagnostics.penetrationRate, SWORD_PENETRATION_RATE_METERS_PER_SECOND);
     assert.equal(diagnostics.withdrawalRate, SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND);
-    assert.equal(diagnostics.releaseExtractionDuration, SWORD_RELEASE_EXTRACTION_DURATION);
     assert.equal('planted' in diagnostics, false);
     assert.equal('plantedAutoExtractionDistance' in diagnostics, false);
     assert.equal('automaticExtractionCount' in diagnostics, false);

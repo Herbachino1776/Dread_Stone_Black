@@ -86,6 +86,31 @@ async function createActor() {
   return { physics, scene, actor: new HumanoidCombatActor({ physics, scene }) };
 }
 
+test('humanoid collapse notifies and clears an embedded weapon before corpse ownership', async () => {
+  const { physics, actor } = await createActor();
+  const transitions = [];
+  const embeddedWeapon = {
+    state: 'embedded',
+    onTargetLifeStateChanged(target, transition) {
+      transitions.push({ target, transition });
+      target.setEmbeddedWeapon(null);
+      return true;
+    },
+  };
+  try {
+    actor.setEmbeddedWeapon(embeddedWeapon);
+    assert.equal(actor.transitionLifeState('dying', 'focused-sword-test', { externalCommit: true, forceFatal: true }), true);
+    assert.equal(transitions.length, 1);
+    assert.equal(transitions[0].target, actor);
+    assert.equal(transitions[0].transition.previousState, 'alive');
+    assert.equal(transitions[0].transition.nextState, 'dying');
+    assert.equal(actor.activeEmbeddedWeapon, null, 'the dying/corpse actor cannot continue driving the weapon');
+  } finally {
+    actor.dispose();
+    physics.dispose();
+  }
+});
+
 function makeHit(actor, bodyId, localPoint = new THREE.Vector3(0, 0, 0.1), regionOverride = null) {
   const entry = actor.bodies.get(bodyId);
   const collider = actor.colliders.get(bodyId);

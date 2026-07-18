@@ -10,7 +10,7 @@ import { CombatLabScene } from '../src/game/combat/CombatLabScene.js';
 import { ACTIVE_DAMAGE_SEGMENT_CONTRACTS, HumanoidDamageSegmentRuntime, validateDamageAsset } from '../src/game/combat/HumanoidDamageSegmentRuntime.js';
 import { TESTMAN_COMBAT_PROFILE, TESTMAN_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
 import { KNIFE_RUNTIME_COMBAT_MODE } from '../src/game/combat/WorldKnifeCombatController.js';
-import { SWORD_RELEASE_EXTRACTION_DURATION, SWORD_RUNTIME_COMBAT_MODE } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
+import { SWORD_ENTRY_RESISTANCE_DURATION, SWORD_RUNTIME_COMBAT_MODE } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 
 const glbUrl = new URL('../public/assets/enemies/testman/damage/testman_damage_v001.glb', import.meta.url);
@@ -629,7 +629,7 @@ test('damage profile is validated for Combat Lab and Folsom while puncture-only 
   assert.deepEqual(TESTMAN_DAMAGE_COMBAT_PROFILE.activeDamageSegmentIds, ['head_neck', 'left_elbow', 'right_elbow']);
   assert.equal(KNIFE_RUNTIME_COMBAT_MODE, 'puncture_only');
   assert.equal(SWORD_RUNTIME_COMBAT_MODE, 'puncture_only');
-  assert.equal(SWORD_RELEASE_EXTRACTION_DURATION, 0.15);
+  assert.equal(SWORD_ENTRY_RESISTANCE_DURATION, 0.09);
   assert.equal(TESTMAN_DAMAGE_COMBAT_PROFILE.activeDamageSegmentIds.includes('lower_spine'), false);
   const walkerSource = readFileSync(new URL('../src/game/combat/CombatLabWalkerController.js', import.meta.url), 'utf8');
   assert.match(walkerSource, /visualProfile: TESTMAN_COMBAT_PROFILE/);

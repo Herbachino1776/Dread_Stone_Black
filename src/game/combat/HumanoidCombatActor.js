@@ -741,6 +741,11 @@ export class HumanoidCombatActor {
     const previousState = this.lifeState;
     this.lifeState = nextState;
     this.collapseReason ??= reason;
+    const embeddedWeapon = this.activeEmbeddedWeapon;
+    if (nextState !== 'alive') {
+      if (typeof embeddedWeapon?.onTargetLifeStateChanged === 'function') embeddedWeapon.onTargetLifeStateChanged(this, { previousState, nextState, reason });
+      else if (nextState === 'dead' && embeddedWeapon?.state) embeddedWeapon.reason = 'embedded-in-corpse';
+    }
     const acceptedDeathRequested = this.acceptedCombatAudio?.handleLifeStateTransition?.(this, { previousState, nextState, reason }) === true;
     if (nextState === 'dying' && this.visualProfile.authoredDeathAnimations && !presentationHandled) {
       this.visualAdapter?.playDeathAnimation?.({
@@ -752,7 +757,6 @@ export class HumanoidCombatActor {
     if (nextState === 'dying' && !acceptedDeathRequested && !this.acceptedCombatAudio?.shouldSuppressSynthesizedDeathVocal?.(this, 'shock_gasp')) this.eventSink?.('shock_gasp', { position: this.getBodyWorldPosition('head'), severity: 0.9 });
     if (nextState === 'dead') {
       if (!acceptedDeathRequested && !this.acceptedCombatAudio?.shouldSuppressSynthesizedDeathVocal?.(this, 'final_exhale')) this.eventSink?.('final_exhale', { position: this.getBodyWorldPosition('head'), severity: 1, final: true });
-      this.activeEmbeddedWeapon?.state && (this.activeEmbeddedWeapon.reason = 'embedded-in-corpse');
     }
     return true;
   }

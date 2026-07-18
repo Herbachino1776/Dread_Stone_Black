@@ -175,6 +175,7 @@ export class CombatLabDebugPanel {
     const weaponSelection = diagnostics.weapon ?? {};
     const activeWeapon = weaponSelection.active ?? weaponSelection;
     const mace = weaponSelection.mace ?? (activeWeapon.itemId === 'dreadstone_mace' ? activeWeapon : {});
+    const sword = weaponSelection.sword ?? (activeWeapon.itemId === 'dreadstone_sword' ? activeWeapon : {});
     const maceDirect = mace.maceDirectControl ?? {};
     const weapon = weaponSelection.knife ?? activeWeapon;
     const director = diagnostics.director ?? {};
@@ -245,6 +246,10 @@ export class CombatLabDebugPanel {
       `extraction reaction attempted ${director.extractionReactionAttempted || reaction.extractionAttemptedToTrigger ? 'YES' : 'NO'}`,
       `spacing center ${(spacing.minimumCenterDistance ?? 0).toFixed(3)}m  load ${(spacing.loadingClearance ?? 0).toFixed(3)}m  full depth ${(spacing.fullGestureDepth ?? 0).toFixed(3)}m`,
       `directed event ${JSON.stringify(director.lastEvent ?? null)}`,
+      '',
+      `sword ${sword.equipped ? 'EQUIPPED' : 'HOLSTERED'}  impalement ${sword.impalementState ?? 'unavailable'}  target ${sword.embeddedTargetId ?? '-'}`,
+      `sword depth ${(sword.penetrationDepth ?? 0).toFixed(3)}m  entry resistance ${sword.entryResistanceActive ? 'YES' : 'NO'}  extraction ${sword.extractionDetected ? 'YES' : 'NO'}  same-target suppression ${sword.sameTargetCollisionSuppressionActive ? 'YES' : 'NO'}`,
+      `sword embedded tracking ${(sword.directControlTrackingErrorWhileEmbedded ?? 0).toFixed(5)}m  cleanup ${sword.lastImpalementCleanupReason ?? '-'}  cleanups ${sword.impalementCleanupCount ?? 0}`,
       '',
       `mace ${mace.maceEquipped ? 'EQUIPPED' : 'HOLSTERED'}  state ${mace.gestureState ?? 'unavailable'}  load ${((mace.loadProgress ?? 0) * 100).toFixed(1)}%`,
       `mace travel up/down ${(maceDirect.accumulatedUpwardTravel ?? 0).toFixed(4)}/${(maceDirect.accumulatedDownwardTravel ?? 0).toFixed(4)}m  speed up/down ${(maceDirect.upwardHeadSpeed ?? 0).toFixed(3)}/${(maceDirect.downwardHeadSpeed ?? 0).toFixed(3)}m/s`,

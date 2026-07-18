@@ -10,7 +10,7 @@ import { MELEE_INTENTS } from '../src/game/combat/MeleeIntentWeapon.js';
 import { weaponProfiles } from '../src/game/equipment/weaponProfiles.js';
 import { equipmentRegistry } from '../src/game/equipment/equipmentRegistry.js';
 import { KNIFE_RUNTIME_COMBAT_MODE } from '../src/game/combat/WorldKnifeCombatController.js';
-import { SWORD_RUNTIME_COMBAT_MODE, SWORD_RELEASE_EXTRACTION_DURATION } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
+import { SWORD_ENTRY_RESISTANCE_DURATION, SWORD_RUNTIME_COMBAT_MODE } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import {
   DREADMACE_ASSET_CORRECTION,
@@ -198,6 +198,26 @@ test('held Dreadmace reaches the unrestricted workspace and visual/physical owne
   assert.equal(diagnostics.visualPhysicalHeadError, 0);
   assert.deepEqual(diagnostics.localGrip, diagnostics.targetLocalGrip);
   controller.dispose();
+});
+
+test('sword impalement cleanup does not alter mace direct-control ownership or tracking', async () => {
+  const controller = makeController();
+  await controller.visualLoadPromise;
+  try {
+    assert.equal(controller.acquireGrip(71, 300, 520, 0), true);
+    controller.beforePhysics(1 / 60);
+    moveMace(controller, 71, 96, -84, 40);
+    const heldTarget = controller.targetLocalGrip.clone();
+    const heldActual = controller.localGrip.clone();
+    const diagnostics = controller.getDiagnostics().maceDirectControl;
+    assert.ok(heldActual.distanceTo(heldTarget) < 1e-12);
+    assert.equal(diagnostics.positionTrackingError, 0);
+    assert.equal(diagnostics.visualPhysicalHeadError, 0);
+    assert.equal('cleanupSwordImpalement' in controller, false);
+    assert.equal('entryResistanceActive' in controller, false);
+  } finally {
+    controller.dispose();
+  }
 });
 
 test('Dreadmace load uses actual upward head travel, speed qualification, and decaying memory', async () => {
@@ -654,7 +674,7 @@ test('reset/disposal clears gesture state and registrations while preserving exi
   assert.equal(lighting.unregistered, 1);
   assert.equal(KNIFE_RUNTIME_COMBAT_MODE, 'puncture_only');
   assert.equal(SWORD_RUNTIME_COMBAT_MODE, 'puncture_only');
-  assert.equal(SWORD_RELEASE_EXTRACTION_DURATION, 0.15);
+  assert.equal(SWORD_ENTRY_RESISTANCE_DURATION, 0.09);
   const panelSource = readFileSync(new URL('../src/game/combat/CombatLabDebugPanel.js', import.meta.url), 'utf8');
   assert.match(panelSource, /KeyJ/);
   assert.match(panelSource, /KeyK/);
