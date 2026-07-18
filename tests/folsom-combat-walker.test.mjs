@@ -74,11 +74,13 @@ function addPuncture(routed, id) {
 }
 
 test('Folsom owns one router with independently routed stationary and walker actors', async () => {
-  const { encounter } = await createEncounter();
+  const { encounter, collision } = await createEncounter();
   const walker = encounter.walkerController.actor;
   assert.ok(walker);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
   assert.equal(encounter.getDiagnostics().routerColliderCount, 36);
+  assert.equal(collision.blockerRects.filter((blocker) => blocker.type === 'combatActor').length, 2, 'each actor contributes one authoritative player locomotion proxy');
+  assert.ok(collision.blockerRects.filter((blocker) => blocker.type === 'combatActor').every((blocker) => blocker.userData.locomotionBlocker === true));
 
   const walkerContact = makeHit(walker, 'upper_chest');
   const stationaryContact = makeHit(encounter.actor, 'lower_chest');
@@ -92,6 +94,28 @@ test('Folsom owns one router with independently routed stationary and walker act
   addPuncture({ ...routedStationary, hit: { ...routedStationary.hit, worldPoint: stationaryContact.point } }, 'stationary');
   assert.equal(walker.woundSystem.wounds.length, 1);
   assert.equal(encounter.actor.woundSystem.wounds.length, 1);
+  encounter.dispose();
+});
+
+test('walker close-range steering separates from player overlap without retaining inward pressure', async () => {
+  const { encounter, player } = await createEncounter();
+  const controller = encounter.walkerController;
+  const minimumDistance = controller.getMinimumPlayerDistance();
+  controller.position.set(player.position.x + minimumDistance - 0.12, 0.16, player.position.z);
+  controller.currentYaw = -Math.PI / 2;
+  controller.desiredYaw = -Math.PI / 2;
+  controller.currentSpeed = controller.maximumSpeed;
+  controller.state = WALKER_STATES.approaching;
+  controller.actor.setLivingRootTransform(controller.position, controller.currentYaw);
+  controller.actor.updatePlayerCollisionBlocker(controller.playerBlocker);
+  const before = Math.hypot(controller.position.x - player.position.x, controller.position.z - player.position.z);
+  controller.updateLivingState(1 / 60, player.position);
+  const after = Math.hypot(controller.position.x - player.position.x, controller.position.z - player.position.z);
+  assert.ok(after > before, 'overlapping walker moves outward');
+  assert.ok(after - before <= 0.08 + 1e-8, 'separation stays within the per-frame correction cap');
+  assert.equal(controller.closeRangeMode, 'separate');
+  assert.equal(controller.currentSpeed, 0, 'inward pursuit pressure stops immediately');
+  assert.ok(Number.isFinite(controller.currentYaw), 'facing rotation remains independent and finite');
   encounter.dispose();
 });
 

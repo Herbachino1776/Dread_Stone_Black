@@ -368,7 +368,7 @@ export class CombatLabScene {
     } : null;
     blood.rendererProgramCount = countBloodChromaRendererPrograms(this.renderer);
     blood.debugEnabled = this.bloodLightingDebugEnabled;
-    return { physics: this.physics.getDiagnostics(), actor, walker: this.walkerController?.getDiagnostics?.() ?? null, combatRouting: this.combatRouter.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood, feedback: this.feedbackSystem.getDiagnostics(), acceptedCombatAudio: this.acceptedCombatAudio.getDiagnostics({ actor: this.actor, penetrationAudioGate: this.weaponController?.penetrationAudioGate }), meleeSpacing: this.meleeSpacing };
+    return { physics: this.physics.getDiagnostics(), actor, walker: this.walkerController?.getDiagnostics?.() ?? null, combatRouting: this.combatRouter.getDiagnostics(), weapon: this.weaponController?.getDiagnostics?.() ?? null, director: this.combatDirector.getDiagnostics(), blood, feedback: this.feedbackSystem.getDiagnostics(), acceptedCombatAudio: this.acceptedCombatAudio.getDiagnostics({ actor: this.actor, penetrationAudioGate: this.weaponController?.penetrationAudioGate }), meleeSpacing: this.meleeSpacing, playerCollision: this.collision?.getMovementDiagnostics?.() ?? null };
   }
 
   forceWalkerRespawn() { this.walkerController?.forceRespawn?.(); }

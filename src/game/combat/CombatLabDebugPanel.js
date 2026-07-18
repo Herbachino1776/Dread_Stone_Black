@@ -171,6 +171,7 @@ export class CombatLabDebugPanel {
     const damageAsset = actor.damageAsset ?? {};
     const dismemberment = actor.dismemberment ?? {};
     const walker = diagnostics.walker ?? {};
+    const playerCollision = diagnostics.playerCollision ?? {};
     const routing = diagnostics.combatRouting ?? {};
     const weaponSelection = diagnostics.weapon ?? {};
     const activeWeapon = weaponSelection.active ?? weaponSelection;
@@ -235,6 +236,10 @@ export class CombatLabDebugPanel {
       `walker ${walker.enabled ? walker.state ?? 'waiting' : 'DISABLED'}  id ${walker.actorInstanceId ?? '-'}  generation ${walker.respawnGeneration ?? 0}  live ${walker.liveWalkers ?? 0}`,
       `walker pos ${JSON.stringify(walker.worldPosition ?? [])}  distance ${(walker.distanceToPlayer ?? 0).toFixed(2)}m  speed ${(walker.currentSpeed ?? 0).toFixed(2)}/${(walker.desiredSpeed ?? 0).toFixed(2)}/${(walker.maximumSpeed ?? 0).toFixed(2)}`,
       `yaw ${(walker.currentYaw ?? 0).toFixed(2)} -> ${(walker.desiredYaw ?? 0).toFixed(2)}  error ${(walker.turnError ?? 0).toFixed(2)}  paused ${walker.paused ? 'YES' : 'NO'}`,
+      `range ${walker.closeRangeMode ?? '-'}  minimum ${(walker.minimumPlayerDistance ?? 0).toFixed(3)}m  overlap ${(walker.playerOverlapDepth ?? 0).toFixed(3)}m  separation ${walker.separationActive ? 'ACTIVE' : 'OFF'}`,
+      `player collision r=${(playerCollision.playerRadius ?? 0).toFixed(3)}  nearest ${playerCollision.nearestEnemyId ?? '-'} ${(playerCollision.nearestEnemyCenterDistance ?? 0).toFixed(3)}/${(playerCollision.requiredMinimumCenterDistance ?? 0).toFixed(3)}m  nearby ${playerCollision.nearbyBlockingActorCount ?? 0}`,
+      `player move ${JSON.stringify(playerCollision.movementRequested ?? [])} -> ${JSON.stringify(playerCollision.movementAccepted ?? [])}  inward ${JSON.stringify(playerCollision.blockedInwardComponent ?? [])}  slide ${JSON.stringify(playerCollision.tangentialSlideComponent ?? [])}`,
+      `recovery ${playerCollision.depenetrationActive ? 'ACTIVE' : 'OFF'}  player ${JSON.stringify(playerCollision.correctionVector ?? [])}  enemy ${JSON.stringify(playerCollision.enemyCorrectionVector ?? [])}  reason ${playerCollision.lastMovementBlockReason ?? '-'}`,
       `authored ${walker.activeAnimation ?? '-'}  walk loop ${walker.walkLooping ? 'YES' : 'NO'}`,
       `vital stabs ${walker.criticalStabCount ?? 0}/2  impaired ${walker.firstStabImpaired ? 'YES' : 'NO'}  wounds ${JSON.stringify(walker.qualifyingWoundIds ?? [])}  last ${walker.lastQualifyingRegion ?? '-'} ${(walker.lastQualifyingDepth ?? 0).toFixed(3)}m`,
       `death ${walker.deathAnimation ?? '-'}  progress ${(walker.deathProgress ?? 0).toFixed(2)}  ${walker.ragdollActive ? 'RAGDOLL ERROR' : walker.finalPoseHeld ? 'FINAL POSE HELD' : 'AUTHORED'}`,

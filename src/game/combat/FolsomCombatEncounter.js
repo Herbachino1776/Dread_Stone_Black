@@ -586,6 +586,7 @@ export class FolsomCombatEncounter {
       feedback: this.feedbackSystem.getDiagnostics(),
       acceptedCombatAudio: this.acceptedCombatAudio.getDiagnostics({ actor: this.actor, penetrationAudioGate: this.weaponController?.penetrationAudioGate }),
       meleeSpacing: this.meleeSpacing,
+      playerCollision: this.dungeon.collision?.getMovementDiagnostics?.() ?? null,
       spawnPosition: this.spawnPosition.toArray(),
       groundY: this.groundY,
       folsomShowcase: {

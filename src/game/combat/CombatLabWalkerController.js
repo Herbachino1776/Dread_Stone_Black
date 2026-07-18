@@ -3,6 +3,7 @@ import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatDirector } from './CombatDirector.js';
 import { HumanoidCombatActor } from './HumanoidCombatActor.js';
 import { TESTMAN_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { ACTOR_SEPARATION_CONFIG, resolveEnemyCloseRangeMotion } from '../ActorSeparation.js';
 
 export const WALKER_STATES = Object.freeze({
   spawning: 'SPAWNING',
@@ -271,6 +272,12 @@ export class CombatLabWalkerController {
     this.footprintActive = true;
     this.spawnGroundHeight = 0;
     this.spawnDiagnostics = null;
+    this.separationActive = false;
+    this.closeRangeMode = 'approach';
+    this.minimumPlayerDistance = 0;
+    this.playerOverlapDepth = 0;
+    this.lastBlockedInwardAmount = 0;
+    this.lastSeparationCorrection = new THREE.Vector3();
   }
 
   setState(nextState) {
@@ -415,6 +422,7 @@ export class CombatLabWalkerController {
     this.combatRouter?.register?.(this.actor, this.director);
     this.routingRegistered = true;
     this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: this.environment.getBlockerName?.(this.respawnGeneration) ?? `combat-lab-walker-blocker-${this.respawnGeneration}` });
+    this.playerBlocker.userData.tryPlayerDepenetration = (correction, context) => this.tryPlayerDepenetration(correction, context);
     this.collision?.addBlocker?.(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: spawnPosition.y, wallX });
     this.lethality = new WalkerVitalStabPolicy();
@@ -428,6 +436,12 @@ export class CombatLabWalkerController {
     this.deathInitialSpeed = 0;
     this.deathDurationSeconds = this.config.deathCollapseSeconds;
     this.selectedDeathName = null;
+    this.separationActive = false;
+    this.closeRangeMode = 'approach';
+    this.minimumPlayerDistance = this.getMinimumPlayerDistance();
+    this.playerOverlapDepth = 0;
+    this.lastBlockedInwardAmount = 0;
+    this.lastSeparationCorrection.set(0, 0, 0);
     this.footprintActive = this.isInsideEncounter(playerPosition, 0);
     this.spawnDiagnostics = {
       point: spawnPosition.toArray(),
@@ -509,10 +523,84 @@ export class CombatLabWalkerController {
     return true;
   }
 
+  getLocomotionRadius() {
+    return Math.max(0.2, Number(this.playerBlocker?.radius) || 0.34);
+  }
+
+  getMinimumPlayerDistance() {
+    const playerRadius = Math.max(0, Number(this.collision?.playerRadius) || 0.35);
+    const clearance = Math.max(0, Number(this.playerBlocker?.collisionClearance) || ACTOR_SEPARATION_CONFIG.livingClearance);
+    return playerRadius + this.getLocomotionRadius() + clearance;
+  }
+
+  isHorizontalCandidateValid(candidate) {
+    const ground = this.sampleGround(candidate);
+    if (!ground || !this.isInsideEncounter(candidate) || Math.abs(ground.y - this.position.y) > this.config.maximumGroundStep) return null;
+    if (this.getBlockingEntries(candidate, this.getLocomotionRadius()).length > 0) return null;
+    return ground;
+  }
+
+  preservesPlayerSeparation(candidate, playerPosition, minimumPlayerDistance) {
+    if (!playerPosition || !Number.isFinite(minimumPlayerDistance) || minimumPlayerDistance <= 0) return true;
+    const currentDistance = Math.hypot(this.position.x - playerPosition.x, this.position.z - playerPosition.z);
+    const candidateDistance = Math.hypot(candidate.x - playerPosition.x, candidate.z - playerPosition.z);
+    return currentDistance < minimumPlayerDistance
+      ? candidateDistance >= currentDistance - ACTOR_SEPARATION_CONFIG.contactEpsilon
+      : candidateDistance >= minimumPlayerDistance - ACTOR_SEPARATION_CONFIG.contactEpsilon;
+  }
+
+  applyHorizontalMovement(movement, { playerPosition = null, minimumPlayerDistance = 0 } = {}) {
+    const requested = movement?.isVector3 ? movement : new THREE.Vector3(movement?.x ?? 0, 0, movement?.z ?? 0);
+    if (![requested.x, requested.z].every(Number.isFinite) || requested.lengthSq() <= ACTOR_SEPARATION_CONFIG.contactEpsilon) return new THREE.Vector3();
+    const start = this.position.clone();
+    const result = this.position.clone();
+    const fullCandidate = result.clone().add(requested);
+    const fullGround = this.isHorizontalCandidateValid(fullCandidate);
+    let fullAccepted = false;
+    if (fullGround && this.preservesPlayerSeparation(fullCandidate, playerPosition, minimumPlayerDistance)) {
+      fullCandidate.y = fullGround.y;
+      result.copy(fullCandidate);
+      fullAccepted = true;
+    }
+    for (const axis of fullAccepted ? [] : ['x', 'z']) {
+      if (Math.abs(requested[axis]) <= ACTOR_SEPARATION_CONFIG.contactEpsilon) continue;
+      const candidate = result.clone();
+      candidate[axis] += requested[axis];
+      const ground = this.isHorizontalCandidateValid(candidate);
+      if (!ground || !this.preservesPlayerSeparation(candidate, playerPosition, minimumPlayerDistance)) continue;
+      candidate.y = ground.y;
+      result.copy(candidate);
+    }
+    const accepted = result.clone().sub(start);
+    if (accepted.dot(requested) <= ACTOR_SEPARATION_CONFIG.contactEpsilon) return new THREE.Vector3();
+    this.position.copy(result);
+    this.actor?.setEnvironmentContactHints?.({ groundY: result.y });
+    this.actor?.setLivingRootTransform?.(this.position, this.currentYaw, accepted);
+    if (this.playerBlocker && !this.deathCollisionReleased) this.actor?.updatePlayerCollisionBlocker?.(this.playerBlocker);
+    return accepted;
+  }
+
+  tryPlayerDepenetration(correction, context = {}) {
+    if (!this.actor || !LIVING_MOVEMENT_STATES.has(this.state) || this.deathCollisionReleased) return { x: 0, z: 0 };
+    const requested = new THREE.Vector3(Number(correction?.x) || 0, 0, Number(correction?.z) || 0);
+    if (requested.length() > ACTOR_SEPARATION_CONFIG.maximumDepenetrationPerFrame) requested.setLength(ACTOR_SEPARATION_CONFIG.maximumDepenetrationPerFrame);
+    const accepted = this.applyHorizontalMovement(requested, { playerPosition: context.playerPosition, minimumPlayerDistance: this.getMinimumPlayerDistance() });
+    if (accepted.lengthSq() > ACTOR_SEPARATION_CONFIG.contactEpsilon) {
+      this.currentSpeed = 0;
+      this.desiredSpeed = 0;
+      this.velocity.set(0, 0, 0);
+      this.lastSeparationCorrection.copy(accepted);
+      this.actor?.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
+      if (this.playerBlocker && !this.deathCollisionReleased) this.actor?.updatePlayerCollisionBlocker?.(this.playerBlocker);
+    }
+    return { x: accepted.x, z: accepted.z };
+  }
+
   updateLivingState(dt, playerPosition) {
     this.footprintActive = this.isInsideEncounter(playerPosition, 0);
     this.toPlayer.set(playerPosition.x - this.position.x, 0, playerPosition.z - this.position.z);
     this.distanceToPlayer = this.toPlayer.length();
+    this.minimumPlayerDistance = this.getMinimumPlayerDistance();
     if (this.distanceToPlayer > 1e-5) this.desiredYaw = Math.atan2(this.toPlayer.x, this.toPlayer.z);
     const reacting = this.actor?.reflex?.time > 0.04;
     if (reacting && this.state !== WALKER_STATES.hitReacting && this.state !== WALKER_STATES.spawning) {
@@ -539,19 +627,33 @@ export class CombatLabWalkerController {
     this.currentSpeed = moveToward(this.currentSpeed, this.desiredSpeed, rate * dt);
     this.currentYaw = moveAngleToward(this.currentYaw, this.desiredYaw, this.config.turnRateRadians * dt);
     this.forward.set(Math.sin(this.currentYaw), 0, Math.cos(this.currentYaw));
-    this.nextPosition.copy(this.position).addScaledVector(this.forward, this.currentSpeed * dt);
-    const nextGround = this.sampleGround(this.nextPosition);
-    if (this.currentSpeed > 0 && nextGround && this.isInsideEncounter(this.nextPosition) && Math.abs(nextGround.y - this.position.y) <= this.config.maximumGroundStep && this.getBlockingEntries(this.nextPosition, 0.34).length === 0) {
-      this.nextPosition.y = nextGround.y;
-      this.position.copy(this.nextPosition);
-      this.actor.setEnvironmentContactHints({ groundY: nextGround.y });
+    const requestedMovement = this.forward.clone().multiplyScalar(this.currentSpeed * dt);
+    const separation = resolveEnemyCloseRangeMotion({
+      enemyPosition: this.position,
+      playerPosition,
+      desiredMovement: requestedMovement,
+      minimumCenterDistance: this.minimumPlayerDistance,
+      separationActive: this.separationActive,
+      holdEnterDistance: this.config.stopEnterDistance,
+      fallbackKey: this.actor?.instanceId ?? this.playerBlocker?.id,
+    });
+    this.separationActive = separation.separationActive;
+    this.closeRangeMode = separation.mode;
+    this.playerOverlapDepth = separation.overlapDepth;
+    this.lastBlockedInwardAmount = separation.blockedInwardAmount;
+    this.lastSeparationCorrection.copy(separation.outwardNormal).multiplyScalar(Math.min(separation.overlapDepth, ACTOR_SEPARATION_CONFIG.maximumDepenetrationPerFrame));
+    if (separation.separationActive || separation.blockedInwardAmount > 0) {
+      this.desiredSpeed = 0;
+      this.currentSpeed = 0;
     }
-    else if (this.currentSpeed > 0) {
+    const movementStart = this.position.clone();
+    const acceptedMovement = this.applyHorizontalMovement(separation.movement, { playerPosition, minimumPlayerDistance: this.minimumPlayerDistance });
+    if (separation.movement.lengthSq() > ACTOR_SEPARATION_CONFIG.contactEpsilon && acceptedMovement.lengthSq() <= ACTOR_SEPARATION_CONFIG.contactEpsilon) {
       this.desiredSpeed = 0;
       this.currentSpeed = moveToward(this.currentSpeed, 0, this.config.deceleration * dt);
     }
-    this.velocity.copy(this.forward).multiplyScalar(this.currentSpeed);
-    const walking = canApproach && (this.desiredSpeed > 0.025 || this.currentSpeed > 0.045);
+    this.velocity.copy(this.position).sub(movementStart).multiplyScalar(dt > 0 ? 1 / dt : 0);
+    const walking = this.closeRangeMode === 'approach' && canApproach && (this.desiredSpeed > 0.025 || this.currentSpeed > 0.045);
     this.actor.visualAdapter?.setMovementState?.({ speed: this.currentSpeed, maximumSpeed: this.maximumSpeed, walking });
     if (this.state === WALKER_STATES.blendingToIdle && this.currentSpeed <= 0.025) this.setState(WALKER_STATES.nearPlayer);
     this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
@@ -743,6 +845,12 @@ export class CombatLabWalkerController {
       respawnGeneration: this.respawnGeneration,
       liveWalkers: this.actor ? 1 : 0,
       paused: this.pauseLocomotion,
+      closeRangeMode: this.closeRangeMode,
+      minimumPlayerDistance: Number(this.minimumPlayerDistance.toFixed(3)),
+      playerOverlapDepth: Number(this.playerOverlapDepth.toFixed(3)),
+      separationActive: this.separationActive,
+      blockedInwardAmount: Number(this.lastBlockedInwardAmount.toFixed(4)),
+      separationCorrection: this.lastSeparationCorrection.toArray().map((value) => Number(value.toFixed(4))),
       encounterFootprintActive: this.footprintActive,
       spawnPoint: this.spawnDiagnostics?.point ?? null,
       spawnGroundHeight: this.spawnDiagnostics?.groundHeight ?? null,

@@ -11,6 +11,7 @@ import { getKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
 import { deriveSwordCutTrauma } from './SwordCutDamage.js';
 import { BLUNT_IMPACT_CLASSIFICATIONS, deriveBluntImpactTrauma } from './weapons/BluntImpactInteraction.js';
 import { capturePhysicsBodyTransform, worldToPhysicsBodyLocal } from './CombatCoordinateSpaces.js';
+import { ACTOR_SEPARATION_CONFIG } from '../ActorSeparation.js';
 
 const BODY_COLLISION_GROUPS = 0x00020001;
 const tmpPosition = new THREE.Vector3();
@@ -900,9 +901,13 @@ export class HumanoidCombatActor {
   updatePlayerCollisionBlocker(blocker = {}) {
     const pelvis = this.getBodyWorldPosition('pelvis');
     const upper = this.getBodyWorldPosition(this.ragdollActive ? 'head' : 'upper_chest');
+    const previousUserData = blocker.userData ?? {};
     blocker.id ??= 'combat-humanoid-player-blocker';
     blocker.type = 'combatActor';
-    blocker.blockerShape = 'capsule';
+    blocker.blockerShape = this.ragdollActive ? 'capsule' : 'circle';
+    blocker.center ??= { x: this.visualRootPosition.x, z: this.visualRootPosition.z };
+    blocker.center.x = this.ragdollActive ? (pelvis.x + upper.x) * 0.5 : this.visualRootPosition.x;
+    blocker.center.z = this.ragdollActive ? (pelvis.z + upper.z) * 0.5 : this.visualRootPosition.z;
     blocker.from ??= { x: pelvis.x, z: pelvis.z };
     blocker.to ??= { x: upper.x, z: upper.z };
     blocker.from.x = pelvis.x;
@@ -910,8 +915,18 @@ export class HumanoidCombatActor {
     blocker.to.x = upper.x;
     blocker.to.z = upper.z;
     blocker.radius = this.ragdollActive ? 0.2 : blocker.meleeSpacingRadius ?? 0.29;
+    blocker.collisionClearance = this.ragdollActive ? 0 : ACTOR_SEPARATION_CONFIG.livingClearance;
     blocker.height = this.ragdollActive ? 0.5 : 1.82;
-    blocker.userData = { actor: this, dynamic: true, ragdoll: this.ragdollActive, meleeSpacing: blocker.userData?.meleeSpacing ?? null };
+    blocker.blocksPlayerLocomotion = true;
+    blocker.userData = {
+      ...previousUserData,
+      actor: this,
+      dynamic: true,
+      locomotionBlocker: true,
+      collisionPolicy: this.ragdollActive ? 'corpse_footprint' : 'living_actor',
+      ragdoll: this.ragdollActive,
+      meleeSpacing: previousUserData.meleeSpacing ?? null,
+    };
     return blocker;
   }
 

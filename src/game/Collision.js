@@ -1,4 +1,12 @@
 import * as THREE from 'three';
+import {
+  ACTOR_SEPARATION_CONFIG,
+  buildPlayerDepenetrationCorrection,
+  constrainPlayerMovementAgainstActors,
+  isAuthoritativeActorBlocker,
+  resolveHorizontalActorContact,
+  sortActorBlockers,
+} from './ActorSeparation.js';
 
 const MAX_COLLISION_STEP_DISTANCE = 0.12;
 const TERRAIN_GROUND_PRIORITY = 0;
@@ -107,6 +115,40 @@ export class CollisionWorld {
     this.sourceLocationId = sourceLocationId;
     this.eyeHeight = 1.55;
     this.maxStepUp = 0.38;
+    this.lastMovementDiagnostics = this.createMovementDiagnostics();
+  }
+
+  createMovementDiagnostics() {
+    return {
+      playerRadius: this.playerRadius,
+      nearestEnemyId: null,
+      nearestEnemyCenterDistance: null,
+      requiredMinimumCenterDistance: null,
+      overlapDepth: 0,
+      depenetrationActive: false,
+      correctionVector: [0, 0, 0],
+      enemyCorrectionVector: [0, 0, 0],
+      movementRequested: [0, 0, 0],
+      movementAccepted: [0, 0, 0],
+      blockedInwardComponent: [0, 0, 0],
+      tangentialSlideComponent: [0, 0, 0],
+      nearbyBlockingActorCount: 0,
+      constrainedActorIds: [],
+      lastMovementBlockReason: null,
+    };
+  }
+
+  getMovementDiagnostics() {
+    return {
+      ...this.lastMovementDiagnostics,
+      correctionVector: [...this.lastMovementDiagnostics.correctionVector],
+      enemyCorrectionVector: [...this.lastMovementDiagnostics.enemyCorrectionVector],
+      movementRequested: [...this.lastMovementDiagnostics.movementRequested],
+      movementAccepted: [...this.lastMovementDiagnostics.movementAccepted],
+      blockedInwardComponent: [...this.lastMovementDiagnostics.blockedInwardComponent],
+      tangentialSlideComponent: [...this.lastMovementDiagnostics.tangentialSlideComponent],
+      constrainedActorIds: [...this.lastMovementDiagnostics.constrainedActorIds],
+    };
   }
 
   removeBlocker(blockerRect) {
@@ -151,7 +193,7 @@ export class CollisionWorld {
     return this.blockerRects.filter((rect) => circleIntersectsBlocker(testPoint, radius, rect));
   }
 
-  canStandAt(position) {
+  canStandAt(position, { ignoreActorBlockers = false } = {}) {
     const testPoint = { x: position.x, z: position.z };
     const inWalkableSpace = this.walkableRects.some((rect) => pointInRect(testPoint, rect));
 
@@ -163,6 +205,7 @@ export class CollisionWorld {
     if (heightDelta > this.maxStepUp && !['ramp', 'stairRamp'].includes(targetSurface.kind)) return false;
 
     return !this.getIntersectingBlockers(position).some((rect) => {
+      if (ignoreActorBlockers && rect.type === 'combatActor') return false;
       if (rect.type === 'canal' && targetSurface.kind === 'bridgeDeck') return false;
       return true;
     });
@@ -177,32 +220,172 @@ export class CollisionWorld {
     const distance = movement.length();
     const steps = Math.max(1, Math.ceil(distance / MAX_COLLISION_STEP_DISTANCE));
     const stepMovement = movement.clone().multiplyScalar(1 / steps);
+    const actorBlockers = sortActorBlockers(this.blockerRects);
+    const movementStart = position.clone();
     let next = position.clone();
+    const blockedInwardComponent = new THREE.Vector3();
+    const tangentialSlideComponent = new THREE.Vector3();
+    const constrainedActorIds = new Set();
+    let invalidNormalCount = 0;
+    let worldBlocked = false;
 
     for (let i = 0; i < steps; i += 1) {
-      next = this.moveSingleStepWithCollision(next, stepMovement);
+      next = this.moveSingleStepWithCollision(next, stepMovement, {
+        actorBlockers,
+        blockedInwardComponent,
+        tangentialSlideComponent,
+        constrainedActorIds,
+        recordInvalidNormals: (count) => { invalidNormalCount += count; },
+        recordWorldBlock: () => { worldBlocked = true; },
+      });
     }
-
+    const movementAccepted = next.clone().sub(movementStart);
+    const recovery = this.recoverPlayerActorOverlaps(next, actorBlockers);
+    next.copy(recovery.position);
+    const initialContacts = actorBlockers
+      .map((blocker) => resolveHorizontalActorContact(movementStart, blocker, this.playerRadius))
+      .filter(Boolean)
+      .sort((first, second) => first.centerDistance - second.centerDistance || String(first.blockerId ?? '').localeCompare(String(second.blockerId ?? '')));
+    const nearest = initialContacts[0] ?? null;
+    const nearbyBlockingActorCount = initialContacts.filter((contact) => contact.distance <= contact.minimumCenterDistance + 0.5).length;
+    const constrainedCount = constrainedActorIds.size;
+    const lastMovementBlockReason = invalidNormalCount > 0
+      ? 'invalid_collision_normal'
+      : recovery.active
+        ? 'enemy_overlap_recovery'
+        : constrainedCount > 1
+          ? 'multiple_enemy_constraint'
+          : constrainedCount === 1
+            ? 'enemy_inward_component'
+            : worldBlocked
+              ? 'world_geometry'
+              : null;
+    this.lastMovementDiagnostics = {
+      playerRadius: this.playerRadius,
+      nearestEnemyId: nearest?.blockerId ?? null,
+      nearestEnemyCenterDistance: nearest?.centerDistance ?? null,
+      requiredMinimumCenterDistance: nearest?.minimumCenterDistance ?? null,
+      overlapDepth: recovery.initialMaximumOverlap,
+      depenetrationActive: recovery.active,
+      correctionVector: recovery.playerCorrection.toArray(),
+      enemyCorrectionVector: recovery.enemyCorrection.toArray(),
+      movementRequested: movement.toArray(),
+      movementAccepted: movementAccepted.toArray(),
+      blockedInwardComponent: blockedInwardComponent.toArray(),
+      tangentialSlideComponent: tangentialSlideComponent.toArray(),
+      nearbyBlockingActorCount,
+      constrainedActorIds: [...constrainedActorIds],
+      lastMovementBlockReason,
+    };
     return next;
   }
 
-  moveSingleStepWithCollision(position, movement) {
-    // Axis-separated movement gives simple sliding along walls without a physics engine.
+  moveSingleStepAgainstWorld(position, movement) {
     const next = position.clone();
     const xStep = next.clone();
     xStep.x += movement.x;
 
-    if (this.canStandAt(xStep)) {
+    if (this.canStandAt(xStep, { ignoreActorBlockers: true })) {
       next.x = xStep.x;
     }
 
     const zStep = next.clone();
     zStep.z += movement.z;
 
-    if (this.canStandAt(zStep)) {
+    if (this.canStandAt(zStep, { ignoreActorBlockers: true })) {
       next.z = zStep.z;
     }
 
     return next;
   }
+
+  moveSingleStepWithCollision(position, movement, diagnostics = null) {
+    const actorBlockers = diagnostics?.actorBlockers ?? sortActorBlockers(this.blockerRects);
+    const firstConstraint = constrainPlayerMovementAgainstActors({ position, movement, blockers: actorBlockers, playerRadius: this.playerRadius });
+    const worldPosition = this.moveSingleStepAgainstWorld(position, firstConstraint.accepted);
+    const worldMovement = worldPosition.clone().sub(position);
+    const secondConstraint = constrainPlayerMovementAgainstActors({ position, movement: worldMovement, blockers: actorBlockers, playerRadius: this.playerRadius });
+    const next = this.moveSingleStepAgainstWorld(position, secondConstraint.accepted);
+    if (diagnostics) {
+      diagnostics.blockedInwardComponent.add(firstConstraint.blockedInwardComponent).add(secondConstraint.blockedInwardComponent);
+      diagnostics.tangentialSlideComponent.copy(secondConstraint.tangentialSlideComponent.lengthSq() > 0 ? secondConstraint.tangentialSlideComponent : firstConstraint.tangentialSlideComponent);
+      [...firstConstraint.constrainedActorIds, ...secondConstraint.constrainedActorIds].forEach((id) => diagnostics.constrainedActorIds.add(id));
+      diagnostics.recordInvalidNormals(firstConstraint.invalidNormalCount + secondConstraint.invalidNormalCount);
+      if (worldMovement.distanceTo(firstConstraint.accepted) > ACTOR_SEPARATION_CONFIG.contactEpsilon
+        || next.clone().sub(position).distanceTo(secondConstraint.accepted) > ACTOR_SEPARATION_CONFIG.contactEpsilon) diagnostics.recordWorldBlock();
+    }
+    return next;
+  }
+
+  recoverPlayerActorOverlaps(position, actorBlockers = sortActorBlockers(this.blockerRects)) {
+    const next = position.clone();
+    const playerCorrection = new THREE.Vector3();
+    const enemyCorrection = new THREE.Vector3();
+    const ownerCorrectionById = new Map();
+    const initial = buildPlayerDepenetrationCorrection({ position: next, blockers: actorBlockers, playerRadius: this.playerRadius });
+    const initialMaximumOverlap = initial.contacts.reduce((maximum, contact) => Math.max(maximum, contact.overlapDepth), 0);
+    if (!initial.contacts.length) return { position: next, playerCorrection, enemyCorrection, active: false, initialMaximumOverlap: 0 };
+
+    for (let iteration = 0; iteration < ACTOR_SEPARATION_CONFIG.solverIterations; iteration += 1) {
+      let recovery = buildPlayerDepenetrationCorrection({ position: next, blockers: actorBlockers, playerRadius: this.playerRadius });
+      if (!recovery.contacts.length) break;
+
+      for (const contact of recovery.contacts) {
+        const moveOwner = contact.blocker.userData?.tryPlayerDepenetration;
+        if (typeof moveOwner !== 'function') continue;
+        const ownerId = String(contact.blockerId ?? 'combat-actor');
+        const ownerCorrectionUsed = ownerCorrectionById.get(ownerId) ?? 0;
+        const ownerCorrectionRemaining = Math.max(0, ACTOR_SEPARATION_CONFIG.maximumDepenetrationPerFrame - ownerCorrectionUsed);
+        const magnitude = Math.min(contact.overlapDepth, ownerCorrectionRemaining);
+        if (magnitude <= ACTOR_SEPARATION_CONFIG.contactEpsilon) continue;
+        const requested = contact.normal.clone().multiplyScalar(-magnitude);
+        const moved = moveOwner({ x: requested.x, z: requested.z }, { playerPosition: next, blocker: contact.blocker });
+        if (finiteHorizontalVector(moved)) {
+          const acceptedOwnerCorrection = new THREE.Vector3(moved.x, 0, moved.z);
+          enemyCorrection.add(acceptedOwnerCorrection);
+          ownerCorrectionById.set(ownerId, ownerCorrectionUsed + acceptedOwnerCorrection.length());
+        }
+      }
+
+      recovery = buildPlayerDepenetrationCorrection({
+        position: next,
+        blockers: actorBlockers,
+        playerRadius: this.playerRadius,
+        maximumCorrection: Math.max(0, ACTOR_SEPARATION_CONFIG.maximumDepenetrationPerFrame - playerCorrection.length()),
+      });
+      if (!recovery.contacts.length || recovery.correction.lengthSq() <= ACTOR_SEPARATION_CONFIG.contactEpsilon) break;
+      const beforeOverlap = recovery.contacts.reduce((sum, contact) => sum + contact.overlapDepth, 0);
+      let candidate = this.moveSingleStepAgainstWorld(next, recovery.correction);
+      let candidateOverlap = totalActorOverlap(candidate, actorBlockers, this.playerRadius);
+      if (candidate.distanceTo(next) <= ACTOR_SEPARATION_CONFIG.contactEpsilon || candidateOverlap >= beforeOverlap - ACTOR_SEPARATION_CONFIG.contactEpsilon) {
+        candidate = next;
+        candidateOverlap = beforeOverlap;
+        for (const contact of recovery.contacts) {
+          const remaining = Math.max(0, ACTOR_SEPARATION_CONFIG.maximumDepenetrationPerFrame - playerCorrection.length());
+          if (remaining <= ACTOR_SEPARATION_CONFIG.contactEpsilon) break;
+          const individualCorrection = contact.normal.clone().multiplyScalar(Math.min(contact.overlapDepth, remaining));
+          const individualCandidate = this.moveSingleStepAgainstWorld(next, individualCorrection);
+          const individualOverlap = totalActorOverlap(individualCandidate, actorBlockers, this.playerRadius);
+          if (individualCandidate.distanceTo(next) > ACTOR_SEPARATION_CONFIG.contactEpsilon && individualOverlap < candidateOverlap - ACTOR_SEPARATION_CONFIG.contactEpsilon) {
+            candidate = individualCandidate;
+            candidateOverlap = individualOverlap;
+          }
+        }
+      }
+      if (candidate === next || candidate.distanceTo(next) <= ACTOR_SEPARATION_CONFIG.contactEpsilon) break;
+      const acceptedCorrection = candidate.clone().sub(next);
+      next.copy(candidate);
+      playerCorrection.add(acceptedCorrection);
+      if (playerCorrection.length() >= ACTOR_SEPARATION_CONFIG.maximumDepenetrationPerFrame - ACTOR_SEPARATION_CONFIG.contactEpsilon) break;
+    }
+    return { position: next, playerCorrection, enemyCorrection, active: true, initialMaximumOverlap };
+  }
+}
+
+function finiteHorizontalVector(value) {
+  return Boolean(value && Number.isFinite(value.x) && Number.isFinite(value.z));
+}
+
+function totalActorOverlap(position, actorBlockers, playerRadius) {
+  return actorBlockers.reduce((sum, blocker) => sum + (resolveHorizontalActorContact(position, blocker, playerRadius)?.overlapDepth ?? 0), 0);
 }
