@@ -52,6 +52,10 @@ export class CombatLabDebugPanel {
       ['DECAPITATE J', () => this.dungeon?.debugDecapitate?.()],
       ['LEFT FOREARM K', () => this.dungeon?.debugDetachLeftForearm?.()],
       ['RIGHT FOREARM L', () => this.dungeon?.debugDetachRightForearm?.()],
+      ['DAMAGE HEAD LEFT', () => this.dungeon?.debugDamageHeadLeft?.()],
+      ['DAMAGE HEAD RIGHT', () => this.dungeon?.debugDamageHeadRight?.()],
+      ['DAMAGE BODY FRONT', () => this.dungeon?.debugDamageBodyFront?.()],
+      ['DAMAGE RESET', () => this.dungeon?.debugResetForgeDamage?.()],
       ['CUT TEST 6', () => this.dungeon?.createDebugSlash?.()],
       ['WALK PAUSE 7', () => this.dungeon?.toggleWalkerLocomotion?.()],
       ['WALK STAB 8', () => this.dungeon?.forceWalkerQualifyingStab?.()],
@@ -170,6 +174,7 @@ export class CombatLabDebugPanel {
     const actor = diagnostics.actor ?? {};
     const damageAsset = actor.damageAsset ?? {};
     const dismemberment = actor.dismemberment ?? {};
+    const forgeDamage = damageAsset.deformation ?? dismemberment.deformation ?? {};
     const walker = diagnostics.walker ?? {};
     const playerCollision = diagnostics.playerCollision ?? {};
     const routing = diagnostics.combatRouting ?? {};
@@ -232,6 +237,9 @@ export class CombatLabDebugPanel {
       `segments ${(dismemberment.detachedSegments ?? []).join(',') || 'INTACT'}  requests ${dismemberment.requestedCount ?? 0}/${dismemberment.acceptedCount ?? 0}  bodies ${dismemberment.detachedRigidBodyCount ?? 0}  colliders ${dismemberment.detachedColliderCount ?? 0}`,
       `spawn error ${(dismemberment.spawnPositionError ?? 0).toFixed(5)}m / ${(dismemberment.spawnRotationErrorDegrees ?? 0).toFixed(2)}deg  collider ${dismemberment.colliderTypeUsed ?? '-'}`,
       `detach mortality/blood ${dismemberment.mortalityActivationCount ?? 0}/${dismemberment.bloodActivationCount ?? 0}  wound transfer ${dismemberment.detachedWoundTransferImplemented ? 'READY' : 'LATER'}`,
+      `forge morphs ${JSON.stringify(forgeDamage.morphWeights ?? {})}`,
+      `forge raised nodes ${JSON.stringify(forgeDamage.visibleGoreNodes ?? [])}  ownership overlap ${forgeDamage.headOwnershipOverlap ? 'ERROR' : 'NONE'}`,
+      `forge last ${JSON.stringify(forgeDamage.lastActivation ?? null)}`,
       '',
       `walker ${walker.enabled ? walker.state ?? 'waiting' : 'DISABLED'}  id ${walker.actorInstanceId ?? '-'}  generation ${walker.respawnGeneration ?? 0}  live ${walker.liveWalkers ?? 0}`,
       `walker pos ${JSON.stringify(walker.worldPosition ?? [])}  distance ${(walker.distanceToPlayer ?? 0).toFixed(2)}m  speed ${(walker.currentSpeed ?? 0).toFixed(2)}/${(walker.desiredSpeed ?? 0).toFixed(2)}/${(walker.maximumSpeed ?? 0).toFixed(2)}`,

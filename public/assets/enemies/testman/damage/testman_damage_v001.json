@@ -1,37 +1,42 @@
 {
   "schema": "dreadstone.damage_authoring.v1",
-  "authoringVersion": "3.8.0",
-  "authoringBuildId": "2026-07-15.segment-stump.3",
-  "generatedAtUtc": "2026-07-15T20:28:07Z",
+  "authoringVersion": "3.9.1",
+  "authoringBuildId": "2026-07-18.source-contract.1",
+  "generatedAtUtc": "2026-07-20T23:01:36Z",
   "glb": "testman_damage_v001.glb",
   "source": {
     "object": "model",
     "armature": "rig",
+    "readinessContractSchema": "dreadstone.source_readiness.v1",
+    "objectId": "43ebb4825c794ab6ac93ea7deb0b8035",
+    "meshDataId": "9b46dfbb712847d2b05367f31b57faf6",
+    "armatureObjectId": "b7bc2536fdad45a799c19a869c1f493e",
+    "armatureDataId": "45467d08083247db991f0955b636daed",
     "topologyFingerprint": "96256fc3f56d95df7415cb7a85cc37ed87816274c909c0411bccaa98400fcd39",
     "weightFingerprint": "3cebdc992934e4a3fb4928a0ab9bb36050e720e9769cffccc2dd162cc8190630",
     "readinessAnalyzerRevision": "virtual_weld_v3.7.4",
-    "readinessAnalyzerBuildId": "2026-07-15.virtual-weld.1",
+    "readinessAnalyzerBuildId": "2026-07-18.source-contract.1",
     "virtualWeldTolerance": 1.0030571570345931e-05,
     "rawVertexCount": 11792,
     "virtualVertexCount": 9922,
     "objectMatrixWorld": [
       [
-        0.01769467070698738,
+        0.017694668844342232,
         0.0,
         0.0,
         0.012096449732780457
       ],
       [
         0.0,
-        -5.360534238718628e-09,
-        -0.017694668844342232,
-        -0.02404196560382843
+        -5.3605337946294185e-09,
+        -0.017694666981697083,
+        -0.024041928350925446
       ],
       [
         0.0,
-        0.017694668844342232,
-        -5.360534238718628e-09,
-        0.7441129684448242
+        0.017694666981697083,
+        -5.3605337946294185e-09,
+        0.6582777500152588
       ],
       [
         0.0,
@@ -41,9 +46,9 @@
       ]
     ],
     "exportScale": [
-      0.01769467070698738,
       0.017694668844342232,
-      0.017694668844342232
+      0.017694666981697083,
+      0.017694666981697083
     ]
   },
   "intact": {
@@ -77,7 +82,7 @@
       "detachedMassHint": 4.5,
       "proximalMassHint": 0.0,
       "colliderHint": "convex_hull",
-      "candidateConfidence": 0.9769947003620933,
+      "candidateConfidence": 0.976994700470726,
       "sourceEdgeIndices": [
         2932,
         3009,
@@ -2686,19 +2691,19 @@
       },
       "jointPlane": {
         "center_object": [
-          0.63444531,
+          0.63444537,
           36.06376648,
-          -1.10240889
+          -1.10241342
         ],
         "normal_object": [
-          0.06556061,
-          0.99784851,
+          0.06556062,
+          0.99784857,
           3e-07
         ],
         "center_world": [
-          -0.02700501,
-          0.74579358,
-          1.30670083
+          0.02332275,
+          -0.00453528,
+          1.29641414
         ],
         "normal_world": [
           0.06556062,
@@ -2724,7 +2729,7 @@
       "detachedMassHint": 1.8,
       "proximalMassHint": 0.0,
       "colliderHint": "convex_hull",
-      "candidateConfidence": 0.9959625117112717,
+      "candidateConfidence": 0.9959625092542584,
       "sourceEdgeIndices": [
         2228,
         2230,
@@ -4594,21 +4599,21 @@
       "jointPlane": {
         "center_object": [
           13.91898155,
-          13.35836601,
-          -2.78812432
+          13.35836411,
+          -2.78812957
         ],
         "normal_object": [
-          0.3044107,
-          -0.94945163,
+          0.30441064,
+          -0.94945157,
           0.07665312
         ],
         "center_world": [
-          0.20806049,
-          0.77562189,
-          0.90493631
+          0.25838822,
+          0.02529302,
+          0.89464957
         ],
         "normal_world": [
-          0.30441073,
+          0.3044107,
           -0.07665284,
           -0.94945168
         ]
@@ -4631,7 +4636,7 @@
       "detachedMassHint": 1.8,
       "proximalMassHint": 0.0,
       "colliderHint": "convex_hull",
-      "candidateConfidence": 0.9953118424391897,
+      "candidateConfidence": 0.9953118473976785,
       "sourceEdgeIndices": [
         3298,
         3302,
@@ -6378,23 +6383,23 @@
       },
       "jointPlane": {
         "center_object": [
-          -13.91898155,
-          13.35836601,
-          -2.78812432
+          -13.91898441,
+          13.35836792,
+          -2.78812551
         ],
         "normal_object": [
-          -0.30441049,
-          -0.94945174,
-          0.07665334
+          -0.30441043,
+          -0.94945163,
+          0.07665332
         ],
         "center_world": [
-          -0.28452313,
-          0.77562183,
-          0.90493631
+          -0.23419535,
+          0.02529295,
+          0.89464962
         ],
         "normal_world": [
-          -0.30441052,
-          -0.07665306,
+          -0.30441049,
+          -0.07665305,
           -0.94945174
         ]
       },
@@ -6416,7 +6421,7 @@
       "detachedMassHint": 28.0,
       "proximalMassHint": 32.0,
       "colliderHint": "compound_convex",
-      "candidateConfidence": 0.9642597630865967,
+      "candidateConfidence": 0.9642596970886649,
       "sourceEdgeIndices": [
         2349,
         2359,
@@ -9228,19 +9233,19 @@
       },
       "jointPlane": {
         "center_object": [
-          0.18739593,
-          5.1660409,
-          -1.10242236
+          0.18739611,
+          5.1660347,
+          -1.10242331
         ],
         "normal_object": [
           0.0,
-          0.99999994,
+          1.0,
           2.3e-07
         ],
         "center_world": [
-          -0.0349154,
-          0.74579394,
-          0.75997579
+          0.01541236,
+          -0.00453494,
+          0.74968904
         ],
         "normal_world": [
           0.0,
@@ -9252,16 +9257,1628 @@
       "proximalSourceFaceSha256": "95adb0ab3250de31334f0b4cfa26997a1c29871a3de7343f64e2dcc6f466a52c"
     }
   ],
+  "deformations": {
+    "schema": "dreadstone.damage_deformation.v1",
+    "authoringVersion": "3.16.1",
+    "authoringBuildId": "2026-07-20.atomic-damage-preview.1",
+    "activeRegionId": "head",
+    "authoredRegionIds": [
+      "head",
+      "body_core"
+    ],
+    "registeredRegions": [
+      {
+        "regionId": "head",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_HEAD",
+        "attachedObject": "DSB_ATTACHED_HEAD",
+        "detachedObject": "DSB_SEGMENT_HEAD",
+        "topologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+        "weightFingerprint": "d0fd72ba94d6bd635de0ea7daf4ea2ac0f45dd6c7929ccee331b5aaa618325dc",
+        "attachedVertexCount": 605,
+        "detachedVertexCount": 605,
+        "polygonCount": 982,
+        "relatedSeamId": "head_neck",
+        "managedKeyNames": [
+          "Head_Dent_Left",
+          "Head_Dent_Right"
+        ],
+        "validationStatus": "PASS",
+        "keys": [
+          {
+            "name": "Head_Dent_Left",
+            "regionId": "head",
+            "regionMode": "PAIRED_SEGMENT",
+            "targetObject": "DSB_ATTACHED_HEAD",
+            "attachedObject": "DSB_ATTACHED_HEAD",
+            "detachedObject": "DSB_SEGMENT_HEAD",
+            "status": "TRAUMA_REBUILT",
+            "recipeStatus": "PROCEDURAL_STACK",
+            "legacy": false,
+            "maximumInfluence": 1.0,
+            "maximumDisplacement": 0.04500000178813934,
+            "measuredMaximumDisplacement": 0.04500001183104507,
+            "maximumPairDeltaError": 4.7166913902629e-09,
+            "validationStatus": "PASS",
+            "legacySyncStatus": null,
+            "legacySyncErrorBefore": null,
+            "legacySyncErrorAfter": null,
+            "legacySyncRepairApplied": false,
+            "orderedStamps": [
+              {
+                "stampId": "stamp_0df260d1f3b742df920aee9f2edc3c01",
+                "displayName": "Impact Stamp",
+                "enabled": true,
+                "family": "BROAD_CAVE",
+                "placementMode": "SELECTED_VERTICES",
+                "center": [
+                  0.08829967677593231,
+                  -0.047600045800209045,
+                  1.3508470058441162
+                ],
+                "direction": [
+                  -0.9370329389380174,
+                  0.34264057908850176,
+                  -0.06757739938084295
+                ],
+                "radius": 0.004999999888241291,
+                "depth": 0.08499999344348907,
+                "falloff": 0.5099999904632568,
+                "influenceMode": "PATCH_FEATHERED",
+                "distanceMode": "SURFACE_DISTANCE",
+                "featherDistance": 0.019999999552965164,
+                "seamProtection": 0.04500000178813934,
+                "strength": 1.4300000667572021,
+                "maximumDisplacement": 0.04500000178813934,
+                "orderIndex": 0,
+                "capture": {
+                  "selectionHash": "67ce2c908355aeb03cd07aa19470fa36309c0900d3e0d786844a4c950c6c8c1b",
+                  "topologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+                  "faceCount": 0,
+                  "vertexCount": 47,
+                  "boundsWorld": [
+                    [
+                      0.06512636691331863,
+                      -0.08436193317174911,
+                      1.319814920425415
+                    ],
+                    [
+                      0.10322116315364838,
+                      0.0018906674813479185,
+                      1.3781636953353882
+                    ]
+                  ],
+                  "estimatedRadius": 0.0574371240045385,
+                  "virtualWeldTolerance": null,
+                  "virtualWeldDigest": null,
+                  "virtualWeldMemberCount": null,
+                  "virtualConnectedComponentCount": null
+                }
+              }
+            ],
+            "recipeDigest": "65e22b7df2f125dce80bb53316496f66b4f3a343d6e5be7de986ae108248fb3c",
+            "surfaceGoreOverlay": {
+              "goreRecipeVersion": 3,
+              "goreOverlayEnabled": true,
+              "gorePresetId": "Gore_Crush_Heavy_Clotted",
+              "goreCoverage": 1.0,
+              "goreScatter": 0.6200000047683716,
+              "goreEdgeFeather": 0.41999998688697815,
+              "goreWetness": 0.3100000023841858,
+              "goreDarkness": 0.0,
+              "goreColorBias": [
+                0.3100000023841858,
+                0.006000000052154064,
+                0.004000000189989805
+              ],
+              "gorePatchScale": 0.01,
+              "goreOverlayMode": "STAIN_AND_RAISED",
+              "goreIntensityClass": "CUSTOM",
+              "goreRaisedEnabled": true,
+              "goreClotCoverage": 1.0,
+              "goreCoreDensity": 1.0,
+              "goreClotThickness": 0.029999999329447746,
+              "goreThicknessVariation": 0.0,
+              "goreIslandBreakup": 0.24567566812038422,
+              "gorePeripheralFragments": 0.0,
+              "goreSurfaceOffset": 0.010649999603629112,
+              "goreGeometryDensity": 1.0,
+              "goreWetnessVariation": 1.0,
+              "goreDarkClotBias": 5.960464477539063e-08,
+              "goreRoughEdgeBias": 1.0,
+              "goreColorIntensity": 0.5199999809265137,
+              "goreOrganicIrregularity": 1.0,
+              "goreSurfaceRoundness": 1.0,
+              "goreTextureEnabled": true,
+              "goreFiberTextureStrength": 0.5068728923797607,
+              "goreBaseColorStrength": 1.0,
+              "goreInnerRimEnabled": true,
+              "goreInnerRimWidth": 0.029999999329447746,
+              "goreInnerRimStrength": 1.0,
+              "goreMaximumTriangles": 2716,
+              "goreDefaultVisible": false,
+              "goreActivationWeight": 0.01,
+              "goreUserCustomized": true,
+              "goreMaskSeed": 347124639,
+              "linkedRegionId": "head",
+              "linkedStampId": "stamp_0df260d1f3b742df920aee9f2edc3c01",
+              "linkedSelectionHash": "67ce2c908355aeb03cd07aa19470fa36309c0900d3e0d786844a4c950c6c8c1b",
+              "linkedCaptureTopologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+              "validationStatus": "PASS"
+            },
+            "goreOverlayDigest": "5a1f67bcd630e90af2ae68b98c04854d1b377d7d56ece2785a7285593b1a8b19",
+            "goreOverlayEnabled": true,
+            "goreOverlayMode": "STAIN_AND_RAISED",
+            "gorePresetId": "Gore_Crush_Heavy_Clotted",
+            "goreIntensityClass": "CUSTOM",
+            "goreDefaultVisible": false,
+            "goreActivationWeight": 0.01,
+            "goreOverlayValidationStatus": "PASS",
+            "exportValidationStatus": "PASS",
+            "goreRegionId": "head",
+            "goreDeformationKey": "Head_Dent_Left",
+            "goreGeneratedMeshIds": [
+              "gore_mesh_582a61fa6343156420c9",
+              "gore_mesh_5878cb41e88747afc7ea"
+            ],
+            "goreGeneratedNodeNames": [
+              "DSB_GORE_ATTACHED_head_Head_Dent_Left",
+              "DSB_GORE_DETACHED_head_Head_Dent_Left"
+            ],
+            "goreGeometryDigests": {
+              "ATTACHED": "f092b461d2a486116aef97466d8a5937182dc13d8c34e27b8dae615916d82af0",
+              "DETACHED": "c71cc45a243e3845f0d1af18710152f621f2ecf84fdd04e281f60ca5341aef4e"
+            },
+            "goreGenerationDigests": {
+              "ATTACHED": "d5e4867ad592ce5a90e955988c9e1d4fea4718da7fc6f45489dc9e0ec9605047",
+              "DETACHED": "318cd8c071017296549c007e59d90dde7740d03bc2ff0627b1f6040041a4d6f5"
+            },
+            "goreTriangleCounts": {
+              "ATTACHED": 1720,
+              "DETACHED": 1720
+            },
+            "goreMaterialIds": [
+              "DSB_GORE_WET_CRIMSON",
+              "DSB_GORE_DARK_CLOT",
+              "DSB_GORE_ROUGH_EDGE"
+            ],
+            "goreMaterialNames": [
+              "DSB_GORE_WET_CRIMSON_5a1f67bc",
+              "DSB_GORE_DARK_CLOT_5a1f67bc",
+              "DSB_GORE_ROUGH_EDGE_5a1f67bc"
+            ],
+            "goreActivationContract": {
+              "defaultVisible": false,
+              "activationWeight": 0.01,
+              "activateWithDeformationKey": "Head_Dent_Left",
+              "retainThroughDeathAndCorpsePersistence": true,
+              "runtimeImplementationIncluded": false
+            }
+          },
+          {
+            "name": "Head_Dent_Right",
+            "regionId": "head",
+            "regionMode": "PAIRED_SEGMENT",
+            "targetObject": "DSB_ATTACHED_HEAD",
+            "attachedObject": "DSB_ATTACHED_HEAD",
+            "detachedObject": "DSB_SEGMENT_HEAD",
+            "status": "TRAUMA_REBUILT",
+            "recipeStatus": "PROCEDURAL_STACK",
+            "legacy": false,
+            "maximumInfluence": 1.0,
+            "maximumDisplacement": 0.04500000178813934,
+            "measuredMaximumDisplacement": 0.045000012063471435,
+            "maximumPairDeltaError": 4.7166913902629e-09,
+            "validationStatus": "PASS",
+            "legacySyncStatus": null,
+            "legacySyncErrorBefore": null,
+            "legacySyncErrorAfter": null,
+            "legacySyncRepairApplied": false,
+            "orderedStamps": [
+              {
+                "stampId": "stamp_0318ffb5a0ff447184b5517424188d01",
+                "displayName": "Impact Stamp",
+                "enabled": true,
+                "family": "BROAD_CAVE",
+                "placementMode": "SELECTED_VERTICES",
+                "center": [
+                  -0.022204603999853134,
+                  -0.06680662930011749,
+                  1.3644720315933228
+                ],
+                "direction": [
+                  0.8716817283117562,
+                  0.3930803738398485,
+                  -0.29267521970497323
+                ],
+                "radius": 0.07500000298023224,
+                "depth": 0.10499999672174454,
+                "falloff": 1.6200000047683716,
+                "influenceMode": "PATCH_FEATHERED",
+                "distanceMode": "SURFACE_DISTANCE",
+                "featherDistance": 0.019999995827674866,
+                "seamProtection": 0.03500000387430191,
+                "strength": 1.4300000667572021,
+                "maximumDisplacement": 0.04500000178813934,
+                "orderIndex": 0,
+                "capture": {
+                  "selectionHash": "55a89c275130579d69c24d12e0ca4b278850566d18127a33637de26fa8aeb9ab",
+                  "topologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+                  "faceCount": 0,
+                  "vertexCount": 61,
+                  "boundsWorld": [
+                    [
+                      -0.04492296278476715,
+                      -0.08912680298089981,
+                      1.3291652202606201
+                    ],
+                    [
+                      0.002376156859099865,
+                      -0.016999009996652603,
+                      1.3949306011199951
+                    ]
+                  ],
+                  "estimatedRadius": 0.05652307828015963,
+                  "virtualWeldTolerance": null,
+                  "virtualWeldDigest": null,
+                  "virtualWeldMemberCount": null,
+                  "virtualConnectedComponentCount": null
+                }
+              }
+            ],
+            "recipeDigest": "cd134232113363624d7e367bd9275f9a33bbb3639f5a4905b53624a95a63a62d",
+            "surfaceGoreOverlay": {
+              "goreRecipeVersion": 3,
+              "goreOverlayEnabled": true,
+              "gorePresetId": "Gore_Crush_Heavy_Clotted",
+              "goreCoverage": 0.8697972893714905,
+              "goreScatter": 1.0,
+              "goreEdgeFeather": 0.41999998688697815,
+              "goreWetness": 0.5800000429153442,
+              "goreDarkness": 0.0599999874830246,
+              "goreColorBias": [
+                0.3100000023841858,
+                0.006000000052154064,
+                0.004000000189989805
+              ],
+              "gorePatchScale": 0.01,
+              "goreOverlayMode": "STAIN_AND_RAISED",
+              "goreIntensityClass": "CUSTOM",
+              "goreRaisedEnabled": true,
+              "goreClotCoverage": 1.0,
+              "goreCoreDensity": 1.0,
+              "goreClotThickness": 0.03480000048875809,
+              "goreThicknessVariation": 0.7900000214576721,
+              "goreIslandBreakup": 0.0,
+              "gorePeripheralFragments": 0.0,
+              "goreSurfaceOffset": 0.0001500000071246177,
+              "goreGeometryDensity": 0.7599999904632568,
+              "goreWetnessVariation": 0.8399999737739563,
+              "goreDarkClotBias": 0.0,
+              "goreRoughEdgeBias": 0.5999999642372131,
+              "goreColorIntensity": 1.0,
+              "goreOrganicIrregularity": 1.0,
+              "goreSurfaceRoundness": 1.0,
+              "goreTextureEnabled": true,
+              "goreFiberTextureStrength": 0.4599999785423279,
+              "goreBaseColorStrength": 1.0,
+              "goreInnerRimEnabled": true,
+              "goreInnerRimWidth": 0.010099999606609344,
+              "goreInnerRimStrength": 1.0,
+              "goreMaximumTriangles": 4565,
+              "goreDefaultVisible": false,
+              "goreActivationWeight": 0.01,
+              "goreUserCustomized": true,
+              "goreMaskSeed": 1733745943,
+              "linkedRegionId": "head",
+              "linkedStampId": "stamp_0318ffb5a0ff447184b5517424188d01",
+              "linkedSelectionHash": "55a89c275130579d69c24d12e0ca4b278850566d18127a33637de26fa8aeb9ab",
+              "linkedCaptureTopologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+              "validationStatus": "PASS"
+            },
+            "goreOverlayDigest": "07d9b481dfd98528145a4a8ae598336763f309f534407b7dfd969421dc457eaa",
+            "goreOverlayEnabled": true,
+            "goreOverlayMode": "STAIN_AND_RAISED",
+            "gorePresetId": "Gore_Crush_Heavy_Clotted",
+            "goreIntensityClass": "CUSTOM",
+            "goreDefaultVisible": false,
+            "goreActivationWeight": 0.01,
+            "goreOverlayValidationStatus": "PASS",
+            "exportValidationStatus": "PASS",
+            "goreRegionId": "head",
+            "goreDeformationKey": "Head_Dent_Right",
+            "goreGeneratedMeshIds": [
+              "gore_mesh_e0ac2c4b415ee62337fa",
+              "gore_mesh_4e8830c5dd2bb8f56c88"
+            ],
+            "goreGeneratedNodeNames": [
+              "DSB_GORE_ATTACHED_head_Head_Dent_Right",
+              "DSB_GORE_DETACHED_head_Head_Dent_Right"
+            ],
+            "goreGeometryDigests": {
+              "ATTACHED": "6407d9988bb30bb21b13f3f23ebf5e6e92ba35c851e33d92f16e9f5e9e0b002c",
+              "DETACHED": "b2b2ec26fd3f6ba46fdc0d48baf8b7eead5bf49de6d766ea3e08f603460554df"
+            },
+            "goreGenerationDigests": {
+              "ATTACHED": "28ba195d8bcf9ad0ecf2a829c8c85572899b5dc4999e3158103e2cad7d1ef2cb",
+              "DETACHED": "e5d0b39b1c788c7ed29e5227e66012694e31d199eb254c265312b3de4c939a40"
+            },
+            "goreTriangleCounts": {
+              "ATTACHED": 2448,
+              "DETACHED": 2448
+            },
+            "goreMaterialIds": [
+              "DSB_GORE_WET_CRIMSON",
+              "DSB_GORE_DARK_CLOT",
+              "DSB_GORE_ROUGH_EDGE"
+            ],
+            "goreMaterialNames": [
+              "DSB_GORE_WET_CRIMSON_07d9b481",
+              "DSB_GORE_DARK_CLOT_07d9b481",
+              "DSB_GORE_ROUGH_EDGE_07d9b481"
+            ],
+            "goreActivationContract": {
+              "defaultVisible": false,
+              "activationWeight": 0.01,
+              "activateWithDeformationKey": "Head_Dent_Right",
+              "retainThroughDeathAndCorpsePersistence": true,
+              "runtimeImplementationIncluded": false
+            }
+          }
+        ]
+      },
+      {
+        "regionId": "body_core",
+        "regionMode": "CORE_SINGLE",
+        "targetObject": "DSB_BODY_CORE",
+        "attachedObject": "DSB_BODY_CORE",
+        "detachedObject": "",
+        "topologyFingerprint": "15c3059aa51b6f1992352b60c6aedf5568eaabec8860a2875147fa6b158ef43b",
+        "weightFingerprint": "1f721deb7a1bad5a8af79df87e1dc34abad1b20c7b05bbcc36c2f354add61ca8",
+        "attachedVertexCount": 8644,
+        "detachedVertexCount": 0,
+        "polygonCount": 14387,
+        "relatedSeamId": "lower_spine",
+        "managedKeyNames": [
+          "Face_Middle_impact_v001"
+        ],
+        "validationStatus": "PASS",
+        "keys": [
+          {
+            "name": "Face_Middle_impact_v001",
+            "regionId": "body_core",
+            "regionMode": "CORE_SINGLE",
+            "targetObject": "DSB_BODY_CORE",
+            "attachedObject": "DSB_BODY_CORE",
+            "detachedObject": "",
+            "status": "TRAUMA_REBUILT",
+            "recipeStatus": "PROCEDURAL_STACK",
+            "legacy": false,
+            "maximumInfluence": 1.0,
+            "maximumDisplacement": 0.04500000178813934,
+            "measuredMaximumDisplacement": 0.045000017075796164,
+            "maximumPairDeltaError": 0.0,
+            "validationStatus": "PASS",
+            "legacySyncStatus": null,
+            "legacySyncErrorBefore": null,
+            "legacySyncErrorAfter": null,
+            "legacySyncRepairApplied": false,
+            "orderedStamps": [
+              {
+                "stampId": "stamp_48efcf26ceed4932b649278fefb3a225",
+                "displayName": "Impact Stamp",
+                "enabled": true,
+                "family": "BROAD_CAVE",
+                "placementMode": "SELECTED_FACE_PATCH",
+                "center": [
+                  0.027725068852305412,
+                  -0.10158082097768784,
+                  1.272979497909546
+                ],
+                "direction": [
+                  -0.07284262758592577,
+                  0.9949101781399343,
+                  -0.0696253476827385
+                ],
+                "radius": 0.10499999672174454,
+                "depth": 0.03999999910593033,
+                "falloff": 1.350000023841858,
+                "influenceMode": "PATCH_FEATHERED",
+                "distanceMode": "SURFACE_DISTANCE",
+                "featherDistance": 0.019999995827674866,
+                "seamProtection": 0.03500000387430191,
+                "strength": 1.25,
+                "maximumDisplacement": 0.04500000178813934,
+                "orderIndex": 0,
+                "capture": {
+                  "selectionHash": "732a44e5888904a3ace01ff7c5caa61a3e561fb743ea9fea88a44fbf98535453",
+                  "topologyFingerprint": "15c3059aa51b6f1992352b60c6aedf5568eaabec8860a2875147fa6b158ef43b",
+                  "faceCount": 151,
+                  "vertexCount": 92,
+                  "boundsWorld": [
+                    [
+                      -0.007940329611301422,
+                      -0.11990898102521896,
+                      1.2397340536117554
+                    ],
+                    [
+                      0.06109844520688057,
+                      -0.0841880738735199,
+                      1.2992815971374512
+                    ]
+                  ],
+                  "estimatedRadius": 0.045216256950180604,
+                  "virtualWeldTolerance": 1.5549679045378566e-07,
+                  "virtualWeldDigest": "3b13471934d2612335439e99eb677571256f5137c7fdf60de154bfc59436ca9e",
+                  "virtualWeldMemberCount": 2520,
+                  "virtualConnectedComponentCount": 1
+                }
+              }
+            ],
+            "recipeDigest": "534fa935b5c956e1f0ab7274e89ae6dd8234c40f635cf204904a692ac31c2220",
+            "surfaceGoreOverlay": {
+              "goreRecipeVersion": 3,
+              "goreOverlayEnabled": true,
+              "gorePresetId": "Gore_Crush_Heavy_Clotted",
+              "goreCoverage": 0.7599999904632568,
+              "goreScatter": 0.17000001668930054,
+              "goreEdgeFeather": 0.41999998688697815,
+              "goreWetness": 0.1899999976158142,
+              "goreDarkness": 0.6800000071525574,
+              "goreColorBias": [
+                0.3100000023841858,
+                0.006000000052154064,
+                0.004000000189989805
+              ],
+              "gorePatchScale": 0.01,
+              "goreOverlayMode": "STAIN_AND_RAISED",
+              "goreIntensityClass": "CUSTOM",
+              "goreRaisedEnabled": true,
+              "goreClotCoverage": 1.0,
+              "goreCoreDensity": 1.0,
+              "goreClotThickness": 0.03999999910593033,
+              "goreThicknessVariation": 0.8799999952316284,
+              "goreIslandBreakup": 0.23999999463558197,
+              "gorePeripheralFragments": 1.0,
+              "goreSurfaceOffset": 0.010999999940395355,
+              "goreGeometryDensity": 1.0,
+              "goreWetnessVariation": 0.6599999666213989,
+              "goreDarkClotBias": 0.0,
+              "goreRoughEdgeBias": 0.0,
+              "goreColorIntensity": 1.0,
+              "goreOrganicIrregularity": 1.0,
+              "goreSurfaceRoundness": 1.0,
+              "goreTextureEnabled": true,
+              "goreFiberTextureStrength": 0.46000003814697266,
+              "goreBaseColorStrength": 1.0,
+              "goreInnerRimEnabled": true,
+              "goreInnerRimWidth": 0.010099999606609344,
+              "goreInnerRimStrength": 0.8799999952316284,
+              "goreMaximumTriangles": 6448,
+              "goreDefaultVisible": false,
+              "goreActivationWeight": 0.01,
+              "goreUserCustomized": true,
+              "goreMaskSeed": 1440209787,
+              "linkedRegionId": "body_core",
+              "linkedStampId": "stamp_48efcf26ceed4932b649278fefb3a225",
+              "linkedSelectionHash": "732a44e5888904a3ace01ff7c5caa61a3e561fb743ea9fea88a44fbf98535453",
+              "linkedCaptureTopologyFingerprint": "15c3059aa51b6f1992352b60c6aedf5568eaabec8860a2875147fa6b158ef43b",
+              "validationStatus": "PASS"
+            },
+            "goreOverlayDigest": "c637189cd820012f21f36b84fcc42cd4ca228ae37be4cdf686a293f5fc6f69e7",
+            "goreOverlayEnabled": true,
+            "goreOverlayMode": "STAIN_AND_RAISED",
+            "gorePresetId": "Gore_Crush_Heavy_Clotted",
+            "goreIntensityClass": "CUSTOM",
+            "goreDefaultVisible": false,
+            "goreActivationWeight": 0.01,
+            "goreOverlayValidationStatus": "PASS",
+            "exportValidationStatus": "PASS",
+            "goreRegionId": "body_core",
+            "goreDeformationKey": "Face_Middle_impact_v001",
+            "goreGeneratedMeshIds": [
+              "gore_mesh_4fc2a13b20f2d29bc072"
+            ],
+            "goreGeneratedNodeNames": [
+              "DSB_GORE_CORE_body_core_Face_Middle_impact_v001"
+            ],
+            "goreGeometryDigests": {
+              "CORE": "8cf266820ebfea0678f268c488b1e0f73eef7ba60a4053a12d5dfaac0fa43376"
+            },
+            "goreGenerationDigests": {
+              "CORE": "0ef67394e8bf68d4b54eca2bf991f8511404014cb9d1769b9f98af5e8317e944"
+            },
+            "goreTriangleCounts": {
+              "CORE": 3876
+            },
+            "goreMaterialIds": [
+              "DSB_GORE_WET_CRIMSON",
+              "DSB_GORE_DARK_CLOT",
+              "DSB_GORE_ROUGH_EDGE"
+            ],
+            "goreMaterialNames": [
+              "DSB_GORE_WET_CRIMSON_c637189c",
+              "DSB_GORE_DARK_CLOT_c637189c",
+              "DSB_GORE_ROUGH_EDGE_c637189c"
+            ],
+            "goreActivationContract": {
+              "defaultVisible": false,
+              "activationWeight": 0.01,
+              "activateWithDeformationKey": "Face_Middle_impact_v001",
+              "retainThroughDeathAndCorpsePersistence": true,
+              "runtimeImplementationIncluded": false
+            }
+          }
+        ]
+      },
+      {
+        "regionId": "forearm_left",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_FOREARM_L",
+        "attachedObject": "DSB_ATTACHED_FOREARM_L",
+        "detachedObject": "DSB_SEGMENT_FOREARM_L",
+        "topologyFingerprint": "184c2e68c419488f816fbe9531177aff1216b5a5d3b60790903ab0888cd09234",
+        "weightFingerprint": "9f5b022f78d933184b0933def67f57337b76a528ccd028a00bec023631df0c2f",
+        "attachedVertexCount": 1529,
+        "detachedVertexCount": 1529,
+        "polygonCount": 2446,
+        "relatedSeamId": "left_elbow",
+        "managedKeyNames": [],
+        "validationStatus": "PASS",
+        "keys": []
+      },
+      {
+        "regionId": "forearm_right",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_FOREARM_R",
+        "attachedObject": "DSB_ATTACHED_FOREARM_R",
+        "detachedObject": "DSB_SEGMENT_FOREARM_R",
+        "topologyFingerprint": "5942b00bd33fb5cd1ecc0e96983b1d329e5cf958399a8de71b512b5eda802bac",
+        "weightFingerprint": "388392806d680a452cf9a5db2f253c0ed579e6b1bb9413b06a308ea0ecbfd30a",
+        "attachedVertexCount": 1560,
+        "detachedVertexCount": 1560,
+        "polygonCount": 2545,
+        "relatedSeamId": "right_elbow",
+        "managedKeyNames": [],
+        "validationStatus": "PASS",
+        "keys": []
+      }
+    ],
+    "keys": [
+      {
+        "name": "Head_Dent_Left",
+        "regionId": "head",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_HEAD",
+        "attachedObject": "DSB_ATTACHED_HEAD",
+        "detachedObject": "DSB_SEGMENT_HEAD",
+        "status": "TRAUMA_REBUILT",
+        "recipeStatus": "PROCEDURAL_STACK",
+        "legacy": false,
+        "maximumInfluence": 1.0,
+        "maximumDisplacement": 0.04500000178813934,
+        "measuredMaximumDisplacement": 0.04500001183104507,
+        "maximumPairDeltaError": 4.7166913902629e-09,
+        "validationStatus": "PASS",
+        "legacySyncStatus": null,
+        "legacySyncErrorBefore": null,
+        "legacySyncErrorAfter": null,
+        "legacySyncRepairApplied": false,
+        "orderedStamps": [
+          {
+            "stampId": "stamp_0df260d1f3b742df920aee9f2edc3c01",
+            "displayName": "Impact Stamp",
+            "enabled": true,
+            "family": "BROAD_CAVE",
+            "placementMode": "SELECTED_VERTICES",
+            "center": [
+              0.08829967677593231,
+              -0.047600045800209045,
+              1.3508470058441162
+            ],
+            "direction": [
+              -0.9370329389380174,
+              0.34264057908850176,
+              -0.06757739938084295
+            ],
+            "radius": 0.004999999888241291,
+            "depth": 0.08499999344348907,
+            "falloff": 0.5099999904632568,
+            "influenceMode": "PATCH_FEATHERED",
+            "distanceMode": "SURFACE_DISTANCE",
+            "featherDistance": 0.019999999552965164,
+            "seamProtection": 0.04500000178813934,
+            "strength": 1.4300000667572021,
+            "maximumDisplacement": 0.04500000178813934,
+            "orderIndex": 0,
+            "capture": {
+              "selectionHash": "67ce2c908355aeb03cd07aa19470fa36309c0900d3e0d786844a4c950c6c8c1b",
+              "topologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+              "faceCount": 0,
+              "vertexCount": 47,
+              "boundsWorld": [
+                [
+                  0.06512636691331863,
+                  -0.08436193317174911,
+                  1.319814920425415
+                ],
+                [
+                  0.10322116315364838,
+                  0.0018906674813479185,
+                  1.3781636953353882
+                ]
+              ],
+              "estimatedRadius": 0.0574371240045385,
+              "virtualWeldTolerance": null,
+              "virtualWeldDigest": null,
+              "virtualWeldMemberCount": null,
+              "virtualConnectedComponentCount": null
+            }
+          }
+        ],
+        "recipeDigest": "65e22b7df2f125dce80bb53316496f66b4f3a343d6e5be7de986ae108248fb3c",
+        "surfaceGoreOverlay": {
+          "goreRecipeVersion": 3,
+          "goreOverlayEnabled": true,
+          "gorePresetId": "Gore_Crush_Heavy_Clotted",
+          "goreCoverage": 1.0,
+          "goreScatter": 0.6200000047683716,
+          "goreEdgeFeather": 0.41999998688697815,
+          "goreWetness": 0.3100000023841858,
+          "goreDarkness": 0.0,
+          "goreColorBias": [
+            0.3100000023841858,
+            0.006000000052154064,
+            0.004000000189989805
+          ],
+          "gorePatchScale": 0.01,
+          "goreOverlayMode": "STAIN_AND_RAISED",
+          "goreIntensityClass": "CUSTOM",
+          "goreRaisedEnabled": true,
+          "goreClotCoverage": 1.0,
+          "goreCoreDensity": 1.0,
+          "goreClotThickness": 0.029999999329447746,
+          "goreThicknessVariation": 0.0,
+          "goreIslandBreakup": 0.24567566812038422,
+          "gorePeripheralFragments": 0.0,
+          "goreSurfaceOffset": 0.010649999603629112,
+          "goreGeometryDensity": 1.0,
+          "goreWetnessVariation": 1.0,
+          "goreDarkClotBias": 5.960464477539063e-08,
+          "goreRoughEdgeBias": 1.0,
+          "goreColorIntensity": 0.5199999809265137,
+          "goreOrganicIrregularity": 1.0,
+          "goreSurfaceRoundness": 1.0,
+          "goreTextureEnabled": true,
+          "goreFiberTextureStrength": 0.5068728923797607,
+          "goreBaseColorStrength": 1.0,
+          "goreInnerRimEnabled": true,
+          "goreInnerRimWidth": 0.029999999329447746,
+          "goreInnerRimStrength": 1.0,
+          "goreMaximumTriangles": 2716,
+          "goreDefaultVisible": false,
+          "goreActivationWeight": 0.01,
+          "goreUserCustomized": true,
+          "goreMaskSeed": 347124639,
+          "linkedRegionId": "head",
+          "linkedStampId": "stamp_0df260d1f3b742df920aee9f2edc3c01",
+          "linkedSelectionHash": "67ce2c908355aeb03cd07aa19470fa36309c0900d3e0d786844a4c950c6c8c1b",
+          "linkedCaptureTopologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+          "validationStatus": "PASS"
+        },
+        "goreOverlayDigest": "5a1f67bcd630e90af2ae68b98c04854d1b377d7d56ece2785a7285593b1a8b19",
+        "goreOverlayEnabled": true,
+        "goreOverlayMode": "STAIN_AND_RAISED",
+        "gorePresetId": "Gore_Crush_Heavy_Clotted",
+        "goreIntensityClass": "CUSTOM",
+        "goreDefaultVisible": false,
+        "goreActivationWeight": 0.01,
+        "goreOverlayValidationStatus": "PASS",
+        "exportValidationStatus": "PASS",
+        "goreRegionId": "head",
+        "goreDeformationKey": "Head_Dent_Left",
+        "goreGeneratedMeshIds": [
+          "gore_mesh_582a61fa6343156420c9",
+          "gore_mesh_5878cb41e88747afc7ea"
+        ],
+        "goreGeneratedNodeNames": [
+          "DSB_GORE_ATTACHED_head_Head_Dent_Left",
+          "DSB_GORE_DETACHED_head_Head_Dent_Left"
+        ],
+        "goreGeometryDigests": {
+          "ATTACHED": "f092b461d2a486116aef97466d8a5937182dc13d8c34e27b8dae615916d82af0",
+          "DETACHED": "c71cc45a243e3845f0d1af18710152f621f2ecf84fdd04e281f60ca5341aef4e"
+        },
+        "goreGenerationDigests": {
+          "ATTACHED": "d5e4867ad592ce5a90e955988c9e1d4fea4718da7fc6f45489dc9e0ec9605047",
+          "DETACHED": "318cd8c071017296549c007e59d90dde7740d03bc2ff0627b1f6040041a4d6f5"
+        },
+        "goreTriangleCounts": {
+          "ATTACHED": 1720,
+          "DETACHED": 1720
+        },
+        "goreMaterialIds": [
+          "DSB_GORE_WET_CRIMSON",
+          "DSB_GORE_DARK_CLOT",
+          "DSB_GORE_ROUGH_EDGE"
+        ],
+        "goreMaterialNames": [
+          "DSB_GORE_WET_CRIMSON_5a1f67bc",
+          "DSB_GORE_DARK_CLOT_5a1f67bc",
+          "DSB_GORE_ROUGH_EDGE_5a1f67bc"
+        ],
+        "goreActivationContract": {
+          "defaultVisible": false,
+          "activationWeight": 0.01,
+          "activateWithDeformationKey": "Head_Dent_Left",
+          "retainThroughDeathAndCorpsePersistence": true,
+          "runtimeImplementationIncluded": false
+        }
+      },
+      {
+        "name": "Head_Dent_Right",
+        "regionId": "head",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_HEAD",
+        "attachedObject": "DSB_ATTACHED_HEAD",
+        "detachedObject": "DSB_SEGMENT_HEAD",
+        "status": "TRAUMA_REBUILT",
+        "recipeStatus": "PROCEDURAL_STACK",
+        "legacy": false,
+        "maximumInfluence": 1.0,
+        "maximumDisplacement": 0.04500000178813934,
+        "measuredMaximumDisplacement": 0.045000012063471435,
+        "maximumPairDeltaError": 4.7166913902629e-09,
+        "validationStatus": "PASS",
+        "legacySyncStatus": null,
+        "legacySyncErrorBefore": null,
+        "legacySyncErrorAfter": null,
+        "legacySyncRepairApplied": false,
+        "orderedStamps": [
+          {
+            "stampId": "stamp_0318ffb5a0ff447184b5517424188d01",
+            "displayName": "Impact Stamp",
+            "enabled": true,
+            "family": "BROAD_CAVE",
+            "placementMode": "SELECTED_VERTICES",
+            "center": [
+              -0.022204603999853134,
+              -0.06680662930011749,
+              1.3644720315933228
+            ],
+            "direction": [
+              0.8716817283117562,
+              0.3930803738398485,
+              -0.29267521970497323
+            ],
+            "radius": 0.07500000298023224,
+            "depth": 0.10499999672174454,
+            "falloff": 1.6200000047683716,
+            "influenceMode": "PATCH_FEATHERED",
+            "distanceMode": "SURFACE_DISTANCE",
+            "featherDistance": 0.019999995827674866,
+            "seamProtection": 0.03500000387430191,
+            "strength": 1.4300000667572021,
+            "maximumDisplacement": 0.04500000178813934,
+            "orderIndex": 0,
+            "capture": {
+              "selectionHash": "55a89c275130579d69c24d12e0ca4b278850566d18127a33637de26fa8aeb9ab",
+              "topologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+              "faceCount": 0,
+              "vertexCount": 61,
+              "boundsWorld": [
+                [
+                  -0.04492296278476715,
+                  -0.08912680298089981,
+                  1.3291652202606201
+                ],
+                [
+                  0.002376156859099865,
+                  -0.016999009996652603,
+                  1.3949306011199951
+                ]
+              ],
+              "estimatedRadius": 0.05652307828015963,
+              "virtualWeldTolerance": null,
+              "virtualWeldDigest": null,
+              "virtualWeldMemberCount": null,
+              "virtualConnectedComponentCount": null
+            }
+          }
+        ],
+        "recipeDigest": "cd134232113363624d7e367bd9275f9a33bbb3639f5a4905b53624a95a63a62d",
+        "surfaceGoreOverlay": {
+          "goreRecipeVersion": 3,
+          "goreOverlayEnabled": true,
+          "gorePresetId": "Gore_Crush_Heavy_Clotted",
+          "goreCoverage": 0.8697972893714905,
+          "goreScatter": 1.0,
+          "goreEdgeFeather": 0.41999998688697815,
+          "goreWetness": 0.5800000429153442,
+          "goreDarkness": 0.0599999874830246,
+          "goreColorBias": [
+            0.3100000023841858,
+            0.006000000052154064,
+            0.004000000189989805
+          ],
+          "gorePatchScale": 0.01,
+          "goreOverlayMode": "STAIN_AND_RAISED",
+          "goreIntensityClass": "CUSTOM",
+          "goreRaisedEnabled": true,
+          "goreClotCoverage": 1.0,
+          "goreCoreDensity": 1.0,
+          "goreClotThickness": 0.03480000048875809,
+          "goreThicknessVariation": 0.7900000214576721,
+          "goreIslandBreakup": 0.0,
+          "gorePeripheralFragments": 0.0,
+          "goreSurfaceOffset": 0.0001500000071246177,
+          "goreGeometryDensity": 0.7599999904632568,
+          "goreWetnessVariation": 0.8399999737739563,
+          "goreDarkClotBias": 0.0,
+          "goreRoughEdgeBias": 0.5999999642372131,
+          "goreColorIntensity": 1.0,
+          "goreOrganicIrregularity": 1.0,
+          "goreSurfaceRoundness": 1.0,
+          "goreTextureEnabled": true,
+          "goreFiberTextureStrength": 0.4599999785423279,
+          "goreBaseColorStrength": 1.0,
+          "goreInnerRimEnabled": true,
+          "goreInnerRimWidth": 0.010099999606609344,
+          "goreInnerRimStrength": 1.0,
+          "goreMaximumTriangles": 4565,
+          "goreDefaultVisible": false,
+          "goreActivationWeight": 0.01,
+          "goreUserCustomized": true,
+          "goreMaskSeed": 1733745943,
+          "linkedRegionId": "head",
+          "linkedStampId": "stamp_0318ffb5a0ff447184b5517424188d01",
+          "linkedSelectionHash": "55a89c275130579d69c24d12e0ca4b278850566d18127a33637de26fa8aeb9ab",
+          "linkedCaptureTopologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+          "validationStatus": "PASS"
+        },
+        "goreOverlayDigest": "07d9b481dfd98528145a4a8ae598336763f309f534407b7dfd969421dc457eaa",
+        "goreOverlayEnabled": true,
+        "goreOverlayMode": "STAIN_AND_RAISED",
+        "gorePresetId": "Gore_Crush_Heavy_Clotted",
+        "goreIntensityClass": "CUSTOM",
+        "goreDefaultVisible": false,
+        "goreActivationWeight": 0.01,
+        "goreOverlayValidationStatus": "PASS",
+        "exportValidationStatus": "PASS",
+        "goreRegionId": "head",
+        "goreDeformationKey": "Head_Dent_Right",
+        "goreGeneratedMeshIds": [
+          "gore_mesh_e0ac2c4b415ee62337fa",
+          "gore_mesh_4e8830c5dd2bb8f56c88"
+        ],
+        "goreGeneratedNodeNames": [
+          "DSB_GORE_ATTACHED_head_Head_Dent_Right",
+          "DSB_GORE_DETACHED_head_Head_Dent_Right"
+        ],
+        "goreGeometryDigests": {
+          "ATTACHED": "6407d9988bb30bb21b13f3f23ebf5e6e92ba35c851e33d92f16e9f5e9e0b002c",
+          "DETACHED": "b2b2ec26fd3f6ba46fdc0d48baf8b7eead5bf49de6d766ea3e08f603460554df"
+        },
+        "goreGenerationDigests": {
+          "ATTACHED": "28ba195d8bcf9ad0ecf2a829c8c85572899b5dc4999e3158103e2cad7d1ef2cb",
+          "DETACHED": "e5d0b39b1c788c7ed29e5227e66012694e31d199eb254c265312b3de4c939a40"
+        },
+        "goreTriangleCounts": {
+          "ATTACHED": 2448,
+          "DETACHED": 2448
+        },
+        "goreMaterialIds": [
+          "DSB_GORE_WET_CRIMSON",
+          "DSB_GORE_DARK_CLOT",
+          "DSB_GORE_ROUGH_EDGE"
+        ],
+        "goreMaterialNames": [
+          "DSB_GORE_WET_CRIMSON_07d9b481",
+          "DSB_GORE_DARK_CLOT_07d9b481",
+          "DSB_GORE_ROUGH_EDGE_07d9b481"
+        ],
+        "goreActivationContract": {
+          "defaultVisible": false,
+          "activationWeight": 0.01,
+          "activateWithDeformationKey": "Head_Dent_Right",
+          "retainThroughDeathAndCorpsePersistence": true,
+          "runtimeImplementationIncluded": false
+        }
+      },
+      {
+        "name": "Face_Middle_impact_v001",
+        "regionId": "body_core",
+        "regionMode": "CORE_SINGLE",
+        "targetObject": "DSB_BODY_CORE",
+        "attachedObject": "DSB_BODY_CORE",
+        "detachedObject": "",
+        "status": "TRAUMA_REBUILT",
+        "recipeStatus": "PROCEDURAL_STACK",
+        "legacy": false,
+        "maximumInfluence": 1.0,
+        "maximumDisplacement": 0.04500000178813934,
+        "measuredMaximumDisplacement": 0.045000017075796164,
+        "maximumPairDeltaError": 0.0,
+        "validationStatus": "PASS",
+        "legacySyncStatus": null,
+        "legacySyncErrorBefore": null,
+        "legacySyncErrorAfter": null,
+        "legacySyncRepairApplied": false,
+        "orderedStamps": [
+          {
+            "stampId": "stamp_48efcf26ceed4932b649278fefb3a225",
+            "displayName": "Impact Stamp",
+            "enabled": true,
+            "family": "BROAD_CAVE",
+            "placementMode": "SELECTED_FACE_PATCH",
+            "center": [
+              0.027725068852305412,
+              -0.10158082097768784,
+              1.272979497909546
+            ],
+            "direction": [
+              -0.07284262758592577,
+              0.9949101781399343,
+              -0.0696253476827385
+            ],
+            "radius": 0.10499999672174454,
+            "depth": 0.03999999910593033,
+            "falloff": 1.350000023841858,
+            "influenceMode": "PATCH_FEATHERED",
+            "distanceMode": "SURFACE_DISTANCE",
+            "featherDistance": 0.019999995827674866,
+            "seamProtection": 0.03500000387430191,
+            "strength": 1.25,
+            "maximumDisplacement": 0.04500000178813934,
+            "orderIndex": 0,
+            "capture": {
+              "selectionHash": "732a44e5888904a3ace01ff7c5caa61a3e561fb743ea9fea88a44fbf98535453",
+              "topologyFingerprint": "15c3059aa51b6f1992352b60c6aedf5568eaabec8860a2875147fa6b158ef43b",
+              "faceCount": 151,
+              "vertexCount": 92,
+              "boundsWorld": [
+                [
+                  -0.007940329611301422,
+                  -0.11990898102521896,
+                  1.2397340536117554
+                ],
+                [
+                  0.06109844520688057,
+                  -0.0841880738735199,
+                  1.2992815971374512
+                ]
+              ],
+              "estimatedRadius": 0.045216256950180604,
+              "virtualWeldTolerance": 1.5549679045378566e-07,
+              "virtualWeldDigest": "3b13471934d2612335439e99eb677571256f5137c7fdf60de154bfc59436ca9e",
+              "virtualWeldMemberCount": 2520,
+              "virtualConnectedComponentCount": 1
+            }
+          }
+        ],
+        "recipeDigest": "534fa935b5c956e1f0ab7274e89ae6dd8234c40f635cf204904a692ac31c2220",
+        "surfaceGoreOverlay": {
+          "goreRecipeVersion": 3,
+          "goreOverlayEnabled": true,
+          "gorePresetId": "Gore_Crush_Heavy_Clotted",
+          "goreCoverage": 0.7599999904632568,
+          "goreScatter": 0.17000001668930054,
+          "goreEdgeFeather": 0.41999998688697815,
+          "goreWetness": 0.1899999976158142,
+          "goreDarkness": 0.6800000071525574,
+          "goreColorBias": [
+            0.3100000023841858,
+            0.006000000052154064,
+            0.004000000189989805
+          ],
+          "gorePatchScale": 0.01,
+          "goreOverlayMode": "STAIN_AND_RAISED",
+          "goreIntensityClass": "CUSTOM",
+          "goreRaisedEnabled": true,
+          "goreClotCoverage": 1.0,
+          "goreCoreDensity": 1.0,
+          "goreClotThickness": 0.03999999910593033,
+          "goreThicknessVariation": 0.8799999952316284,
+          "goreIslandBreakup": 0.23999999463558197,
+          "gorePeripheralFragments": 1.0,
+          "goreSurfaceOffset": 0.010999999940395355,
+          "goreGeometryDensity": 1.0,
+          "goreWetnessVariation": 0.6599999666213989,
+          "goreDarkClotBias": 0.0,
+          "goreRoughEdgeBias": 0.0,
+          "goreColorIntensity": 1.0,
+          "goreOrganicIrregularity": 1.0,
+          "goreSurfaceRoundness": 1.0,
+          "goreTextureEnabled": true,
+          "goreFiberTextureStrength": 0.46000003814697266,
+          "goreBaseColorStrength": 1.0,
+          "goreInnerRimEnabled": true,
+          "goreInnerRimWidth": 0.010099999606609344,
+          "goreInnerRimStrength": 0.8799999952316284,
+          "goreMaximumTriangles": 6448,
+          "goreDefaultVisible": false,
+          "goreActivationWeight": 0.01,
+          "goreUserCustomized": true,
+          "goreMaskSeed": 1440209787,
+          "linkedRegionId": "body_core",
+          "linkedStampId": "stamp_48efcf26ceed4932b649278fefb3a225",
+          "linkedSelectionHash": "732a44e5888904a3ace01ff7c5caa61a3e561fb743ea9fea88a44fbf98535453",
+          "linkedCaptureTopologyFingerprint": "15c3059aa51b6f1992352b60c6aedf5568eaabec8860a2875147fa6b158ef43b",
+          "validationStatus": "PASS"
+        },
+        "goreOverlayDigest": "c637189cd820012f21f36b84fcc42cd4ca228ae37be4cdf686a293f5fc6f69e7",
+        "goreOverlayEnabled": true,
+        "goreOverlayMode": "STAIN_AND_RAISED",
+        "gorePresetId": "Gore_Crush_Heavy_Clotted",
+        "goreIntensityClass": "CUSTOM",
+        "goreDefaultVisible": false,
+        "goreActivationWeight": 0.01,
+        "goreOverlayValidationStatus": "PASS",
+        "exportValidationStatus": "PASS",
+        "goreRegionId": "body_core",
+        "goreDeformationKey": "Face_Middle_impact_v001",
+        "goreGeneratedMeshIds": [
+          "gore_mesh_4fc2a13b20f2d29bc072"
+        ],
+        "goreGeneratedNodeNames": [
+          "DSB_GORE_CORE_body_core_Face_Middle_impact_v001"
+        ],
+        "goreGeometryDigests": {
+          "CORE": "8cf266820ebfea0678f268c488b1e0f73eef7ba60a4053a12d5dfaac0fa43376"
+        },
+        "goreGenerationDigests": {
+          "CORE": "0ef67394e8bf68d4b54eca2bf991f8511404014cb9d1769b9f98af5e8317e944"
+        },
+        "goreTriangleCounts": {
+          "CORE": 3876
+        },
+        "goreMaterialIds": [
+          "DSB_GORE_WET_CRIMSON",
+          "DSB_GORE_DARK_CLOT",
+          "DSB_GORE_ROUGH_EDGE"
+        ],
+        "goreMaterialNames": [
+          "DSB_GORE_WET_CRIMSON_c637189c",
+          "DSB_GORE_DARK_CLOT_c637189c",
+          "DSB_GORE_ROUGH_EDGE_c637189c"
+        ],
+        "goreActivationContract": {
+          "defaultVisible": false,
+          "activationWeight": 0.01,
+          "activateWithDeformationKey": "Face_Middle_impact_v001",
+          "retainThroughDeathAndCorpsePersistence": true,
+          "runtimeImplementationIncluded": false
+        }
+      }
+    ],
+    "generatedGoreMeshes": [
+      {
+        "meshId": "gore_mesh_582a61fa6343156420c9",
+        "nodeName": "DSB_GORE_ATTACHED_head_Head_Dent_Left",
+        "regionId": "head",
+        "deformationKey": "Head_Dent_Left",
+        "attachedDetachedRole": "ATTACHED",
+        "ownershipRole": "ATTACHED",
+        "sourceObject": "DSB_ATTACHED_HEAD",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 1720,
+        "recipeDigest": "5a1f67bcd630e90af2ae68b98c04854d1b377d7d56ece2785a7285593b1a8b19",
+        "generationDigest": "d5e4867ad592ce5a90e955988c9e1d4fea4718da7fc6f45489dc9e0ec9605047",
+        "geometryDigest": "f092b461d2a486116aef97466d8a5937182dc13d8c34e27b8dae615916d82af0",
+        "materialIds": [
+          "DSB_GORE_WET_CRIMSON",
+          "DSB_GORE_DARK_CLOT",
+          "DSB_GORE_ROUGH_EDGE"
+        ],
+        "materialNames": [
+          "DSB_GORE_WET_CRIMSON_5a1f67bc",
+          "DSB_GORE_DARK_CLOT_5a1f67bc",
+          "DSB_GORE_ROUGH_EDGE_5a1f67bc"
+        ],
+        "previewOnly": false
+      },
+      {
+        "meshId": "gore_mesh_5878cb41e88747afc7ea",
+        "nodeName": "DSB_GORE_DETACHED_head_Head_Dent_Left",
+        "regionId": "head",
+        "deformationKey": "Head_Dent_Left",
+        "attachedDetachedRole": "DETACHED",
+        "ownershipRole": "DETACHED",
+        "sourceObject": "DSB_SEGMENT_HEAD",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 1720,
+        "recipeDigest": "5a1f67bcd630e90af2ae68b98c04854d1b377d7d56ece2785a7285593b1a8b19",
+        "generationDigest": "318cd8c071017296549c007e59d90dde7740d03bc2ff0627b1f6040041a4d6f5",
+        "geometryDigest": "c71cc45a243e3845f0d1af18710152f621f2ecf84fdd04e281f60ca5341aef4e",
+        "materialIds": [
+          "DSB_GORE_WET_CRIMSON",
+          "DSB_GORE_DARK_CLOT",
+          "DSB_GORE_ROUGH_EDGE"
+        ],
+        "materialNames": [
+          "DSB_GORE_WET_CRIMSON_5a1f67bc",
+          "DSB_GORE_DARK_CLOT_5a1f67bc",
+          "DSB_GORE_ROUGH_EDGE_5a1f67bc"
+        ],
+        "previewOnly": false
+      },
+      {
+        "meshId": "gore_mesh_e0ac2c4b415ee62337fa",
+        "nodeName": "DSB_GORE_ATTACHED_head_Head_Dent_Right",
+        "regionId": "head",
+        "deformationKey": "Head_Dent_Right",
+        "attachedDetachedRole": "ATTACHED",
+        "ownershipRole": "ATTACHED",
+        "sourceObject": "DSB_ATTACHED_HEAD",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 2448,
+        "recipeDigest": "07d9b481dfd98528145a4a8ae598336763f309f534407b7dfd969421dc457eaa",
+        "generationDigest": "28ba195d8bcf9ad0ecf2a829c8c85572899b5dc4999e3158103e2cad7d1ef2cb",
+        "geometryDigest": "6407d9988bb30bb21b13f3f23ebf5e6e92ba35c851e33d92f16e9f5e9e0b002c",
+        "materialIds": [
+          "DSB_GORE_WET_CRIMSON",
+          "DSB_GORE_DARK_CLOT",
+          "DSB_GORE_ROUGH_EDGE"
+        ],
+        "materialNames": [
+          "DSB_GORE_WET_CRIMSON_07d9b481",
+          "DSB_GORE_DARK_CLOT_07d9b481",
+          "DSB_GORE_ROUGH_EDGE_07d9b481"
+        ],
+        "previewOnly": false
+      },
+      {
+        "meshId": "gore_mesh_4e8830c5dd2bb8f56c88",
+        "nodeName": "DSB_GORE_DETACHED_head_Head_Dent_Right",
+        "regionId": "head",
+        "deformationKey": "Head_Dent_Right",
+        "attachedDetachedRole": "DETACHED",
+        "ownershipRole": "DETACHED",
+        "sourceObject": "DSB_SEGMENT_HEAD",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 2448,
+        "recipeDigest": "07d9b481dfd98528145a4a8ae598336763f309f534407b7dfd969421dc457eaa",
+        "generationDigest": "e5d0b39b1c788c7ed29e5227e66012694e31d199eb254c265312b3de4c939a40",
+        "geometryDigest": "b2b2ec26fd3f6ba46fdc0d48baf8b7eead5bf49de6d766ea3e08f603460554df",
+        "materialIds": [
+          "DSB_GORE_WET_CRIMSON",
+          "DSB_GORE_DARK_CLOT",
+          "DSB_GORE_ROUGH_EDGE"
+        ],
+        "materialNames": [
+          "DSB_GORE_WET_CRIMSON_07d9b481",
+          "DSB_GORE_DARK_CLOT_07d9b481",
+          "DSB_GORE_ROUGH_EDGE_07d9b481"
+        ],
+        "previewOnly": false
+      },
+      {
+        "meshId": "gore_mesh_4fc2a13b20f2d29bc072",
+        "nodeName": "DSB_GORE_CORE_body_core_Face_Middle_impact_v001",
+        "regionId": "body_core",
+        "deformationKey": "Face_Middle_impact_v001",
+        "attachedDetachedRole": "CORE",
+        "ownershipRole": "CORE",
+        "sourceObject": "DSB_BODY_CORE",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 3876,
+        "recipeDigest": "c637189cd820012f21f36b84fcc42cd4ca228ae37be4cdf686a293f5fc6f69e7",
+        "generationDigest": "0ef67394e8bf68d4b54eca2bf991f8511404014cb9d1769b9f98af5e8317e944",
+        "geometryDigest": "8cf266820ebfea0678f268c488b1e0f73eef7ba60a4053a12d5dfaac0fa43376",
+        "materialIds": [
+          "DSB_GORE_WET_CRIMSON",
+          "DSB_GORE_DARK_CLOT",
+          "DSB_GORE_ROUGH_EDGE"
+        ],
+        "materialNames": [
+          "DSB_GORE_WET_CRIMSON_c637189c",
+          "DSB_GORE_DARK_CLOT_c637189c",
+          "DSB_GORE_ROUGH_EDGE_c637189c"
+        ],
+        "previewOnly": false
+      }
+    ],
+    "compoundTraumaEvents": [],
+    "compoundActivationContract": {
+      "undamagedState": "ALL_CHILD_MORPHS_ZERO_AND_GORE_INACTIVE",
+      "activationSource": "semantic compound event synchronized weight",
+      "runtimeImplementationIncluded": false
+    },
+    "maceHeadGuardActions": [],
+    "goreActivationContract": {
+      "undamagedState": "INACTIVE",
+      "activationSource": "matching deformation key weight/state",
+      "defaultVisible": false,
+      "runtimeImplementationIncluded": false
+    },
+    "validationStatus": "PASS",
+    "region": "head",
+    "attachedObject": "DSB_ATTACHED_HEAD",
+    "detachedObject": "DSB_SEGMENT_HEAD",
+    "topologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9"
+  },
   "validation": {
     "status": "PASS",
-    "validated_at_utc": "2026-07-15T20:28:05Z",
-    "authoring_version": "3.8.0",
-    "authoring_build_id": "2026-07-15.segment-stump.3",
+    "validated_at_utc": "2026-07-20T23:01:34Z",
+    "authoring_version": "3.9.1",
+    "authoring_build_id": "2026-07-18.source-contract.1",
     "source_topology_sha256": "96256fc3f56d95df7415cb7a85cc37ed87816274c909c0411bccaa98400fcd39",
     "source_weight_sha256": "3cebdc992934e4a3fb4928a0ab9bb36050e720e9769cffccc2dd162cc8190630",
     "gap_tolerance_m": 0.0005000000237487257,
     "errors": [],
     "warnings": [],
-    "generated_object_count": 19
+    "generated_object_count": 24,
+    "source_readiness": {
+      "status": "PASS",
+      "contract_schema": "dreadstone.source_readiness.v1",
+      "source_objects": [
+        "model"
+      ]
+    },
+    "deformation": {
+      "status": "PASS",
+      "schema": "dreadstone.damage_deformation.v1",
+      "authoringVersion": "3.16.1",
+      "authoringBuildId": "2026-07-20.atomic-damage-preview.1",
+      "topologyPair": {
+        "status": "PASS",
+        "errors": [],
+        "attachedVertexCount": 605,
+        "detachedVertexCount": 605,
+        "attachedPolygonCount": 982,
+        "detachedPolygonCount": 982,
+        "topologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetVertexCount": 605,
+        "targetPolygonCount": 982,
+        "weightFingerprint": "d0fd72ba94d6bd635de0ea7daf4ea2ac0f45dd6c7929ccee331b5aaa618325dc"
+      },
+      "registeredRegionCount": 4,
+      "activeRegionId": "head",
+      "regions": [
+        {
+          "regionId": "head",
+          "regionMode": "PAIRED_SEGMENT",
+          "targetObject": "DSB_ATTACHED_HEAD",
+          "attachedObject": "DSB_ATTACHED_HEAD",
+          "detachedObject": "DSB_SEGMENT_HEAD",
+          "status": "PASS",
+          "topologyPair": {
+            "status": "PASS",
+            "errors": [],
+            "attachedVertexCount": 605,
+            "detachedVertexCount": 605,
+            "attachedPolygonCount": 982,
+            "detachedPolygonCount": 982,
+            "topologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+            "regionMode": "PAIRED_SEGMENT",
+            "targetVertexCount": 605,
+            "targetPolygonCount": 982,
+            "weightFingerprint": "d0fd72ba94d6bd635de0ea7daf4ea2ac0f45dd6c7929ccee331b5aaa618325dc"
+          },
+          "keys": [
+            {
+              "name": "Head_Dent_Left",
+              "regionId": "head",
+              "maximumInfluence": 1.0,
+              "maximumDisplacement": 0.04500000178813934,
+              "measuredMaximumDisplacement": 0.04500001183104507,
+              "maximumPairDeltaError": 4.7166913902629e-09,
+              "status": "TRAUMA_REBUILT",
+              "recipeStatus": "PROCEDURAL_STACK",
+              "stampCount": 1,
+              "deformationValidationStatus": "PASS",
+              "goreOverlayValidationStatus": "PASS",
+              "raisedGoreValidationStatus": "PASS",
+              "raisedGore": {
+                "status": "PASS",
+                "nodeNames": [
+                  "DSB_GORE_ATTACHED_head_Head_Dent_Left",
+                  "DSB_GORE_DETACHED_head_Head_Dent_Left"
+                ],
+                "meshIds": [
+                  "gore_mesh_582a61fa6343156420c9",
+                  "gore_mesh_5878cb41e88747afc7ea"
+                ],
+                "triangleCounts": {
+                  "ATTACHED": 1720,
+                  "DETACHED": 1720
+                },
+                "materialIds": [
+                  "DSB_GORE_WET_CRIMSON",
+                  "DSB_GORE_DARK_CLOT",
+                  "DSB_GORE_ROUGH_EDGE"
+                ],
+                "defaultVisible": false,
+                "activationWeight": 0.01,
+                "errors": []
+              },
+              "exportValidationStatus": "PASS",
+              "goreOverlayEnabled": true
+            },
+            {
+              "name": "Head_Dent_Right",
+              "regionId": "head",
+              "maximumInfluence": 1.0,
+              "maximumDisplacement": 0.04500000178813934,
+              "measuredMaximumDisplacement": 0.045000012063471435,
+              "maximumPairDeltaError": 4.7166913902629e-09,
+              "status": "TRAUMA_REBUILT",
+              "recipeStatus": "PROCEDURAL_STACK",
+              "stampCount": 1,
+              "deformationValidationStatus": "PASS",
+              "goreOverlayValidationStatus": "PASS",
+              "raisedGoreValidationStatus": "PASS",
+              "raisedGore": {
+                "status": "PASS",
+                "nodeNames": [
+                  "DSB_GORE_ATTACHED_head_Head_Dent_Right",
+                  "DSB_GORE_DETACHED_head_Head_Dent_Right"
+                ],
+                "meshIds": [
+                  "gore_mesh_e0ac2c4b415ee62337fa",
+                  "gore_mesh_4e8830c5dd2bb8f56c88"
+                ],
+                "triangleCounts": {
+                  "ATTACHED": 2448,
+                  "DETACHED": 2448
+                },
+                "materialIds": [
+                  "DSB_GORE_WET_CRIMSON",
+                  "DSB_GORE_DARK_CLOT",
+                  "DSB_GORE_ROUGH_EDGE"
+                ],
+                "defaultVisible": false,
+                "activationWeight": 0.01,
+                "errors": []
+              },
+              "exportValidationStatus": "PASS",
+              "goreOverlayEnabled": true
+            }
+          ],
+          "errors": []
+        },
+        {
+          "regionId": "body_core",
+          "regionMode": "CORE_SINGLE",
+          "targetObject": "DSB_BODY_CORE",
+          "attachedObject": "DSB_BODY_CORE",
+          "detachedObject": "",
+          "status": "PASS",
+          "topologyPair": {
+            "status": "PASS",
+            "errors": [],
+            "targetVertexCount": 8644,
+            "targetPolygonCount": 14387,
+            "topologyFingerprint": "15c3059aa51b6f1992352b60c6aedf5568eaabec8860a2875147fa6b158ef43b",
+            "weightFingerprint": "1f721deb7a1bad5a8af79df87e1dc34abad1b20c7b05bbcc36c2f354add61ca8",
+            "regionMode": "CORE_SINGLE",
+            "attachedVertexCount": 8644,
+            "detachedVertexCount": 0,
+            "attachedPolygonCount": 14387,
+            "detachedPolygonCount": 0
+          },
+          "keys": [
+            {
+              "name": "Face_Middle_impact_v001",
+              "regionId": "body_core",
+              "maximumInfluence": 1.0,
+              "maximumDisplacement": 0.04500000178813934,
+              "measuredMaximumDisplacement": 0.045000017075796164,
+              "maximumPairDeltaError": 0.0,
+              "status": "TRAUMA_REBUILT",
+              "recipeStatus": "PROCEDURAL_STACK",
+              "stampCount": 1,
+              "deformationValidationStatus": "PASS",
+              "goreOverlayValidationStatus": "PASS",
+              "raisedGoreValidationStatus": "PASS",
+              "raisedGore": {
+                "status": "PASS",
+                "nodeNames": [
+                  "DSB_GORE_CORE_body_core_Face_Middle_impact_v001"
+                ],
+                "meshIds": [
+                  "gore_mesh_4fc2a13b20f2d29bc072"
+                ],
+                "triangleCounts": {
+                  "CORE": 3876
+                },
+                "materialIds": [
+                  "DSB_GORE_WET_CRIMSON",
+                  "DSB_GORE_DARK_CLOT",
+                  "DSB_GORE_ROUGH_EDGE"
+                ],
+                "defaultVisible": false,
+                "activationWeight": 0.01,
+                "errors": []
+              },
+              "exportValidationStatus": "PASS",
+              "goreOverlayEnabled": true
+            }
+          ],
+          "errors": []
+        },
+        {
+          "regionId": "forearm_left",
+          "regionMode": "PAIRED_SEGMENT",
+          "targetObject": "DSB_ATTACHED_FOREARM_L",
+          "attachedObject": "DSB_ATTACHED_FOREARM_L",
+          "detachedObject": "DSB_SEGMENT_FOREARM_L",
+          "status": "PASS",
+          "topologyPair": {
+            "status": "PASS",
+            "errors": [],
+            "attachedVertexCount": 1529,
+            "detachedVertexCount": 1529,
+            "attachedPolygonCount": 2446,
+            "detachedPolygonCount": 2446,
+            "topologyFingerprint": "184c2e68c419488f816fbe9531177aff1216b5a5d3b60790903ab0888cd09234",
+            "regionMode": "PAIRED_SEGMENT",
+            "targetVertexCount": 1529,
+            "targetPolygonCount": 2446,
+            "weightFingerprint": "9f5b022f78d933184b0933def67f57337b76a528ccd028a00bec023631df0c2f"
+          },
+          "keys": [],
+          "errors": []
+        },
+        {
+          "regionId": "forearm_right",
+          "regionMode": "PAIRED_SEGMENT",
+          "targetObject": "DSB_ATTACHED_FOREARM_R",
+          "attachedObject": "DSB_ATTACHED_FOREARM_R",
+          "detachedObject": "DSB_SEGMENT_FOREARM_R",
+          "status": "PASS",
+          "topologyPair": {
+            "status": "PASS",
+            "errors": [],
+            "attachedVertexCount": 1560,
+            "detachedVertexCount": 1560,
+            "attachedPolygonCount": 2545,
+            "detachedPolygonCount": 2545,
+            "topologyFingerprint": "5942b00bd33fb5cd1ecc0e96983b1d329e5cf958399a8de71b512b5eda802bac",
+            "regionMode": "PAIRED_SEGMENT",
+            "targetVertexCount": 1560,
+            "targetPolygonCount": 2545,
+            "weightFingerprint": "388392806d680a452cf9a5db2f253c0ed579e6b1bb9413b06a308ea0ecbfd30a"
+          },
+          "keys": [],
+          "errors": []
+        }
+      ],
+      "managedKeyCount": 3,
+      "raisedGoreTriangleCount": 12212,
+      "raisedGoreTriangleLimit": 48000,
+      "keys": [
+        {
+          "name": "Head_Dent_Left",
+          "regionId": "head",
+          "maximumInfluence": 1.0,
+          "maximumDisplacement": 0.04500000178813934,
+          "measuredMaximumDisplacement": 0.04500001183104507,
+          "maximumPairDeltaError": 4.7166913902629e-09,
+          "status": "TRAUMA_REBUILT",
+          "recipeStatus": "PROCEDURAL_STACK",
+          "stampCount": 1,
+          "deformationValidationStatus": "PASS",
+          "goreOverlayValidationStatus": "PASS",
+          "raisedGoreValidationStatus": "PASS",
+          "raisedGore": {
+            "status": "PASS",
+            "nodeNames": [
+              "DSB_GORE_ATTACHED_head_Head_Dent_Left",
+              "DSB_GORE_DETACHED_head_Head_Dent_Left"
+            ],
+            "meshIds": [
+              "gore_mesh_582a61fa6343156420c9",
+              "gore_mesh_5878cb41e88747afc7ea"
+            ],
+            "triangleCounts": {
+              "ATTACHED": 1720,
+              "DETACHED": 1720
+            },
+            "materialIds": [
+              "DSB_GORE_WET_CRIMSON",
+              "DSB_GORE_DARK_CLOT",
+              "DSB_GORE_ROUGH_EDGE"
+            ],
+            "defaultVisible": false,
+            "activationWeight": 0.01,
+            "errors": []
+          },
+          "exportValidationStatus": "PASS",
+          "goreOverlayEnabled": true
+        },
+        {
+          "name": "Head_Dent_Right",
+          "regionId": "head",
+          "maximumInfluence": 1.0,
+          "maximumDisplacement": 0.04500000178813934,
+          "measuredMaximumDisplacement": 0.045000012063471435,
+          "maximumPairDeltaError": 4.7166913902629e-09,
+          "status": "TRAUMA_REBUILT",
+          "recipeStatus": "PROCEDURAL_STACK",
+          "stampCount": 1,
+          "deformationValidationStatus": "PASS",
+          "goreOverlayValidationStatus": "PASS",
+          "raisedGoreValidationStatus": "PASS",
+          "raisedGore": {
+            "status": "PASS",
+            "nodeNames": [
+              "DSB_GORE_ATTACHED_head_Head_Dent_Right",
+              "DSB_GORE_DETACHED_head_Head_Dent_Right"
+            ],
+            "meshIds": [
+              "gore_mesh_e0ac2c4b415ee62337fa",
+              "gore_mesh_4e8830c5dd2bb8f56c88"
+            ],
+            "triangleCounts": {
+              "ATTACHED": 2448,
+              "DETACHED": 2448
+            },
+            "materialIds": [
+              "DSB_GORE_WET_CRIMSON",
+              "DSB_GORE_DARK_CLOT",
+              "DSB_GORE_ROUGH_EDGE"
+            ],
+            "defaultVisible": false,
+            "activationWeight": 0.01,
+            "errors": []
+          },
+          "exportValidationStatus": "PASS",
+          "goreOverlayEnabled": true
+        },
+        {
+          "name": "Face_Middle_impact_v001",
+          "regionId": "body_core",
+          "maximumInfluence": 1.0,
+          "maximumDisplacement": 0.04500000178813934,
+          "measuredMaximumDisplacement": 0.045000017075796164,
+          "maximumPairDeltaError": 0.0,
+          "status": "TRAUMA_REBUILT",
+          "recipeStatus": "PROCEDURAL_STACK",
+          "stampCount": 1,
+          "deformationValidationStatus": "PASS",
+          "goreOverlayValidationStatus": "PASS",
+          "raisedGoreValidationStatus": "PASS",
+          "raisedGore": {
+            "status": "PASS",
+            "nodeNames": [
+              "DSB_GORE_CORE_body_core_Face_Middle_impact_v001"
+            ],
+            "meshIds": [
+              "gore_mesh_4fc2a13b20f2d29bc072"
+            ],
+            "triangleCounts": {
+              "CORE": 3876
+            },
+            "materialIds": [
+              "DSB_GORE_WET_CRIMSON",
+              "DSB_GORE_DARK_CLOT",
+              "DSB_GORE_ROUGH_EDGE"
+            ],
+            "defaultVisible": false,
+            "activationWeight": 0.01,
+            "errors": []
+          },
+          "exportValidationStatus": "PASS",
+          "goreOverlayEnabled": true
+        }
+      ],
+      "coreSingleRegionCount": 1,
+      "pairedSegmentRegionCount": 3,
+      "compoundTrauma": {
+        "status": "PASS",
+        "eventCount": 0,
+        "events": [],
+        "errors": []
+      },
+      "errors": [],
+      "warnings": []
+    }
   }
 }

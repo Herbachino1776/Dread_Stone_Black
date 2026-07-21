@@ -1,12 +1,379 @@
 {
   "status": "PASS",
-  "validated_at_utc": "2026-07-15T20:28:05Z",
-  "authoring_version": "3.8.0",
-  "authoring_build_id": "2026-07-15.segment-stump.3",
+  "validated_at_utc": "2026-07-20T23:01:34Z",
+  "authoring_version": "3.9.1",
+  "authoring_build_id": "2026-07-18.source-contract.1",
   "source_topology_sha256": "96256fc3f56d95df7415cb7a85cc37ed87816274c909c0411bccaa98400fcd39",
   "source_weight_sha256": "3cebdc992934e4a3fb4928a0ab9bb36050e720e9769cffccc2dd162cc8190630",
   "gap_tolerance_m": 0.0005000000237487257,
   "errors": [],
   "warnings": [],
-  "generated_object_count": 19
+  "generated_object_count": 24,
+  "source_readiness": {
+    "status": "PASS",
+    "contract_schema": "dreadstone.source_readiness.v1",
+    "source_objects": [
+      "model"
+    ]
+  },
+  "deformation": {
+    "status": "PASS",
+    "schema": "dreadstone.damage_deformation.v1",
+    "authoringVersion": "3.16.1",
+    "authoringBuildId": "2026-07-20.atomic-damage-preview.1",
+    "topologyPair": {
+      "status": "PASS",
+      "errors": [],
+      "attachedVertexCount": 605,
+      "detachedVertexCount": 605,
+      "attachedPolygonCount": 982,
+      "detachedPolygonCount": 982,
+      "topologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+      "regionMode": "PAIRED_SEGMENT",
+      "targetVertexCount": 605,
+      "targetPolygonCount": 982,
+      "weightFingerprint": "d0fd72ba94d6bd635de0ea7daf4ea2ac0f45dd6c7929ccee331b5aaa618325dc"
+    },
+    "registeredRegionCount": 4,
+    "activeRegionId": "head",
+    "regions": [
+      {
+        "regionId": "head",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_HEAD",
+        "attachedObject": "DSB_ATTACHED_HEAD",
+        "detachedObject": "DSB_SEGMENT_HEAD",
+        "status": "PASS",
+        "topologyPair": {
+          "status": "PASS",
+          "errors": [],
+          "attachedVertexCount": 605,
+          "detachedVertexCount": 605,
+          "attachedPolygonCount": 982,
+          "detachedPolygonCount": 982,
+          "topologyFingerprint": "479e2eaed97ac501470c04cf02b593fe7bd02a00d5fa34ded096c26f85fa94a9",
+          "regionMode": "PAIRED_SEGMENT",
+          "targetVertexCount": 605,
+          "targetPolygonCount": 982,
+          "weightFingerprint": "d0fd72ba94d6bd635de0ea7daf4ea2ac0f45dd6c7929ccee331b5aaa618325dc"
+        },
+        "keys": [
+          {
+            "name": "Head_Dent_Left",
+            "regionId": "head",
+            "maximumInfluence": 1.0,
+            "maximumDisplacement": 0.04500000178813934,
+            "measuredMaximumDisplacement": 0.04500001183104507,
+            "maximumPairDeltaError": 4.7166913902629e-09,
+            "status": "TRAUMA_REBUILT",
+            "recipeStatus": "PROCEDURAL_STACK",
+            "stampCount": 1,
+            "deformationValidationStatus": "PASS",
+            "goreOverlayValidationStatus": "PASS",
+            "raisedGoreValidationStatus": "PASS",
+            "raisedGore": {
+              "status": "PASS",
+              "nodeNames": [
+                "DSB_GORE_ATTACHED_head_Head_Dent_Left",
+                "DSB_GORE_DETACHED_head_Head_Dent_Left"
+              ],
+              "meshIds": [
+                "gore_mesh_582a61fa6343156420c9",
+                "gore_mesh_5878cb41e88747afc7ea"
+              ],
+              "triangleCounts": {
+                "ATTACHED": 1720,
+                "DETACHED": 1720
+              },
+              "materialIds": [
+                "DSB_GORE_WET_CRIMSON",
+                "DSB_GORE_DARK_CLOT",
+                "DSB_GORE_ROUGH_EDGE"
+              ],
+              "defaultVisible": false,
+              "activationWeight": 0.01,
+              "errors": []
+            },
+            "exportValidationStatus": "PASS",
+            "goreOverlayEnabled": true
+          },
+          {
+            "name": "Head_Dent_Right",
+            "regionId": "head",
+            "maximumInfluence": 1.0,
+            "maximumDisplacement": 0.04500000178813934,
+            "measuredMaximumDisplacement": 0.045000012063471435,
+            "maximumPairDeltaError": 4.7166913902629e-09,
+            "status": "TRAUMA_REBUILT",
+            "recipeStatus": "PROCEDURAL_STACK",
+            "stampCount": 1,
+            "deformationValidationStatus": "PASS",
+            "goreOverlayValidationStatus": "PASS",
+            "raisedGoreValidationStatus": "PASS",
+            "raisedGore": {
+              "status": "PASS",
+              "nodeNames": [
+                "DSB_GORE_ATTACHED_head_Head_Dent_Right",
+                "DSB_GORE_DETACHED_head_Head_Dent_Right"
+              ],
+              "meshIds": [
+                "gore_mesh_e0ac2c4b415ee62337fa",
+                "gore_mesh_4e8830c5dd2bb8f56c88"
+              ],
+              "triangleCounts": {
+                "ATTACHED": 2448,
+                "DETACHED": 2448
+              },
+              "materialIds": [
+                "DSB_GORE_WET_CRIMSON",
+                "DSB_GORE_DARK_CLOT",
+                "DSB_GORE_ROUGH_EDGE"
+              ],
+              "defaultVisible": false,
+              "activationWeight": 0.01,
+              "errors": []
+            },
+            "exportValidationStatus": "PASS",
+            "goreOverlayEnabled": true
+          }
+        ],
+        "errors": []
+      },
+      {
+        "regionId": "body_core",
+        "regionMode": "CORE_SINGLE",
+        "targetObject": "DSB_BODY_CORE",
+        "attachedObject": "DSB_BODY_CORE",
+        "detachedObject": "",
+        "status": "PASS",
+        "topologyPair": {
+          "status": "PASS",
+          "errors": [],
+          "targetVertexCount": 8644,
+          "targetPolygonCount": 14387,
+          "topologyFingerprint": "15c3059aa51b6f1992352b60c6aedf5568eaabec8860a2875147fa6b158ef43b",
+          "weightFingerprint": "1f721deb7a1bad5a8af79df87e1dc34abad1b20c7b05bbcc36c2f354add61ca8",
+          "regionMode": "CORE_SINGLE",
+          "attachedVertexCount": 8644,
+          "detachedVertexCount": 0,
+          "attachedPolygonCount": 14387,
+          "detachedPolygonCount": 0
+        },
+        "keys": [
+          {
+            "name": "Face_Middle_impact_v001",
+            "regionId": "body_core",
+            "maximumInfluence": 1.0,
+            "maximumDisplacement": 0.04500000178813934,
+            "measuredMaximumDisplacement": 0.045000017075796164,
+            "maximumPairDeltaError": 0.0,
+            "status": "TRAUMA_REBUILT",
+            "recipeStatus": "PROCEDURAL_STACK",
+            "stampCount": 1,
+            "deformationValidationStatus": "PASS",
+            "goreOverlayValidationStatus": "PASS",
+            "raisedGoreValidationStatus": "PASS",
+            "raisedGore": {
+              "status": "PASS",
+              "nodeNames": [
+                "DSB_GORE_CORE_body_core_Face_Middle_impact_v001"
+              ],
+              "meshIds": [
+                "gore_mesh_4fc2a13b20f2d29bc072"
+              ],
+              "triangleCounts": {
+                "CORE": 3876
+              },
+              "materialIds": [
+                "DSB_GORE_WET_CRIMSON",
+                "DSB_GORE_DARK_CLOT",
+                "DSB_GORE_ROUGH_EDGE"
+              ],
+              "defaultVisible": false,
+              "activationWeight": 0.01,
+              "errors": []
+            },
+            "exportValidationStatus": "PASS",
+            "goreOverlayEnabled": true
+          }
+        ],
+        "errors": []
+      },
+      {
+        "regionId": "forearm_left",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_FOREARM_L",
+        "attachedObject": "DSB_ATTACHED_FOREARM_L",
+        "detachedObject": "DSB_SEGMENT_FOREARM_L",
+        "status": "PASS",
+        "topologyPair": {
+          "status": "PASS",
+          "errors": [],
+          "attachedVertexCount": 1529,
+          "detachedVertexCount": 1529,
+          "attachedPolygonCount": 2446,
+          "detachedPolygonCount": 2446,
+          "topologyFingerprint": "184c2e68c419488f816fbe9531177aff1216b5a5d3b60790903ab0888cd09234",
+          "regionMode": "PAIRED_SEGMENT",
+          "targetVertexCount": 1529,
+          "targetPolygonCount": 2446,
+          "weightFingerprint": "9f5b022f78d933184b0933def67f57337b76a528ccd028a00bec023631df0c2f"
+        },
+        "keys": [],
+        "errors": []
+      },
+      {
+        "regionId": "forearm_right",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_FOREARM_R",
+        "attachedObject": "DSB_ATTACHED_FOREARM_R",
+        "detachedObject": "DSB_SEGMENT_FOREARM_R",
+        "status": "PASS",
+        "topologyPair": {
+          "status": "PASS",
+          "errors": [],
+          "attachedVertexCount": 1560,
+          "detachedVertexCount": 1560,
+          "attachedPolygonCount": 2545,
+          "detachedPolygonCount": 2545,
+          "topologyFingerprint": "5942b00bd33fb5cd1ecc0e96983b1d329e5cf958399a8de71b512b5eda802bac",
+          "regionMode": "PAIRED_SEGMENT",
+          "targetVertexCount": 1560,
+          "targetPolygonCount": 2545,
+          "weightFingerprint": "388392806d680a452cf9a5db2f253c0ed579e6b1bb9413b06a308ea0ecbfd30a"
+        },
+        "keys": [],
+        "errors": []
+      }
+    ],
+    "managedKeyCount": 3,
+    "raisedGoreTriangleCount": 12212,
+    "raisedGoreTriangleLimit": 48000,
+    "keys": [
+      {
+        "name": "Head_Dent_Left",
+        "regionId": "head",
+        "maximumInfluence": 1.0,
+        "maximumDisplacement": 0.04500000178813934,
+        "measuredMaximumDisplacement": 0.04500001183104507,
+        "maximumPairDeltaError": 4.7166913902629e-09,
+        "status": "TRAUMA_REBUILT",
+        "recipeStatus": "PROCEDURAL_STACK",
+        "stampCount": 1,
+        "deformationValidationStatus": "PASS",
+        "goreOverlayValidationStatus": "PASS",
+        "raisedGoreValidationStatus": "PASS",
+        "raisedGore": {
+          "status": "PASS",
+          "nodeNames": [
+            "DSB_GORE_ATTACHED_head_Head_Dent_Left",
+            "DSB_GORE_DETACHED_head_Head_Dent_Left"
+          ],
+          "meshIds": [
+            "gore_mesh_582a61fa6343156420c9",
+            "gore_mesh_5878cb41e88747afc7ea"
+          ],
+          "triangleCounts": {
+            "ATTACHED": 1720,
+            "DETACHED": 1720
+          },
+          "materialIds": [
+            "DSB_GORE_WET_CRIMSON",
+            "DSB_GORE_DARK_CLOT",
+            "DSB_GORE_ROUGH_EDGE"
+          ],
+          "defaultVisible": false,
+          "activationWeight": 0.01,
+          "errors": []
+        },
+        "exportValidationStatus": "PASS",
+        "goreOverlayEnabled": true
+      },
+      {
+        "name": "Head_Dent_Right",
+        "regionId": "head",
+        "maximumInfluence": 1.0,
+        "maximumDisplacement": 0.04500000178813934,
+        "measuredMaximumDisplacement": 0.045000012063471435,
+        "maximumPairDeltaError": 4.7166913902629e-09,
+        "status": "TRAUMA_REBUILT",
+        "recipeStatus": "PROCEDURAL_STACK",
+        "stampCount": 1,
+        "deformationValidationStatus": "PASS",
+        "goreOverlayValidationStatus": "PASS",
+        "raisedGoreValidationStatus": "PASS",
+        "raisedGore": {
+          "status": "PASS",
+          "nodeNames": [
+            "DSB_GORE_ATTACHED_head_Head_Dent_Right",
+            "DSB_GORE_DETACHED_head_Head_Dent_Right"
+          ],
+          "meshIds": [
+            "gore_mesh_e0ac2c4b415ee62337fa",
+            "gore_mesh_4e8830c5dd2bb8f56c88"
+          ],
+          "triangleCounts": {
+            "ATTACHED": 2448,
+            "DETACHED": 2448
+          },
+          "materialIds": [
+            "DSB_GORE_WET_CRIMSON",
+            "DSB_GORE_DARK_CLOT",
+            "DSB_GORE_ROUGH_EDGE"
+          ],
+          "defaultVisible": false,
+          "activationWeight": 0.01,
+          "errors": []
+        },
+        "exportValidationStatus": "PASS",
+        "goreOverlayEnabled": true
+      },
+      {
+        "name": "Face_Middle_impact_v001",
+        "regionId": "body_core",
+        "maximumInfluence": 1.0,
+        "maximumDisplacement": 0.04500000178813934,
+        "measuredMaximumDisplacement": 0.045000017075796164,
+        "maximumPairDeltaError": 0.0,
+        "status": "TRAUMA_REBUILT",
+        "recipeStatus": "PROCEDURAL_STACK",
+        "stampCount": 1,
+        "deformationValidationStatus": "PASS",
+        "goreOverlayValidationStatus": "PASS",
+        "raisedGoreValidationStatus": "PASS",
+        "raisedGore": {
+          "status": "PASS",
+          "nodeNames": [
+            "DSB_GORE_CORE_body_core_Face_Middle_impact_v001"
+          ],
+          "meshIds": [
+            "gore_mesh_4fc2a13b20f2d29bc072"
+          ],
+          "triangleCounts": {
+            "CORE": 3876
+          },
+          "materialIds": [
+            "DSB_GORE_WET_CRIMSON",
+            "DSB_GORE_DARK_CLOT",
+            "DSB_GORE_ROUGH_EDGE"
+          ],
+          "defaultVisible": false,
+          "activationWeight": 0.01,
+          "errors": []
+        },
+        "exportValidationStatus": "PASS",
+        "goreOverlayEnabled": true
+      }
+    ],
+    "coreSingleRegionCount": 1,
+    "pairedSegmentRegionCount": 3,
+    "compoundTrauma": {
+      "status": "PASS",
+      "eventCount": 0,
+      "events": [],
+      "errors": []
+    },
+    "errors": [],
+    "warnings": []
+  }
 }

@@ -129,7 +129,7 @@ export function completeBluntImpactInteraction(interaction, { completedAt = inte
   interaction.actorDamageApplied = Math.max(0, finite(actorResult?.damageApplied));
   interaction.reactionEmitted = actorResult?.reactionEmitted === true;
   interaction.collapseRequested = actorResult?.collapseRequested === true;
-  interaction.deformationApplied = false;
-  interaction.detachmentApplied = false;
+  interaction.deformationApplied = actorResult?.deformationApplied === true;
+  interaction.detachmentApplied = actorResult?.detachmentApplied === true;
   return interaction;
 }

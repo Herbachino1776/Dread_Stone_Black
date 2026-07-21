@@ -474,7 +474,7 @@ export class CombatLabWalkerController {
       }
       return;
     }
-    this.synchronizeFatalSegmentDetachment();
+    this.synchronizeAuthoredDeath();
     this.stateElapsed += dt;
     if (this.state === WALKER_STATES.grounded) {
       this.currentSpeed = 0;
@@ -510,18 +510,20 @@ export class CombatLabWalkerController {
     this.assertBoundedState();
   }
 
-  synchronizeFatalSegmentDetachment() {
-    if (!this.actor || !LIVING_MOVEMENT_STATES.has(this.state) || this.actor.fatalSegmentDetachmentActive !== true || this.actor.lifeState !== 'dying') return false;
+  synchronizeAuthoredDeath() {
+    if (!this.actor || !LIVING_MOVEMENT_STATES.has(this.state) || this.actor.lifeState !== 'dying') return false;
     this.desiredSpeed = 0;
     this.deathInitialSpeed = this.currentSpeed;
     const animation = this.actor.visualAdapter?.animationController;
-    this.selectedDeathName = animation?.activeAction?.getClip?.()?.name ?? animation?.activeAnimation ?? null;
-    this.deathDurationSeconds = animation?.activeAction?.getClip?.()?.duration ?? this.config.deathCollapseSeconds;
+    this.selectedDeathName = animation?.activeOneShot?.getClip?.()?.name ?? animation?.activeMetadata?.name ?? null;
+    this.deathDurationSeconds = animation?.activeOneShot?.getClip?.()?.duration ?? animation?.activeMetadata?.duration_seconds ?? this.config.deathCollapseSeconds;
     this.setState(WALKER_STATES.losingConsciousness);
     this.actor.combatContactState = 'dying';
     this.releaseDeathCollisionOwnership();
     return true;
   }
+
+  synchronizeFatalSegmentDetachment() { return this.synchronizeAuthoredDeath(); }
 
   getLocomotionRadius() {
     return Math.max(0.2, Number(this.playerBlocker?.radius) || 0.34);

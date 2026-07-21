@@ -79,7 +79,7 @@ export function measureVisibleSkinnedBounds(root) {
   const bounds = new THREE.Box3().makeEmpty();
   const vertex = new THREE.Vector3();
   root.traverse((object) => {
-    if (!object.isSkinnedMesh || !object.geometry?.attributes?.position) return;
+    if (!object.visible || !object.isSkinnedMesh || !object.geometry?.attributes?.position) return;
     object.skeleton?.update?.();
     for (let index = 0; index < object.geometry.attributes.position.count; index += 1) {
       object.getVertexPosition(index, vertex);
@@ -273,6 +273,7 @@ export class HumanoidGlbVisualAdapter {
     this.damageManifest = damageManifest;
     if (this.isolateMaterials) this.ownedMaterials = isolateObjectMaterials(this.scene);
     this.scene.traverse((object) => {
+      if (object.userData?.dsb_default_visible === false || object.userData?.dsb_gore_default_visible === false || object.name?.startsWith('DSB_GORE_')) object.visible = false;
       if (object.isBone) this.bones.set(object.name, object);
       if (!object.isMesh) return;
       enableCombatReadabilityLightLayer(object);
@@ -620,6 +621,14 @@ export class HumanoidGlbVisualAdapter {
     return transformWorldToActorLocal(this.getActorCoordinateRoot(), worldPoint, target);
   }
 
+  worldDirectionToActorLocal(worldDirection, target = new THREE.Vector3()) {
+    const coordinateRoot = this.getActorCoordinateRoot();
+    const inverseWorldRotation = coordinateRoot?.getWorldQuaternion?.(new THREE.Quaternion())?.invert?.();
+    target.copy(worldDirection ?? new THREE.Vector3());
+    if (inverseWorldRotation) target.applyQuaternion(inverseWorldRotation);
+    return target.lengthSq() > 1e-8 ? target.normalize() : target;
+  }
+
   reconstructVisibleSurface(binding, target, { refresh = true } = {}) {
     if (!validateSurfaceBinding(binding) || !this.scene) return null;
     if (refresh) this.prepareVisibleSurfaceFrame();
@@ -675,6 +684,18 @@ export class HumanoidGlbVisualAdapter {
 
   requestDetachment(request) {
     return this.damageSegmentRuntime?.requestDetachment?.(request) ?? null;
+  }
+
+  applyForgeMaceDamage(request) {
+    return this.damageSegmentRuntime?.applyForgeMaceDamage?.(request) ?? { applied: false, reason: 'damage-runtime-not-ready' };
+  }
+
+  activateForgeDamage(morphName, options = {}) {
+    return this.damageSegmentRuntime?.activateForgeDamage?.(morphName, options) ?? { applied: false, reason: 'damage-runtime-not-ready', selectedMorph: morphName ?? null };
+  }
+
+  resetForgeDamage() {
+    return this.damageSegmentRuntime?.resetForgeDamage?.() ?? null;
   }
 
   getDetachmentWorldPoint(segmentId, target = new THREE.Vector3()) {

@@ -9,6 +9,10 @@ import { COMBAT_MORTALITY_MODES } from '../src/game/combat/CombatMortality.js';
 import { CombatLabScene } from '../src/game/combat/CombatLabScene.js';
 import { ACTIVE_DAMAGE_SEGMENT_CONTRACTS, HumanoidDamageSegmentRuntime, validateDamageAsset } from '../src/game/combat/HumanoidDamageSegmentRuntime.js';
 import { TESTMAN_COMBAT_PROFILE, TESTMAN_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
+import { TESTMAN_FORGE_DAMAGE_MORPHS } from '../src/game/combat/ForgeDamageDeformationRuntime.js';
+import { CombatDirector } from '../src/game/combat/CombatDirector.js';
+import { MELEE_INTENTS } from '../src/game/combat/MeleeIntentWeapon.js';
+import { AuthoredHumanoidDeathController } from '../src/game/combat/AuthoredHumanoidDeathController.js';
 import { KNIFE_RUNTIME_COMBAT_MODE } from '../src/game/combat/WorldKnifeCombatController.js';
 import { SWORD_RUNTIME_COMBAT_MODE } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
@@ -158,13 +162,13 @@ test('damage and animation manifests resolve exact approved metadata and validat
     assert.equal(damageManifest.source.topologyFingerprint, validationReport.source_topology_sha256);
     assert.equal(damageManifest.source.weightFingerprint, validationReport.source_weight_sha256);
     assert.equal(validationReport.status, 'PASS');
-    assert.equal(validationReport.authoring_version, '3.8.0');
-    assert.equal(validationReport.authoring_build_id, '2026-07-15.segment-stump.3');
-    assert.equal(validationReport.generated_object_count, 19);
+    assert.equal(validationReport.authoring_version, '3.9.1');
+    assert.equal(validationReport.authoring_build_id, '2026-07-18.source-contract.1');
+    assert.equal(validationReport.generated_object_count, 24);
     assert.deepEqual(validationReport.errors, []);
     assert.deepEqual(validationReport.warnings, []);
     const startupBounds = new THREE.Box3().makeEmpty();
-    fixture.gltf.scene.traverse((object) => { if (object.isSkinnedMesh) startupBounds.union(new THREE.Box3().setFromObject(object, true)); });
+    fixture.gltf.scene.traverse((object) => { if (object.visible && object.isSkinnedMesh) startupBounds.union(new THREE.Box3().setFromObject(object, true)); });
     const unscaledHeight = startupBounds.getSize(new THREE.Vector3()).y / getHumanoidProfileScale(TESTMAN_DAMAGE_COMBAT_PROFILE);
     assert.ok(Math.abs(unscaledHeight - TESTMAN_DAMAGE_COMBAT_PROFILE.rawHeight) < 1e-6);
   } finally { fixture.dispose(); }
@@ -184,8 +188,197 @@ test('damage runtime explicitly enforces the intact startup contract', async () 
     assert.equal(diagnostics.perSegment.left_elbow.proximalStumpVisible, false);
     assert.equal(diagnostics.perSegment.right_elbow.proximalStumpVisible, false);
     for (const name of ['DSB_SEGMENT_FOREARM_L', 'DSB_SEGMENT_FOREARM_R', 'DSB_SEGMENT_UPPER_BODY', 'DSB_SEGMENT_LOWER_BODY', 'DSB_STUMP_WAIST_UPPER', 'DSB_STUMP_WAIST_LOWER']) assert.equal(fixture.gltf.scene.getObjectByName(name).visible, false, `${name} must start hidden`);
+    assert.deepEqual(fixture.runtime.deformationRuntime.getDiagnostics().managedMorphNames, ['Head_Dent_Left', 'Head_Dent_Right', 'Face_Middle_impact_v001']);
+    assert.deepEqual(fixture.runtime.deformationRuntime.getDiagnostics().visibleGoreNodes, []);
+    assert.ok(Object.values(fixture.runtime.deformationRuntime.getDiagnostics().morphWeights).every((weights) => weights.attached === 0 && (weights.detached == null || weights.detached === 0)));
     assert.equal(fixture.runtime.getDamageAssetDiagnostics().intactStateValid, true);
   } finally { fixture.dispose(); }
+});
+
+test('manual Forge damage states obey exact authored names, thresholds, and reset', async () => {
+  const fixture = await createRuntimeFixture();
+  try {
+    const cases = [
+      [TESTMAN_FORGE_DAMAGE_MORPHS.headLeft, 'DSB_GORE_ATTACHED_head_Head_Dent_Left'],
+      [TESTMAN_FORGE_DAMAGE_MORPHS.headRight, 'DSB_GORE_ATTACHED_head_Head_Dent_Right'],
+      [TESTMAN_FORGE_DAMAGE_MORPHS.bodyFront, 'DSB_GORE_CORE_body_core_Face_Middle_impact_v001'],
+    ];
+    for (const [morphName, goreName] of cases) {
+      fixture.runtime.resetForgeDamage();
+      const belowThreshold = fixture.runtime.activateForgeDamage(morphName, { requestedWeight: 0.005, source: 'test' });
+      assert.equal(belowThreshold.actualWeight, 0.005);
+      assert.equal(belowThreshold.activatedGoreNode, null);
+      assert.deepEqual(fixture.runtime.deformationRuntime.getDiagnostics().visibleGoreNodes, []);
+      const active = fixture.runtime.activateForgeDamage(morphName, { requestedWeight: 1, source: 'test' });
+      assert.equal(active.selectedMorph, morphName);
+      assert.equal(active.actualWeight, 1);
+      assert.equal(active.activationThreshold, 0.01);
+      assert.equal(active.activatedGoreNode, goreName);
+      assert.deepEqual(fixture.runtime.deformationRuntime.getDiagnostics().visibleGoreNodes, [goreName]);
+    }
+    const reset = fixture.runtime.resetForgeDamage();
+    assert.deepEqual(reset.visibleGoreNodes, []);
+    assert.ok(Object.values(reset.morphWeights).every((weights) => weights.attached === 0 && (weights.detached == null || weights.detached === 0)));
+  } finally { fixture.dispose(); }
+});
+
+test('mace hit mapping uses Testman-local side and never activates both head dents from one hit', async () => {
+  const fixture = await createRuntimeFixture();
+  try {
+    const makeImpact = (x) => ({ primitive: 'mace_head', worldPoint: new THREE.Vector3(x, 1.35, 0), impactDirection: new THREE.Vector3(-Math.sign(x || 1), 0, 0) });
+    const left = fixture.runtime.applyForgeMaceDamage({ hit: { regionId: 'skull' }, impact: makeImpact(0.12) });
+    assert.equal(left.hitSide, 'left');
+    assert.equal(left.selectedMorph, TESTMAN_FORGE_DAMAGE_MORPHS.headLeft);
+    let diagnostics = fixture.runtime.deformationRuntime.getDiagnostics();
+    assert.equal(diagnostics.morphWeights.Head_Dent_Left.attached, 1);
+    assert.equal(diagnostics.morphWeights.Head_Dent_Right.attached, 0);
+    assert.deepEqual(diagnostics.visibleGoreNodes, ['DSB_GORE_ATTACHED_head_Head_Dent_Left']);
+
+    const right = fixture.runtime.applyForgeMaceDamage({ hit: { regionId: 'face' }, impact: makeImpact(-0.12) });
+    assert.equal(right.hitSide, 'right');
+    assert.equal(right.selectedMorph, TESTMAN_FORGE_DAMAGE_MORPHS.headRight);
+    diagnostics = fixture.runtime.deformationRuntime.getDiagnostics();
+    assert.equal(diagnostics.morphWeights.Head_Dent_Left.attached, 0);
+    assert.equal(diagnostics.morphWeights.Head_Dent_Right.attached, 1);
+    assert.deepEqual(diagnostics.visibleGoreNodes, ['DSB_GORE_ATTACHED_head_Head_Dent_Right']);
+
+    fixture.runtime.resetForgeDamage();
+    const body = fixture.runtime.applyForgeMaceDamage({ hit: { regionId: 'upper_chest' }, impact: makeImpact(0) });
+    assert.equal(body.hitSide, 'center/front');
+    assert.equal(body.selectedMorph, TESTMAN_FORGE_DAMAGE_MORPHS.bodyFront);
+    assert.deepEqual(fixture.runtime.deformationRuntime.getDiagnostics().visibleGoreNodes, ['DSB_GORE_CORE_body_core_Face_Middle_impact_v001']);
+    assert.equal(fixture.runtime.applyForgeMaceDamage({ hit: { regionId: 'left_forearm' }, impact: makeImpact(0.2) }).applied, false);
+  } finally { fixture.dispose(); }
+});
+
+test('head deformation and raised gore transfer to detached ownership and persist through corpse animation', async () => {
+  const fixture = await createRuntimeFixture();
+  try {
+    fixture.runtime.activateForgeDamage(TESTMAN_FORGE_DAMAGE_MORPHS.headLeft, { source: 'test', hitRegion: 'skull', hitSide: 'left' });
+    const detached = detach(fixture.runtime);
+    assert.equal(detached.accepted, true);
+    let damage = fixture.runtime.deformationRuntime.getDiagnostics();
+    assert.equal(damage.morphWeights.Head_Dent_Left.attached, 1);
+    assert.equal(damage.morphWeights.Head_Dent_Left.detached, 1);
+    assert.deepEqual(damage.visibleGoreNodes, ['DSB_GORE_DETACHED_head_Head_Dent_Left']);
+    assert.equal(damage.headOwnershipOverlap, false);
+    const detachedGore = fixture.hostScene.getObjectByName('DSB_GORE_DETACHED_head_Head_Dent_Left');
+    assert.equal(detachedGore.parent, fixture.hostScene.getObjectByName('DSB_SEGMENT_HEAD'));
+
+    fixture.mixer.stopAllAction();
+    const deathClip = fixture.gltf.animations.find((clip) => clip.name === 'DSB_Death_Faceplant_LEFT_v001');
+    fixture.mixer.clipAction(deathClip).reset().play();
+    fixture.mixer.update(deathClip.duration);
+    damage = fixture.runtime.deformationRuntime.getDiagnostics();
+    assert.equal(damage.morphWeights.Head_Dent_Left.detached, 1);
+    assert.deepEqual(damage.visibleGoreNodes, ['DSB_GORE_DETACHED_head_Head_Dent_Left']);
+    assert.equal(damage.headOwnershipOverlap, false);
+  } finally { fixture.dispose(); }
+});
+
+test('raised gore remains opaque, shadowed, and standard-lit for torch response', async () => {
+  const fixture = await createRuntimeFixture();
+  try {
+    for (const entry of damageManifest.deformations.generatedGoreMeshes) {
+      const node = fixture.gltf.scene.getObjectByName(entry.nodeName);
+      const meshes = [];
+      node.traverse((object) => { if (object.isMesh) meshes.push(object); });
+      assert.ok(meshes.length > 0, `${entry.nodeName} has renderable geometry`);
+      assert.ok(meshes.every((mesh) => mesh.castShadow && mesh.receiveShadow));
+      assert.ok(meshes.every((mesh) => (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).every((material) => material?.isMeshStandardMaterial && material.transparent === false && material.opacity === 1)));
+    }
+  } finally { fixture.dispose(); }
+});
+
+test('strong body mace hit survives with hurt while a head mace hit enters authored corpse behavior', async () => {
+  await initializeCombatPhysics();
+  const createActorFixture = () => {
+    const physics = new CombatPhysicsWorld();
+    const actor = new HumanoidCombatActor({ physics, scene: new THREE.Scene(), visualProfile: TESTMAN_DAMAGE_COMBAT_PROFILE, automaticMortality: false });
+    const visualState = { activeMorph: null, hurtCount: 0, deathCount: 0 };
+    const animationController = { state: 'HOLDING', activeOneShot: null, activeMetadata: null };
+    actor.visualAdapter = {
+      animationController,
+      applyForgeMaceDamage({ hit }) {
+        visualState.activeMorph = ['head', 'face', 'skull'].includes(hit.regionId) ? TESTMAN_FORGE_DAMAGE_MORPHS.headLeft : TESTMAN_FORGE_DAMAGE_MORPHS.bodyFront;
+        return { applied: true, selectedMorph: visualState.activeMorph, actualWeight: 1, activatedGoreNode: 'test-gore' };
+      },
+      triggerPainReaction() { visualState.hurtCount += 1; },
+      playDeathAnimation({ regionId }) {
+        visualState.deathCount += 1;
+        animationController.state = 'DYING';
+        animationController.activeMetadata = { name: 'DSB_Death_Faceplant_LEFT_v001', duration_seconds: 1, approved_kind: 'DEATH', hold_final_pose: true, regionId };
+        return { name: animationController.activeMetadata.name, durationSeconds: 1, holdFinalPose: true };
+      },
+      reset() {},
+      dispose() {},
+    };
+    const director = new CombatDirector({ actor });
+    return { physics, actor, director, visualState, animationController };
+  };
+  const strike = (fixture, bodyId) => {
+    const center = fixture.actor.getBodyWorldPosition(bodyId);
+    const point = center.clone().add(new THREE.Vector3(0, 0, bodyId === 'head' ? 0.15 : 0.1));
+    const hit = fixture.actor.resolveHit(fixture.actor.colliders.get(bodyId), point);
+    return fixture.director.resolveBluntImpact({
+      weapon: { id: 'dreadstone_mace', family: 'mace' },
+      intent: { weaponId: 'dreadstone_mace', intent: MELEE_INTENTS.smash, ownerId: `test-${bodyId}`, speed: 6, intentional: true, damaging: true },
+      hit,
+      primitive: 'mace_head',
+      worldPoint: point,
+      worldNormal: new THREE.Vector3(0, 0, 1),
+      impactDirection: new THREE.Vector3(0, 0, -1),
+      headCenterVelocity: new THREE.Vector3(0, 0, -6),
+      contactCenterVelocity: new THREE.Vector3(0, 0, -6),
+      actorRelativeVelocity: new THREE.Vector3(0, 0, -6),
+      normalImpactSpeed: 6,
+      tangentialSpeed: 0,
+      effectiveMass: 5.4,
+      estimatedImpulse: 32.4,
+      estimatedEnergy: 97.2,
+      loadProgress: 1,
+      gesturePower: 1,
+      impactRadiusEstimate: 0.11,
+      classification: 'heavy_smash',
+    });
+  };
+
+  const body = createActorFixture();
+  try {
+    const interaction = strike(body, 'upper_chest');
+    body.director.update(0.12);
+    assert.equal(body.actor.lifeState, 'alive');
+    assert.equal(body.visualState.activeMorph, TESTMAN_FORGE_DAMAGE_MORPHS.bodyFront);
+    assert.equal(body.visualState.hurtCount, 1);
+    assert.equal(interaction.result.bluntImpact.deformationApplied, true);
+  } finally {
+    body.director.dispose();
+    body.actor.dispose();
+    body.physics.dispose();
+  }
+
+  const head = createActorFixture();
+  const deathController = new AuthoredHumanoidDeathController({ actor: head.actor });
+  try {
+    const interaction = strike(head, 'head');
+    head.director.update(0.12);
+    assert.equal(head.actor.lifeState, 'dying');
+    assert.equal(head.actor.fatalMaceHeadImpactActivationCount, 1);
+    assert.equal(head.visualState.activeMorph, TESTMAN_FORGE_DAMAGE_MORPHS.headLeft);
+    assert.equal(head.visualState.deathCount, 1);
+    assert.equal(interaction.result.bluntImpact.deformationApplied, true);
+    assert.equal(deathController.synchronizeAuthoredDeath(), true);
+    assert.equal(deathController.state, 'LOSING_CONSCIOUSNESS');
+    head.animationController.state = 'DEAD';
+    deathController.prepareFrame(0.01);
+    assert.equal(head.actor.lifeState, 'dead');
+    assert.equal(head.visualState.activeMorph, TESTMAN_FORGE_DAMAGE_MORPHS.headLeft, 'corpse transition does not reset deformation');
+  } finally {
+    deathController.dispose();
+    head.director.dispose();
+    head.actor.dispose();
+    head.physics.dispose();
+  }
 });
 
 test('detached head captures a non-rest animated head transform within tolerance', async () => {

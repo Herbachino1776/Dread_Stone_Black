@@ -16,6 +16,7 @@ import { CombatLabWalkerController } from './CombatLabWalkerController.js';
 import { BLOOD_LIGHTING_DEBUG_MODES, countBloodChromaRendererPrograms, getBloodMaterialDiagnostics, setBloodLightingDebugMode } from './BloodChromaMaterial.js';
 import { BLOOD_COLOR_PALETTE } from './CombatStage2Config.js';
 import { CombatAcceptedAudioSystem } from './CombatAcceptedAudioSystem.js';
+import { TESTMAN_FORGE_DAMAGE_MORPHS } from './ForgeDamageDeformationRuntime.js';
 
 export class CombatLabScene {
   static async create(options = {}) {
@@ -329,6 +330,10 @@ export class CombatLabScene {
   }
   debugDetachLeftForearm() { return this.debugDetachForearm('left_elbow', -1); }
   debugDetachRightForearm() { return this.debugDetachForearm('right_elbow', 1); }
+  debugDamageHeadLeft() { return this.actor?.visualAdapter?.activateForgeDamage?.(TESTMAN_FORGE_DAMAGE_MORPHS.headLeft, { source: 'combat_lab_debug', hitRegion: 'skull', hitSide: 'left' }) ?? null; }
+  debugDamageHeadRight() { return this.actor?.visualAdapter?.activateForgeDamage?.(TESTMAN_FORGE_DAMAGE_MORPHS.headRight, { source: 'combat_lab_debug', hitRegion: 'skull', hitSide: 'right' }) ?? null; }
+  debugDamageBodyFront() { return this.actor?.visualAdapter?.activateForgeDamage?.(TESTMAN_FORGE_DAMAGE_MORPHS.bodyFront, { source: 'combat_lab_debug', hitRegion: 'upper_chest', hitSide: 'center/front' }) ?? null; }
+  debugResetForgeDamage() { return this.actor?.visualAdapter?.resetForgeDamage?.() ?? null; }
   toggleMortalityMode() {
     const next = this.actor.mortalityMode === 'normal' ? 'immortal_reactive' : 'normal';
     this.actor.setMortalityMode(next);

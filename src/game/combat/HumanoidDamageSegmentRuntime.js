@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RAPIER } from './CombatPhysicsWorld.js';
+import { ForgeDamageDeformationRuntime } from './ForgeDamageDeformationRuntime.js';
 
 export const DAMAGE_MANIFEST_SCHEMA = 'dreadstone.damage_authoring.v1';
 
@@ -282,6 +283,13 @@ export class HumanoidDamageSegmentRuntime {
     this.detachedSegments = new Set();
     this.resetDiagnostics();
     this.configureDamageObjects();
+    this.deformationRuntime = new ForgeDamageDeformationRuntime({
+      actor,
+      adapter,
+      segmentRuntime: this,
+      root: loadedGlbRoot,
+      manifest: damageManifest,
+    });
     this.captureSegmentBindings();
     this.applyIntactState();
   }
@@ -328,15 +336,36 @@ export class HumanoidDamageSegmentRuntime {
   }
 
   applyIntactState() {
-    DAMAGE_INTACT_VISIBLE_OBJECTS.forEach((name) => { this.objects.get(name).visible = true; });
-    DAMAGE_INTACT_HIDDEN_OBJECTS.forEach((name) => { this.objects.get(name).visible = false; });
+    this.objects.forEach((object) => {
+      if (object.userData?.dsb_default_visible === false || object.userData?.dsb_gore_default_visible === false || object.name?.startsWith('DSB_GORE_')) object.visible = false;
+    });
+    const intactNames = [this.manifest?.intact?.bodyCore, ...(this.manifest?.intact?.attachedSegments ?? [])].filter(Boolean);
+    intactNames.forEach((name) => { this.objects.get(name).visible = true; });
+    this.deformationRuntime?.reset?.();
     this.validation.diagnostics.intactStateValid = this.validateIntactState();
     return this.validation.diagnostics.intactStateValid;
   }
 
   validateIntactState() {
-    return DAMAGE_INTACT_VISIBLE_OBJECTS.every((name) => this.objects.get(name)?.visible === true)
-      && DAMAGE_INTACT_HIDDEN_OBJECTS.every((name) => this.objects.get(name)?.visible === false);
+    const intactNames = [this.manifest?.intact?.bodyCore, ...(this.manifest?.intact?.attachedSegments ?? [])].filter(Boolean);
+    const hiddenObjects = [...this.objects.values()].filter((object) => object.userData?.dsb_default_visible === false || object.userData?.dsb_gore_default_visible === false || object.name?.startsWith('DSB_GORE_'));
+    const deformation = this.deformationRuntime?.getDiagnostics?.();
+    return intactNames.every((name) => this.objects.get(name)?.visible === true)
+      && hiddenObjects.every((object) => object.visible === false)
+      && (deformation?.visibleGoreNodes?.length ?? 0) === 0
+      && Object.values(deformation?.morphWeights ?? {}).every((weights) => Math.abs(weights.attached ?? 0) <= 1e-6 && Math.abs(weights.detached ?? 0) <= 1e-6);
+  }
+
+  applyForgeMaceDamage(request = {}) {
+    return this.deformationRuntime?.applyMaceHit?.(request) ?? { applied: false, reason: 'deformation-runtime-not-ready' };
+  }
+
+  activateForgeDamage(morphName, options = {}) {
+    return this.deformationRuntime?.activate?.(morphName, options) ?? { applied: false, reason: 'deformation-runtime-not-ready', selectedMorph: morphName ?? null };
+  }
+
+  resetForgeDamage() {
+    return this.deformationRuntime?.reset?.() ?? null;
   }
 
   captureAnimatedMotion(deltaSeconds) {
@@ -478,6 +507,7 @@ export class HumanoidDamageSegmentRuntime {
     state.detachedObject.visible = true;
     state.distalStump.visible = true;
     this.detachedSegments.add(segmentId);
+    this.deformationRuntime?.handleSegmentDetached?.(segmentId);
     this.lastCause = cause;
     if (segmentId !== 'head_neck') this.actor?.disableDetachedSemanticBodies?.(state.detachedBodyIds);
 
@@ -576,7 +606,11 @@ export class HumanoidDamageSegmentRuntime {
   }
 
   getDamageAssetDiagnostics() {
-    return { ...this.validation.diagnostics, intactStateValid: this.validateIntactState() || this.detachedSegments.size > 0 };
+    return {
+      ...this.validation.diagnostics,
+      intactStateValid: this.validateIntactState() || this.detachedSegments.size > 0,
+      deformation: this.deformationRuntime?.getDiagnostics?.() ?? null,
+    };
   }
 
   getDiagnostics() {
@@ -620,6 +654,7 @@ export class HumanoidDamageSegmentRuntime {
       nonfatalConsequenceCount: this.nonfatalConsequenceCount,
       disabledProxyBodyIds: [...(this.actor?.detachedSemanticBodyIds ?? [])],
       detachedWoundTransferImplemented: false,
+      deformation: this.deformationRuntime?.getDiagnostics?.() ?? null,
       perSegment,
       headDetached: this.detachedSegments.has('head_neck'),
       attachedHeadVisible: this.attachedHead.visible,
@@ -641,6 +676,8 @@ export class HumanoidDamageSegmentRuntime {
   dispose() {
     if (this.disposed) return;
     this.reset();
+    this.deformationRuntime?.dispose?.();
+    this.deformationRuntime = null;
     this.disposed = true;
     this.actor = null;
     this.adapter = null;

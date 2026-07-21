@@ -14,6 +14,7 @@ import { COMBAT_LAB_WALKER_CONFIG, CombatLabWalkerController, WALKER_STATES } fr
 import { AuthoredHumanoidDeathController } from './AuthoredHumanoidDeathController.js';
 import { CombatAcceptedAudioSystem } from './CombatAcceptedAudioSystem.js';
 import { FolsomShowcaseCombatExtras, isFolsomShowcaseEnabled } from './FolsomShowcaseCombatExtras.js';
+import { TESTMAN_FORGE_DAMAGE_MORPHS } from './ForgeDamageDeformationRuntime.js';
 
 const FOLSOM_AUTHORED_PLAYER_SPAWN = Object.freeze([-2, 1.71, -4]);
 const FOLSOM_TESTMAN_SPAWN_XZ = Object.freeze([8, -4]);
@@ -151,10 +152,34 @@ export class FolsomCombatEncounter {
     this.resetEnemyWaveLifecycle();
     this.priorityCombatActor = this.getPriorityCombatActor(this.player);
     this.combatActiveActor = null;
+    this.installForgeDamageDebugCommands();
   }
 
   createDamageProfileActor(options = {}) {
     return new HumanoidCombatActor({ ...options, visualProfile: TESTMAN_DAMAGE_COMBAT_PROFILE });
+  }
+
+  installForgeDamageDebugCommands() {
+    if (import.meta.env?.DEV !== true || typeof globalThis === 'undefined') return null;
+    const commands = Object.freeze({
+      Head_Dent_Left: () => this.debugActivateForgeDamage(TESTMAN_FORGE_DAMAGE_MORPHS.headLeft, 'skull', 'left'),
+      Head_Dent_Right: () => this.debugActivateForgeDamage(TESTMAN_FORGE_DAMAGE_MORPHS.headRight, 'skull', 'right'),
+      Face_Middle_impact_v001: () => this.debugActivateForgeDamage(TESTMAN_FORGE_DAMAGE_MORPHS.bodyFront, 'upper_chest', 'center/front'),
+      resetAllDamage: () => this.debugResetForgeDamage(),
+      diagnostics: () => this.actor?.visualAdapter?.damageSegmentRuntime?.deformationRuntime?.getDiagnostics?.() ?? null,
+    });
+    this.forgeDamageDebugCommands = commands;
+    globalThis.__DSB_TESTMAN_DAMAGE__ = commands;
+    console.info('[ForgeDamage] Folsom debug commands installed at __DSB_TESTMAN_DAMAGE__.');
+    return commands;
+  }
+
+  debugActivateForgeDamage(morphName, hitRegion = 'manual', hitSide = 'manual') {
+    return this.actor?.visualAdapter?.activateForgeDamage?.(morphName, { source: 'folsom_debug_command', hitRegion, hitSide }) ?? { applied: false, reason: 'damage-runtime-not-ready', selectedMorph: morphName };
+  }
+
+  debugResetForgeDamage() {
+    return this.actor?.visualAdapter?.resetForgeDamage?.() ?? null;
   }
 
   spawnStationaryActor() {
@@ -636,6 +661,8 @@ export class FolsomCombatEncounter {
     this.combatRouter.dispose();
     this.feedbackSystem.dispose();
     this.physics.dispose();
+    if (globalThis.__DSB_TESTMAN_DAMAGE__ === this.forgeDamageDebugCommands) delete globalThis.__DSB_TESTMAN_DAMAGE__;
+    this.forgeDamageDebugCommands = null;
     delete this.scene.userData.activeCombatShadowTarget;
   }
 }

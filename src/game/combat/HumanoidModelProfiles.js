@@ -73,8 +73,8 @@ export const TESTMAN_DAMAGE_COMBAT_PROFILE = Object.freeze({
   damageManifestPath: './assets/enemies/testman/damage/testman_damage_v001.json',
   animationManifestPath: './assets/enemies/testman/damage/testman_damage_v001_animpack.json',
   rawHeight: 1.5228491691721973,
-  damageAuthoringVersion: '3.8.0',
-  damageAuthoringBuildId: '2026-07-15.segment-stump.3',
+  damageAuthoringVersion: '3.9.1',
+  damageAuthoringBuildId: '2026-07-18.source-contract.1',
   damageTopologyFingerprint: '96256fc3f56d95df7415cb7a85cc37ed87816274c909c0411bccaa98400fcd39',
   damageWeightFingerprint: '3cebdc992934e4a3fb4928a0ab9bb36050e720e9769cffccc2dd162cc8190630',
   damageRequiredObjects: Object.freeze([
@@ -106,7 +106,7 @@ export const TESTMAN_DAMAGE_COMBAT_PROFILE = Object.freeze({
     'DSB_Death_Faceplant_LEFT_v001',
   ]),
   activeDamageSegmentIds: Object.freeze(['head_neck', 'left_elbow', 'right_elbow']),
-  colliderFitNotes: 'Combat Lab and Folsom Forge v3.8.1 damage visual. Head and forearm detachment contracts are active; waist remains loaded but inactive.',
+  colliderFitNotes: 'Combat Lab and Folsom Forge v3.9.1 damage visual. Head/forearm detachment and the first three manifest-authored mace deformation states are active; waist remains loaded but inactive.',
 });
 
 export function getHumanoidProfileScale(profile) {

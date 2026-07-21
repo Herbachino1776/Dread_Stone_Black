@@ -9,6 +9,9 @@ const ignoredPathParts = new Set(['fishing', 'locations/generated']);
 const ignoredFiles = new Set([
   'src/game/GameState.js', // save repair intentionally strips pre-purge rusted_sword snapshots
 ]);
+const permittedPatternLabelsByFile = new Map([
+  ['src/game/combat/ForgeDamageDeformationRuntime.js', new Set(['gore runtime'])], // Manifest-authored Testman damage presentation.
+]);
 
 const bannedPatterns = [
   [/Broadsword|broadsword/, 'broadsword viewmodel/combat runtime'],
@@ -33,11 +36,12 @@ function* walk(dir) {
 const failures = [];
 for (const base of runtimeRoots) {
   for (const file of walk(base)) {
-    const rel = relative(root, file).replaceAll('\\\\', '/');
+    const rel = relative(root, file).replaceAll('\\', '/');
     if (ignoredFiles.has(rel)) continue;
     if ([...ignoredPathParts].some((part) => rel.includes(`/${part}/`))) continue;
     const text = readFileSync(file, 'utf8');
     for (const [pattern, label] of bannedPatterns) {
+      if (permittedPatternLabelsByFile.get(rel)?.has(label)) continue;
       if (pattern.test(text)) failures.push(`${rel}: ${label} (${pattern})`);
     }
   }

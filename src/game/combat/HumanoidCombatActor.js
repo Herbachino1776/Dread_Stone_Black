@@ -24,6 +24,12 @@ const HUMANOID_PHYSICAL_SCALE = 0.82;
 let humanoidActorInstanceSerial = 0;
 const HUMANOID_REGION_BY_ID = new Map(HUMANOID_ANATOMY_REGIONS.map((region) => [region.id, region]));
 
+function finiteVector(value, fallback = new THREE.Vector3()) {
+  if (value?.isVector3 && value.toArray().every(Number.isFinite)) return value.clone();
+  if (value && [value.x, value.y, value.z].every(Number.isFinite)) return new THREE.Vector3(value.x, value.y, value.z);
+  return fallback.clone();
+}
+
 export const RAGDOLL_HANDOFF_LIMITS = Object.freeze({
   maximumInheritedLinearSpeed: 0.9,
   maximumInheritedAngularSpeed: 1.25,
@@ -111,6 +117,8 @@ export class HumanoidCombatActor {
     this.collapseReason = null;
     this.fatalSegmentDetachmentActive = false;
     this.fatalSegmentDetachmentActivationCount = 0;
+    this.fatalMaceHeadImpactActive = false;
+    this.fatalMaceHeadImpactActivationCount = 0;
     this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
     this.environmentContactHints = { groundY: this.spawnOffset.y, wallX: null };
     this.impactCooldowns = new Map();
@@ -644,6 +652,9 @@ export class HumanoidCombatActor {
     const headImpact = ['head', 'face', 'skull'].includes(hit.regionId);
     const torsoImpact = ['neck', 'upper_chest', 'lower_chest', 'abdomen', 'pelvis'].includes(hit.regionId);
     const legImpact = hit.regionId.includes('thigh') || hit.regionId.includes('leg') || hit.regionId.includes('foot');
+    const forgeDamage = impact.primitive === 'mace_head'
+      ? this.visualAdapter?.applyForgeMaceDamage?.({ hit, impact, requestedWeight: 1 }) ?? { applied: false, reason: 'damage-runtime-not-ready' }
+      : { applied: false, reason: 'non-mace-head-primitive' };
     this.physiology?.onBluntImpact?.({ hit, impact, severity: damageApplied });
     let collapseRequested = false;
     if (headImpact && damageApplied >= 1.9) {
@@ -674,11 +685,16 @@ export class HumanoidCombatActor {
         region: hit.regionId,
         skullOrHead: headImpact,
       },
-      deformationApplied: false,
+      deformationApplied: forgeDamage.applied === true,
       detachmentApplied: false,
+      forgeDamage,
     };
     this.evaluateLifeState();
-    return { accepted: true, damageApplied, reactionEmitted: true, collapseRequested, deformationApplied: false, detachmentApplied: false };
+    const fatalHeadHitTriggered = headImpact && forgeDamage.applied === true
+      ? this.requestFatalMaceHeadImpact({ hit, impact, damageApplied, forgeDamage })
+      : false;
+    collapseRequested ||= fatalHeadHitTriggered;
+    return { accepted: true, damageApplied, reactionEmitted: true, collapseRequested, deformationApplied: forgeDamage.applied === true, detachmentApplied: false, forgeDamage, fatalHeadHitTriggered };
   }
 
   onWeaponExtracted(woundId, { releaseSeverity = 0, direction = null } = {}) {
@@ -731,6 +747,32 @@ export class HumanoidCombatActor {
     this.motorStrength = Math.min(this.motorStrength, 0.02);
     if (this.lifeState === 'alive' || this.lifeState === 'incapacitated') this.transitionLifeState('dying', this.collapseReason, { forceFatal: true, externalCommit: true });
     return true;
+  }
+
+  requestFatalMaceHeadImpact({ hit, impact, damageApplied = 0, forgeDamage = null } = {}) {
+    if (this.fatalMaceHeadImpactActive || this.lifeState === 'dying' || this.lifeState === 'dead') return false;
+    this.fatalMaceHeadImpactActive = true;
+    this.fatalMaceHeadImpactActivationCount = Math.min(1_000_000, this.fatalMaceHeadImpactActivationCount + 1);
+    this.collapseFamily = 'neurological';
+    this.collapseReason = `fatal-mace-head-impact:${hit?.regionId ?? 'head'}`;
+    this.motorStrength = Math.min(this.motorStrength, 0.02);
+    this.lastReaction = {
+      regionId: hit?.regionId ?? 'head',
+      severity: Math.max(0, damageApplied),
+      point: finiteVector(impact?.worldPoint, this.getBodyWorldPosition('head')),
+      direction: finiteVector(impact?.impactDirection, new THREE.Vector3(0, 0, -1)),
+      hardContact: true,
+      forgeDamage,
+    };
+    const death = this.visualAdapter?.playDeathAnimation?.({
+      regionId: hit?.regionId ?? 'head',
+      variation: damageApplied,
+    });
+    return this.transitionLifeState('dying', this.collapseReason, {
+      externalCommit: true,
+      forceFatal: true,
+      presentationHandled: Boolean(death),
+    });
   }
 
   transitionLifeState(nextState, reason = 'trauma', { forceFatal = false, externalCommit = false, presentationHandled = false } = {}) {
@@ -1155,6 +1197,8 @@ export class HumanoidCombatActor {
       collapseReason: this.collapseReason,
       fatalSegmentDetachmentActive: this.fatalSegmentDetachmentActive,
       fatalSegmentDetachmentActivationCount: this.fatalSegmentDetachmentActivationCount,
+      fatalMaceHeadImpactActive: this.fatalMaceHeadImpactActive,
+      fatalMaceHeadImpactActivationCount: this.fatalMaceHeadImpactActivationCount,
       disabledProxyBodyIds: [...this.detachedSemanticBodyIds],
       disabledMotorBodyIds: [...this.detachedMotorBodyIds],
       nonfatalDetachedSegments: [...this.nonfatalDetachedSegments],
@@ -1243,6 +1287,8 @@ export class HumanoidCombatActor {
     this.collapseReason = null;
     this.fatalSegmentDetachmentActive = false;
     this.fatalSegmentDetachmentActivationCount = 0;
+    this.fatalMaceHeadImpactActive = false;
+    this.fatalMaceHeadImpactActivationCount = 0;
     this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
     this.corpseSleeping = false;
     this.finalSettleEmitted = false;
