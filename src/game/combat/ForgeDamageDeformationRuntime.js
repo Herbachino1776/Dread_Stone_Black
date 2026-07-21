@@ -64,6 +64,10 @@ function readBindingWeight(binding) {
   return binding?.object?.morphTargetInfluences?.[binding.index] ?? 0;
 }
 
+function setGoreSubtreeVisible(node, visible) {
+  node?.traverse?.((object) => { object.visible = visible; });
+}
+
 function finiteVector(value) {
   if (value?.isVector3 && value.toArray().every(Number.isFinite)) return value.clone();
   if (Array.isArray(value) && value.slice(0, 3).every(Number.isFinite)) return new THREE.Vector3().fromArray(value);
@@ -201,7 +205,7 @@ export class ForgeDamageDeformationRuntime {
       setBindingWeight(record.targetMorph, 0);
       setBindingWeight(record.detachedMorph, 0);
     });
-    this.goreNodes.forEach(({ node }) => { node.visible = false; });
+    this.goreNodes.forEach(({ node }) => setGoreSubtreeVisible(node, false));
     this.lastActivation = null;
     this.activationCount = 0;
     return this.getDiagnostics();
@@ -260,7 +264,7 @@ export class ForgeDamageDeformationRuntime {
 
   hideRegionGore(regionId) {
     this.goreNodes.forEach((entry) => {
-      if (entry.regionId === regionId) entry.node.visible = false;
+      if (entry.regionId === regionId) setGoreSubtreeVisible(entry.node, false);
     });
   }
 
@@ -279,7 +283,7 @@ export class ForgeDamageDeformationRuntime {
     const ownershipRole = this.getOwnershipRole(record);
     const thresholdPassed = attachedActual + weightEpsilon >= record.activationWeight;
     const activatedGoreNodes = thresholdPassed ? [...(record.goreByRole.get(ownershipRole) ?? [])] : [];
-    activatedGoreNodes.forEach((node) => { node.visible = true; });
+    activatedGoreNodes.forEach((node) => setGoreSubtreeVisible(node, true));
     this.activationCount += 1;
     this.lastActivation = {
       source,
@@ -322,8 +326,8 @@ export class ForgeDamageDeformationRuntime {
     affected.forEach((record) => {
       const weight = readBindingWeight(record.targetMorph);
       setBindingWeight(record.detachedMorph, weight);
-      record.goreByRole.get('ATTACHED')?.forEach((node) => { node.visible = false; });
-      record.goreByRole.get('DETACHED')?.forEach((node) => { node.visible = weight + weightEpsilon >= record.activationWeight; });
+      record.goreByRole.get('ATTACHED')?.forEach((node) => setGoreSubtreeVisible(node, false));
+      record.goreByRole.get('DETACHED')?.forEach((node) => setGoreSubtreeVisible(node, weight + weightEpsilon >= record.activationWeight));
     });
     return affected.length > 0;
   }

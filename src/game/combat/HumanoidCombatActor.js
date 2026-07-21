@@ -21,6 +21,7 @@ const tmpInverseQuaternion = new THREE.Quaternion();
 const tmpEuler = new THREE.Euler();
 const tmpDirection = new THREE.Vector3();
 const HUMANOID_PHYSICAL_SCALE = 0.82;
+const FATAL_MACE_HEAD_REACTION_SECONDS = 0.12;
 let humanoidActorInstanceSerial = 0;
 const HUMANOID_REGION_BY_ID = new Map(HUMANOID_ANATOMY_REGIONS.map((region) => [region.id, region]));
 
@@ -119,6 +120,7 @@ export class HumanoidCombatActor {
     this.fatalSegmentDetachmentActivationCount = 0;
     this.fatalMaceHeadImpactActive = false;
     this.fatalMaceHeadImpactActivationCount = 0;
+    this.pendingFatalMaceHeadImpact = null;
     this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
     this.environmentContactHints = { groundY: this.spawnOffset.y, wallX: null };
     this.impactCooldowns = new Map();
@@ -251,6 +253,7 @@ export class HumanoidCombatActor {
 
   prepareFrame(deltaSeconds) {
     if (this.visualProfile.animationAuthoritative && !this.ragdollActive) this.visualAdapter?.updateAnimationAuthority?.(deltaSeconds);
+    this.advanceFatalMaceHeadImpact(deltaSeconds);
     if (!this.ragdollActive && this.lifeState !== 'alive' && !this.visualProfile.authoredDeathAnimations && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll({ forced: this.ragdollForced });
   }
 
@@ -689,10 +692,10 @@ export class HumanoidCombatActor {
       detachmentApplied: false,
       forgeDamage,
     };
-    this.evaluateLifeState();
     const fatalHeadHitTriggered = headImpact && forgeDamage.applied === true
       ? this.requestFatalMaceHeadImpact({ hit, impact, damageApplied, forgeDamage })
       : false;
+    if (!fatalHeadHitTriggered) this.evaluateLifeState();
     collapseRequested ||= fatalHeadHitTriggered;
     return { accepted: true, damageApplied, reactionEmitted: true, collapseRequested, deformationApplied: forgeDamage.applied === true, detachmentApplied: false, forgeDamage, fatalHeadHitTriggered };
   }
@@ -764,9 +767,28 @@ export class HumanoidCombatActor {
       hardContact: true,
       forgeDamage,
     };
-    const death = this.visualAdapter?.playDeathAnimation?.({
+    this.pendingFatalMaceHeadImpact = {
       regionId: hit?.regionId ?? 'head',
       variation: damageApplied,
+      elapsedSeconds: 0,
+      delaySeconds: FATAL_MACE_HEAD_REACTION_SECONDS,
+    };
+    return true;
+  }
+
+  advanceFatalMaceHeadImpact(deltaSeconds) {
+    const pending = this.pendingFatalMaceHeadImpact;
+    if (!pending) return false;
+    if (this.lifeState === 'dying' || this.lifeState === 'dead') {
+      this.pendingFatalMaceHeadImpact = null;
+      return false;
+    }
+    pending.elapsedSeconds += Math.max(0, Math.min(0.05, Number(deltaSeconds) || 0));
+    if (pending.elapsedSeconds + 1e-6 < pending.delaySeconds) return false;
+    this.pendingFatalMaceHeadImpact = null;
+    const death = this.visualAdapter?.playDeathAnimation?.({
+      regionId: pending.regionId,
+      variation: pending.variation,
     });
     return this.transitionLifeState('dying', this.collapseReason, {
       externalCommit: true,
@@ -1199,6 +1221,7 @@ export class HumanoidCombatActor {
       fatalSegmentDetachmentActivationCount: this.fatalSegmentDetachmentActivationCount,
       fatalMaceHeadImpactActive: this.fatalMaceHeadImpactActive,
       fatalMaceHeadImpactActivationCount: this.fatalMaceHeadImpactActivationCount,
+      pendingFatalMaceHeadImpact: this.pendingFatalMaceHeadImpact ? { ...this.pendingFatalMaceHeadImpact } : null,
       disabledProxyBodyIds: [...this.detachedSemanticBodyIds],
       disabledMotorBodyIds: [...this.detachedMotorBodyIds],
       nonfatalDetachedSegments: [...this.nonfatalDetachedSegments],
@@ -1289,6 +1312,7 @@ export class HumanoidCombatActor {
     this.fatalSegmentDetachmentActivationCount = 0;
     this.fatalMaceHeadImpactActive = false;
     this.fatalMaceHeadImpactActivationCount = 0;
+    this.pendingFatalMaceHeadImpact = null;
     this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
     this.corpseSleeping = false;
     this.finalSettleEmitted = false;

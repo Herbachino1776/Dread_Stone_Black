@@ -120,6 +120,11 @@ function detachSegment(runtime, segmentId, overrides = {}) {
   });
 }
 
+function isEffectivelyVisible(object) {
+  for (let current = object; current; current = current.parent) if (!current.visible) return false;
+  return true;
+}
+
 test('damage GLB has the approved rig, skinned intact pieces, rigid head, parenting, and clips', () => {
   const json = parseGlbJson(readFileSync(glbUrl));
   const parentByNode = new Map();
@@ -215,6 +220,11 @@ test('manual Forge damage states obey exact authored names, thresholds, and rese
       assert.equal(active.activationThreshold, 0.01);
       assert.equal(active.activatedGoreNode, goreName);
       assert.deepEqual(fixture.runtime.deformationRuntime.getDiagnostics().visibleGoreNodes, [goreName]);
+      const goreNode = fixture.gltf.scene.getObjectByName(goreName);
+      const renderMeshes = [];
+      goreNode.traverse((object) => { if (object.isMesh) renderMeshes.push(object); });
+      assert.ok(renderMeshes.length > 0);
+      assert.ok(renderMeshes.every(isEffectivelyVisible), `${goreName} render subtree must be effectively visible`);
     }
     const reset = fixture.runtime.resetForgeDamage();
     assert.deepEqual(reset.visibleGoreNodes, []);
@@ -264,6 +274,13 @@ test('head deformation and raised gore transfer to detached ownership and persis
     assert.equal(damage.headOwnershipOverlap, false);
     const detachedGore = fixture.hostScene.getObjectByName('DSB_GORE_DETACHED_head_Head_Dent_Left');
     assert.equal(detachedGore.parent, fixture.hostScene.getObjectByName('DSB_SEGMENT_HEAD'));
+    const detachedRenderMeshes = [];
+    detachedGore.traverse((object) => { if (object.isMesh) detachedRenderMeshes.push(object); });
+    assert.ok(detachedRenderMeshes.every(isEffectivelyVisible), 'detached gore render subtree remains effectively visible');
+    const attachedGore = fixture.hostScene.getObjectByName('DSB_GORE_ATTACHED_head_Head_Dent_Left');
+    const attachedRenderMeshes = [];
+    attachedGore.traverse((object) => { if (object.isMesh) attachedRenderMeshes.push(object); });
+    assert.ok(attachedRenderMeshes.every((object) => !isEffectivelyVisible(object)), 'attached gore ownership subtree is fully hidden after detachment');
 
     fixture.mixer.stopAllAction();
     const deathClip = fixture.gltf.animations.find((clip) => clip.name === 'DSB_Death_Faceplant_LEFT_v001');
@@ -361,10 +378,17 @@ test('strong body mace hit survives with hurt while a head mace hit enters autho
   const deathController = new AuthoredHumanoidDeathController({ actor: head.actor });
   try {
     const interaction = strike(head, 'head');
-    head.director.update(0.12);
-    assert.equal(head.actor.lifeState, 'dying');
+    head.director.update(0.02);
+    assert.equal(head.actor.lifeState, 'alive');
     assert.equal(head.actor.fatalMaceHeadImpactActivationCount, 1);
     assert.equal(head.visualState.activeMorph, TESTMAN_FORGE_DAMAGE_MORPHS.headLeft);
+    assert.equal(head.visualState.hurtCount, 1);
+    assert.equal(head.visualState.deathCount, 0);
+    head.actor.prepareFrame(0.05);
+    head.actor.prepareFrame(0.05);
+    assert.equal(head.actor.lifeState, 'alive', 'fatal transition waits through several authored reaction frames');
+    head.actor.prepareFrame(0.02);
+    assert.equal(head.actor.lifeState, 'dying');
     assert.equal(head.visualState.deathCount, 1);
     assert.equal(interaction.result.bluntImpact.deformationApplied, true);
     assert.equal(deathController.synchronizeAuthoredDeath(), true);
