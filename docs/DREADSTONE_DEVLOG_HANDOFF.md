@@ -1,39 +1,69 @@
 # Dreadstone Black 2.0 Development Handoff
 
-<!-- last_processed_sha: 76c7ea885790c153ef710457174c80a847da7948 -->
+<!-- last_processed_sha: 02545e2c69c8ff7d4f96e59f13f83668d92c2a6a -->
 
 ## Current Handoff Snapshot
 
 ### Verified implementation
 
-- **Sword impalement now follows the shared knife-style depth model:** The final state in `src/game/combat/weapons/SwordWorldWeaponController.js` derives penetration/withdrawal rates, lateral bind distance, forced-extraction distance, and force transfer from `KNIFE_COMBAT_CONFIG`. Penetration depth is computed along the target body-local entry axis, with tissue resistance and authored hard-structure depth participating in advancement.
-- **Embedded swords can be released, remain planted, and be reacquired:** Grip acquisition no longer rejects an active impalement. Releasing an embedded sword leaves it planted rather than auto-withdrawing; reacquisition resumes embedded control. Extraction and invalid-target cleanup remain explicit.
-- **Embedded collision routing is selective:** Colliders belonging to the penetrated actor are suppressed during embedded movement to prevent repeated sticky self-collision, while other-target contact can still be resolved. Diagnostics count same-target suppression, other-target embedded contact, cleanup reasons, and tracking error.
-- **Life-state integration is explicit:** `HumanoidCombatActor.js` notifies an active embedded weapon when the target changes life state. The sword controller tracks target life state and cleanup behavior rather than relying only on generic disposal.
-- **Player/enemy trapping has a dedicated separation system:** New `src/game/ActorSeparation.js` supplies deterministic contact normals, stable blocker ordering, inward-motion rejection with tangential sliding, bounded player depenetration, and close-range enemy separation/hold/approach logic.
-- **Collision movement now treats combat actors separately from static world geometry:** `src/game/Collision.js` constrains actor-relative movement before/alongside world collision, can ignore actor blockers for standability checks, applies bounded overlap recovery, and exposes detailed movement diagnostics.
-- **Combat actors expose authoritative locomotion blockers:** Walker/actor code marks living combat volumes for player locomotion blocking and releases them through the existing death/contact lifecycle. Close enemies are prevented from continuing inward compression when minimum spacing is reached.
-- **Diagnostics and tests expanded:** `CombatLabDebugPanel.js` now reports sword impalement and actor-separation state. `tests/actor-separation.test.mjs` was added, and sword/combat/Folsom tests were expanded. These diffs verify test coverage changes only; they do not prove successful local or CI execution.
-- **Existing baseline remains:** Player-authored Dreadmace rotation, unified weapon presentation/physics, Folsom dismemberment gating, weighted piercing lethality, combat audio, Folsom ambience, and persistent Dreadmace progression remain active unless superseded above.
+- **Forge-authored blunt deformation is now integrated into Testman combat:** `src/game/combat/ForgeDamageDeformationRuntime.js` loads authored deformation records from the damage asset, binds paired attached/detached morph targets and gore ownership nodes, applies region-specific deformation, resets state, transfers deformation/gore ownership across segment detachment, and exposes diagnostics.
+- **The Testman damage asset contract expanded:** `testman_damage_v001.json` now carries source-readiness identity fields, deformation schema/version metadata, authored head/body deformation regions, ordered procedural impact stamps, paired attached/detached morph information, gore ownership data, validation status, and updated source transforms. The GLB and validation report were regenerated alongside it.
+- **Mace trauma routes into authored deformation:** `HumanoidCombatActor.js`, `HumanoidDamageSegmentRuntime.js`, `HumanoidGlbVisualAdapter.js`, combat scene/walker/death routing, and Folsom encounter integration were updated so accepted blunt impacts can activate Forge damage and preserve it across actor lifecycle and segment ownership changes.
+- **Fatal head-mace timing preserves a visible reaction beat:** A fatal mace head impact now enters a pending state for 0.12 seconds before transitioning the actor to `dying`, allowing the authored hurt/deformation response to appear before the death animation begins. The pending state is advanced per frame, cancelled when life state has already advanced, diagnosed, and reset explicitly.
+- **Gore visibility is subtree-authoritative:** `ForgeDamageDeformationRuntime.js` now traverses entire gore node subtrees when showing/hiding them. This fixes cases where a parent ownership node became visible while child render meshes remained hidden, or stale attached gore children remained effectively visible after ownership transfer.
+- **Regression coverage expanded:** `tests/testman-damage-segments.test.mjs` now checks authored deformation metadata and bindings, manual damage activation/reset, paired attached/detached ownership transfer, effective gore subtree visibility, body survival versus fatal head-mace behavior, and the delayed fatal reaction window. These diffs show tests were added or changed; they do not prove successful execution.
+- **Existing baseline remains:** Knife-parity sword impalement, planted release/reacquisition, selective embedded collision routing, player/enemy separation, direct physical Dreadmace control, shared weapon presentation, weighted lethality, combat audio, Folsom ambience, showcase dismemberment, and persistent mace progression remain active unless superseded above.
 
 ### Important design decisions
 
-- Sword impalement depth authority is target-body-axis projection with knife-parity resistance and extraction semantics, not unconstrained camera-space tracking.
-- Releasing an embedded sword should preserve a planted weapon that can be grabbed again; release is not automatic extraction.
-- The penetrated target’s own colliders must not repeatedly block the embedded sword, but unrelated targets remain valid collision candidates.
-- Actor separation must block only inward compression while preserving tangential escape, use deterministic normals for exact overlap, and cap depenetration per frame.
-- Living combat actors are authoritative locomotion blockers; blocker release remains tied to the actor life/contact lifecycle rather than visual presentation alone.
+- Authored damage deformation is asset-driven and region-specific; runtime code consumes the exported contract rather than synthesizing arbitrary dents or gore placement.
+- Attached and detached segment variants must share deformation state and transfer visible gore ownership atomically when a segment detaches.
+- Gore visibility must be evaluated across the complete scene subtree, not only the named ownership root.
+- A lethal mace head hit should visibly register its hurt/deformation response before authored death begins; the implemented reaction delay is 0.12 seconds.
+- Testman source identity/readiness metadata is part of the damage-authoring contract and should remain synchronized with regenerated GLB/JSON/validation outputs.
 
 ### Risks and next logical work
 
-- **Verified risk surface:** Three consecutive sword commits replaced portions of the embedded-control model. The canonical behavior is the final `97d21dc` knife-parity implementation; any assumptions based on the earlier camera-relative or corpse-detached intermediate versions are stale.
-- **Verified risk surface:** Body-local entry axes and moving actor bodies can expose discontinuities if the body transform disappears, changes ownership, or detaches during death/dismemberment. Cleanup and rearm gates should be checked across those transitions.
-- **Verified risk surface:** Selective same-target collider suppression must not hide legitimate extraction or permit the sword to tunnel into adjacent geometry/actors while planted.
-- **Verified risk surface:** Actor separation now spans player movement, world collision, blocker metadata, walker motion, death-state release, exact-overlap fallback normals, and multiple simultaneous enemies. Ordering or stale blocker registration could create jitter, overcorrection, or new escape failures.
-- **Inference:** Knife-parity constants and the new separation clearances/iteration caps are implemented tuning values, not proof of final feel or stability under low frame rate and dense crowds.
-- **Next logical work:** Run the focused sword tests, `tests/actor-separation.test.mjs`, `npm run validate:combat`, and Folsom walker validation. Manually test planted release/regrab, slow and fast extraction, moving/dying/dismembered targets, adjacent-target contact while embedded, exact player/enemy overlap, diagonal escape, wall-plus-enemy pinches, multiple-enemy crowding, and blocker release during collapse. Confirm diagnostics show bounded correction without inward leakage or oscillation.
+- **Verified risk surface:** The deformation contract is large and tightly coupled to exact object names, topology/weight fingerprints, morph names, region ownership, and generated source IDs. Asset re-export or renaming can silently invalidate bindings unless validation catches it.
+- **Verified risk surface:** Attached/detached morph and gore transfer now spans deformation runtime, damage segment runtime, visual adapter, actor life state, authored death, and Folsom encounter cleanup. Ordering errors could produce duplicated gore, disappearing deformation, or stale ownership after detachment.
+- **Verified risk surface:** The 0.12-second fatal head reaction delays life-state transition. During this window the actor remains alive, so repeated impacts, walker decisions, blocker state, audio, and encounter mortality accounting require focused verification.
+- **Inference:** The authored head/body stamp depth, radius, feathering, and displacement values are implementation data, not proof that deformation reads correctly at all camera distances, lighting conditions, or mace impact angles.
+- **Next logical work:** Run `tests/testman-damage-segments.test.mjs`, `npm run validate:combat`, and Folsom validation. Manually test left/right head dents, body-core deformation, reset, repeated impacts, fatal head reaction timing, attached-to-detached deformation transfer, gore visibility from multiple viewing angles, death during the pending reaction window, and encounter cleanup. Confirm diagnostics and exported validation reports agree with actual rendered ownership and morph weights.
 
 ## Development History
+
+### 2026-07-20 22:02 EDT — Update through `02545e2`
+
+**Scanned range:** after checkpoint `76c7ea8` through observed `main` HEAD `02545e2c69c8ff7d4f96e59f13f83668d92c2a6a`. The intervening `0fc30f2` commit (`docs(devlog): update through 76c7ea8`) was ignored as a devlog-only self-update. Two development commits were included.
+
+**Included commits, chronological:**
+
+- `8d5451e` — new mace
+- `02545e2` — fix gore overlay
+
+**Grouped development steps:**
+
+1. **Forge damage asset and source-readiness contract**
+   - Regenerated `public/assets/enemies/testman/damage/testman_damage_v001.glb`, its JSON contract, and validation report.
+   - Expanded source metadata with stable object/mesh/armature identities and a readiness-contract schema.
+   - Added authored deformation metadata for head and body-core regions, including paired attached/detached targets, morph keys, procedural stamp recipes, displacement limits, gore ownership, and validation state.
+
+2. **Runtime authored deformation integration**
+   - Added `src/game/combat/ForgeDamageDeformationRuntime.js` to bind exported deformation/gore records, activate region damage, reset morphs, expose diagnostics, and transfer deformation and gore ownership when segments detach.
+   - Updated humanoid actor, segment, visual, walker, scene, death, and Folsom encounter paths so blunt impacts and actor lifecycle events participate in the Forge-authored damage system.
+   - Updated Testman profile/data validation and blunt-impact plumbing to match the regenerated contract.
+
+3. **Fatal mace-head presentation timing**
+   - Added a pending fatal mace-head state in `HumanoidCombatActor.js` with a 0.12-second authored reaction window before entering `dying`.
+   - Preserved the initial hurt/deformation response, then starts death animation and life-state transition after the delay; diagnostics and reset logic track the pending state.
+
+4. **Gore ownership visibility fix**
+   - Replaced root-only `visible` writes with recursive subtree visibility control in `ForgeDamageDeformationRuntime.js`.
+   - Ensured attached gore is fully hidden and detached gore render meshes become effectively visible after ownership transfer.
+
+5. **Regression additions**
+   - Expanded `tests/testman-damage-segments.test.mjs` for deformation metadata, activation/reset, ownership transfer, effective subtree visibility, body-versus-head mace outcomes, and delayed fatal transition.
+   - No successful local test or CI execution is asserted by this record.
 
 ### 2026-07-18 14:00 EDT — Update through `76c7ea8`
 
