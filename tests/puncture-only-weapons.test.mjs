@@ -7,6 +7,7 @@ import { MELEE_INTENTS } from '../src/game/combat/MeleeIntentWeapon.js';
 import { KNIFE_RUNTIME_COMBAT_MODE } from '../src/game/combat/WorldKnifeCombatController.js';
 import {
   DREADSTONE_SWORD_DIMENSIONS,
+  DREADSTONE_SWORD_SOURCE_DIMENSIONS,
   SWORD_FORCED_EXTRACTION_DISTANCE,
   SWORD_FORCE_TRANSFER,
   SWORD_IMPALEMENT_STATES,
@@ -19,6 +20,7 @@ import {
   SWORD_THRUST_MIN_FORWARD_SPEED,
   SWORD_THRUST_REARM_DISTANCE,
   SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND,
+  SWORD_WORLD_WEAPON_CONFIG,
   SwordWorldWeaponController,
 } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
 
@@ -41,7 +43,7 @@ function bodyLocalPoint(body, worldPoint) {
   return worldPoint.clone().sub(body.position).applyQuaternion(body.quaternion.clone().invert());
 }
 
-async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
+async function createSwordHarness({ tipHit = true, tipToi = 0.5, tipHitOnCast = null } = {}) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, 390 / 702, 0.1, 100);
   camera.updateMatrixWorld(true);
@@ -119,11 +121,13 @@ async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
   const physics = {
     tipHit,
     castCount: 0,
+    casts: [],
     edgeCastCount: 0,
     prepareWeaponSweepBatch: () => false,
     castWeaponTip(previousTip, currentTip, _radius, predicate = null) {
       this.castCount += 1;
-      if (!this.tipHit || (predicate && !predicate(collider))) return null;
+      this.casts.push({ previousTip: previousTip.clone(), currentTip: currentTip.clone() });
+      if (!this.tipHit || (Number.isInteger(tipHitOnCast) && this.castCount !== tipHitOnCast) || (predicate && !predicate(collider))) return null;
       return { collider, time_of_impact: tipToi, normal1: { x: 0, y: 0, z: 1 } };
     },
     castSweptEdgeSphere() { this.edgeCastCount += 1; throw new Error('edge sweep must not run'); },
@@ -217,7 +221,7 @@ test('sword impalement uses the approved knife control tuning', () => {
   assert.equal(SWORD_FORCE_TRANSFER, KNIFE_COMBAT_CONFIG.forceTransfer);
 });
 
-test('actual sword tip displacement above both thresholds performs the only contact sweep', async () => {
+test('actual sword tip displacement above both thresholds performs only bounded puncture contact sweeps', async () => {
   const harness = await createSwordHarness({ tipHit: false });
   const { controller, physics } = harness;
   try {
@@ -228,8 +232,36 @@ test('actual sword tip displacement above both thresholds performs the only cont
     assert.ok(controller.forwardSpeed >= SWORD_THRUST_MIN_FORWARD_SPEED);
     assert.ok(controller.forwardRatio >= SWORD_THRUST_MIN_FORWARD_RATIO);
     assert.equal(controller.thrustEligible, true);
-    assert.equal(physics.castCount, 1);
+    assert.equal(physics.castCount, 2, 'a tip miss performs one additional inward-only entry probe');
+    assert.equal(controller.closeRangeEntrySweepCount, 1);
     assert.equal(physics.edgeCastCount, 0);
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('blade-heel entry closes the minimum-distance dead zone without extending far tip reach', async () => {
+  const harness = await createSwordHarness({ tipHitOnCast: 2 });
+  const { controller, physics } = harness;
+  try {
+    const minimumEnemySurfaceDistance = 0.95 - 0.12;
+    const readyHeelDistance = Math.abs(SWORD_WORLD_WEAPON_CONFIG.workspace.ready[2] + DREADSTONE_SWORD_DIMENSIONS.bladeHeelZ);
+    const maximumHeelDistance = readyHeelDistance + SWORD_WORLD_WEAPON_CONFIG.workspace.thrustDistance;
+    assert.ok(readyHeelDistance < minimumEnemySurfaceDistance && maximumHeelDistance > minimumEnemySurfaceDistance, 'the inward-only heel probe crosses a target surface at minimum collision distance');
+    const originalMaximumTipDistance = Math.abs(-1.03 + DREADSTONE_SWORD_SOURCE_DIMENSIONS.tipZ);
+    const scaledMaximumTipDistance = Math.abs(SWORD_WORLD_WEAPON_CONFIG.workspace.min[2] + DREADSTONE_SWORD_DIMENSIONS.tipZ);
+    assert.ok(Math.abs(originalMaximumTipDistance - scaledMaximumTipDistance) < 1e-12, 'maximum sword damage reach is unchanged');
+
+    beginHarnessThrust(harness, 0.03);
+    assert.equal(physics.castCount, 2, 'a missed inside-start tip sweep falls back to one bounded blade-heel sweep');
+    assert.equal(controller.lastEntryProbe, 'blade_heel');
+    assert.equal(controller.closeRangeEntrySweepCount, 1);
+    assert.equal(controller.closeRangeEntryHitCount, 1);
+    const tipSweep = physics.casts[0];
+    const heelSweep = physics.casts[1];
+    const expectedSetback = controller.config.tipLength - Math.abs(DREADSTONE_SWORD_DIMENSIONS.bladeHeelZ);
+    assert.ok(Math.abs(heelSweep.previousTip.distanceTo(tipSweep.previousTip) - expectedSetback) < 1e-9);
+    assert.ok(Math.abs(heelSweep.currentTip.distanceTo(tipSweep.currentTip) - expectedSetback) < 1e-9);
   } finally {
     controller.dispose();
   }

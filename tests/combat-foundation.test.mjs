@@ -23,7 +23,7 @@ import { Feedback } from '../src/game/Feedback.js';
 import { applyMeleeSpacingEnvelope, resolveMeleeSpacingEnvelope, resolveWeaponMicroResponse, sampleTissueResistanceCurve } from '../src/game/combat/CombatPresentation.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import { EDGE_DAMAGE_SCHEMA } from '../src/game/combat/weapons/EdgeDamageInteraction.js';
-import { DREADSTONE_SWORD_DIMENSIONS, DREADSTONE_SWORD_GLB_PATH, SWORD_CONTACT_PRIMITIVES, SWORD_EDGE_BASE_SAMPLE_COUNT, SWORD_EDGE_MAX_SAMPLE_COUNT, SWORD_MAXIMUM_PENETRATION_DEPTH, SWORD_PENETRATION_RATE_METERS_PER_SECOND, SWORD_RUNTIME_COMBAT_MODE, SWORD_THRUST_MIN_FORWARD_RATIO, SWORD_THRUST_MIN_FORWARD_SPEED, SWORD_THRUST_REARM_DISTANCE, SWORD_VIEWMODEL_LAYER, SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND, SwordWorldWeaponController, classifySwordContact, resolveSwordEdgeSampleCount, resolveSwordLeadingPart } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
+import { DREADSTONE_SWORD_DIMENSIONS, DREADSTONE_SWORD_GLB_PATH, DREADSTONE_SWORD_MODEL_SCALE, DREADSTONE_SWORD_SOURCE_DIMENSIONS, SWORD_CONTACT_PRIMITIVES, SWORD_EDGE_BASE_SAMPLE_COUNT, SWORD_EDGE_MAX_SAMPLE_COUNT, SWORD_MAXIMUM_PENETRATION_DEPTH, SWORD_PENETRATION_RATE_METERS_PER_SECOND, SWORD_REACH_COMPENSATION, SWORD_RUNTIME_COMBAT_MODE, SWORD_THRUST_MIN_FORWARD_RATIO, SWORD_THRUST_MIN_FORWARD_SPEED, SWORD_THRUST_REARM_DISTANCE, SWORD_VIEWMODEL_LAYER, SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND, SWORD_WORLD_WEAPON_CONFIG, SwordWorldWeaponController, classifySwordContact, resolveSwordEdgeSampleCount, resolveSwordLeadingPart } from '../src/game/combat/weapons/SwordWorldWeaponController.js';
 import { deriveSwordCutTrauma } from '../src/game/combat/SwordCutDamage.js';
 import { MAX_SWORD_CUT_SURFACE_SAMPLES, SWORD_CUT_TARGET_SAMPLE_SPACING } from '../src/game/combat/SwordCutWoundVisual.js';
 import { CombatBloodEffects } from '../src/game/combat/CombatBloodEffects.js';
@@ -33,8 +33,11 @@ installKnifeWoundManifestForHeadlessTests(JSON.parse(readFileSync(new URL('../pu
 
 test('authored sword dimensions drive complete weapon-neutral contact primitives', () => {
   assert.equal(DREADSTONE_SWORD_GLB_PATH, './assets/weapons/melee/dreadstone_sword_v002.glb');
-  assert.equal(DREADSTONE_SWORD_DIMENSIONS.tipZ, -0.892469227);
-  assert.ok(DREADSTONE_SWORD_DIMENSIONS.overallLength > 1.09 && DREADSTONE_SWORD_DIMENSIONS.overallLength < 1.11);
+  assert.equal(DREADSTONE_SWORD_MODEL_SCALE, 0.85);
+  assert.equal(DREADSTONE_SWORD_SOURCE_DIMENSIONS.tipZ, -0.892469227);
+  assert.ok(DREADSTONE_SWORD_SOURCE_DIMENSIONS.overallLength > 1.09 && DREADSTONE_SWORD_SOURCE_DIMENSIONS.overallLength < 1.11);
+  assert.equal(DREADSTONE_SWORD_DIMENSIONS.tipZ, DREADSTONE_SWORD_SOURCE_DIMENSIONS.tipZ * DREADSTONE_SWORD_MODEL_SCALE);
+  assert.equal(DREADSTONE_SWORD_DIMENSIONS.overallLength, DREADSTONE_SWORD_SOURCE_DIMENSIONS.overallLength * DREADSTONE_SWORD_MODEL_SCALE);
   assert.deepEqual(Object.keys(SWORD_CONTACT_PRIMITIVES), ['tip', 'leftEdge', 'rightEdge', 'flat', 'spine', 'guard', 'grip']);
   assert.equal(SWORD_CONTACT_PRIMITIVES.tip.point[2], DREADSTONE_SWORD_DIMENSIONS.tipZ);
   assert.equal(SWORD_CONTACT_PRIMITIVES.guard.points[0][0], -DREADSTONE_SWORD_DIMENSIONS.guardHalfSpan);
@@ -47,6 +50,10 @@ test('authored sword dimensions drive complete weapon-neutral contact primitives
   assert.equal(SWORD_WITHDRAWAL_RATE_METERS_PER_SECOND, KNIFE_COMBAT_CONFIG.withdrawalRate);
   assert.equal(SWORD_THRUST_PUNCTURE_PRESENTATION_SCALE, 2.1875);
   assert.equal(SWORD_MAXIMUM_PENETRATION_DEPTH, Math.abs(DREADSTONE_SWORD_DIMENSIONS.tipZ - (DREADSTONE_SWORD_DIMENSIONS.guardCenterZ - DREADSTONE_SWORD_DIMENSIONS.guardRadius)));
+  const originalReadyTipZ = -0.50 + DREADSTONE_SWORD_SOURCE_DIMENSIONS.tipZ;
+  const scaledReadyTipZ = SWORD_WORLD_WEAPON_CONFIG.workspace.ready[2] + DREADSTONE_SWORD_DIMENSIONS.tipZ;
+  assert.ok(Math.abs(originalReadyTipZ - scaledReadyTipZ) < 1e-12, 'shrinking the model cannot shorten or extend the established far tip reach');
+  assert.equal(SWORD_REACH_COMPENSATION, Math.abs(DREADSTONE_SWORD_SOURCE_DIMENSIONS.tipZ) - Math.abs(DREADSTONE_SWORD_DIMENSIONS.tipZ));
 });
 
 test('long sword edges adapt sampling and classify every authored contact family', () => {
@@ -65,6 +72,24 @@ test('long sword edges adapt sampling and classify every authored contact family
   assert.equal(classifySwordContact({ part: 'rightEdge', speed: 0.05, localMotion: new THREE.Vector3(0.1, 0, 0) }).classification, 'scrape');
   assert.equal(classifySwordContact({ part: 'flat', speed: 1, localMotion: new THREE.Vector3(0, 1, 0) }).classification, 'flat_strike');
   assert.equal(classifySwordContact({ part: 'guard', speed: 1, localMotion: new THREE.Vector3(1, 0, 0) }).classification, 'guard_impact');
+});
+
+test('approved sword GLB measures at source scale and the combat model is exactly fifteen percent smaller', async () => {
+  globalThis.self ??= globalThis;
+  globalThis.ProgressEvent ??= class ProgressEvent { constructor(type, init = {}) { this.type = type; Object.assign(this, init); } };
+  globalThis.createImageBitmap ??= async () => ({ width: 1, height: 1, close() {} });
+  const bytes = readFileSync(new URL('../public/assets/weapons/melee/dreadstone_sword_v002.glb', import.meta.url));
+  const assetBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const gltf = await new GLTFLoader().parseAsync(assetBuffer, new URL('../public/assets/weapons/melee/', import.meta.url).href);
+  gltf.scene.updateMatrixWorld(true);
+  const sourceBounds = new THREE.Box3().setFromObject(gltf.scene);
+  assert.ok(sourceBounds.min.distanceTo(new THREE.Vector3(...DREADSTONE_SWORD_SOURCE_DIMENSIONS.boundsMin)) < 1e-6);
+  assert.ok(sourceBounds.max.distanceTo(new THREE.Vector3(...DREADSTONE_SWORD_SOURCE_DIMENSIONS.boundsMax)) < 1e-6);
+  const sourceSize = sourceBounds.getSize(new THREE.Vector3());
+  gltf.scene.scale.multiplyScalar(DREADSTONE_SWORD_MODEL_SCALE);
+  gltf.scene.updateMatrixWorld(true);
+  const combatSize = new THREE.Box3().setFromObject(gltf.scene).getSize(new THREE.Vector3());
+  assert.ok(combatSize.distanceTo(sourceSize.multiplyScalar(DREADSTONE_SWORD_MODEL_SCALE)) < 1e-6);
 });
 
 test('sword trauma rewards committed aligned motion and scales vital anatomy above limbs', () => {
@@ -1095,11 +1120,15 @@ test('sword controller loads the grip-origin GLB and directly follows owned worl
   const equipment = { hasItem: (id) => id === 'dreadstone_sword', getEquippedWeaponProfile: () => ({ id: 'dreadstone_sword' }) };
   const source = new THREE.Group();
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.01, 0.9), new THREE.MeshStandardMaterial());
-  source.add(mesh);
+  const authoredTip = new THREE.Object3D();
+  authoredTip.name = 'authored-sword-tip-scale-proof';
+  authoredTip.position.z = DREADSTONE_SWORD_SOURCE_DIMENSIONS.tipZ;
+  source.add(mesh, authoredTip);
   const sword = new SwordWorldWeaponController({ app: viewport, scene, camera, equipmentRuntime: equipment, physics: null, contactActivationProvider: () => false, visualAssetLoader: async () => source, bindPointerInput: false });
   await sword.visualLoadPromise;
   assert.equal(sword.visualAssetState, 'loaded');
   assert.equal(sword.visual.children[0].position.length(), 0, 'the authored grip origin is used without a corrective mesh offset');
+  assert.deepEqual(sword.visual.children[0].scale.toArray(), [DREADSTONE_SWORD_MODEL_SCALE, DREADSTONE_SWORD_MODEL_SCALE, DREADSTONE_SWORD_MODEL_SCALE]);
   assert.equal(sword.visual.children[0].children[0].layers.mask, 1 << SWORD_VIEWMODEL_LAYER);
   const before = sword.actualGrip.clone();
   assert.equal(sword.acquireGrip(4, 195, 560, 0), true);
@@ -1116,6 +1145,8 @@ test('sword controller loads the grip-origin GLB and directly follows owned worl
   assert.deepEqual(Object.keys(sword.primitives), ['leftEdge', 'rightEdge', 'flat', 'spine', 'guard', 'grip']);
   sword.afterPhysics();
   assert.ok(sword.visual.position.distanceTo(sword.actualGrip) < 1e-9);
+  const displayedTip = sword.visual.getObjectByName('authored-sword-tip-scale-proof').getWorldPosition(new THREE.Vector3());
+  assert.ok(displayedTip.distanceTo(sword.currentTip) < 1e-9, 'the scaled GLB tip and authoritative collision tip remain coincident');
   sword.dispose();
   assert.equal(scene.children.includes(sword.visual), false);
 });

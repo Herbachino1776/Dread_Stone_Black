@@ -18,9 +18,10 @@ import { WeaponPresentationRuntime } from './WeaponViewmodelAnchor.js';
 
 export const DREADSTONE_SWORD_GLB_PATH = './assets/weapons/melee/dreadstone_sword_v002.glb';
 export const SWORD_VIEWMODEL_LAYER = WEAPON_VIEWMODEL_LAYER;
+export const DREADSTONE_SWORD_MODEL_SCALE = 0.85;
 export const SWORD_EDGE_BASE_SAMPLE_COUNT = 5;
 export const SWORD_EDGE_MAX_SAMPLE_COUNT = 17;
-export const SWORD_EDGE_COLLISION_RADIUS = 0.012;
+export const SWORD_EDGE_COLLISION_RADIUS = 0.012 * DREADSTONE_SWORD_MODEL_SCALE;
 export const SWORD_RUNTIME_COMBAT_MODE = 'puncture_only';
 export const SWORD_THRUST_MIN_FORWARD_SPEED = 0.16;
 export const SWORD_THRUST_MIN_FORWARD_RATIO = 0.55;
@@ -33,7 +34,7 @@ export const SWORD_FORCED_EXTRACTION_DISTANCE = KNIFE_COMBAT_CONFIG.forcedExtrac
 export const SWORD_FORCE_TRANSFER = KNIFE_COMBAT_CONFIG.forceTransfer;
 
 // Authored v002 measurements. Collision intentionally does not inspect render triangles.
-export const DREADSTONE_SWORD_DIMENSIONS = Object.freeze({
+export const DREADSTONE_SWORD_SOURCE_DIMENSIONS = Object.freeze({
   boundsMin: Object.freeze([-0.098054029, -0.019207124, -0.892469227]),
   boundsMax: Object.freeze([0.098054029, 0.019207124, 0.207401887]),
   overallLength: 1.099870,
@@ -53,6 +54,29 @@ export const DREADSTONE_SWORD_DIMENSIONS = Object.freeze({
   gripRadius: 0.019,
 });
 
+const scaleSwordMeters = (value) => value * DREADSTONE_SWORD_MODEL_SCALE;
+const scaleSwordPoint = (point) => Object.freeze(point.map(scaleSwordMeters));
+
+export const DREADSTONE_SWORD_DIMENSIONS = Object.freeze({
+  boundsMin: scaleSwordPoint(DREADSTONE_SWORD_SOURCE_DIMENSIONS.boundsMin),
+  boundsMax: scaleSwordPoint(DREADSTONE_SWORD_SOURCE_DIMENSIONS.boundsMax),
+  overallLength: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.overallLength),
+  tipZ: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.tipZ),
+  bladeHeelZ: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.bladeHeelZ),
+  bladeShoulderZ: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.bladeShoulderZ),
+  bladeLength: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.bladeLength),
+  bladeWidth: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.bladeWidth),
+  bladeThickness: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.bladeThickness),
+  bladeHalfWidth: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.bladeHalfWidth),
+  bladeHalfThickness: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.bladeHalfThickness),
+  guardCenterZ: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.guardCenterZ),
+  guardHalfSpan: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.guardHalfSpan),
+  guardRadius: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.guardRadius),
+  gripMinZ: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.gripMinZ),
+  gripMaxZ: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.gripMaxZ),
+  gripRadius: scaleSwordMeters(DREADSTONE_SWORD_SOURCE_DIMENSIONS.gripRadius),
+});
+
 export const SWORD_MAXIMUM_PENETRATION_DEPTH =
   Math.abs(
     DREADSTONE_SWORD_DIMENSIONS.tipZ
@@ -70,14 +94,17 @@ export const SWORD_IMPALEMENT_STATES = Object.freeze({
 });
 
 export const SWORD_CONTACT_PRIMITIVES = Object.freeze({
-  tip: Object.freeze({ kind: 'point', point: Object.freeze([0, 0, DREADSTONE_SWORD_DIMENSIONS.tipZ]), radius: 0.014 }),
-  leftEdge: Object.freeze({ kind: 'cutting_edge', points: Object.freeze([Object.freeze([-0.035, 0, -0.214]), Object.freeze([-0.0355, 0, -0.70]), Object.freeze([0, 0, DREADSTONE_SWORD_DIMENSIONS.tipZ])]), radius: SWORD_EDGE_COLLISION_RADIUS }),
-  rightEdge: Object.freeze({ kind: 'cutting_edge', points: Object.freeze([Object.freeze([0.035, 0, -0.214]), Object.freeze([0.0355, 0, -0.70]), Object.freeze([0, 0, DREADSTONE_SWORD_DIMENSIONS.tipZ])]), radius: SWORD_EDGE_COLLISION_RADIUS }),
-  flat: Object.freeze({ kind: 'blade_flat', points: Object.freeze([Object.freeze([0, 0, -0.22]), Object.freeze([0, 0, -0.84])]), radius: 0.031 }),
-  spine: Object.freeze({ kind: 'blade_spine', points: Object.freeze([Object.freeze([0, DREADSTONE_SWORD_DIMENSIONS.bladeHalfThickness, -0.22]), Object.freeze([0, DREADSTONE_SWORD_DIMENSIONS.bladeHalfThickness, -0.82])]), radius: 0.014 }),
+  tip: Object.freeze({ kind: 'point', point: Object.freeze([0, 0, DREADSTONE_SWORD_DIMENSIONS.tipZ]), radius: scaleSwordMeters(0.014) }),
+  leftEdge: Object.freeze({ kind: 'cutting_edge', points: Object.freeze([scaleSwordPoint([-0.035, 0, -0.214]), scaleSwordPoint([-0.0355, 0, -0.70]), Object.freeze([0, 0, DREADSTONE_SWORD_DIMENSIONS.tipZ])]), radius: SWORD_EDGE_COLLISION_RADIUS }),
+  rightEdge: Object.freeze({ kind: 'cutting_edge', points: Object.freeze([scaleSwordPoint([0.035, 0, -0.214]), scaleSwordPoint([0.0355, 0, -0.70]), Object.freeze([0, 0, DREADSTONE_SWORD_DIMENSIONS.tipZ])]), radius: SWORD_EDGE_COLLISION_RADIUS }),
+  flat: Object.freeze({ kind: 'blade_flat', points: Object.freeze([scaleSwordPoint([0, 0, -0.22]), scaleSwordPoint([0, 0, -0.84])]), radius: scaleSwordMeters(0.031) }),
+  spine: Object.freeze({ kind: 'blade_spine', points: Object.freeze([scaleSwordPoint([0, DREADSTONE_SWORD_SOURCE_DIMENSIONS.bladeHalfThickness, -0.22]), scaleSwordPoint([0, DREADSTONE_SWORD_SOURCE_DIMENSIONS.bladeHalfThickness, -0.82])]), radius: scaleSwordMeters(0.014) }),
   guard: Object.freeze({ kind: 'guard', points: Object.freeze([Object.freeze([-DREADSTONE_SWORD_DIMENSIONS.guardHalfSpan, 0, DREADSTONE_SWORD_DIMENSIONS.guardCenterZ]), Object.freeze([DREADSTONE_SWORD_DIMENSIONS.guardHalfSpan, 0, DREADSTONE_SWORD_DIMENSIONS.guardCenterZ])]), radius: DREADSTONE_SWORD_DIMENSIONS.guardRadius }),
   grip: Object.freeze({ kind: 'grip', points: Object.freeze([Object.freeze([0, 0, DREADSTONE_SWORD_DIMENSIONS.gripMinZ]), Object.freeze([0, 0, DREADSTONE_SWORD_DIMENSIONS.gripMaxZ])]), radius: DREADSTONE_SWORD_DIMENSIONS.gripRadius }),
 });
+
+export const SWORD_REACH_COMPENSATION = Math.abs(DREADSTONE_SWORD_SOURCE_DIMENSIONS.tipZ) - Math.abs(DREADSTONE_SWORD_DIMENSIONS.tipZ);
+const preserveSwordTipReach = (point) => Object.freeze([point[0], point[1], point[2] - SWORD_REACH_COMPENSATION]);
 
 export const SWORD_WORLD_WEAPON_CONFIG = Object.freeze({
   itemId: 'dreadstone_sword',
@@ -85,9 +112,9 @@ export const SWORD_WORLD_WEAPON_CONFIG = Object.freeze({
   minimumAttackSpeed: 0.05,
   gripZone: Object.freeze({ minimumRadiusPx: 38, maximumRadiusPx: 74, viewportRatio: 0.082 }),
   workspace: Object.freeze({
-    ready: Object.freeze([0.16, -0.24, -0.50]),
-    min: Object.freeze([-0.36, -0.43, -1.03]),
-    max: Object.freeze([0.43, 0.10, -0.42]),
+    ready: preserveSwordTipReach([0.16, -0.24, -0.50]),
+    min: preserveSwordTipReach([-0.36, -0.43, -1.03]),
+    max: preserveSwordTipReach([0.43, 0.10, -0.42]),
     lateralReach: 0.34,
     verticalReach: 0.24,
     thrustDistance: 0.43,
@@ -237,6 +264,8 @@ export class SwordWorldWeaponController {
     this.desiredTip = new THREE.Vector3();
     this.currentTip = new THREE.Vector3();
     this.previousTip = new THREE.Vector3();
+    this.previousCloseRangeEntryProbe = new THREE.Vector3();
+    this.currentCloseRangeEntryProbe = new THREE.Vector3();
     this.bladeForward = new THREE.Vector3(0, 0, -1);
     this.tipDisplacement = new THREE.Vector3();
     this.tipVelocity = new THREE.Vector3();
@@ -293,6 +322,9 @@ export class SwordWorldWeaponController {
     this.lastImpalementCleanupReason = null;
     this.impalementCleanupCount = 0;
     this.tipSweepCount = 0;
+    this.closeRangeEntrySweepCount = 0;
+    this.closeRangeEntryHitCount = 0;
+    this.lastEntryProbe = 'none';
     this.suppressedNonTipContacts = 0;
     this.embeddedToFreePositionDiscontinuity = 0;
     this.embeddedToFreeRotationDiscontinuity = 0;
@@ -320,6 +352,7 @@ export class SwordWorldWeaponController {
   buildVisual() {
     this.visual = new THREE.Group();
     this.visual.name = 'dreadstone-sword-authoritative-world-weapon';
+    this.visualModelRoot = null;
     this.visualGeometries = [];
     this.visualMaterials = [];
     this.visualAssetState = 'loading';
@@ -332,6 +365,9 @@ export class SwordWorldWeaponController {
       }
       owned.root.name = 'dreadstone-sword-v002-glb-visual';
       owned.root.userData.sourceAsset = DREADSTONE_SWORD_GLB_PATH;
+      owned.root.userData.authoritativeCombatScale = DREADSTONE_SWORD_MODEL_SCALE;
+      owned.root.scale.multiplyScalar(DREADSTONE_SWORD_MODEL_SCALE);
+      this.visualModelRoot = owned.root;
       this.visual.add(owned.root);
       this.visualGeometries.push(...owned.geometries);
       this.visualMaterials.push(...owned.materials);
@@ -349,6 +385,10 @@ export class SwordWorldWeaponController {
   }
 
   buildFallbackVisual() {
+    const fallbackRoot = new THREE.Group();
+    fallbackRoot.name = 'dreadstone-sword-fallback-scaled-visual';
+    fallbackRoot.userData.authoritativeCombatScale = DREADSTONE_SWORD_MODEL_SCALE;
+    fallbackRoot.scale.setScalar(DREADSTONE_SWORD_MODEL_SCALE);
     const steel = new THREE.MeshStandardMaterial({ color: 0x7b7f80, roughness: 0.48, metalness: 0.72 });
     const gripMaterial = new THREE.MeshStandardMaterial({ color: 0x2d241d, roughness: 0.9 });
     const bladeGeometry = new THREE.BoxGeometry(0.071, 0.016, 0.67);
@@ -357,14 +397,16 @@ export class SwordWorldWeaponController {
     const blade = new THREE.Mesh(bladeGeometry, steel);
     blade.position.z = -0.55;
     const guard = new THREE.Mesh(guardGeometry, steel);
-    guard.position.z = DREADSTONE_SWORD_DIMENSIONS.guardCenterZ;
+    guard.position.z = DREADSTONE_SWORD_SOURCE_DIMENSIONS.guardCenterZ;
     const grip = new THREE.Mesh(gripGeometry, gripMaterial);
     grip.rotation.x = Math.PI / 2;
     grip.position.z = 0.0475;
-    this.visual.add(blade, guard, grip);
+    fallbackRoot.add(blade, guard, grip);
+    this.visualModelRoot = fallbackRoot;
+    this.visual.add(fallbackRoot);
     this.visualGeometries.push(bladeGeometry, guardGeometry, gripGeometry);
     this.visualMaterials.push(steel, gripMaterial);
-    this.registerOutdoorMaterials(this.visual);
+    this.registerOutdoorMaterials(fallbackRoot);
   }
 
   registerOutdoorMaterials(root) {
@@ -666,31 +708,51 @@ export class SwordWorldWeaponController {
     this.contactDamageReason = 'damaging:actual-tip-forward-thrust';
     this.tipContactDirection.copy(this.tipVelocity).normalize();
     const positionsPrepared = this.physics.prepareWeaponSweepBatch?.() === true;
-    if (!this.resolveSwordThrustTipContact(this.tipContactDirection, positionsPrepared)) this.recordSuppressedNonTipContact();
+    if (!this.resolveSwordThrustEntryContact(this.tipContactDirection, positionsPrepared)) this.recordSuppressedNonTipContact();
   }
 
   recordSuppressedNonTipContact() {
     this.suppressedNonTipContacts = Math.min(1_000_000, this.suppressedNonTipContacts + 1);
   }
 
-  resolveSwordThrustTipContact(contactDirection, positionsPrepared) {
+  resolveSwordThrustEntryContact(contactDirection, positionsPrepared) {
     if (this.tipDisplacement.lengthSq() < SWORD_KINEMATIC_EPSILON ** 2) return false;
     this.tipSweepCount = Math.min(1_000_000, this.tipSweepCount + 1);
-    const raw = this.physics.castWeaponTip(this.previousTip, this.currentTip, SWORD_CONTACT_PRIMITIVES.tip.radius, this.colliderFilter, positionsPrepared);
+    let previousProbe = this.previousTip;
+    let currentProbe = this.currentTip;
+    let entryProbe = 'tip';
+    let raw = this.physics.castWeaponTip(previousProbe, currentProbe, SWORD_CONTACT_PRIMITIVES.tip.radius, this.colliderFilter, positionsPrepared);
+    if (!raw?.collider) {
+      this.previousCloseRangeEntryProbe
+        .set(0, 0, DREADSTONE_SWORD_DIMENSIONS.bladeHeelZ)
+        .applyQuaternion(this.previousQuaternion)
+        .add(this.previousGrip);
+      this.currentCloseRangeEntryProbe
+        .set(0, 0, DREADSTONE_SWORD_DIMENSIONS.bladeHeelZ)
+        .applyQuaternion(this.actualQuaternion)
+        .add(this.actualGrip);
+      previousProbe = this.previousCloseRangeEntryProbe;
+      currentProbe = this.currentCloseRangeEntryProbe;
+      entryProbe = 'blade_heel';
+      this.closeRangeEntrySweepCount = Math.min(1_000_000, this.closeRangeEntrySweepCount + 1);
+      raw = this.physics.castWeaponTip(previousProbe, currentProbe, SWORD_CONTACT_PRIMITIVES.tip.radius, this.colliderFilter, positionsPrepared);
+    }
     if (!raw?.collider) return false;
     const toi = THREE.MathUtils.clamp(raw.time_of_impact ?? 0, 0, 1);
     const point = raw.witness1
       ? this.contactScratch.point.set(raw.witness1.x, raw.witness1.y, raw.witness1.z)
-      : this.contactScratch.point.copy(this.previousTip).lerp(this.currentTip, toi);
+      : this.contactScratch.point.copy(previousProbe).lerp(currentProbe, toi);
     const routed = this.weaponContactRouter.resolveTarget(raw.collider, point);
     if (!routed) return false;
     const normal = raw.normal1
       ? this.contactScratch.normal.set(raw.normal1.x, raw.normal1.y, raw.normal1.z).normalize()
       : this.contactScratch.normal.copy(point).sub(getRigidBodyWorldPosition(routed.hit.body, this.contactScratch.bodyCenter)).normalize();
-    return this.beginSwordPenetration({ routed, point, normal, contactDirection });
+    const accepted = this.beginSwordPenetration({ routed, point, normal, contactDirection, entryProbe });
+    if (accepted && entryProbe === 'blade_heel') this.closeRangeEntryHitCount = Math.min(1_000_000, this.closeRangeEntryHitCount + 1);
+    return accepted;
   }
 
-  beginSwordPenetration({ routed, point, normal, contactDirection }) {
+  beginSwordPenetration({ routed, point, normal, contactDirection, entryProbe = 'tip' }) {
     if (this.entry) return false;
     const entryAxis = this.bladeForward.clone().normalize();
     const bodyTransformAtCollision = capturePhysicsBodyTransform(routed.hit.bodyTransformAtCollision ?? routed.hit.body);
@@ -776,6 +838,7 @@ export class SwordWorldWeaponController {
     this.thrustEligible = true;
     this.lastContactPart = 'tip';
     this.lastClassification = 'thrust';
+    this.lastEntryProbe = entryProbe;
     this.contactState = SWORD_IMPALEMENT_STATES.surfaceContact;
     this.state = SWORD_IMPALEMENT_STATES.surfaceContact;
     this.punctureBeginCount = Math.min(1_000_000, this.punctureBeginCount + 1);
@@ -1483,6 +1546,7 @@ export class SwordWorldWeaponController {
     this.contactDamageReason = `non-damaging:${reason}`;
     this.lastContactPart = 'none';
     this.lastClassification = 'none';
+    this.lastEntryProbe = 'none';
     this.deliberateInputVelocity.set(0, 0, 0);
     this.offensiveVelocity.set(0, 0, 0);
     this.measureEmbeddedToFreeContinuity = false;
@@ -1523,6 +1587,9 @@ export class SwordWorldWeaponController {
       forwardRatio: Number(this.forwardRatio.toFixed(4)),
       thrustEligible: this.thrustEligible,
       tipSweepCount: this.tipSweepCount,
+      closeRangeEntrySweepCount: this.closeRangeEntrySweepCount,
+      closeRangeEntryHitCount: this.closeRangeEntryHitCount,
+      lastEntryProbe: this.lastEntryProbe,
       lastContactPart: this.lastContactPart,
       lastClassification: this.lastClassification,
       ownedTargetActor: this.entry?.actor?.instanceId ?? this.entry?.actor?.id ?? null,
@@ -1577,6 +1644,8 @@ export class SwordWorldWeaponController {
       transitionLightingDiscontinuityCount: this.transitionLightingDiscontinuityCount,
       transitionLightingDiscontinuityCounter: this.transitionLightingDiscontinuityCount,
       assetPath: DREADSTONE_SWORD_GLB_PATH,
+      modelScale: DREADSTONE_SWORD_MODEL_SCALE,
+      sourceDimensions: DREADSTONE_SWORD_SOURCE_DIMENSIONS,
       dimensions: DREADSTONE_SWORD_DIMENSIONS,
       penetrationAudio: this.penetrationAudioGate.getDiagnostics(),
       edgeSweepObserver: this.edgeSweepObserver?.getDiagnostics?.() ?? null,
