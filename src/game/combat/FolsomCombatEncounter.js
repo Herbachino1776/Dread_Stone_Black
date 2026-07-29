@@ -14,6 +14,7 @@ import { COMBAT_LAB_WALKER_CONFIG, CombatLabWalkerController, WALKER_STATES } fr
 import { AuthoredHumanoidDeathController } from './AuthoredHumanoidDeathController.js';
 import { CombatAcceptedAudioSystem } from './CombatAcceptedAudioSystem.js';
 import { FolsomShowcaseCombatExtras, isFolsomShowcaseEnabled } from './FolsomShowcaseCombatExtras.js';
+import { BLUNT_IMPACT_CLASSIFICATIONS, BLUNT_IMPACT_SCHEMA } from './weapons/BluntImpactInteraction.js';
 
 const FOLSOM_AUTHORED_PLAYER_SPAWN = Object.freeze([-2, 1.71, -4]);
 const FOLSOM_DREADGUARD_SPAWN_XZ = Object.freeze([8, -4]);
@@ -165,6 +166,7 @@ export class FolsomCombatEncounter {
       Medium: () => this.debugSetProgressiveDamageStage('MEDIUM'),
       Heavy: () => this.debugSetProgressiveDamageStage('HEAVY'),
       nextStage: () => this.debugAdvanceProgressiveDamage(),
+      solidHeadImpact: () => this.debugApplySolidHeadImpact(),
       resetAllDamage: () => this.debugResetForgeDamage(),
       diagnostics: () => this.actor?.visualAdapter?.damageSegmentRuntime?.deformationRuntime?.getDiagnostics?.() ?? null,
       characterDiagnostics: () => this.actor?.getDiagnostics?.() ?? null,
@@ -181,6 +183,52 @@ export class FolsomCombatEncounter {
 
   debugAdvanceProgressiveDamage() {
     return this.actor?.visualAdapter?.advanceProgressiveDamageSite?.(null, { source: 'folsom_debug_command', hitRegion: 'skull', hitSide: 'left' }) ?? { applied: false, reason: 'damage-runtime-not-ready' };
+  }
+
+  debugApplySolidHeadImpact() {
+    const actor = this.actor;
+    const adapter = actor?.visualAdapter;
+    const manifest = adapter?.damageManifest;
+    const sites = manifest?.deformations?.progressiveDamageSites ?? [];
+    const site = sites.find((entry) => {
+      if (entry?.regionId !== 'head') return false;
+      const firstStageName = entry.stageOrder?.[0];
+      const firstStage = entry.stages?.find?.((stage) => stage.stage === firstStageName);
+      return Number(firstStage?.measurements?.captureCenterLocal?.[0]) < 0;
+    });
+    const firstStageName = site?.stageOrder?.[0];
+    const firstStage = site?.stages?.find?.((stage) => stage.stage === firstStageName);
+    const captureCenterLocal = firstStage?.measurements?.captureCenterLocal;
+    const headCollider = actor?.colliders?.get?.('head');
+    if (!actor || !adapter || !headCollider || !Array.isArray(captureCenterLocal)) {
+      return { accepted: false, reason: 'left-head-progressive-site-not-ready' };
+    }
+    const worldPoint = adapter.actorLocalToWorld(new THREE.Vector3().fromArray(captureCenterLocal));
+    const hit = actor.resolveHit(headCollider, worldPoint);
+    if (!hit?.region) return { accepted: false, reason: 'left-head-hit-resolution-failed' };
+    const preferredLocal = new THREE.Vector3().fromArray(site.preferredDirectionLocal ?? [0, 0, -1]);
+    if (preferredLocal.lengthSq() < 1e-8) preferredLocal.set(0, 0, -1);
+    const worldDirection = preferredLocal.normalize().applyQuaternion(adapter.getActorCoordinateRoot().getWorldQuaternion(new THREE.Quaternion())).normalize();
+    const worldNormal = worldDirection.clone().negate();
+    return actor.applyBluntImpact({
+      hit,
+      impact: {
+        schema: BLUNT_IMPACT_SCHEMA,
+        interactionId: `folsom-debug-solid-head-impact-${actor.elapsed.toFixed(4)}`,
+        primitive: 'mace_head',
+        classification: BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt,
+        worldPoint,
+        worldNormal,
+        impactDirection: worldDirection,
+        normalImpactSpeed: 4,
+        tangentialSpeed: 0.3,
+        estimatedImpulse: 21.6,
+        estimatedEnergy: 43.2,
+        loadProgress: 0.76,
+        gesturePower: 0.7,
+        impactRadiusEstimate: 0.11,
+      },
+    });
   }
 
   debugResetForgeDamage() {

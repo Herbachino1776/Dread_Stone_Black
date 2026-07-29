@@ -21,7 +21,6 @@ const tmpInverseQuaternion = new THREE.Quaternion();
 const tmpEuler = new THREE.Euler();
 const tmpDirection = new THREE.Vector3();
 const HUMANOID_PHYSICAL_SCALE = 0.82;
-const FATAL_MACE_HEAD_REACTION_SECONDS = 0.12;
 let humanoidActorInstanceSerial = 0;
 const HUMANOID_REGION_BY_ID = new Map(HUMANOID_ANATOMY_REGIONS.map((region) => [region.id, region]));
 
@@ -120,7 +119,6 @@ export class HumanoidCombatActor {
     this.fatalSegmentDetachmentActivationCount = 0;
     this.fatalMaceHeadImpactActive = false;
     this.fatalMaceHeadImpactActivationCount = 0;
-    this.pendingFatalMaceHeadImpact = null;
     this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
     this.environmentContactHints = { groundY: this.spawnOffset.y, wallX: null };
     this.impactCooldowns = new Map();
@@ -254,8 +252,8 @@ export class HumanoidCombatActor {
   prepareFrame(deltaSeconds) {
     if (this.visualProfile.animationAuthoritative && !this.ragdollActive) this.visualAdapter?.updateAnimationAuthority?.(deltaSeconds);
     else if (this.visualProfile.restPoseAuthoritative && !this.ragdollActive) this.visualAdapter?.updateRestPoseAuthority?.(deltaSeconds);
-    this.advanceFatalMaceHeadImpact(deltaSeconds);
-    if (!this.ragdollActive && this.lifeState !== 'alive' && !this.visualProfile.authoredDeathAnimations && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll({ forced: this.ragdollForced });
+    const fatalCommitActive = this.fatalSegmentDetachmentActive || this.fatalMaceHeadImpactActive;
+    if (!this.ragdollActive && this.lifeState !== 'alive' && !this.visualProfile.authoredDeathAnimations && (!this.isImmortalReactive() || this.ragdollForced || fatalCommitActive)) this.activateRagdoll({ forced: this.ragdollForced });
   }
 
   syncAnimationProxyBodies(adapter = this.visualAdapter) {
@@ -659,9 +657,14 @@ export class HumanoidCombatActor {
     const forgeDamage = impact.primitive === 'mace_head'
       ? this.visualAdapter?.applyForgeMaceDamage?.({ hit, impact, requestedWeight: 1 }) ?? { applied: false, reason: 'damage-runtime-not-ready' }
       : { applied: false, reason: 'non-mace-head-primitive' };
+    const progressiveHeadImpact = headImpact && forgeDamage.applied === true && forgeDamage.progressiveSite === true;
+    const terminalProgressiveHeadImpact = progressiveHeadImpact && forgeDamage.terminalStageReached === true;
     this.physiology?.onBluntImpact?.({ hit, impact, severity: damageApplied });
+    if (progressiveHeadImpact && !terminalProgressiveHeadImpact) {
+      this.physiology.neurologicalIntegrity = Math.max(0.11, this.physiology.neurologicalIntegrity);
+    }
     let collapseRequested = false;
-    if (headImpact && damageApplied >= 1.9) {
+    if (headImpact && !progressiveHeadImpact && damageApplied >= 1.9) {
       collapseRequested = true;
       this.requestCollapse('neurological', { immediate: true, lethal: damageApplied >= HUMANOID_DURABILITY_CONFIG.criticalDyingThreshold, regionId: hit.regionId });
     } else if (torsoImpact && damageApplied >= 2.25) {
@@ -693,10 +696,10 @@ export class HumanoidCombatActor {
       detachmentApplied: false,
       forgeDamage,
     };
-    const fatalHeadHitTriggered = headImpact && forgeDamage.applied === true
+    const fatalHeadHitTriggered = terminalProgressiveHeadImpact
       ? this.requestFatalMaceHeadImpact({ hit, impact, damageApplied, forgeDamage })
       : false;
-    if (!fatalHeadHitTriggered) this.evaluateLifeState();
+    if (!fatalHeadHitTriggered && !progressiveHeadImpact) this.evaluateLifeState();
     collapseRequested ||= fatalHeadHitTriggered;
     return { accepted: true, damageApplied, reactionEmitted: true, collapseRequested, deformationApplied: forgeDamage.applied === true, detachmentApplied: false, forgeDamage, fatalHeadHitTriggered };
   }
@@ -768,28 +771,9 @@ export class HumanoidCombatActor {
       hardContact: true,
       forgeDamage,
     };
-    this.pendingFatalMaceHeadImpact = {
+    const death = this.visualAdapter?.playDeathAnimation?.({
       regionId: hit?.regionId ?? 'head',
       variation: damageApplied,
-      elapsedSeconds: 0,
-      delaySeconds: FATAL_MACE_HEAD_REACTION_SECONDS,
-    };
-    return true;
-  }
-
-  advanceFatalMaceHeadImpact(deltaSeconds) {
-    const pending = this.pendingFatalMaceHeadImpact;
-    if (!pending) return false;
-    if (this.lifeState === 'dying' || this.lifeState === 'dead') {
-      this.pendingFatalMaceHeadImpact = null;
-      return false;
-    }
-    pending.elapsedSeconds += Math.max(0, Math.min(0.05, Number(deltaSeconds) || 0));
-    if (pending.elapsedSeconds + 1e-6 < pending.delaySeconds) return false;
-    this.pendingFatalMaceHeadImpact = null;
-    const death = this.visualAdapter?.playDeathAnimation?.({
-      regionId: pending.regionId,
-      variation: pending.variation,
     });
     return this.transitionLifeState('dying', this.collapseReason, {
       externalCommit: true,
@@ -818,7 +802,7 @@ export class HumanoidCombatActor {
         regionId: this.lastReaction?.regionId ?? this.collapseFamily ?? '',
         variation: this.lastReaction?.severity ?? 0,
       });
-    } else if (!this.visualProfile.authoredDeathAnimations && ['incapacitated', 'dying', 'dead'].includes(nextState) && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll();
+    } else if (!this.visualProfile.authoredDeathAnimations && ['incapacitated', 'dying', 'dead'].includes(nextState) && (!this.isImmortalReactive() || this.ragdollForced || forceFatal || this.fatalSegmentDetachmentActive || this.fatalMaceHeadImpactActive)) this.activateRagdoll();
     if (nextState === 'incapacitated' && !this.acceptedCombatAudio?.shouldSuppressSynthesizedDeathVocal?.(this, 'unconscious')) this.eventSink?.('unconscious', { position: this.getBodyWorldPosition('head'), severity: 0.6 });
     if (nextState === 'dying' && !acceptedDeathRequested && !this.acceptedCombatAudio?.shouldSuppressSynthesizedDeathVocal?.(this, 'shock_gasp')) this.eventSink?.('shock_gasp', { position: this.getBodyWorldPosition('head'), severity: 0.9 });
     if (nextState === 'dead') {
@@ -1222,7 +1206,6 @@ export class HumanoidCombatActor {
       fatalSegmentDetachmentActivationCount: this.fatalSegmentDetachmentActivationCount,
       fatalMaceHeadImpactActive: this.fatalMaceHeadImpactActive,
       fatalMaceHeadImpactActivationCount: this.fatalMaceHeadImpactActivationCount,
-      pendingFatalMaceHeadImpact: this.pendingFatalMaceHeadImpact ? { ...this.pendingFatalMaceHeadImpact } : null,
       disabledProxyBodyIds: [...this.detachedSemanticBodyIds],
       disabledMotorBodyIds: [...this.detachedMotorBodyIds],
       nonfatalDetachedSegments: [...this.nonfatalDetachedSegments],
@@ -1313,7 +1296,6 @@ export class HumanoidCombatActor {
     this.fatalSegmentDetachmentActivationCount = 0;
     this.fatalMaceHeadImpactActive = false;
     this.fatalMaceHeadImpactActivationCount = 0;
-    this.pendingFatalMaceHeadImpact = null;
     this.reflex = { regionId: null, intensity: 0, time: 0, direction: new THREE.Vector3() };
     this.corpseSleeping = false;
     this.finalSettleEmitted = false;

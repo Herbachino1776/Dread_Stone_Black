@@ -820,6 +820,93 @@ test('Dreadguard holds its exported rest pose kinematically before a dynamic rag
   physics.dispose();
 });
 
+test('Dreadguard progressive head impacts stay upright through Light and Medium, then collapse immediately at Heavy', async () => {
+  await initializeCombatPhysics();
+  const physics = new CombatPhysicsWorld();
+  const actor = new HumanoidCombatActor({
+    physics,
+    scene: new THREE.Scene(),
+    visualProfile: DREADGUARD_DAMAGE_COMBAT_PROFILE,
+    automaticMortality: false,
+    mortalityMode: COMBAT_MORTALITY_MODES.immortalReactive,
+  });
+  const stageResults = [
+    { stage: 'LIGHT', stageIndex: 0, terminalStageReached: false },
+    { stage: 'MEDIUM', stageIndex: 1, terminalStageReached: false },
+    { stage: 'HEAVY', stageIndex: 2, terminalStageReached: true },
+  ];
+  let stageCallCount = 0;
+  let ragdollBeginCount = 0;
+  const visualAdapter = {
+    applyForgeMaceDamage: () => ({
+      applied: true,
+      progressiveSite: true,
+      siteId: 'damage_site',
+      stageCount: 3,
+      terminalStage: 'HEAVY',
+      ...stageResults[stageCallCount++],
+    }),
+    playDeathAnimation: () => null,
+    beginRagdoll: () => { ragdollBeginCount += 1; return true; },
+    getProxyPose: (bodyId) => {
+      const body = actor.bodies.get(bodyId)?.body;
+      const position = body?.translation();
+      const quaternion = body?.rotation();
+      return body ? {
+        position: new THREE.Vector3(position.x, position.y, position.z),
+        quaternion: new THREE.Quaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w),
+      } : null;
+    },
+    updateRagdoll() {},
+    reset() {},
+    dispose() {},
+  };
+  actor.visualAdapter = visualAdapter;
+  actor.setAnimationAuthorityReady(visualAdapter);
+  const { hit, worldPoint } = makeHit(actor, 'head', new THREE.Vector3(-0.05, 0.04, 0.08));
+  const createImpact = (serial) => ({
+    schema: 'dreadstone.blunt-impact.v1',
+    interactionId: `three-stage-head-impact-${serial}`,
+    primitive: 'mace_head',
+    classification: 'committed_blunt',
+    worldPoint: worldPoint.clone(),
+    worldNormal: new THREE.Vector3(0, 0, 1),
+    impactDirection: new THREE.Vector3(0.1, -0.15, -1).normalize(),
+    normalImpactSpeed: 4,
+    tangentialSpeed: 0.3,
+    estimatedImpulse: 21.6,
+    estimatedEnergy: 43.2,
+    gesturePower: 0.7,
+    impactRadiusEstimate: 0.11,
+  });
+  try {
+    const light = actor.applyBluntImpact({ hit, impact: createImpact(1) });
+    assert.equal(light.forgeDamage.stage, 'LIGHT');
+    assert.equal(light.fatalHeadHitTriggered, false);
+    assert.equal(actor.lifeState, 'alive');
+    assert.ok([...actor.bodies.values()].every(({ body }) => body.isKinematic()));
+
+    const medium = actor.applyBluntImpact({ hit, impact: createImpact(2) });
+    assert.equal(medium.forgeDamage.stage, 'MEDIUM');
+    assert.equal(medium.fatalHeadHitTriggered, false);
+    assert.equal(actor.lifeState, 'alive');
+    assert.ok([...actor.bodies.values()].every(({ body }) => body.isKinematic()));
+
+    const heavy = actor.applyBluntImpact({ hit, impact: createImpact(3) });
+    assert.equal(heavy.forgeDamage.stage, 'HEAVY');
+    assert.equal(heavy.fatalHeadHitTriggered, true);
+    assert.equal(heavy.collapseRequested, true);
+    assert.equal(actor.lifeState, 'dying');
+    assert.equal(actor.ragdollActive, true);
+    assert.equal(ragdollBeginCount, 1);
+    assert.equal(actor.fatalMaceHeadImpactActivationCount, 1);
+    assert.ok([...actor.bodies.values()].every(({ body }) => body.isDynamic()));
+  } finally {
+    actor.dispose();
+    physics.dispose();
+  }
+});
+
 test('sword edge damage keeps its physiological wound while slash ribbons and contact streak bursts stay disabled', async () => {
   const { actor, physics, scene } = await createActor();
   const bloodEffects = new CombatBloodEffects({ scene, woundSystem: actor.woundSystem, physiology: actor.physiology });

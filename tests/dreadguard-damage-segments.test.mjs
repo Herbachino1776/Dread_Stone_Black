@@ -6,6 +6,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CombatPhysicsWorld, initializeCombatPhysics } from '../src/game/combat/CombatPhysicsWorld.js';
 import { HumanoidDamageSegmentRuntime, validateDamageAsset } from '../src/game/combat/HumanoidDamageSegmentRuntime.js';
 import { DREADGUARD_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
+import { FORGE_GORE_RENDER_ORDER } from '../src/game/combat/ForgeDamageDeformationRuntime.js';
+import { isForgeGoreSurfaceObject, prepareHumanoidCombatMaterial } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
+import { BLUNT_IMPACT_CLASSIFICATIONS } from '../src/game/combat/weapons/BluntImpactInteraction.js';
 
 const glbUrl = new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb', import.meta.url);
 const manifestUrl = new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.json', import.meta.url);
@@ -216,6 +219,41 @@ test('intact startup visibility and all active segment relationships come from t
   }
 });
 
+test('Forge gore surfaces preserve authored wetness and render above the deformed host surface', async () => {
+  const fixture = await createRuntimeFixture();
+  try {
+    const light = stageRecords()[0];
+    const goreNames = expectedGoreNames(light.stage.deformationKeyName, 'ATTACHED');
+    const meshes = [];
+    goreNames.forEach((name) => fixture.gltf.scene.getObjectByName(name).traverse((object) => {
+      if (object.isMesh) meshes.push(object);
+    }));
+    assert.ok(meshes.length > 0);
+    assert.equal(fixture.runtime.getDiagnostics().deformation.gorePresentationMeshCount > 0, true);
+    fixture.runtime.setProgressiveDamageStage(light.site.siteId, 'LIGHT', { source: 'gore-material-diagnostics-test' });
+    const visibleMaterialDiagnostics = fixture.runtime.getDiagnostics().deformation.visibleGoreMaterials;
+    assert.ok(visibleMaterialDiagnostics.length > 0);
+    assert.ok(visibleMaterialDiagnostics.some((material) => material.roughness < 0.9));
+    assert.ok(visibleMaterialDiagnostics.every((material) => material.polygonOffset && material.renderOrder >= FORGE_GORE_RENDER_ORDER));
+    meshes.forEach((mesh) => {
+      assert.equal(isForgeGoreSurfaceObject(mesh), true);
+      assert.equal(mesh.frustumCulled, false);
+      assert.ok(mesh.renderOrder >= FORGE_GORE_RENDER_ORDER);
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((material) => {
+        const authoredRoughness = material.roughness;
+        prepareHumanoidCombatMaterial(mesh, material);
+        assert.equal(material.roughness, authoredRoughness, 'runtime tuning must not flatten Forge wet/clotted material response');
+        assert.equal(material.polygonOffset, true);
+        assert.equal(material.polygonOffsetFactor, -1);
+        assert.equal(material.polygonOffsetUnits, -4);
+      });
+    });
+  } finally {
+    fixture.dispose();
+  }
+});
+
 test('Light, Medium, and Heavy preserve the exact exported stage/key mapping', async () => {
   const fixture = await createRuntimeFixture();
   try {
@@ -233,6 +271,8 @@ test('Light, Medium, and Heavy preserve the exact exported stage/key mapping', a
       assert.equal(result.stage, stageName);
       assert.equal(result.selectedMorph, stage.deformationKeyName);
       assert.equal(result.severity, anchor);
+      assert.equal(result.terminalStage, 'HEAVY');
+      assert.equal(result.terminalStageReached, stageName === 'HEAVY');
       assert.equal(siteDiagnostics.currentStage, stageName);
       assert.equal(siteDiagnostics.goreStage, stageName);
       assert.equal(siteDiagnostics.stageKeyMapping[stageName], stage.deformationKeyName);
@@ -273,16 +313,39 @@ test('left-head mace hits advance Light to Heavy while opposite-side hits do not
   try {
     const request = {
       hit: { regionId: 'head', collisionPointWorld: new THREE.Vector3(-0.05, 1.45, 0) },
-      impact: { primitive: 'mace_head', worldPoint: new THREE.Vector3(-0.05, 1.45, 0), impactDirection: new THREE.Vector3(1, 0, 0) },
+      impact: {
+        primitive: 'mace_head',
+        classification: BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt,
+        worldPoint: new THREE.Vector3(-0.05, 1.45, 0),
+        impactDirection: new THREE.Vector3(1, 0, 0),
+      },
     };
-    assert.equal(fixture.runtime.applyForgeMaceDamage(request).stage, 'LIGHT');
-    assert.equal(fixture.runtime.applyForgeMaceDamage(request).stage, 'MEDIUM');
-    assert.equal(fixture.runtime.applyForgeMaceDamage(request).stage, 'HEAVY');
+    const glancing = fixture.runtime.applyForgeMaceDamage({
+      ...request,
+      impact: { ...request.impact, classification: BLUNT_IMPACT_CLASSIFICATIONS.glancingBlunt },
+    });
+    assert.equal(glancing.applied, false);
+    assert.equal(glancing.reason, 'insufficient-progressive-impact');
+    assert.equal(fixture.runtime.getDiagnostics().deformation.progressiveSites.damage_site.currentStage, null);
+    const light = fixture.runtime.applyForgeMaceDamage(request);
+    const medium = fixture.runtime.applyForgeMaceDamage(request);
+    const heavy = fixture.runtime.applyForgeMaceDamage(request);
+    assert.equal(light.stage, 'LIGHT');
+    assert.equal(light.terminalStageReached, false);
+    assert.equal(medium.stage, 'MEDIUM');
+    assert.equal(medium.terminalStageReached, false);
+    assert.equal(heavy.stage, 'HEAVY');
+    assert.equal(heavy.terminalStageReached, true);
     assert.equal(fixture.runtime.applyForgeMaceDamage(request).reason, 'site-at-heavy');
     fixture.runtime.resetForgeDamage();
     const opposite = fixture.runtime.applyForgeMaceDamage({
       hit: { regionId: 'head', collisionPointWorld: new THREE.Vector3(0.05, 1.45, 0) },
-      impact: { primitive: 'mace_head', worldPoint: new THREE.Vector3(0.05, 1.45, 0), impactDirection: new THREE.Vector3(-1, 0, 0) },
+      impact: {
+        primitive: 'mace_head',
+        classification: BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt,
+        worldPoint: new THREE.Vector3(0.05, 1.45, 0),
+        impactDirection: new THREE.Vector3(-1, 0, 0),
+      },
     });
     assert.equal(opposite.applied, false);
     assert.equal(opposite.reason, 'unmanaged-hit');
@@ -368,5 +431,7 @@ test('runtime configuration is Dreadguard, no-animation safe, and free of site-n
   assert.match(folsomSource, /Light: \(\) => this\.debugSetProgressiveDamageStage\('LIGHT'\)/);
   assert.match(folsomSource, /Medium: \(\) => this\.debugSetProgressiveDamageStage\('MEDIUM'\)/);
   assert.match(folsomSource, /Heavy: \(\) => this\.debugSetProgressiveDamageStage\('HEAVY'\)/);
+  assert.match(folsomSource, /solidHeadImpact: \(\) => this\.debugApplySolidHeadImpact\(\)/);
+  assert.match(folsomSource, /captureCenterLocal/);
   assert.match(folsomSource, /characterDiagnostics: \(\) => this\.actor\?\.getDiagnostics/);
 });

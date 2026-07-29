@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BLUNT_IMPACT_CLASSIFICATIONS } from './weapons/BluntImpactInteraction.js';
 
 export const FORGE_DAMAGE_DEFORMATION_SCHEMA = 'dreadstone.damage_deformation.v1';
 export const FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA = 'dreadstone.progressive_damage_sites.v1';
@@ -6,8 +7,13 @@ export const FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA = 'dreadstone.progressive_dama
 const HEAD_REGIONS = new Set(['head', 'face', 'skull']);
 const BODY_REGIONS = new Set(['upper_chest', 'lower_chest', 'abdomen', 'pelvis']);
 const VALID_GORE_ROLES = new Set(['ATTACHED', 'DETACHED', 'CORE']);
+const QUALIFYING_PROGRESSIVE_IMPACTS = new Set([
+  BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt,
+  BLUNT_IMPACT_CLASSIFICATIONS.heavySmash,
+]);
 const SIDE_EPSILON = 0.015;
 const weightEpsilon = 1e-6;
+export const FORGE_GORE_RENDER_ORDER = 6;
 
 function collectNamedObjects(root) {
   const objects = new Map();
@@ -72,6 +78,25 @@ function readBindingWeight(binding) {
 
 function setGoreSubtreeVisible(node, visible) {
   node?.traverse?.((object) => { object.visible = visible; });
+}
+
+function prepareGoreSubtreePresentation(node) {
+  let meshCount = 0;
+  node?.traverse?.((object) => {
+    if (!object.isMesh) return;
+    meshCount += 1;
+    object.frustumCulled = false;
+    object.renderOrder = Math.max(object.renderOrder, FORGE_GORE_RENDER_ORDER);
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.forEach((material) => {
+      if (!material) return;
+      material.polygonOffset = true;
+      material.polygonOffsetFactor = -1;
+      material.polygonOffsetUnits = -4;
+      material.needsUpdate = true;
+    });
+  });
+  return meshCount;
 }
 
 function finiteVector(value) {
@@ -241,6 +266,7 @@ export class ForgeDamageDeformationRuntime {
     this.activationCount = 0;
     this.disposed = false;
     this.parentDetachedGoreToOwnedSegments();
+    this.gorePresentationMeshCount = this.goreNodes.reduce((count, { node }) => count + prepareGoreSubtreePresentation(node), 0);
     this.reset();
   }
 
@@ -446,6 +472,14 @@ export class ForgeDamageDeformationRuntime {
       localPoint: null,
       localDirection: null,
     };
+    const terminalStageIndex = site.stageRecords.length - 1;
+    const terminalStage = site.stageRecords[terminalStageIndex];
+    this.lastActivation.progressiveSite = true;
+    this.lastActivation.stageIndex = state.stageIndex;
+    this.lastActivation.stageCount = site.stageRecords.length;
+    this.lastActivation.terminalStage = terminalStage?.stage ?? null;
+    this.lastActivation.terminalStageReached = state.stageIndex === terminalStageIndex
+      && blend.severity + weightEpsilon >= (terminalStage?.anchor ?? 1);
     this.logActivation(this.lastActivation);
     return { applied: true, ...this.lastActivation };
   }
@@ -464,7 +498,18 @@ export class ForgeDamageDeformationRuntime {
     const state = this.progressiveState.get(site.siteId);
     const nextIndex = Math.min((state?.stageIndex ?? -1) + 1, site.stageRecords.length - 1);
     if ((state?.stageIndex ?? -1) >= site.stageRecords.length - 1) {
-      return { applied: false, reason: 'site-at-heavy', siteId: site.siteId, stage: state.currentStage, severity: state.severity };
+      return {
+        applied: false,
+        reason: 'site-at-heavy',
+        siteId: site.siteId,
+        stage: state.currentStage,
+        severity: state.severity,
+        progressiveSite: true,
+        stageIndex: state.stageIndex,
+        stageCount: site.stageRecords.length,
+        terminalStage: site.stageRecords.at(-1)?.stage ?? null,
+        terminalStageReached: true,
+      };
     }
     return this.setProgressiveSiteSeverity(site.siteId, site.stageRecords[nextIndex].anchor, options);
   }
@@ -509,6 +554,18 @@ export class ForgeDamageDeformationRuntime {
   applyMaceHit({ hit, impact, requestedWeight = 1 } = {}) {
     const selection = this.selectMaceDamage({ hit, impact });
     if (!selection) return { applied: false, reason: 'unmanaged-hit', hitRegion: hit?.regionId ?? null, hitSide: 'none', selectedMorph: null };
+    if (selection.site && !QUALIFYING_PROGRESSIVE_IMPACTS.has(impact?.classification)) {
+      return {
+        applied: false,
+        reason: 'insufficient-progressive-impact',
+        hitRegion: selection.hitRegion,
+        hitSide: selection.hitSide,
+        siteId: selection.site.siteId,
+        progressiveSite: true,
+        classification: impact?.classification ?? null,
+        selectedMorph: null,
+      };
+    }
     const options = { requestedWeight, hitRegion: selection.hitRegion, hitSide: selection.hitSide, source: 'mace_hit' };
     const result = selection.site
       ? this.advanceProgressiveDamageSite(selection.site.siteId, options)
@@ -563,6 +620,23 @@ export class ForgeDamageDeformationRuntime {
       detached: record.detachedMorph ? readBindingWeight(record.detachedMorph) : null,
     }]));
     const visibleGoreNodes = this.goreNodes.filter(({ node }) => node.visible).map(({ node }) => node.name);
+    const visibleGoreMaterials = [];
+    const recordedMaterials = new Set();
+    this.goreNodes.filter(({ node }) => node.visible).forEach(({ node }) => node.traverse((object) => {
+      if (!object.isMesh) return;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.filter(Boolean).forEach((material) => {
+        if (recordedMaterials.has(material.uuid)) return;
+        recordedMaterials.add(material.uuid);
+        visibleGoreMaterials.push({
+          name: material.name,
+          roughness: Number.isFinite(material.roughness) ? material.roughness : null,
+          clearcoat: Number.isFinite(material.clearcoat) ? material.clearcoat : null,
+          polygonOffset: material.polygonOffset === true,
+          renderOrder: object.renderOrder,
+        });
+      });
+    }));
     const headOwnershipOverlap = [...this.keyRecords.values()].some((record) => {
       return Boolean(record?.goreByRole.get('ATTACHED')?.some((node) => node.visible) && record?.goreByRole.get('DETACHED')?.some((node) => node.visible));
     });
@@ -593,9 +667,12 @@ export class ForgeDamageDeformationRuntime {
       managedMorphNames: [...this.keyRecords.keys()],
       morphWeights,
       visibleGoreNodes,
+      visibleGoreMaterials,
       headOwnershipOverlap,
       progressiveSiteSchema: this.validation.deformation.progressiveDamageSiteSchema ?? null,
       progressiveSites,
+      gorePresentationMeshCount: this.gorePresentationMeshCount,
+      goreRenderOrder: FORGE_GORE_RENDER_ORDER,
       activationCount: this.activationCount,
       lastActivation: this.lastActivation ? { ...this.lastActivation } : null,
     };

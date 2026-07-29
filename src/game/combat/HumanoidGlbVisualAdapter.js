@@ -204,6 +204,40 @@ export function isolateObjectMaterials(root) {
   return clonesBySource;
 }
 
+export function isForgeGoreSurfaceObject(object) {
+  for (let current = object; current; current = current.parent) {
+    if (current.userData?.dsb_gore_owned === true || current.userData?.dsb_generated_role === 'raised_gore') return true;
+  }
+  return false;
+}
+
+export function prepareHumanoidCombatMaterial(object, material) {
+  if (!material) return material;
+  if (material.map) {
+    material.map.colorSpace = THREE.SRGBColorSpace;
+    material.map.magFilter = THREE.NearestFilter;
+    material.map.minFilter = THREE.LinearMipmapLinearFilter;
+    material.map.generateMipmaps = true;
+  }
+  if (material.normalMap) {
+    material.normalMap.colorSpace = THREE.NoColorSpace;
+    material.normalMap.magFilter = THREE.LinearFilter;
+    material.normalMap.minFilter = THREE.LinearMipmapLinearFilter;
+    material.normalMap.generateMipmaps = true;
+    if (!isForgeGoreSurfaceObject(object)) {
+      const normalSignX = Math.sign(material.normalScale?.x ?? 1) || 1;
+      const normalSignY = Math.sign(material.normalScale?.y ?? 1) || 1;
+      material.normalScale.set(normalSignX * 0.55, normalSignY * 0.55);
+    }
+  }
+  if (material.isMeshStandardMaterial && !isForgeGoreSurfaceObject(object)) {
+    material.metalness = 0;
+    material.roughness = Math.max(material.roughness, 0.9);
+  }
+  material.needsUpdate = true;
+  return material;
+}
+
 export class HumanoidGlbVisualAdapter {
   constructor({ actor, parent, profile = CURRENT_HUMANOID_PROFILE, isolateMaterials = false }) {
     this.actor = actor;
@@ -285,29 +319,7 @@ export class HumanoidGlbVisualAdapter {
       object.castShadow = true;
       object.receiveShadow = true;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
-      materials.forEach((material) => {
-        if (!material) return;
-        if (material.map) {
-          material.map.colorSpace = THREE.SRGBColorSpace;
-          material.map.magFilter = THREE.NearestFilter;
-          material.map.minFilter = THREE.LinearMipmapLinearFilter;
-          material.map.generateMipmaps = true;
-        }
-        if (material.normalMap) {
-          material.normalMap.colorSpace = THREE.NoColorSpace;
-          material.normalMap.magFilter = THREE.LinearFilter;
-          material.normalMap.minFilter = THREE.LinearMipmapLinearFilter;
-          material.normalMap.generateMipmaps = true;
-          const normalSignX = Math.sign(material.normalScale?.x ?? 1) || 1;
-          const normalSignY = Math.sign(material.normalScale?.y ?? 1) || 1;
-          material.normalScale.set(normalSignX * 0.55, normalSignY * 0.55);
-        }
-        if (material.isMeshStandardMaterial) {
-          material.metalness = 0;
-          material.roughness = Math.max(material.roughness, 0.9);
-        }
-        material.needsUpdate = true;
-      });
+      materials.forEach((material) => prepareHumanoidCombatMaterial(object, material));
     });
     this.skinnedMeshes.forEach((mesh) => {
       const metadata = buildSkinnedTriangleInfluenceMetadata(mesh, { boneMap: this.profile.boneMap });
