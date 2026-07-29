@@ -8,6 +8,7 @@ const HEAD_REGIONS = new Set(['head', 'face', 'skull']);
 const BODY_REGIONS = new Set(['upper_chest', 'lower_chest', 'abdomen', 'pelvis']);
 const VALID_GORE_ROLES = new Set(['ATTACHED', 'DETACHED', 'CORE']);
 const QUALIFYING_PROGRESSIVE_IMPACTS = new Set([
+  BLUNT_IMPACT_CLASSIFICATIONS.glancingBlunt,
   BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt,
   BLUNT_IMPACT_CLASSIFICATIONS.heavySmash,
 ]);
@@ -450,8 +451,8 @@ export class ForgeDamageDeformationRuntime {
     });
     const state = this.progressiveState.get(site.siteId);
     state.severity = blend.severity;
-    state.stageIndex = exactStageIndex >= 0 ? exactStageIndex : 0;
-    state.currentStage = site.stageRecords[state.stageIndex]?.stage ?? null;
+    state.stageIndex = exactStageIndex;
+    state.currentStage = exactStageIndex >= 0 ? site.stageRecords[exactStageIndex]?.stage ?? null : null;
     state.goreStage = goreStage?.stage ?? null;
     state.activationCount += 1;
     state.stageWeights = Object.fromEntries(site.stageRecords.map((stage, index) => [stage.stage, blend.weights[index]]));

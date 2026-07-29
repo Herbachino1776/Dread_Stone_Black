@@ -310,7 +310,47 @@ test('adjacent smoothstep crossfade uses at most two stage morphs and midpoint-r
   }
 });
 
-test('left-head mace hits advance Light to Heavy while opposite-side hits do not guess a site', async () => {
+test('a sub-Light blend cannot consume the first exact mace damage stage', async () => {
+  const fixture = await createRuntimeFixture();
+  try {
+    const [light] = stageRecords();
+    const partialSeverity = light.anchor * 0.01;
+    const partial = fixture.runtime.deformationRuntime.setProgressiveSiteSeverity(
+      light.site.siteId,
+      partialSeverity,
+      { source: 'sub-light-state-regression-test' },
+    );
+    const partialDiagnostics = fixture.runtime.getDiagnostics().deformation;
+    assert.equal(partial.stage, null);
+    assert.equal(partial.goreStage, null);
+    assert.equal(partialDiagnostics.progressiveSites[light.site.siteId].currentStage, null);
+    assert.equal(partialDiagnostics.progressiveSites[light.site.siteId].goreStage, null);
+    assert.ok(partialDiagnostics.morphWeights[light.stage.deformationKeyName].attached > 0);
+    assert.ok(partialDiagnostics.morphWeights[light.stage.deformationKeyName].attached < 1);
+    assert.deepEqual(partialDiagnostics.visibleGoreNodes, []);
+
+    const result = fixture.runtime.applyForgeMaceDamage({
+      hit: { regionId: 'head', collisionPointWorld: new THREE.Vector3(-0.05, 1.45, 0) },
+      impact: {
+        primitive: 'mace_head',
+        classification: BLUNT_IMPACT_CLASSIFICATIONS.glancingBlunt,
+        worldPoint: new THREE.Vector3(-0.05, 1.45, 0),
+        impactDirection: new THREE.Vector3(1, 0, 0),
+      },
+    });
+    const lightDiagnostics = fixture.runtime.getDiagnostics().deformation;
+    assert.equal(result.applied, true);
+    assert.equal(result.stage, 'LIGHT');
+    assert.equal(result.goreStage, 'LIGHT');
+    assert.equal(result.severity, light.anchor);
+    assert.equal(lightDiagnostics.morphWeights[light.stage.deformationKeyName].attached, 1);
+    assert.deepEqual(lightDiagnostics.visibleGoreNodes.sort(), expectedGoreNames(light.stage.deformationKeyName, 'ATTACHED'));
+  } finally {
+    fixture.dispose();
+  }
+});
+
+test('left-head damaging mace hits advance exact Light to Heavy while non-damaging contacts and opposite-side hits do not guess a site', async () => {
   const fixture = await createRuntimeFixture();
   try {
     const request = {
@@ -322,17 +362,21 @@ test('left-head mace hits advance Light to Heavy while opposite-side hits do not
         impactDirection: new THREE.Vector3(1, 0, 0),
       },
     };
-    const glancing = fixture.runtime.applyForgeMaceDamage({
+    const nonDamaging = fixture.runtime.applyForgeMaceDamage({
+      ...request,
+      impact: { ...request.impact, classification: BLUNT_IMPACT_CLASSIFICATIONS.nonDamagingContact },
+    });
+    assert.equal(nonDamaging.applied, false);
+    assert.equal(nonDamaging.reason, 'insufficient-progressive-impact');
+    assert.equal(fixture.runtime.getDiagnostics().deformation.progressiveSites.damage_site.currentStage, null);
+    const light = fixture.runtime.applyForgeMaceDamage({
       ...request,
       impact: { ...request.impact, classification: BLUNT_IMPACT_CLASSIFICATIONS.glancingBlunt },
     });
-    assert.equal(glancing.applied, false);
-    assert.equal(glancing.reason, 'insufficient-progressive-impact');
-    assert.equal(fixture.runtime.getDiagnostics().deformation.progressiveSites.damage_site.currentStage, null);
-    const light = fixture.runtime.applyForgeMaceDamage(request);
     const medium = fixture.runtime.applyForgeMaceDamage(request);
     const heavy = fixture.runtime.applyForgeMaceDamage(request);
     assert.equal(light.stage, 'LIGHT');
+    assert.equal(light.goreStage, 'LIGHT');
     assert.equal(light.terminalStageReached, false);
     assert.equal(medium.stage, 'MEDIUM');
     assert.equal(medium.terminalStageReached, false);
