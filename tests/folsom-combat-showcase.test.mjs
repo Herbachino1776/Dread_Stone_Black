@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { CollisionWorld } from '../src/game/Collision.js';
 import { FOLSOM_COMBAT_FOOTPRINT, FOLSOM_RAPIER_SUPPORT, FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
-import { TESTMAN_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
+import { DREADGUARD_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { FOLSOM_SHOWCASE_COMBAT_CONFIG } from '../src/game/combat/FolsomShowcaseCombatExtras.js';
 import { FOLSOM_SHOWCASE_VISIBLE_PHYSICAL_EDGE_TOLERANCE, FolsomShowcaseSwordDismemberment } from '../src/game/combat/FolsomShowcaseSwordDismemberment.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
@@ -66,7 +66,7 @@ test('default Folsom showcase owns four distinct damage-profile actors on one ro
   assert.equal(actors.length, 4);
   assert.equal(controllers.length, 3);
   assert.equal(encounter.showcaseExtras.getWalkerControllers().length, 2);
-  assert.ok(actors.every((actor) => actor.visualProfile === TESTMAN_DAMAGE_COMBAT_PROFILE));
+  assert.ok(actors.every((actor) => actor.visualProfile === DREADGUARD_DAMAGE_COMBAT_PROFILE));
   assert.ok(actors.every((actor) => actor.visualProfile.activeDamageSegmentIds.join(',') === 'head_neck,left_elbow,right_elbow'));
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
   assert.equal(encounter.combatRouter.getDiagnostics().colliderCount, actors.reduce((sum, actor) => sum + actor.colliders.size, 0));
@@ -113,7 +113,7 @@ test('folsomShowcase=0 removes only the two extra walkers and temporary sword qu
   assert.equal(encounter.getWalkerControllers().length, 1);
   assert.equal(encounter.getActiveCombatActors().length, 2);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
-  assert.ok(encounter.getActiveCombatActors().every((actor) => actor.visualProfile === TESTMAN_DAMAGE_COMBAT_PROFILE));
+  assert.ok(encounter.getActiveCombatActors().every((actor) => actor.visualProfile === DREADGUARD_DAMAGE_COMBAT_PROFILE));
   encounter.dispose();
 });
 
@@ -145,7 +145,7 @@ test('all four Folsom actors own independent death, voice, corpse cleanup, and w
   assert.equal(replacements.length, 4);
   assert.ok(replacements.every(Boolean));
   assert.ok(replacements.every((actor) => !firstActorIds.includes(actor.instanceId)));
-  assert.ok(replacements.every((actor) => actor.visualProfile === TESTMAN_DAMAGE_COMBAT_PROFILE));
+  assert.ok(replacements.every((actor) => actor.visualProfile === DREADGUARD_DAMAGE_COMBAT_PROFILE));
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
   assert.equal(encounter.acceptedCombatAudio.actorStates.size, 4);
   encounter.reset();
@@ -156,7 +156,7 @@ test('all four Folsom actors own independent death, voice, corpse cleanup, and w
   assert.equal(collision.blockerRects.filter((entry) => entry.type === 'combatActor').length, 0);
 });
 
-test('stationary Testman and all three walkers share corrected two-hit sword thrust mortality', async () => {
+test('stationary Dreadguard and all three walkers share corrected two-hit sword thrust mortality', async () => {
   const { encounter } = await createShowcaseEncounter();
   const slots = [
     { actor: encounter.actor, controller: encounter.stationaryDeathController },
@@ -188,7 +188,7 @@ test('stationary Testman and all three walkers share corrected two-hit sword thr
   encounter.dispose();
 });
 
-test('fatal authored head consequences enter the existing Folsom corpse lifecycle', async () => {
+test('fatal manifest-authored head consequences enter the existing Folsom corpse lifecycle', async () => {
   const { encounter } = await createShowcaseEncounter();
   const stationary = encounter.actor;
   const walkerController = encounter.getWalkerControllers()[1];
@@ -482,7 +482,7 @@ test('showcase configuration remains in the requested tuning bands and waist sta
   assert.ok(FOLSOM_SHOWCASE_COMBAT_CONFIG.minimumSwordAccumulatedEdgeTravel >= 0.08 && FOLSOM_SHOWCASE_COMBAT_CONFIG.minimumSwordAccumulatedEdgeTravel <= 0.12);
   assert.deepEqual(FOLSOM_SHOWCASE_COMBAT_CONFIG.maximumSwordSeamDistance, { head_neck: 0.18, left_elbow: 0.16, right_elbow: 0.16 });
   assert.equal(FOLSOM_SHOWCASE_COMBAT_CONFIG.maximumSwordDetachmentsPerGesture, 2);
-  assert.equal(TESTMAN_DAMAGE_COMBAT_PROFILE.activeDamageSegmentIds.includes('lower_spine'), false);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.activeDamageSegmentIds.includes('lower_spine'), false);
 });
 
 test('combat mace runtime is available only for Combat Lab and Folsom and cannot request detachment', () => {

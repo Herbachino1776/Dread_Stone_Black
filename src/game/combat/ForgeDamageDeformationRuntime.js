@@ -1,12 +1,7 @@
 import * as THREE from 'three';
 
 export const FORGE_DAMAGE_DEFORMATION_SCHEMA = 'dreadstone.damage_deformation.v1';
-
-export const TESTMAN_FORGE_DAMAGE_MORPHS = Object.freeze({
-  headLeft: 'Head_Dent_Left',
-  headRight: 'Head_Dent_Right',
-  bodyFront: 'Face_Middle_impact_v001',
-});
+export const FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA = 'dreadstone.progressive_damage_sites.v1';
 
 const HEAD_REGIONS = new Set(['head', 'face', 'skull']);
 const BODY_REGIONS = new Set(['upper_chest', 'lower_chest', 'abdomen', 'pelvis']);
@@ -52,6 +47,17 @@ function resolveMorphBinding(object, morphName, label, errors) {
 
 function approximatelyEqual(first, second, tolerance = 1e-6) {
   return Number.isFinite(first) && Number.isFinite(second) && Math.abs(first - second) <= tolerance;
+}
+
+function smoothstep01(value) {
+  const clamped = THREE.MathUtils.clamp(Number(value) || 0, 0, 1);
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
+function resolveStageAnchor(site, stage) {
+  const namedAnchor = Number(site?.severityAnchors?.[stage?.stage?.toLowerCase?.()]);
+  const recommended = Number(stage?.recommendedSeverity);
+  return Number.isFinite(namedAnchor) ? namedAnchor : recommended;
 }
 
 function setBindingWeight(binding, weight) {
@@ -167,11 +173,55 @@ export function validateForgeDamageDeformationAsset({ manifest, root } = {}) {
   for (const record of keyRecords.values()) {
     const expectedRoles = record.regionMode === 'PAIRED_SEGMENT' ? ['ATTACHED', 'DETACHED'] : ['CORE'];
     expectedRoles.forEach((role) => {
-      if ((record.goreByRole.get(role)?.length ?? 0) !== 1) errors.push(`${record.name} requires exactly one ${role} gore node`);
+      if ((record.goreByRole.get(role)?.length ?? 0) < 1) errors.push(`${record.name} requires at least one ${role} gore node`);
     });
+    const expectedGoreNames = new Set(record.manifest.goreGeneratedNodeNames ?? []);
+    const resolvedGoreNames = new Set([...record.goreByRole.values()].flat().map((node) => node.name));
+    if (expectedGoreNames.size !== resolvedGoreNames.size || [...expectedGoreNames].some((name) => !resolvedGoreNames.has(name))) {
+      errors.push(`${record.name} resolved gore nodes do not match its manifest binding`);
+    }
+  }
+
+  const progressiveSites = new Map();
+  const progressiveStageByKey = new Map();
+  if (deformation?.progressiveDamageSites?.length && deformation.progressiveDamageSiteSchema !== FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA) {
+    errors.push(`invalid progressive damage site schema ${deformation.progressiveDamageSiteSchema ?? 'missing'}`);
+  }
+  for (const site of deformation?.progressiveDamageSites ?? []) {
+    if (site?.schema !== FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA || !site.siteId || progressiveSites.has(site.siteId)) {
+      errors.push(`invalid or duplicate progressive damage site ${site?.siteId ?? 'missing'}`);
+      continue;
+    }
+    if (!Array.isArray(site.stageOrder) || !site.stageOrder.length || !Array.isArray(site.stages)) {
+      errors.push(`${site.siteId} is missing its stage order or stage records`);
+      continue;
+    }
+    const stagesByName = new Map(site.stages.map((stage) => [stage?.stage, stage]));
+    const stageRecords = [];
+    let previousAnchor = 0;
+    for (const stageName of site.stageOrder) {
+      const stage = stagesByName.get(stageName);
+      const keyRecord = keyRecords.get(stage?.deformationKeyName);
+      const anchor = resolveStageAnchor(site, stage);
+      if (!stage || !stage.stageId || !keyRecord) errors.push(`${site.siteId} stage ${stageName} has no valid manifest deformation binding`);
+      if (!(anchor > previousAnchor && anchor <= 1)) errors.push(`${site.siteId} stage ${stageName} has invalid severity anchor ${anchor}`);
+      if (stage?.regionId !== site.regionId || keyRecord?.regionId !== site.regionId) errors.push(`${site.siteId} stage ${stageName} region does not match ${site.regionId}`);
+      if (stage?.targetObject !== keyRecord?.manifest?.targetObject || stage?.detachedObject !== keyRecord?.manifest?.detachedObject) {
+        errors.push(`${site.siteId} stage ${stageName} object binding does not match deformation ${stage?.deformationKeyName ?? 'missing'}`);
+      }
+      if (keyRecord && progressiveStageByKey.has(keyRecord.name)) errors.push(`${keyRecord.name} is assigned to multiple progressive damage stages`);
+      if (keyRecord) {
+        const record = { ...stage, anchor, keyRecord };
+        stageRecords.push(record);
+        progressiveStageByKey.set(keyRecord.name, { siteId: site.siteId, stage: record });
+      }
+      previousAnchor = anchor;
+    }
+    if (stageRecords.length !== site.stageOrder.length) errors.push(`${site.siteId} did not resolve every stage in manifest order`);
+    progressiveSites.set(site.siteId, { ...site, stageRecords });
   }
   if (errors.length) throw new Error(`Forge damage deformation asset failed validation: ${errors.join('; ')}`);
-  return { deformation, objects, regions, keyRecords, goreNodes };
+  return { deformation, objects, regions, keyRecords, goreNodes, progressiveSites, progressiveStageByKey };
 }
 
 export class ForgeDamageDeformationRuntime {
@@ -184,6 +234,9 @@ export class ForgeDamageDeformationRuntime {
     this.validation = validateForgeDamageDeformationAsset({ manifest, root });
     this.keyRecords = this.validation.keyRecords;
     this.goreNodes = this.validation.goreNodes;
+    this.progressiveSites = this.validation.progressiveSites;
+    this.progressiveStageByKey = this.validation.progressiveStageByKey;
+    this.progressiveState = new Map();
     this.lastActivation = null;
     this.activationCount = 0;
     this.disposed = false;
@@ -206,6 +259,17 @@ export class ForgeDamageDeformationRuntime {
       setBindingWeight(record.detachedMorph, 0);
     });
     this.goreNodes.forEach(({ node }) => setGoreSubtreeVisible(node, false));
+    this.progressiveState.clear();
+    this.progressiveSites.forEach((site, siteId) => {
+      this.progressiveState.set(siteId, {
+        severity: 0,
+        stageIndex: -1,
+        currentStage: null,
+        goreStage: null,
+        activationCount: 0,
+        stageWeights: Object.fromEntries(site.stageOrder.map((stageName) => [stageName, 0])),
+      });
+    });
     this.lastActivation = null;
     this.activationCount = 0;
     return this.getDiagnostics();
@@ -228,33 +292,72 @@ export class ForgeDamageDeformationRuntime {
     return quaternion ? direction.applyQuaternion(quaternion).normalize() : direction.normalize();
   }
 
-  selectHeadMorph(localPoint, localDirection) {
-    const left = this.keyRecords.get(TESTMAN_FORGE_DAMAGE_MORPHS.headLeft);
-    const right = this.keyRecords.get(TESTMAN_FORGE_DAMAGE_MORPHS.headRight);
-    if (!left || !right) return null;
+  getSiteCenterX(site) {
+    const keyCenters = site.stageRecords.map(({ keyRecord }) => keyRecord.stampCenterX).filter(Number.isFinite);
+    if (keyCenters.length) return keyCenters.reduce((total, value) => total + value, 0) / keyCenters.length;
+    const anchorX = Number(site.anchorLocal?.[0]);
+    return Number.isFinite(anchorX) ? anchorX : 0;
+  }
+
+  resolveHitSideX(localPoint, localDirection) {
     let sideX = localPoint.x;
     if (Math.abs(sideX) <= SIDE_EPSILON && Math.abs(localDirection.x) > SIDE_EPSILON) sideX = -localDirection.x;
-    if (Math.abs(sideX) <= SIDE_EPSILON) return left;
-    if (Number.isFinite(left.stampCenterX) && Number.isFinite(right.stampCenterX)) {
-      return Math.abs(sideX - left.stampCenterX) <= Math.abs(sideX - right.stampCenterX) ? left : right;
+    return sideX;
+  }
+
+  siteMatchesHitRegion(site, hitRegion) {
+    if (!hitRegion) return false;
+    if (site.regionId === hitRegion || site.structuralGroup === hitRegion) return true;
+    if (HEAD_REGIONS.has(hitRegion)) return site.regionId === 'head' || site.structuralGroup === 'head';
+    if (BODY_REGIONS.has(hitRegion)) return site.regionId === 'body_core' || site.structuralGroup === 'body';
+    if (hitRegion === 'left_forearm') return site.regionId === 'forearm_left';
+    if (hitRegion === 'right_forearm') return site.regionId === 'forearm_right';
+    return false;
+  }
+
+  selectProgressiveSite(localPoint, localDirection, hitRegion) {
+    const sideX = this.resolveHitSideX(localPoint, localDirection);
+    const candidates = [...this.progressiveSites.values()].filter((site) => this.siteMatchesHitRegion(site, hitRegion));
+    const sideCompatible = candidates.filter((site) => {
+      const centerX = this.getSiteCenterX(site);
+      return Math.abs(sideX) <= SIDE_EPSILON || Math.abs(centerX) <= SIDE_EPSILON || Math.sign(sideX) === Math.sign(centerX);
+    });
+    const available = sideCompatible.length ? sideCompatible : (Math.abs(sideX) <= SIDE_EPSILON ? candidates : []);
+    if (!available.length) return null;
+    return available.sort((first, second) => Math.abs(sideX - this.getSiteCenterX(first)) - Math.abs(sideX - this.getSiteCenterX(second)))[0];
+  }
+
+  selectRegionFallback(localPoint, localDirection, hitRegion) {
+    const candidateRegions = HEAD_REGIONS.has(hitRegion)
+      ? ['head']
+      : BODY_REGIONS.has(hitRegion)
+        ? ['body_core', 'body']
+        : [hitRegion];
+    const records = [...this.keyRecords.values()].filter((record) => candidateRegions.includes(record.regionId) && !this.progressiveStageByKey.has(record.name));
+    if (!records.length) return null;
+    const sideX = this.resolveHitSideX(localPoint, localDirection);
+    if (Math.abs(sideX) <= SIDE_EPSILON) return records[0];
+    const withCenters = records.filter((record) => Number.isFinite(record.stampCenterX));
+    if (withCenters.length) {
+      return withCenters.sort((first, second) => Math.abs(sideX - first.stampCenterX) - Math.abs(sideX - second.stampCenterX))[0];
     }
-    return sideX >= 0 ? left : right;
+    return records[0];
   }
 
   selectMaceDamage({ hit, impact } = {}) {
     if (impact?.primitive !== 'mace_head') return null;
     const localPoint = this.getActorLocalPoint(hit, impact);
     const localDirection = this.getActorLocalDirection(impact);
-    let record = null;
-    let hitSide = 'none';
-    if (HEAD_REGIONS.has(hit?.regionId)) {
-      record = this.selectHeadMorph(localPoint, localDirection);
-      hitSide = record?.name === TESTMAN_FORGE_DAMAGE_MORPHS.headLeft ? 'left' : 'right';
-    } else if (BODY_REGIONS.has(hit?.regionId)) {
-      record = this.keyRecords.get(TESTMAN_FORGE_DAMAGE_MORPHS.bodyFront) ?? null;
-      hitSide = 'center/front';
+    const site = this.selectProgressiveSite(localPoint, localDirection, hit?.regionId);
+    if (site) {
+      const centerX = this.getSiteCenterX(site);
+      const hitSide = centerX < -SIDE_EPSILON ? 'left' : centerX > SIDE_EPSILON ? 'right' : 'center';
+      return { site, record: null, hitRegion: hit.regionId, hitSide, localPoint, localDirection };
     }
-    return record ? { record, hitRegion: hit.regionId, hitSide, localPoint, localDirection } : null;
+    const record = this.selectRegionFallback(localPoint, localDirection, hit?.regionId);
+    if (!record) return null;
+    const hitSide = record.stampCenterX < -SIDE_EPSILON ? 'left' : record.stampCenterX > SIDE_EPSILON ? 'right' : 'center';
+    return { site: null, record, hitRegion: hit.regionId, hitSide, localPoint, localDirection };
   }
 
   getOwnershipRole(record) {
@@ -268,7 +371,107 @@ export class ForgeDamageDeformationRuntime {
     });
   }
 
+  hideProgressiveSiteGore(site) {
+    site?.stageRecords?.forEach(({ keyRecord }) => {
+      keyRecord.goreByRole.forEach((nodes) => nodes.forEach((node) => setGoreSubtreeVisible(node, false)));
+    });
+  }
+
+  resolveProgressiveSite(siteId = null) {
+    if (siteId && this.progressiveSites.has(siteId)) return this.progressiveSites.get(siteId);
+    if (!siteId && this.progressiveSites.size === 1) return this.progressiveSites.values().next().value;
+    return null;
+  }
+
+  calculateProgressiveWeights(site, severity) {
+    const clampedSeverity = THREE.MathUtils.clamp(Number(severity) || 0, 0, 1);
+    const weights = site.stageRecords.map(() => 0);
+    if (clampedSeverity <= 0 || !site.stageRecords.length) return { severity: clampedSeverity, weights, goreStageIndex: -1 };
+    const first = site.stageRecords[0];
+    if (clampedSeverity <= first.anchor) {
+      weights[0] = smoothstep01(clampedSeverity / first.anchor);
+      return { severity: clampedSeverity, weights, goreStageIndex: weights[0] + weightEpsilon >= first.keyRecord.activationWeight ? 0 : -1 };
+    }
+    for (let index = 1; index < site.stageRecords.length; index += 1) {
+      const lower = site.stageRecords[index - 1];
+      const upper = site.stageRecords[index];
+      if (clampedSeverity > upper.anchor && index < site.stageRecords.length - 1) continue;
+      const blend = smoothstep01((clampedSeverity - lower.anchor) / (upper.anchor - lower.anchor));
+      weights[index - 1] = 1 - blend;
+      weights[index] = blend;
+      return { severity: clampedSeverity, weights, goreStageIndex: blend < 0.5 ? index - 1 : index };
+    }
+    weights[weights.length - 1] = 1;
+    return { severity: clampedSeverity, weights, goreStageIndex: weights.length - 1 };
+  }
+
+  setProgressiveSiteSeverity(siteId, severity, { hitRegion = 'manual', hitSide = 'manual', source = 'progressive_damage' } = {}) {
+    const site = this.resolveProgressiveSite(siteId);
+    if (!site || this.disposed) return { applied: false, reason: 'unknown-site-or-disposed', siteId: siteId ?? null };
+    const blend = this.calculateProgressiveWeights(site, severity);
+    site.stageRecords.forEach(({ keyRecord }, index) => {
+      setBindingWeight(keyRecord.targetMorph, blend.weights[index]);
+      setBindingWeight(keyRecord.detachedMorph, blend.weights[index]);
+    });
+    this.hideProgressiveSiteGore(site);
+    const goreStage = blend.goreStageIndex >= 0 ? site.stageRecords[blend.goreStageIndex] : null;
+    const ownershipRole = goreStage ? this.getOwnershipRole(goreStage.keyRecord) : null;
+    const activatedGoreNodes = goreStage ? [...(goreStage.keyRecord.goreByRole.get(ownershipRole) ?? [])] : [];
+    activatedGoreNodes.forEach((node) => setGoreSubtreeVisible(node, true));
+    let exactStageIndex = -1;
+    site.stageRecords.forEach((stage, index) => {
+      if (blend.severity + weightEpsilon >= stage.anchor) exactStageIndex = index;
+    });
+    const state = this.progressiveState.get(site.siteId);
+    state.severity = blend.severity;
+    state.stageIndex = exactStageIndex >= 0 ? exactStageIndex : 0;
+    state.currentStage = site.stageRecords[state.stageIndex]?.stage ?? null;
+    state.goreStage = goreStage?.stage ?? null;
+    state.activationCount += 1;
+    state.stageWeights = Object.fromEntries(site.stageRecords.map((stage, index) => [stage.stage, blend.weights[index]]));
+    this.activationCount += 1;
+    this.lastActivation = {
+      source,
+      hitRegion,
+      hitSide,
+      siteId: site.siteId,
+      stage: state.currentStage,
+      goreStage: state.goreStage,
+      severity: blend.severity,
+      selectedMorph: goreStage?.keyRecord.name ?? null,
+      stageWeights: { ...state.stageWeights },
+      ownershipRole,
+      activatedGoreNode: activatedGoreNodes[0]?.name ?? null,
+      activatedGoreNodes: activatedGoreNodes.map((node) => node.name),
+      localPoint: null,
+      localDirection: null,
+    };
+    this.logActivation(this.lastActivation);
+    return { applied: true, ...this.lastActivation };
+  }
+
+  setProgressiveDamageStage(siteId, stageName, options = {}) {
+    const site = this.resolveProgressiveSite(siteId);
+    const normalizedStage = String(stageName ?? '').toUpperCase();
+    const stage = site?.stageRecords?.find((entry) => entry.stage === normalizedStage);
+    if (!site || !stage) return { applied: false, reason: 'unknown-site-or-stage', siteId: siteId ?? null, stage: normalizedStage || null };
+    return this.setProgressiveSiteSeverity(site.siteId, stage.anchor, options);
+  }
+
+  advanceProgressiveDamageSite(siteId = null, options = {}) {
+    const site = this.resolveProgressiveSite(siteId);
+    if (!site) return { applied: false, reason: 'unknown-or-ambiguous-site', siteId: siteId ?? null };
+    const state = this.progressiveState.get(site.siteId);
+    const nextIndex = Math.min((state?.stageIndex ?? -1) + 1, site.stageRecords.length - 1);
+    if ((state?.stageIndex ?? -1) >= site.stageRecords.length - 1) {
+      return { applied: false, reason: 'site-at-heavy', siteId: site.siteId, stage: state.currentStage, severity: state.severity };
+    }
+    return this.setProgressiveSiteSeverity(site.siteId, site.stageRecords[nextIndex].anchor, options);
+  }
+
   activate(morphName, { requestedWeight = 1, hitRegion = 'manual', hitSide = 'manual', source = 'debug' } = {}) {
+    const progressive = this.progressiveStageByKey.get(morphName);
+    if (progressive) return this.setProgressiveDamageStage(progressive.siteId, progressive.stage.stage, { hitRegion, hitSide, source });
     const record = this.keyRecords.get(morphName);
     if (!record || this.disposed) return { applied: false, reason: 'unknown-or-disposed', selectedMorph: morphName ?? null };
     const actualWeight = THREE.MathUtils.clamp(Number(requestedWeight) || 0, 0, record.maximumInfluence);
@@ -306,12 +509,10 @@ export class ForgeDamageDeformationRuntime {
   applyMaceHit({ hit, impact, requestedWeight = 1 } = {}) {
     const selection = this.selectMaceDamage({ hit, impact });
     if (!selection) return { applied: false, reason: 'unmanaged-hit', hitRegion: hit?.regionId ?? null, hitSide: 'none', selectedMorph: null };
-    const result = this.activate(selection.record.name, {
-      requestedWeight,
-      hitRegion: selection.hitRegion,
-      hitSide: selection.hitSide,
-      source: 'mace_hit',
-    });
+    const options = { requestedWeight, hitRegion: selection.hitRegion, hitSide: selection.hitSide, source: 'mace_hit' };
+    const result = selection.site
+      ? this.advanceProgressiveDamageSite(selection.site.siteId, options)
+      : this.activate(selection.record.name, options);
     if (result.applied) {
       this.lastActivation.localPoint = selection.localPoint.toArray();
       this.lastActivation.localDirection = selection.localDirection.toArray();
@@ -327,6 +528,18 @@ export class ForgeDamageDeformationRuntime {
       const weight = readBindingWeight(record.targetMorph);
       setBindingWeight(record.detachedMorph, weight);
       record.goreByRole.get('ATTACHED')?.forEach((node) => setGoreSubtreeVisible(node, false));
+      record.goreByRole.get('DETACHED')?.forEach((node) => setGoreSubtreeVisible(node, false));
+    });
+    const progressiveKeys = new Set();
+    for (const [siteId, site] of this.progressiveSites) {
+      if (!site.stageRecords.some(({ keyRecord }) => keyRecord.relatedSeamId === segmentId)) continue;
+      site.stageRecords.forEach(({ keyRecord }) => progressiveKeys.add(keyRecord.name));
+      const state = this.progressiveState.get(siteId);
+      const goreStage = site.stageRecords.find((stage) => stage.stage === state?.goreStage);
+      goreStage?.keyRecord.goreByRole.get('DETACHED')?.forEach((node) => setGoreSubtreeVisible(node, true));
+    }
+    affected.filter((record) => !progressiveKeys.has(record.name)).forEach((record) => {
+      const weight = readBindingWeight(record.targetMorph);
       record.goreByRole.get('DETACHED')?.forEach((node) => setGoreSubtreeVisible(node, weight + weightEpsilon >= record.activationWeight));
     });
     return affected.length > 0;
@@ -350,10 +563,28 @@ export class ForgeDamageDeformationRuntime {
       detached: record.detachedMorph ? readBindingWeight(record.detachedMorph) : null,
     }]));
     const visibleGoreNodes = this.goreNodes.filter(({ node }) => node.visible).map(({ node }) => node.name);
-    const headOwnershipOverlap = [TESTMAN_FORGE_DAMAGE_MORPHS.headLeft, TESTMAN_FORGE_DAMAGE_MORPHS.headRight].some((name) => {
-      const record = this.keyRecords.get(name);
+    const headOwnershipOverlap = [...this.keyRecords.values()].some((record) => {
       return Boolean(record?.goreByRole.get('ATTACHED')?.some((node) => node.visible) && record?.goreByRole.get('DETACHED')?.some((node) => node.visible));
     });
+    const progressiveSites = Object.fromEntries([...this.progressiveSites].map(([siteId, site]) => {
+      const state = this.progressiveState.get(siteId);
+      return [siteId, {
+        displayName: site.displayName,
+        regionId: site.regionId,
+        structuralGroup: site.structuralGroup,
+        stageOrder: [...site.stageOrder],
+        stageKeyMapping: Object.fromEntries(site.stageRecords.map((stage) => [stage.stage, stage.keyRecord.name])),
+        severityAnchors: { ...site.severityAnchors },
+        transitionMode: site.transitionMode,
+        transitionCurve: site.transitionCurve,
+        goreTransitionMode: site.goreTransitionMode,
+        severity: state?.severity ?? 0,
+        currentStage: state?.currentStage ?? null,
+        goreStage: state?.goreStage ?? null,
+        stageWeights: { ...(state?.stageWeights ?? {}) },
+        activationCount: state?.activationCount ?? 0,
+      }];
+    }));
     return {
       enabled: true,
       schema: this.validation.deformation.schema,
@@ -363,6 +594,8 @@ export class ForgeDamageDeformationRuntime {
       morphWeights,
       visibleGoreNodes,
       headOwnershipOverlap,
+      progressiveSiteSchema: this.validation.deformation.progressiveDamageSiteSchema ?? null,
+      progressiveSites,
       activationCount: this.activationCount,
       lastActivation: this.lastActivation ? { ...this.lastActivation } : null,
     };

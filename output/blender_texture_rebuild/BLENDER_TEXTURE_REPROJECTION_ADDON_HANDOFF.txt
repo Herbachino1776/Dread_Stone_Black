@@ -1,0 +1,632 @@
+BLENDER MULTI-VIEW CHARACTER TEXTURE REPROJECTION ADD-ON
+Codex project handoff and implementation brief
+
+======================================================================
+COPY/PASTE PROMPT FOR THE NEW CODEX TASK
+======================================================================
+
+Build a Blender add-on that makes the character texture-reprojection
+workflow described below repeatable on other SPAR3D-generated GLB or
+Blender character models.
+
+I will provide:
+
+1. The original SPAR3D Blender file:
+   D:\Blender\Blends\folsomsavage.blend
+
+2. The corrected reference file:
+   D:\Blender\Blends\folsomsavage_retextured_v6.blend
+
+3. The corrected GLB:
+   D:\Blender\Blends\folsomsavage_retextured_v6.glb
+
+4. The original high-resolution front source image:
+   E:\Dev\Dread_Stone_Black\output\imagegen\folsom_bandits_4k\folsom bandit 1 4k.png
+
+5. The standardized projection images:
+   E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\projection_views\front_projection.png
+   E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\projection_views\back_projection.png
+   E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\projection_views\left_projection.png
+   E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\projection_views\right_projection.png
+
+6. The final 4096 x 4096 baked texture:
+   E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\folsomsavage_rebuilt_base_color_4096_v6.png
+
+7. The working reference scripts:
+   E:\Dev\Dread_Stone_Black\tmp\blender_texture_rebuild\project_and_bake.py
+   E:\Dev\Dread_Stone_Black\tmp\blender_texture_rebuild\verify_retexture.py
+   E:\Dev\Dread_Stone_Black\tmp\blender_texture_rebuild\cleanup_delivery.py
+
+Inspect the original and corrected Blender files and the reference
+scripts before designing the add-on. Preserve the original model and
+its UV layout. The add-on must never overwrite the source file unless
+the user explicitly requests it.
+
+Target Blender version for the initial implementation: Blender 5.1.2.
+
+The finished project should include:
+
+- An installable Blender add-on ZIP.
+- Readable, organized Python source.
+- A Blender N-panel interface.
+- A non-destructive preview/rebuild workflow.
+- Controls for the important reprojection parameters listed below.
+- A final bake operation.
+- Temporary-data cleanup.
+- Save-copy and GLB export operations.
+- Installation and usage documentation.
+- A repeatable verification process using multiple rendered angles.
+
+======================================================================
+THE PROBLEM THE ADD-ON SOLVES
+======================================================================
+
+SPAR3D can produce a useful character mesh, but its generated facial
+texture may be muddy or distorted. A better high-resolution concept
+image can be projected onto the existing mesh and baked back into the
+model's existing UV atlas.
+
+A single front image is not enough for the entire model. For this test,
+front, back, left-profile, and right-profile character views were used.
+The projection images all represented the same person, clothing, pose,
+proportions, and lighting.
+
+The add-on should let the user load these images, project them from the
+corresponding directions, blend them over the mesh, and bake the result
+into the mesh's original UV layout.
+
+The alternate views must not appear as separate objects or planes in
+the final file. They are only temporary projection sources.
+
+======================================================================
+REFERENCE MODEL FACTS
+======================================================================
+
+The test model used:
+
+- Mesh object: geometry_0
+- Approximately 8,779 vertices
+- Approximately 12,116 polygons
+- Original UV map: UVMap
+- One primary material
+- Original packed base-color texture
+- Original packed normal texture
+- Final base-color texture size: 4096 x 4096
+- Final normal-map strength: 0.25
+- Smooth shading enabled
+
+The cleaned v6 Blender file contains only:
+
+- geometry_0
+- world
+- UVMap
+- Production material and packed textures
+
+Temporary cameras, projection UV maps, weight attributes, projection
+materials, and projection images were removed before delivery.
+
+======================================================================
+THE SUCCESSFUL V6 METHOD
+======================================================================
+
+1. Validate the selected character.
+
+   - Require a selected mesh object.
+   - Require an existing UV map for the final bake.
+   - Detect the material and current base-color image.
+   - Preserve the current material, texture, UV map, and normal map.
+   - Warn about unapplied transforms, missing UVs, multiple materials,
+     multiple mesh objects, or unsupported node layouts.
+
+2. Load four projection images.
+
+   Baseline inputs:
+
+   - Front
+   - Back
+   - Character's left profile
+   - Character's right profile
+
+   Use sRGB for base-color source images. Preserve and use image alpha.
+   The reference images used straight alpha.
+
+3. Create temporary orthographic projection cameras.
+
+   The reference model used these world directions:
+
+   - Front camera position: center + (0, +3, 0)
+   - Front surface direction: (0, +1, 0)
+   - Back camera position: center + (0, -3, 0)
+   - Back surface direction: (0, -1, 0)
+   - Left camera position: center + (-3, 0, 0)
+   - Left surface direction: (-1, 0, 0)
+   - Right camera position: center + (+3, 0, 0)
+   - Right surface direction: (+1, 0, 0)
+
+   Every camera looks at the character's bounding-box center.
+
+   The successful starting orthographic scale was:
+
+       ortho_scale = character_height / 0.90
+
+   Do not assume every imported model uses this axis convention.
+   Provide axis/orientation controls or an automatic orientation step.
+
+4. Create temporary projection UV maps.
+
+   Create:
+
+   - PROJ_front
+   - PROJ_back
+   - PROJ_left
+   - PROJ_right
+
+   For every mesh loop/corner:
+
+   - Transform its vertex coordinate into world space.
+   - Use Blender's world_to_camera_view() with the corresponding camera.
+   - Store the resulting X/Y camera coordinate in that projection UV.
+
+   Force a view-layer update after creating and positioning cameras so
+   world_to_camera_view() uses the correct evaluated transforms.
+
+5. Calculate smooth per-corner projection weights.
+
+   Do not hard-lock the entire body to one view per polygon.
+
+   For each loop:
+
+       world_co = object.matrix_world @ vertex.co
+       world_normal = normalized(
+           object.matrix_world.to_3x3() @ vertex.normal
+       )
+
+       directional = max(0, dot(world_normal, view_direction))
+
+   Normalize character height:
+
+       height_ratio =
+           (world_co.z - world_z_min) /
+           max(world_z_max - world_z_min, epsilon)
+
+   The successful front/back identity biases were:
+
+       if height_ratio >= 0.75:
+           identity_bias = 40.0
+       elif height_ratio >= 0.58:
+           identity_bias = 10.0
+       else:
+           identity_bias = 3.0
+
+   Side-view bias remained 1.0.
+
+   This makes the high-quality front/back identity sources strongly win
+   across the head and upper torso while preserving real side textures
+   on truly side-facing geometry.
+
+6. Handle upward- and downward-facing surfaces.
+
+   Top-facing hair and shoulders may have almost no X/Y directional
+   weight. If all four weights become nearly equal there, the alternate
+   images visibly average together.
+
+   Calculate the vertex's front/back position:
+
+       front_position =
+           (world_co.y - world_y_min) /
+           max(world_y_max - world_y_min, epsilon)
+
+       front_hemisphere = front_position
+       back_hemisphere = 1.0 - front_position
+
+   For the front and back sources, augment directional coverage:
+
+       top_surface_coverage =
+           abs(world_normal.z) * hemisphere * 0.90
+
+       directional = max(directional, top_surface_coverage)
+
+   This assigns the upper surfaces according to their position on the
+   front or back half of the character instead of averaging every view.
+
+7. Calculate the final view weight.
+
+       weight =
+           0.001 + view_bias * pow(directional, 4.0)
+
+   Successful defaults:
+
+   - Minimum weight: 0.001
+   - Directional exponent: 4.0
+   - Lower-body front/back bias: 3.0
+   - Upper-body front/back bias: 10.0
+   - Head front/back bias: 40.0
+   - Upper-body threshold: 0.58
+   - Head threshold: 0.75
+   - Top-surface coverage: 0.90
+   - Side-view bias: 1.0
+
+   Store these as temporary FLOAT/CORNER attributes:
+
+   - weight_front
+   - weight_back
+   - weight_left
+   - weight_right
+
+8. Build a temporary projection material.
+
+   For every projection image:
+
+   - Read it through its corresponding PROJ UV map.
+   - Use CLIP extension outside the projection image.
+   - Multiply the calculated weight by the image alpha.
+   - Multiply the image color by that alpha-weighted value.
+
+   Add all weighted colors and add all weights.
+
+   Normalize:
+
+       normalized_color =
+           sum(weighted_colors) / max(sum(weights), 0.0001)
+
+   If total projection coverage is too small, fall back to the model's
+   original base-color texture. The successful coverage threshold was
+   approximately 0.01.
+
+   The fallback is essential. It prevents black or empty gaps where the
+   source silhouettes do not fully cover the mesh.
+
+9. Bake into the original UV atlas.
+
+   Reference settings:
+
+   - Bake type: EMIT
+   - Engine: Cycles
+   - Device: CPU
+   - Samples: 1
+   - Texture size: 4096 x 4096
+   - Bake margin: 24 pixels
+   - Color space: sRGB
+   - Target UV map: the original UVMap
+
+   The projection UV maps drive the temporary material, but the active
+   original UV map receives the final baked atlas.
+
+10. Restore the production material.
+
+   - Replace only the production base-color image with the baked image.
+   - Preserve the original normal image and other material connections.
+   - Pack the baked image into the Blender file.
+   - Set normal-map strength to the configurable value; 0.25 worked for
+     this SPAR3D character.
+   - Enable smooth shading.
+
+11. Clean temporary data.
+
+   Remove:
+
+   - PROJ_front, PROJ_back, PROJ_left, PROJ_right
+   - weight_front, weight_back, weight_left, weight_right
+   - Temporary projection cameras
+   - Temporary projection material
+   - Temporary loaded projection image datablocks when safe
+
+   Preserve:
+
+   - Original UVMap
+   - Production material
+   - Baked base-color image
+   - Original normal map
+   - Original mesh and object hierarchy
+
+12. Save and export non-destructively.
+
+   - Save a new Blender copy.
+   - Export the selected production mesh as GLB.
+   - Embed/pack textures where appropriate.
+   - Never overwrite the input file by default.
+
+======================================================================
+WHY THE EARLIER APPROACHES FAILED
+======================================================================
+
+Failure 1: ordinary smooth blending everywhere
+
+The original smooth directional blend allowed left/right generated face
+details to mix too heavily with the front face at three-quarter angles.
+This created doubled eyes, a second nose/mouth impression, and pale
+triangular shoulder details. It looked as though the alternate views
+were visible on the model.
+
+Failure 2: hard polygon locking
+
+Assigning each polygon to exactly one authoritative image removed the
+double face, but it created large white/pale bands along arms, shoulders,
+and silhouettes. The hard assignment exposed small differences in the
+alpha silhouettes and framing of the source images.
+
+Successful compromise
+
+Use continuous directional blending for the whole body, but strongly
+bias front/back identity sources across the upper torso and head. Add a
+front/back positional rule for top-facing geometry. This retained a
+single readable face without creating silhouette bands.
+
+======================================================================
+ADD-ON UI AND ADJUSTABLE CONTROLS
+======================================================================
+
+Create a panel in the 3D Viewport sidebar, for example:
+
+    N-panel > Texture Reproject
+
+Suggested sections:
+
+1. Target
+
+   - Target mesh object
+   - Production material
+   - Target/original UV map
+   - Base-color image node
+   - Normal-map node
+   - Character forward axis
+   - Character up axis
+   - Apply/evaluate transforms option
+
+2. Source Images
+
+   - Front image
+   - Back image
+   - Left image
+   - Right image
+   - Per-view enable/disable checkbox
+   - Per-view image flip X/Y
+   - Per-view scale
+   - Per-view horizontal offset
+   - Per-view vertical offset
+   - Per-view alpha threshold
+   - Per-view overall weight
+
+3. Camera Fit
+
+   - Automatic bounding-box fit
+   - Framing ratio; default 0.90
+   - Camera distance
+   - Shared scale
+   - Per-view scale and offsets
+   - Show/hide projection cameras
+   - Recalculate projection UVs
+
+4. Blending
+
+   Expose at least:
+
+   - Directional exponent; default 4.0
+   - Minimum weight; default 0.001
+   - Lower-body front/back bias; default 3.0
+   - Upper-body front/back bias; default 10.0
+   - Head front/back bias; default 40.0
+   - Side-view bias; default 1.0
+   - Upper-body height threshold; default 0.58
+   - Head height threshold; default 0.75
+   - Top-surface coverage; default 0.90
+   - Projection fallback threshold; default 0.01
+   - Blend/feather width near view transitions
+
+5. Bake
+
+   - Texture size: 1024, 2048, 4096, or 8192
+   - Bake margin; default 24
+   - Bake device
+   - Output texture path
+   - Pack baked image checkbox
+   - Normal-map strength; default 0.25
+   - Smooth shading checkbox
+
+6. Actions
+
+   - Validate Character
+   - Create/Refresh Projection Preview
+   - Toggle Original/Reprojected Preview
+   - Bake Final Texture
+   - Clean Temporary Projection Data
+   - Save Corrected Copy
+   - Export Corrected GLB
+   - Render Verification Views
+
+Add a preset system. The successful baseline preset should be called
+something like:
+
+    SPAR3D Character - Identity Priority
+
+======================================================================
+MOST IMPORTANT TWEAKS FOR MANUAL REPAIR
+======================================================================
+
+If alternate eyes or facial features appear at three-quarter angles:
+
+- Increase head front/back bias.
+- Increase the directional exponent.
+- Raise or lower the head threshold so the entire face is included.
+- Reduce the left/right view weight around the head.
+- Correct the profile-image horizontal offset or scale.
+
+If white/pale bands appear along the arms or silhouette:
+
+- Do not use hard one-view polygon assignment.
+- Increase projection-image alpha feathering.
+- Verify identical subject framing between views.
+- Reduce the directional exponent slightly.
+- Increase fallback use near low-alpha areas.
+- Correct the side image scale and horizontal offset.
+
+If shoulders or the top of the head look like a collage:
+
+- Increase top-surface coverage.
+- Check character front/back axis selection.
+- Adjust the front/back positional split.
+
+If clothing seams do not line up:
+
+- Adjust individual image offsets and scale.
+- Lower the directional exponent for a wider blend.
+- Add a paintable per-view mask in a later version.
+
+If the texture appears too embossed or muddy:
+
+- Lower normal-map strength.
+- Confirm the base-color image is using sRGB.
+- Confirm the normal image is using Non-Color.
+- Ensure no lighting was baked into the material accidentally.
+
+======================================================================
+REPEATABLE WORKFLOW FOR A DIFFERENT CHARACTER
+======================================================================
+
+Source-image preparation:
+
+1. Create or collect front, back, left, and right full-body images of
+   the same character.
+
+2. Keep the following consistent between views:
+
+   - Same identity and facial structure
+   - Same hairstyle
+   - Same clothing and colors
+   - Same body proportions
+   - Same neutral standing pose
+   - Same camera height and perspective
+   - Same lighting and exposure
+   - Same framing and subject scale
+
+3. Use a transparent background when possible. A clean solid background
+   can work if it is removed before reprojection.
+
+4. High-resolution sources are recommended. For a 4096 texture bake,
+   the character should occupy most of a source image that is at least
+   roughly 2048-4096 pixels tall.
+
+5. Avoid weapons crossing the torso, flowing capes, extreme poses,
+   crossed limbs, strong cast shadows, dramatic perspective, and loose
+   objects that do not exist in the target mesh.
+
+Blender processing:
+
+1. Import the SPAR3D GLB or open its Blender file.
+2. Save a working copy.
+3. Select the character mesh.
+4. Open Texture Reproject in the N-panel.
+5. Validate the mesh, material, UV map, and axis orientation.
+6. Load the four standardized source images.
+7. Use automatic camera fit.
+8. Create the projection preview using the SPAR3D identity-priority
+   preset.
+9. Inspect:
+
+   - Front
+   - Back
+   - Exact left profile
+   - Exact right profile
+   - Left three-quarter
+   - Right three-quarter
+   - Face close-up
+
+10. Correct image scale/offset first.
+11. Correct blend biases only after the projections are aligned.
+12. Bake the final 4096 texture.
+13. Toggle between the original and baked material for comparison.
+14. Clean temporary projection data.
+15. Save a new Blender file.
+16. Export a new GLB.
+17. Reopen the saved file and verify that the baked texture is packed,
+    only production UVs remain, and no temporary cameras/materials exist.
+
+======================================================================
+MVP SCOPE
+======================================================================
+
+The first version may support:
+
+- One selected mesh
+- One production material
+- One original UV map
+- Four orthographic projection images
+- Base-color reprojection only
+- Existing normal-map preservation
+- 4K baking
+- Blender 5.1.2
+
+Do not overcomplicate the first working version with AI image generation,
+automatic facial landmark detection, new UV unwrapping, texture painting,
+or multi-character batch processing.
+
+Once the reference Folsom character reproduces the v6 result through the
+add-on, possible later features include:
+
+- Multiple materials
+- Multiple mesh objects
+- Optional three-quarter source images
+- Paintable per-view masks
+- Alpha-mask erosion/dilation and feathering
+- Face-only projection mode
+- Reusable character presets
+- Batch processing
+- Head/body material separation
+- Automatic source-image alignment
+- Seam-healing or inpainting after bake
+- Roughness, metallic, and normal-detail generation
+
+======================================================================
+ACCEPTANCE TESTS
+======================================================================
+
+The add-on is ready for its first release when:
+
+1. It can reproduce a result close to
+   folsomsavage_retextured_v6.blend from the original file and the four
+   reference projection images.
+
+2. The face does not show doubled eyes, noses, mouths, or profile
+   features at either three-quarter angle.
+
+3. The arms, shoulders, head, and body do not show white projection
+   bands or transparent gaps.
+
+4. Front, back, left, and right clothing remain recognizably consistent.
+
+5. The original UV atlas is preserved.
+
+6. The final base-color image is 4096 x 4096 and can be packed.
+
+7. The original normal map is preserved and its strength is adjustable.
+
+8. Temporary cameras, UV maps, attributes, materials, and image
+   datablocks can be removed with one operation.
+
+9. The source Blender file remains untouched.
+
+10. The corrected Blender copy and exported GLB reopen successfully.
+
+11. The same workflow can be run on a second SPAR3D character without
+    editing the add-on source code.
+
+======================================================================
+REFERENCE VERIFICATION IMAGES
+======================================================================
+
+The v6 proof renders are located at:
+
+E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\verify_front.png
+E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\verify_back.png
+E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\verify_left.png
+E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\verify_right.png
+E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\verify_face_closeup.png
+E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\verify_threequarter_left.png
+E:\Dev\Dread_Stone_Black\output\blender_texture_rebuild\verify_threequarter_right.png
+
+Use these views as visual acceptance references, not just the front
+viewport.
+
+======================================================================
+END OF HANDOFF
+======================================================================

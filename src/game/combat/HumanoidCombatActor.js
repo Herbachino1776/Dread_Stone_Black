@@ -305,12 +305,12 @@ export class HumanoidCombatActor {
   }
 
   createBody(config) {
-    const proxyFit = this.visualProfile.animationAuthoritative ? this.visualProfile.proxyFit?.[config.id] : null;
+    const proxyFit = this.visualProfile.proxyFit?.[config.id] ?? null;
     const position = new THREE.Vector3(config.position[0] * HUMANOID_PHYSICAL_SCALE, config.position[1] * HUMANOID_PHYSICAL_SCALE, (config.position[2] + 3.55) * HUMANOID_PHYSICAL_SCALE)
       .applyQuaternion(this.spawnRotation)
       .add(new THREE.Vector3(this.spawnOffset.x, this.spawnOffset.y, this.spawnOffset.z - 3.55));
     const quaternion = this.spawnRotation.clone().multiply(bodyQuaternion(config.rotation));
-    const descriptor = (proxyFit ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.dynamic())
+    const descriptor = (this.visualProfile.animationAuthoritative ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.dynamic())
       .setTranslation(position.x, position.y, position.z)
       .setRotation(quaternion)
       .setLinearDamping(3.4)
@@ -835,7 +835,7 @@ export class HumanoidCombatActor {
 
   activateRagdoll({ forced = false } = {}) {
     if (this.visualProfile.authoredDeathAnimations) return false;
-    if (this.ragdollActive || !this.animationAuthorityReady) return false;
+    if (this.ragdollActive || (this.visualProfile.animationAuthoritative && !this.animationAuthorityReady) || !this.visualAdapter) return false;
     if (typeof this.visualAdapter?.getProxyPose === 'function') this.syncAnimationProxyBodies(this.visualAdapter);
     const finalPose = new Map();
     this.bodies.forEach(({ body }, bodyId) => {

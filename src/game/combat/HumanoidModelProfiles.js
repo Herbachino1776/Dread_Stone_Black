@@ -6,7 +6,7 @@ export const CURRENT_HUMANOID_BONE_MAP = Object.freeze({
   right_thigh: 'leg_right_top', right_lower_leg: 'leg_right_bot', right_foot: 'leg_right_foot',
 });
 
-export const TESTMAN_BONE_MAP = Object.freeze({
+export const DREADGUARD_BONE_MAP = Object.freeze({
   pelvis: 'body', abdomen: 'body_top0', lower_chest: 'body_top1', upper_chest: 'body_top2', neck: 'neck', head: 'head',
   left_upper_arm: 'arm_left_top', left_forearm: 'arm_left_bot', left_hand: 'arm_left_hand',
   right_upper_arm: 'arm_right_top', right_forearm: 'arm_right_bot', right_hand: 'arm_right_hand',
@@ -27,22 +27,23 @@ export const CURRENT_HUMANOID_PROFILE = Object.freeze({
   colliderFitNotes: 'Canonical 2.06 m combat profile; existing 18-body/17-joint collider layout is unchanged.',
 });
 
-export const TESTMAN_COMBAT_PROFILE = Object.freeze({
-  name: 'testman_animpack_v002_animation_authoritative',
+export const DREADGUARD_DAMAGE_COMBAT_PROFILE = Object.freeze({
+  name: 'dreadguard_damage_v001_no_animation',
   voiceProfile: 'male_human',
-  assetPath: './assets/enemies/testman/testman_animpack_v002.glb',
-  animationManifestPath: './assets/enemies/testman/testman_animpack_v002.json',
-  rawHeight: 4.835451218922911,
+  assetPath: './assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb',
+  damageManifestPath: './assets/enemies/dreadguard/damage/dreadguard_damage_v001.json',
+  damageValidationReportPath: './assets/enemies/dreadguard/damage/dreadguard_damage_v001_validation.json',
+  rawHeight: 1.4635979019523002,
   targetHeight: 1.82,
-  animationAuthoritative: true,
-  authoredAnimationPack: true,
-  authoredDeathAnimations: true,
-  animationFadeSeconds: 0.1,
-  walkReferenceSpeed: 0.72,
+  animationAuthoritative: false,
+  authoredAnimationPack: false,
+  authoredDeathAnimations: false,
+  ignoreEmbeddedAnimations: true,
+  noAnimationFallback: 'physics_bound_rest_pose',
   groundClearance: 0.02,
   rootYaw: 0,
   rootOffset: Object.freeze([0, 0, 0]),
-  boneMap: TESTMAN_BONE_MAP,
+  boneMap: DREADGUARD_BONE_MAP,
   proxyFit: Object.freeze({
     pelvis: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.17, 0.11, 0.11]), bone: 'body' }),
     abdomen: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.16, 0.09, 0.11]), start: 'body', end: 'body_top0' }),
@@ -63,50 +64,13 @@ export const TESTMAN_COMBAT_PROFILE = Object.freeze({
     right_lower_leg: Object.freeze({ shape: 'capsule', radius: 0.07, halfHeight: 0.145, start: 'leg_right_bot', end: 'leg_right_foot' }),
     right_foot: Object.freeze({ shape: 'box', halfExtents: Object.freeze([0.075, 0.055, 0.13]), bone: 'leg_right_foot', offset: Object.freeze([0, 0.08, 0]) }),
   }),
-  colliderFitNotes: 'Animation-authoritative 1.82 m visual with bone-following semantic capsules/boxes; GLB bones are never driven from Rapier.',
-});
-
-export const TESTMAN_DAMAGE_COMBAT_PROFILE = Object.freeze({
-  ...TESTMAN_COMBAT_PROFILE,
-  name: 'testman_damage_v001_animation_authoritative',
-  assetPath: './assets/enemies/testman/damage/testman_damage_v001.glb',
-  damageManifestPath: './assets/enemies/testman/damage/testman_damage_v001.json',
-  animationManifestPath: './assets/enemies/testman/damage/testman_damage_v001_animpack.json',
-  rawHeight: 1.5228491691721973,
   damageAuthoringVersion: '3.9.1',
   damageAuthoringBuildId: '2026-07-18.source-contract.1',
-  damageTopologyFingerprint: '96256fc3f56d95df7415cb7a85cc37ed87816274c909c0411bccaa98400fcd39',
-  damageWeightFingerprint: '3cebdc992934e4a3fb4928a0ab9bb36050e720e9769cffccc2dd162cc8190630',
-  damageRequiredObjects: Object.freeze([
-    'DSB_DAMAGE_RIG',
-    'DSB_BODY_CORE',
-    'DSB_ATTACHED_HEAD',
-    'DSB_ATTACHED_FOREARM_L',
-    'DSB_ATTACHED_FOREARM_R',
-    'DSB_SEGMENT_HEAD',
-    'DSB_STUMP_NECK_TORSO',
-    'DSB_STUMP_NECK_HEAD',
-    'DSB_SEGMENT_FOREARM_L',
-    'DSB_SEGMENT_FOREARM_R',
-    'DSB_STUMP_ELBOW_L_UPPER',
-    'DSB_STUMP_ELBOW_L_LOWER',
-    'DSB_STUMP_ELBOW_R_UPPER',
-    'DSB_STUMP_ELBOW_R_LOWER',
-    'DSB_SEGMENT_UPPER_BODY',
-    'DSB_SEGMENT_LOWER_BODY',
-    'DSB_STUMP_WAIST_UPPER',
-    'DSB_STUMP_WAIST_LOWER',
-    'DSB_SOCKET_ABDOMEN_VISCERA',
-  ]),
-  damageExpectedAnimationNames: Object.freeze([
-    'DSB_Walk_NORMAL_v001',
-    'DSB_Hurt_LEFT_Flank_v001',
-    'DSB_Hurt_RIGHT_Flank_v001',
-    'DSB_Death_ChestHold_LEFT_v001',
-    'DSB_Death_Faceplant_LEFT_v001',
-  ]),
+  damageTopologyFingerprint: '880eabb3e8810327a1e60bd9e8313ad1acd65dff33970f6ae3c01ce2a459a2c8',
+  damageWeightFingerprint: '17ab81330545a1a9c2506bf9151f3b99deaa7a674835bbb15d77228a2e5b9b97',
+  damageExpectedAnimationNames: Object.freeze([]),
   activeDamageSegmentIds: Object.freeze(['head_neck', 'left_elbow', 'right_elbow']),
-  colliderFitNotes: 'Combat Lab and Folsom Forge v3.9.1 damage visual. Head/forearm detachment and the first three manifest-authored mace deformation states are active; waist remains loaded but inactive.',
+  colliderFitNotes: 'Folsom and Combat Lab Forge v3.9.1 Dreadguard baseline. The exported rest pose uses the established physics-bound no-animation fallback; manifest-authored head/forearm detachment remains active.',
 });
 
 export function getHumanoidProfileScale(profile) {

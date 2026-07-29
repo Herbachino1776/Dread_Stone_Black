@@ -17,7 +17,7 @@ import {
 import { COMBAT_DIRECTOR_EVENTS, CombatDirector } from '../src/game/combat/CombatDirector.js';
 import { PenetrationAudioGate } from '../src/game/combat/weapons/PenetrationAudioGate.js';
 import { MELEE_INTENTS } from '../src/game/combat/MeleeIntentWeapon.js';
-import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE, TESTMAN_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
+import { CURRENT_HUMANOID_PROFILE, DREADGUARD_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const acceptedCueIds = [...FLESH_STAB_CUE_IDS, ...MALE_HUMAN_DEATH_SIGH_CUE_IDS];
@@ -43,7 +43,7 @@ function createActor(instanceId = 'male-actor-1', position = new THREE.Vector3(2
   return {
     instanceId,
     lifeState: 'alive',
-    visualProfile: TESTMAN_COMBAT_PROFILE,
+    visualProfile: DREADGUARD_DAMAGE_COMBAT_PROFILE,
     root,
     emitterPosition: position.clone(),
     getBodyWorldPosition() { return this.emitterPosition.clone(); },
@@ -271,13 +271,12 @@ test('direct death, actor-time spatial capture, independent emitters, reset, dis
 
 test('male voice metadata is explicit and detachment audio remains terminal-state owned', async () => {
   assert.equal(CURRENT_HUMANOID_PROFILE.voiceProfile, 'male_human');
-  assert.equal(TESTMAN_COMBAT_PROFILE.voiceProfile, 'male_human');
-  assert.equal(TESTMAN_DAMAGE_COMBAT_PROFILE.voiceProfile, 'male_human');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.voiceProfile, 'male_human');
   const actorSource = await readFile(`${repoRoot}/src/game/combat/HumanoidCombatActor.js`, 'utf8');
   const segmentSource = await readFile(`${repoRoot}/src/game/combat/HumanoidDamageSegmentRuntime.js`, 'utf8');
   assert.match(actorSource, /requestFatalSegmentDetachment[\s\S]*transitionLifeState\('dying'/);
   assert.doesNotMatch(segmentSource, /deathSigh|male_death_sigh|acceptedCombatAudio/);
-  assert.match(segmentSource, /fatal:\s*true/);
+  assert.match(segmentSource, /state\.manifest\.fatal === true/);
   assert.match(segmentSource, /fatal:\s*false/);
 });
 

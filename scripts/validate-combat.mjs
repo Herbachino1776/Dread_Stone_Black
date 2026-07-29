@@ -10,7 +10,7 @@ assert.equal(result.bodyCount, 18);
 assert.equal(result.jointCount, 17);
 assert.ok(result.regionCount >= 20);
 
-const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSource, presentationSource, cameraFeedbackSource, intentSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, animationControllerSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, directorDocsSource, diagnosticDocsSource, glbBuffer, testmanGlbBuffer, testmanManifestSource, testmanValidationSource] = await Promise.all([
+const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSource, presentationSource, cameraFeedbackSource, intentSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, animationControllerSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, directorDocsSource, glbBuffer, dreadguardGlbBuffer, dreadguardManifestSource, dreadguardValidationSource] = await Promise.all([
   readFile(new URL('../src/game/Game.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/SceneSessionHost.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/FirstPersonViewmodelHost.js', import.meta.url), 'utf8'),
@@ -40,11 +40,10 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSo
   readFile(new URL('../package.json', import.meta.url), 'utf8'),
   readFile(new URL('../docs/architecture/PHYSICAL_HUMANOID_COMBAT_FOUNDATION.md', import.meta.url), 'utf8').catch(() => ''),
   readFile(new URL('../docs/architecture/COMBAT_DIRECTOR.md', import.meta.url), 'utf8'),
-  readFile(new URL('../docs/testman_animpack_v002_diagnostic.md', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/models/npc/human/human_retro_256.glb', import.meta.url)),
-  readFile(new URL('../public/assets/enemies/testman/testman_animpack_v002.glb', import.meta.url)),
-  readFile(new URL('../public/assets/enemies/testman/testman_animpack_v002.json', import.meta.url), 'utf8'),
-  readFile(new URL('../public/assets/enemies/testman/testman_animpack_v002_validation.json', import.meta.url), 'utf8'),
+  readFile(new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb', import.meta.url)),
+  readFile(new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.json', import.meta.url), 'utf8'),
+  readFile(new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001_validation.json', import.meta.url), 'utf8'),
 ]);
 const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSource, actorRouterSource, bloodMaterialSource, weaponPoseSource, weaponGestureSource, weaponContactRouterSource, sweptCuttingEdgeSource, weaponVisualAssetSource, weaponContactScratchSource, swordControllerSource, edgeDamageSource] = await Promise.all([
   readFile(new URL('../src/game/combat/KnifeWoundDecalLibrary.js', import.meta.url), 'utf8'),
@@ -99,51 +98,36 @@ assert.ok(glbJson.skins?.[0]?.joints?.length >= 18, 'humanoid GLB contains a coh
 assert.ok(glbJson.images?.every((image) => image.bufferView != null), 'humanoid textures are embedded');
 const nodeNames = new Set(glbJson.nodes.map((node) => node.name));
 ['body', 'body_top0', 'body_top1', 'body_top2', 'neck', 'head', 'arm_left_top', 'arm_left_bot', 'arm_left_hand', 'arm_right_top', 'arm_right_bot', 'arm_right_hand', 'leg_left_top', 'leg_left_bot', 'leg_left_foot', 'leg_right_top', 'leg_right_bot', 'leg_right_foot'].forEach((name) => assert.ok(nodeNames.has(name), `required mapped GLB bone exists: ${name}`));
-const testmanGlbJson = parseGlbJson(testmanGlbBuffer);
-const testmanManifest = JSON.parse(testmanManifestSource);
-const testmanValidation = JSON.parse(testmanValidationSource);
-const manifestAnimationNames = testmanManifest.animations.map((animation) => animation.name);
-const exportedAnimationNames = testmanGlbJson.animations?.map((animation) => animation.name) ?? [];
-assert.equal(testmanManifest.schema, 'dreadstone.animation_pack.v1');
-assert.equal(testmanManifest.asset, 'testman_animpack_v002.glb');
-assert.equal(testmanManifest.approved_animation_count, 5);
-assert.equal(testmanManifest.animations.length, testmanManifest.approved_animation_count);
-assert.equal(new Set(manifestAnimationNames).size, manifestAnimationNames.length, 'Testman manifest animation names are unique');
-assert.deepEqual(exportedAnimationNames, manifestAnimationNames, 'every manifest animation is discoverable in the v002 GLB');
-assert.ok(testmanGlbJson.meshes?.length >= 1, 'Testman v002 GLB contains a mesh');
-assert.ok(testmanGlbJson.skins?.length >= 1, 'Testman v002 GLB contains a skin');
-assert.ok(testmanGlbJson.meshes.flatMap((mesh) => mesh.primitives).some((primitive) => primitive.attributes.JOINTS_0 != null && primitive.attributes.WEIGHTS_0 != null), 'Testman v002 GLB contains a SkinnedMesh primitive');
-assert.ok(testmanGlbJson.animations?.every((animation) => animation.channels.length > 0), 'every Testman v002 animation contains channels');
-assert.ok(testmanGlbJson.images?.every((image) => image.bufferView != null), 'Testman v002 textures are embedded');
-const testmanNodeNames = new Set(testmanGlbJson.nodes.map((node) => node.name));
-['body', 'body_top0', 'body_top1', 'body_top2', 'neck', 'head', 'arm_left_top', 'arm_left_bot', 'arm_left_hand', 'arm_right_top', 'arm_right_bot', 'arm_right_hand', 'leg_left_top', 'leg_left_bot', 'leg_left_foot', 'leg_right_top', 'leg_right_bot', 'leg_right_foot'].forEach((name) => assert.ok(testmanNodeNames.has(name), `required mapped Testman v002 bone exists: ${name}`));
-const animationsByKind = testmanManifest.animations.reduce((groups, animation) => {
-  if (!groups.has(animation.approved_kind)) groups.set(animation.approved_kind, []);
-  groups.get(animation.approved_kind).push(animation);
-  return groups;
-}, new Map());
-assert.equal(animationsByKind.get('WALK')?.length, 1);
-assert.ok(animationsByKind.get('WALK').every((animation) => animation.loop && !animation.play_once && !animation.hold_final_pose));
-assert.equal(animationsByKind.get('HURT_LEFT')?.length, 1);
-assert.equal(animationsByKind.get('HURT_RIGHT')?.length, 1);
-assert.ok([...animationsByKind.get('HURT_LEFT'), ...animationsByKind.get('HURT_RIGHT')].every((animation) => !animation.loop && animation.play_once && !animation.hold_final_pose && animation.return_to_previous_state));
-assert.equal(animationsByKind.get('DEATH')?.length, 2);
-assert.ok(animationsByKind.get('DEATH').every((animation) => !animation.loop && animation.play_once && animation.hold_final_pose && !animation.return_to_previous_state));
-testmanManifest.animations.forEach((metadata, index) => {
-  const animation = testmanGlbJson.animations[index];
-  const bounds = animation.samplers.map((sampler) => testmanGlbJson.accessors[sampler.input]).filter(Boolean);
-  const start = Math.min(...bounds.map((accessor) => accessor.min?.[0]).filter(Number.isFinite));
-  const end = Math.max(...bounds.map((accessor) => accessor.max?.[0]).filter(Number.isFinite));
-  assert.ok(Math.abs((end - start) - metadata.duration_seconds) < 1e-5, `${metadata.name} duration matches its manifest metadata`);
+const dreadguardGlbJson = parseGlbJson(dreadguardGlbBuffer);
+const dreadguardManifest = JSON.parse(dreadguardManifestSource);
+const dreadguardValidation = JSON.parse(dreadguardValidationSource);
+assert.equal(dreadguardManifest.schema, 'dreadstone.damage_authoring.v1');
+assert.equal(dreadguardManifest.glb, 'dreadguard_damage_v001.glb');
+assert.equal(dreadguardValidation.status, 'PASS');
+assert.deepEqual(dreadguardValidation.errors, []);
+assert.deepEqual(dreadguardValidation.warnings, []);
+assert.equal(dreadguardValidation.source_topology_sha256, dreadguardManifest.source.topologyFingerprint);
+assert.equal(dreadguardValidation.source_weight_sha256, dreadguardManifest.source.weightFingerprint);
+assert.equal(dreadguardValidation.deformation.progressiveDamageSites.siteCount, 1);
+assert.ok(dreadguardGlbJson.meshes?.length >= 1, 'Dreadguard damage GLB contains meshes');
+assert.ok(dreadguardGlbJson.skins?.length >= 1, 'Dreadguard damage GLB contains a skin');
+assert.ok(dreadguardGlbJson.meshes.flatMap((mesh) => mesh.primitives).some((primitive) => primitive.attributes.JOINTS_0 != null && primitive.attributes.WEIGHTS_0 != null), 'Dreadguard damage GLB contains a SkinnedMesh primitive');
+assert.ok(dreadguardGlbJson.images?.every((image) => image.bufferView != null), 'Dreadguard textures are embedded');
+const dreadguardNodeNames = new Set(dreadguardGlbJson.nodes.map((node) => node.name));
+['body', 'body_top0', 'body_top1', 'body_top2', 'neck', 'head', 'arm_left_top', 'arm_left_bot', 'arm_left_hand', 'arm_right_top', 'arm_right_bot', 'arm_right_hand', 'leg_left_top', 'leg_left_bot', 'leg_left_foot', 'leg_right_top', 'leg_right_bot', 'leg_right_foot'].forEach((name) => assert.ok(dreadguardNodeNames.has(name), `required mapped Dreadguard bone exists: ${name}`));
+dreadguardManifest.deformations.generatedGoreMeshes.forEach(({ nodeName }) => assert.ok(dreadguardNodeNames.has(nodeName), `manifest gore node exists: ${nodeName}`));
+const progressiveSite = dreadguardManifest.deformations.progressiveDamageSites[0];
+assert.equal(dreadguardManifest.deformations.progressiveDamageSiteSchema, 'dreadstone.progressive_damage_sites.v1');
+assert.deepEqual(progressiveSite.stageOrder, ['LIGHT', 'MEDIUM', 'HEAVY']);
+assert.deepEqual(Object.fromEntries(progressiveSite.stages.map((stage) => [stage.stage, stage.deformationKeyName])), {
+  LIGHT: 'Left_Head_Impact_v003',
+  MEDIUM: 'Left_Head_Impact_v002',
+  HEAVY: 'Left_Head_Impact_v001',
 });
-assert.equal(testmanValidation.status, 'PASS');
-assert.equal(testmanValidation.file_size_bytes, testmanGlbBuffer.length);
-assert.deepEqual(testmanValidation.expected_animation_names, manifestAnimationNames);
-assert.deepEqual(testmanValidation.exported_animation_names, manifestAnimationNames);
-assert.deepEqual(testmanValidation.missing_animations, []);
-assert.deepEqual(testmanValidation.unexpected_animations, []);
-assert.deepEqual(testmanValidation.duplicate_animation_names, []);
-assert.equal(testmanValidation.preview_floor_exported, false);
+const attachedHeadNode = dreadguardGlbJson.nodes.find((node) => node.name === progressiveSite.stages[0].attachedObject);
+const detachedHeadNode = dreadguardGlbJson.nodes.find((node) => node.name === progressiveSite.stages[0].detachedObject);
+assert.deepEqual(dreadguardGlbJson.meshes[attachedHeadNode.mesh].extras.targetNames, ['Left_Head_Impact_v001', 'Left_Head_Impact_v002', 'Left_Head_Impact_v003']);
+assert.deepEqual(dreadguardGlbJson.meshes[detachedHeadNode.mesh].extras.targetNames, ['Left_Head_Impact_v001', 'Left_Head_Impact_v002', 'Left_Head_Impact_v003']);
 
 assert.match(sceneHostSource, /combatLab/);
 assert.match(sceneHostSource, /FolsomCombatEncounter/);
@@ -287,10 +271,11 @@ assert.doesNotMatch(adapterSource, /material\.normalMap\.magFilter = THREE\.Near
 assert.match(adapterSource, /no-cast-shadow|no-receive-shadow|no-normal-map|no-directional-shadow|tight-shadow-frustum/);
 assert.match(adapterSource, /cachedAssetPromises = new Map/);
 assert.match(adapterSource, /loadCachedAsset\(this\.profile\.assetPath\)/);
-assert.match(profileSource, /testman_animpack_v002_animation_authoritative/);
-assert.match(profileSource, /\.\/assets\/enemies\/testman\/testman_animpack_v002\.glb/);
-assert.match(profileSource, /\.\/assets\/enemies\/testman\/testman_animpack_v002\.json/);
-assert.match(profileSource, /animationAuthoritative: true/);
+assert.match(profileSource, /dreadguard_damage_v001_no_animation/);
+assert.match(profileSource, /\.\/assets\/enemies\/dreadguard\/damage\/dreadguard_damage_v001\.glb/);
+assert.match(profileSource, /\.\/assets\/enemies\/dreadguard\/damage\/dreadguard_damage_v001\.json/);
+assert.match(profileSource, /animationAuthoritative: false/);
+assert.match(profileSource, /noAnimationFallback: 'physics_bound_rest_pose'/);
 assert.match(profileSource, /targetHeight: 1\.82/);
 assert.match(profileSource, /proxyFit/);
 assert.match(adapterSource, /measureVisibleSkinnedBounds/);
@@ -382,8 +367,8 @@ assert.match(stage2ConfigSource, /fresh: 0xc41222/);
 assert.match(stage2ConfigSource, /spray: 0xd41424/);
 assert.match(stage2ConfigSource, /arterial: 0xe0182d/);
 assert.match(stage2ConfigSource, /slashArterial: 0xf01b32/);
-assert.match(folsomEncounterSource, /folsom-testman-stationary-blocker-/);
-assert.match(folsomEncounterSource, /TESTMAN_DAMAGE_COMBAT_PROFILE/);
+assert.match(folsomEncounterSource, /folsom-dreadguard-stationary-blocker-/);
+assert.match(folsomEncounterSource, /DREADGUARD_DAMAGE_COMBAT_PROFILE/);
 assert.match(folsomEncounterSource, /new FolsomShowcaseCombatExtras/);
 assert.match(folsomEncounterSource, /new CombatDirector/);
 assert.match(folsomEncounterSource, /applyMeleeSpacingEnvelope/);
@@ -423,16 +408,16 @@ assert.match(combatLabSource, /blood-lighting/);
 assert.match(packageSource, /blood-chroma-material\.test\.mjs/);
 assert.match(feedbackSource, /navigator\?\.vibrate/);
 assert.match(feedbackSource, /maximumVoices/);
-assert.match(folsomEncounterSource, /folsom-testman-stationary-/);
-assert.match(folsomEncounterSource, /FOLSOM_TESTMAN_SPAWN_XZ/);
+assert.match(folsomEncounterSource, /folsom-dreadguard-stationary-/);
+assert.match(folsomEncounterSource, /FOLSOM_DREADGUARD_SPAWN_XZ/);
 assert.match(folsomEncounterSource, /resolveCombatMortalityMode/);
-assert.match(folsomEncounterSource, /TESTMAN_DAMAGE_COMBAT_PROFILE/);
+assert.match(folsomEncounterSource, /DREADGUARD_DAMAGE_COMBAT_PROFILE/);
 assert.doesNotMatch(folsomEncounterSource, /FolsomModelIdleRawReference|modelIdleCombatTest|rawModelReference/);
-assert.match(combatLabSource, /TESTMAN_DAMAGE_COMBAT_PROFILE/);
+assert.match(combatLabSource, /DREADGUARD_DAMAGE_COMBAT_PROFILE/);
 assert.match(combatLabSource, /new CombatDirector/);
 assert.match(combatLabSource, /this\.combatDirector\.beginSlash/);
-assert.match(diagnosticDocsSource, /testman_animpack_v002\.json.*source of truth/);
-assert.match(diagnosticDocsSource, /never drives? the GLB bones/);
+assert.match(folsomEncounterSource, /__DSB_DREADGUARD_DAMAGE__/);
+assert.match(folsomEncounterSource, /Light.*Medium.*Heavy/s);
 assert.match(combatLabSource, /resolveCombatMortalityMode/);
 assert.match(combatLabSource, /toggleMortalityMode/);
 assert.match(combatLabPanelSource, /MORTALITY X/);

@@ -5,7 +5,7 @@ import { HumanoidCombatActor } from './HumanoidCombatActor.js';
 import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
 import { resolveCombatMortalityMode } from './CombatMortality.js';
-import { TESTMAN_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { DREADGUARD_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 import { CombatDirector } from './CombatDirector.js';
 import { MELEE_INTENTS } from './MeleeIntentWeapon.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
@@ -16,7 +16,6 @@ import { CombatLabWalkerController } from './CombatLabWalkerController.js';
 import { BLOOD_LIGHTING_DEBUG_MODES, countBloodChromaRendererPrograms, getBloodMaterialDiagnostics, setBloodLightingDebugMode } from './BloodChromaMaterial.js';
 import { BLOOD_COLOR_PALETTE } from './CombatStage2Config.js';
 import { CombatAcceptedAudioSystem } from './CombatAcceptedAudioSystem.js';
-import { TESTMAN_FORGE_DAMAGE_MORPHS } from './ForgeDamageDeformationRuntime.js';
 
 export class CombatLabScene {
   static async create(options = {}) {
@@ -57,7 +56,7 @@ export class CombatLabScene {
     this.lightingMode = 'day';
     this.disposed = false;
     this.buildEnvironment();
-    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, visualProfile: TESTMAN_DAMAGE_COMBAT_PROFILE, mortalityMode: resolveCombatMortalityMode(), acceptedCombatAudio: this.acceptedCombatAudio, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
+    this.actor = new HumanoidCombatActor({ physics: this.physics, scene: this.scene, visualProfile: DREADGUARD_DAMAGE_COMBAT_PROFILE, mortalityMode: resolveCombatMortalityMode(), acceptedCombatAudio: this.acceptedCombatAudio, eventSink: (event, payload) => this.handleCombatEvent(event, payload) });
     this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: 'combat-lab-humanoid-player-blocker' });
     this.meleeSpacing = applyMeleeSpacingEnvelope(this.playerBlocker, { playerRadius: this.collision.playerRadius, readyReach: Math.abs(KNIFE_COMBAT_CONFIG.workspace.ready[2]) + KNIFE_COMBAT_CONFIG.bladeLength, gestureReach: KNIFE_COMBAT_CONFIG.workspace.thrustDistance, effectiveDepth: KNIFE_COMBAT_CONFIG.maximumPenetrationDepth });
     this.collision.addBlocker(this.playerBlocker);
@@ -330,9 +329,10 @@ export class CombatLabScene {
   }
   debugDetachLeftForearm() { return this.debugDetachForearm('left_elbow', -1); }
   debugDetachRightForearm() { return this.debugDetachForearm('right_elbow', 1); }
-  debugDamageHeadLeft() { return this.actor?.visualAdapter?.activateForgeDamage?.(TESTMAN_FORGE_DAMAGE_MORPHS.headLeft, { source: 'combat_lab_debug', hitRegion: 'skull', hitSide: 'left' }) ?? null; }
-  debugDamageHeadRight() { return this.actor?.visualAdapter?.activateForgeDamage?.(TESTMAN_FORGE_DAMAGE_MORPHS.headRight, { source: 'combat_lab_debug', hitRegion: 'skull', hitSide: 'right' }) ?? null; }
-  debugDamageBodyFront() { return this.actor?.visualAdapter?.activateForgeDamage?.(TESTMAN_FORGE_DAMAGE_MORPHS.bodyFront, { source: 'combat_lab_debug', hitRegion: 'upper_chest', hitSide: 'center/front' }) ?? null; }
+  debugDamageStage(stageName) { return this.actor?.visualAdapter?.setProgressiveDamageStage?.(null, stageName, { source: 'combat_lab_debug', hitRegion: 'skull', hitSide: 'left' }) ?? null; }
+  debugDamageLight() { return this.debugDamageStage('LIGHT'); }
+  debugDamageMedium() { return this.debugDamageStage('MEDIUM'); }
+  debugDamageHeavy() { return this.debugDamageStage('HEAVY'); }
   debugResetForgeDamage() { return this.actor?.visualAdapter?.resetForgeDamage?.() ?? null; }
   toggleMortalityMode() {
     const next = this.actor.mortalityMode === 'normal' ? 'immortal_reactive' : 'normal';

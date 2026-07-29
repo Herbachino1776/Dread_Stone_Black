@@ -1,5 +1,5 @@
 import { CombatLabWalkerController } from './CombatLabWalkerController.js';
-import { TESTMAN_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { DREADGUARD_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 
 export const FOLSOM_SHOWCASE_COMBAT_CONFIG = Object.freeze({
   enabled: true,
@@ -110,7 +110,7 @@ export class FolsomShowcaseCombatExtras {
       enabled: this.enabled,
       configuredAdditionalWalkerCount: this.config.additionalWalkerCount,
       additionalWalkerCount: actors.length,
-      damageProfileActorCount: actors.filter((actor) => actor.visualProfile === TESTMAN_DAMAGE_COMBAT_PROFILE).length,
+      damageProfileActorCount: actors.filter((actor) => actor.visualProfile === DREADGUARD_DAMAGE_COMBAT_PROFILE).length,
       walkers: this.controllers.map((controller) => controller.getDiagnostics()),
     };
   }

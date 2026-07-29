@@ -1,0 +1,204 @@
+{
+  "blender_version": "5.1.2",
+  "blend_path": "D:\\Blender\\Blends\\folsomsavage.blend",
+  "scene": "Scene",
+  "render_engine": "BLENDER_EEVEE",
+  "objects": [
+    {
+      "name": "geometry_0",
+      "type": "MESH",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "hide_render": false,
+      "vertices": 8779,
+      "edges": 20339,
+      "polygons": 12116,
+      "uv_layers": [
+        "UVMap"
+      ],
+      "active_uv": "UVMap",
+      "material_slots": [
+        "Material_0"
+      ],
+      "bounds": [
+        [
+          -0.20795263350009918,
+          -0.10913465917110443,
+          -0.4990088641643524
+        ],
+        [
+          -0.20795263350009918,
+          -0.10913465917110443,
+          0.5002559423446655
+        ],
+        [
+          -0.20795263350009918,
+          0.09824204444885254,
+          0.5002559423446655
+        ],
+        [
+          -0.20795263350009918,
+          0.09824204444885254,
+          -0.4990088641643524
+        ],
+        [
+          0.21274255216121674,
+          -0.10913465917110443,
+          -0.4990088641643524
+        ],
+        [
+          0.21274255216121674,
+          -0.10913465917110443,
+          0.5002559423446655
+        ],
+        [
+          0.21274255216121674,
+          0.09824204444885254,
+          0.5002559423446655
+        ],
+        [
+          0.21274255216121674,
+          0.09824204444885254,
+          -0.4990088641643524
+        ]
+      ]
+    },
+    {
+      "name": "world",
+      "type": "EMPTY",
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "hide_render": false
+    }
+  ],
+  "materials": [
+    {
+      "name": "Material_0",
+      "use_nodes": true,
+      "blend_method": "DITHERED",
+      "nodes": [
+        {
+          "name": "Principled BSDF",
+          "type": "ShaderNodeBsdfPrincipled",
+          "label": ""
+        },
+        {
+          "name": "Material Output",
+          "type": "ShaderNodeOutputMaterial",
+          "label": ""
+        },
+        {
+          "name": "Image Texture",
+          "type": "ShaderNodeTexImage",
+          "label": "BASE COLOR",
+          "image": "Image_0"
+        },
+        {
+          "name": "Normal Map",
+          "type": "ShaderNodeNormalMap",
+          "label": ""
+        },
+        {
+          "name": "Image Texture.001",
+          "type": "ShaderNodeTexImage",
+          "label": "NORMAL MAP",
+          "image": "Image_1"
+        }
+      ],
+      "links": [
+        {
+          "from": "Principled BSDF.BSDF",
+          "to": "Material Output.Surface"
+        },
+        {
+          "from": "Image Texture.Color",
+          "to": "Principled BSDF.Base Color"
+        },
+        {
+          "from": "Normal Map.Normal",
+          "to": "Principled BSDF.Normal"
+        },
+        {
+          "from": "Image Texture.001.Color",
+          "to": "Normal Map.Color"
+        }
+      ]
+    }
+  ],
+  "images": [
+    {
+      "name": "Image_0",
+      "size": [
+        4096,
+        4096
+      ],
+      "channels": 4,
+      "filepath": "",
+      "source": "FILE",
+      "packed": true,
+      "colorspace": "sRGB"
+    },
+    {
+      "name": "Image_1",
+      "size": [
+        4096,
+        4096
+      ],
+      "channels": 4,
+      "filepath": "",
+      "source": "FILE",
+      "packed": true,
+      "colorspace": "Non-Color"
+    },
+    {
+      "name": "Render Result",
+      "size": [
+        0,
+        0
+      ],
+      "channels": 0,
+      "filepath": "",
+      "source": "VIEWER",
+      "packed": false,
+      "colorspace": ""
+    },
+    {
+      "name": "Viewer Node",
+      "size": [
+        256,
+        256
+      ],
+      "channels": 4,
+      "filepath": "",
+      "source": "VIEWER",
+      "packed": false,
+      "colorspace": ""
+    }
+  ]
+}

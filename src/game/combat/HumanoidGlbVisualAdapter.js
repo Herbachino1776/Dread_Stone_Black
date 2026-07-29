@@ -267,7 +267,7 @@ export class HumanoidGlbVisualAdapter {
       if (animationManifest.asset !== expectedAssetName) throw new Error(`Humanoid GLB profile ${this.profile.name} manifest targets ${animationManifest.asset}, expected ${expectedAssetName}`);
     }
     this.scene = clone(asset.scene);
-    this.scene.name = 'humanoid-combat-glb-visual';
+    this.scene.name = `${this.profile.name}-combat-glb-visual`;
     this.scene.visible = damageManifest ? false : true;
     this.loadedClips = asset.animations ?? [];
     this.damageManifest = damageManifest;
@@ -316,17 +316,7 @@ export class HumanoidGlbVisualAdapter {
     if (!this.skinnedMeshes.length || !this.skeletons.length) throw new Error(`Humanoid GLB has no SkinnedMesh/skeleton: ${this.profile.assetPath}`);
     if (this.profile.animationAuthoritative) {
       this.initializeAnimationAuthoritative(asset.animations ?? [], animationManifest);
-      if (damageManifest) {
-        this.damageSegmentRuntime = new HumanoidDamageSegmentRuntime({
-          actor: this.actor,
-          adapter: this,
-          loadedGlbRoot: this.scene,
-          damageManifest,
-          physicsWorld: this.actor.physics,
-          hostScene: this.actor.scene,
-        });
-        this.scene.visible = true;
-      }
+      this.initializeDamageRuntime();
       return;
     }
     this.scene.position.fromArray(this.profile.rootOffset);
@@ -336,6 +326,21 @@ export class HumanoidGlbVisualAdapter {
     this.parent.add(this.scene);
     this.captureBindings();
     this.update(1);
+    this.initializeDamageRuntime();
+  }
+
+  initializeDamageRuntime() {
+    if (!this.damageManifest || this.damageSegmentRuntime) return this.damageSegmentRuntime;
+    this.damageSegmentRuntime = new HumanoidDamageSegmentRuntime({
+      actor: this.actor,
+      adapter: this,
+      loadedGlbRoot: this.scene,
+      damageManifest: this.damageManifest,
+      physicsWorld: this.actor.physics,
+      hostScene: this.actor.scene,
+    });
+    this.scene.visible = true;
+    return this.damageSegmentRuntime;
   }
 
   applyCharacterLightingDiagnostic() {
@@ -391,7 +396,7 @@ export class HumanoidGlbVisualAdapter {
 
   initializeAnimationAuthoritative(clips, animationManifest = null) {
     this.presentationRoot = new THREE.Group();
-    this.presentationRoot.name = 'testman-animpack-v002-animation-authoritative-root';
+    this.presentationRoot.name = `${this.profile.name}-animation-authoritative-root`;
     this.presentationRoot.add(this.scene);
     this.parent.add(this.presentationRoot);
     this.animationManifest = animationManifest;
@@ -511,6 +516,7 @@ export class HumanoidGlbVisualAdapter {
 
   playDeathAnimation(options = {}) {
     if (!this.animationController) {
+      if (!this.profile.animationAuthoritative) return null;
       this.pendingDeath = { ...options };
       return null;
     }
@@ -526,6 +532,11 @@ export class HumanoidGlbVisualAdapter {
   }
 
   beginRagdoll() {
+    if (!this.profile.animationAuthoritative) {
+      if (!this.scene || !this.bindings.length) return false;
+      this.ragdollDiagnostics.activationCount += 1;
+      return true;
+    }
     // Ordinary hits never enter this path. The mixer remains authoritative until
     // the actor has explicitly transitioned into a terminal/collapse state.
     if (!this.scene || !this.presentationRoot || this.ragdollBindings.length) return this.ragdollBindings.length > 0;
@@ -559,6 +570,10 @@ export class HumanoidGlbVisualAdapter {
   }
 
   updateRagdoll() {
+    if (!this.profile.animationAuthoritative) {
+      this.update();
+      return;
+    }
     if (!this.ragdollBindings.length || !this.scene) return;
     this.parent.updateMatrixWorld(true);
     for (const binding of this.ragdollBindings) {
@@ -583,6 +598,7 @@ export class HumanoidGlbVisualAdapter {
       : null;
     const options = { ...contact, localHitX };
     if (!this.animationController) {
+      if (!this.profile.animationAuthoritative) return null;
       if (!this.pendingDeath) this.pendingHurt = options;
       return null;
     }
@@ -694,6 +710,14 @@ export class HumanoidGlbVisualAdapter {
     return this.damageSegmentRuntime?.activateForgeDamage?.(morphName, options) ?? { applied: false, reason: 'damage-runtime-not-ready', selectedMorph: morphName ?? null };
   }
 
+  setProgressiveDamageStage(siteId, stageName, options = {}) {
+    return this.damageSegmentRuntime?.setProgressiveDamageStage?.(siteId, stageName, options) ?? { applied: false, reason: 'damage-runtime-not-ready', siteId: siteId ?? null, stage: stageName ?? null };
+  }
+
+  advanceProgressiveDamageSite(siteId = null, options = {}) {
+    return this.damageSegmentRuntime?.advanceProgressiveDamageSite?.(siteId, options) ?? { applied: false, reason: 'damage-runtime-not-ready', siteId };
+  }
+
   resetForgeDamage() {
     return this.damageSegmentRuntime?.resetForgeDamage?.() ?? null;
   }
@@ -734,6 +758,8 @@ export class HumanoidGlbVisualAdapter {
       profileName: this.profile.name,
       animationAuthoritative: this.profile.animationAuthoritative === true,
       animationManifestPath: this.profile.animationManifestPath ?? null,
+      noAnimationFallback: this.profile.noAnimationFallback ?? null,
+      ignoredEmbeddedAnimationCount: this.profile.ignoreEmbeddedAnimations ? this.loadedClips.length : 0,
       damageManifestPath: this.profile.damageManifestPath ?? null,
       manifestAnimationCount: this.animationPack?.entriesByName.size ?? 0,
       manifestAnimationNames: [...(this.animationPack?.entriesByName.keys() ?? [])],

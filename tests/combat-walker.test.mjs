@@ -6,7 +6,19 @@ import { HumanoidAnimationPackController, HUMANOID_ANIMATION_STATES, resolveDeat
 import { HumanoidGlbVisualAdapter, resolveAnimationPackManifest, isolateObjectMaterials } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { COMBAT_LAB_WALKER_CONFIG, WalkerVitalStabPolicy } from '../src/game/combat/CombatLabWalkerController.js';
 
-const manifest = JSON.parse(readFileSync(new URL('../public/assets/enemies/testman/testman_animpack_v002.json', import.meta.url), 'utf8'));
+const manifest = Object.freeze({
+  schema: 'dreadstone.animation_pack.v1',
+  asset: 'synthetic_humanoid.glb',
+  fps: 24,
+  approved_animation_count: 5,
+  animations: Object.freeze([
+    Object.freeze({ name: 'DSB_Walk_NORMAL_v001', approved_kind: 'WALK', frame_start: 0, duration_seconds: 1, loop: true, play_once: false, hold_final_pose: false, return_to_previous_state: false }),
+    Object.freeze({ name: 'DSB_Hurt_LEFT_Flank_v001', approved_kind: 'HURT_LEFT', frame_start: 0, duration_seconds: 0.5, loop: false, play_once: true, hold_final_pose: false, return_to_previous_state: true }),
+    Object.freeze({ name: 'DSB_Hurt_RIGHT_Flank_v001', approved_kind: 'HURT_RIGHT', frame_start: 0, duration_seconds: 0.5, loop: false, play_once: true, hold_final_pose: false, return_to_previous_state: true }),
+    Object.freeze({ name: 'DSB_Death_ChestHold_LEFT_v001', approved_kind: 'DEATH', frame_start: 0, duration_seconds: 0.8, loop: false, play_once: true, hold_final_pose: true, return_to_previous_state: false }),
+    Object.freeze({ name: 'DSB_Death_Faceplant_LEFT_v001', approved_kind: 'DEATH', frame_start: 0, duration_seconds: 0.8, loop: false, play_once: true, hold_final_pose: true, return_to_previous_state: false }),
+  ]),
+});
 
 function createAnimationRig() {
   const root = new THREE.Group();
@@ -17,7 +29,7 @@ function createAnimationRig() {
       new THREE.NumberKeyframeTrack('.position[x]', [start, end], [index * 0.01, index * 0.01 + 0.1]),
     ]);
   });
-  const pack = resolveAnimationPackManifest(manifest, clips, 'testman-v002-test');
+  const pack = resolveAnimationPackManifest(manifest, clips, 'synthetic-authored-pack-test');
   const mixer = new THREE.AnimationMixer(root);
   const controller = new HumanoidAnimationPackController({ mixer, animationPack: pack, manifest, fadeSeconds: 0.05, walkReferenceSpeed: COMBAT_LAB_WALKER_CONFIG.baseWalkingSpeed });
   return { root, mixer, controller, pack };
@@ -32,7 +44,7 @@ function createFadeAdapter(root) {
   return adapter;
 }
 
-test('v002 walk is the only looping base animation and follows walker motion', () => {
+test('authored walk is the only looping base animation and follows walker motion', () => {
   const { controller } = createAnimationRig();
   assert.equal(controller.state, HUMANOID_ANIMATION_STATES.holding);
   assert.equal(controller.walkAction.paused, true);
@@ -46,7 +58,7 @@ test('v002 walk is the only looping base animation and follows walker motion', (
   controller.setMovement({ speed: 0, maximumSpeed: 0.85, walking: false });
   const heldTime = controller.walkAction.time;
   controller.update(0.5);
-  assert.equal(controller.walkAction.time, heldTime, 'stopped Testman holds the authored walk pose without a synthetic idle');
+  assert.equal(controller.walkAction.time, heldTime, 'stopped authored humanoid holds the walk pose without a synthetic idle');
   controller.dispose();
 });
 
@@ -67,7 +79,7 @@ test('left and right hurt clips play once and recover to the prior walking state
   controller.dispose();
 });
 
-test('both v002 death clips play once, complete, and clamp their final pose', () => {
+test('both authored death clips play once, complete, and clamp their final pose', () => {
   const cases = [
     { regionId: 'upper_chest', expected: 'DSB_Death_ChestHold_LEFT_v001' },
     { regionId: 'neck', expected: 'DSB_Death_Faceplant_LEFT_v001' },
@@ -129,7 +141,7 @@ test('walker lethality accepts physiological sword cuts with vital weighting and
   for (let index = 0; index < 5; index += 1) limbPolicy.evaluate([{ ...limb, id: `limb-${index}` }]);
   assert.ok(limbPolicy.criticalStabCount < 2, 'limb cuts accumulate materially slower than vital cuts');
   limbPolicy.evaluate([{ ...limb, id: 'limb-5' }]);
-  assert.ok(limbPolicy.criticalStabCount >= 2, 'repeated sword cuts can still incapacitate a normal Testman');
+  assert.ok(limbPolicy.criticalStabCount >= 2, 'repeated sword cuts can still incapacitate an authored humanoid');
 });
 
 test('walker material cloning shares textures while isolating actor opacity', () => {
@@ -232,7 +244,7 @@ test('character fade state stays opaque until explicitly begun, remains isolated
   texture.dispose();
 });
 
-test('Testman runtime contains no procedural skeletal animation fallback', () => {
+test('authored animation controller remains free of procedural skeletal pose layers', () => {
   const adapter = readFileSync(new URL('../src/game/combat/HumanoidGlbVisualAdapter.js', import.meta.url), 'utf8');
   const walker = readFileSync(new URL('../src/game/combat/CombatLabWalkerController.js', import.meta.url), 'utf8');
   const death = readFileSync(new URL('../src/game/combat/AuthoredHumanoidDeathController.js', import.meta.url), 'utf8');

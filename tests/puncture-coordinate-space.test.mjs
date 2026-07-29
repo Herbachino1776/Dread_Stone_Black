@@ -28,7 +28,7 @@ import {
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { HumanoidGlbVisualAdapter, measureVisibleSkinnedBounds } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
-import { TESTMAN_COMBAT_PROFILE, TESTMAN_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
+import { DREADGUARD_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
 import { MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
 import { buildSkinnedTriangleInfluenceMetadata, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
@@ -45,35 +45,45 @@ globalThis.ProgressEvent ??= class ProgressEvent {
 };
 globalThis.createImageBitmap ??= async () => ({ width: 1, height: 1, close() {} });
 
-const TESTMAN_POSE_SECONDS = 0.31;
 const FOLSOM_STYLE_POSITION = new THREE.Vector3(8, 0.16, -4);
 const FOLSOM_STYLE_YAW = THREE.MathUtils.degToRad(67.2);
-let testmanAssetPromise = null;
+const dreadguardManifest = JSON.parse(readFileSync(
+  new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.json', import.meta.url),
+  'utf8',
+));
+let dreadguardAssetPromise = null;
 let canonicalChestPuncturePromise = null;
 
-function loadTestmanAsset() {
-  testmanAssetPromise ??= (async () => {
-    const bytes = readFileSync(new URL('../public/assets/enemies/testman/testman_animpack_v002.glb', import.meta.url));
+function loadDreadguardAsset() {
+  dreadguardAssetPromise ??= (async () => {
+    const bytes = readFileSync(new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb', import.meta.url));
     const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-    return new GLTFLoader().parseAsync(buffer, new URL('../public/assets/enemies/testman/', import.meta.url).href);
+    return new GLTFLoader().parseAsync(buffer, new URL('../public/assets/enemies/dreadguard/damage/', import.meta.url).href);
   })();
-  return testmanAssetPromise;
+  return dreadguardAssetPromise;
 }
 
-async function createTestmanPose(position, yaw) {
-  const asset = await loadTestmanAsset();
+async function createDreadguardRestPose(position, yaw) {
+  const asset = await loadDreadguardAsset();
   const modelScene = clone(asset.scene);
-  const mixer = new THREE.AnimationMixer(modelScene);
-  const walk = asset.animations.find((clip) => /Walk/.test(clip.name));
-  mixer.clipAction(walk).play();
-  mixer.setTime(TESTMAN_POSE_SECONDS);
+  const initiallyHiddenNames = new Set();
+  dreadguardManifest.segments.forEach((segment) => {
+    [segment.detached, segment.stump, segment.boneCap].flat().filter(Boolean).forEach((name) => initiallyHiddenNames.add(name));
+  });
+  Object.values(dreadguardManifest.deformations?.goreByMorph ?? {}).flatMap((entry) => [
+    ...(entry.attached ?? []),
+    ...(entry.detached ?? []),
+  ]).forEach((name) => initiallyHiddenNames.add(name));
+  modelScene.traverse((object) => {
+    if (initiallyHiddenNames.has(object.name)) object.visible = false;
+  });
   modelScene.updateMatrixWorld(true);
-  modelScene.scale.setScalar(getHumanoidProfileScale(TESTMAN_COMBAT_PROFILE));
+  modelScene.scale.setScalar(getHumanoidProfileScale(DREADGUARD_DAMAGE_COMBAT_PROFILE));
   const scaledBounds = measureVisibleSkinnedBounds(modelScene);
-  modelScene.position.y = TESTMAN_COMBAT_PROFILE.groundClearance - scaledBounds.min.y;
+  modelScene.position.y = DREADGUARD_DAMAGE_COMBAT_PROFILE.groundClearance - scaledBounds.min.y;
 
   const presentationRoot = new THREE.Group();
-  presentationRoot.name = 'deterministic-testman-presentation-root';
+  presentationRoot.name = 'deterministic-dreadguard-presentation-root';
   presentationRoot.position.copy(position);
   presentationRoot.rotation.y = yaw;
   presentationRoot.add(modelScene);
@@ -91,11 +101,11 @@ async function createTestmanPose(position, yaw) {
   skeletons.forEach((skeleton) => skeleton.update());
   const surfaceBindingMetadata = new Map(skinnedMeshes.map((mesh) => [
     mesh,
-    buildSkinnedTriangleInfluenceMetadata(mesh, { boneMap: TESTMAN_COMBAT_PROFILE.boneMap }),
+    buildSkinnedTriangleInfluenceMetadata(mesh, { boneMap: DREADGUARD_DAMAGE_COMBAT_PROFILE.boneMap }),
   ]));
   const adapter = Object.create(HumanoidGlbVisualAdapter.prototype);
   Object.assign(adapter, {
-    profile: TESTMAN_COMBAT_PROFILE,
+    profile: DREADGUARD_DAMAGE_COMBAT_PROFILE,
     scene: modelScene,
     presentationRoot,
     skinnedMeshes,
@@ -110,44 +120,38 @@ async function createTestmanPose(position, yaw) {
     asset,
     modelScene,
     presentationRoot,
-    mixer,
     bones,
     skinnedMeshes,
     skeletons,
     surfaceBindingMetadata,
     adapter,
-    advanceHurt(fraction = 0.5) {
-      const hurt = asset.animations.find((clip) => /Hurt_LEFT/.test(clip.name));
-      mixer.stopAllAction();
-      mixer.clipAction(hurt).reset().play();
-      mixer.setTime(hurt.duration * fraction);
+    refreshRestPose() {
       adapter.prepareVisibleSurfaceFrame();
-      return hurt;
     },
   };
 }
 
 function getProxyPose(fixture, bodyId) {
   return HumanoidGlbVisualAdapter.prototype.getProxyPose.call({
-    profile: TESTMAN_COMBAT_PROFILE,
+    profile: DREADGUARD_DAMAGE_COMBAT_PROFILE,
     bones: fixture.bones,
   }, bodyId);
 }
 
 async function getCanonicalChestPuncture() {
   canonicalChestPuncturePromise ??= (async () => {
-    const fixture = await createTestmanPose(new THREE.Vector3(), 0);
+    const fixture = await createDreadguardRestPose(new THREE.Vector3(), 0);
     const bodyId = 'upper_chest';
     const proxyPose = getProxyPose(fixture, bodyId);
     const outward = new THREE.Vector3(0, 0, 1).applyQuaternion(proxyPose.quaternion).normalize();
-    const probe = proxyPose.position.clone().addScaledVector(outward, TESTMAN_COMBAT_PROFILE.proxyFit[bodyId].halfExtents[2]);
+    const probe = proxyPose.position.clone().addScaledVector(outward, DREADGUARD_DAMAGE_COMBAT_PROFILE.proxyFit[bodyId].halfExtents[2]);
     const binding = fixture.adapter.bindVisibleSurface(probe, {
       bodyId,
       regionId: bodyId,
       referenceNormal: outward,
       ...KNIFE_PUNCTURE_SURFACE_BINDING_OPTIONS,
     });
-    assert.ok(validateSurfaceBinding(binding), 'canonical Testman chest probe reaches visible skin');
+    assert.ok(validateSurfaceBinding(binding), 'canonical Dreadguard chest probe reaches visible skin');
     const reconstructed = fixture.adapter.reconstructVisibleSurface(binding);
     return {
       actorLocalPoint: worldToActorLocal(fixture.presentationRoot, reconstructed.point),
@@ -168,9 +172,9 @@ async function createRuntimeCase({ position, yaw }) {
     scene,
     spawnOffset,
     spawnYaw: yaw,
-    visualProfile: TESTMAN_COMBAT_PROFILE,
+    visualProfile: DREADGUARD_DAMAGE_COMBAT_PROFILE,
   });
-  const fixture = await createTestmanPose(position, yaw);
+  const fixture = await createDreadguardRestPose(position, yaw);
   scene.add(fixture.presentationRoot);
   actor.visualAdapter = fixture.adapter;
 
@@ -248,7 +252,7 @@ function traceCase(runtime, wound) {
   };
 }
 
-test('origin and translated/yawed Testman punctures bind the same actor-local visible surface', async (t) => {
+test('origin and translated/yawed Dreadguard punctures bind the same actor-local visible surface', async (t) => {
   const lab = await createRuntimeCase({ position: new THREE.Vector3(), yaw: 0 });
   const folsom = await createRuntimeCase({ position: FOLSOM_STYLE_POSITION, yaw: FOLSOM_STYLE_YAW });
   try {
@@ -316,7 +320,7 @@ test('origin and translated/yawed Testman punctures bind the same actor-local vi
   }
 });
 
-test('locked puncture triangle and barycentrics remain attached after hurt animation advances', async () => {
+test('locked puncture triangle and barycentrics remain stable across no-animation rest-pose updates', async () => {
   const runtime = await createRuntimeCase({ position: FOLSOM_STYLE_POSITION, yaw: FOLSOM_STYLE_YAW });
   try {
     const wound = runtime.createKnifePuncture();
@@ -324,14 +328,14 @@ test('locked puncture triangle and barycentrics remain attached after hurt anima
     const indices = [...binding.triangleIndices];
     const barycentric = binding.barycentric.clone();
     const before = runtime.fixture.adapter.reconstructVisibleSurface(binding).point.clone();
-    runtime.fixture.advanceHurt(0.55);
+    runtime.fixture.refreshRestPose();
     runtime.actor.woundSystem.update(1 / 60);
     const after = runtime.fixture.adapter.reconstructVisibleSurface(binding);
-    assert.ok(after, 'hurt pose still reconstructs the locked surface binding');
+    assert.ok(after, 'rest pose still reconstructs the locked surface binding');
     assert.equal(wound.surfaceBinding, binding);
     assert.deepEqual(binding.triangleIndices, indices);
     assert.ok(binding.barycentric.distanceTo(barycentric) < 1e-12);
-    assert.ok(after.point.distanceTo(before) > 0.001);
+    assert.ok(after.point.distanceTo(before) < 1e-9);
     assert.equal(wound.visualSlot.puncture.visible, true);
     assert.equal(wound.surfaceBindingStatus, 'skinned_triangle');
   } finally {
@@ -339,7 +343,7 @@ test('locked puncture triangle and barycentrics remain attached after hurt anima
   }
 });
 
-test('Combat Lab damage Testman and Folsom Testman share puncture binding function and options', async () => {
+test('Combat Lab and Folsom Dreadguards share puncture binding function and options', async () => {
   const lab = await CombatLabScene.create({ query: new URLSearchParams('walker=0') });
   const collision = new CollisionWorld({
     walkableRects: [{ minX: -18, maxX: 22, minZ: -20, maxZ: 18 }],
@@ -351,8 +355,8 @@ test('Combat Lab damage Testman and Folsom Testman share puncture binding functi
   const dungeon = { scene: new THREE.Scene(), collision, isPositionInFishingWater: () => false };
   const folsom = await FolsomCombatEncounter.create({ dungeon, query: new URLSearchParams('folsomWalker=0&folsomShowcase=0') });
   try {
-    assert.equal(lab.actor.visualProfile, TESTMAN_DAMAGE_COMBAT_PROFILE);
-    assert.equal(folsom.actor.visualProfile, TESTMAN_DAMAGE_COMBAT_PROFILE);
+    assert.equal(lab.actor.visualProfile, DREADGUARD_DAMAGE_COMBAT_PROFILE);
+    assert.equal(folsom.actor.visualProfile, DREADGUARD_DAMAGE_COMBAT_PROFILE);
     assert.equal(lab.actor.woundSystem.bindPunctureSurface, folsom.actor.woundSystem.bindPunctureSurface);
     assert.equal(lab.actor.woundSystem.getPunctureSurfaceBindingOptions({ weaponFamily: 'knife' }), KNIFE_PUNCTURE_SURFACE_BINDING_OPTIONS);
     assert.equal(folsom.actor.woundSystem.getPunctureSurfaceBindingOptions({ weaponFamily: 'knife' }), KNIFE_PUNCTURE_SURFACE_BINDING_OPTIONS);

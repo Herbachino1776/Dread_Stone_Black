@@ -61,8 +61,8 @@ async function createSwordHarness({ tipHit = true, tipToi = 0.5 } = {}) {
     bodyTransformAtCollision: { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() },
   };
   const actor = {
-    id: 'testman-owner',
-    instanceId: 'testman-owner',
+    id: 'baseline-owner',
+    instanceId: 'baseline-owner',
     disposed: false,
     lifeState: 'alive',
     bodies: new Map([['upper_chest', { body }]]),
@@ -945,7 +945,7 @@ test('sword diagnostics expose knife-parity tissue resistance and authoritative 
     const diagnostics = controller.getDiagnostics();
     assert.equal(diagnostics.runtimeCombatMode, SWORD_RUNTIME_COMBAT_MODE);
     assert.equal(diagnostics.impalementState, SWORD_IMPALEMENT_STATES.embedded);
-    assert.equal(diagnostics.ownedTargetActor, 'testman-owner');
+    assert.equal(diagnostics.ownedTargetActor, 'baseline-owner');
     assert.equal(diagnostics.entryBody, 'upper_chest');
     assert.equal(diagnostics.entryRegion, 'upper_chest');
     assert.equal(diagnostics.maximumPenetrationDepth, SWORD_MAXIMUM_PENETRATION_DEPTH);
@@ -953,7 +953,7 @@ test('sword diagnostics expose knife-parity tissue resistance and authoritative 
     assert.ok(diagnostics.desiredProjectedDepth > diagnostics.penetrationDepth);
     assert.ok(diagnostics.projectionError > 0);
     assert.equal(diagnostics.penetrationActive, true);
-    assert.equal(diagnostics.embeddedTargetId, 'testman-owner');
+    assert.equal(diagnostics.embeddedTargetId, 'baseline-owner');
     assert.equal(diagnostics.embeddedTargetLifeState, 'alive');
     assert.equal(diagnostics.entryResistanceActive, true);
     assert.equal(diagnostics.entryResistanceModel, 'knife-tissue-depth-advance');

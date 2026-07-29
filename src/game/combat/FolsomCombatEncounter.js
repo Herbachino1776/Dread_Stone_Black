@@ -4,7 +4,7 @@ import { HumanoidCombatActor } from './HumanoidCombatActor.js';
 import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
 import { resolveCombatMortalityMode } from './CombatMortality.js';
-import { TESTMAN_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { DREADGUARD_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 import { CombatDirector } from './CombatDirector.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { applyMeleeSpacingEnvelope } from './CombatPresentation.js';
@@ -14,10 +14,9 @@ import { COMBAT_LAB_WALKER_CONFIG, CombatLabWalkerController, WALKER_STATES } fr
 import { AuthoredHumanoidDeathController } from './AuthoredHumanoidDeathController.js';
 import { CombatAcceptedAudioSystem } from './CombatAcceptedAudioSystem.js';
 import { FolsomShowcaseCombatExtras, isFolsomShowcaseEnabled } from './FolsomShowcaseCombatExtras.js';
-import { TESTMAN_FORGE_DAMAGE_MORPHS } from './ForgeDamageDeformationRuntime.js';
 
 const FOLSOM_AUTHORED_PLAYER_SPAWN = Object.freeze([-2, 1.71, -4]);
-const FOLSOM_TESTMAN_SPAWN_XZ = Object.freeze([8, -4]);
+const FOLSOM_DREADGUARD_SPAWN_XZ = Object.freeze([8, -4]);
 const FOLSOM_COMBAT_RANGE = 6.5;
 
 export const FOLSOM_COMBAT_FOOTPRINT = Object.freeze({
@@ -97,7 +96,7 @@ export class FolsomCombatEncounter {
     this.combatRouter = new CombatActorRouter();
     this.weaponController = null;
     this.disposed = false;
-    this.modelProfile = TESTMAN_DAMAGE_COMBAT_PROFILE;
+    this.modelProfile = DREADGUARD_DAMAGE_COMBAT_PROFILE;
     this.showcaseEnabled = isFolsomShowcaseEnabled(this.query);
     this.waveGeneration = 1;
     this.playerSpawn = new THREE.Vector3(...FOLSOM_AUTHORED_PLAYER_SPAWN);
@@ -156,26 +155,32 @@ export class FolsomCombatEncounter {
   }
 
   createDamageProfileActor(options = {}) {
-    return new HumanoidCombatActor({ ...options, visualProfile: TESTMAN_DAMAGE_COMBAT_PROFILE });
+    return new HumanoidCombatActor({ ...options, visualProfile: DREADGUARD_DAMAGE_COMBAT_PROFILE });
   }
 
   installForgeDamageDebugCommands() {
     if (import.meta.env?.DEV !== true || typeof globalThis === 'undefined') return null;
     const commands = Object.freeze({
-      Head_Dent_Left: () => this.debugActivateForgeDamage(TESTMAN_FORGE_DAMAGE_MORPHS.headLeft, 'skull', 'left'),
-      Head_Dent_Right: () => this.debugActivateForgeDamage(TESTMAN_FORGE_DAMAGE_MORPHS.headRight, 'skull', 'right'),
-      Face_Middle_impact_v001: () => this.debugActivateForgeDamage(TESTMAN_FORGE_DAMAGE_MORPHS.bodyFront, 'upper_chest', 'center/front'),
+      Light: () => this.debugSetProgressiveDamageStage('LIGHT'),
+      Medium: () => this.debugSetProgressiveDamageStage('MEDIUM'),
+      Heavy: () => this.debugSetProgressiveDamageStage('HEAVY'),
+      nextStage: () => this.debugAdvanceProgressiveDamage(),
       resetAllDamage: () => this.debugResetForgeDamage(),
       diagnostics: () => this.actor?.visualAdapter?.damageSegmentRuntime?.deformationRuntime?.getDiagnostics?.() ?? null,
+      characterDiagnostics: () => this.actor?.getDiagnostics?.() ?? null,
     });
     this.forgeDamageDebugCommands = commands;
-    globalThis.__DSB_TESTMAN_DAMAGE__ = commands;
-    console.info('[ForgeDamage] Folsom debug commands installed at __DSB_TESTMAN_DAMAGE__.');
+    globalThis.__DSB_DREADGUARD_DAMAGE__ = commands;
+    console.info('[ForgeDamage] Folsom Dreadguard commands installed at __DSB_DREADGUARD_DAMAGE__.');
     return commands;
   }
 
-  debugActivateForgeDamage(morphName, hitRegion = 'manual', hitSide = 'manual') {
-    return this.actor?.visualAdapter?.activateForgeDamage?.(morphName, { source: 'folsom_debug_command', hitRegion, hitSide }) ?? { applied: false, reason: 'damage-runtime-not-ready', selectedMorph: morphName };
+  debugSetProgressiveDamageStage(stageName) {
+    return this.actor?.visualAdapter?.setProgressiveDamageStage?.(null, stageName, { source: 'folsom_debug_command', hitRegion: 'skull', hitSide: 'left' }) ?? { applied: false, reason: 'damage-runtime-not-ready', stage: stageName };
+  }
+
+  debugAdvanceProgressiveDamage() {
+    return this.actor?.visualAdapter?.advanceProgressiveDamageSite?.(null, { source: 'folsom_debug_command', hitRegion: 'skull', hitSide: 'left' }) ?? { applied: false, reason: 'damage-runtime-not-ready' };
   }
 
   debugResetForgeDamage() {
@@ -186,9 +191,9 @@ export class FolsomCombatEncounter {
     const spawnOffset = new THREE.Vector3(this.spawnPosition.x, this.groundY, this.spawnPosition.z + 3.55);
     const spawnYaw = Math.atan2(this.playerSpawn.x - this.spawnPosition.x, this.playerSpawn.z - this.spawnPosition.z);
     this.actor = this.createDamageProfileActor({ physics: this.physics, scene: this.scene, spawnOffset, spawnYaw, mortalityMode: resolveCombatMortalityMode(), automaticMortality: false, isolateVisualMaterials: true, acceptedCombatAudio: this.acceptedCombatAudio, eventSink: (event, payload) => this.handleStationaryCombatEvent(event, payload) });
-    this.actor.root.name = `folsom-testman-stationary-${this.waveGeneration}`;
+    this.actor.root.name = `folsom-dreadguard-stationary-${this.waveGeneration}`;
     this.actor.combatContactState = 'alive';
-    this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: `folsom-testman-stationary-blocker-${this.waveGeneration}` });
+    this.playerBlocker = this.actor.updatePlayerCollisionBlocker({ id: `folsom-dreadguard-stationary-blocker-${this.waveGeneration}` });
     this.meleeSpacing = this.applyActorMeleeSpacing(this.playerBlocker);
     this.dungeon.collision?.addBlocker?.(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: this.groundY, wallX: null });
@@ -311,7 +316,7 @@ export class FolsomCombatEncounter {
       const blocked = (this.dungeon.collision?.getIntersectingBlockers?.(new THREE.Vector3(x, floorY + 1.55, z), 0.5) ?? []).length > 0;
       if (walkable && !blocked) return floorPosition;
     }
-    return new THREE.Vector3(FOLSOM_TESTMAN_SPAWN_XZ[0], 0.16, FOLSOM_TESTMAN_SPAWN_XZ[1]);
+    return new THREE.Vector3(FOLSOM_DREADGUARD_SPAWN_XZ[0], 0.16, FOLSOM_DREADGUARD_SPAWN_XZ[1]);
   }
 
   handleStationaryCombatEvent(event, payload = {}) {
@@ -620,7 +625,7 @@ export class FolsomCombatEncounter {
         livingActorCount: this.getLivingCombatActors().length,
         contactableActorCount: this.getContactableCombatActors().length,
         additionalWalkerCount: this.showcaseExtras?.getActors?.().length ?? 0,
-        damageProfileActorCount: ownedActors.filter((actor) => actor.visualProfile === TESTMAN_DAMAGE_COMBAT_PROFILE).length,
+        damageProfileActorCount: ownedActors.filter((actor) => actor.visualProfile === DREADGUARD_DAMAGE_COMBAT_PROFILE).length,
         maceChestPresent,
         maceControllerAvailable: weapon?.mace != null,
         swordShowcaseEnabled: swordShowcase?.enabled === true,
@@ -661,7 +666,7 @@ export class FolsomCombatEncounter {
     this.combatRouter.dispose();
     this.feedbackSystem.dispose();
     this.physics.dispose();
-    if (globalThis.__DSB_TESTMAN_DAMAGE__ === this.forgeDamageDebugCommands) delete globalThis.__DSB_TESTMAN_DAMAGE__;
+    if (globalThis.__DSB_DREADGUARD_DAMAGE__ === this.forgeDamageDebugCommands) delete globalThis.__DSB_DREADGUARD_DAMAGE__;
     this.forgeDamageDebugCommands = null;
     delete this.scene.userData.activeCombatShadowTarget;
   }

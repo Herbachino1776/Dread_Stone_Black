@@ -1,0 +1,821 @@
+{
+  "status": "PASS",
+  "validated_at_utc": "2026-07-29T14:09:30Z",
+  "authoring_version": "3.9.1",
+  "authoring_build_id": "2026-07-18.source-contract.1",
+  "source_topology_sha256": "880eabb3e8810327a1e60bd9e8313ad1acd65dff33970f6ae3c01ce2a459a2c8",
+  "source_weight_sha256": "17ab81330545a1a9c2506bf9151f3b99deaa7a674835bbb15d77228a2e5b9b97",
+  "gap_tolerance_m": 0.0005000000237487257,
+  "errors": [],
+  "warnings": [],
+  "generated_object_count": 29,
+  "source_readiness": {
+    "status": "PASS",
+    "contract_schema": "dreadstone.source_readiness.v1",
+    "source_objects": [
+      "SBF_CLEAN_CHARACTER"
+    ]
+  },
+  "deformation": {
+    "status": "PASS",
+    "schema": "dreadstone.damage_deformation.v1",
+    "authoringVersion": "3.20.0",
+    "authoringBuildId": "2026-07-28.progressive-damage-sites.1",
+    "topologyPair": {
+      "status": "PASS",
+      "errors": [],
+      "attachedVertexCount": 300,
+      "detachedVertexCount": 300,
+      "attachedPolygonCount": 337,
+      "detachedPolygonCount": 337,
+      "topologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+      "regionMode": "PAIRED_SEGMENT",
+      "targetVertexCount": 300,
+      "targetPolygonCount": 337,
+      "weightFingerprint": "e774b504038f06b6c4bd60409517c0e96027cbc47eba7af89c6dd65eaf163e49"
+    },
+    "registeredRegionCount": 4,
+    "activeRegionId": "head",
+    "regions": [
+      {
+        "regionId": "head",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_HEAD",
+        "attachedObject": "DSB_ATTACHED_HEAD",
+        "detachedObject": "DSB_SEGMENT_HEAD",
+        "status": "PASS",
+        "topologyPair": {
+          "status": "PASS",
+          "errors": [],
+          "attachedVertexCount": 300,
+          "detachedVertexCount": 300,
+          "attachedPolygonCount": 337,
+          "detachedPolygonCount": 337,
+          "topologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+          "regionMode": "PAIRED_SEGMENT",
+          "targetVertexCount": 300,
+          "targetPolygonCount": 337,
+          "weightFingerprint": "e774b504038f06b6c4bd60409517c0e96027cbc47eba7af89c6dd65eaf163e49"
+        },
+        "keys": [
+          {
+            "name": "Left_Head_Impact_v001",
+            "regionId": "head",
+            "maximumInfluence": 1.0,
+            "maximumDisplacement": 0.05375061184167862,
+            "measuredMaximumDisplacement": 0.05375060071897997,
+            "maximumPairDeltaError": 8.33000234328132e-09,
+            "status": "TRAUMA_REBUILT",
+            "recipeStatus": "PROCEDURAL_STACK",
+            "stampCount": 1,
+            "deformationValidationStatus": "PASS",
+            "goreOverlayValidationStatus": "PASS",
+            "raisedGoreValidationStatus": "PASS",
+            "raisedGore": {
+              "status": "PASS",
+              "geometryMode": "HYBRID_ADDITIVE",
+              "identityId": "BLOODY_CRATER",
+              "nodeNames": [
+                "DSB_GORE_ATTACHED_head_Left_Head_Impact_v001_RAISED",
+                "DSB_GORE_DETACHED_head_Left_Head_Impact_v001_RAISED",
+                "DSB_GORE_ATTACHED_head_Left_Head_Impact_v001_INLAY",
+                "DSB_GORE_DETACHED_head_Left_Head_Impact_v001_INLAY"
+              ],
+              "meshIds": [
+                "gore_mesh_fdfdfa19245f761b290d",
+                "gore_mesh_3b1a9aec02aa206c6e9e",
+                "gore_mesh_0ed530dc698ee17d697e",
+                "gore_mesh_3e6fab996e490514c34a"
+              ],
+              "triangleCounts": {
+                "ATTACHED:RAISED": 3760,
+                "DETACHED:RAISED": 3760,
+                "ATTACHED:INLAY": 976,
+                "DETACHED:INLAY": 976
+              },
+              "materialIds": [
+                "DSB_GORE_CRUSHED_TISSUE",
+                "DSB_GORE_DARK_CLOT",
+                "DSB_GORE_DEEP_WOUND_BED",
+                "DSB_GORE_EXPOSED_BONE",
+                "DSB_GORE_ROUGH_EDGE",
+                "DSB_GORE_WET_CRIMSON"
+              ],
+              "measurements": {
+                "ATTACHED:INLAY": {
+                  "generatedVertexCount": 590,
+                  "layerDepths": {
+                    "BARRIER": {
+                      "maximum": 0.01577214951161295,
+                      "median": 0.015519108970183878,
+                      "minimum": 0.015266068428754805
+                    },
+                    "CLOT": {
+                      "maximum": 0.009665055596269668,
+                      "median": 0.009412015054840595,
+                      "minimum": 0.009158974513411522
+                    },
+                    "LINER": {
+                      "maximum": 0.024601090433029008,
+                      "median": 0.018904444457210574,
+                      "minimum": 0.0061014766230158765
+                    },
+                    "RIM": {
+                      "maximum": 0.008434822233795183,
+                      "median": 0.0048124587501612165,
+                      "minimum": 0.002085570884696153
+                    }
+                  },
+                  "maximumCavityDepth": 0.024601090433029008,
+                  "maximumGeneratedDepth": 0.024601090433029008,
+                  "maximumProudness": 0.0,
+                  "medianLinerDepth": 0.018904444457210574,
+                  "minimumSkinToLinerSeparation": 0.0061014766230158765,
+                  "percentVerticesAboveLimit": 0.0,
+                  "triangleCount": 976
+                },
+                "DETACHED:INLAY": {
+                  "generatedVertexCount": 590,
+                  "layerDepths": {
+                    "BARRIER": {
+                      "maximum": 0.01577214951161295,
+                      "median": 0.015519108970183878,
+                      "minimum": 0.015266068428754805
+                    },
+                    "CLOT": {
+                      "maximum": 0.009665055596269668,
+                      "median": 0.009412015054840595,
+                      "minimum": 0.009158974513411522
+                    },
+                    "LINER": {
+                      "maximum": 0.024601090433029008,
+                      "median": 0.018904444457210574,
+                      "minimum": 0.0061014766230158765
+                    },
+                    "RIM": {
+                      "maximum": 0.008434822233795183,
+                      "median": 0.0048124587501612165,
+                      "minimum": 0.002085570884696153
+                    }
+                  },
+                  "maximumCavityDepth": 0.024601090433029008,
+                  "maximumGeneratedDepth": 0.024601090433029008,
+                  "maximumProudness": 0.0,
+                  "medianLinerDepth": 0.018904444457210574,
+                  "minimumSkinToLinerSeparation": 0.0061014766230158765,
+                  "percentVerticesAboveLimit": 0.0,
+                  "triangleCount": 976
+                }
+              },
+              "defaultVisible": false,
+              "activationWeight": 0.01,
+              "errors": []
+            },
+            "exportValidationStatus": "PASS",
+            "goreOverlayEnabled": true
+          },
+          {
+            "name": "Left_Head_Impact_v002",
+            "regionId": "head",
+            "maximumInfluence": 1.0,
+            "maximumDisplacement": 0.009618547745049,
+            "measuredMaximumDisplacement": 0.009278442400500436,
+            "maximumPairDeltaError": 3.725290298461914e-09,
+            "status": "TRAUMA_REBUILT",
+            "recipeStatus": "PROCEDURAL_STACK",
+            "stampCount": 1,
+            "deformationValidationStatus": "PASS",
+            "goreOverlayValidationStatus": "PASS",
+            "raisedGoreValidationStatus": "PASS",
+            "raisedGore": {
+              "status": "PASS",
+              "geometryMode": "HYBRID_ADDITIVE",
+              "identityId": "BLOODY_CRATER",
+              "nodeNames": [
+                "DSB_GORE_ATTACHED_head_Left_Head_Impact_v002_RAISED",
+                "DSB_GORE_DETACHED_head_Left_Head_Impact_v002_RAISED",
+                "DSB_GORE_ATTACHED_head_Left_Head_Impact_v002_INLAY",
+                "DSB_GORE_DETACHED_head_Left_Head_Impact_v002_INLAY"
+              ],
+              "meshIds": [
+                "gore_mesh_b75b50f276cb986b7ba8",
+                "gore_mesh_3126ab74ceafe1a08b81",
+                "gore_mesh_f59364e57f85dae50fb4",
+                "gore_mesh_4ee4c32804b5706185f7"
+              ],
+              "triangleCounts": {
+                "ATTACHED:RAISED": 2028,
+                "DETACHED:RAISED": 2028,
+                "ATTACHED:INLAY": 1024,
+                "DETACHED:INLAY": 1024
+              },
+              "materialIds": [
+                "DSB_GORE_CRUSHED_TISSUE",
+                "DSB_GORE_DARK_CLOT",
+                "DSB_GORE_DEEP_WOUND_BED",
+                "DSB_GORE_EXPOSED_BONE",
+                "DSB_GORE_ROUGH_EDGE",
+                "DSB_GORE_WET_CRIMSON"
+              ],
+              "measurements": {
+                "ATTACHED:INLAY": {
+                  "generatedVertexCount": 618,
+                  "layerDepths": {
+                    "BARRIER": {
+                      "maximum": 0.004126964523456991,
+                      "median": 0.003873923982027918,
+                      "minimum": 0.0036208834405988453
+                    },
+                    "CLOT": {
+                      "maximum": 0.0025175059447064994,
+                      "median": 0.002264465403277427,
+                      "minimum": 0.0020114248618483543
+                    },
+                    "LINER": {
+                      "maximum": 0.0062684734573953535,
+                      "median": 0.005024493748468151,
+                      "minimum": 0.0023796128822281574
+                    },
+                    "RIM": {
+                      "maximum": 0.003173401486974989,
+                      "median": 0.002221679737219992,
+                      "minimum": 0.0013575520087971797
+                    }
+                  },
+                  "maximumCavityDepth": 0.0062684734573953535,
+                  "maximumGeneratedDepth": 0.0062684734573953535,
+                  "maximumProudness": 0.0,
+                  "medianLinerDepth": 0.005024493748468151,
+                  "minimumSkinToLinerSeparation": 0.0023796128822281574,
+                  "percentVerticesAboveLimit": 0.0,
+                  "triangleCount": 1024
+                },
+                "DETACHED:INLAY": {
+                  "generatedVertexCount": 618,
+                  "layerDepths": {
+                    "BARRIER": {
+                      "maximum": 0.004126964523456991,
+                      "median": 0.003873923982027918,
+                      "minimum": 0.0036208834405988453
+                    },
+                    "CLOT": {
+                      "maximum": 0.0025175059447064994,
+                      "median": 0.002264465403277427,
+                      "minimum": 0.0020114248618483543
+                    },
+                    "LINER": {
+                      "maximum": 0.0062684734573953535,
+                      "median": 0.005024493748468151,
+                      "minimum": 0.0023796128822281574
+                    },
+                    "RIM": {
+                      "maximum": 0.003173401486974989,
+                      "median": 0.002221679737219992,
+                      "minimum": 0.0013575520087971797
+                    }
+                  },
+                  "maximumCavityDepth": 0.0062684734573953535,
+                  "maximumGeneratedDepth": 0.0062684734573953535,
+                  "maximumProudness": 0.0,
+                  "medianLinerDepth": 0.005024493748468151,
+                  "minimumSkinToLinerSeparation": 0.0023796128822281574,
+                  "percentVerticesAboveLimit": 0.0,
+                  "triangleCount": 1024
+                }
+              },
+              "defaultVisible": false,
+              "activationWeight": 0.01,
+              "errors": []
+            },
+            "exportValidationStatus": "PASS",
+            "goreOverlayEnabled": true
+          },
+          {
+            "name": "Left_Head_Impact_v003",
+            "regionId": "head",
+            "maximumInfluence": 1.0,
+            "maximumDisplacement": 0.008335838094353676,
+            "measuredMaximumDisplacement": 0.007964796998660761,
+            "maximumPairDeltaError": 3.725290298461914e-09,
+            "status": "TRAUMA_REBUILT",
+            "recipeStatus": "PROCEDURAL_STACK",
+            "stampCount": 1,
+            "deformationValidationStatus": "PASS",
+            "goreOverlayValidationStatus": "PASS",
+            "raisedGoreValidationStatus": "PASS",
+            "raisedGore": {
+              "status": "PASS",
+              "geometryMode": "CAVITY_INLAY",
+              "identityId": "BLOODY_CRATER",
+              "nodeNames": [
+                "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
+                "DSB_GORE_DETACHED_head_Left_Head_Impact_v003"
+              ],
+              "meshIds": [
+                "gore_mesh_a3509a1c22cc61927cfe",
+                "gore_mesh_86d85885ad64fb52cfee"
+              ],
+              "triangleCounts": {
+                "ATTACHED": 1104,
+                "DETACHED": 1104
+              },
+              "materialIds": [
+                "DSB_GORE_CRUSHED_TISSUE",
+                "DSB_GORE_DARK_CLOT",
+                "DSB_GORE_DEEP_WOUND_BED",
+                "DSB_GORE_EXPOSED_BONE",
+                "DSB_GORE_ROUGH_EDGE",
+                "DSB_GORE_WET_CRIMSON"
+              ],
+              "measurements": {
+                "ATTACHED": {
+                  "generatedVertexCount": 630,
+                  "layerDepths": {
+                    "BARRIER": {
+                      "maximum": 0.0033160710637457668,
+                      "median": 0.003073900855379179,
+                      "minimum": 0.0028317306470125913
+                    },
+                    "LINER": {
+                      "maximum": 0.0051729693909631546,
+                      "median": 0.0037785920549625015,
+                      "minimum": 0.0017880501127489254
+                    },
+                    "RIM": {
+                      "maximum": 0.002799680743032408,
+                      "median": 0.0020121571868842673,
+                      "minimum": 0.001234732975698677
+                    }
+                  },
+                  "maximumCavityDepth": 0.0051729693909631546,
+                  "maximumGeneratedDepth": 0.0051729693909631546,
+                  "maximumProudness": 0.0,
+                  "medianLinerDepth": 0.0037785920549625015,
+                  "minimumSkinToLinerSeparation": 0.0017880501127489254,
+                  "percentVerticesAboveLimit": 0.0,
+                  "triangleCount": 1104
+                },
+                "DETACHED": {
+                  "generatedVertexCount": 630,
+                  "layerDepths": {
+                    "BARRIER": {
+                      "maximum": 0.0033160710637457668,
+                      "median": 0.003073900855379179,
+                      "minimum": 0.0028317306470125913
+                    },
+                    "LINER": {
+                      "maximum": 0.0051729693909631546,
+                      "median": 0.0037785920549625015,
+                      "minimum": 0.0017880501127489254
+                    },
+                    "RIM": {
+                      "maximum": 0.002799680743032408,
+                      "median": 0.0020121571868842673,
+                      "minimum": 0.001234732975698677
+                    }
+                  },
+                  "maximumCavityDepth": 0.0051729693909631546,
+                  "maximumGeneratedDepth": 0.0051729693909631546,
+                  "maximumProudness": 0.0,
+                  "medianLinerDepth": 0.0037785920549625015,
+                  "minimumSkinToLinerSeparation": 0.0017880501127489254,
+                  "percentVerticesAboveLimit": 0.0,
+                  "triangleCount": 1104
+                }
+              },
+              "defaultVisible": false,
+              "activationWeight": 0.01,
+              "errors": []
+            },
+            "exportValidationStatus": "PASS",
+            "goreOverlayEnabled": true
+          }
+        ],
+        "errors": []
+      },
+      {
+        "regionId": "body_core",
+        "regionMode": "CORE_SINGLE",
+        "targetObject": "DSB_BODY_CORE",
+        "attachedObject": "DSB_BODY_CORE",
+        "detachedObject": "",
+        "status": "PASS",
+        "topologyPair": {
+          "status": "PASS",
+          "errors": [],
+          "targetVertexCount": 7859,
+          "targetPolygonCount": 9322,
+          "topologyFingerprint": "2e98feb39ae58c59525c580fb217796111e0dd272dd6a5d7702f07ec97072c7c",
+          "weightFingerprint": "97f927a671f943559df662cb343151bed01715b372311e005429e5e1b3efe066",
+          "regionMode": "CORE_SINGLE",
+          "attachedVertexCount": 7859,
+          "detachedVertexCount": 0,
+          "attachedPolygonCount": 9322,
+          "detachedPolygonCount": 0
+        },
+        "keys": [],
+        "errors": []
+      },
+      {
+        "regionId": "forearm_left",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_FOREARM_L",
+        "attachedObject": "DSB_ATTACHED_FOREARM_L",
+        "detachedObject": "DSB_SEGMENT_FOREARM_L",
+        "status": "PASS",
+        "topologyPair": {
+          "status": "PASS",
+          "errors": [],
+          "attachedVertexCount": 585,
+          "detachedVertexCount": 585,
+          "attachedPolygonCount": 391,
+          "detachedPolygonCount": 391,
+          "topologyFingerprint": "b002edf01feda84121c76b8e30944cd57a75fa8b7e93e2be95f8370e1dc9a329",
+          "regionMode": "PAIRED_SEGMENT",
+          "targetVertexCount": 585,
+          "targetPolygonCount": 391,
+          "weightFingerprint": "0423c4a863a6b199d1c960cc821e046082d6b9a55bcc1ddf72c084cbd25509e9"
+        },
+        "keys": [],
+        "errors": []
+      },
+      {
+        "regionId": "forearm_right",
+        "regionMode": "PAIRED_SEGMENT",
+        "targetObject": "DSB_ATTACHED_FOREARM_R",
+        "attachedObject": "DSB_ATTACHED_FOREARM_R",
+        "detachedObject": "DSB_SEGMENT_FOREARM_R",
+        "status": "PASS",
+        "topologyPair": {
+          "status": "PASS",
+          "errors": [],
+          "attachedVertexCount": 582,
+          "detachedVertexCount": 582,
+          "attachedPolygonCount": 390,
+          "detachedPolygonCount": 390,
+          "topologyFingerprint": "51a46130a8d50656e970099e869fcad97d64312d753d93d2deded1261a0254a4",
+          "regionMode": "PAIRED_SEGMENT",
+          "targetVertexCount": 582,
+          "targetPolygonCount": 390,
+          "weightFingerprint": "69c7dcf2ec4a9efaf672ee22b22e1ad9b4c60dde0fcc95bddf2aa27581f2ad8f"
+        },
+        "keys": [],
+        "errors": []
+      }
+    ],
+    "managedKeyCount": 3,
+    "raisedGoreTriangleCount": 17784,
+    "raisedGoreTriangleLimit": 48000,
+    "keys": [
+      {
+        "name": "Left_Head_Impact_v001",
+        "regionId": "head",
+        "maximumInfluence": 1.0,
+        "maximumDisplacement": 0.05375061184167862,
+        "measuredMaximumDisplacement": 0.05375060071897997,
+        "maximumPairDeltaError": 8.33000234328132e-09,
+        "status": "TRAUMA_REBUILT",
+        "recipeStatus": "PROCEDURAL_STACK",
+        "stampCount": 1,
+        "deformationValidationStatus": "PASS",
+        "goreOverlayValidationStatus": "PASS",
+        "raisedGoreValidationStatus": "PASS",
+        "raisedGore": {
+          "status": "PASS",
+          "geometryMode": "HYBRID_ADDITIVE",
+          "identityId": "BLOODY_CRATER",
+          "nodeNames": [
+            "DSB_GORE_ATTACHED_head_Left_Head_Impact_v001_RAISED",
+            "DSB_GORE_DETACHED_head_Left_Head_Impact_v001_RAISED",
+            "DSB_GORE_ATTACHED_head_Left_Head_Impact_v001_INLAY",
+            "DSB_GORE_DETACHED_head_Left_Head_Impact_v001_INLAY"
+          ],
+          "meshIds": [
+            "gore_mesh_fdfdfa19245f761b290d",
+            "gore_mesh_3b1a9aec02aa206c6e9e",
+            "gore_mesh_0ed530dc698ee17d697e",
+            "gore_mesh_3e6fab996e490514c34a"
+          ],
+          "triangleCounts": {
+            "ATTACHED:RAISED": 3760,
+            "DETACHED:RAISED": 3760,
+            "ATTACHED:INLAY": 976,
+            "DETACHED:INLAY": 976
+          },
+          "materialIds": [
+            "DSB_GORE_CRUSHED_TISSUE",
+            "DSB_GORE_DARK_CLOT",
+            "DSB_GORE_DEEP_WOUND_BED",
+            "DSB_GORE_EXPOSED_BONE",
+            "DSB_GORE_ROUGH_EDGE",
+            "DSB_GORE_WET_CRIMSON"
+          ],
+          "measurements": {
+            "ATTACHED:INLAY": {
+              "generatedVertexCount": 590,
+              "layerDepths": {
+                "BARRIER": {
+                  "maximum": 0.01577214951161295,
+                  "median": 0.015519108970183878,
+                  "minimum": 0.015266068428754805
+                },
+                "CLOT": {
+                  "maximum": 0.009665055596269668,
+                  "median": 0.009412015054840595,
+                  "minimum": 0.009158974513411522
+                },
+                "LINER": {
+                  "maximum": 0.024601090433029008,
+                  "median": 0.018904444457210574,
+                  "minimum": 0.0061014766230158765
+                },
+                "RIM": {
+                  "maximum": 0.008434822233795183,
+                  "median": 0.0048124587501612165,
+                  "minimum": 0.002085570884696153
+                }
+              },
+              "maximumCavityDepth": 0.024601090433029008,
+              "maximumGeneratedDepth": 0.024601090433029008,
+              "maximumProudness": 0.0,
+              "medianLinerDepth": 0.018904444457210574,
+              "minimumSkinToLinerSeparation": 0.0061014766230158765,
+              "percentVerticesAboveLimit": 0.0,
+              "triangleCount": 976
+            },
+            "DETACHED:INLAY": {
+              "generatedVertexCount": 590,
+              "layerDepths": {
+                "BARRIER": {
+                  "maximum": 0.01577214951161295,
+                  "median": 0.015519108970183878,
+                  "minimum": 0.015266068428754805
+                },
+                "CLOT": {
+                  "maximum": 0.009665055596269668,
+                  "median": 0.009412015054840595,
+                  "minimum": 0.009158974513411522
+                },
+                "LINER": {
+                  "maximum": 0.024601090433029008,
+                  "median": 0.018904444457210574,
+                  "minimum": 0.0061014766230158765
+                },
+                "RIM": {
+                  "maximum": 0.008434822233795183,
+                  "median": 0.0048124587501612165,
+                  "minimum": 0.002085570884696153
+                }
+              },
+              "maximumCavityDepth": 0.024601090433029008,
+              "maximumGeneratedDepth": 0.024601090433029008,
+              "maximumProudness": 0.0,
+              "medianLinerDepth": 0.018904444457210574,
+              "minimumSkinToLinerSeparation": 0.0061014766230158765,
+              "percentVerticesAboveLimit": 0.0,
+              "triangleCount": 976
+            }
+          },
+          "defaultVisible": false,
+          "activationWeight": 0.01,
+          "errors": []
+        },
+        "exportValidationStatus": "PASS",
+        "goreOverlayEnabled": true
+      },
+      {
+        "name": "Left_Head_Impact_v002",
+        "regionId": "head",
+        "maximumInfluence": 1.0,
+        "maximumDisplacement": 0.009618547745049,
+        "measuredMaximumDisplacement": 0.009278442400500436,
+        "maximumPairDeltaError": 3.725290298461914e-09,
+        "status": "TRAUMA_REBUILT",
+        "recipeStatus": "PROCEDURAL_STACK",
+        "stampCount": 1,
+        "deformationValidationStatus": "PASS",
+        "goreOverlayValidationStatus": "PASS",
+        "raisedGoreValidationStatus": "PASS",
+        "raisedGore": {
+          "status": "PASS",
+          "geometryMode": "HYBRID_ADDITIVE",
+          "identityId": "BLOODY_CRATER",
+          "nodeNames": [
+            "DSB_GORE_ATTACHED_head_Left_Head_Impact_v002_RAISED",
+            "DSB_GORE_DETACHED_head_Left_Head_Impact_v002_RAISED",
+            "DSB_GORE_ATTACHED_head_Left_Head_Impact_v002_INLAY",
+            "DSB_GORE_DETACHED_head_Left_Head_Impact_v002_INLAY"
+          ],
+          "meshIds": [
+            "gore_mesh_b75b50f276cb986b7ba8",
+            "gore_mesh_3126ab74ceafe1a08b81",
+            "gore_mesh_f59364e57f85dae50fb4",
+            "gore_mesh_4ee4c32804b5706185f7"
+          ],
+          "triangleCounts": {
+            "ATTACHED:RAISED": 2028,
+            "DETACHED:RAISED": 2028,
+            "ATTACHED:INLAY": 1024,
+            "DETACHED:INLAY": 1024
+          },
+          "materialIds": [
+            "DSB_GORE_CRUSHED_TISSUE",
+            "DSB_GORE_DARK_CLOT",
+            "DSB_GORE_DEEP_WOUND_BED",
+            "DSB_GORE_EXPOSED_BONE",
+            "DSB_GORE_ROUGH_EDGE",
+            "DSB_GORE_WET_CRIMSON"
+          ],
+          "measurements": {
+            "ATTACHED:INLAY": {
+              "generatedVertexCount": 618,
+              "layerDepths": {
+                "BARRIER": {
+                  "maximum": 0.004126964523456991,
+                  "median": 0.003873923982027918,
+                  "minimum": 0.0036208834405988453
+                },
+                "CLOT": {
+                  "maximum": 0.0025175059447064994,
+                  "median": 0.002264465403277427,
+                  "minimum": 0.0020114248618483543
+                },
+                "LINER": {
+                  "maximum": 0.0062684734573953535,
+                  "median": 0.005024493748468151,
+                  "minimum": 0.0023796128822281574
+                },
+                "RIM": {
+                  "maximum": 0.003173401486974989,
+                  "median": 0.002221679737219992,
+                  "minimum": 0.0013575520087971797
+                }
+              },
+              "maximumCavityDepth": 0.0062684734573953535,
+              "maximumGeneratedDepth": 0.0062684734573953535,
+              "maximumProudness": 0.0,
+              "medianLinerDepth": 0.005024493748468151,
+              "minimumSkinToLinerSeparation": 0.0023796128822281574,
+              "percentVerticesAboveLimit": 0.0,
+              "triangleCount": 1024
+            },
+            "DETACHED:INLAY": {
+              "generatedVertexCount": 618,
+              "layerDepths": {
+                "BARRIER": {
+                  "maximum": 0.004126964523456991,
+                  "median": 0.003873923982027918,
+                  "minimum": 0.0036208834405988453
+                },
+                "CLOT": {
+                  "maximum": 0.0025175059447064994,
+                  "median": 0.002264465403277427,
+                  "minimum": 0.0020114248618483543
+                },
+                "LINER": {
+                  "maximum": 0.0062684734573953535,
+                  "median": 0.005024493748468151,
+                  "minimum": 0.0023796128822281574
+                },
+                "RIM": {
+                  "maximum": 0.003173401486974989,
+                  "median": 0.002221679737219992,
+                  "minimum": 0.0013575520087971797
+                }
+              },
+              "maximumCavityDepth": 0.0062684734573953535,
+              "maximumGeneratedDepth": 0.0062684734573953535,
+              "maximumProudness": 0.0,
+              "medianLinerDepth": 0.005024493748468151,
+              "minimumSkinToLinerSeparation": 0.0023796128822281574,
+              "percentVerticesAboveLimit": 0.0,
+              "triangleCount": 1024
+            }
+          },
+          "defaultVisible": false,
+          "activationWeight": 0.01,
+          "errors": []
+        },
+        "exportValidationStatus": "PASS",
+        "goreOverlayEnabled": true
+      },
+      {
+        "name": "Left_Head_Impact_v003",
+        "regionId": "head",
+        "maximumInfluence": 1.0,
+        "maximumDisplacement": 0.008335838094353676,
+        "measuredMaximumDisplacement": 0.007964796998660761,
+        "maximumPairDeltaError": 3.725290298461914e-09,
+        "status": "TRAUMA_REBUILT",
+        "recipeStatus": "PROCEDURAL_STACK",
+        "stampCount": 1,
+        "deformationValidationStatus": "PASS",
+        "goreOverlayValidationStatus": "PASS",
+        "raisedGoreValidationStatus": "PASS",
+        "raisedGore": {
+          "status": "PASS",
+          "geometryMode": "CAVITY_INLAY",
+          "identityId": "BLOODY_CRATER",
+          "nodeNames": [
+            "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
+            "DSB_GORE_DETACHED_head_Left_Head_Impact_v003"
+          ],
+          "meshIds": [
+            "gore_mesh_a3509a1c22cc61927cfe",
+            "gore_mesh_86d85885ad64fb52cfee"
+          ],
+          "triangleCounts": {
+            "ATTACHED": 1104,
+            "DETACHED": 1104
+          },
+          "materialIds": [
+            "DSB_GORE_CRUSHED_TISSUE",
+            "DSB_GORE_DARK_CLOT",
+            "DSB_GORE_DEEP_WOUND_BED",
+            "DSB_GORE_EXPOSED_BONE",
+            "DSB_GORE_ROUGH_EDGE",
+            "DSB_GORE_WET_CRIMSON"
+          ],
+          "measurements": {
+            "ATTACHED": {
+              "generatedVertexCount": 630,
+              "layerDepths": {
+                "BARRIER": {
+                  "maximum": 0.0033160710637457668,
+                  "median": 0.003073900855379179,
+                  "minimum": 0.0028317306470125913
+                },
+                "LINER": {
+                  "maximum": 0.0051729693909631546,
+                  "median": 0.0037785920549625015,
+                  "minimum": 0.0017880501127489254
+                },
+                "RIM": {
+                  "maximum": 0.002799680743032408,
+                  "median": 0.0020121571868842673,
+                  "minimum": 0.001234732975698677
+                }
+              },
+              "maximumCavityDepth": 0.0051729693909631546,
+              "maximumGeneratedDepth": 0.0051729693909631546,
+              "maximumProudness": 0.0,
+              "medianLinerDepth": 0.0037785920549625015,
+              "minimumSkinToLinerSeparation": 0.0017880501127489254,
+              "percentVerticesAboveLimit": 0.0,
+              "triangleCount": 1104
+            },
+            "DETACHED": {
+              "generatedVertexCount": 630,
+              "layerDepths": {
+                "BARRIER": {
+                  "maximum": 0.0033160710637457668,
+                  "median": 0.003073900855379179,
+                  "minimum": 0.0028317306470125913
+                },
+                "LINER": {
+                  "maximum": 0.0051729693909631546,
+                  "median": 0.0037785920549625015,
+                  "minimum": 0.0017880501127489254
+                },
+                "RIM": {
+                  "maximum": 0.002799680743032408,
+                  "median": 0.0020121571868842673,
+                  "minimum": 0.001234732975698677
+                }
+              },
+              "maximumCavityDepth": 0.0051729693909631546,
+              "maximumGeneratedDepth": 0.0051729693909631546,
+              "maximumProudness": 0.0,
+              "medianLinerDepth": 0.0037785920549625015,
+              "minimumSkinToLinerSeparation": 0.0017880501127489254,
+              "percentVerticesAboveLimit": 0.0,
+              "triangleCount": 1104
+            }
+          },
+          "defaultVisible": false,
+          "activationWeight": 0.01,
+          "errors": []
+        },
+        "exportValidationStatus": "PASS",
+        "goreOverlayEnabled": true
+      }
+    ],
+    "coreSingleRegionCount": 1,
+    "pairedSegmentRegionCount": 3,
+    "compoundTrauma": {
+      "status": "PASS",
+      "eventCount": 0,
+      "events": [],
+      "errors": []
+    },
+    "progressiveDamageSites": {
+      "status": "PASS",
+      "errors": [],
+      "warnings": [],
+      "siteCount": 1,
+      "exportEnabledSiteCount": 1
+    },
+    "errors": [],
+    "warnings": []
+  }
+}

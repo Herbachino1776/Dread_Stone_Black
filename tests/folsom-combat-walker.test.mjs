@@ -225,7 +225,7 @@ test('Folsom reset leaves exactly two fresh active actors and no stale walker co
   encounter.dispose();
 });
 
-test('authored Folsom spawn completes its death state without procedural collapse or ragdoll', async () => {
+test('Folsom no-animation baseline completes its stationary death lifecycle without exceptions', async () => {
   const { encounter, player, collision } = await createEncounter();
   const actor = encounter.actor;
   const controller = encounter.stationaryDeathController;
@@ -245,14 +245,14 @@ test('authored Folsom spawn completes its death state without procedural collaps
   assert.equal(encounter.getContactableCombatActors().includes(actor), true);
   assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled()), true);
   assert.equal(collision.blockerRects.includes(encounter.playerBlocker), false);
-  assert.equal(cancelledTargets.length, 0, 'death collision release does not pull a planted knife out of the animated body');
+  assert.equal(cancelledTargets.length, 0, 'death collision release does not pull a planted knife out of the body');
 
   for (let frame = 0; frame < 120; frame += 1) controller.prepareFrame(0.05);
   actor.prepareFrame(0.05);
 
   assert.equal(controller.state, WALKER_STATES.grounded);
   assert.equal(controller.shouldHoldFinalPose(), true);
-  assert.equal(actor.ragdollActive, false);
+  assert.equal(actor.ragdollActive, false, 'the headless fixture has not completed the asynchronous visual load needed for presentation handoff');
   assert.equal(actor.getDiagnostics().ragdollHandoff.activationCount, 0);
   assert.equal(actor.visualAdapter?.ragdollDiagnostics.activationCount ?? 0, 0);
   assert.equal(encounter.stationaryDeathCollisionReleased, true);

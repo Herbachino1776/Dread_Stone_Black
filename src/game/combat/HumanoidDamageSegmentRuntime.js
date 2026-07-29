@@ -7,68 +7,17 @@ export const DAMAGE_MANIFEST_SCHEMA = 'dreadstone.damage_authoring.v1';
 export const ACTIVE_DAMAGE_SEGMENT_CONTRACTS = Object.freeze({
   head_neck: Object.freeze({
     segmentId: 'head_neck',
-    attachedObject: 'DSB_ATTACHED_HEAD',
-    detachedObject: 'DSB_SEGMENT_HEAD',
-    proximalStump: 'DSB_STUMP_NECK_TORSO',
-    distalStump: 'DSB_STUMP_NECK_HEAD',
-    parentRegion: 'neck',
-    bone: 'head',
     detachedBodyIds: Object.freeze(['head']),
-    fatal: true,
-    detachedMassHint: 4.5,
-    colliderHint: 'convex_hull',
   }),
   left_elbow: Object.freeze({
     segmentId: 'left_elbow',
-    attachedObject: 'DSB_ATTACHED_FOREARM_L',
-    detachedObject: 'DSB_SEGMENT_FOREARM_L',
-    proximalStump: 'DSB_STUMP_ELBOW_L_UPPER',
-    distalStump: 'DSB_STUMP_ELBOW_L_LOWER',
-    parentRegion: 'arm_left_top',
-    bone: 'arm_left_bot',
     detachedBodyIds: Object.freeze(['left_forearm', 'left_hand']),
-    fatal: false,
-    detachedMassHint: 1.8,
-    colliderHint: 'convex_hull',
   }),
   right_elbow: Object.freeze({
     segmentId: 'right_elbow',
-    attachedObject: 'DSB_ATTACHED_FOREARM_R',
-    detachedObject: 'DSB_SEGMENT_FOREARM_R',
-    proximalStump: 'DSB_STUMP_ELBOW_R_UPPER',
-    distalStump: 'DSB_STUMP_ELBOW_R_LOWER',
-    parentRegion: 'arm_right_top',
-    bone: 'arm_right_bot',
     detachedBodyIds: Object.freeze(['right_forearm', 'right_hand']),
-    fatal: false,
-    detachedMassHint: 1.8,
-    colliderHint: 'convex_hull',
   }),
 });
-
-export const DAMAGE_INTACT_VISIBLE_OBJECTS = Object.freeze([
-  'DSB_BODY_CORE',
-  'DSB_ATTACHED_HEAD',
-  'DSB_ATTACHED_FOREARM_L',
-  'DSB_ATTACHED_FOREARM_R',
-]);
-
-export const DAMAGE_INTACT_HIDDEN_OBJECTS = Object.freeze([
-  'DSB_SEGMENT_HEAD',
-  'DSB_STUMP_NECK_TORSO',
-  'DSB_STUMP_NECK_HEAD',
-  'DSB_SEGMENT_FOREARM_L',
-  'DSB_SEGMENT_FOREARM_R',
-  'DSB_STUMP_ELBOW_L_UPPER',
-  'DSB_STUMP_ELBOW_L_LOWER',
-  'DSB_STUMP_ELBOW_R_UPPER',
-  'DSB_STUMP_ELBOW_R_LOWER',
-  'DSB_SEGMENT_UPPER_BODY',
-  'DSB_SEGMENT_LOWER_BODY',
-  'DSB_STUMP_WAIST_UPPER',
-  'DSB_STUMP_WAIST_LOWER',
-  'DSB_SOCKET_ABDOMEN_VISCERA',
-]);
 
 const DETACHED_COLLISION_GROUPS = 0x00020001;
 const MAXIMUM_DETACHED_LINEAR_SPEED = 8;
@@ -112,34 +61,52 @@ function incrementBounded(value) {
 export function validateDamageAsset({ manifest, root, profile, clips = [], animationManifest = null } = {}) {
   const errors = [];
   const { objects, duplicates } = collectNamedObjects(root);
-  const requiredNames = [...(profile?.damageRequiredObjects ?? [])];
-  const missingObjects = requiredNames.filter((name) => !objects.has(name));
-  const duplicateRequiredObjects = requiredNames.filter((name) => duplicates.has(name));
   if (!manifest || manifest.schema !== DAMAGE_MANIFEST_SCHEMA) errors.push(`invalid damage manifest schema ${manifest?.schema ?? 'missing'}`);
   if (manifest?.authoringVersion !== profile?.damageAuthoringVersion) errors.push(`authoring version ${manifest?.authoringVersion ?? 'missing'} does not match ${profile?.damageAuthoringVersion ?? 'profile'}`);
   if (manifest?.authoringBuildId !== profile?.damageAuthoringBuildId) errors.push(`authoring build ${manifest?.authoringBuildId ?? 'missing'} does not match ${profile?.damageAuthoringBuildId ?? 'profile'}`);
   if (manifest?.glb !== basename(profile?.assetPath)) errors.push(`damage manifest targets ${manifest?.glb ?? 'missing'}, expected ${basename(profile?.assetPath)}`);
   if (manifest?.source?.topologyFingerprint !== profile?.damageTopologyFingerprint) errors.push('source topology fingerprint mismatch');
   if (manifest?.source?.weightFingerprint !== profile?.damageWeightFingerprint) errors.push('source weight fingerprint mismatch');
-  if (missingObjects.length) errors.push(`missing required objects: ${missingObjects.join(', ')}`);
-  if (duplicateRequiredObjects.length) errors.push(`duplicate required objects: ${duplicateRequiredObjects.join(', ')}`);
 
   const segmentRecords = new Map();
-  Object.entries(ACTIVE_DAMAGE_SEGMENT_CONTRACTS).forEach(([segmentId, contract]) => {
-    const matches = (manifest?.segments ?? []).filter((entry) => entry?.segmentId === segmentId);
-    const segment = matches[0] ?? null;
-    if (matches.length !== 1) errors.push(`expected one ${segmentId} segment, found ${matches.length}`);
-    for (const key of ['attachedObject', 'detachedObject', 'proximalStump', 'distalStump', 'parentRegion', 'bone', 'fatal', 'detachedMassHint', 'colliderHint']) {
-      if (segment?.[key] !== contract[key]) errors.push(`${segmentId} ${key} must be ${contract[key]}`);
+  const requiredNames = new Set([
+    manifest?.intact?.bodyCore,
+    ...(manifest?.intact?.attachedSegments ?? []),
+    ...(manifest?.sockets ?? []).map((socket) => socket?.object),
+  ].filter(Boolean));
+  if (!Array.isArray(manifest?.segments)) errors.push('damage segments are missing');
+  for (const segment of manifest?.segments ?? []) {
+    const segmentId = segment?.segmentId;
+    if (!segmentId || segmentRecords.has(segmentId)) {
+      errors.push(`invalid or duplicate damage segment ${segmentId ?? 'missing'}`);
+      continue;
     }
-    if (!objects.get(segment?.detachedObject)?.isMesh) errors.push(`${segmentId} detached object must be a rigid mesh`);
-    if (objects.get(segment?.detachedObject)?.isSkinnedMesh) errors.push(`${segmentId} detached object must not be skinned`);
-    if (!objects.get(segment?.attachedObject)?.isSkinnedMesh) errors.push(`${segmentId} attached object must be skinned`);
-    if (!objects.get(segment?.proximalStump)?.isSkinnedMesh) errors.push(`${segmentId} proximal stump must be skinned`);
-    if (objects.get(segment?.distalStump)?.parent !== objects.get(segment?.detachedObject)) errors.push(`${segmentId} distal stump must be parented to its detached object`);
-    if (!objects.has(segment?.bone)) errors.push(`${segmentId} animated bone is missing`);
-    if (segment) segmentRecords.set(segmentId, segment);
-  });
+    for (const key of ['attachedObject', 'detachedObject', 'proximalSegmentObject', 'proximalStump', 'distalStump', 'bone']) {
+      if (segment[key]) requiredNames.add(segment[key]);
+    }
+    const attachedObject = segment.attachedObject ? objects.get(segment.attachedObject) : null;
+    const detachedObject = segment.detachedObject ? objects.get(segment.detachedObject) : null;
+    const proximalSegmentObject = segment.proximalSegmentObject ? objects.get(segment.proximalSegmentObject) : null;
+    const proximalStump = segment.proximalStump ? objects.get(segment.proximalStump) : null;
+    const distalStump = segment.distalStump ? objects.get(segment.distalStump) : null;
+    if (!detachedObject?.isMesh || detachedObject.isSkinnedMesh) errors.push(`${segmentId} detached object ${segment.detachedObject ?? 'missing'} must be a rigid mesh`);
+    if (segment.attachedObject && !attachedObject?.isSkinnedMesh) errors.push(`${segmentId} attached object ${segment.attachedObject} must be skinned`);
+    if (!segment.attachedObject && !proximalSegmentObject?.isMesh) errors.push(`${segmentId} requires an attached object or proximal rigid segment`);
+    if (proximalSegmentObject?.isSkinnedMesh) errors.push(`${segmentId} proximal segment ${segment.proximalSegmentObject} must be rigid`);
+    if (!proximalStump?.isMesh) errors.push(`${segmentId} proximal stump ${segment.proximalStump ?? 'missing'} must be a mesh`);
+    if (!distalStump?.isMesh) errors.push(`${segmentId} distal stump ${segment.distalStump ?? 'missing'} must be a mesh`);
+    if (distalStump?.parent !== detachedObject) errors.push(`${segmentId} distal stump must be parented to its manifest detached object`);
+    if (!objects.get(segment.bone)?.isBone) errors.push(`${segmentId} bone ${segment.bone ?? 'missing'} is missing`);
+    segmentRecords.set(segmentId, segment);
+  }
+  for (const segmentId of profile?.activeDamageSegmentIds ?? []) {
+    if (!segmentRecords.has(segmentId)) errors.push(`active damage segment ${segmentId} is missing from the manifest`);
+    if (!ACTIVE_DAMAGE_SEGMENT_CONTRACTS[segmentId]) errors.push(`active damage segment ${segmentId} has no gameplay body binding`);
+  }
+  const missingObjects = [...requiredNames].filter((name) => !objects.has(name));
+  const duplicateRequiredObjects = [...requiredNames].filter((name) => duplicates.has(name));
+  if (missingObjects.length) errors.push(`missing manifest objects: ${missingObjects.join(', ')}`);
+  if (duplicateRequiredObjects.length) errors.push(`duplicate manifest objects: ${duplicateRequiredObjects.join(', ')}`);
 
   const expectedAnimations = [...(profile?.damageExpectedAnimationNames ?? [])];
   const manifestAnimationNames = (animationManifest?.animations ?? []).map((entry) => entry?.name).filter(Boolean);
@@ -362,6 +329,14 @@ export class HumanoidDamageSegmentRuntime {
 
   activateForgeDamage(morphName, options = {}) {
     return this.deformationRuntime?.activate?.(morphName, options) ?? { applied: false, reason: 'deformation-runtime-not-ready', selectedMorph: morphName ?? null };
+  }
+
+  setProgressiveDamageStage(siteId, stageName, options = {}) {
+    return this.deformationRuntime?.setProgressiveDamageStage?.(siteId, stageName, options) ?? { applied: false, reason: 'deformation-runtime-not-ready', siteId: siteId ?? null, stage: stageName ?? null };
+  }
+
+  advanceProgressiveDamageSite(siteId = null, options = {}) {
+    return this.deformationRuntime?.advanceProgressiveDamageSite?.(siteId, options) ?? { applied: false, reason: 'deformation-runtime-not-ready', siteId };
   }
 
   resetForgeDamage() {

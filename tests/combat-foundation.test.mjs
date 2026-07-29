@@ -10,14 +10,13 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
-import { CURRENT_HUMANOID_PROFILE, TESTMAN_COMBAT_PROFILE, TESTMAN_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
+import { CURRENT_HUMANOID_PROFILE, DREADGUARD_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
 import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, KNIFE_EDGE_BASE_SAMPLE_COUNT, KNIFE_EDGE_COLLISION_RADIUS, KNIFE_EDGE_MAX_SAMPLE_COUNT, KNIFE_RUNTIME_COMBAT_MODE, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveKnifeEdgeSampleCount, resolveSlashLeadingPart, sampleKnifeCuttingEdgeLocal } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG, resolveCombatMortalityMode } from '../src/game/combat/CombatMortality.js';
-import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveAnimationPackManifest, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
+import { HumanoidGlbVisualAdapter, applySolvedBoneLocalTransform, captureModelSpaceBoneBinding, measureVisibleSkinnedBounds, resolveRequiredBoneMappings, solveModelSpaceBoneLocal } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { MAX_ADJACENT_SURFACE_PROJECTION_DISTANCE, MAX_SLASH_SURFACE_SAMPLES, MAX_SURFACE_PROJECTION_DISTANCE, WOUND_SURFACE_BIAS, buildSkinnedTriangleInfluenceMetadata, createSurfaceBindingDiagnostics, findClosestSkinnedSurface, reconstructSkinnedSurface, sampleSlashPath, validateSurfaceBinding } from '../src/game/combat/SkinnedSurfaceBinding.js';
-import { HumanoidAnimationPackController } from '../src/game/combat/HumanoidAnimationPackController.js';
 import { COMBAT_DIRECTOR_EVENTS, CombatDirector, PENETRATION_STAGES, resolveMeleeTimeline } from '../src/game/combat/CombatDirector.js';
 import { isDamageIntent, MELEE_INTENTS, MeleeIntentWeapon } from '../src/game/combat/MeleeIntentWeapon.js';
 import { Feedback } from '../src/game/Feedback.js';
@@ -737,19 +736,17 @@ test('wound and reaction lifecycle keeps one bounded pool while retaining the se
   physics.dispose();
 });
 
-test('Testman authored deaths never hand skeletal authority to ragdoll', async () => {
+test('Dreadguard uses the established ragdoll death fallback when no animation pack is configured', async () => {
   await initializeCombatPhysics();
   const physics = new CombatPhysicsWorld();
-  const actor = new HumanoidCombatActor({ physics, scene: new THREE.Scene(), visualProfile: TESTMAN_COMBAT_PROFILE });
-  actor.animationAuthorityReady = true;
+  const actor = new HumanoidCombatActor({ physics, scene: new THREE.Scene(), visualProfile: DREADGUARD_DAMAGE_COMBAT_PROFILE });
   let ragdollBeginCount = 0;
   actor.visualAdapter = { beginRagdoll: () => { ragdollBeginCount += 1; return true; }, updateRagdoll() {}, reset() {}, dispose() {} };
-  assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 2));
-  assert.equal(actor.activateRagdoll({ forced: true }), false);
-  assert.equal(actor.forceRagdoll(), false);
-  assert.equal(actor.ragdollActive, false);
-  assert.equal(ragdollBeginCount, 0);
-  assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 2));
+  assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 0), 'the rest-pose fallback starts as motor-controlled dynamic physics');
+  assert.equal(actor.activateRagdoll({ forced: true }), true);
+  assert.equal(actor.ragdollActive, true);
+  assert.equal(ragdollBeginCount, 1);
+  assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 0));
   actor.dispose();
   physics.dispose();
 });
@@ -1378,17 +1375,17 @@ test('combat feedback guards unsupported haptics, cooldowns contact audio, and h
   feedback.dispose();
 });
 
-test('Folsom keeps the stationary Testman subject and routes all three walkers independently', async () => {
+test('Folsom keeps one stationary Dreadguard and routes all three walkers independently', async () => {
   const scene = new THREE.Scene();
   const dungeon = { scene, collision: { sampleWalkableY: () => ({ y: 0.16 }), canStandAtFloorPosition: () => true, getIntersectingBlockers: () => [] } };
   const encounter = await FolsomCombatEncounter.create({ dungeon });
   const pelvis = encounter.actor.getBodyWorldPosition('pelvis');
   const playerSpawn = new THREE.Vector3(-2, 1.71, -4);
   assert.equal(Math.hypot(encounter.spawnPosition.x - playerSpawn.x, encounter.spawnPosition.z - playerSpawn.z), 10);
-  assert.equal(encounter.actor.visualProfile, TESTMAN_DAMAGE_COMBAT_PROFILE);
-  assert.ok(scene.getObjectByName('folsom-testman-stationary-1'));
-  assert.equal(scene.children.filter((child) => child.name.startsWith('folsom-testman-stationary-')).length, 1);
-  assert.equal(scene.getObjectByName('folsom-testman-raw-reference'), undefined);
+  assert.equal(encounter.actor.visualProfile, DREADGUARD_DAMAGE_COMBAT_PROFILE);
+  assert.ok(scene.getObjectByName('folsom-dreadguard-stationary-1'));
+  assert.equal(scene.children.filter((child) => child.name.startsWith('folsom-dreadguard-stationary-')).length, 1);
+  assert.equal(scene.children.some((child) => child.name.toLowerCase().includes('testman')), false);
   assert.ok(pelvis.x > 7 && pelvis.z < -3);
   assert.ok(encounter.walkerController.actor);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
@@ -1397,93 +1394,50 @@ test('Folsom keeps the stationary Testman subject and routes all three walkers i
   encounter.reset();
   assert.equal(encounter.physics.world.bodies.len(), 73);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
-  assert.equal(scene.children.filter((child) => child.name.startsWith('folsom-testman-stationary-')).length, 1);
+  assert.equal(scene.children.filter((child) => child.name.startsWith('folsom-dreadguard-stationary-')).length, 1);
   encounter.dispose();
-  assert.equal(scene.children.some((child) => child.name.startsWith('folsom-testman-stationary-')), false);
+  assert.equal(scene.children.some((child) => child.name.startsWith('folsom-dreadguard-stationary-')), false);
   assert.equal(scene.children.some((child) => child.name.startsWith('folsom-authored-walker-')), false);
 });
 
-test('loaded Testman bounds, root scale, semantic proxies, and wound projection share one meter space', async () => {
+test('loaded Dreadguard damage bundle preserves world scale and the no-animation baseline contract', async () => {
   globalThis.self ??= globalThis;
   globalThis.ProgressEvent ??= class ProgressEvent { constructor(type, init = {}) { this.type = type; Object.assign(this, init); } };
   globalThis.createImageBitmap ??= async () => ({ width: 1, height: 1, close() {} });
-  const bytes = readFileSync(new URL('../public/assets/enemies/testman/testman_animpack_v002.glb', import.meta.url));
+  const bytes = readFileSync(new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb', import.meta.url));
   const assetBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  const gltf = await new GLTFLoader().parseAsync(assetBuffer, new URL('../public/assets/enemies/testman/', import.meta.url).href);
-  const manifest = JSON.parse(readFileSync(new URL('../public/assets/enemies/testman/testman_animpack_v002.json', import.meta.url), 'utf8'));
-  const animationPack = resolveAnimationPackManifest(manifest, gltf.animations, TESTMAN_COMBAT_PROFILE.name);
-  const mixer = new THREE.AnimationMixer(gltf.scene);
-  new HumanoidAnimationPackController({ mixer, animationPack, manifest, fadeSeconds: TESTMAN_COMBAT_PROFILE.animationFadeSeconds, walkReferenceSpeed: TESTMAN_COMBAT_PROFILE.walkReferenceSpeed });
-  mixer.update(0);
+  const gltf = await new GLTFLoader().parseAsync(assetBuffer, new URL('../public/assets/enemies/dreadguard/damage/', import.meta.url).href);
+  const manifest = JSON.parse(readFileSync(new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.json', import.meta.url), 'utf8'));
   const root = gltf.scene;
+  root.traverse((object) => {
+    if (object.userData?.dsb_default_visible === false || object.userData?.dsb_gore_default_visible === false || object.name?.startsWith('DSB_GORE_')) object.visible = false;
+  });
+  root.updateMatrixWorld(true);
   const rawHeight = measureVisibleSkinnedBounds(root).getSize(new THREE.Vector3()).y;
-  const uniformScale = getHumanoidProfileScale(TESTMAN_COMBAT_PROFILE);
-  assert.ok(Math.abs(rawHeight - TESTMAN_COMBAT_PROFILE.rawHeight) < 1e-6, 'the profile records the loaded v002 skinned height, not the older asset height');
-  assert.ok(uniformScale > 0.37 && uniformScale < 0.38, 'one profile scale normalizes the smaller v002 asset');
+  const uniformScale = getHumanoidProfileScale(DREADGUARD_DAMAGE_COMBAT_PROFILE);
+  assert.ok(Math.abs(rawHeight - DREADGUARD_DAMAGE_COMBAT_PROFILE.rawHeight) < 1e-6);
+  assert.ok(uniformScale > 1.24 && uniformScale < 1.25);
   root.scale.setScalar(uniformScale);
   const scaled = measureVisibleSkinnedBounds(root);
-  root.position.y = TESTMAN_COMBAT_PROFILE.groundClearance - scaled.min.y;
+  root.position.y = DREADGUARD_DAMAGE_COMBAT_PROFILE.groundClearance - scaled.min.y;
   const normalized = measureVisibleSkinnedBounds(root);
   assert.ok(Math.abs(normalized.getSize(new THREE.Vector3()).y - 1.82) < 1e-6);
   assert.deepEqual(root.scale.toArray(), [uniformScale, uniformScale, uniformScale]);
-  assert.equal(TESTMAN_COMBAT_PROFILE.animationAuthoritative, true);
-  assert.equal(Object.keys(TESTMAN_COMBAT_PROFILE.proxyFit).length, 18);
-
-  const bones = new Map();
-  const skinnedMeshes = [];
-  root.traverse((object) => {
-    if (object.isBone) bones.set(object.name, object);
-    if (object.isSkinnedMesh) skinnedMeshes.push(object);
-  });
-  const triangleMetadataByMesh = new Map(skinnedMeshes.map((mesh) => [mesh, buildSkinnedTriangleInfluenceMetadata(mesh, { boneMap: TESTMAN_COMBAT_PROFILE.boneMap })]));
-  const adapter = { profile: TESTMAN_COMBAT_PROFILE, bones };
-  const surfaceBindings = [];
-  for (const [bodyId, fit] of Object.entries(TESTMAN_COMBAT_PROFILE.proxyFit)) {
-    const pose = HumanoidGlbVisualAdapter.prototype.getProxyPose.call(adapter, bodyId);
-    const outward = new THREE.Vector3(0, 0, 1).applyQuaternion(pose.quaternion).normalize();
-    const contactPoint = pose.position.clone().addScaledVector(outward, fit.radius ?? fit.halfExtents[2]);
-    const binding = findClosestSkinnedSurface(skinnedMeshes, contactPoint, { bodyId, regionId: bodyId, referenceNormal: outward, anatomyAware: true, triangleMetadataByMesh });
-    assert.ok(validateSurfaceBinding(binding), `${bodyId} proxy reaches the final scaled skin`);
-    assert.ok(binding.distanceAtBind <= MAX_SURFACE_PROJECTION_DISTANCE, `${bodyId} uses the bounded projection distance`);
-    assert.ok(['exact', 'weighted_overlap', 'adjacent', 'adjacent_overlap'].includes(binding.semanticCompatibility.kind), `${bodyId} records semantic triangle compatibility`);
-    assert.ok(reconstructSkinnedSurface(binding).point.distanceTo(contactPoint) <= MAX_SURFACE_PROJECTION_DISTANCE + 1e-8);
-    surfaceBindings.push([bodyId, binding]);
-  }
-  for (const clip of gltf.animations.filter((entry) => /Hurt|Death/.test(entry.name))) {
-    mixer.stopAllAction();
-    const action = mixer.clipAction(clip); action.reset().play();
-    for (const fraction of [0.25, 0.5, 0.75, 1]) {
-      mixer.setTime(clip.duration * fraction);
-      root.updateMatrixWorld(true);
-      skinnedMeshes.forEach((mesh) => mesh.skeleton.update());
-      surfaceBindings.forEach(([bodyId, binding]) => assert.ok(reconstructSkinnedSurface(binding), `${bodyId} remains reconstructed during ${clip.name} at ${fraction}`));
-    }
-  }
-  mixer.stopAllAction();
-});
-
-test('Testman v002 authoritative profile is independent and uses its enemy-specific manifest route', () => {
-  assert.notEqual(CURRENT_HUMANOID_PROFILE.assetPath, TESTMAN_COMBAT_PROFILE.assetPath);
-  assert.notEqual(CURRENT_HUMANOID_PROFILE.boneMap, TESTMAN_COMBAT_PROFILE.boneMap);
-  assert.equal(TESTMAN_COMBAT_PROFILE.assetPath, './assets/enemies/testman/testman_animpack_v002.glb');
-  assert.equal(TESTMAN_COMBAT_PROFILE.animationManifestPath, './assets/enemies/testman/testman_animpack_v002.json');
-  assert.equal(TESTMAN_COMBAT_PROFILE.idleClipName, undefined);
-  assert.equal(TESTMAN_COMBAT_PROFILE.name, 'testman_animpack_v002_animation_authoritative');
-});
-
-test('Testman v002 manifest is the source of truth for discoverable animation clips', () => {
-  const manifest = JSON.parse(readFileSync(new URL('../public/assets/enemies/testman/testman_animpack_v002.json', import.meta.url), 'utf8'));
-  const clips = manifest.animations.map(({ name }) => ({ name, tracks: [{}] }));
-  const pack = resolveAnimationPackManifest(manifest, clips, TESTMAN_COMBAT_PROFILE.name);
-  assert.equal(pack.entriesByName.size, manifest.approved_animation_count);
-  assert.equal(pack.entriesByKind.get('WALK')[0].loop, true);
-  assert.ok(pack.entriesByKind.get('HURT_LEFT')[0].play_once);
-  assert.ok(pack.entriesByKind.get('HURT_RIGHT')[0].return_to_previous_state);
-  assert.ok(pack.entriesByKind.get('DEATH').every((entry) => entry.play_once && entry.hold_final_pose));
-  assert.throws(
-    () => resolveAnimationPackManifest(manifest, clips.slice(1), TESTMAN_COMBAT_PROFILE.name),
-    /missing manifest animations: DSB_Death_ChestHold_LEFT_v001/,
-  );
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationAuthoritative, false);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.authoredDeathAnimations, false);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.noAnimationFallback, 'physics_bound_rest_pose');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationManifestPath, undefined);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoreEmbeddedAnimations, true);
+  assert.equal(gltf.animations.length, 1, 'the bundle clip is present but intentionally not registered as an authored animation pack');
+  assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.damageExpectedAnimationNames, []);
+  assert.notEqual(CURRENT_HUMANOID_PROFILE.assetPath, DREADGUARD_DAMAGE_COMBAT_PROFILE.assetPath);
+  assert.notEqual(CURRENT_HUMANOID_PROFILE.boneMap, DREADGUARD_DAMAGE_COMBAT_PROFILE.boneMap);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.assetPath, './assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.damageManifestPath, './assets/enemies/dreadguard/damage/dreadguard_damage_v001.json');
+  assert.equal(manifest.glb, 'dreadguard_damage_v001.glb');
+  const site = manifest.deformations.progressiveDamageSites[0];
+  assert.deepEqual(site.stageOrder, ['LIGHT', 'MEDIUM', 'HEAVY']);
+  assert.deepEqual(site.stages.map(({ deformationKeyName }) => deformationKeyName), ['Left_Head_Impact_v003', 'Left_Head_Impact_v002', 'Left_Head_Impact_v001']);
 });
 
 test('authored wound materials preserve authored color and remain lighting-responsive', async () => {

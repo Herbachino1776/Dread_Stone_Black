@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatDirector } from './CombatDirector.js';
 import { HumanoidCombatActor } from './HumanoidCombatActor.js';
-import { TESTMAN_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { DREADGUARD_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 import { ACTOR_SEPARATION_CONFIG, resolveEnemyCloseRangeMotion } from '../ActorSeparation.js';
 
 export const WALKER_STATES = Object.freeze({
@@ -410,7 +410,7 @@ export class CombatLabWalkerController {
     this.desiredYaw = targetYaw;
     this.position.copy(spawnPosition);
     const spawnOffset = new THREE.Vector3(spawnPosition.x, spawnPosition.y, spawnPosition.z + 3.55);
-    const actorOptions = { physics: this.physics, scene: this.scene, spawnOffset, spawnYaw: this.currentYaw, visualProfile: TESTMAN_COMBAT_PROFILE, automaticMortality: false, isolateVisualMaterials: true, acceptedCombatAudio: this.acceptedCombatAudio, eventSink: (event, payload) => this.handleActorEvent(event, payload) };
+    const actorOptions = { physics: this.physics, scene: this.scene, spawnOffset, spawnYaw: this.currentYaw, visualProfile: DREADGUARD_DAMAGE_COMBAT_PROFILE, automaticMortality: false, isolateVisualMaterials: true, acceptedCombatAudio: this.acceptedCombatAudio, eventSink: (event, payload) => this.handleActorEvent(event, payload) };
     this.actor = this.actorFactory ? this.actorFactory(actorOptions) : new HumanoidCombatActor(actorOptions);
     this.actor.root.name = this.environment.getActorName?.(this.respawnGeneration) ?? `combat-lab-authored-walker-${this.respawnGeneration}`;
     this.actor.setLivingRootTransform?.(this.position, this.currentYaw);
@@ -611,7 +611,7 @@ export class CombatLabWalkerController {
     } else if (this.state === WALKER_STATES.hitReacting && !reacting && this.stateElapsed >= 0.2) {
       this.setState(this.distanceToPlayer <= this.config.stopEnterDistance ? WALKER_STATES.blendingToIdle : this.distanceToPlayer > this.config.resumeDistance ? WALKER_STATES.approaching : WALKER_STATES.nearPlayer);
     }
-    if (this.state === WALKER_STATES.spawning && this.stateElapsed >= 0.45 && (this.actor.animationAuthorityReady || !this.actor.visualAdapter)) this.setState(WALKER_STATES.blendingToWalk);
+    if (this.state === WALKER_STATES.spawning && this.stateElapsed >= 0.45 && (this.actor.animationAuthorityReady || this.actor.visualAdapter?.scene || !this.actor.visualAdapter)) this.setState(WALKER_STATES.blendingToWalk);
     if (!this.footprintActive && [WALKER_STATES.blendingToWalk, WALKER_STATES.approaching, WALKER_STATES.hitReacting].includes(this.state)) this.setState(WALKER_STATES.blendingToIdle);
     if (this.state === WALKER_STATES.blendingToWalk && this.distanceToPlayer <= this.config.stopEnterDistance) this.setState(WALKER_STATES.blendingToIdle);
     else if (this.state === WALKER_STATES.blendingToWalk && this.stateElapsed >= this.config.idleToWalkSeconds) this.setState(WALKER_STATES.approaching);
@@ -701,7 +701,7 @@ export class CombatLabWalkerController {
       const death = this.actor.visualAdapter?.playDeathAnimation?.({ regionId: region, variation: this.respawnGeneration });
       this.deathDurationSeconds = death?.durationSeconds ?? this.config.deathCollapseSeconds;
       this.selectedDeathName = death?.name ?? null;
-      this.actor.transitionLifeState?.('dying', 'authored-walker-vital-stab', { externalCommit: true, forceFatal: true, presentationHandled: true });
+      this.actor.transitionLifeState?.('dying', 'walker-vital-stab', { externalCommit: true, forceFatal: true, presentationHandled: death != null });
       this.setState(WALKER_STATES.losingConsciousness);
       this.actor.combatContactState = 'dying';
       this.releaseDeathCollisionOwnership();
@@ -804,7 +804,7 @@ export class CombatLabWalkerController {
   assertBoundedState() {
     if (this.actor && this.actor.disposed) throw new Error('Disposed walker remained active.');
     if (![this.position.x, this.position.y, this.position.z, this.currentSpeed, this.currentYaw, this.desiredYaw].every(Number.isFinite)) throw new Error('Walker movement became non-finite.');
-    if (this.actor?.ragdollActive && [WALKER_STATES.losingConsciousness, WALKER_STATES.grounded].includes(this.state)) throw new Error('Walker skeletal death entered ragdoll.');
+    if (this.actor?.visualProfile?.authoredDeathAnimations && this.actor?.ragdollActive && [WALKER_STATES.losingConsciousness, WALKER_STATES.grounded].includes(this.state)) throw new Error('Walker authored skeletal death entered ragdoll.');
     const qualifyingWeight = [...this.lethality.countedWoundWeights.values()].reduce((sum, value) => sum + value, 0);
     if (Math.abs(qualifyingWeight - this.lethality.criticalStabCount) > 1e-8) throw new Error('Walker wound lethality accounting drifted.');
   }

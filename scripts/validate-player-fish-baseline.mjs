@@ -10,7 +10,7 @@ const ignoredFiles = new Set([
   'src/game/GameState.js', // save repair intentionally strips pre-purge rusted_sword snapshots
 ]);
 const permittedPatternLabelsByFile = new Map([
-  ['src/game/combat/ForgeDamageDeformationRuntime.js', new Set(['gore runtime'])], // Manifest-authored Testman damage presentation.
+  ['src/game/combat/ForgeDamageDeformationRuntime.js', new Set(['gore runtime'])], // Manifest-authored Forge damage presentation.
 ]);
 
 const bannedPatterns = [
