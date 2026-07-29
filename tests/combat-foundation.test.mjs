@@ -10,7 +10,7 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
-import { CURRENT_HUMANOID_PROFILE, DREADGUARD_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
+import { CURRENT_HUMANOID_PROFILE, DREADGUARD_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale, isHumanoidPoseAuthoritative } from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
 import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, KNIFE_EDGE_BASE_SAMPLE_COUNT, KNIFE_EDGE_COLLISION_RADIUS, KNIFE_EDGE_MAX_SAMPLE_COUNT, KNIFE_RUNTIME_COMBAT_MODE, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveKnifeEdgeSampleCount, resolveSlashLeadingPart, sampleKnifeCuttingEdgeLocal } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
@@ -404,6 +404,58 @@ test('GLB physics binding preserves bind pose and authored bone scale under mode
   assert.deepEqual(bone.scale.toArray(), authoredScale.toArray(), 'per-frame matrix decomposition cannot accumulate scale drift into the skin');
 });
 
+test('rest-pose authority applies the gameplay spawn without rewriting exported bone locals', () => {
+  const fixture = createSkinnedSurfaceFixture();
+  const rawHeight = measureVisibleSkinnedBounds(fixture.root).getSize(new THREE.Vector3()).y;
+  const host = new THREE.Group();
+  const actor = {
+    visualRootPosition: new THREE.Vector3(8, 0.188, -4),
+    spawnYaw: 0.4,
+    readyAdapter: null,
+    setAnimationAuthorityReady(adapter) { this.readyAdapter = adapter; },
+  };
+  const adapter = Object.assign(Object.create(HumanoidGlbVisualAdapter.prototype), {
+    actor,
+    parent: host,
+    profile: {
+      name: 'rest-pose-spawn-regression',
+      rawHeight,
+      targetHeight: 1.5,
+      groundClearance: 0.02,
+      rootYaw: 0,
+      boneMap: { upper_chest: fixture.bone.name },
+      proxyFit: { upper_chest: { bone: fixture.bone.name } },
+    },
+    scene: fixture.root,
+    skeletons: [fixture.mesh.skeleton],
+    bones: new Map([[fixture.bone.name, fixture.bone]]),
+    animationBones: new Map(),
+    restPoseBoneTransforms: new Map(),
+    presentationRoot: null,
+    rawVisibleBounds: null,
+    normalizedVisibleBounds: null,
+    uniformScale: null,
+    basePresentationPosition: new THREE.Vector3(),
+    basePresentationYaw: 0,
+  });
+  const localPosition = fixture.bone.position.clone();
+  const localQuaternion = fixture.bone.quaternion.clone();
+  const localScale = fixture.bone.scale.clone();
+
+  adapter.initializeRestPoseAuthoritative();
+
+  assert.equal(actor.readyAdapter, adapter);
+  assert.deepEqual(adapter.presentationRoot.position.toArray(), actor.visualRootPosition.toArray());
+  assert.equal(adapter.presentationRoot.rotation.y, actor.spawnYaw);
+  assert.ok(Math.abs(adapter.normalizedVisibleBounds.getSize(new THREE.Vector3()).y - 1.5) < 1e-6);
+  assert.ok(Math.abs(adapter.normalizedVisibleBounds.min.y - (actor.visualRootPosition.y + 0.02)) < 1e-6);
+  assert.ok(fixture.bone.position.distanceTo(localPosition) < 1e-12);
+  assert.ok(1 - Math.abs(fixture.bone.quaternion.dot(localQuaternion)) < 1e-12);
+  assert.ok(fixture.bone.scale.distanceTo(localScale) < 1e-12);
+  fixture.geometry.dispose();
+  fixture.mesh.material.dispose();
+});
+
 test('diagnostic GLB profiles fail clearly when a required mapped bone is missing', () => {
   const bodies = new Map([['pelvis', {}], ['head', {}]]);
   const bones = new Map([['body', new THREE.Bone()]]);
@@ -736,17 +788,34 @@ test('wound and reaction lifecycle keeps one bounded pool while retaining the se
   physics.dispose();
 });
 
-test('Dreadguard uses the established ragdoll death fallback when no animation pack is configured', async () => {
+test('Dreadguard holds its exported rest pose kinematically before a dynamic ragdoll handoff', async () => {
   await initializeCombatPhysics();
   const physics = new CombatPhysicsWorld();
   const actor = new HumanoidCombatActor({ physics, scene: new THREE.Scene(), visualProfile: DREADGUARD_DAMAGE_COMBAT_PROFILE });
   let ragdollBeginCount = 0;
-  actor.visualAdapter = { beginRagdoll: () => { ragdollBeginCount += 1; return true; }, updateRagdoll() {}, reset() {}, dispose() {} };
-  assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 0), 'the rest-pose fallback starts as motor-controlled dynamic physics');
+  const visualAdapter = {
+    beginRagdoll: () => { ragdollBeginCount += 1; return true; },
+    getProxyPose: (bodyId) => {
+      const body = actor.bodies.get(bodyId)?.body;
+      const position = body?.translation();
+      const quaternion = body?.rotation();
+      return body ? {
+        position: new THREE.Vector3(position.x, position.y, position.z),
+        quaternion: new THREE.Quaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w),
+      } : null;
+    },
+    updateRagdoll() {},
+    reset() {},
+    dispose() {},
+  };
+  actor.visualAdapter = visualAdapter;
+  actor.setAnimationAuthorityReady(visualAdapter);
+  assert.equal(isHumanoidPoseAuthoritative(DREADGUARD_DAMAGE_COMBAT_PROFILE), true);
+  assert.ok([...actor.bodies.values()].every(({ body }) => body.isKinematic()), 'the exported rest pose owns kinematic combat proxies while alive');
   assert.equal(actor.activateRagdoll({ forced: true }), true);
   assert.equal(actor.ragdollActive, true);
   assert.equal(ragdollBeginCount, 1);
-  assert.ok([...actor.bodies.values()].every(({ body }) => body.bodyType() === 0));
+  assert.ok([...actor.bodies.values()].every(({ body }) => body.isDynamic()), 'ragdoll handoff releases every proxy to dynamic physics');
   actor.dispose();
   physics.dispose();
 });
@@ -1416,16 +1485,18 @@ test('loaded Dreadguard damage bundle preserves world scale and the no-animation
   const rawHeight = measureVisibleSkinnedBounds(root).getSize(new THREE.Vector3()).y;
   const uniformScale = getHumanoidProfileScale(DREADGUARD_DAMAGE_COMBAT_PROFILE);
   assert.ok(Math.abs(rawHeight - DREADGUARD_DAMAGE_COMBAT_PROFILE.rawHeight) < 1e-6);
-  assert.ok(uniformScale > 1.24 && uniformScale < 1.25);
+  assert.ok(uniformScale > 1.024 && uniformScale < 1.025);
   root.scale.setScalar(uniformScale);
   const scaled = measureVisibleSkinnedBounds(root);
   root.position.y = DREADGUARD_DAMAGE_COMBAT_PROFILE.groundClearance - scaled.min.y;
   const normalized = measureVisibleSkinnedBounds(root);
-  assert.ok(Math.abs(normalized.getSize(new THREE.Vector3()).y - 1.82) < 1e-6);
+  assert.ok(Math.abs(normalized.getSize(new THREE.Vector3()).y - 1.5) < 1e-6);
   assert.deepEqual(root.scale.toArray(), [uniformScale, uniformScale, uniformScale]);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationAuthoritative, false);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.restPoseAuthoritative, true);
+  assert.equal(isHumanoidPoseAuthoritative(DREADGUARD_DAMAGE_COMBAT_PROFILE), true);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.authoredDeathAnimations, false);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.noAnimationFallback, 'physics_bound_rest_pose');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.noAnimationFallback, 'exported_rest_pose');
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationManifestPath, undefined);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoreEmbeddedAnimations, true);
   assert.equal(gltf.animations.length, 1, 'the bundle clip is present but intentionally not registered as an authored animation pack');

@@ -353,9 +353,10 @@ test('head and forearm detachment remain independent, physical, single-shot, and
 test('runtime configuration is Dreadguard, no-animation safe, and free of site-name hard-coding', () => {
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.assetPath, './assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb');
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationAuthoritative, false);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.restPoseAuthoritative, true);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.authoredDeathAnimations, false);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoreEmbeddedAnimations, true);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.noAnimationFallback, 'physics_bound_rest_pose');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.noAnimationFallback, 'exported_rest_pose');
   assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.activeDamageSegmentIds, ['head_neck', 'left_elbow', 'right_elbow']);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.activeDamageSegmentIds.includes('lower_spine'), false);
 

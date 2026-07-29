@@ -34,12 +34,13 @@ export const DREADGUARD_DAMAGE_COMBAT_PROFILE = Object.freeze({
   damageManifestPath: './assets/enemies/dreadguard/damage/dreadguard_damage_v001.json',
   damageValidationReportPath: './assets/enemies/dreadguard/damage/dreadguard_damage_v001_validation.json',
   rawHeight: 1.4635979019523002,
-  targetHeight: 1.82,
+  targetHeight: 1.5,
   animationAuthoritative: false,
+  restPoseAuthoritative: true,
   authoredAnimationPack: false,
   authoredDeathAnimations: false,
   ignoreEmbeddedAnimations: true,
-  noAnimationFallback: 'physics_bound_rest_pose',
+  noAnimationFallback: 'exported_rest_pose',
   groundClearance: 0.02,
   rootYaw: 0,
   rootOffset: Object.freeze([0, 0, 0]),
@@ -70,9 +71,13 @@ export const DREADGUARD_DAMAGE_COMBAT_PROFILE = Object.freeze({
   damageWeightFingerprint: '17ab81330545a1a9c2506bf9151f3b99deaa7a674835bbb15d77228a2e5b9b97',
   damageExpectedAnimationNames: Object.freeze([]),
   activeDamageSegmentIds: Object.freeze(['head_neck', 'left_elbow', 'right_elbow']),
-  colliderFitNotes: 'Folsom and Combat Lab Forge v3.9.1 Dreadguard baseline. The exported rest pose uses the established physics-bound no-animation fallback; manifest-authored head/forearm detachment remains active.',
+  colliderFitNotes: 'Folsom and Combat Lab Forge v3.9.1 Dreadguard baseline. The exported 1.5 m rest pose is authoritative while alive; kinematic combat proxies hand off to dynamic ragdoll only for collapse/death. Manifest-authored head/forearm detachment remains active.',
 });
 
 export function getHumanoidProfileScale(profile) {
   return profile.targetHeight / profile.rawHeight;
+}
+
+export function isHumanoidPoseAuthoritative(profile) {
+  return profile?.animationAuthoritative === true || profile?.restPoseAuthoritative === true;
 }

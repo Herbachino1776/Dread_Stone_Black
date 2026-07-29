@@ -6,7 +6,7 @@ import { CombatPhysiology } from './CombatPhysiology.js';
 import { COLLAPSE_CONFIG, HUMANOID_DURABILITY_CONFIG, VESSEL_ZONES } from './CombatStage2Config.js';
 import { COMBAT_MORTALITY_MODES, IMMORTAL_REACTIVE_CONFIG } from './CombatMortality.js';
 import { HumanoidGlbVisualAdapter } from './HumanoidGlbVisualAdapter.js';
-import { CURRENT_HUMANOID_PROFILE } from './HumanoidModelProfiles.js';
+import { CURRENT_HUMANOID_PROFILE, isHumanoidPoseAuthoritative } from './HumanoidModelProfiles.js';
 import { getKnifeWoundDecalLibrary } from './KnifeWoundDecalLibrary.js';
 import { deriveSwordCutTrauma } from './SwordCutDamage.js';
 import { BLUNT_IMPACT_CLASSIFICATIONS, deriveBluntImpactTrauma } from './weapons/BluntImpactInteraction.js';
@@ -247,12 +247,13 @@ export class HumanoidCombatActor {
   isImmortalReactive() { return this.mortalityMode === COMBAT_MORTALITY_MODES.immortalReactive; }
   setAnimationAuthorityReady(adapter) {
     if (adapter !== this.visualAdapter && this.visualAdapter) return;
-    this.animationAuthorityReady = this.visualProfile.animationAuthoritative === true;
+    this.animationAuthorityReady = isHumanoidPoseAuthoritative(this.visualProfile);
     this.syncAnimationProxyBodies(adapter);
   }
 
   prepareFrame(deltaSeconds) {
     if (this.visualProfile.animationAuthoritative && !this.ragdollActive) this.visualAdapter?.updateAnimationAuthority?.(deltaSeconds);
+    else if (this.visualProfile.restPoseAuthoritative && !this.ragdollActive) this.visualAdapter?.updateRestPoseAuthority?.(deltaSeconds);
     this.advanceFatalMaceHeadImpact(deltaSeconds);
     if (!this.ragdollActive && this.lifeState !== 'alive' && !this.visualProfile.authoredDeathAnimations && (!this.isImmortalReactive() || this.ragdollForced)) this.activateRagdoll({ forced: this.ragdollForced });
   }
@@ -310,7 +311,7 @@ export class HumanoidCombatActor {
       .applyQuaternion(this.spawnRotation)
       .add(new THREE.Vector3(this.spawnOffset.x, this.spawnOffset.y, this.spawnOffset.z - 3.55));
     const quaternion = this.spawnRotation.clone().multiply(bodyQuaternion(config.rotation));
-    const descriptor = (this.visualProfile.animationAuthoritative ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.dynamic())
+    const descriptor = (isHumanoidPoseAuthoritative(this.visualProfile) ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.dynamic())
       .setTranslation(position.x, position.y, position.z)
       .setRotation(quaternion)
       .setLinearDamping(3.4)
@@ -433,7 +434,7 @@ export class HumanoidCombatActor {
   }
 
   createDebugBody(config) {
-    const proxyFit = this.visualProfile.animationAuthoritative ? this.visualProfile.proxyFit?.[config.id] : null;
+    const proxyFit = isHumanoidPoseAuthoritative(this.visualProfile) ? this.visualProfile.proxyFit?.[config.id] : null;
     const geometry = proxyFit?.shape === 'capsule'
       ? new THREE.CapsuleGeometry(proxyFit.radius, proxyFit.halfHeight * 2, 4, 8)
       : proxyFit?.shape === 'box'
@@ -835,7 +836,7 @@ export class HumanoidCombatActor {
 
   activateRagdoll({ forced = false } = {}) {
     if (this.visualProfile.authoredDeathAnimations) return false;
-    if (this.ragdollActive || (this.visualProfile.animationAuthoritative && !this.animationAuthorityReady) || !this.visualAdapter) return false;
+    if (this.ragdollActive || (isHumanoidPoseAuthoritative(this.visualProfile) && !this.animationAuthorityReady) || !this.visualAdapter) return false;
     if (typeof this.visualAdapter?.getProxyPose === 'function') this.syncAnimationProxyBodies(this.visualAdapter);
     const finalPose = new Map();
     this.bodies.forEach(({ body }, bodyId) => {
@@ -980,7 +981,7 @@ export class HumanoidCombatActor {
     blocker.to.z = upper.z;
     blocker.radius = this.ragdollActive ? 0.2 : blocker.meleeSpacingRadius ?? 0.29;
     blocker.collisionClearance = this.ragdollActive ? 0 : ACTOR_SEPARATION_CONFIG.livingClearance;
-    blocker.height = this.ragdollActive ? 0.5 : 1.82;
+    blocker.height = this.ragdollActive ? 0.5 : (this.visualProfile.targetHeight ?? 1.82);
     blocker.blocksPlayerLocomotion = true;
     blocker.userData = {
       ...previousUserData,
@@ -1142,9 +1143,9 @@ export class HumanoidCombatActor {
     this.recordFirstRagdollPhysicsFrame();
     this.updateVesselDebug();
     if (this.ragdollActive) this.visualAdapter?.updateRagdoll?.();
-    else if (!this.visualProfile.animationAuthoritative) this.visualAdapter?.update();
+    else if (!isHumanoidPoseAuthoritative(this.visualProfile)) this.visualAdapter?.update();
     this.visualAdapter?.updateDamageSegments?.();
-    if (!this.visualProfile.animationAuthoritative || this.ragdollActive) this.woundSystem.update(1 / 60);
+    if (!isHumanoidPoseAuthoritative(this.visualProfile) || this.ragdollActive) this.woundSystem.update(1 / 60);
     this.updateBodyImpactFeedback();
     const speeds = [...this.bodies.values()].map((entry) => { const v = entry.body.linvel(); return Math.hypot(v.x, v.y, v.z); });
     const speed = speeds.length ? speeds.reduce((sum, value) => sum + value, 0) / speeds.length : 0;
