@@ -42,7 +42,8 @@ export const DREADGUARD_DAMAGE_COMBAT_PROFILE = Object.freeze({
   ignoreEmbeddedAnimations: true,
   noAnimationFallback: 'exported_rest_pose',
   groundClearance: 0.02,
-  rootYaw: 0,
+  authoredForwardAxis: '+Y',
+  rootYaw: Math.PI,
   rootOffset: Object.freeze([0, 0, 0]),
   boneMap: DREADGUARD_BONE_MAP,
   proxyFit: Object.freeze({
@@ -71,7 +72,7 @@ export const DREADGUARD_DAMAGE_COMBAT_PROFILE = Object.freeze({
   damageWeightFingerprint: '17ab81330545a1a9c2506bf9151f3b99deaa7a674835bbb15d77228a2e5b9b97',
   damageExpectedAnimationNames: Object.freeze([]),
   activeDamageSegmentIds: Object.freeze(['head_neck', 'left_elbow', 'right_elbow']),
-  colliderFitNotes: 'Folsom and Combat Lab Forge v3.9.1 Dreadguard baseline. The exported 1.5 m rest pose is authoritative while alive; kinematic combat proxies hand off to dynamic ragdoll only for collapse/death. Manifest-authored head/forearm detachment remains active.',
+  colliderFitNotes: 'Folsom and Combat Lab Forge v3.9.1 Dreadguard baseline. The exported 1.5 m rest pose and +Y authored forward axis are authoritative while alive; the profile yaw converts authored forward to runtime forward. Kinematic combat proxies hand off to dynamic ragdoll only for collapse/death. Manifest-authored head/forearm detachment remains active.',
 });
 
 export function getHumanoidProfileScale(profile) {

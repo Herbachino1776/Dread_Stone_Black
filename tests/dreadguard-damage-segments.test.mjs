@@ -155,6 +155,8 @@ test('Forge bundle identity, GLB structure, and validation report agree', async 
   assert.ok(json.images.length >= 18);
   assert.equal(gltf.animations.length, 1, 'the bundle contains one non-authoritative embedded walk clip');
   assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.damageExpectedAnimationNames, []);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.authoredForwardAxis, '+Y');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.rootYaw, Math.PI, 'the +Y-authored Dreadguard is rotated into runtime forward instead of gliding backward');
   assert.doesNotThrow(() => validateDamageAsset({
     manifest: damageManifest,
     root: gltf.scene,

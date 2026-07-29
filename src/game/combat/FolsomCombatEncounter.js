@@ -39,6 +39,10 @@ export const FOLSOM_WALKER_CONFIG = Object.freeze({
   ...COMBAT_LAB_WALKER_CONFIG,
   fallbackPosition: Object.freeze([-4.05, 0.16, 1.65]),
   spawnCandidateCount: 12,
+  stopTargetDistance: 1,
+  stopEnterDistance: 1.08,
+  resumeDistance: 1.42,
+  slowDistance: 1.9,
 });
 
 const FOLSOM_WALKER_SPAWN_PATTERNS = Object.freeze([

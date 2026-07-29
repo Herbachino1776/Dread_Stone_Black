@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { CollisionWorld } from '../src/game/Collision.js';
-import { FOLSOM_COMBAT_FOOTPRINT, FOLSOM_ENEMY_WAVE_CONFIG, FOLSOM_RAPIER_SUPPORT, FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
+import { FOLSOM_COMBAT_FOOTPRINT, FOLSOM_ENEMY_WAVE_CONFIG, FOLSOM_RAPIER_SUPPORT, FOLSOM_WALKER_CONFIG, FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { WALKER_STATES } from '../src/game/combat/CombatLabWalkerController.js';
 import { HumanoidGlbVisualAdapter, isolateObjectMaterials } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
@@ -116,6 +116,18 @@ test('walker close-range steering separates from player overlap without retainin
   assert.equal(controller.closeRangeMode, 'separate');
   assert.equal(controller.currentSpeed, 0, 'inward pursuit pressure stops immediately');
   assert.ok(Number.isFinite(controller.currentYaw), 'facing rotation remains independent and finite');
+  encounter.dispose();
+});
+
+test('Folsom walker closes to the safe melee collision envelope before holding', async () => {
+  const { encounter } = await createEncounter();
+  const minimumDistance = encounter.walkerController.getMinimumPlayerDistance();
+  assert.ok(Math.abs(minimumDistance - 0.95) < 1e-8, 'the weapon-authored collision envelope remains unchanged');
+  assert.ok(FOLSOM_WALKER_CONFIG.stopTargetDistance >= minimumDistance, 'the locomotion target cannot pull the walker through player collision');
+  assert.ok(FOLSOM_WALKER_CONFIG.stopEnterDistance - minimumDistance <= 0.15, 'the walker no longer holds roughly half a meter outside melee collision');
+  assert.ok(FOLSOM_WALKER_CONFIG.stopTargetDistance < FOLSOM_WALKER_CONFIG.stopEnterDistance);
+  assert.ok(FOLSOM_WALKER_CONFIG.stopEnterDistance < FOLSOM_WALKER_CONFIG.resumeDistance);
+  assert.ok(FOLSOM_WALKER_CONFIG.resumeDistance < FOLSOM_WALKER_CONFIG.slowDistance);
   encounter.dispose();
 });
 

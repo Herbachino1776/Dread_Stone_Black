@@ -85,7 +85,7 @@ async function createDreadguardRestPose(position, yaw) {
   const presentationRoot = new THREE.Group();
   presentationRoot.name = 'deterministic-dreadguard-presentation-root';
   presentationRoot.position.copy(position);
-  presentationRoot.rotation.y = yaw;
+  presentationRoot.rotation.y = yaw + DREADGUARD_DAMAGE_COMBAT_PROFILE.rootYaw;
   presentationRoot.add(modelScene);
   presentationRoot.updateMatrixWorld(true);
 
