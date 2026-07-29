@@ -1,42 +1,72 @@
 # Dreadstone Black 2.0 Development Handoff
 
-<!-- last_processed_sha: 1b8c21224e7eae35b332dfcd43404f3b3bb14abf -->
+<!-- last_processed_sha: d15407e34a017b299e03134a0840c557f018b647 -->
 
 ## Current Handoff Snapshot
 
 ### Verified implementation
 
-- **Dreadguard is now the canonical humanoid combat character.** Folsom Field and Combat Lab use `public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb`, its manifest JSON, and validation report through `DREADGUARD_DAMAGE_COMBAT_PROFILE` in `src/game/combat/HumanoidModelProfiles.js`. The previous Testman damage bundle, animation-pack files, profile references, diagnostics document, and Testman-focused tests were removed or replaced.
-- **The Forge manifest is authoritative for combat-character structure and damage.** Runtime validation consumes intact objects, segments, attached/detached relationships, deformation regions, morph targets, generated gore nodes, and progressive-damage sites. Missing/duplicate nodes, invalid parenting, missing morphs, ownership inconsistencies, and invalid stage bindings are rejected.
-- **The current progressive-damage proof is a left-head site.** Site `damage_site` uses region/group `head`, `ADJACENT_CROSSFADE`, `SMOOTHSTEP`, and `MIDPOINT_REPLACE`. Its exact stage mapping is Light at `0.33000001311302185` -> `Left_Head_Impact_v003`, Medium at `0.6600000262260437` -> `Left_Head_Impact_v002`, and Heavy at `1` -> `Left_Head_Impact_v001`.
-- **Progressive mace damage is impact-qualified and terminal-stage lethal.** `ForgeDamageDeformationRuntime.js` only advances progressive sites for committed/heavy blunt classifications. It reports stage index/count and terminal-stage state. Earlier progressive head stages preserve neurological integrity above the collapse boundary; reaching the terminal stage commits fatal head-impact behavior and ragdoll/collapse without the superseded 0.12-second pending-fatal delay.
-- **Gore presentation is explicitly prepared.** Managed gore mesh subtrees disable frustum culling, receive a fixed render order and polygon offset, and expose visible material/render diagnostics. Attached/detached ownership transfer remains subtree-authoritative.
-- **A deterministic Folsom debug path exists.** Development builds expose `__DSB_DREADGUARD_DAMAGE__` commands for Light, Medium, Heavy, next stage, a synthetic solid head impact, reset, deformation diagnostics, and character diagnostics. No production UI is added.
-- **The exported rest pose is authoritative while alive.** The Dreadguard profile is non-animation-authoritative but `restPoseAuthoritative: true`, uses `noAnimationFallback: 'exported_rest_pose'`, normalizes to a 1.5 m target height, captures/restores exported bone transforms, drives kinematic proxy bodies from that pose, and hands off to dynamic ragdoll only on collapse/death. The GLB's embedded walk clip remains intentionally ignored because no approved animation pack is declared.
-- **Dreadguard authored facing is corrected.** The profile records authored forward as `+Y` and applies `rootYaw: Math.PI` so the exported character faces runtime forward rather than gliding backward. Deterministic puncture-space fixtures now include the profile yaw.
-- **Folsom enemy hold distance is tightened to the melee envelope.** `FOLSOM_WALKER_CONFIG` now uses stop target `1.0`, stop-enter `1.08`, resume `1.42`, and slow distance `1.9`, while preserving the weapon-authored minimum collision distance of `0.95`.
-- **Asset-production work was checked in.** The range adds Blender texture-rebuild handoffs, scripts, intermediate/rebuilt textures, Blender/GLB deliveries, verification renders, image-generation sources, and a v6 packaged retexture under `output/blender_texture_rebuild/`, plus Folsom enemy/bandit image outputs. These are repository artifacts; the diffs alone do not establish final visual approval.
-- **Regression coverage was rewritten around Dreadguard.** `tests/dreadguard-damage-segments.test.mjs` replaces the Testman segment suite, and combat foundation, walker, Folsom, puncture-coordinate, puncture-only, accepted-audio, and validation scripts were updated. Added assertions cover bundle identity, exact progressive mappings, rest-pose authority, forward-axis correction, gore presentation, staged mace outcomes, detachment ownership, and close melee spacing. The record does not claim these tests or CI executed successfully.
-- **Earlier active systems remain unless superseded above:** direct physical Dreadmace control, knife-parity sword impalement and planted reacquisition, selective embedded collision routing, authoritative player/enemy separation, shared weapon-viewmodel ownership, weighted piercing lethality, combat audio, Folsom ambience, showcase dismemberment, and persistent mace acquisition.
+- **Dreadguard remains the canonical humanoid combat character.** Folsom Field and Combat Lab use `public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb`, its Forge manifest, and validation report through `DREADGUARD_DAMAGE_COMBAT_PROFILE` in `src/game/combat/HumanoidModelProfiles.js`.
+- **The Forge manifest remains authoritative for character segmentation and progressive damage.** Runtime validation owns intact objects, attached/detached relationships, deformation regions, morph targets, generated gore nodes, progressive sites, stage anchors, and ownership transfer.
+- **Progressive mace damage now floors accepted hits at an exact authored stage.** `ForgeDamageDeformationRuntime.js` accepts glancing, committed, and heavy blunt classifications for progressive sites, while non-damaging contacts remain rejected. A sub-Light interpolated deformation may exist visually without claiming a named stage or showing stage gore; the next qualifying hit resolves to exact Light rather than accidentally consuming it.
+- **The left-head progressive proof remains Light → Medium → Heavy.** Light is non-terminal, Medium is non-terminal, and Heavy is the terminal fatal commitment point. Named stage diagnostics and gore state now remain `null` until an exact stage anchor is reached.
+- **The Dreadstone sword now uses a uniform authoritative combat scale of `0.85`.** Source dimensions are retained separately, then scaled for collision primitives, maximum penetration, blade geometry, fallback presentation, and diagnostics. The workspace is offset to preserve prior tip reach despite the smaller model.
+- **Close-range sword thrust entry has a second authored probe.** A thrust first sweeps the actual tip; when that misses, it sweeps from the blade heel to catch close enemies already inside the tip path. Successful heel-probe entry reconstructs the actual tip impact position before routing impalement, and diagnostics track tip versus blade-heel entry sweeps/hits.
+- **Sword collision and presentation scale are unified.** The GLB visual root and fallback visual receive the same `0.85` scale used by combat dimensions and contact radii, reducing visible-versus-physical mismatch rather than scaling presentation alone.
+- **The exported Dreadguard rest pose remains authoritative while alive.** The profile remains non-animation-authoritative, normalizes to 1.5 m, applies the authored-axis yaw correction, drives kinematic proxy bodies, and hands off to dynamic ragdoll on terminal collapse.
+- **Folsom close-combat systems remain active.** Tight walker hold spacing, player/enemy separation, knife-parity sword impalement and planted reacquisition, direct physical Dreadmace control, weighted piercing lethality, combat audio, ambience, showcase dismemberment, and persistent mace acquisition remain unless superseded above.
+- **Regression coverage was extended.** Sword tests now assert the 0.85 source-to-runtime dimension contract, preserved tip reach, scaled visual roots, and close-range blade-heel entry behavior. Dreadguard tests now assert that sub-Light blends do not claim Light or stage gore, glancing hits resolve exact Light, and non-damaging contacts do not advance the site. The record does not claim tests, build, validation, or CI executed successfully.
 
 ### Important design decisions
 
-- The exported Forge manifest, not JavaScript naming conventions, owns character segmentation, progressive sites, morph bindings, and gore ownership.
-- Living Dreadguard pose authority comes from the exported rest pose. Embedded animation is not treated as approved gameplay animation.
-- Progressive head damage must visibly advance through authored stages; non-terminal qualified hits do not trigger ordinary blunt head-collapse logic, while the terminal stage commits the fatal result.
-- Progressive stages crossfade only between adjacent morphs, with at most two active stage morphs; detailed gore replaces at the midpoint rather than stacking.
-- Runtime forward must explicitly account for the asset's authored axis through the profile yaw.
-- Walker stopping distances must remain outside the player collision envelope but close enough for melee interaction.
+- The Forge manifest, not JavaScript naming conventions, owns progressive stage identities, anchors, morph bindings, and gore ownership.
+- Interpolated deformation below the first authored anchor is not an exact damage stage. Named stage and gore state begin only when an authored anchor is reached.
+- Glancing blunt impacts are permitted to produce the exact Light progressive stage; non-damaging contact classifications are not.
+- Sword render scale, collision dimensions, contact primitives, and penetration limits must share one authoritative scale constant.
+- Reducing sword size must not silently reduce practical forward reach; workspace compensation preserves the prior tip envelope.
+- Close-range impalement may use an interior blade-entry probe only as a fallback after the true tip sweep misses, while routed impact geometry remains based on the actual sword tip.
 
 ### Risks, inference, and next logical work
 
-- **Verified risk surface:** The Dreadguard contract is tightly coupled to exact object, bone, morph, segment, fingerprint, progressive-site, and generated-gore identities. Re-exported assets require manifest and validation synchronization.
-- **Verified risk surface:** Rest-pose kinematic authority, wound updates, progressive deformation, detachment transfer, and terminal ragdoll now cross actor, adapter, segment runtime, physiology, and Folsom encounter lifecycles. Ordering mistakes could create pose jumps, duplicate ownership, stale gore, or premature collapse.
-- **Verified risk surface:** The committed/heavy classification gate means low-classification mace contacts no longer advance the progressive site. Strike classification and damage presentation should be verified together in live play.
-- **Inference:** The checked-in texture-rebuild iterations and verification renders indicate active visual iteration, but the diffs do not prove which variant is approved for runtime use or that all angles/material responses are satisfactory.
-- **Next logical work:** Run `npm run validate:combat`, `npm run validate:folsom`, `npm run build`, and the focused Dreadguard/Folsom tests. Manually verify the 1.5 m rest pose, forward orientation, close-range walker hold behavior, Light/Medium/Heavy head progression, insufficient-impact rejection, terminal-stage death/ragdoll, gore visibility at camera/frustum edges, attached-to-detached ownership transfer, reset, puncture coordinate alignment, and the selected retexture under gameplay lighting.
+- **Verified risk surface:** The close-range blade-heel probe broadens entry detection. Live validation should confirm it fixes enemies already inside the tip arc without producing side-on or behind-the-guard false impalements.
+- **Verified risk surface:** Sword reach compensation preserves the tip envelope while the guard, grip, thickness, and contact radii shrink. Collision feel near the hand and at oblique angles may therefore change independently from maximum reach.
+- **Verified risk surface:** Allowing glancing blunt classification to advance progressive damage makes classification thresholds presentation-critical. Repeated low-energy contacts must be checked to ensure they do not qualify unexpectedly.
+- **Verified risk surface:** Sub-Light morph weight can exist with no named stage or gore. Diagnostics and debug tooling must continue to distinguish interpolated visual state from exact stage ownership.
+- **Inference:** The sword changes appear intended to improve visual proportion and close-body impalement reliability, but the diffs do not establish final scale approval or gameplay feel.
+- **Next logical work:** Run the focused sword and Dreadguard tests plus `npm run validate:combat`, `npm run validate:folsom`, and `npm run build`. In live play, verify sword visual/collider alignment, preserved forward reach, close-range chest/head thrust entry, no heel-probe false positives, planted extraction/reacquisition after heel entry, Light/Medium/Heavy mace progression, sub-Light diagnostic state, glancing-hit qualification, and rejection of non-damaging contacts.
 
 ## Development History
+
+### 2026-07-29 18:30 EDT — Update through `d15407e`
+
+**Scanned range:** after canonical checkpoint `1b8c21224e7eae35b332dfcd43404f3b3bb14abf` through observed `main` HEAD `d15407e34a017b299e03134a0840c557f018b647`. The `71ce2a1` devlog self-update was ignored. Merge commit `fd0beaa` was also excluded because its recorded diff was limited to restoring `docs/DREADSTONE_DEVLOG_HANDOFF.md`. Two development commits were included.
+
+**Included commits, chronological:**
+
+- `c406b53` — fix(combat): tighten sword scale and close-range impalement
+- `d15407e` — fix(combat): floor mace damage at exact light stage
+
+**Grouped development steps:**
+
+1. **Authoritative sword scale and reach preservation**
+   - Added `DREADSTONE_SWORD_MODEL_SCALE = 0.85` in the sword combat controller and retained unscaled authored measurements as `DREADSTONE_SWORD_SOURCE_DIMENSIONS`.
+   - Derived runtime bounds, blade/guard/grip measurements, contact radii, maximum penetration depth, and fallback geometry scale from the shared constant.
+   - Applied the same scale to the loaded GLB visual root and fallback visual root, and exposed the authoritative scale through visual metadata/diagnostics.
+   - Offset ready/min/max workspace points by the lost tip length so the smaller sword preserves the prior forward tip reach.
+
+2. **Close-range sword impalement fallback**
+   - Replaced tip-only thrust resolution with an entry resolver that first sweeps the tip, then conditionally sweeps a blade-heel probe when the tip finds no collider.
+   - Reconstructs the actual tip location at the fallback time of impact before target routing, preserving tip-authored penetration geometry.
+   - Added counters and last-probe diagnostics for close-range sweep attempts and successful heel-probe entries.
+   - Expanded sword regression coverage for scaled source/runtime dimensions, contact primitives, visual scale, preserved reach, and close-range entry behavior.
+
+3. **Exact-stage progressive mace floor**
+   - Added `glancingBlunt` to qualifying progressive-impact classifications while retaining rejection of `nonDamagingContact`.
+   - Changed progressive state so interpolated severity below the first exact anchor reports no `stageIndex`, `currentStage`, or stage gore rather than defaulting to Light.
+   - Added regression coverage proving a sub-Light blend can carry partial morph weight without consuming Light or showing gore, and that the next qualifying glancing hit resolves exactly to Light before Medium and Heavy.
+
+4. **Validation evidence**
+   - Tests were added or changed in the commits. No successful test, build, validation, or CI execution is asserted by this record.
 
 ### 2026-07-29 13:59 EDT — Update through `1b8c212`
 
