@@ -696,6 +696,19 @@ export class HumanoidCombatActor {
       detachmentApplied: false,
       forgeDamage,
     };
+    if (!terminalProgressiveHeadImpact) {
+      this.triggerReflex(
+        hit.regionId,
+        THREE.MathUtils.clamp(damageApplied * 0.32, 0.2, 1),
+        impulseDirection,
+        {
+          point: impact.worldPoint,
+          force: damageApplied,
+          source: 'committed_blunt_impact',
+          reactionKind: 'hurt',
+        },
+      );
+    }
     const fatalHeadHitTriggered = terminalProgressiveHeadImpact
       ? this.requestFatalMaceHeadImpact({ hit, impact, damageApplied, forgeDamage })
       : false;

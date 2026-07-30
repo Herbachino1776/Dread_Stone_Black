@@ -7,7 +7,10 @@ import { CombatPhysicsWorld, initializeCombatPhysics } from '../src/game/combat/
 import { HumanoidDamageSegmentRuntime, validateDamageAsset } from '../src/game/combat/HumanoidDamageSegmentRuntime.js';
 import {
   DREADGUARD_DAMAGE_COMBAT_PROFILE,
+  DREADGUARD_IGNORED_GUARD_ANIMATION_NAMES,
   DREADGUARD_PROGRESSIVE_DAMAGE_SITE_FALLBACK,
+  DREADGUARD_RUNTIME_ANIMATION_KINDS,
+  DREADGUARD_RUNTIME_ANIMATION_NAMES,
   getHumanoidProfileScale,
 } from '../src/game/combat/HumanoidModelProfiles.js';
 import {
@@ -15,14 +18,22 @@ import {
   FORGE_SURFACE_STAIN_BINDING_SCHEMA,
   FORGE_SURFACE_STAIN_RENDER_ORDER,
 } from '../src/game/combat/ForgeDamageDeformationRuntime.js';
-import { isForgeGoreSurfaceObject, prepareHumanoidCombatMaterial } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
+import {
+  isForgeGoreSurfaceObject,
+  prepareHumanoidCombatMaterial,
+  resolveAnimationPackManifest,
+} from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { BLUNT_IMPACT_CLASSIFICATIONS } from '../src/game/combat/weapons/BluntImpactInteraction.js';
 
 const glbUrl = new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb', import.meta.url);
 const manifestUrl = new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.json', import.meta.url);
 const validationUrl = new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001_validation.json', import.meta.url);
+const animationManifestUrl = new URL('../public/assets/enemies/dreadguard/animations/dreadguard_animpack_v003.json', import.meta.url);
+const animationValidationUrl = new URL('../public/assets/enemies/dreadguard/animations/dreadguard_animpack_v003_validation.json', import.meta.url);
 const damageManifest = JSON.parse(readFileSync(manifestUrl, 'utf8'));
 const validationReport = JSON.parse(readFileSync(validationUrl, 'utf8'));
+const animationManifest = JSON.parse(readFileSync(animationManifestUrl, 'utf8'));
+const animationValidationReport = JSON.parse(readFileSync(animationValidationUrl, 'utf8'));
 
 globalThis.self ??= globalThis;
 globalThis.ProgressEvent ??= class ProgressEvent {
@@ -86,7 +97,7 @@ async function createRuntimeFixture({ livingVelocity = new THREE.Vector3() } = {
   const adapter = {
     profile: DREADGUARD_DAMAGE_COMBAT_PROFILE,
     loadedClips: gltf.animations,
-    animationManifest: null,
+    animationManifest,
     presentationRoot,
     prepareVisibleSurfaceFrame() {
       presentationRoot.updateMatrixWorld(true);
@@ -185,8 +196,25 @@ test('Forge bundle identity, GLB structure, and validation report agree', async 
     'DSB_Mace_Brace_Head_RightArm_v001',
     'DSB_Mace_Brace_Head_TwoArm_v001',
     'DSB_Walk_NORMAL_v001',
-  ], 'embedded Forge clips remain visible to validation but are not an approved animation pack');
-  assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.damageExpectedAnimationNames, []);
+  ], 'the combined combat GLB contains every clip from approved animation pack v003');
+  assert.equal(animationManifest.schema, 'dreadstone.animation_pack.v1');
+  assert.equal(animationManifest.asset, 'dreadguard_animpack_v003.glb');
+  assert.equal(animationValidationReport.status, 'PASS');
+  assert.equal(animationValidationReport.animation_count, 7);
+  const resolvedPack = resolveAnimationPackManifest(
+    animationManifest,
+    gltf.animations,
+    DREADGUARD_DAMAGE_COMBAT_PROFILE.name,
+    {
+      allowedKinds: DREADGUARD_DAMAGE_COMBAT_PROFILE.animationRuntimeKinds,
+      expectedIgnoredNames: DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoredEmbeddedAnimationNames,
+      requireEmbeddedApprovalMetadata: true,
+    },
+  );
+  assert.deepEqual([...resolvedPack.entriesByName.keys()].sort(), [...DREADGUARD_RUNTIME_ANIMATION_NAMES].sort());
+  assert.deepEqual(resolvedPack.ignoredEntries.map((entry) => entry.name).sort(), [...DREADGUARD_IGNORED_GUARD_ANIMATION_NAMES].sort());
+  assert.deepEqual([...resolvedPack.entriesByKind.keys()].sort(), [...DREADGUARD_RUNTIME_ANIMATION_KINDS].sort());
+  assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.damageExpectedAnimationNames, DREADGUARD_RUNTIME_ANIMATION_NAMES);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.authoredForwardAxis, '+Y');
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.rootYaw, Math.PI, 'the +Y-authored Dreadguard is rotated into runtime forward instead of gliding backward');
   for (const binding of damageManifest.deformations.surfaceStainMeshes) {
@@ -201,7 +229,7 @@ test('Forge bundle identity, GLB structure, and validation report agree', async 
     root: gltf.scene,
     profile: DREADGUARD_DAMAGE_COMBAT_PROFILE,
     clips: gltf.animations,
-    animationManifest: null,
+    animationManifest,
   }));
 });
 
@@ -211,7 +239,13 @@ test('manifest validation fails clearly for a missing required node or morph tar
   const originalName = attachedHead.name;
   attachedHead.name = `${originalName}_MISSING`;
   assert.throws(
-    () => validateDamageAsset({ manifest: damageManifest, root: gltf.scene, profile: DREADGUARD_DAMAGE_COMBAT_PROFILE, clips: gltf.animations }),
+    () => validateDamageAsset({
+      manifest: damageManifest,
+      root: gltf.scene,
+      profile: DREADGUARD_DAMAGE_COMBAT_PROFILE,
+      clips: gltf.animations,
+      animationManifest,
+    }),
     /missing manifest objects: DSB_ATTACHED_HEAD/,
   );
   attachedHead.name = originalName;
@@ -222,7 +256,7 @@ test('manifest validation fails clearly for a missing required node or morph tar
   assert.throws(
     () => new HumanoidDamageSegmentRuntime({
       actor: {},
-      adapter: { profile: DREADGUARD_DAMAGE_COMBAT_PROFILE, loadedClips: gltf.animations, animationManifest: null },
+       adapter: { profile: DREADGUARD_DAMAGE_COMBAT_PROFILE, loadedClips: gltf.animations, animationManifest },
       loadedGlbRoot: gltf.scene,
       damageManifest,
       physicsWorld: {},
@@ -544,13 +578,19 @@ test('head and forearm detachment remain independent, physical, single-shot, and
   }
 });
 
-test('runtime configuration is Dreadguard, no-animation safe, and free of site-name hard-coding', () => {
+test('runtime configuration uses only approved walk, hurt, and death clips and remains free of site-name hard-coding', () => {
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.assetPath, './assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb');
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationAuthoritative, false);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.restPoseAuthoritative, true);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.authoredDeathAnimations, false);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoreEmbeddedAnimations, true);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.noAnimationFallback, 'exported_rest_pose');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationManifestPath, './assets/enemies/dreadguard/animations/dreadguard_animpack_v003.json');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationValidationReportPath, './assets/enemies/dreadguard/animations/dreadguard_animpack_v003_validation.json');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationManifestAssetName, 'dreadguard_animpack_v003.glb');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationAuthoritative, true);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.restPoseAuthoritative, false);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.authoredDeathAnimations, true);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoreEmbeddedAnimations, false);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.holdingPoseMode, 'exported_rest_pose');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.requireEmbeddedAnimationApprovalMetadata, true);
+  assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationRuntimeKinds, DREADGUARD_RUNTIME_ANIMATION_KINDS);
+  assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoredEmbeddedAnimationNames, DREADGUARD_IGNORED_GUARD_ANIMATION_NAMES);
   assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.activeDamageSegmentIds, ['head_neck', 'left_elbow', 'right_elbow']);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.activeDamageSegmentIds.includes('lower_spine'), false);
 
@@ -565,4 +605,5 @@ test('runtime configuration is Dreadguard, no-animation safe, and free of site-n
   assert.match(folsomSource, /solidHeadImpact: \(\) => this\.debugApplySolidHeadImpact\(\)/);
   assert.match(folsomSource, /captureCenterLocal/);
   assert.match(folsomSource, /characterDiagnostics: \(\) => this\.actor\?\.getDiagnostics/);
+  assert.match(folsomSource, /deathDiagnostics: \(\) => this\.stationaryDeathController\?\.getDiagnostics/);
 });

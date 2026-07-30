@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { CURRENT_HUMANOID_BONE_MAP, CURRENT_HUMANOID_PROFILE, getHumanoidProfileScale, isHumanoidPoseAuthoritative } from './HumanoidModelProfiles.js';
-import { HumanoidAnimationPackController } from './HumanoidAnimationPackController.js';
+import { createExportedRestPoseClip, HumanoidAnimationPackController } from './HumanoidAnimationPackController.js';
 import { buildSkinnedTriangleInfluenceMetadata, findClosestSkinnedSurface, reconstructSkinnedSurface, reconstructSurfaceBindingNeighborhood, validateSurfaceBinding } from './SkinnedSurfaceBinding.js';
 import { enableCombatReadabilityLightLayer } from './CombatReadabilityLightLayer.js';
 import { FULLY_OPAQUE_THRESHOLD, applyFadeOpacity, captureAndPrepareFadeMaterials, clampFadeOpacity, restoreFadeMaterials } from './MaterialFadeState.js';
@@ -20,6 +20,10 @@ const cachedAnimationManifestPromises = new Map();
 const cachedDamageManifestPromises = new Map();
 let assetLoadCount = 0;
 const CHARACTER_LIGHTING_MODES = new Set(['normal', 'no-cast-shadow', 'no-receive-shadow', 'no-normal-map', 'no-directional-shadow', 'linear-normal-map', 'tight-shadow-frustum']);
+
+function assetBasename(path = '') {
+  return path.split('/').pop()?.split(/[?#]/, 1)[0] ?? path;
+}
 
 function filterName(filter) {
   if (filter === THREE.NearestFilter) return 'NearestFilter';
@@ -173,21 +177,51 @@ function loadCachedDamageManifest(manifestPath) {
   return cachedDamageManifestPromises.get(manifestPath);
 }
 
-export function resolveAnimationPackManifest(manifest, clips, profileName = 'humanoid-animation-pack') {
+export function resolveAnimationPackManifest(manifest, clips, profileName = 'humanoid-animation-pack', {
+  allowedKinds = null,
+  expectedIgnoredNames = null,
+  requireEmbeddedApprovalMetadata = false,
+} = {}) {
   if (!manifest || manifest.schema !== 'dreadstone.animation_pack.v1') throw new Error(`Humanoid GLB profile ${profileName} has an invalid animation manifest schema`);
   if (!Array.isArray(manifest.animations) || manifest.animations.length !== manifest.approved_animation_count) throw new Error(`Humanoid GLB profile ${profileName} has an invalid approved animation count`);
+  const allowedKindSet = Array.isArray(allowedKinds) && allowedKinds.length ? new Set(allowedKinds) : null;
+  const sourceEntriesByName = new Map();
   const entriesByName = new Map();
   const entriesByKind = new Map();
   for (const entry of manifest.animations) {
-    if (!entry?.name || !entry.approved_kind || entriesByName.has(entry.name)) throw new Error(`Humanoid GLB profile ${profileName} has invalid or duplicate animation metadata`);
+    if (!entry?.name || !entry.approved_kind || sourceEntriesByName.has(entry.name)) throw new Error(`Humanoid GLB profile ${profileName} has invalid or duplicate animation metadata`);
+    sourceEntriesByName.set(entry.name, entry);
+    if (allowedKindSet && !allowedKindSet.has(entry.approved_kind)) continue;
     entriesByName.set(entry.name, entry);
     if (!entriesByKind.has(entry.approved_kind)) entriesByKind.set(entry.approved_kind, []);
     entriesByKind.get(entry.approved_kind).push(entry);
   }
+  if (!entriesByName.size) throw new Error(`Humanoid GLB profile ${profileName} selected no runtime animations`);
   const clipsByName = new Map(clips.filter((clip) => clip?.name && clip.tracks?.length > 0).map((clip) => [clip.name, clip]));
   const missing = [...entriesByName.keys()].filter((name) => !clipsByName.has(name));
   if (missing.length) throw new Error(`Humanoid GLB profile ${profileName} is missing manifest animations: ${missing.join(', ')}`);
-  return { entriesByName, entriesByKind, clipsByName };
+  if (requireEmbeddedApprovalMetadata) {
+    const metadataErrors = [];
+    entriesByName.forEach((entry, name) => {
+      const metadata = clipsByName.get(name)?.userData ?? {};
+      if (metadata.dsb_approved !== true || metadata.dsb_draft !== false) metadataErrors.push(`${name} is not marked approved/non-draft in the embedded clip`);
+      if (metadata.dsb_animation_clip_schema !== 'dreadstone.animation_clip.v1') metadataErrors.push(`${name} has invalid embedded clip schema`);
+      if (metadata.dsb_approved_kind !== entry.approved_kind) metadataErrors.push(`${name} embedded kind ${metadata.dsb_approved_kind ?? 'missing'} does not match ${entry.approved_kind}`);
+      if (Number(metadata.dsb_approved_frame_start) !== Number(entry.frame_start) || Number(metadata.dsb_approved_frame_end) !== Number(entry.frame_end)) {
+        metadataErrors.push(`${name} embedded frame bounds do not match the approved pack`);
+      }
+    });
+    if (metadataErrors.length) throw new Error(`Humanoid GLB profile ${profileName} failed embedded animation approval validation: ${metadataErrors.join('; ')}`);
+  }
+  const ignoredEntries = [...sourceEntriesByName.values()].filter((entry) => !entriesByName.has(entry.name));
+  if (Array.isArray(expectedIgnoredNames)) {
+    const actualNames = ignoredEntries.map((entry) => entry.name).sort();
+    const expectedNames = [...expectedIgnoredNames].sort();
+    if (actualNames.length !== expectedNames.length || actualNames.some((name, index) => name !== expectedNames[index])) {
+      throw new Error(`Humanoid GLB profile ${profileName} ignored animation set does not match the configured exclusions`);
+    }
+  }
+  return { sourceEntriesByName, entriesByName, entriesByKind, clipsByName, ignoredEntries };
 }
 
 export function isolateObjectMaterials(root) {
@@ -303,7 +337,7 @@ export class HumanoidGlbVisualAdapter {
     ]);
     if (this.disposed) return;
     if (animationManifest) {
-      const expectedAssetName = this.profile.assetPath.split('/').pop();
+      const expectedAssetName = this.profile.animationManifestAssetName ?? assetBasename(this.profile.assetPath);
       if (animationManifest.asset !== expectedAssetName) throw new Error(`Humanoid GLB profile ${this.profile.name} manifest targets ${animationManifest.asset}, expected ${expectedAssetName}`);
     }
     this.scene = clone(asset.scene);
@@ -429,7 +463,11 @@ export class HumanoidGlbVisualAdapter {
     this.presentationRoot.add(this.scene);
     this.parent.add(this.presentationRoot);
     this.animationManifest = animationManifest;
-    this.animationPack = animationManifest ? resolveAnimationPackManifest(animationManifest, clips, this.profile.name) : null;
+    this.animationPack = animationManifest ? resolveAnimationPackManifest(animationManifest, clips, this.profile.name, {
+      allowedKinds: this.profile.animationRuntimeKinds,
+      expectedIgnoredNames: this.profile.ignoredEmbeddedAnimationNames,
+      requireEmbeddedApprovalMetadata: this.profile.requireEmbeddedAnimationApprovalMetadata === true,
+    }) : null;
     const baseEntry = this.animationPack?.entriesByKind.get('WALK')?.[0] ?? null;
     const idleClip = (baseEntry ? this.animationPack.clipsByName.get(baseEntry.name) : null)
       ?? clips.find((clip) => clip.name === this.profile.idleClipName && clip.tracks.length > 0)
@@ -438,14 +476,16 @@ export class HumanoidGlbVisualAdapter {
     if (!idleClip) throw new Error(`Humanoid GLB profile ${this.profile.name} has no valid idle animation`);
     this.mixer = new THREE.AnimationMixer(this.scene);
     if (this.animationPack) {
+      const restPoseClip = createExportedRestPoseClip(this.scene, idleClip);
       this.animationController = new HumanoidAnimationPackController({
         mixer: this.mixer,
         animationPack: this.animationPack,
         manifest: animationManifest,
+        restPoseClip,
         fadeSeconds: this.profile.animationFadeSeconds,
         walkReferenceSpeed: this.profile.walkReferenceSpeed,
       });
-      this.idleAction = this.animationController.walkAction;
+      this.idleAction = this.animationController.restAction;
       if (this.pendingDeath) this.animationController.playDeath(this.pendingDeath);
       else if (this.pendingHurt) this.animationController.playHurt(this.pendingHurt);
       this.pendingDeath = null;
@@ -857,8 +897,11 @@ export class HumanoidGlbVisualAdapter {
       restPoseAuthoritative: this.profile.restPoseAuthoritative === true,
       poseAuthoritative: isHumanoidPoseAuthoritative(this.profile),
       animationManifestPath: this.profile.animationManifestPath ?? null,
-      noAnimationFallback: this.profile.noAnimationFallback ?? null,
-      ignoredEmbeddedAnimationCount: this.profile.ignoreEmbeddedAnimations ? this.loadedClips.length : 0,
+      holdingPoseMode: this.profile.holdingPoseMode ?? this.profile.noAnimationFallback ?? null,
+      embeddedAnimationCount: this.loadedClips.length,
+      ignoredEmbeddedAnimationCount: this.animationPack?.ignoredEntries.length
+        ?? (this.profile.ignoreEmbeddedAnimations ? this.loadedClips.length : 0),
+      ignoredEmbeddedAnimationNames: this.animationPack?.ignoredEntries.map((entry) => entry.name) ?? [],
       damageManifestPath: this.profile.damageManifestPath ?? null,
       manifestAnimationCount: this.animationPack?.entriesByName.size ?? 0,
       manifestAnimationNames: [...(this.animationPack?.entriesByName.keys() ?? [])],

@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "glb_path": "D:\\Blender\\Blends\\exports/dreadguard_animpack_v003.glb",
+  "file_size_bytes": 6579916,
+  "mesh_count": 1,
+  "skin_count": 1,
+  "animation_count": 7,
+  "expected_animation_names": [
+    "DSB_Death_KneesFirst_RIGHT_v001",
+    "DSB_Hurt_LEFT_Flank_v001",
+    "DSB_Hurt_RIGHT_Flank_v001",
+    "DSB_Mace_Brace_Head_LeftArm_v001",
+    "DSB_Mace_Brace_Head_RightArm_v001",
+    "DSB_Mace_Brace_Head_TwoArm_v001",
+    "DSB_Walk_NORMAL_v001"
+  ],
+  "exported_animation_names": [
+    "DSB_Death_KneesFirst_RIGHT_v001",
+    "DSB_Hurt_LEFT_Flank_v001",
+    "DSB_Hurt_RIGHT_Flank_v001",
+    "DSB_Mace_Brace_Head_LeftArm_v001",
+    "DSB_Mace_Brace_Head_RightArm_v001",
+    "DSB_Mace_Brace_Head_TwoArm_v001",
+    "DSB_Walk_NORMAL_v001"
+  ],
+  "missing_animations": [],
+  "unexpected_animations": [],
+  "duplicate_animation_names": [],
+  "preview_floor_exported": false,
+  "node_count": 23,
+  "generator": "Khronos glTF Blender I/O v5.1.20"
+}

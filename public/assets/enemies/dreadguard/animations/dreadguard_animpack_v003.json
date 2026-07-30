@@ -1,0 +1,284 @@
+{
+  "schema": "dreadstone.animation_pack.v1",
+  "asset": "dreadguard_animpack_v003.glb",
+  "created_utc": "2026-07-30T00:34:12.681948+00:00",
+  "blender_version": "5.1.2",
+  "source_blend": "D:\\Blender\\Blends\\Untitled2.blend",
+  "approved_animation_count": 7,
+  "fps": 24.0,
+  "character": {
+    "sizing_mode": "NATIVE_RIG",
+    "source_root_name": "SBF_ProductionRig",
+    "armature_name": "SBF_ProductionRig",
+    "wrapper_name": null,
+    "wrapper_location": null,
+    "wrapper_scale": null,
+    "target_height_m": null,
+    "original_height_m": null,
+    "visible_height_m": 1.4635978571604937
+  },
+  "animations": [
+    {
+      "name": "DSB_Death_KneesFirst_RIGHT_v001",
+      "approved_kind": "DEATH",
+      "frame_start": 1.0,
+      "frame_end": 61.0,
+      "frame_count": 60.0,
+      "duration_seconds": 2.5,
+      "fcurve_count": 147,
+      "keyframe_count": 1479,
+      "contains_scale_curves": false,
+      "non_finite_keyframes": 0,
+      "loop": false,
+      "play_once": true,
+      "hold_final_pose": true,
+      "return_to_previous_state": false,
+      "floor_grounding": {
+        "baked": true,
+        "floor_z": 0.0,
+        "ground_sink_m": 0.004999999888241291,
+        "sample_count": 61,
+        "grounded_frame_count": 58,
+        "maximum_correction_m": 0.6144131375476718,
+        "minimum_z": -0.005000110249966383
+      }
+    },
+    {
+      "name": "DSB_Hurt_LEFT_Flank_v001",
+      "approved_kind": "HURT_LEFT",
+      "frame_start": 1.0,
+      "frame_end": 20.0,
+      "frame_count": 19.0,
+      "duration_seconds": 0.791667,
+      "fcurve_count": 147,
+      "keyframe_count": 882,
+      "contains_scale_curves": false,
+      "non_finite_keyframes": 0,
+      "loop": false,
+      "play_once": true,
+      "hold_final_pose": false,
+      "return_to_previous_state": true
+    },
+    {
+      "name": "DSB_Hurt_RIGHT_Flank_v001",
+      "approved_kind": "HURT_RIGHT",
+      "frame_start": 1.0,
+      "frame_end": 20.0,
+      "frame_count": 19.0,
+      "duration_seconds": 0.791667,
+      "fcurve_count": 147,
+      "keyframe_count": 882,
+      "contains_scale_curves": false,
+      "non_finite_keyframes": 0,
+      "loop": false,
+      "play_once": true,
+      "hold_final_pose": false,
+      "return_to_previous_state": true
+    },
+    {
+      "name": "DSB_Mace_Brace_Head_LeftArm_v001",
+      "approved_kind": "MACE_GUARD_LEFT_ARM",
+      "frame_start": 1.0,
+      "frame_end": 48.0,
+      "frame_count": 47.0,
+      "duration_seconds": 1.958333,
+      "fcurve_count": 147,
+      "keyframe_count": 882,
+      "contains_scale_curves": false,
+      "non_finite_keyframes": 0,
+      "loop": false,
+      "play_once": true,
+      "hold_final_pose": false,
+      "return_to_previous_state": false,
+      "guard_variant": "LEFT_ARM_EMERGENCY_HEAD_GUARD",
+      "guard_active_frame": 5,
+      "guard_active_time_seconds": 0.166667,
+      "markers": {
+        "Brace_Start": 1,
+        "Recognition": 2,
+        "Covering": 4,
+        "Guard_Active": 5,
+        "Guard_Hold_End": 26,
+        "Brace_End": 48
+      },
+      "presented_regions": [
+        "forearm_left",
+        "head"
+      ],
+      "interruptible": true,
+      "root_motion_policy": "IN_PLACE",
+      "guard_validation_status": "PASS"
+    },
+    {
+      "name": "DSB_Mace_Brace_Head_RightArm_v001",
+      "approved_kind": "MACE_GUARD_RIGHT_ARM",
+      "frame_start": 1.0,
+      "frame_end": 66.0,
+      "frame_count": 65.0,
+      "duration_seconds": 2.708333,
+      "fcurve_count": 147,
+      "keyframe_count": 882,
+      "contains_scale_curves": false,
+      "non_finite_keyframes": 0,
+      "loop": false,
+      "play_once": true,
+      "hold_final_pose": false,
+      "return_to_previous_state": false,
+      "guard_variant": "RIGHT_ARM_EMERGENCY_HEAD_GUARD",
+      "guard_active_frame": 23,
+      "guard_active_time_seconds": 0.916667,
+      "markers": {
+        "Brace_Start": 1,
+        "Recognition": 6,
+        "Covering": 15,
+        "Guard_Active": 23,
+        "Guard_Hold_End": 44,
+        "Brace_End": 66
+      },
+      "presented_regions": [
+        "forearm_right",
+        "head"
+      ],
+      "interruptible": true,
+      "root_motion_policy": "IN_PLACE",
+      "guard_validation_status": "PASS"
+    },
+    {
+      "name": "DSB_Mace_Brace_Head_TwoArm_v001",
+      "approved_kind": "MACE_GUARD_TWO_ARM",
+      "frame_start": 1.0,
+      "frame_end": 50.0,
+      "frame_count": 49.0,
+      "duration_seconds": 2.041667,
+      "fcurve_count": 147,
+      "keyframe_count": 882,
+      "contains_scale_curves": false,
+      "non_finite_keyframes": 0,
+      "loop": false,
+      "play_once": true,
+      "hold_final_pose": false,
+      "return_to_previous_state": false,
+      "guard_variant": "TWO_ARM_HEAD_GUARD",
+      "guard_active_frame": 23,
+      "guard_active_time_seconds": 0.916667,
+      "markers": {
+        "Brace_Start": 1,
+        "Recognition": 6,
+        "Covering": 15,
+        "Guard_Active": 23,
+        "Guard_Hold_End": 28,
+        "Brace_End": 50
+      },
+      "presented_regions": [
+        "forearm_left",
+        "forearm_right",
+        "head"
+      ],
+      "interruptible": true,
+      "root_motion_policy": "IN_PLACE",
+      "guard_validation_status": "PASS"
+    },
+    {
+      "name": "DSB_Walk_NORMAL_v001",
+      "approved_kind": "WALK",
+      "frame_start": 1.0,
+      "frame_end": 41.0,
+      "frame_count": 40.0,
+      "duration_seconds": 1.666667,
+      "fcurve_count": 147,
+      "keyframe_count": 1323,
+      "contains_scale_curves": false,
+      "non_finite_keyframes": 0,
+      "loop": true,
+      "play_once": false,
+      "hold_final_pose": false,
+      "return_to_previous_state": false
+    }
+  ],
+  "mace_head_guard_validation": [
+    {
+      "status": "PASS",
+      "action": "DSB_Mace_Brace_Head_LeftArm_v001",
+      "guardVariant": "LEFT_ARM_EMERGENCY_HEAD_GUARD",
+      "guardActiveFrame": 5,
+      "presentedRegions": [
+        "forearm_left",
+        "head"
+      ],
+      "coverage": [
+        {
+          "side": "l",
+          "distanceToHead": 0.49965967297232977,
+          "coverageLimit": 0.4659595253539803
+        }
+      ],
+      "warnings": [
+        "Mace guard l forearm may not visually cover the head at Guard_Active; adjust Arm Cover Height, Guard Elbow Flex, or Forearm Wrap if desired."
+      ],
+      "errors": []
+    },
+    {
+      "status": "PASS",
+      "action": "DSB_Mace_Brace_Head_RightArm_v001",
+      "guardVariant": "RIGHT_ARM_EMERGENCY_HEAD_GUARD",
+      "guardActiveFrame": 23,
+      "presentedRegions": [
+        "forearm_right",
+        "head"
+      ],
+      "coverage": [
+        {
+          "side": "r",
+          "distanceToHead": 0.5072615826209357,
+          "coverageLimit": 0.4659595253539803
+        }
+      ],
+      "warnings": [
+        "Mace guard r forearm may not visually cover the head at Guard_Active; adjust Arm Cover Height, Guard Elbow Flex, or Forearm Wrap if desired."
+      ],
+      "errors": []
+    },
+    {
+      "status": "PASS",
+      "action": "DSB_Mace_Brace_Head_TwoArm_v001",
+      "guardVariant": "TWO_ARM_HEAD_GUARD",
+      "guardActiveFrame": 23,
+      "presentedRegions": [
+        "forearm_left",
+        "forearm_right",
+        "head"
+      ],
+      "coverage": [
+        {
+          "side": "l",
+          "distanceToHead": 0.49965967297232977,
+          "coverageLimit": 0.4659595253539803
+        },
+        {
+          "side": "r",
+          "distanceToHead": 0.5072615826209357,
+          "coverageLimit": 0.4659595253539803
+        }
+      ],
+      "warnings": [
+        "Mace guard l forearm may not visually cover the head at Guard_Active; adjust Arm Cover Height, Guard Elbow Flex, or Forearm Wrap if desired.",
+        "Mace guard r forearm may not visually cover the head at Guard_Active; adjust Arm Cover Height, Guard Elbow Flex, or Forearm Wrap if desired."
+      ],
+      "errors": []
+    }
+  ],
+  "death_floor_validation": [
+    {
+      "status": "PASS",
+      "action": "DSB_Death_KneesFirst_RIGHT_v001",
+      "floorZ": 0.0,
+      "groundSinkM": 0.004999999888241291,
+      "allowedMinimumZ": -0.004999999888241291,
+      "minimumZ": 1.3120026665092155e-07,
+      "worstFrame": 1,
+      "sampleCount": 61,
+      "errors": []
+    }
+  ],
+  "validation_report": "dreadguard_animpack_v003_validation.json"
+}

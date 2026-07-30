@@ -8,6 +8,8 @@ export const HUMANOID_ANIMATION_STATES = Object.freeze({
   dead: 'DEAD',
 });
 
+export const EXPORTED_REST_POSE_CLIP_NAME = 'DSB_RUNTIME_EXPORTED_REST_POSE';
+
 const REQUIRED_KINDS = Object.freeze(['WALK', 'HURT_LEFT', 'HURT_RIGHT', 'DEATH']);
 const TORSO_REGIONS = new Set(['upper_chest', 'lower_chest', 'abdomen']);
 
@@ -23,9 +25,38 @@ function normalizeClipToManifest(clip, metadata, fps) {
 function configureAction(action, metadata) {
   const repeats = metadata.loop === true;
   action.enabled = true;
-  action.clampWhenFinished = metadata.hold_final_pose === true;
+  action.clampWhenFinished = metadata.hold_final_pose === true || metadata.return_to_previous_state === true;
   action.setLoop(repeats ? THREE.LoopRepeat : THREE.LoopOnce, repeats ? Infinity : 1);
   return action;
+}
+
+export function createExportedRestPoseClip(root, sourceClip, durationSeconds = 1) {
+  if (!root || !sourceClip?.tracks?.length) throw new Error('Exported rest-pose holding requires a loaded rig and authored source clip');
+  const tracks = [];
+  const registeredTrackNames = new Set();
+  sourceClip.tracks.forEach((sourceTrack) => {
+    if (registeredTrackNames.has(sourceTrack.name)) return;
+    const separator = sourceTrack.name.lastIndexOf('.');
+    const nodeName = separator >= 0 ? sourceTrack.name.slice(0, separator) : '';
+    const propertyName = separator >= 0 ? sourceTrack.name.slice(separator + 1) : '';
+    if (!['position', 'quaternion', 'scale'].includes(propertyName)) return;
+    const object = root.getObjectByName(nodeName);
+    const property = object?.[propertyName];
+    const values = property?.toArray?.();
+    if (!object || !Array.isArray(values) || values.length !== sourceTrack.getValueSize()) {
+      throw new Error(`Exported rest-pose holding cannot resolve ${sourceTrack.name}`);
+    }
+    const track = new sourceTrack.constructor(
+      sourceTrack.name,
+      [0, durationSeconds],
+      [...values, ...values],
+      sourceTrack.getInterpolation(),
+    );
+    tracks.push(track);
+    registeredTrackNames.add(sourceTrack.name);
+  });
+  if (!tracks.length) throw new Error('Exported rest-pose holding resolved no transform tracks');
+  return new THREE.AnimationClip(EXPORTED_REST_POSE_CLIP_NAME, durationSeconds, tracks);
 }
 
 export function resolveHurtKind({ regionId = '', localHitX = null, worldDirection = null } = {}) {
@@ -43,14 +74,14 @@ export function resolveDeathIndex({ regionId = '', variation = 0 } = {}) {
 }
 
 export class HumanoidAnimationPackController {
-  constructor({ mixer, animationPack, manifest, fadeSeconds = 0.1, walkReferenceSpeed = 0.72 } = {}) {
-    if (!mixer || !animationPack || !manifest) throw new Error('Authored humanoid animation controller requires a mixer, resolved pack, and manifest');
+  constructor({ mixer, animationPack, manifest, restPoseClip, fadeSeconds = 0.1, walkReferenceSpeed = 0.72 } = {}) {
+    if (!mixer || !animationPack || !manifest || !restPoseClip) throw new Error('Authored humanoid animation controller requires a mixer, resolved pack, manifest, and exported rest pose');
     REQUIRED_KINDS.forEach((kind) => {
       if (!animationPack.entriesByKind.get(kind)?.length) throw new Error(`Authored humanoid animation pack is missing required kind ${kind}`);
     });
     if (animationPack.entriesByKind.get('WALK').length !== 1) throw new Error('Authored humanoid animation pack requires exactly one WALK clip');
     if (animationPack.entriesByKind.get('HURT_LEFT').length !== 1 || animationPack.entriesByKind.get('HURT_RIGHT').length !== 1) throw new Error('Authored humanoid animation pack requires one hurt clip per side');
-    if (animationPack.entriesByKind.get('DEATH').length !== 2) throw new Error('Authored humanoid animation pack requires exactly two DEATH clips');
+    if (animationPack.entriesByKind.get('DEATH').length < 1) throw new Error('Authored humanoid animation pack requires at least one DEATH clip');
 
     this.mixer = mixer;
     this.animationPack = animationPack;
@@ -69,8 +100,9 @@ export class HumanoidAnimationPackController {
     this.hurtRecoveryCount = 0;
     this.deathCompleted = false;
     this.disposed = false;
+    this.walkStopFadeRemaining = 0;
 
-    manifest.animations.forEach((metadata) => {
+    animationPack.entriesByName.forEach((metadata) => {
       const sourceClip = animationPack.clipsByName.get(metadata.name);
       const clip = normalizeClipToManifest(sourceClip, metadata, manifest.fps);
       const action = configureAction(mixer.clipAction(clip), metadata);
@@ -79,22 +111,44 @@ export class HumanoidAnimationPackController {
     });
     this.walkMetadata = animationPack.entriesByKind.get('WALK')[0];
     this.walkAction = this.actionsByName.get(this.walkMetadata.name);
-    this.walkAction.reset().play();
+    this.walkAction.stop();
     this.walkAction.paused = true;
+    this.restAction = mixer.clipAction(restPoseClip);
+    this.restAction.enabled = true;
+    this.restAction.clampWhenFinished = false;
+    this.restAction.setLoop(THREE.LoopRepeat, Infinity);
+    this.restAction.reset().setEffectiveWeight(1).setEffectiveTimeScale(1).play();
+    this.baseAction = this.restAction;
     this.finishedHandler = (event) => this.handleFinished(event.action);
     this.mixer.addEventListener('finished', this.finishedHandler);
   }
 
   setMovement({ speed = 0, maximumSpeed = this.walkReferenceSpeed, walking = false } = {}) {
     if (this.disposed || this.state === HUMANOID_ANIMATION_STATES.dying || this.state === HUMANOID_ANIMATION_STATES.dead) return false;
+    const wasMoving = this.moving;
     this.speed = Math.max(0, Number(speed) || 0);
     this.maximumSpeed = Math.max(0.01, Number(maximumSpeed) || this.walkReferenceSpeed);
     this.moving = walking === true && this.speed > 0.025;
     const speedRatio = THREE.MathUtils.clamp(this.speed / this.walkReferenceSpeed, 0.65, 1.35);
     this.walkAction.setEffectiveTimeScale(this.moving ? speedRatio : 1);
-    this.walkAction.paused = !this.moving;
+    if (this.moving !== wasMoving && !this.activeOneShot) this.transitionToMovementBase();
     if (!this.activeOneShot) this.state = this.moving ? HUMANOID_ANIMATION_STATES.walking : HUMANOID_ANIMATION_STATES.holding;
     return true;
+  }
+
+  transitionToMovementBase() {
+    const nextAction = this.moving ? this.walkAction : this.restAction;
+    const previousAction = this.baseAction;
+    nextAction.enabled = true;
+    nextAction.paused = false;
+    nextAction.reset().setEffectiveWeight(1).play();
+    if (previousAction && previousAction !== nextAction) {
+      if (this.fadeSeconds > 0) previousAction.crossFadeTo(nextAction, this.fadeSeconds, false);
+      else previousAction.stop();
+    }
+    this.baseAction = nextAction;
+    this.walkStopFadeRemaining = this.moving ? 0 : this.fadeSeconds;
+    return nextAction;
   }
 
   playHurt(options = {}) {
@@ -108,9 +162,10 @@ export class HumanoidAnimationPackController {
   playDeath({ regionId = '', variation = 0, deathIndex = null } = {}) {
     if (this.disposed || this.state === HUMANOID_ANIMATION_STATES.dying || this.state === HUMANOID_ANIMATION_STATES.dead) return null;
     const deaths = this.animationPack.entriesByKind.get('DEATH');
-    const index = Number.isInteger(deathIndex)
+    const requestedIndex = Number.isInteger(deathIndex)
       ? THREE.MathUtils.clamp(deathIndex, 0, deaths.length - 1)
       : resolveDeathIndex({ regionId, variation });
+    const index = THREE.MathUtils.clamp(requestedIndex, 0, deaths.length - 1);
     const metadata = deaths[index];
     this.selectedDeathName = metadata.name;
     this.deathCompleted = false;
@@ -121,14 +176,17 @@ export class HumanoidAnimationPackController {
   playOneShot(metadata, state) {
     const nextAction = this.actionsByName.get(metadata.name);
     if (!nextAction) return null;
-    const previousAction = this.activeOneShot ?? this.walkAction;
+    const previousAction = this.activeOneShot ?? this.baseAction;
     if (this.activeOneShot && this.activeOneShot !== nextAction) this.activeOneShot.fadeOut(this.fadeSeconds);
     nextAction.reset();
     configureAction(nextAction, metadata);
     nextAction.setEffectiveTimeScale(1);
     nextAction.setEffectiveWeight(1);
     nextAction.play();
-    if (previousAction !== nextAction) previousAction.crossFadeTo(nextAction, this.fadeSeconds, false);
+    if (previousAction !== nextAction) {
+      if (this.fadeSeconds > 0) previousAction.crossFadeTo(nextAction, this.fadeSeconds, false);
+      else previousAction.stop();
+    }
     this.activeOneShot = nextAction;
     this.activeMetadata = metadata;
     this.state = state;
@@ -144,13 +202,16 @@ export class HumanoidAnimationPackController {
       return;
     }
     if (metadata?.return_to_previous_state === true) {
-      action.crossFadeTo(this.walkAction, this.fadeSeconds, false);
-      action.stop();
+      const baseAction = this.moving ? this.walkAction : this.restAction;
+      baseAction.enabled = true;
+      baseAction.paused = false;
+      baseAction.setEffectiveWeight(1).play();
+      if (this.fadeSeconds > 0) action.crossFadeTo(baseAction, this.fadeSeconds, false);
+      else action.stop();
       this.activeOneShot = null;
       this.activeMetadata = null;
-      this.walkAction.enabled = true;
-      this.walkAction.play();
-      this.walkAction.paused = !this.moving;
+      this.baseAction = baseAction;
+      this.walkStopFadeRemaining = this.moving ? 0 : this.fadeSeconds;
       this.state = this.moving ? HUMANOID_ANIMATION_STATES.walking : HUMANOID_ANIMATION_STATES.holding;
       this.hurtRecoveryCount += 1;
     }
@@ -158,7 +219,12 @@ export class HumanoidAnimationPackController {
 
   update(deltaSeconds) {
     if (this.disposed) return;
-    this.mixer.update(Math.max(0, Number(deltaSeconds) || 0));
+    const dt = Math.max(0, Number(deltaSeconds) || 0);
+    this.mixer.update(dt);
+    if (this.walkStopFadeRemaining > 0) {
+      this.walkStopFadeRemaining = Math.max(0, this.walkStopFadeRemaining - dt);
+      if (this.walkStopFadeRemaining === 0 && !this.moving && this.baseAction === this.restAction) this.walkAction.paused = true;
+    }
   }
 
   reset() {
@@ -171,24 +237,30 @@ export class HumanoidAnimationPackController {
     this.hurtRecoveryCount = 0;
     this.moving = false;
     this.speed = 0;
-    this.walkAction.reset().setEffectiveWeight(1).setEffectiveTimeScale(1).play();
+    this.walkAction.stop();
     this.walkAction.paused = true;
+    this.restAction.reset().setEffectiveWeight(1).setEffectiveTimeScale(1).play();
+    this.baseAction = this.restAction;
+    this.walkStopFadeRemaining = 0;
     this.state = HUMANOID_ANIMATION_STATES.holding;
   }
 
   getDiagnostics() {
     return {
       state: this.state,
-      activeAnimation: this.activeMetadata?.name ?? this.walkMetadata.name,
+      activeAnimation: this.activeMetadata?.name ?? (this.moving ? this.walkMetadata.name : null),
+      holdingPose: this.moving || this.activeMetadata ? null : 'exported_rest_pose',
+      holdingPoseClip: this.restAction.getClip().name,
       walkAnimation: this.walkMetadata.name,
       walkLooping: this.walkMetadata.loop === true,
-      walkPaused: this.walkAction.paused,
+      walkPaused: !this.walkAction.isRunning() || this.walkAction.paused,
       moving: this.moving,
       hurtRecoveryCount: this.hurtRecoveryCount,
       selectedDeathName: this.selectedDeathName,
       deathCompleted: this.deathCompleted,
       finalPoseHeld: this.state === HUMANOID_ANIMATION_STATES.dead && this.activeMetadata?.hold_final_pose === true,
       availableAnimationNames: [...this.actionsByName.keys()],
+      ignoredAnimationNames: this.animationPack.ignoredEntries.map((entry) => entry.name),
     };
   }
 

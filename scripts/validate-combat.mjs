@@ -11,7 +11,7 @@ assert.equal(result.bodyCount, 18);
 assert.equal(result.jointCount, 17);
 assert.ok(result.regionCount >= 20);
 
-const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSource, presentationSource, cameraFeedbackSource, intentSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, animationControllerSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, directorDocsSource, glbBuffer, dreadguardGlbBuffer, dreadguardManifestSource, dreadguardValidationSource] = await Promise.all([
+const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSource, presentationSource, cameraFeedbackSource, intentSource, oldViewmodelSource, actorSource, adapterSource, profileSource, woundSource, animationControllerSource, surfaceBindingSource, physiologySource, bloodSource, feedbackSource, folsomEncounterSource, combatLabSource, combatLabPanelSource, mortalitySource, controlSource, configSource, stage2ConfigSource, collisionSource, packageSource, docsSource, directorDocsSource, glbBuffer, dreadguardGlbBuffer, dreadguardManifestSource, dreadguardValidationSource, dreadguardAnimationManifestSource, dreadguardAnimationValidationSource] = await Promise.all([
   readFile(new URL('../src/game/Game.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/SceneSessionHost.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/hosts/FirstPersonViewmodelHost.js', import.meta.url), 'utf8'),
@@ -45,6 +45,8 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSo
   readFile(new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb', import.meta.url)),
   readFile(new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.json', import.meta.url), 'utf8'),
   readFile(new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001_validation.json', import.meta.url), 'utf8'),
+  readFile(new URL('../public/assets/enemies/dreadguard/animations/dreadguard_animpack_v003.json', import.meta.url), 'utf8'),
+  readFile(new URL('../public/assets/enemies/dreadguard/animations/dreadguard_animpack_v003_validation.json', import.meta.url), 'utf8'),
 ]);
 const [decalLibrarySource, outdoorLightingSource, woundManifestSource, walkerSource, actorRouterSource, bloodMaterialSource, weaponPoseSource, weaponGestureSource, weaponContactRouterSource, sweptCuttingEdgeSource, weaponVisualAssetSource, weaponContactScratchSource, swordControllerSource, edgeDamageSource] = await Promise.all([
   readFile(new URL('../src/game/combat/KnifeWoundDecalLibrary.js', import.meta.url), 'utf8'),
@@ -102,6 +104,19 @@ const nodeNames = new Set(glbJson.nodes.map((node) => node.name));
 const dreadguardGlbJson = parseGlbJson(dreadguardGlbBuffer);
 const dreadguardManifest = JSON.parse(dreadguardManifestSource);
 const dreadguardValidation = JSON.parse(dreadguardValidationSource);
+const dreadguardAnimationManifest = JSON.parse(dreadguardAnimationManifestSource);
+const dreadguardAnimationValidation = JSON.parse(dreadguardAnimationValidationSource);
+const dreadguardRuntimeAnimationNames = [
+  'DSB_Death_KneesFirst_RIGHT_v001',
+  'DSB_Hurt_LEFT_Flank_v001',
+  'DSB_Hurt_RIGHT_Flank_v001',
+  'DSB_Walk_NORMAL_v001',
+];
+const ignoredDreadguardGuardAnimationNames = [
+  'DSB_Mace_Brace_Head_LeftArm_v001',
+  'DSB_Mace_Brace_Head_RightArm_v001',
+  'DSB_Mace_Brace_Head_TwoArm_v001',
+];
 assert.equal(dreadguardManifest.schema, 'dreadstone.damage_authoring.v1');
 assert.equal(dreadguardManifest.glb, 'dreadguard_damage_v001.glb');
 assert.equal(dreadguardValidation.status, 'PASS');
@@ -113,6 +128,32 @@ assert.equal(dreadguardValidation.deformation.progressiveDamageSites.siteCount, 
 assert.equal(dreadguardValidation.deformation.progressiveDamageSites.exportEnabledSiteCount, 0);
 assert.equal(dreadguardValidation.finalGlb.surfaceStains.status, 'PASS');
 assert.equal(dreadguardValidation.finalGlb.surfaceStains.bindingCount, 6);
+assert.equal(dreadguardAnimationManifest.schema, 'dreadstone.animation_pack.v1');
+assert.equal(dreadguardAnimationManifest.asset, 'dreadguard_animpack_v003.glb');
+assert.equal(dreadguardAnimationManifest.approved_animation_count, 7);
+assert.equal(dreadguardAnimationValidation.status, 'PASS');
+assert.equal(dreadguardAnimationValidation.animation_count, 7);
+const dreadguardAnimationNames = dreadguardAnimationManifest.animations.map((entry) => entry.name);
+assert.deepEqual(
+  dreadguardAnimationManifest.animations
+    .filter((entry) => ['WALK', 'HURT_LEFT', 'HURT_RIGHT', 'DEATH'].includes(entry.approved_kind))
+    .map((entry) => entry.name)
+    .sort(),
+  [...dreadguardRuntimeAnimationNames].sort(),
+);
+assert.deepEqual(
+  dreadguardAnimationManifest.animations
+    .filter((entry) => entry.approved_kind.startsWith('MACE_GUARD_'))
+    .map((entry) => entry.name)
+    .sort(),
+  [...ignoredDreadguardGuardAnimationNames].sort(),
+);
+assert.deepEqual(dreadguardAnimationValidation.exported_animation_names, dreadguardAnimationNames);
+assert.deepEqual(
+  dreadguardGlbJson.animations.map((animation) => animation.name).sort(),
+  [...dreadguardAnimationNames].sort(),
+  'combined damage GLB carries the exact approved pack v003 clips',
+);
 assert.ok(dreadguardGlbJson.meshes?.length >= 1, 'Dreadguard damage GLB contains meshes');
 assert.ok(dreadguardGlbJson.skins?.length >= 1, 'Dreadguard damage GLB contains a skin');
 assert.ok(dreadguardGlbJson.meshes.flatMap((mesh) => mesh.primitives).some((primitive) => primitive.attributes.JOINTS_0 != null && primitive.attributes.WEIGHTS_0 != null), 'Dreadguard damage GLB contains a SkinnedMesh primitive');
@@ -289,12 +330,14 @@ assert.doesNotMatch(adapterSource, /material\.normalMap\.magFilter = THREE\.Near
 assert.match(adapterSource, /no-cast-shadow|no-receive-shadow|no-normal-map|no-directional-shadow|tight-shadow-frustum/);
 assert.match(adapterSource, /cachedAssetPromises = new Map/);
 assert.match(adapterSource, /loadCachedAsset\(this\.profile\.assetPath\)/);
-assert.match(profileSource, /dreadguard_damage_v001_no_animation/);
+assert.match(profileSource, /dreadguard_damage_v001_animpack_v003/);
 assert.match(profileSource, /\.\/assets\/enemies\/dreadguard\/damage\/dreadguard_damage_v001\.glb/);
 assert.match(profileSource, /\.\/assets\/enemies\/dreadguard\/damage\/dreadguard_damage_v001\.json/);
-assert.match(profileSource, /animationAuthoritative: false/);
-assert.match(profileSource, /restPoseAuthoritative: true/);
-assert.match(profileSource, /noAnimationFallback: 'exported_rest_pose'/);
+assert.match(profileSource, /\.\/assets\/enemies\/dreadguard\/animations\/dreadguard_animpack_v003\.json/);
+assert.match(profileSource, /animationAuthoritative: true/);
+assert.match(profileSource, /restPoseAuthoritative: false/);
+assert.match(profileSource, /holdingPoseMode: 'exported_rest_pose'/);
+assert.match(profileSource, /ignoredEmbeddedAnimationNames: DREADGUARD_IGNORED_GUARD_ANIMATION_NAMES/);
 assert.match(profileSource, /targetHeight: 1\.5/);
 assert.match(profileSource, /proxyFit/);
 assert.match(adapterSource, /measureVisibleSkinnedBounds/);
@@ -303,7 +346,8 @@ assert.ok(adapterSource.indexOf('this.animationController.update(dt)') < adapter
 assert.ok(adapterSource.indexOf('this.actor.woundSystem?.update?.(dt)') < adapterSource.indexOf('this.actor.syncAnimationProxyBodies(this)'), 'semantic proxies sync after the completed authored pose');
 assert.match(animationControllerSource, /HURT_LEFT/);
 assert.match(animationControllerSource, /HURT_RIGHT/);
-assert.match(animationControllerSource, /exactly two DEATH clips/);
+assert.match(animationControllerSource, /at least one DEATH clip/);
+assert.match(animationControllerSource, /createExportedRestPoseClip/);
 assert.match(animationControllerSource, /THREE\.LoopRepeat/);
 assert.match(animationControllerSource, /THREE\.LoopOnce/);
 assert.match(animationControllerSource, /return_to_previous_state/);

@@ -2,7 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
-import { HumanoidAnimationPackController, HUMANOID_ANIMATION_STATES, resolveDeathIndex, resolveHurtKind } from '../src/game/combat/HumanoidAnimationPackController.js';
+import {
+  createExportedRestPoseClip,
+  EXPORTED_REST_POSE_CLIP_NAME,
+  HumanoidAnimationPackController,
+  HUMANOID_ANIMATION_STATES,
+  resolveDeathIndex,
+  resolveHurtKind,
+} from '../src/game/combat/HumanoidAnimationPackController.js';
 import { HumanoidGlbVisualAdapter, resolveAnimationPackManifest, isolateObjectMaterials } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { COMBAT_LAB_WALKER_CONFIG, WalkerVitalStabPolicy } from '../src/game/combat/CombatLabWalkerController.js';
 
@@ -20,19 +27,33 @@ const manifest = Object.freeze({
   ]),
 });
 
-function createAnimationRig() {
+function createAnimationRig(sourceManifest = manifest) {
   const root = new THREE.Group();
-  const clips = manifest.animations.map((metadata, index) => {
-    const start = metadata.frame_start / manifest.fps;
+  const animatedBone = new THREE.Bone();
+  animatedBone.name = 'body';
+  root.add(animatedBone);
+  const clips = sourceManifest.animations.map((metadata, index) => {
+    const start = metadata.frame_start / sourceManifest.fps;
     const end = start + metadata.duration_seconds;
     return new THREE.AnimationClip(metadata.name, end, [
-      new THREE.NumberKeyframeTrack('.position[x]', [start, end], [index * 0.01, index * 0.01 + 0.1]),
+      new THREE.VectorKeyframeTrack('body.position', [start, end], [
+        index * 0.01, 0, 0,
+        index * 0.01 + 0.1, 0, 0,
+      ]),
     ]);
   });
-  const pack = resolveAnimationPackManifest(manifest, clips, 'synthetic-authored-pack-test');
+  const pack = resolveAnimationPackManifest(sourceManifest, clips, 'synthetic-authored-pack-test');
   const mixer = new THREE.AnimationMixer(root);
-  const controller = new HumanoidAnimationPackController({ mixer, animationPack: pack, manifest, fadeSeconds: 0.05, walkReferenceSpeed: COMBAT_LAB_WALKER_CONFIG.baseWalkingSpeed });
-  return { root, mixer, controller, pack };
+  const restPoseClip = createExportedRestPoseClip(root, clips[0]);
+  const controller = new HumanoidAnimationPackController({
+    mixer,
+    animationPack: pack,
+    manifest: sourceManifest,
+    restPoseClip,
+    fadeSeconds: 0.05,
+    walkReferenceSpeed: COMBAT_LAB_WALKER_CONFIG.baseWalkingSpeed,
+  });
+  return { root, animatedBone, mixer, controller, pack, restPoseClip };
 }
 
 function createFadeAdapter(root) {
@@ -44,11 +65,14 @@ function createFadeAdapter(root) {
   return adapter;
 }
 
-test('authored walk is the only looping base animation and follows walker motion', () => {
-  const { controller } = createAnimationRig();
+test('exported rest pose holds while stationary and authored walk follows walker motion', () => {
+  const { animatedBone, controller } = createAnimationRig();
   assert.equal(controller.state, HUMANOID_ANIMATION_STATES.holding);
   assert.equal(controller.walkAction.paused, true);
+  assert.equal(controller.restAction.isRunning(), true);
   assert.equal(controller.walkAction.loop, THREE.LoopRepeat);
+  assert.equal(controller.getDiagnostics().holdingPose, 'exported_rest_pose');
+  assert.equal(controller.getDiagnostics().holdingPoseClip, EXPORTED_REST_POSE_CLIP_NAME);
   controller.setMovement({ speed: 0.72, maximumSpeed: 0.85, walking: true });
   assert.equal(controller.state, HUMANOID_ANIMATION_STATES.walking);
   assert.equal(controller.walkAction.paused, false);
@@ -56,9 +80,9 @@ test('authored walk is the only looping base animation and follows walker motion
   controller.update(duration * 2.4);
   assert.ok(controller.walkAction.time < duration, 'walk time wraps instead of completing');
   controller.setMovement({ speed: 0, maximumSpeed: 0.85, walking: false });
-  const heldTime = controller.walkAction.time;
   controller.update(0.5);
-  assert.equal(controller.walkAction.time, heldTime, 'stopped authored humanoid holds the walk pose without a synthetic idle');
+  assert.equal(controller.walkAction.paused, true);
+  assert.ok(Math.abs(animatedBone.position.x) < 1e-6, 'stopped authored humanoid returns to its exact exported rest pose');
   controller.dispose();
 });
 
@@ -98,6 +122,23 @@ test('both authored death clips play once, complete, and clamp their final pose'
     assert.equal(controller.activeOneShot.time, heldTime, 'death does not restart or recover');
     controller.dispose();
   });
+});
+
+test('a pack with one approved death clip deterministically uses that clip for every fatal region', () => {
+  const oneDeathManifest = {
+    ...manifest,
+    approved_animation_count: 4,
+    animations: manifest.animations.filter((entry) => (
+      entry.approved_kind !== 'DEATH' || entry.name === 'DSB_Death_ChestHold_LEFT_v001'
+    )),
+  };
+  const { controller } = createAnimationRig(oneDeathManifest);
+  const death = controller.playDeath({ regionId: 'head' });
+  assert.equal(death.name, 'DSB_Death_ChestHold_LEFT_v001');
+  controller.update(death.durationSeconds + 0.06);
+  assert.equal(controller.state, HUMANOID_ANIMATION_STATES.dead);
+  assert.equal(controller.getDiagnostics().finalPoseHeld, true);
+  controller.dispose();
 });
 
 test('authored reaction selection is deterministic for side and injury region', () => {

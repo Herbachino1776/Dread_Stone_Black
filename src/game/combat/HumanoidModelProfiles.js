@@ -89,6 +89,26 @@ export const DREADGUARD_PROGRESSIVE_DAMAGE_SITE_FALLBACK = Object.freeze({
   ]),
 });
 
+export const DREADGUARD_RUNTIME_ANIMATION_KINDS = Object.freeze([
+  'WALK',
+  'HURT_LEFT',
+  'HURT_RIGHT',
+  'DEATH',
+]);
+
+export const DREADGUARD_RUNTIME_ANIMATION_NAMES = Object.freeze([
+  'DSB_Death_KneesFirst_RIGHT_v001',
+  'DSB_Hurt_LEFT_Flank_v001',
+  'DSB_Hurt_RIGHT_Flank_v001',
+  'DSB_Walk_NORMAL_v001',
+]);
+
+export const DREADGUARD_IGNORED_GUARD_ANIMATION_NAMES = Object.freeze([
+  'DSB_Mace_Brace_Head_LeftArm_v001',
+  'DSB_Mace_Brace_Head_RightArm_v001',
+  'DSB_Mace_Brace_Head_TwoArm_v001',
+]);
+
 export const CURRENT_HUMANOID_PROFILE = Object.freeze({
   name: 'human_retro_256_combat',
   voiceProfile: 'male_human',
@@ -103,19 +123,27 @@ export const CURRENT_HUMANOID_PROFILE = Object.freeze({
 });
 
 export const DREADGUARD_DAMAGE_COMBAT_PROFILE = Object.freeze({
-  name: 'dreadguard_damage_v001_no_animation',
+  name: 'dreadguard_damage_v001_animpack_v003',
   voiceProfile: 'male_human',
   assetPath: './assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb',
+  animationManifestPath: './assets/enemies/dreadguard/animations/dreadguard_animpack_v003.json',
+  animationValidationReportPath: './assets/enemies/dreadguard/animations/dreadguard_animpack_v003_validation.json',
+  animationManifestAssetName: 'dreadguard_animpack_v003.glb',
   damageManifestPath: './assets/enemies/dreadguard/damage/dreadguard_damage_v001.json',
   damageValidationReportPath: './assets/enemies/dreadguard/damage/dreadguard_damage_v001_validation.json',
   rawHeight: 1.4635979019523002,
   targetHeight: 1.5,
-  animationAuthoritative: false,
-  restPoseAuthoritative: true,
-  authoredAnimationPack: false,
-  authoredDeathAnimations: false,
-  ignoreEmbeddedAnimations: true,
-  noAnimationFallback: 'exported_rest_pose',
+  animationAuthoritative: true,
+  restPoseAuthoritative: false,
+  authoredAnimationPack: true,
+  authoredDeathAnimations: true,
+  ignoreEmbeddedAnimations: false,
+  holdingPoseMode: 'exported_rest_pose',
+  animationFadeSeconds: 0.12,
+  walkReferenceSpeed: 0.72,
+  animationRuntimeKinds: DREADGUARD_RUNTIME_ANIMATION_KINDS,
+  ignoredEmbeddedAnimationNames: DREADGUARD_IGNORED_GUARD_ANIMATION_NAMES,
+  requireEmbeddedAnimationApprovalMetadata: true,
   groundClearance: 0.02,
   authoredForwardAxis: '+Y',
   rootYaw: Math.PI,
@@ -146,9 +174,9 @@ export const DREADGUARD_DAMAGE_COMBAT_PROFILE = Object.freeze({
   damageTopologyFingerprint: '880eabb3e8810327a1e60bd9e8313ad1acd65dff33970f6ae3c01ce2a459a2c8',
   damageWeightFingerprint: '17ab81330545a1a9c2506bf9151f3b99deaa7a674835bbb15d77228a2e5b9b97',
   progressiveDamageSiteFallbacks: Object.freeze([DREADGUARD_PROGRESSIVE_DAMAGE_SITE_FALLBACK]),
-  damageExpectedAnimationNames: Object.freeze([]),
+  damageExpectedAnimationNames: DREADGUARD_RUNTIME_ANIMATION_NAMES,
   activeDamageSegmentIds: Object.freeze(['head_neck', 'left_elbow', 'right_elbow']),
-  colliderFitNotes: 'Folsom and Combat Lab Forge v3.9.1 Dreadguard baseline. The exported 1.5 m rest pose and +Y authored forward axis are authoritative while alive; the profile yaw converts authored forward to runtime forward. Kinematic combat proxies hand off to dynamic ragdoll only for collapse/death. Manifest-authored head/forearm detachment remains active.',
+  colliderFitNotes: 'Folsom and Combat Lab Forge Dreadguard baseline. Approved pack v003 owns walk, side hurt, and knees-first death while the exported rest pose remains the stationary holding pose. The three embedded mace guard clips are intentionally unregistered. The +Y authored forward axis is converted by the profile yaw. Manifest-authored head/forearm detachment remains active.',
 });
 
 export function getHumanoidProfileScale(profile) {

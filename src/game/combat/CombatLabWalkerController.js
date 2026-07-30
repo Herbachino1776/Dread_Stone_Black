@@ -719,7 +719,7 @@ export class CombatLabWalkerController {
     this.currentSpeed = 0;
     this.desiredSpeed = 0;
     this.velocity.set(0, 0, 0);
-    this.actor.transitionLifeState?.('dead', 'authored-walker-grounded', { externalCommit: true, presentationHandled: true });
+    this.actor.transitionLifeState?.('dead', 'authored-walker-grounded', { externalCommit: true, forceFatal: true, presentationHandled: true });
     this.setState(WALKER_STATES.grounded);
     this.actor.combatContactState = 'grounded';
     this.finalizeDeathContactOwnership();

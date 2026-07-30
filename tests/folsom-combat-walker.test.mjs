@@ -237,7 +237,7 @@ test('Folsom reset leaves exactly two fresh active actors and no stale walker co
   encounter.dispose();
 });
 
-test('Folsom no-animation baseline completes its stationary death lifecycle without exceptions', async () => {
+test('Folsom baseline completes its stationary death lifecycle without exceptions', async () => {
   const { encounter, player, collision } = await createEncounter();
   const actor = encounter.actor;
   const controller = encounter.stationaryDeathController;
@@ -263,6 +263,7 @@ test('Folsom no-animation baseline completes its stationary death lifecycle with
   actor.prepareFrame(0.05);
 
   assert.equal(controller.state, WALKER_STATES.grounded);
+  assert.equal(actor.lifeState, 'dead');
   assert.equal(controller.shouldHoldFinalPose(), true);
   assert.equal(actor.ragdollActive, false, 'the headless fixture has not completed the asynchronous visual load needed for presentation handoff');
   assert.equal(actor.getDiagnostics().ragdollHandoff.activationCount, 0);
@@ -309,6 +310,7 @@ test('dying Folsom walker releases player blocking but keeps weapon contact unti
   assert.equal(collision.blockerRects.includes(blocker), false);
   assert.equal(cancelledTargets.length, 0, 'walker death collision release preserves an implanted weapon until disposal');
   controller.holdGroundedPose();
+  assert.equal(actor.lifeState, 'dead');
   assert.equal(encounter.combatRouter.getDirector(actor), null);
   assert.equal(encounter.getContactableCombatActors().includes(actor), false);
   assert.equal([...actor.colliders.values()].every((collider) => collider.isEnabled() === false), true);

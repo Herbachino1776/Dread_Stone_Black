@@ -67,7 +67,7 @@ export class AuthoredHumanoidDeathController {
 
   holdGroundedPose() {
     if (this.state !== WALKER_STATES.losingConsciousness) return false;
-    this.actor?.transitionLifeState?.('dead', 'authored-stationary-grounded', { externalCommit: true, presentationHandled: true });
+    this.actor?.transitionLifeState?.('dead', 'authored-stationary-grounded', { externalCommit: true, forceFatal: true, presentationHandled: true });
     this.state = WALKER_STATES.grounded;
     this.onGrounded?.(this.actor);
     return true;

@@ -174,6 +174,7 @@ export class FolsomCombatEncounter {
       resetAllDamage: () => this.debugResetForgeDamage(),
       diagnostics: () => this.actor?.visualAdapter?.damageSegmentRuntime?.deformationRuntime?.getDiagnostics?.() ?? null,
       characterDiagnostics: () => this.actor?.getDiagnostics?.() ?? null,
+      deathDiagnostics: () => this.stationaryDeathController?.getDiagnostics?.() ?? null,
     });
     this.forgeDamageDebugCommands = commands;
     globalThis.__DSB_DREADGUARD_DAMAGE__ = commands;

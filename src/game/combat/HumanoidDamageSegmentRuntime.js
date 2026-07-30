@@ -26,7 +26,7 @@ const MAXIMUM_DIAGNOSTIC_COUNT = 1_000_000;
 const tmpPoint = new THREE.Vector3();
 
 function basename(path = '') {
-  return path.split('/').pop() ?? path;
+  return path.split('/').pop()?.split(/[?#]/, 1)[0] ?? path;
 }
 
 function finiteVector(value, fallback = new THREE.Vector3()) {
@@ -109,7 +109,11 @@ export function validateDamageAsset({ manifest, root, profile, clips = [], anima
   if (duplicateRequiredObjects.length) errors.push(`duplicate manifest objects: ${duplicateRequiredObjects.join(', ')}`);
 
   const expectedAnimations = [...(profile?.damageExpectedAnimationNames ?? [])];
-  const manifestAnimationNames = (animationManifest?.animations ?? []).map((entry) => entry?.name).filter(Boolean);
+  const runtimeKinds = new Set(profile?.animationRuntimeKinds ?? []);
+  const manifestAnimationNames = (animationManifest?.animations ?? [])
+    .filter((entry) => runtimeKinds.size === 0 || runtimeKinds.has(entry?.approved_kind))
+    .map((entry) => entry?.name)
+    .filter(Boolean);
   const clipNames = clips.filter((clip) => clip?.tracks?.length > 0).map((clip) => clip.name);
   if (!sameNames(manifestAnimationNames, expectedAnimations)) errors.push('damage animation manifest does not contain the exact approved animation names');
   const missingAnimations = expectedAnimations.filter((name) => !clipNames.includes(name));

@@ -10,7 +10,14 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { HumanoidCombatActor } from '../src/game/combat/HumanoidCombatActor.js';
 import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
-import { CURRENT_HUMANOID_PROFILE, DREADGUARD_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale, isHumanoidPoseAuthoritative } from '../src/game/combat/HumanoidModelProfiles.js';
+import {
+  CURRENT_HUMANOID_PROFILE,
+  DREADGUARD_DAMAGE_COMBAT_PROFILE,
+  DREADGUARD_IGNORED_GUARD_ANIMATION_NAMES,
+  DREADGUARD_RUNTIME_ANIMATION_NAMES,
+  getHumanoidProfileScale,
+  isHumanoidPoseAuthoritative,
+} from '../src/game/combat/HumanoidModelProfiles.js';
 import { BLOOD_COLOR_PALETTE, BLOOD_EFFECT_CONFIG, SLASH_CONFIG, VESSEL_ZONES, WOUND_CONFIG, validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
 import { COMBAT_KNIFE_VIEWMODEL_LAYER, COMBAT_KNIFE_WORLD_LAYER, KNIFE_EDGE_BASE_SAMPLE_COUNT, KNIFE_EDGE_COLLISION_RADIUS, KNIFE_EDGE_MAX_SAMPLE_COUNT, KNIFE_RUNTIME_COMBAT_MODE, WorldKnifeCombatController, computeBladeSurfaceCorrection, resolveKnifeEdgeSampleCount, resolveSlashLeadingPart, sampleKnifeCuttingEdgeLocal } from '../src/game/combat/WorldKnifeCombatController.js';
 import { KNIFE_CONTROL_STATES, canKnifeCreateOffensiveContact, criticallyDampedReturnProgress, getKnifeReleasePlan } from '../src/game/combat/KnifeControlState.js';
@@ -813,7 +820,7 @@ test('wound and reaction lifecycle keeps one bounded pool while retaining the se
   physics.dispose();
 });
 
-test('Dreadguard holds its exported rest pose kinematically before a dynamic ragdoll handoff', async () => {
+test('Dreadguard holds its exported rest pose kinematically and reserves death for its approved clip', async () => {
   await initializeCombatPhysics();
   const physics = new CombatPhysicsWorld();
   const actor = new HumanoidCombatActor({ physics, scene: new THREE.Scene(), visualProfile: DREADGUARD_DAMAGE_COMBAT_PROFILE });
@@ -837,10 +844,10 @@ test('Dreadguard holds its exported rest pose kinematically before a dynamic rag
   actor.setAnimationAuthorityReady(visualAdapter);
   assert.equal(isHumanoidPoseAuthoritative(DREADGUARD_DAMAGE_COMBAT_PROFILE), true);
   assert.ok([...actor.bodies.values()].every(({ body }) => body.isKinematic()), 'the exported rest pose owns kinematic combat proxies while alive');
-  assert.equal(actor.activateRagdoll({ forced: true }), true);
-  assert.equal(actor.ragdollActive, true);
-  assert.equal(ragdollBeginCount, 1);
-  assert.ok([...actor.bodies.values()].every(({ body }) => body.isDynamic()), 'ragdoll handoff releases every proxy to dynamic physics');
+  assert.equal(actor.activateRagdoll({ forced: true }), false);
+  assert.equal(actor.ragdollActive, false);
+  assert.equal(ragdollBeginCount, 0);
+  assert.ok([...actor.bodies.values()].every(({ body }) => body.isKinematic()), 'approved death animation retains kinematic proxy ownership');
   actor.dispose();
   physics.dispose();
 });
@@ -862,6 +869,8 @@ test('Dreadguard progressive head impacts stay upright through Light and Medium,
   ];
   let stageCallCount = 0;
   let ragdollBeginCount = 0;
+  let deathPlayCount = 0;
+  let hurtPlayCount = 0;
   const visualAdapter = {
     applyForgeMaceDamage: () => ({
       applied: true,
@@ -871,7 +880,14 @@ test('Dreadguard progressive head impacts stay upright through Light and Medium,
       terminalStage: 'HEAVY',
       ...stageResults[stageCallCount++],
     }),
-    playDeathAnimation: () => null,
+    triggerPainReaction: () => {
+      hurtPlayCount += 1;
+      return { name: 'DSB_Hurt_LEFT_Flank_v001' };
+    },
+    playDeathAnimation: () => {
+      deathPlayCount += 1;
+      return { name: 'DSB_Death_KneesFirst_RIGHT_v001' };
+    },
     beginRagdoll: () => { ragdollBeginCount += 1; return true; },
     getProxyPose: (bodyId) => {
       const body = actor.bodies.get(bodyId)?.body;
@@ -908,12 +924,14 @@ test('Dreadguard progressive head impacts stay upright through Light and Medium,
     const light = actor.applyBluntImpact({ hit, impact: createImpact(1) });
     assert.equal(light.forgeDamage.stage, 'LIGHT');
     assert.equal(light.fatalHeadHitTriggered, false);
+    assert.equal(hurtPlayCount, 1);
     assert.equal(actor.lifeState, 'alive');
     assert.ok([...actor.bodies.values()].every(({ body }) => body.isKinematic()));
 
     const medium = actor.applyBluntImpact({ hit, impact: createImpact(2) });
     assert.equal(medium.forgeDamage.stage, 'MEDIUM');
     assert.equal(medium.fatalHeadHitTriggered, false);
+    assert.equal(hurtPlayCount, 2);
     assert.equal(actor.lifeState, 'alive');
     assert.ok([...actor.bodies.values()].every(({ body }) => body.isKinematic()));
 
@@ -922,10 +940,12 @@ test('Dreadguard progressive head impacts stay upright through Light and Medium,
     assert.equal(heavy.fatalHeadHitTriggered, true);
     assert.equal(heavy.collapseRequested, true);
     assert.equal(actor.lifeState, 'dying');
-    assert.equal(actor.ragdollActive, true);
-    assert.equal(ragdollBeginCount, 1);
+    assert.equal(actor.ragdollActive, false);
+    assert.equal(ragdollBeginCount, 0);
+    assert.equal(deathPlayCount, 1);
+    assert.equal(hurtPlayCount, 2, 'terminal Heavy starts the death clip directly instead of briefly starting hurt');
     assert.equal(actor.fatalMaceHeadImpactActivationCount, 1);
-    assert.ok([...actor.bodies.values()].every(({ body }) => body.isDynamic()));
+    assert.ok([...actor.bodies.values()].every(({ body }) => body.isKinematic()));
   } finally {
     actor.dispose();
     physics.dispose();
@@ -1587,7 +1607,7 @@ test('Folsom keeps one stationary Dreadguard and routes all three walkers indepe
   assert.equal(scene.children.some((child) => child.name.startsWith('folsom-authored-walker-')), false);
 });
 
-test('loaded Dreadguard damage bundle preserves world scale and the no-animation baseline contract', async () => {
+test('loaded Dreadguard damage bundle preserves world scale and the selected approved-animation contract', async () => {
   globalThis.self ??= globalThis;
   globalThis.ProgressEvent ??= class ProgressEvent { constructor(type, init = {}) { this.type = type; Object.assign(this, init); } };
   globalThis.createImageBitmap ??= async () => ({ width: 1, height: 1, close() {} });
@@ -1616,15 +1636,16 @@ test('loaded Dreadguard damage bundle preserves world scale and the no-animation
   const normalized = measureVisibleSkinnedBounds(root);
   assert.ok(Math.abs(normalized.getSize(new THREE.Vector3()).y - 1.5) < 1e-6);
   assert.deepEqual(root.scale.toArray(), [uniformScale, uniformScale, uniformScale]);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationAuthoritative, false);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.restPoseAuthoritative, true);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationAuthoritative, true);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.restPoseAuthoritative, false);
   assert.equal(isHumanoidPoseAuthoritative(DREADGUARD_DAMAGE_COMBAT_PROFILE), true);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.authoredDeathAnimations, false);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.noAnimationFallback, 'exported_rest_pose');
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationManifestPath, undefined);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoreEmbeddedAnimations, true);
-  assert.equal(gltf.animations.length, 7, 'the bundle clips are present but intentionally not registered as an authored animation pack');
-  assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.damageExpectedAnimationNames, []);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.authoredDeathAnimations, true);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.holdingPoseMode, 'exported_rest_pose');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationManifestPath, './assets/enemies/dreadguard/animations/dreadguard_animpack_v003.json');
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoreEmbeddedAnimations, false);
+  assert.equal(gltf.animations.length, 7, 'the combined combat bundle contains all approved pack v003 clips');
+  assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.damageExpectedAnimationNames, DREADGUARD_RUNTIME_ANIMATION_NAMES);
+  assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoredEmbeddedAnimationNames, DREADGUARD_IGNORED_GUARD_ANIMATION_NAMES);
   assert.notEqual(CURRENT_HUMANOID_PROFILE.assetPath, DREADGUARD_DAMAGE_COMBAT_PROFILE.assetPath);
   assert.notEqual(CURRENT_HUMANOID_PROFILE.boneMap, DREADGUARD_DAMAGE_COMBAT_PROFILE.boneMap);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.assetPath, './assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb');
