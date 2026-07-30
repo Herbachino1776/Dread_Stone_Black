@@ -1,41 +1,68 @@
 # Dreadstone Black 2.0 Development Handoff
 
-<!-- last_processed_sha: d15407e34a017b299e03134a0840c557f018b647 -->
+<!-- last_processed_sha: b45183fdf5c2fc131f43ffa859d2705a72f37ddc -->
 
 ## Current Handoff Snapshot
 
 ### Verified implementation
 
-- **Dreadguard remains the canonical humanoid combat character.** Folsom Field and Combat Lab use `public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb`, its Forge manifest, and validation report through `DREADGUARD_DAMAGE_COMBAT_PROFILE` in `src/game/combat/HumanoidModelProfiles.js`.
-- **The Forge manifest remains authoritative for character segmentation and progressive damage.** Runtime validation owns intact objects, attached/detached relationships, deformation regions, morph targets, generated gore nodes, progressive sites, stage anchors, and ownership transfer.
-- **Progressive mace damage now floors accepted hits at an exact authored stage.** `ForgeDamageDeformationRuntime.js` accepts glancing, committed, and heavy blunt classifications for progressive sites, while non-damaging contacts remain rejected. A sub-Light interpolated deformation may exist visually without claiming a named stage or showing stage gore; the next qualifying hit resolves to exact Light rather than accidentally consuming it.
-- **The left-head progressive proof remains Light → Medium → Heavy.** Light is non-terminal, Medium is non-terminal, and Heavy is the terminal fatal commitment point. Named stage diagnostics and gore state now remain `null` until an exact stage anchor is reached.
-- **The Dreadstone sword now uses a uniform authoritative combat scale of `0.85`.** Source dimensions are retained separately, then scaled for collision primitives, maximum penetration, blade geometry, fallback presentation, and diagnostics. The workspace is offset to preserve prior tip reach despite the smaller model.
-- **Close-range sword thrust entry has a second authored probe.** A thrust first sweeps the actual tip; when that misses, it sweeps from the blade heel to catch close enemies already inside the tip path. Successful heel-probe entry reconstructs the actual tip impact position before routing impalement, and diagnostics track tip versus blade-heel entry sweeps/hits.
-- **Sword collision and presentation scale are unified.** The GLB visual root and fallback visual receive the same `0.85` scale used by combat dimensions and contact radii, reducing visible-versus-physical mismatch rather than scaling presentation alone.
-- **The exported Dreadguard rest pose remains authoritative while alive.** The profile remains non-animation-authoritative, normalizes to 1.5 m, applies the authored-axis yaw correction, drives kinematic proxy bodies, and hands off to dynamic ragdoll on terminal collapse.
-- **Folsom close-combat systems remain active.** Tight walker hold spacing, player/enemy separation, knife-parity sword impalement and planted reacquisition, direct physical Dreadmace control, weighted piercing lethality, combat audio, ambience, showcase dismemberment, and persistent mace acquisition remain unless superseded above.
-- **Regression coverage was extended.** Sword tests now assert the 0.85 source-to-runtime dimension contract, preserved tip reach, scaled visual roots, and close-range blade-heel entry behavior. Dreadguard tests now assert that sub-Light blends do not claim Light or stage gore, glancing hits resolve exact Light, and non-damaging contacts do not advance the site. The record does not claim tests, build, validation, or CI executed successfully.
+- **Dreadguard remains the canonical humanoid combat character.** Folsom Field and Combat Lab use the Forge-authored Dreadguard damage asset/profile, with manifest-driven segmentation, progressive damage, gore ownership, and terminal ragdoll handoff.
+- **Approved Dreadguard animation playback is now enabled.** `public/assets/enemies/dreadguard/animations/dreadguard_animpack_v003.json` and its validation report define seven approved clips: walk, left/right hurt, three mace head-guard variants, and a knees-first death. `HumanoidModelProfiles.js`, `HumanoidAnimationPackController.js`, `HumanoidGlbVisualAdapter.js`, actor/death/walker integration, and validation/tests were updated to consume that pack.
+- **Animation authority now supersedes the prior alive rest-pose-only behavior when an approved clip is active.** The controller resolves approved kinds, clip metadata, looping/play-once behavior, final-pose holding, and return-to-previous-state behavior. The knees-first death is authored to hold its terminal pose before the existing collapse handoff; left/right hurt clips return to the previous state; walk loops.
+- **Mace defense has three authored emergency head-guard variants.** Left-arm, right-arm, and two-arm clips carry marker timing, presented-region metadata, interruptibility, in-place root-motion policy, and guard-active times. Export validation passes, but the manifest contains explicit warnings that forearm-to-head visual coverage may be outside the authored coverage limit.
+- **Forge portable surface stains are integrated into progressive damage.** The Dreadguard damage GLB/manifest/validation contract was regenerated under the `2026-07-29.portable-surface-stains.1` build. Runtime/profile/segment/visual/Folsom integration now consumes manifest-owned surface-stain data alongside deformation and gore state rather than deriving stain behavior from JavaScript naming conventions.
+- **Surface-stain state follows progressive-site lifecycle and ownership.** `ForgeDamageDeformationRuntime.js`, `HumanoidDamageSegmentRuntime.js`, and `HumanoidGlbVisualAdapter.js` were expanded so authored stain bindings can be validated, applied with progressive damage, reset, diagnosed, and transferred with attached/detached ownership.
+- **Progressive mace stage semantics remain exact-anchor based.** Sub-Light interpolation does not claim Light or stage gore; qualifying glancing, committed, and heavy blunt impacts can advance authored stages, while non-damaging contacts remain rejected. The left-head proof remains Light → Medium → Heavy, with Heavy terminal.
+- **Sword scale and close-range thrust behavior remain active.** The sword uses the shared `0.85` render/collision scale, preserved tip reach, and a blade-heel fallback probe after a true tip sweep misses.
+- **Validation evidence is limited to checked-in artifacts and assertions.** The new animation-pack validation JSON reports `PASS`, seven expected/exported clips, no missing/unexpected/duplicate clips, and no preview floor. The damage validation report reports `PASS` with one warning that draft site `Left Head` was omitted from export. Tests and `validate-combat` assertions were expanded, but this record does not claim the project test suite, build, or CI ran successfully.
 
 ### Important design decisions
 
-- The Forge manifest, not JavaScript naming conventions, owns progressive stage identities, anchors, morph bindings, and gore ownership.
-- Interpolated deformation below the first authored anchor is not an exact damage stage. Named stage and gore state begin only when an authored anchor is reached.
-- Glancing blunt impacts are permitted to produce the exact Light progressive stage; non-damaging contact classifications are not.
-- Sword render scale, collision dimensions, contact primitives, and penetration limits must share one authoritative scale constant.
-- Reducing sword size must not silently reduce practical forward reach; workspace compensation preserves the prior tip envelope.
-- Close-range impalement may use an interior blade-entry probe only as a fallback after the true tip sweep misses, while routed impact geometry remains based on the actual sword tip.
+- Forge manifests remain authoritative for progressive sites, stages, morphs, gore nodes, surface stains, and attached/detached ownership.
+- Approved animation identity and playback policy come from the animation-pack manifest; runtime code should not infer clip semantics from arbitrary clip names alone.
+- Animation authority is conditional: approved active clips may drive the visible rig, while combat proxies, damage state, and terminal physics remain separate systems that must stay synchronized.
+- Guard-active timing and presented regions are authored data. A validation `PASS` does not erase explicit visual-coverage warnings.
+- Interpolated deformation below the first authored anchor is not a named damage stage and must not expose named-stage gore.
+- Sword visual scale, physical dimensions, contact radii, penetration limits, and reach compensation continue to share one contract.
 
 ### Risks, inference, and next logical work
 
-- **Verified risk surface:** The close-range blade-heel probe broadens entry detection. Live validation should confirm it fixes enemies already inside the tip arc without producing side-on or behind-the-guard false impalements.
-- **Verified risk surface:** Sword reach compensation preserves the tip envelope while the guard, grip, thickness, and contact radii shrink. Collision feel near the hand and at oblique angles may therefore change independently from maximum reach.
-- **Verified risk surface:** Allowing glancing blunt classification to advance progressive damage makes classification thresholds presentation-critical. Repeated low-energy contacts must be checked to ensure they do not qualify unexpectedly.
-- **Verified risk surface:** Sub-Light morph weight can exist with no named stage or gore. Diagnostics and debug tooling must continue to distinguish interpolated visual state from exact stage ownership.
-- **Inference:** The sword changes appear intended to improve visual proportion and close-body impalement reliability, but the diffs do not establish final scale approval or gameplay feel.
-- **Next logical work:** Run the focused sword and Dreadguard tests plus `npm run validate:combat`, `npm run validate:folsom`, and `npm run build`. In live play, verify sword visual/collider alignment, preserved forward reach, close-range chest/head thrust entry, no heel-probe false positives, planted extraction/reacquisition after heel entry, Light/Medium/Heavy mace progression, sub-Light diagnostic state, glancing-hit qualification, and rejection of non-damaging contacts.
+- **Verified risk surface:** The animation GLB referenced by `dreadguard_animpack_v003.json` is not listed as added in the processed commit diff, while the JSON and validation files are. Confirm the runtime asset path resolves in a clean checkout and packaged build.
+- **Verified risk surface:** All three mace guard exports pass validation but include warnings that the presented forearm may not visually cover the head at `Guard_Active`. Treat guard timing/coverage as needing live visual and combat-contact verification.
+- **Verified risk surface:** Enabling animation authority changes transforms consumed by kinematic proxy, damage-segment, blocker, weapon-contact, and ragdoll systems. Verify no visible/physical drift during walk, hurt, guard interruption, death hold, and collapse handoff.
+- **Verified risk surface:** Portable surface stains add another manifest-owned presentation layer that must remain synchronized across progressive advancement, reset, detachment, and attached/detached ownership transfer.
+- **Inference:** The surface-stain work appears intended to make blood/impact marking portable with Forge-authored damage assets, but the diffs do not establish final art approval or live-play readability.
+- **Next logical work:** Run focused animation, Dreadguard damage, walker, Folsom, and combat-foundation tests, then `npm run validate:combat`, `npm run validate:folsom`, and `npm run build`. In live play, verify animation asset loading, walk cadence, hurt-side selection and recovery, each guard’s activation/interrupt behavior and actual head coverage, knees-first death/final-pose/ragdoll transition, proxy alignment, progressive stain appearance and cleanup, detachment ownership transfer, and no regressions to exact Light/Medium/Heavy mace progression or sword impalement.
 
 ## Development History
+
+### 2026-07-30 02:04 EDT — Update through `b45183f`
+
+**Scanned range:** after canonical checkpoint `d15407e34a017b299e03134a0840c557f018b647` through observed `main` HEAD `b45183fdf5c2fc131f43ffa859d2705a72f37ddc`. The `6004de4` commit was ignored because its message begins with `docs(devlog):` and its change was the canonical record. Two development commits were included.
+
+**Included commits, chronological:**
+
+- `3f5ae16` — feat(combat): integrate Forge surface stains
+- `b45183f` — feat(combat): enable approved Dreadguard animations
+
+**Grouped development steps:**
+
+1. **Forge-authored portable surface stains**
+   - Regenerated `public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb`, its manifest, and validation output under Forge authoring version `4.0.0` / build `2026-07-29.portable-surface-stains.1`.
+   - Expanded `ForgeDamageDeformationRuntime.js` to validate and manage manifest-owned stain data with progressive deformation, diagnostics, reset, and lifecycle state.
+   - Updated `HumanoidDamageSegmentRuntime.js`, `HumanoidGlbVisualAdapter.js`, `HumanoidModelProfiles.js`, and `FolsomCombatEncounter.js` to bind and present stain state with the Dreadguard damage profile.
+   - Extended `scripts/validate-combat.mjs`, `tests/combat-foundation.test.mjs`, and `tests/dreadguard-damage-segments.test.mjs` for the new contract.
+   - The checked-in damage validation artifact reports `PASS` and carries a warning that draft site `Left Head` was omitted from export; no broader test/build result is asserted.
+
+2. **Approved Dreadguard animation pack**
+   - Added `dreadguard_animpack_v003.json` and `dreadguard_animpack_v003_validation.json`, describing seven approved animations: walk, bilateral hurt, three mace head guards, and a knees-first death.
+   - Added manifest-backed clip selection and playback policy in `HumanoidAnimationPackController.js`, including loop, play-once, hold-final-pose, return-state, guard markers, and approved-kind handling.
+   - Updated `HumanoidGlbVisualAdapter.js`, `HumanoidCombatActor.js`, `AuthoredHumanoidDeathController.js`, `CombatLabWalkerController.js`, `FolsomCombatEncounter.js`, `HumanoidDamageSegmentRuntime.js`, and `HumanoidModelProfiles.js` so approved animation authority can coexist with combat, damage, walker, and death systems.
+   - Expanded combat, walker, Folsom, and Dreadguard regression assertions plus combat validation checks.
+   - The animation validation artifact reports `PASS`, seven expected/exported clips, no missing/unexpected/duplicate clips, and warnings on all three mace guards that forearm-to-head visual coverage may need adjustment.
+
+3. **Validation evidence**
+   - Checked-in Forge validation artifacts report `PASS`, and tests/validation scripts were changed. No successful repository test suite, build, live-play validation, or CI run is asserted by this record.
 
 ### 2026-07-29 18:30 EDT — Update through `d15407e`
 
