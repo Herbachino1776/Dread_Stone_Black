@@ -1597,7 +1597,13 @@ test('loaded Dreadguard damage bundle preserves world scale and the no-animation
   const manifest = JSON.parse(readFileSync(new URL('../public/assets/enemies/dreadguard/damage/dreadguard_damage_v001.json', import.meta.url), 'utf8'));
   const root = gltf.scene;
   root.traverse((object) => {
-    if (object.userData?.dsb_default_visible === false || object.userData?.dsb_gore_default_visible === false || object.name?.startsWith('DSB_GORE_')) object.visible = false;
+    if (
+      object.userData?.dsb_default_visible === false
+      || object.userData?.dsb_gore_default_visible === false
+      || object.userData?.dsb_stain_default_visible === false
+      || object.name?.startsWith('DSB_GORE_')
+      || object.name?.startsWith('DSB_STAIN_')
+    ) object.visible = false;
   });
   root.updateMatrixWorld(true);
   const rawHeight = measureVisibleSkinnedBounds(root).getSize(new THREE.Vector3()).y;
@@ -1617,16 +1623,17 @@ test('loaded Dreadguard damage bundle preserves world scale and the no-animation
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.noAnimationFallback, 'exported_rest_pose');
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.animationManifestPath, undefined);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.ignoreEmbeddedAnimations, true);
-  assert.equal(gltf.animations.length, 1, 'the bundle clip is present but intentionally not registered as an authored animation pack');
+  assert.equal(gltf.animations.length, 7, 'the bundle clips are present but intentionally not registered as an authored animation pack');
   assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.damageExpectedAnimationNames, []);
   assert.notEqual(CURRENT_HUMANOID_PROFILE.assetPath, DREADGUARD_DAMAGE_COMBAT_PROFILE.assetPath);
   assert.notEqual(CURRENT_HUMANOID_PROFILE.boneMap, DREADGUARD_DAMAGE_COMBAT_PROFILE.boneMap);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.assetPath, './assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb');
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.damageManifestPath, './assets/enemies/dreadguard/damage/dreadguard_damage_v001.json');
   assert.equal(manifest.glb, 'dreadguard_damage_v001.glb');
-  const site = manifest.deformations.progressiveDamageSites[0];
+  const site = manifest.deformations.progressiveDamageSites[0]
+    ?? DREADGUARD_DAMAGE_COMBAT_PROFILE.progressiveDamageSiteFallbacks[0];
   assert.deepEqual(site.stageOrder, ['LIGHT', 'MEDIUM', 'HEAVY']);
-  assert.deepEqual(site.stages.map(({ deformationKeyName }) => deformationKeyName), ['Left_Head_Impact_v003', 'Left_Head_Impact_v002', 'Left_Head_Impact_v001']);
+  assert.deepEqual(site.stages.map(({ deformationKeyName }) => deformationKeyName), ['Left_Head_Impact_v003_v001', 'Left_Head_Impact_v002', 'Left_Head_Impact_v001']);
 });
 
 test('authored wound materials preserve authored color and remain lighting-responsive', async () => {

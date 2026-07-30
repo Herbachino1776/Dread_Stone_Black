@@ -2,7 +2,7 @@
   "schema": "dreadstone.damage_authoring.v1",
   "authoringVersion": "3.9.1",
   "authoringBuildId": "2026-07-18.source-contract.1",
-  "generatedAtUtc": "2026-07-29T14:09:30Z",
+  "generatedAtUtc": "2026-07-30T01:44:10Z",
   "glb": "dreadguard_damage_v001.glb",
   "source": {
     "object": "SBF_CLEAN_CHARACTER",
@@ -4871,8 +4871,8 @@
   ],
   "deformations": {
     "schema": "dreadstone.damage_deformation.v1",
-    "authoringVersion": "3.20.0",
-    "authoringBuildId": "2026-07-28.progressive-damage-sites.1",
+    "authoringVersion": "4.0.0",
+    "authoringBuildId": "2026-07-29.portable-surface-stains.1",
     "activeRegionId": "head",
     "authoredRegionIds": [
       "head"
@@ -4893,7 +4893,7 @@
         "managedKeyNames": [
           "Left_Head_Impact_v001",
           "Left_Head_Impact_v002",
-          "Left_Head_Impact_v003"
+          "Left_Head_Impact_v003_v001"
         ],
         "validationStatus": "PASS",
         "keys": [
@@ -5261,6 +5261,87 @@
               "activateWithDeformationKey": "Left_Head_Impact_v001",
               "retainThroughDeathAndCorpsePersistence": true,
               "runtimeImplementationIncluded": false
+            },
+            "surfaceStainBindingSchema": "dreadstone.surface_stain_binding.v1",
+            "surfaceStainBindings": [
+              {
+                "schema": "dreadstone.surface_stain_binding.v1",
+                "meshId": "stain_mesh_539f887ae29abd6152de",
+                "nodeName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v001",
+                "materialName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v001_MAT",
+                "textureName": "",
+                "attributeName": "DSB_Surface_Stain_RGBA",
+                "attributeSemantic": "COLOR_0",
+                "maskEncoding": "COLOR_0_RGBA_ALPHA",
+                "regionId": "head",
+                "deformationKey": "Left_Head_Impact_v001",
+                "ownershipRole": "ATTACHED",
+                "sourceObject": "DSB_ATTACHED_HEAD",
+                "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+                "morphTarget": "Left_Head_Impact_v001",
+                "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+                "defaultVisible": false,
+                "activationWeight": 0.01,
+                "triangleCount": 140,
+                "alphaMode": "BLEND",
+                "portableRepresentation": "VERTEX_COLOR_RGBA",
+                "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+                "portableArtifactIncluded": true,
+                "runtimeImplementationIncluded": false,
+                "rendererRequirements": {
+                  "glTFVersion": "2.0",
+                  "materialModel": "PBR_METALLIC_ROUGHNESS",
+                  "alphaMode": "BLEND",
+                  "embeddedTexture": false,
+                  "vertexColorSemantic": "COLOR_0",
+                  "requiresNodeVisibilityToggle": true,
+                  "requiresMorphWeightBinding": true,
+                  "threeJsLoader": "GLTFLoader"
+                }
+              },
+              {
+                "schema": "dreadstone.surface_stain_binding.v1",
+                "meshId": "stain_mesh_6d346d3a59e01774166b",
+                "nodeName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v001",
+                "materialName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v001_MAT",
+                "textureName": "",
+                "attributeName": "DSB_Surface_Stain_RGBA",
+                "attributeSemantic": "COLOR_0",
+                "maskEncoding": "COLOR_0_RGBA_ALPHA",
+                "regionId": "head",
+                "deformationKey": "Left_Head_Impact_v001",
+                "ownershipRole": "DETACHED",
+                "sourceObject": "DSB_SEGMENT_HEAD",
+                "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+                "morphTarget": "Left_Head_Impact_v001",
+                "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+                "defaultVisible": false,
+                "activationWeight": 0.01,
+                "triangleCount": 140,
+                "alphaMode": "BLEND",
+                "portableRepresentation": "VERTEX_COLOR_RGBA",
+                "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+                "portableArtifactIncluded": true,
+                "runtimeImplementationIncluded": false,
+                "rendererRequirements": {
+                  "glTFVersion": "2.0",
+                  "materialModel": "PBR_METALLIC_ROUGHNESS",
+                  "alphaMode": "BLEND",
+                  "embeddedTexture": false,
+                  "vertexColorSemantic": "COLOR_0",
+                  "requiresNodeVisibilityToggle": true,
+                  "requiresMorphWeightBinding": true,
+                  "threeJsLoader": "GLTFLoader"
+                }
+              }
+            ],
+            "surfaceStainActivationContract": {
+              "defaultVisible": false,
+              "activateWithDeformationKey": "Left_Head_Impact_v001",
+              "activationWeight": 0.01,
+              "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+              "portableArtifactIncluded": true,
+              "runtimeImplementationIncluded": false
             }
           },
           {
@@ -5378,13 +5459,13 @@
                 "macros": {
                   "exposure": 100.0,
                   "cavity": 100.0,
-                  "clotFill": 59.94898223876953,
+                  "clotFill": 17.192981719970703,
                   "breakup": 0.0,
-                  "wetness": 68.0,
+                  "wetness": 2.2657365798950195,
                   "variation": 2.653062343597412
                 },
                 "seed": 492281812,
-                "identityDigest": "ab685355b75fc495aa30d302f3298ff2a34c6dbed8bbd435a88b4792be5c68d9"
+                "identityDigest": "10e293f2581ca1025b8febfcddb8c3ae1cb430a9af1f9507061e8e2689e3591b"
               },
               "goreSurfaceControl": {
                 "schema": "dreadstone.surface_gore_control.v1",
@@ -5394,15 +5475,15 @@
                   "relief": 0.0,
                   "nucleus": 100.0,
                   "lobes": 100.0,
-                  "redness": 43.87099838256836
+                  "redness": 100.0
                 },
-                "identityDigest": "8f540a1830382b69a51958396e37a9dd9f4a187fc18e4e1a07a0803dcac739e9"
+                "identityDigest": "51f1178956eed61724570f8528a88dec1feb557fc07acd7f73e27e8657b84ec8"
               },
-              "goreCoverage": 0.9120408296585083,
+              "goreCoverage": 0.9462456107139587,
               "goreScatter": 0.07999999821186066,
               "goreEdgeFeather": 1.0,
-              "goreWetness": 0.7288821339607239,
-              "goreDarkness": 0.5318707823753357,
+              "goreWetness": 0.04479935020208359,
+              "goreDarkness": 0.23999999463558197,
               "goreColorBias": [
                 0.30000001192092896,
                 0.00800000037997961,
@@ -5420,15 +5501,15 @@
               "gorePeripheralFragments": 0.8329668641090393,
               "goreSurfaceOffset": 0.0006589597905986011,
               "goreGeometryDensity": 0.44573864340782166,
-              "goreWetnessVariation": 0.20399999618530273,
-              "goreDarkClotBias": 0.6279028058052063,
+              "goreWetnessVariation": 0.006797209847718477,
+              "goreDarkClotBias": 0.32480621337890625,
               "goreRoughEdgeBias": 0.7530004978179932,
-              "goreColorIntensity": 0.6407743692398071,
+              "goreColorIntensity": 1.0,
               "goreOrganicIrregularity": 0.9599999785423279,
               "goreSurfaceRoundness": 0.07999999821186066,
               "goreTextureEnabled": true,
               "goreFiberTextureStrength": 0.4925000071525574,
-              "goreBaseColorStrength": 0.5790324807167053,
+              "goreBaseColorStrength": 1.0,
               "goreInnerRimEnabled": true,
               "goreInnerRimWidth": 0.011867282912135124,
               "goreInnerRimStrength": 0.8999999761581421,
@@ -5439,11 +5520,11 @@
               "goreCavityDepth": 0.006242902483791113,
               "goreLinerSeparation": 0.001124624628573656,
               "goreRimWidth": 0.011867282912135124,
-              "goreClotFillDepth": 0.0020114248618483543,
+              "goreClotFillDepth": 0.0030257266480475664,
               "goreProudnessLimit": 0.0,
               "goreHostDeformationContribution": 1.0,
-              "goreBoneReveal": 0.11151544004678726,
-              "goreTissueCoverage": 0.17059285938739777,
+              "goreBoneReveal": 0.2764725387096405,
+              "goreTissueCoverage": 0.2115360051393509,
               "goreWoundBedEnabled": true,
               "goreClotLayerEnabled": true,
               "goreTissueLayerEnabled": false,
@@ -5461,7 +5542,7 @@
               "linkedCaptureTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
               "validationStatus": "PASS"
             },
-            "goreOverlayDigest": "0c1e553468e42f4140013a72f6fa9f50b3924ae9175c62f3e1568e53f7dd4ae1",
+            "goreOverlayDigest": "6c2a0ce173a4f3a3211c8e0c4f4b5c63bec2c4fcbf1775b7205259b8adee592f",
             "goreOverlayEnabled": true,
             "goreOverlayMode": "STAIN_AND_RAISED",
             "goreGeometryMode": "HYBRID_ADDITIVE",
@@ -5477,13 +5558,13 @@
               "macros": {
                 "exposure": 100.0,
                 "cavity": 100.0,
-                "clotFill": 59.94898223876953,
+                "clotFill": 17.192981719970703,
                 "breakup": 0.0,
-                "wetness": 68.0,
+                "wetness": 2.2657365798950195,
                 "variation": 2.653062343597412
               },
               "seed": 492281812,
-              "identityDigest": "ab685355b75fc495aa30d302f3298ff2a34c6dbed8bbd435a88b4792be5c68d9"
+              "identityDigest": "10e293f2581ca1025b8febfcddb8c3ae1cb430a9af1f9507061e8e2689e3591b"
             },
             "goreSurfaceControl": {
               "schema": "dreadstone.surface_gore_control.v1",
@@ -5493,9 +5574,9 @@
                 "relief": 0.0,
                 "nucleus": 100.0,
                 "lobes": 100.0,
-                "redness": 43.87099838256836
+                "redness": 100.0
               },
-              "identityDigest": "8f540a1830382b69a51958396e37a9dd9f4a187fc18e4e1a07a0803dcac739e9"
+              "identityDigest": "51f1178956eed61724570f8528a88dec1feb557fc07acd7f73e27e8657b84ec8"
             },
             "gorePresetId": "USER_AUTHORED",
             "goreIntensityClass": "HIGH",
@@ -5518,21 +5599,21 @@
               "DSB_GORE_DETACHED_head_Left_Head_Impact_v002_INLAY"
             ],
             "goreGeometryDigests": {
-              "ATTACHED:INLAY": "e8ac38a82c572820513e05885c871eabfdcfbdbee9a61919524cc9f7ad7b8ffe",
-              "ATTACHED:RAISED": "70df8428cdd5690fa3e60fdc27a079e8a418f22963f290a644c8e325062e01f4",
-              "DETACHED:INLAY": "4e743f48abe2799139703dfeda1e48a032d8893cd535b37b49f01a8b747bc33f",
-              "DETACHED:RAISED": "01abc965a20471c812379fc26acab75e7079b4cf2ed1bcf8c8bd6338341de2d5"
+              "ATTACHED:INLAY": "5d8d176ae6fa262f4a534c037930adfda84f8ccce110df1b1fe26b0bd99cdcb4",
+              "ATTACHED:RAISED": "91a642e7b9b12d93b49351df987ae97e8cb060c49e80affbf4ef6eb789efc39d",
+              "DETACHED:INLAY": "97ade576d388e16c626f7c2987ee09d02182da2fa9d744e9bb3e219ffda93788",
+              "DETACHED:RAISED": "f27b75822f4c016fb5c42cd3567596f0aa762102aab4ea1ac855facc49d4419a"
             },
             "goreGenerationDigests": {
-              "ATTACHED:INLAY": "ea3b3ffab9c093d690bd637f6ab1bdab8866f35ec2845ea871ea02a8b62b17c3",
-              "ATTACHED:RAISED": "b83348ad95e62c5aea51b5bcdb78a00d1aa6a2add72977497655f1390d96ac40",
-              "DETACHED:INLAY": "55918f7eecda5e14a9a4678323a3a0ae75e32ffc52ddd008bc8521c0fd67cd88",
-              "DETACHED:RAISED": "90c41dd3979e91f1d2ec4a8b41f8f35b4e875817eb07e18e0a95027db315296e"
+              "ATTACHED:INLAY": "38431bac5527f2529b44deba78ed8c718c8a413e11d0a2aab51aac538bb82b85",
+              "ATTACHED:RAISED": "960d079e4c49da71d6f593e69da816e132a1c6d2d2641c507eec868f567174fe",
+              "DETACHED:INLAY": "cea6448b43afe045136564cd4c56b7bd7260aad01b20f31485bf1f9a63148712",
+              "DETACHED:RAISED": "2d2512ab1f2e3c2c5924f4e845b4bbcc096c8ff9288c7ec8240cb16b88b145c6"
             },
             "goreTriangleCounts": {
-              "ATTACHED:INLAY": 1024,
+              "ATTACHED:INLAY": 1072,
               "ATTACHED:RAISED": 2028,
-              "DETACHED:INLAY": 1024,
+              "DETACHED:INLAY": 1072,
               "DETACHED:RAISED": 2028
             },
             "goreMaterialIds": [
@@ -5544,20 +5625,20 @@
               "DSB_GORE_WET_CRIMSON"
             ],
             "goreMaterialNames": [
-              "DSB_GORE_CRUSHED_TISSUE_3325ead6",
-              "DSB_GORE_CRUSHED_TISSUE_8ecdf54f",
-              "DSB_GORE_DARK_CLOT_3325ead6",
-              "DSB_GORE_DARK_CLOT_8ecdf54f",
-              "DSB_GORE_DEEP_WOUND_BED_8ecdf54f",
-              "DSB_GORE_EXPOSED_BONE_8ecdf54f",
-              "DSB_GORE_ROUGH_EDGE_3325ead6",
-              "DSB_GORE_ROUGH_EDGE_8ecdf54f",
-              "DSB_GORE_WET_CRIMSON_3325ead6",
-              "DSB_GORE_WET_CRIMSON_8ecdf54f"
+              "DSB_GORE_CRUSHED_TISSUE_66243447",
+              "DSB_GORE_CRUSHED_TISSUE_e1929c49",
+              "DSB_GORE_DARK_CLOT_66243447",
+              "DSB_GORE_DARK_CLOT_e1929c49",
+              "DSB_GORE_DEEP_WOUND_BED_e1929c49",
+              "DSB_GORE_EXPOSED_BONE_e1929c49",
+              "DSB_GORE_ROUGH_EDGE_66243447",
+              "DSB_GORE_ROUGH_EDGE_e1929c49",
+              "DSB_GORE_WET_CRIMSON_66243447",
+              "DSB_GORE_WET_CRIMSON_e1929c49"
             ],
             "goreValidationMeasurements": {
               "ATTACHED:INLAY": {
-                "generatedVertexCount": 618,
+                "generatedVertexCount": 646,
                 "layerDepths": {
                   "BARRIER": {
                     "maximum": 0.004126964523456991,
@@ -5565,9 +5646,9 @@
                     "minimum": 0.0036208834405988453
                   },
                   "CLOT": {
-                    "maximum": 0.0025175059447064994,
-                    "median": 0.002264465403277427,
-                    "minimum": 0.0020114248618483543
+                    "maximum": 0.0035318077309057115,
+                    "median": 0.003278767189476639,
+                    "minimum": 0.0030257266480475664
                   },
                   "LINER": {
                     "maximum": 0.0062684734573953535,
@@ -5576,7 +5657,7 @@
                   },
                   "RIM": {
                     "maximum": 0.003173401486974989,
-                    "median": 0.002221679737219992,
+                    "median": 0.002219541996013512,
                     "minimum": 0.0013575520087971797
                   }
                 },
@@ -5586,10 +5667,10 @@
                 "medianLinerDepth": 0.005024493748468151,
                 "minimumSkinToLinerSeparation": 0.0023796128822281574,
                 "percentVerticesAboveLimit": 0.0,
-                "triangleCount": 1024
+                "triangleCount": 1072
               },
               "DETACHED:INLAY": {
-                "generatedVertexCount": 618,
+                "generatedVertexCount": 646,
                 "layerDepths": {
                   "BARRIER": {
                     "maximum": 0.004126964523456991,
@@ -5597,9 +5678,9 @@
                     "minimum": 0.0036208834405988453
                   },
                   "CLOT": {
-                    "maximum": 0.0025175059447064994,
-                    "median": 0.002264465403277427,
-                    "minimum": 0.0020114248618483543
+                    "maximum": 0.0035318077309057115,
+                    "median": 0.003278767189476639,
+                    "minimum": 0.0030257266480475664
                   },
                   "LINER": {
                     "maximum": 0.0062684734573953535,
@@ -5608,7 +5689,7 @@
                   },
                   "RIM": {
                     "maximum": 0.003173401486974989,
-                    "median": 0.002221679737219992,
+                    "median": 0.002219541996013512,
                     "minimum": 0.0013575520087971797
                   }
                 },
@@ -5618,7 +5699,7 @@
                 "medianLinerDepth": 0.005024493748468151,
                 "minimumSkinToLinerSeparation": 0.0023796128822281574,
                 "percentVerticesAboveLimit": 0.0,
-                "triangleCount": 1024
+                "triangleCount": 1072
               }
             },
             "goreActivationContract": {
@@ -5627,11 +5708,92 @@
               "activateWithDeformationKey": "Left_Head_Impact_v002",
               "retainThroughDeathAndCorpsePersistence": true,
               "runtimeImplementationIncluded": false
+            },
+            "surfaceStainBindingSchema": "dreadstone.surface_stain_binding.v1",
+            "surfaceStainBindings": [
+              {
+                "schema": "dreadstone.surface_stain_binding.v1",
+                "meshId": "stain_mesh_ac95213280779b39ad4d",
+                "nodeName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v002",
+                "materialName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v002_MAT",
+                "textureName": "",
+                "attributeName": "DSB_Surface_Stain_RGBA",
+                "attributeSemantic": "COLOR_0",
+                "maskEncoding": "COLOR_0_RGBA_ALPHA",
+                "regionId": "head",
+                "deformationKey": "Left_Head_Impact_v002",
+                "ownershipRole": "ATTACHED",
+                "sourceObject": "DSB_ATTACHED_HEAD",
+                "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+                "morphTarget": "Left_Head_Impact_v002",
+                "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+                "defaultVisible": false,
+                "activationWeight": 0.01,
+                "triangleCount": 140,
+                "alphaMode": "BLEND",
+                "portableRepresentation": "VERTEX_COLOR_RGBA",
+                "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+                "portableArtifactIncluded": true,
+                "runtimeImplementationIncluded": false,
+                "rendererRequirements": {
+                  "glTFVersion": "2.0",
+                  "materialModel": "PBR_METALLIC_ROUGHNESS",
+                  "alphaMode": "BLEND",
+                  "embeddedTexture": false,
+                  "vertexColorSemantic": "COLOR_0",
+                  "requiresNodeVisibilityToggle": true,
+                  "requiresMorphWeightBinding": true,
+                  "threeJsLoader": "GLTFLoader"
+                }
+              },
+              {
+                "schema": "dreadstone.surface_stain_binding.v1",
+                "meshId": "stain_mesh_0842f5439095adbc9791",
+                "nodeName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v002",
+                "materialName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v002_MAT",
+                "textureName": "",
+                "attributeName": "DSB_Surface_Stain_RGBA",
+                "attributeSemantic": "COLOR_0",
+                "maskEncoding": "COLOR_0_RGBA_ALPHA",
+                "regionId": "head",
+                "deformationKey": "Left_Head_Impact_v002",
+                "ownershipRole": "DETACHED",
+                "sourceObject": "DSB_SEGMENT_HEAD",
+                "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+                "morphTarget": "Left_Head_Impact_v002",
+                "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+                "defaultVisible": false,
+                "activationWeight": 0.01,
+                "triangleCount": 140,
+                "alphaMode": "BLEND",
+                "portableRepresentation": "VERTEX_COLOR_RGBA",
+                "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+                "portableArtifactIncluded": true,
+                "runtimeImplementationIncluded": false,
+                "rendererRequirements": {
+                  "glTFVersion": "2.0",
+                  "materialModel": "PBR_METALLIC_ROUGHNESS",
+                  "alphaMode": "BLEND",
+                  "embeddedTexture": false,
+                  "vertexColorSemantic": "COLOR_0",
+                  "requiresNodeVisibilityToggle": true,
+                  "requiresMorphWeightBinding": true,
+                  "threeJsLoader": "GLTFLoader"
+                }
+              }
+            ],
+            "surfaceStainActivationContract": {
+              "defaultVisible": false,
+              "activateWithDeformationKey": "Left_Head_Impact_v002",
+              "activationWeight": 0.01,
+              "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+              "portableArtifactIncluded": true,
+              "runtimeImplementationIncluded": false
             }
           },
           {
-            "name": "Left_Head_Impact_v003",
-            "damageKeyId": "damage_key_9b070fdc8a7ed2abd5dc97d03cbaa422",
+            "name": "Left_Head_Impact_v003_v001",
+            "damageKeyId": "damage_key_7446127ace1ec130620c7570f54a620b",
             "regionId": "head",
             "regionMode": "PAIRED_SEGMENT",
             "targetObject": "DSB_ATTACHED_HEAD",
@@ -5641,43 +5803,43 @@
             "recipeStatus": "PROCEDURAL_STACK",
             "legacy": false,
             "maximumInfluence": 1.0,
-            "maximumDisplacement": 0.008335838094353676,
-            "measuredMaximumDisplacement": 0.007964796998660761,
-            "maximumPairDeltaError": 3.725290298461914e-09,
+            "maximumDisplacement": 0.004307036753743887,
+            "measuredMaximumDisplacement": 0.003062068867836048,
+            "maximumPairDeltaError": 3.4924596548080444e-09,
             "validationStatus": "PASS",
             "legacySyncStatus": null,
             "legacySyncErrorBefore": null,
             "legacySyncErrorAfter": null,
             "legacySyncRepairApplied": false,
-            "previewEnabled": false,
-            "activeStampId": "stamp_33e7f442ee924ff39a47dbf16d439cf7",
+            "previewEnabled": true,
+            "activeStampId": "stamp_6c4f2c90718f4ffc97080f55467bc0f6",
             "stampMode": "ALTERNATIVES",
             "orderedStamps": [
               {
-                "stampId": "stamp_33e7f442ee924ff39a47dbf16d439cf7",
+                "stampId": "stamp_6c4f2c90718f4ffc97080f55467bc0f6",
                 "displayName": "Facial Gore",
                 "enabled": true,
                 "family": "COMPACT_DENT",
                 "placementMode": "SELECTED_VERTICES",
                 "center": [
-                  -0.03728043660521507,
-                  0.06950261443853378,
-                  1.388119101524353
+                  -0.03260580822825432,
+                  0.06482163071632385,
+                  1.3866814374923706
                 ],
                 "direction": [
-                  0.8173169897734973,
-                  -0.5440415412926316,
-                  -0.18976759358627793
+                  0.7895985326980519,
+                  -0.5812538483285972,
+                  -0.19666753917278734
                 ],
-                "radius": 0.06167621910572052,
-                "depth": 0.007608870975673199,
-                "falloff": 1.2934401035308838,
+                "radius": 0.031980182975530624,
+                "depth": 0.003959805238991976,
+                "falloff": 1.4871950149536133,
                 "influenceMode": "PATCH_FEATHERED",
                 "distanceMode": "SURFACE_DISTANCE",
-                "featherDistance": 0.019341036677360535,
-                "seamProtection": 0.006040788721293211,
-                "strength": 0.8927004337310791,
-                "maximumDisplacement": 0.008335838094353676,
+                "featherDistance": 0.004029503092169762,
+                "seamProtection": 0.0006396036478690803,
+                "strength": 0.7732882499694824,
+                "maximumDisplacement": 0.004307036753743887,
                 "orderIndex": 0,
                 "capture": {
                   "selectionHash": "66c11bba883957540b8c7f2489b94665bfc93ae23e204e0b3dda0679e5d1bc17",
@@ -5696,34 +5858,34 @@
                       1.43349289894104
                     ]
                   ],
-                  "estimatedRadius": 0.06788479114468005,
+                  "estimatedRadius": 0.06662538298583238,
                   "virtualWeldTolerance": null,
                   "virtualWeldDigest": null,
                   "virtualWeldMemberCount": null,
                   "virtualConnectedComponentCount": null
                 },
-                "impactSeed": 745510914,
-                "impactChaos": 0.42,
-                "impactProfile": 0.46,
-                "profileCenterRimBalance": 0.46
+                "impactSeed": 557576500,
+                "impactChaos": 0.0,
+                "impactProfile": 0.5091227722167969,
+                "profileCenterRimBalance": 0.5091227722167969
               }
             ],
-            "recipeDigest": "a571f003a08a2c2e85abd1354d27cc55cc1d831ef2addd6c0eb2684053eed5c6",
+            "recipeDigest": "4bb6106690cbc3b542b827f4fe41e7a840b008267c122588565bfb90473ceac3",
             "impactControl": {
               "schema": "dreadstone.impact_control.v1",
               "version": 1,
               "mode": "MACRO",
               "recipeClass": "IMPACT_PEDAL",
               "macros": {
-                "size": 43.45991516113281,
-                "crush": 26.042192459106445,
-                "profile": 46.0,
-                "edgeSafety": 45.0,
-                "chaos": 42.0,
-                "asymmetry": 38.0
+                "size": 0.0,
+                "crush": 18.93709945678711,
+                "profile": 50.91227722167969,
+                "edgeSafety": 100.0,
+                "chaos": 0.0,
+                "asymmetry": 100.0
               },
-              "seed": 745510914,
-              "identityDigest": "021da07b6e35b7013147de3370f9254598b36c799d1fcb57019f3ab9b57720d7"
+              "seed": 557576500,
+              "identityDigest": "2bc80ad08b7b44e9a5753c326e975f72a72bd76b2a2fbcea402b1a53062b1fc4"
             },
             "surfaceGoreOverlay": {
               "goreRecipeVersion": 6,
@@ -5733,7 +5895,7 @@
               "gorePresetId": "USER_AUTHORED",
               "goreIdentityId": "BLOODY_CRATER",
               "goreGeometryMode": "CAVITY_INLAY",
-              "goreInlayAmount": 0.9236286878585815,
+              "goreInlayAmount": 1.0,
               "goreRaisedAmount": 0.0,
               "goreControl": {
                 "schema": "dreadstone.gore_control.v1",
@@ -5743,95 +5905,95 @@
                 "identityId": "BLOODY_CRATER",
                 "macros": {
                   "exposure": 100.0,
-                  "cavity": 92.36286878585815,
-                  "clotFill": 0.0,
+                  "cavity": 100.0,
+                  "clotFill": 100.0,
                   "breakup": 0.0,
-                  "wetness": 83.61181640625,
+                  "wetness": 54.36363983154297,
                   "variation": 0.0
                 },
-                "seed": 745510914,
-                "identityDigest": "6a789c530f8abb15ffdbdf9312d26b83d4de6040c8f58db7163a0b067a573069"
+                "seed": 124691150,
+                "identityDigest": "001c4bc81cda883e2dda88ee451d482916adcfb040d69bf3cf81a311e38c73e2"
               },
               "goreSurfaceControl": {
                 "schema": "dreadstone.surface_gore_control.v1",
                 "version": 1,
                 "macros": {
-                  "mass": 82.0,
-                  "relief": 68.0,
-                  "nucleus": 32.0,
-                  "lobes": 72.0,
-                  "redness": 88.0
+                  "mass": 0.0,
+                  "relief": 0.0,
+                  "nucleus": 0.0,
+                  "lobes": 67.2597885131836,
+                  "redness": 100.0
                 },
-                "identityDigest": "25bfba40eaead2ad2877eb15c31cff88cc0371de34f5cf379c9d955c84c7fe4e"
+                "identityDigest": "e5e408fad565995fbe42ba06985286d9082b84019d510a3d0af0aa215925a88f"
               },
-              "goreCoverage": 0.944725751876831,
-              "goreScatter": 0.07999999821186066,
+              "goreCoverage": 0.31741002202033997,
+              "goreScatter": 0.11999999731779099,
               "goreEdgeFeather": 1.0,
-              "goreWetness": 0.863494336605072,
-              "goreDarkness": 0.24799999594688416,
+              "goreWetness": 0.6066706776618958,
+              "goreDarkness": 0.23999999463558197,
               "goreColorBias": [
                 0.30000001192092896,
                 0.00800000037997961,
                 0.006000000052154064
               ],
-              "gorePatchScale": 0.013576958328485489,
+              "gorePatchScale": 0.0038376220036298037,
               "goreOverlayMode": "STAIN_AND_RAISED",
               "goreIntensityClass": "HIGH",
               "goreRaisedEnabled": true,
-              "goreClotCoverage": 0.8828315734863281,
-              "goreCoreDensity": 0.8824067115783691,
-              "goreClotThickness": 0.015422719530761242,
-              "goreThicknessVariation": 0.4871616065502167,
-              "goreIslandBreakup": 0.24001599848270416,
-              "gorePeripheralFragments": 0.07553804665803909,
-              "goreSurfaceOffset": 0.0024513304233551025,
-              "goreGeometryDensity": 0.9092350006103516,
-              "goreWetnessVariation": 0.25083544850349426,
-              "goreDarkClotBias": 0.30640000104904175,
-              "goreRoughEdgeBias": 0.4016435146331787,
-              "goreColorIntensity": 0.9232000112533569,
-              "goreOrganicIrregularity": 0.7192000150680542,
-              "goreSurfaceRoundness": 0.6647999882698059,
+              "goreClotCoverage": 0.11999999731779099,
+              "goreCoreDensity": 0.18000000715255737,
+              "goreClotThickness": 0.0015182433417066932,
+              "goreThicknessVariation": 0.2779217064380646,
+              "goreIslandBreakup": 0.07999999821186066,
+              "gorePeripheralFragments": 0.7249822020530701,
+              "goreSurfaceOffset": 0.0006589597905986011,
+              "goreGeometryDensity": 0.25,
+              "goreWetnessVariation": 0.16309091448783875,
+              "goreDarkClotBias": 0.3400000035762787,
+              "goreRoughEdgeBias": 0.5904626250267029,
+              "goreColorIntensity": 1.0,
+              "goreOrganicIrregularity": 0.05999999865889549,
+              "goreSurfaceRoundness": 0.07999999821186066,
               "goreTextureEnabled": true,
-              "goreFiberTextureStrength": 0.5856320261955261,
-              "goreBaseColorStrength": 0.9100000262260437,
+              "goreFiberTextureStrength": 0.6371886134147644,
+              "goreBaseColorStrength": 1.0,
               "goreInnerRimEnabled": true,
-              "goreInnerRimWidth": 0.010353404097259045,
-              "goreInnerRimStrength": 0.8480675220489502,
+              "goreInnerRimWidth": 0.010616296902298927,
+              "goreInnerRimStrength": 0.8999999761581421,
               "goreMaximumTriangles": 9000,
               "goreDefaultVisible": false,
               "goreActivationWeight": 0.01,
               "goreUserCustomized": false,
-              "goreCavityDepth": 0.0048822942189872265,
-              "goreLinerSeparation": 0.0010763120371848345,
-              "goreRimWidth": 0.010353404097259045,
-              "goreClotFillDepth": 0.0,
+              "goreCavityDepth": 0.0028510596603155136,
+              "goreLinerSeparation": 0.001124624628573656,
+              "goreRimWidth": 0.010616296902298927,
+              "goreClotFillDepth": 0.001686937059275806,
               "goreProudnessLimit": 0.0,
-              "goreHostDeformationContribution": 0.9064362049102783,
-              "goreBoneReveal": 0.30336353182792664,
-              "goreTissueCoverage": 0.2280000001192093,
+              "goreHostDeformationContribution": 1.0,
+              "goreBoneReveal": 0.0,
+              "goreTissueCoverage": 0.13223999738693237,
               "goreWoundBedEnabled": true,
-              "goreClotLayerEnabled": false,
+              "goreClotLayerEnabled": true,
               "goreTissueLayerEnabled": false,
               "goreBoneLayerEnabled": false,
               "goreBarrierLayerEnabled": true,
               "goreRaisedRimOptIn": false,
               "goreAllowInternalFragments": false,
-              "goreSurfaceMass": 0.8199999928474426,
-              "goreNucleusAmount": 0.3199999928474426,
-              "goreNucleusLobes": 0.7200000286102295,
-              "goreMaskSeed": 745510914,
+              "goreSurfaceMass": 0.0,
+              "goreNucleusAmount": 0.0,
+              "goreNucleusLobes": 0.6725978851318359,
+              "goreMaskSeed": 124691150,
               "linkedRegionId": "head",
-              "linkedStampId": "stamp_33e7f442ee924ff39a47dbf16d439cf7",
+              "linkedStampId": "stamp_6c4f2c90718f4ffc97080f55467bc0f6",
               "linkedSelectionHash": "66c11bba883957540b8c7f2489b94665bfc93ae23e204e0b3dda0679e5d1bc17",
               "linkedCaptureTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
               "validationStatus": "PASS"
             },
-            "goreOverlayDigest": "86e16d40fa827832362e8dc52105caf1b6000a72ff180469b89c4a955a9c7d39",
+            "goreOverlayDigest": "70cafc6251bb0e4a9dfcafa9997554a3076e33c6a70fdf8d03c38712bf983a4f",
             "goreOverlayEnabled": true,
             "goreOverlayMode": "STAIN_AND_RAISED",
             "goreGeometryMode": "CAVITY_INLAY",
-            "goreInlayAmount": 0.9236286878585815,
+            "goreInlayAmount": 1.0,
             "goreRaisedAmount": 0.0,
             "goreIdentityId": "BLOODY_CRATER",
             "goreControl": {
@@ -5842,26 +6004,26 @@
               "identityId": "BLOODY_CRATER",
               "macros": {
                 "exposure": 100.0,
-                "cavity": 92.36286878585815,
-                "clotFill": 0.0,
+                "cavity": 100.0,
+                "clotFill": 100.0,
                 "breakup": 0.0,
-                "wetness": 83.61181640625,
+                "wetness": 54.36363983154297,
                 "variation": 0.0
               },
-              "seed": 745510914,
-              "identityDigest": "6a789c530f8abb15ffdbdf9312d26b83d4de6040c8f58db7163a0b067a573069"
+              "seed": 124691150,
+              "identityDigest": "001c4bc81cda883e2dda88ee451d482916adcfb040d69bf3cf81a311e38c73e2"
             },
             "goreSurfaceControl": {
               "schema": "dreadstone.surface_gore_control.v1",
               "version": 1,
               "macros": {
-                "mass": 82.0,
-                "relief": 68.0,
-                "nucleus": 32.0,
-                "lobes": 72.0,
-                "redness": 88.0
+                "mass": 0.0,
+                "relief": 0.0,
+                "nucleus": 0.0,
+                "lobes": 67.2597885131836,
+                "redness": 100.0
               },
-              "identityDigest": "25bfba40eaead2ad2877eb15c31cff88cc0371de34f5cf379c9d955c84c7fe4e"
+              "identityDigest": "e5e408fad565995fbe42ba06985286d9082b84019d510a3d0af0aa215925a88f"
             },
             "gorePresetId": "USER_AUTHORED",
             "goreIntensityClass": "HIGH",
@@ -5870,26 +6032,26 @@
             "goreOverlayValidationStatus": "PASS",
             "exportValidationStatus": "PASS",
             "goreRegionId": "head",
-            "goreDeformationKey": "Left_Head_Impact_v003",
+            "goreDeformationKey": "Left_Head_Impact_v003_v001",
             "goreGeneratedMeshIds": [
-              "gore_mesh_a3509a1c22cc61927cfe",
-              "gore_mesh_86d85885ad64fb52cfee"
+              "gore_mesh_196738d0cdcf04c38f2e",
+              "gore_mesh_57ec45eb14fc7bbbb5ef"
             ],
             "goreGeneratedNodeNames": [
-              "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
-              "DSB_GORE_DETACHED_head_Left_Head_Impact_v003"
+              "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003_v001",
+              "DSB_GORE_DETACHED_head_Left_Head_Impact_v003_v001"
             ],
             "goreGeometryDigests": {
-              "ATTACHED": "02c210b849b8d6dde4f738f9145ae5949625c2556aab09ba3335092ab2a2152c",
-              "DETACHED": "550146b7190398515336d22997fca1c5190737abbbb444894b9a4a131110ea72"
+              "ATTACHED": "96eac3222ef58b8ec2fdf1b5e071d3bc5910597bc7784c4cfd9efcbdc26f8edc",
+              "DETACHED": "f5ac8f516dd842214158e69d89cf249f5560488003b278c76497de791b551e11"
             },
             "goreGenerationDigests": {
-              "ATTACHED": "29ab2cb3e9dcf7046b2158f8ccc6dbfe08f17eaa443989a421c4115a76bf7bec",
-              "DETACHED": "ef26750080988ed4e0aaeaa3a1e1070d260a1aaf2f56d7aefd84dbc149f3dc7c"
+              "ATTACHED": "baa3581ee3b0686eb2dcea9e9d60779ff71c84b930dcf76e7884276d13d8456e",
+              "DETACHED": "3e32362a6b9b71e29e537127bc08f511932d0b29b0735aa391e2c1fad10ffd06"
             },
             "goreTriangleCounts": {
-              "ATTACHED": 1104,
-              "DETACHED": 1104
+              "ATTACHED": 600,
+              "DETACHED": 600
             },
             "goreMaterialIds": [
               "DSB_GORE_CRUSHED_TISSUE",
@@ -5900,74 +6062,165 @@
               "DSB_GORE_WET_CRIMSON"
             ],
             "goreMaterialNames": [
-              "DSB_GORE_CRUSHED_TISSUE_86e16d40",
-              "DSB_GORE_DARK_CLOT_86e16d40",
-              "DSB_GORE_DEEP_WOUND_BED_86e16d40",
-              "DSB_GORE_EXPOSED_BONE_86e16d40",
-              "DSB_GORE_ROUGH_EDGE_86e16d40",
-              "DSB_GORE_WET_CRIMSON_86e16d40"
+              "DSB_GORE_CRUSHED_TISSUE_70cafc62",
+              "DSB_GORE_DARK_CLOT_70cafc62",
+              "DSB_GORE_DEEP_WOUND_BED_70cafc62",
+              "DSB_GORE_EXPOSED_BONE_70cafc62",
+              "DSB_GORE_ROUGH_EDGE_70cafc62",
+              "DSB_GORE_WET_CRIMSON_70cafc62"
             ],
             "goreValidationMeasurements": {
               "ATTACHED": {
-                "generatedVertexCount": 630,
+                "generatedVertexCount": 354,
                 "layerDepths": {
                   "BARRIER": {
-                    "maximum": 0.0033160710637457668,
-                    "median": 0.003073900855379179,
-                    "minimum": 0.0028317306470125913
+                    "maximum": 0.0027553303400054572,
+                    "median": 0.0025022897985763847,
+                    "minimum": 0.002249249257147312
+                  },
+                  "CLOT": {
+                    "maximum": 0.002193018142133951,
+                    "median": 0.0019399776007048785,
+                    "minimum": 0.001686937059275806
                   },
                   "LINER": {
-                    "maximum": 0.0051729693909631546,
-                    "median": 0.0037785920549625015,
-                    "minimum": 0.0017880501127489254
+                    "maximum": 0.0033777526340915435,
+                    "median": 0.002625038584867999,
+                    "minimum": 0.0018723245356444549
                   },
                   "RIM": {
-                    "maximum": 0.002799680743032408,
-                    "median": 0.0020121571868842673,
-                    "minimum": 0.001234732975698677
+                    "maximum": 0.002342492756817753,
+                    "median": 0.001774592996513653,
+                    "minimum": 0.0012066932362095537
                   }
                 },
-                "maximumCavityDepth": 0.0051729693909631546,
-                "maximumGeneratedDepth": 0.0051729693909631546,
+                "maximumCavityDepth": 0.0033777526340915435,
+                "maximumGeneratedDepth": 0.0033777526340915435,
                 "maximumProudness": 0.0,
-                "medianLinerDepth": 0.0037785920549625015,
-                "minimumSkinToLinerSeparation": 0.0017880501127489254,
+                "medianLinerDepth": 0.002625038584867999,
+                "minimumSkinToLinerSeparation": 0.0018723245356444549,
                 "percentVerticesAboveLimit": 0.0,
-                "triangleCount": 1104
+                "triangleCount": 600
               },
               "DETACHED": {
-                "generatedVertexCount": 630,
+                "generatedVertexCount": 354,
                 "layerDepths": {
                   "BARRIER": {
-                    "maximum": 0.0033160710637457668,
-                    "median": 0.003073900855379179,
-                    "minimum": 0.0028317306470125913
+                    "maximum": 0.0027553303400054572,
+                    "median": 0.0025022897985763847,
+                    "minimum": 0.002249249257147312
+                  },
+                  "CLOT": {
+                    "maximum": 0.002193018142133951,
+                    "median": 0.0019399776007048785,
+                    "minimum": 0.001686937059275806
                   },
                   "LINER": {
-                    "maximum": 0.0051729693909631546,
-                    "median": 0.0037785920549625015,
-                    "minimum": 0.0017880501127489254
+                    "maximum": 0.0033777526340915435,
+                    "median": 0.002625038584867999,
+                    "minimum": 0.0018723245356444549
                   },
                   "RIM": {
-                    "maximum": 0.002799680743032408,
-                    "median": 0.0020121571868842673,
-                    "minimum": 0.001234732975698677
+                    "maximum": 0.002342492756817753,
+                    "median": 0.001774592996513653,
+                    "minimum": 0.0012066932362095537
                   }
                 },
-                "maximumCavityDepth": 0.0051729693909631546,
-                "maximumGeneratedDepth": 0.0051729693909631546,
+                "maximumCavityDepth": 0.0033777526340915435,
+                "maximumGeneratedDepth": 0.0033777526340915435,
                 "maximumProudness": 0.0,
-                "medianLinerDepth": 0.0037785920549625015,
-                "minimumSkinToLinerSeparation": 0.0017880501127489254,
+                "medianLinerDepth": 0.002625038584867999,
+                "minimumSkinToLinerSeparation": 0.0018723245356444549,
                 "percentVerticesAboveLimit": 0.0,
-                "triangleCount": 1104
+                "triangleCount": 600
               }
             },
             "goreActivationContract": {
               "defaultVisible": false,
               "activationWeight": 0.01,
-              "activateWithDeformationKey": "Left_Head_Impact_v003",
+              "activateWithDeformationKey": "Left_Head_Impact_v003_v001",
               "retainThroughDeathAndCorpsePersistence": true,
+              "runtimeImplementationIncluded": false
+            },
+            "surfaceStainBindingSchema": "dreadstone.surface_stain_binding.v1",
+            "surfaceStainBindings": [
+              {
+                "schema": "dreadstone.surface_stain_binding.v1",
+                "meshId": "stain_mesh_c1bbdc776cc4cf7e157d",
+                "nodeName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v003_v001",
+                "materialName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v003_v001_MAT",
+                "textureName": "",
+                "attributeName": "DSB_Surface_Stain_RGBA",
+                "attributeSemantic": "COLOR_0",
+                "maskEncoding": "COLOR_0_RGBA_ALPHA",
+                "regionId": "head",
+                "deformationKey": "Left_Head_Impact_v003_v001",
+                "ownershipRole": "ATTACHED",
+                "sourceObject": "DSB_ATTACHED_HEAD",
+                "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+                "morphTarget": "Left_Head_Impact_v003_v001",
+                "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+                "defaultVisible": false,
+                "activationWeight": 0.01,
+                "triangleCount": 86,
+                "alphaMode": "BLEND",
+                "portableRepresentation": "VERTEX_COLOR_RGBA",
+                "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+                "portableArtifactIncluded": true,
+                "runtimeImplementationIncluded": false,
+                "rendererRequirements": {
+                  "glTFVersion": "2.0",
+                  "materialModel": "PBR_METALLIC_ROUGHNESS",
+                  "alphaMode": "BLEND",
+                  "embeddedTexture": false,
+                  "vertexColorSemantic": "COLOR_0",
+                  "requiresNodeVisibilityToggle": true,
+                  "requiresMorphWeightBinding": true,
+                  "threeJsLoader": "GLTFLoader"
+                }
+              },
+              {
+                "schema": "dreadstone.surface_stain_binding.v1",
+                "meshId": "stain_mesh_8d649fd4cdd2e45a8f1f",
+                "nodeName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v003_v001",
+                "materialName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v003_v001_MAT",
+                "textureName": "",
+                "attributeName": "DSB_Surface_Stain_RGBA",
+                "attributeSemantic": "COLOR_0",
+                "maskEncoding": "COLOR_0_RGBA_ALPHA",
+                "regionId": "head",
+                "deformationKey": "Left_Head_Impact_v003_v001",
+                "ownershipRole": "DETACHED",
+                "sourceObject": "DSB_SEGMENT_HEAD",
+                "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+                "morphTarget": "Left_Head_Impact_v003_v001",
+                "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+                "defaultVisible": false,
+                "activationWeight": 0.01,
+                "triangleCount": 86,
+                "alphaMode": "BLEND",
+                "portableRepresentation": "VERTEX_COLOR_RGBA",
+                "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+                "portableArtifactIncluded": true,
+                "runtimeImplementationIncluded": false,
+                "rendererRequirements": {
+                  "glTFVersion": "2.0",
+                  "materialModel": "PBR_METALLIC_ROUGHNESS",
+                  "alphaMode": "BLEND",
+                  "embeddedTexture": false,
+                  "vertexColorSemantic": "COLOR_0",
+                  "requiresNodeVisibilityToggle": true,
+                  "requiresMorphWeightBinding": true,
+                  "threeJsLoader": "GLTFLoader"
+                }
+              }
+            ],
+            "surfaceStainActivationContract": {
+              "defaultVisible": false,
+              "activateWithDeformationKey": "Left_Head_Impact_v003_v001",
+              "activationWeight": 0.01,
+              "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+              "portableArtifactIncluded": true,
               "runtimeImplementationIncluded": false
             }
           }
@@ -6387,6 +6640,87 @@
           "activateWithDeformationKey": "Left_Head_Impact_v001",
           "retainThroughDeathAndCorpsePersistence": true,
           "runtimeImplementationIncluded": false
+        },
+        "surfaceStainBindingSchema": "dreadstone.surface_stain_binding.v1",
+        "surfaceStainBindings": [
+          {
+            "schema": "dreadstone.surface_stain_binding.v1",
+            "meshId": "stain_mesh_539f887ae29abd6152de",
+            "nodeName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v001",
+            "materialName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v001_MAT",
+            "textureName": "",
+            "attributeName": "DSB_Surface_Stain_RGBA",
+            "attributeSemantic": "COLOR_0",
+            "maskEncoding": "COLOR_0_RGBA_ALPHA",
+            "regionId": "head",
+            "deformationKey": "Left_Head_Impact_v001",
+            "ownershipRole": "ATTACHED",
+            "sourceObject": "DSB_ATTACHED_HEAD",
+            "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+            "morphTarget": "Left_Head_Impact_v001",
+            "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+            "defaultVisible": false,
+            "activationWeight": 0.01,
+            "triangleCount": 140,
+            "alphaMode": "BLEND",
+            "portableRepresentation": "VERTEX_COLOR_RGBA",
+            "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+            "portableArtifactIncluded": true,
+            "runtimeImplementationIncluded": false,
+            "rendererRequirements": {
+              "glTFVersion": "2.0",
+              "materialModel": "PBR_METALLIC_ROUGHNESS",
+              "alphaMode": "BLEND",
+              "embeddedTexture": false,
+              "vertexColorSemantic": "COLOR_0",
+              "requiresNodeVisibilityToggle": true,
+              "requiresMorphWeightBinding": true,
+              "threeJsLoader": "GLTFLoader"
+            }
+          },
+          {
+            "schema": "dreadstone.surface_stain_binding.v1",
+            "meshId": "stain_mesh_6d346d3a59e01774166b",
+            "nodeName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v001",
+            "materialName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v001_MAT",
+            "textureName": "",
+            "attributeName": "DSB_Surface_Stain_RGBA",
+            "attributeSemantic": "COLOR_0",
+            "maskEncoding": "COLOR_0_RGBA_ALPHA",
+            "regionId": "head",
+            "deformationKey": "Left_Head_Impact_v001",
+            "ownershipRole": "DETACHED",
+            "sourceObject": "DSB_SEGMENT_HEAD",
+            "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+            "morphTarget": "Left_Head_Impact_v001",
+            "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+            "defaultVisible": false,
+            "activationWeight": 0.01,
+            "triangleCount": 140,
+            "alphaMode": "BLEND",
+            "portableRepresentation": "VERTEX_COLOR_RGBA",
+            "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+            "portableArtifactIncluded": true,
+            "runtimeImplementationIncluded": false,
+            "rendererRequirements": {
+              "glTFVersion": "2.0",
+              "materialModel": "PBR_METALLIC_ROUGHNESS",
+              "alphaMode": "BLEND",
+              "embeddedTexture": false,
+              "vertexColorSemantic": "COLOR_0",
+              "requiresNodeVisibilityToggle": true,
+              "requiresMorphWeightBinding": true,
+              "threeJsLoader": "GLTFLoader"
+            }
+          }
+        ],
+        "surfaceStainActivationContract": {
+          "defaultVisible": false,
+          "activateWithDeformationKey": "Left_Head_Impact_v001",
+          "activationWeight": 0.01,
+          "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+          "portableArtifactIncluded": true,
+          "runtimeImplementationIncluded": false
         }
       },
       {
@@ -6504,13 +6838,13 @@
             "macros": {
               "exposure": 100.0,
               "cavity": 100.0,
-              "clotFill": 59.94898223876953,
+              "clotFill": 17.192981719970703,
               "breakup": 0.0,
-              "wetness": 68.0,
+              "wetness": 2.2657365798950195,
               "variation": 2.653062343597412
             },
             "seed": 492281812,
-            "identityDigest": "ab685355b75fc495aa30d302f3298ff2a34c6dbed8bbd435a88b4792be5c68d9"
+            "identityDigest": "10e293f2581ca1025b8febfcddb8c3ae1cb430a9af1f9507061e8e2689e3591b"
           },
           "goreSurfaceControl": {
             "schema": "dreadstone.surface_gore_control.v1",
@@ -6520,15 +6854,15 @@
               "relief": 0.0,
               "nucleus": 100.0,
               "lobes": 100.0,
-              "redness": 43.87099838256836
+              "redness": 100.0
             },
-            "identityDigest": "8f540a1830382b69a51958396e37a9dd9f4a187fc18e4e1a07a0803dcac739e9"
+            "identityDigest": "51f1178956eed61724570f8528a88dec1feb557fc07acd7f73e27e8657b84ec8"
           },
-          "goreCoverage": 0.9120408296585083,
+          "goreCoverage": 0.9462456107139587,
           "goreScatter": 0.07999999821186066,
           "goreEdgeFeather": 1.0,
-          "goreWetness": 0.7288821339607239,
-          "goreDarkness": 0.5318707823753357,
+          "goreWetness": 0.04479935020208359,
+          "goreDarkness": 0.23999999463558197,
           "goreColorBias": [
             0.30000001192092896,
             0.00800000037997961,
@@ -6546,15 +6880,15 @@
           "gorePeripheralFragments": 0.8329668641090393,
           "goreSurfaceOffset": 0.0006589597905986011,
           "goreGeometryDensity": 0.44573864340782166,
-          "goreWetnessVariation": 0.20399999618530273,
-          "goreDarkClotBias": 0.6279028058052063,
+          "goreWetnessVariation": 0.006797209847718477,
+          "goreDarkClotBias": 0.32480621337890625,
           "goreRoughEdgeBias": 0.7530004978179932,
-          "goreColorIntensity": 0.6407743692398071,
+          "goreColorIntensity": 1.0,
           "goreOrganicIrregularity": 0.9599999785423279,
           "goreSurfaceRoundness": 0.07999999821186066,
           "goreTextureEnabled": true,
           "goreFiberTextureStrength": 0.4925000071525574,
-          "goreBaseColorStrength": 0.5790324807167053,
+          "goreBaseColorStrength": 1.0,
           "goreInnerRimEnabled": true,
           "goreInnerRimWidth": 0.011867282912135124,
           "goreInnerRimStrength": 0.8999999761581421,
@@ -6565,11 +6899,11 @@
           "goreCavityDepth": 0.006242902483791113,
           "goreLinerSeparation": 0.001124624628573656,
           "goreRimWidth": 0.011867282912135124,
-          "goreClotFillDepth": 0.0020114248618483543,
+          "goreClotFillDepth": 0.0030257266480475664,
           "goreProudnessLimit": 0.0,
           "goreHostDeformationContribution": 1.0,
-          "goreBoneReveal": 0.11151544004678726,
-          "goreTissueCoverage": 0.17059285938739777,
+          "goreBoneReveal": 0.2764725387096405,
+          "goreTissueCoverage": 0.2115360051393509,
           "goreWoundBedEnabled": true,
           "goreClotLayerEnabled": true,
           "goreTissueLayerEnabled": false,
@@ -6587,7 +6921,7 @@
           "linkedCaptureTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
           "validationStatus": "PASS"
         },
-        "goreOverlayDigest": "0c1e553468e42f4140013a72f6fa9f50b3924ae9175c62f3e1568e53f7dd4ae1",
+        "goreOverlayDigest": "6c2a0ce173a4f3a3211c8e0c4f4b5c63bec2c4fcbf1775b7205259b8adee592f",
         "goreOverlayEnabled": true,
         "goreOverlayMode": "STAIN_AND_RAISED",
         "goreGeometryMode": "HYBRID_ADDITIVE",
@@ -6603,13 +6937,13 @@
           "macros": {
             "exposure": 100.0,
             "cavity": 100.0,
-            "clotFill": 59.94898223876953,
+            "clotFill": 17.192981719970703,
             "breakup": 0.0,
-            "wetness": 68.0,
+            "wetness": 2.2657365798950195,
             "variation": 2.653062343597412
           },
           "seed": 492281812,
-          "identityDigest": "ab685355b75fc495aa30d302f3298ff2a34c6dbed8bbd435a88b4792be5c68d9"
+          "identityDigest": "10e293f2581ca1025b8febfcddb8c3ae1cb430a9af1f9507061e8e2689e3591b"
         },
         "goreSurfaceControl": {
           "schema": "dreadstone.surface_gore_control.v1",
@@ -6619,9 +6953,9 @@
             "relief": 0.0,
             "nucleus": 100.0,
             "lobes": 100.0,
-            "redness": 43.87099838256836
+            "redness": 100.0
           },
-          "identityDigest": "8f540a1830382b69a51958396e37a9dd9f4a187fc18e4e1a07a0803dcac739e9"
+          "identityDigest": "51f1178956eed61724570f8528a88dec1feb557fc07acd7f73e27e8657b84ec8"
         },
         "gorePresetId": "USER_AUTHORED",
         "goreIntensityClass": "HIGH",
@@ -6644,21 +6978,21 @@
           "DSB_GORE_DETACHED_head_Left_Head_Impact_v002_INLAY"
         ],
         "goreGeometryDigests": {
-          "ATTACHED:INLAY": "e8ac38a82c572820513e05885c871eabfdcfbdbee9a61919524cc9f7ad7b8ffe",
-          "ATTACHED:RAISED": "70df8428cdd5690fa3e60fdc27a079e8a418f22963f290a644c8e325062e01f4",
-          "DETACHED:INLAY": "4e743f48abe2799139703dfeda1e48a032d8893cd535b37b49f01a8b747bc33f",
-          "DETACHED:RAISED": "01abc965a20471c812379fc26acab75e7079b4cf2ed1bcf8c8bd6338341de2d5"
+          "ATTACHED:INLAY": "5d8d176ae6fa262f4a534c037930adfda84f8ccce110df1b1fe26b0bd99cdcb4",
+          "ATTACHED:RAISED": "91a642e7b9b12d93b49351df987ae97e8cb060c49e80affbf4ef6eb789efc39d",
+          "DETACHED:INLAY": "97ade576d388e16c626f7c2987ee09d02182da2fa9d744e9bb3e219ffda93788",
+          "DETACHED:RAISED": "f27b75822f4c016fb5c42cd3567596f0aa762102aab4ea1ac855facc49d4419a"
         },
         "goreGenerationDigests": {
-          "ATTACHED:INLAY": "ea3b3ffab9c093d690bd637f6ab1bdab8866f35ec2845ea871ea02a8b62b17c3",
-          "ATTACHED:RAISED": "b83348ad95e62c5aea51b5bcdb78a00d1aa6a2add72977497655f1390d96ac40",
-          "DETACHED:INLAY": "55918f7eecda5e14a9a4678323a3a0ae75e32ffc52ddd008bc8521c0fd67cd88",
-          "DETACHED:RAISED": "90c41dd3979e91f1d2ec4a8b41f8f35b4e875817eb07e18e0a95027db315296e"
+          "ATTACHED:INLAY": "38431bac5527f2529b44deba78ed8c718c8a413e11d0a2aab51aac538bb82b85",
+          "ATTACHED:RAISED": "960d079e4c49da71d6f593e69da816e132a1c6d2d2641c507eec868f567174fe",
+          "DETACHED:INLAY": "cea6448b43afe045136564cd4c56b7bd7260aad01b20f31485bf1f9a63148712",
+          "DETACHED:RAISED": "2d2512ab1f2e3c2c5924f4e845b4bbcc096c8ff9288c7ec8240cb16b88b145c6"
         },
         "goreTriangleCounts": {
-          "ATTACHED:INLAY": 1024,
+          "ATTACHED:INLAY": 1072,
           "ATTACHED:RAISED": 2028,
-          "DETACHED:INLAY": 1024,
+          "DETACHED:INLAY": 1072,
           "DETACHED:RAISED": 2028
         },
         "goreMaterialIds": [
@@ -6670,20 +7004,20 @@
           "DSB_GORE_WET_CRIMSON"
         ],
         "goreMaterialNames": [
-          "DSB_GORE_CRUSHED_TISSUE_3325ead6",
-          "DSB_GORE_CRUSHED_TISSUE_8ecdf54f",
-          "DSB_GORE_DARK_CLOT_3325ead6",
-          "DSB_GORE_DARK_CLOT_8ecdf54f",
-          "DSB_GORE_DEEP_WOUND_BED_8ecdf54f",
-          "DSB_GORE_EXPOSED_BONE_8ecdf54f",
-          "DSB_GORE_ROUGH_EDGE_3325ead6",
-          "DSB_GORE_ROUGH_EDGE_8ecdf54f",
-          "DSB_GORE_WET_CRIMSON_3325ead6",
-          "DSB_GORE_WET_CRIMSON_8ecdf54f"
+          "DSB_GORE_CRUSHED_TISSUE_66243447",
+          "DSB_GORE_CRUSHED_TISSUE_e1929c49",
+          "DSB_GORE_DARK_CLOT_66243447",
+          "DSB_GORE_DARK_CLOT_e1929c49",
+          "DSB_GORE_DEEP_WOUND_BED_e1929c49",
+          "DSB_GORE_EXPOSED_BONE_e1929c49",
+          "DSB_GORE_ROUGH_EDGE_66243447",
+          "DSB_GORE_ROUGH_EDGE_e1929c49",
+          "DSB_GORE_WET_CRIMSON_66243447",
+          "DSB_GORE_WET_CRIMSON_e1929c49"
         ],
         "goreValidationMeasurements": {
           "ATTACHED:INLAY": {
-            "generatedVertexCount": 618,
+            "generatedVertexCount": 646,
             "layerDepths": {
               "BARRIER": {
                 "maximum": 0.004126964523456991,
@@ -6691,9 +7025,9 @@
                 "minimum": 0.0036208834405988453
               },
               "CLOT": {
-                "maximum": 0.0025175059447064994,
-                "median": 0.002264465403277427,
-                "minimum": 0.0020114248618483543
+                "maximum": 0.0035318077309057115,
+                "median": 0.003278767189476639,
+                "minimum": 0.0030257266480475664
               },
               "LINER": {
                 "maximum": 0.0062684734573953535,
@@ -6702,7 +7036,7 @@
               },
               "RIM": {
                 "maximum": 0.003173401486974989,
-                "median": 0.002221679737219992,
+                "median": 0.002219541996013512,
                 "minimum": 0.0013575520087971797
               }
             },
@@ -6712,10 +7046,10 @@
             "medianLinerDepth": 0.005024493748468151,
             "minimumSkinToLinerSeparation": 0.0023796128822281574,
             "percentVerticesAboveLimit": 0.0,
-            "triangleCount": 1024
+            "triangleCount": 1072
           },
           "DETACHED:INLAY": {
-            "generatedVertexCount": 618,
+            "generatedVertexCount": 646,
             "layerDepths": {
               "BARRIER": {
                 "maximum": 0.004126964523456991,
@@ -6723,9 +7057,9 @@
                 "minimum": 0.0036208834405988453
               },
               "CLOT": {
-                "maximum": 0.0025175059447064994,
-                "median": 0.002264465403277427,
-                "minimum": 0.0020114248618483543
+                "maximum": 0.0035318077309057115,
+                "median": 0.003278767189476639,
+                "minimum": 0.0030257266480475664
               },
               "LINER": {
                 "maximum": 0.0062684734573953535,
@@ -6734,7 +7068,7 @@
               },
               "RIM": {
                 "maximum": 0.003173401486974989,
-                "median": 0.002221679737219992,
+                "median": 0.002219541996013512,
                 "minimum": 0.0013575520087971797
               }
             },
@@ -6744,7 +7078,7 @@
             "medianLinerDepth": 0.005024493748468151,
             "minimumSkinToLinerSeparation": 0.0023796128822281574,
             "percentVerticesAboveLimit": 0.0,
-            "triangleCount": 1024
+            "triangleCount": 1072
           }
         },
         "goreActivationContract": {
@@ -6753,11 +7087,92 @@
           "activateWithDeformationKey": "Left_Head_Impact_v002",
           "retainThroughDeathAndCorpsePersistence": true,
           "runtimeImplementationIncluded": false
+        },
+        "surfaceStainBindingSchema": "dreadstone.surface_stain_binding.v1",
+        "surfaceStainBindings": [
+          {
+            "schema": "dreadstone.surface_stain_binding.v1",
+            "meshId": "stain_mesh_ac95213280779b39ad4d",
+            "nodeName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v002",
+            "materialName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v002_MAT",
+            "textureName": "",
+            "attributeName": "DSB_Surface_Stain_RGBA",
+            "attributeSemantic": "COLOR_0",
+            "maskEncoding": "COLOR_0_RGBA_ALPHA",
+            "regionId": "head",
+            "deformationKey": "Left_Head_Impact_v002",
+            "ownershipRole": "ATTACHED",
+            "sourceObject": "DSB_ATTACHED_HEAD",
+            "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+            "morphTarget": "Left_Head_Impact_v002",
+            "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+            "defaultVisible": false,
+            "activationWeight": 0.01,
+            "triangleCount": 140,
+            "alphaMode": "BLEND",
+            "portableRepresentation": "VERTEX_COLOR_RGBA",
+            "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+            "portableArtifactIncluded": true,
+            "runtimeImplementationIncluded": false,
+            "rendererRequirements": {
+              "glTFVersion": "2.0",
+              "materialModel": "PBR_METALLIC_ROUGHNESS",
+              "alphaMode": "BLEND",
+              "embeddedTexture": false,
+              "vertexColorSemantic": "COLOR_0",
+              "requiresNodeVisibilityToggle": true,
+              "requiresMorphWeightBinding": true,
+              "threeJsLoader": "GLTFLoader"
+            }
+          },
+          {
+            "schema": "dreadstone.surface_stain_binding.v1",
+            "meshId": "stain_mesh_0842f5439095adbc9791",
+            "nodeName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v002",
+            "materialName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v002_MAT",
+            "textureName": "",
+            "attributeName": "DSB_Surface_Stain_RGBA",
+            "attributeSemantic": "COLOR_0",
+            "maskEncoding": "COLOR_0_RGBA_ALPHA",
+            "regionId": "head",
+            "deformationKey": "Left_Head_Impact_v002",
+            "ownershipRole": "DETACHED",
+            "sourceObject": "DSB_SEGMENT_HEAD",
+            "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+            "morphTarget": "Left_Head_Impact_v002",
+            "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+            "defaultVisible": false,
+            "activationWeight": 0.01,
+            "triangleCount": 140,
+            "alphaMode": "BLEND",
+            "portableRepresentation": "VERTEX_COLOR_RGBA",
+            "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+            "portableArtifactIncluded": true,
+            "runtimeImplementationIncluded": false,
+            "rendererRequirements": {
+              "glTFVersion": "2.0",
+              "materialModel": "PBR_METALLIC_ROUGHNESS",
+              "alphaMode": "BLEND",
+              "embeddedTexture": false,
+              "vertexColorSemantic": "COLOR_0",
+              "requiresNodeVisibilityToggle": true,
+              "requiresMorphWeightBinding": true,
+              "threeJsLoader": "GLTFLoader"
+            }
+          }
+        ],
+        "surfaceStainActivationContract": {
+          "defaultVisible": false,
+          "activateWithDeformationKey": "Left_Head_Impact_v002",
+          "activationWeight": 0.01,
+          "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+          "portableArtifactIncluded": true,
+          "runtimeImplementationIncluded": false
         }
       },
       {
-        "name": "Left_Head_Impact_v003",
-        "damageKeyId": "damage_key_9b070fdc8a7ed2abd5dc97d03cbaa422",
+        "name": "Left_Head_Impact_v003_v001",
+        "damageKeyId": "damage_key_7446127ace1ec130620c7570f54a620b",
         "regionId": "head",
         "regionMode": "PAIRED_SEGMENT",
         "targetObject": "DSB_ATTACHED_HEAD",
@@ -6767,43 +7182,43 @@
         "recipeStatus": "PROCEDURAL_STACK",
         "legacy": false,
         "maximumInfluence": 1.0,
-        "maximumDisplacement": 0.008335838094353676,
-        "measuredMaximumDisplacement": 0.007964796998660761,
-        "maximumPairDeltaError": 3.725290298461914e-09,
+        "maximumDisplacement": 0.004307036753743887,
+        "measuredMaximumDisplacement": 0.003062068867836048,
+        "maximumPairDeltaError": 3.4924596548080444e-09,
         "validationStatus": "PASS",
         "legacySyncStatus": null,
         "legacySyncErrorBefore": null,
         "legacySyncErrorAfter": null,
         "legacySyncRepairApplied": false,
-        "previewEnabled": false,
-        "activeStampId": "stamp_33e7f442ee924ff39a47dbf16d439cf7",
+        "previewEnabled": true,
+        "activeStampId": "stamp_6c4f2c90718f4ffc97080f55467bc0f6",
         "stampMode": "ALTERNATIVES",
         "orderedStamps": [
           {
-            "stampId": "stamp_33e7f442ee924ff39a47dbf16d439cf7",
+            "stampId": "stamp_6c4f2c90718f4ffc97080f55467bc0f6",
             "displayName": "Facial Gore",
             "enabled": true,
             "family": "COMPACT_DENT",
             "placementMode": "SELECTED_VERTICES",
             "center": [
-              -0.03728043660521507,
-              0.06950261443853378,
-              1.388119101524353
+              -0.03260580822825432,
+              0.06482163071632385,
+              1.3866814374923706
             ],
             "direction": [
-              0.8173169897734973,
-              -0.5440415412926316,
-              -0.18976759358627793
+              0.7895985326980519,
+              -0.5812538483285972,
+              -0.19666753917278734
             ],
-            "radius": 0.06167621910572052,
-            "depth": 0.007608870975673199,
-            "falloff": 1.2934401035308838,
+            "radius": 0.031980182975530624,
+            "depth": 0.003959805238991976,
+            "falloff": 1.4871950149536133,
             "influenceMode": "PATCH_FEATHERED",
             "distanceMode": "SURFACE_DISTANCE",
-            "featherDistance": 0.019341036677360535,
-            "seamProtection": 0.006040788721293211,
-            "strength": 0.8927004337310791,
-            "maximumDisplacement": 0.008335838094353676,
+            "featherDistance": 0.004029503092169762,
+            "seamProtection": 0.0006396036478690803,
+            "strength": 0.7732882499694824,
+            "maximumDisplacement": 0.004307036753743887,
             "orderIndex": 0,
             "capture": {
               "selectionHash": "66c11bba883957540b8c7f2489b94665bfc93ae23e204e0b3dda0679e5d1bc17",
@@ -6822,34 +7237,34 @@
                   1.43349289894104
                 ]
               ],
-              "estimatedRadius": 0.06788479114468005,
+              "estimatedRadius": 0.06662538298583238,
               "virtualWeldTolerance": null,
               "virtualWeldDigest": null,
               "virtualWeldMemberCount": null,
               "virtualConnectedComponentCount": null
             },
-            "impactSeed": 745510914,
-            "impactChaos": 0.42,
-            "impactProfile": 0.46,
-            "profileCenterRimBalance": 0.46
+            "impactSeed": 557576500,
+            "impactChaos": 0.0,
+            "impactProfile": 0.5091227722167969,
+            "profileCenterRimBalance": 0.5091227722167969
           }
         ],
-        "recipeDigest": "a571f003a08a2c2e85abd1354d27cc55cc1d831ef2addd6c0eb2684053eed5c6",
+        "recipeDigest": "4bb6106690cbc3b542b827f4fe41e7a840b008267c122588565bfb90473ceac3",
         "impactControl": {
           "schema": "dreadstone.impact_control.v1",
           "version": 1,
           "mode": "MACRO",
           "recipeClass": "IMPACT_PEDAL",
           "macros": {
-            "size": 43.45991516113281,
-            "crush": 26.042192459106445,
-            "profile": 46.0,
-            "edgeSafety": 45.0,
-            "chaos": 42.0,
-            "asymmetry": 38.0
+            "size": 0.0,
+            "crush": 18.93709945678711,
+            "profile": 50.91227722167969,
+            "edgeSafety": 100.0,
+            "chaos": 0.0,
+            "asymmetry": 100.0
           },
-          "seed": 745510914,
-          "identityDigest": "021da07b6e35b7013147de3370f9254598b36c799d1fcb57019f3ab9b57720d7"
+          "seed": 557576500,
+          "identityDigest": "2bc80ad08b7b44e9a5753c326e975f72a72bd76b2a2fbcea402b1a53062b1fc4"
         },
         "surfaceGoreOverlay": {
           "goreRecipeVersion": 6,
@@ -6859,7 +7274,7 @@
           "gorePresetId": "USER_AUTHORED",
           "goreIdentityId": "BLOODY_CRATER",
           "goreGeometryMode": "CAVITY_INLAY",
-          "goreInlayAmount": 0.9236286878585815,
+          "goreInlayAmount": 1.0,
           "goreRaisedAmount": 0.0,
           "goreControl": {
             "schema": "dreadstone.gore_control.v1",
@@ -6869,95 +7284,95 @@
             "identityId": "BLOODY_CRATER",
             "macros": {
               "exposure": 100.0,
-              "cavity": 92.36286878585815,
-              "clotFill": 0.0,
+              "cavity": 100.0,
+              "clotFill": 100.0,
               "breakup": 0.0,
-              "wetness": 83.61181640625,
+              "wetness": 54.36363983154297,
               "variation": 0.0
             },
-            "seed": 745510914,
-            "identityDigest": "6a789c530f8abb15ffdbdf9312d26b83d4de6040c8f58db7163a0b067a573069"
+            "seed": 124691150,
+            "identityDigest": "001c4bc81cda883e2dda88ee451d482916adcfb040d69bf3cf81a311e38c73e2"
           },
           "goreSurfaceControl": {
             "schema": "dreadstone.surface_gore_control.v1",
             "version": 1,
             "macros": {
-              "mass": 82.0,
-              "relief": 68.0,
-              "nucleus": 32.0,
-              "lobes": 72.0,
-              "redness": 88.0
+              "mass": 0.0,
+              "relief": 0.0,
+              "nucleus": 0.0,
+              "lobes": 67.2597885131836,
+              "redness": 100.0
             },
-            "identityDigest": "25bfba40eaead2ad2877eb15c31cff88cc0371de34f5cf379c9d955c84c7fe4e"
+            "identityDigest": "e5e408fad565995fbe42ba06985286d9082b84019d510a3d0af0aa215925a88f"
           },
-          "goreCoverage": 0.944725751876831,
-          "goreScatter": 0.07999999821186066,
+          "goreCoverage": 0.31741002202033997,
+          "goreScatter": 0.11999999731779099,
           "goreEdgeFeather": 1.0,
-          "goreWetness": 0.863494336605072,
-          "goreDarkness": 0.24799999594688416,
+          "goreWetness": 0.6066706776618958,
+          "goreDarkness": 0.23999999463558197,
           "goreColorBias": [
             0.30000001192092896,
             0.00800000037997961,
             0.006000000052154064
           ],
-          "gorePatchScale": 0.013576958328485489,
+          "gorePatchScale": 0.0038376220036298037,
           "goreOverlayMode": "STAIN_AND_RAISED",
           "goreIntensityClass": "HIGH",
           "goreRaisedEnabled": true,
-          "goreClotCoverage": 0.8828315734863281,
-          "goreCoreDensity": 0.8824067115783691,
-          "goreClotThickness": 0.015422719530761242,
-          "goreThicknessVariation": 0.4871616065502167,
-          "goreIslandBreakup": 0.24001599848270416,
-          "gorePeripheralFragments": 0.07553804665803909,
-          "goreSurfaceOffset": 0.0024513304233551025,
-          "goreGeometryDensity": 0.9092350006103516,
-          "goreWetnessVariation": 0.25083544850349426,
-          "goreDarkClotBias": 0.30640000104904175,
-          "goreRoughEdgeBias": 0.4016435146331787,
-          "goreColorIntensity": 0.9232000112533569,
-          "goreOrganicIrregularity": 0.7192000150680542,
-          "goreSurfaceRoundness": 0.6647999882698059,
+          "goreClotCoverage": 0.11999999731779099,
+          "goreCoreDensity": 0.18000000715255737,
+          "goreClotThickness": 0.0015182433417066932,
+          "goreThicknessVariation": 0.2779217064380646,
+          "goreIslandBreakup": 0.07999999821186066,
+          "gorePeripheralFragments": 0.7249822020530701,
+          "goreSurfaceOffset": 0.0006589597905986011,
+          "goreGeometryDensity": 0.25,
+          "goreWetnessVariation": 0.16309091448783875,
+          "goreDarkClotBias": 0.3400000035762787,
+          "goreRoughEdgeBias": 0.5904626250267029,
+          "goreColorIntensity": 1.0,
+          "goreOrganicIrregularity": 0.05999999865889549,
+          "goreSurfaceRoundness": 0.07999999821186066,
           "goreTextureEnabled": true,
-          "goreFiberTextureStrength": 0.5856320261955261,
-          "goreBaseColorStrength": 0.9100000262260437,
+          "goreFiberTextureStrength": 0.6371886134147644,
+          "goreBaseColorStrength": 1.0,
           "goreInnerRimEnabled": true,
-          "goreInnerRimWidth": 0.010353404097259045,
-          "goreInnerRimStrength": 0.8480675220489502,
+          "goreInnerRimWidth": 0.010616296902298927,
+          "goreInnerRimStrength": 0.8999999761581421,
           "goreMaximumTriangles": 9000,
           "goreDefaultVisible": false,
           "goreActivationWeight": 0.01,
           "goreUserCustomized": false,
-          "goreCavityDepth": 0.0048822942189872265,
-          "goreLinerSeparation": 0.0010763120371848345,
-          "goreRimWidth": 0.010353404097259045,
-          "goreClotFillDepth": 0.0,
+          "goreCavityDepth": 0.0028510596603155136,
+          "goreLinerSeparation": 0.001124624628573656,
+          "goreRimWidth": 0.010616296902298927,
+          "goreClotFillDepth": 0.001686937059275806,
           "goreProudnessLimit": 0.0,
-          "goreHostDeformationContribution": 0.9064362049102783,
-          "goreBoneReveal": 0.30336353182792664,
-          "goreTissueCoverage": 0.2280000001192093,
+          "goreHostDeformationContribution": 1.0,
+          "goreBoneReveal": 0.0,
+          "goreTissueCoverage": 0.13223999738693237,
           "goreWoundBedEnabled": true,
-          "goreClotLayerEnabled": false,
+          "goreClotLayerEnabled": true,
           "goreTissueLayerEnabled": false,
           "goreBoneLayerEnabled": false,
           "goreBarrierLayerEnabled": true,
           "goreRaisedRimOptIn": false,
           "goreAllowInternalFragments": false,
-          "goreSurfaceMass": 0.8199999928474426,
-          "goreNucleusAmount": 0.3199999928474426,
-          "goreNucleusLobes": 0.7200000286102295,
-          "goreMaskSeed": 745510914,
+          "goreSurfaceMass": 0.0,
+          "goreNucleusAmount": 0.0,
+          "goreNucleusLobes": 0.6725978851318359,
+          "goreMaskSeed": 124691150,
           "linkedRegionId": "head",
-          "linkedStampId": "stamp_33e7f442ee924ff39a47dbf16d439cf7",
+          "linkedStampId": "stamp_6c4f2c90718f4ffc97080f55467bc0f6",
           "linkedSelectionHash": "66c11bba883957540b8c7f2489b94665bfc93ae23e204e0b3dda0679e5d1bc17",
           "linkedCaptureTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
           "validationStatus": "PASS"
         },
-        "goreOverlayDigest": "86e16d40fa827832362e8dc52105caf1b6000a72ff180469b89c4a955a9c7d39",
+        "goreOverlayDigest": "70cafc6251bb0e4a9dfcafa9997554a3076e33c6a70fdf8d03c38712bf983a4f",
         "goreOverlayEnabled": true,
         "goreOverlayMode": "STAIN_AND_RAISED",
         "goreGeometryMode": "CAVITY_INLAY",
-        "goreInlayAmount": 0.9236286878585815,
+        "goreInlayAmount": 1.0,
         "goreRaisedAmount": 0.0,
         "goreIdentityId": "BLOODY_CRATER",
         "goreControl": {
@@ -6968,26 +7383,26 @@
           "identityId": "BLOODY_CRATER",
           "macros": {
             "exposure": 100.0,
-            "cavity": 92.36286878585815,
-            "clotFill": 0.0,
+            "cavity": 100.0,
+            "clotFill": 100.0,
             "breakup": 0.0,
-            "wetness": 83.61181640625,
+            "wetness": 54.36363983154297,
             "variation": 0.0
           },
-          "seed": 745510914,
-          "identityDigest": "6a789c530f8abb15ffdbdf9312d26b83d4de6040c8f58db7163a0b067a573069"
+          "seed": 124691150,
+          "identityDigest": "001c4bc81cda883e2dda88ee451d482916adcfb040d69bf3cf81a311e38c73e2"
         },
         "goreSurfaceControl": {
           "schema": "dreadstone.surface_gore_control.v1",
           "version": 1,
           "macros": {
-            "mass": 82.0,
-            "relief": 68.0,
-            "nucleus": 32.0,
-            "lobes": 72.0,
-            "redness": 88.0
+            "mass": 0.0,
+            "relief": 0.0,
+            "nucleus": 0.0,
+            "lobes": 67.2597885131836,
+            "redness": 100.0
           },
-          "identityDigest": "25bfba40eaead2ad2877eb15c31cff88cc0371de34f5cf379c9d955c84c7fe4e"
+          "identityDigest": "e5e408fad565995fbe42ba06985286d9082b84019d510a3d0af0aa215925a88f"
         },
         "gorePresetId": "USER_AUTHORED",
         "goreIntensityClass": "HIGH",
@@ -6996,26 +7411,26 @@
         "goreOverlayValidationStatus": "PASS",
         "exportValidationStatus": "PASS",
         "goreRegionId": "head",
-        "goreDeformationKey": "Left_Head_Impact_v003",
+        "goreDeformationKey": "Left_Head_Impact_v003_v001",
         "goreGeneratedMeshIds": [
-          "gore_mesh_a3509a1c22cc61927cfe",
-          "gore_mesh_86d85885ad64fb52cfee"
+          "gore_mesh_196738d0cdcf04c38f2e",
+          "gore_mesh_57ec45eb14fc7bbbb5ef"
         ],
         "goreGeneratedNodeNames": [
-          "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
-          "DSB_GORE_DETACHED_head_Left_Head_Impact_v003"
+          "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003_v001",
+          "DSB_GORE_DETACHED_head_Left_Head_Impact_v003_v001"
         ],
         "goreGeometryDigests": {
-          "ATTACHED": "02c210b849b8d6dde4f738f9145ae5949625c2556aab09ba3335092ab2a2152c",
-          "DETACHED": "550146b7190398515336d22997fca1c5190737abbbb444894b9a4a131110ea72"
+          "ATTACHED": "96eac3222ef58b8ec2fdf1b5e071d3bc5910597bc7784c4cfd9efcbdc26f8edc",
+          "DETACHED": "f5ac8f516dd842214158e69d89cf249f5560488003b278c76497de791b551e11"
         },
         "goreGenerationDigests": {
-          "ATTACHED": "29ab2cb3e9dcf7046b2158f8ccc6dbfe08f17eaa443989a421c4115a76bf7bec",
-          "DETACHED": "ef26750080988ed4e0aaeaa3a1e1070d260a1aaf2f56d7aefd84dbc149f3dc7c"
+          "ATTACHED": "baa3581ee3b0686eb2dcea9e9d60779ff71c84b930dcf76e7884276d13d8456e",
+          "DETACHED": "3e32362a6b9b71e29e537127bc08f511932d0b29b0735aa391e2c1fad10ffd06"
         },
         "goreTriangleCounts": {
-          "ATTACHED": 1104,
-          "DETACHED": 1104
+          "ATTACHED": 600,
+          "DETACHED": 600
         },
         "goreMaterialIds": [
           "DSB_GORE_CRUSHED_TISSUE",
@@ -7026,74 +7441,165 @@
           "DSB_GORE_WET_CRIMSON"
         ],
         "goreMaterialNames": [
-          "DSB_GORE_CRUSHED_TISSUE_86e16d40",
-          "DSB_GORE_DARK_CLOT_86e16d40",
-          "DSB_GORE_DEEP_WOUND_BED_86e16d40",
-          "DSB_GORE_EXPOSED_BONE_86e16d40",
-          "DSB_GORE_ROUGH_EDGE_86e16d40",
-          "DSB_GORE_WET_CRIMSON_86e16d40"
+          "DSB_GORE_CRUSHED_TISSUE_70cafc62",
+          "DSB_GORE_DARK_CLOT_70cafc62",
+          "DSB_GORE_DEEP_WOUND_BED_70cafc62",
+          "DSB_GORE_EXPOSED_BONE_70cafc62",
+          "DSB_GORE_ROUGH_EDGE_70cafc62",
+          "DSB_GORE_WET_CRIMSON_70cafc62"
         ],
         "goreValidationMeasurements": {
           "ATTACHED": {
-            "generatedVertexCount": 630,
+            "generatedVertexCount": 354,
             "layerDepths": {
               "BARRIER": {
-                "maximum": 0.0033160710637457668,
-                "median": 0.003073900855379179,
-                "minimum": 0.0028317306470125913
+                "maximum": 0.0027553303400054572,
+                "median": 0.0025022897985763847,
+                "minimum": 0.002249249257147312
+              },
+              "CLOT": {
+                "maximum": 0.002193018142133951,
+                "median": 0.0019399776007048785,
+                "minimum": 0.001686937059275806
               },
               "LINER": {
-                "maximum": 0.0051729693909631546,
-                "median": 0.0037785920549625015,
-                "minimum": 0.0017880501127489254
+                "maximum": 0.0033777526340915435,
+                "median": 0.002625038584867999,
+                "minimum": 0.0018723245356444549
               },
               "RIM": {
-                "maximum": 0.002799680743032408,
-                "median": 0.0020121571868842673,
-                "minimum": 0.001234732975698677
+                "maximum": 0.002342492756817753,
+                "median": 0.001774592996513653,
+                "minimum": 0.0012066932362095537
               }
             },
-            "maximumCavityDepth": 0.0051729693909631546,
-            "maximumGeneratedDepth": 0.0051729693909631546,
+            "maximumCavityDepth": 0.0033777526340915435,
+            "maximumGeneratedDepth": 0.0033777526340915435,
             "maximumProudness": 0.0,
-            "medianLinerDepth": 0.0037785920549625015,
-            "minimumSkinToLinerSeparation": 0.0017880501127489254,
+            "medianLinerDepth": 0.002625038584867999,
+            "minimumSkinToLinerSeparation": 0.0018723245356444549,
             "percentVerticesAboveLimit": 0.0,
-            "triangleCount": 1104
+            "triangleCount": 600
           },
           "DETACHED": {
-            "generatedVertexCount": 630,
+            "generatedVertexCount": 354,
             "layerDepths": {
               "BARRIER": {
-                "maximum": 0.0033160710637457668,
-                "median": 0.003073900855379179,
-                "minimum": 0.0028317306470125913
+                "maximum": 0.0027553303400054572,
+                "median": 0.0025022897985763847,
+                "minimum": 0.002249249257147312
+              },
+              "CLOT": {
+                "maximum": 0.002193018142133951,
+                "median": 0.0019399776007048785,
+                "minimum": 0.001686937059275806
               },
               "LINER": {
-                "maximum": 0.0051729693909631546,
-                "median": 0.0037785920549625015,
-                "minimum": 0.0017880501127489254
+                "maximum": 0.0033777526340915435,
+                "median": 0.002625038584867999,
+                "minimum": 0.0018723245356444549
               },
               "RIM": {
-                "maximum": 0.002799680743032408,
-                "median": 0.0020121571868842673,
-                "minimum": 0.001234732975698677
+                "maximum": 0.002342492756817753,
+                "median": 0.001774592996513653,
+                "minimum": 0.0012066932362095537
               }
             },
-            "maximumCavityDepth": 0.0051729693909631546,
-            "maximumGeneratedDepth": 0.0051729693909631546,
+            "maximumCavityDepth": 0.0033777526340915435,
+            "maximumGeneratedDepth": 0.0033777526340915435,
             "maximumProudness": 0.0,
-            "medianLinerDepth": 0.0037785920549625015,
-            "minimumSkinToLinerSeparation": 0.0017880501127489254,
+            "medianLinerDepth": 0.002625038584867999,
+            "minimumSkinToLinerSeparation": 0.0018723245356444549,
             "percentVerticesAboveLimit": 0.0,
-            "triangleCount": 1104
+            "triangleCount": 600
           }
         },
         "goreActivationContract": {
           "defaultVisible": false,
           "activationWeight": 0.01,
-          "activateWithDeformationKey": "Left_Head_Impact_v003",
+          "activateWithDeformationKey": "Left_Head_Impact_v003_v001",
           "retainThroughDeathAndCorpsePersistence": true,
+          "runtimeImplementationIncluded": false
+        },
+        "surfaceStainBindingSchema": "dreadstone.surface_stain_binding.v1",
+        "surfaceStainBindings": [
+          {
+            "schema": "dreadstone.surface_stain_binding.v1",
+            "meshId": "stain_mesh_c1bbdc776cc4cf7e157d",
+            "nodeName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v003_v001",
+            "materialName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v003_v001_MAT",
+            "textureName": "",
+            "attributeName": "DSB_Surface_Stain_RGBA",
+            "attributeSemantic": "COLOR_0",
+            "maskEncoding": "COLOR_0_RGBA_ALPHA",
+            "regionId": "head",
+            "deformationKey": "Left_Head_Impact_v003_v001",
+            "ownershipRole": "ATTACHED",
+            "sourceObject": "DSB_ATTACHED_HEAD",
+            "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+            "morphTarget": "Left_Head_Impact_v003_v001",
+            "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+            "defaultVisible": false,
+            "activationWeight": 0.01,
+            "triangleCount": 86,
+            "alphaMode": "BLEND",
+            "portableRepresentation": "VERTEX_COLOR_RGBA",
+            "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+            "portableArtifactIncluded": true,
+            "runtimeImplementationIncluded": false,
+            "rendererRequirements": {
+              "glTFVersion": "2.0",
+              "materialModel": "PBR_METALLIC_ROUGHNESS",
+              "alphaMode": "BLEND",
+              "embeddedTexture": false,
+              "vertexColorSemantic": "COLOR_0",
+              "requiresNodeVisibilityToggle": true,
+              "requiresMorphWeightBinding": true,
+              "threeJsLoader": "GLTFLoader"
+            }
+          },
+          {
+            "schema": "dreadstone.surface_stain_binding.v1",
+            "meshId": "stain_mesh_8d649fd4cdd2e45a8f1f",
+            "nodeName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v003_v001",
+            "materialName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v003_v001_MAT",
+            "textureName": "",
+            "attributeName": "DSB_Surface_Stain_RGBA",
+            "attributeSemantic": "COLOR_0",
+            "maskEncoding": "COLOR_0_RGBA_ALPHA",
+            "regionId": "head",
+            "deformationKey": "Left_Head_Impact_v003_v001",
+            "ownershipRole": "DETACHED",
+            "sourceObject": "DSB_SEGMENT_HEAD",
+            "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+            "morphTarget": "Left_Head_Impact_v003_v001",
+            "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+            "defaultVisible": false,
+            "activationWeight": 0.01,
+            "triangleCount": 86,
+            "alphaMode": "BLEND",
+            "portableRepresentation": "VERTEX_COLOR_RGBA",
+            "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+            "portableArtifactIncluded": true,
+            "runtimeImplementationIncluded": false,
+            "rendererRequirements": {
+              "glTFVersion": "2.0",
+              "materialModel": "PBR_METALLIC_ROUGHNESS",
+              "alphaMode": "BLEND",
+              "embeddedTexture": false,
+              "vertexColorSemantic": "COLOR_0",
+              "requiresNodeVisibilityToggle": true,
+              "requiresMorphWeightBinding": true,
+              "threeJsLoader": "GLTFLoader"
+            }
+          }
+        ],
+        "surfaceStainActivationContract": {
+          "defaultVisible": false,
+          "activateWithDeformationKey": "Left_Head_Impact_v003_v001",
+          "activationWeight": 0.01,
+          "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+          "portableArtifactIncluded": true,
           "runtimeImplementationIncluded": false
         }
       }
@@ -7311,13 +7817,13 @@
         "sourceObject": "DSB_ATTACHED_HEAD",
         "defaultVisible": false,
         "activationWeight": 0.01,
-        "triangleCount": 1024,
-        "recipeDigest": "8ecdf54f55d417b4f7bce8155dba1e33c22e10d2c989ec154926ce5d2a3c7efc",
-        "generationDigest": "ea3b3ffab9c093d690bd637f6ab1bdab8866f35ec2845ea871ea02a8b62b17c3",
-        "geometryDigest": "e8ac38a82c572820513e05885c871eabfdcfbdbee9a61919524cc9f7ad7b8ffe",
+        "triangleCount": 1072,
+        "recipeDigest": "e1929c49130bc8a153a6148b9a067f4d346dd75a805765015516ecc5f0a08f2c",
+        "generationDigest": "38431bac5527f2529b44deba78ed8c718c8a413e11d0a2aab51aac538bb82b85",
+        "geometryDigest": "5d8d176ae6fa262f4a534c037930adfda84f8ccce110df1b1fe26b0bd99cdcb4",
         "geometryMode": "CAVITY_INLAY",
         "component": "INLAY",
-        "parentRecipeDigest": "0c1e553468e42f4140013a72f6fa9f50b3924ae9175c62f3e1568e53f7dd4ae1",
+        "parentRecipeDigest": "6c2a0ce173a4f3a3211c8e0c4f4b5c63bec2c4fcbf1775b7205259b8adee592f",
         "identityId": "BLOODY_CRATER",
         "materialIds": [
           "DSB_GORE_WET_CRIMSON",
@@ -7328,15 +7834,15 @@
           "DSB_GORE_EXPOSED_BONE"
         ],
         "materialNames": [
-          "DSB_GORE_WET_CRIMSON_8ecdf54f",
-          "DSB_GORE_DARK_CLOT_8ecdf54f",
-          "DSB_GORE_ROUGH_EDGE_8ecdf54f",
-          "DSB_GORE_DEEP_WOUND_BED_8ecdf54f",
-          "DSB_GORE_CRUSHED_TISSUE_8ecdf54f",
-          "DSB_GORE_EXPOSED_BONE_8ecdf54f"
+          "DSB_GORE_WET_CRIMSON_e1929c49",
+          "DSB_GORE_DARK_CLOT_e1929c49",
+          "DSB_GORE_ROUGH_EDGE_e1929c49",
+          "DSB_GORE_DEEP_WOUND_BED_e1929c49",
+          "DSB_GORE_CRUSHED_TISSUE_e1929c49",
+          "DSB_GORE_EXPOSED_BONE_e1929c49"
         ],
         "validationMeasurements": {
-          "generatedVertexCount": 618,
+          "generatedVertexCount": 646,
           "layerDepths": {
             "BARRIER": {
               "maximum": 0.004126964523456991,
@@ -7344,9 +7850,9 @@
               "minimum": 0.0036208834405988453
             },
             "CLOT": {
-              "maximum": 0.0025175059447064994,
-              "median": 0.002264465403277427,
-              "minimum": 0.0020114248618483543
+              "maximum": 0.0035318077309057115,
+              "median": 0.003278767189476639,
+              "minimum": 0.0030257266480475664
             },
             "LINER": {
               "maximum": 0.0062684734573953535,
@@ -7355,7 +7861,7 @@
             },
             "RIM": {
               "maximum": 0.003173401486974989,
-              "median": 0.002221679737219992,
+              "median": 0.002219541996013512,
               "minimum": 0.0013575520087971797
             }
           },
@@ -7365,7 +7871,7 @@
           "medianLinerDepth": 0.005024493748468151,
           "minimumSkinToLinerSeparation": 0.0023796128822281574,
           "percentVerticesAboveLimit": 0.0,
-          "triangleCount": 1024
+          "triangleCount": 1072
         },
         "previewOnly": false
       },
@@ -7380,12 +7886,12 @@
         "defaultVisible": false,
         "activationWeight": 0.01,
         "triangleCount": 2028,
-        "recipeDigest": "3325ead6cf24e7520f8dc9d2e071917db9f4c9dd3c302985c95b06b40b0897ad",
-        "generationDigest": "b83348ad95e62c5aea51b5bcdb78a00d1aa6a2add72977497655f1390d96ac40",
-        "geometryDigest": "70df8428cdd5690fa3e60fdc27a079e8a418f22963f290a644c8e325062e01f4",
+        "recipeDigest": "66243447a5bd438cf80ea86ffe9ec0b52eb2964efdae6b61cb2871f4a56a6efd",
+        "generationDigest": "960d079e4c49da71d6f593e69da816e132a1c6d2d2641c507eec868f567174fe",
+        "geometryDigest": "91a642e7b9b12d93b49351df987ae97e8cb060c49e80affbf4ef6eb789efc39d",
         "geometryMode": "LEGACY_RAISED",
         "component": "RAISED",
-        "parentRecipeDigest": "0c1e553468e42f4140013a72f6fa9f50b3924ae9175c62f3e1568e53f7dd4ae1",
+        "parentRecipeDigest": "6c2a0ce173a4f3a3211c8e0c4f4b5c63bec2c4fcbf1775b7205259b8adee592f",
         "identityId": "BLOODY_CRATER",
         "materialIds": [
           "DSB_GORE_WET_CRIMSON",
@@ -7394,10 +7900,10 @@
           "DSB_GORE_CRUSHED_TISSUE"
         ],
         "materialNames": [
-          "DSB_GORE_WET_CRIMSON_3325ead6",
-          "DSB_GORE_DARK_CLOT_3325ead6",
-          "DSB_GORE_ROUGH_EDGE_3325ead6",
-          "DSB_GORE_CRUSHED_TISSUE_3325ead6"
+          "DSB_GORE_WET_CRIMSON_66243447",
+          "DSB_GORE_DARK_CLOT_66243447",
+          "DSB_GORE_ROUGH_EDGE_66243447",
+          "DSB_GORE_CRUSHED_TISSUE_66243447"
         ],
         "validationMeasurements": {},
         "previewOnly": false
@@ -7412,13 +7918,13 @@
         "sourceObject": "DSB_SEGMENT_HEAD",
         "defaultVisible": false,
         "activationWeight": 0.01,
-        "triangleCount": 1024,
-        "recipeDigest": "8ecdf54f55d417b4f7bce8155dba1e33c22e10d2c989ec154926ce5d2a3c7efc",
-        "generationDigest": "55918f7eecda5e14a9a4678323a3a0ae75e32ffc52ddd008bc8521c0fd67cd88",
-        "geometryDigest": "4e743f48abe2799139703dfeda1e48a032d8893cd535b37b49f01a8b747bc33f",
+        "triangleCount": 1072,
+        "recipeDigest": "e1929c49130bc8a153a6148b9a067f4d346dd75a805765015516ecc5f0a08f2c",
+        "generationDigest": "cea6448b43afe045136564cd4c56b7bd7260aad01b20f31485bf1f9a63148712",
+        "geometryDigest": "97ade576d388e16c626f7c2987ee09d02182da2fa9d744e9bb3e219ffda93788",
         "geometryMode": "CAVITY_INLAY",
         "component": "INLAY",
-        "parentRecipeDigest": "0c1e553468e42f4140013a72f6fa9f50b3924ae9175c62f3e1568e53f7dd4ae1",
+        "parentRecipeDigest": "6c2a0ce173a4f3a3211c8e0c4f4b5c63bec2c4fcbf1775b7205259b8adee592f",
         "identityId": "BLOODY_CRATER",
         "materialIds": [
           "DSB_GORE_WET_CRIMSON",
@@ -7429,15 +7935,15 @@
           "DSB_GORE_EXPOSED_BONE"
         ],
         "materialNames": [
-          "DSB_GORE_WET_CRIMSON_8ecdf54f",
-          "DSB_GORE_DARK_CLOT_8ecdf54f",
-          "DSB_GORE_ROUGH_EDGE_8ecdf54f",
-          "DSB_GORE_DEEP_WOUND_BED_8ecdf54f",
-          "DSB_GORE_CRUSHED_TISSUE_8ecdf54f",
-          "DSB_GORE_EXPOSED_BONE_8ecdf54f"
+          "DSB_GORE_WET_CRIMSON_e1929c49",
+          "DSB_GORE_DARK_CLOT_e1929c49",
+          "DSB_GORE_ROUGH_EDGE_e1929c49",
+          "DSB_GORE_DEEP_WOUND_BED_e1929c49",
+          "DSB_GORE_CRUSHED_TISSUE_e1929c49",
+          "DSB_GORE_EXPOSED_BONE_e1929c49"
         ],
         "validationMeasurements": {
-          "generatedVertexCount": 618,
+          "generatedVertexCount": 646,
           "layerDepths": {
             "BARRIER": {
               "maximum": 0.004126964523456991,
@@ -7445,9 +7951,9 @@
               "minimum": 0.0036208834405988453
             },
             "CLOT": {
-              "maximum": 0.0025175059447064994,
-              "median": 0.002264465403277427,
-              "minimum": 0.0020114248618483543
+              "maximum": 0.0035318077309057115,
+              "median": 0.003278767189476639,
+              "minimum": 0.0030257266480475664
             },
             "LINER": {
               "maximum": 0.0062684734573953535,
@@ -7456,7 +7962,7 @@
             },
             "RIM": {
               "maximum": 0.003173401486974989,
-              "median": 0.002221679737219992,
+              "median": 0.002219541996013512,
               "minimum": 0.0013575520087971797
             }
           },
@@ -7466,7 +7972,7 @@
           "medianLinerDepth": 0.005024493748468151,
           "minimumSkinToLinerSeparation": 0.0023796128822281574,
           "percentVerticesAboveLimit": 0.0,
-          "triangleCount": 1024
+          "triangleCount": 1072
         },
         "previewOnly": false
       },
@@ -7481,12 +7987,12 @@
         "defaultVisible": false,
         "activationWeight": 0.01,
         "triangleCount": 2028,
-        "recipeDigest": "3325ead6cf24e7520f8dc9d2e071917db9f4c9dd3c302985c95b06b40b0897ad",
-        "generationDigest": "90c41dd3979e91f1d2ec4a8b41f8f35b4e875817eb07e18e0a95027db315296e",
-        "geometryDigest": "01abc965a20471c812379fc26acab75e7079b4cf2ed1bcf8c8bd6338341de2d5",
+        "recipeDigest": "66243447a5bd438cf80ea86ffe9ec0b52eb2964efdae6b61cb2871f4a56a6efd",
+        "generationDigest": "2d2512ab1f2e3c2c5924f4e845b4bbcc096c8ff9288c7ec8240cb16b88b145c6",
+        "geometryDigest": "f27b75822f4c016fb5c42cd3567596f0aa762102aab4ea1ac855facc49d4419a",
         "geometryMode": "LEGACY_RAISED",
         "component": "RAISED",
-        "parentRecipeDigest": "0c1e553468e42f4140013a72f6fa9f50b3924ae9175c62f3e1568e53f7dd4ae1",
+        "parentRecipeDigest": "6c2a0ce173a4f3a3211c8e0c4f4b5c63bec2c4fcbf1775b7205259b8adee592f",
         "identityId": "BLOODY_CRATER",
         "materialIds": [
           "DSB_GORE_WET_CRIMSON",
@@ -7495,31 +8001,31 @@
           "DSB_GORE_CRUSHED_TISSUE"
         ],
         "materialNames": [
-          "DSB_GORE_WET_CRIMSON_3325ead6",
-          "DSB_GORE_DARK_CLOT_3325ead6",
-          "DSB_GORE_ROUGH_EDGE_3325ead6",
-          "DSB_GORE_CRUSHED_TISSUE_3325ead6"
+          "DSB_GORE_WET_CRIMSON_66243447",
+          "DSB_GORE_DARK_CLOT_66243447",
+          "DSB_GORE_ROUGH_EDGE_66243447",
+          "DSB_GORE_CRUSHED_TISSUE_66243447"
         ],
         "validationMeasurements": {},
         "previewOnly": false
       },
       {
-        "meshId": "gore_mesh_a3509a1c22cc61927cfe",
-        "nodeName": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
+        "meshId": "gore_mesh_196738d0cdcf04c38f2e",
+        "nodeName": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003_v001",
         "regionId": "head",
-        "deformationKey": "Left_Head_Impact_v003",
+        "deformationKey": "Left_Head_Impact_v003_v001",
         "attachedDetachedRole": "ATTACHED",
         "ownershipRole": "ATTACHED",
         "sourceObject": "DSB_ATTACHED_HEAD",
         "defaultVisible": false,
         "activationWeight": 0.01,
-        "triangleCount": 1104,
-        "recipeDigest": "86e16d40fa827832362e8dc52105caf1b6000a72ff180469b89c4a955a9c7d39",
-        "generationDigest": "29ab2cb3e9dcf7046b2158f8ccc6dbfe08f17eaa443989a421c4115a76bf7bec",
-        "geometryDigest": "02c210b849b8d6dde4f738f9145ae5949625c2556aab09ba3335092ab2a2152c",
+        "triangleCount": 600,
+        "recipeDigest": "70cafc6251bb0e4a9dfcafa9997554a3076e33c6a70fdf8d03c38712bf983a4f",
+        "generationDigest": "baa3581ee3b0686eb2dcea9e9d60779ff71c84b930dcf76e7884276d13d8456e",
+        "geometryDigest": "96eac3222ef58b8ec2fdf1b5e071d3bc5910597bc7784c4cfd9efcbdc26f8edc",
         "geometryMode": "CAVITY_INLAY",
         "component": "INLAY",
-        "parentRecipeDigest": "86e16d40fa827832362e8dc52105caf1b6000a72ff180469b89c4a955a9c7d39",
+        "parentRecipeDigest": "70cafc6251bb0e4a9dfcafa9997554a3076e33c6a70fdf8d03c38712bf983a4f",
         "identityId": "BLOODY_CRATER",
         "materialIds": [
           "DSB_GORE_WET_CRIMSON",
@@ -7530,59 +8036,64 @@
           "DSB_GORE_EXPOSED_BONE"
         ],
         "materialNames": [
-          "DSB_GORE_WET_CRIMSON_86e16d40",
-          "DSB_GORE_DARK_CLOT_86e16d40",
-          "DSB_GORE_ROUGH_EDGE_86e16d40",
-          "DSB_GORE_DEEP_WOUND_BED_86e16d40",
-          "DSB_GORE_CRUSHED_TISSUE_86e16d40",
-          "DSB_GORE_EXPOSED_BONE_86e16d40"
+          "DSB_GORE_WET_CRIMSON_70cafc62",
+          "DSB_GORE_DARK_CLOT_70cafc62",
+          "DSB_GORE_ROUGH_EDGE_70cafc62",
+          "DSB_GORE_DEEP_WOUND_BED_70cafc62",
+          "DSB_GORE_CRUSHED_TISSUE_70cafc62",
+          "DSB_GORE_EXPOSED_BONE_70cafc62"
         ],
         "validationMeasurements": {
-          "generatedVertexCount": 630,
+          "generatedVertexCount": 354,
           "layerDepths": {
             "BARRIER": {
-              "maximum": 0.0033160710637457668,
-              "median": 0.003073900855379179,
-              "minimum": 0.0028317306470125913
+              "maximum": 0.0027553303400054572,
+              "median": 0.0025022897985763847,
+              "minimum": 0.002249249257147312
+            },
+            "CLOT": {
+              "maximum": 0.002193018142133951,
+              "median": 0.0019399776007048785,
+              "minimum": 0.001686937059275806
             },
             "LINER": {
-              "maximum": 0.0051729693909631546,
-              "median": 0.0037785920549625015,
-              "minimum": 0.0017880501127489254
+              "maximum": 0.0033777526340915435,
+              "median": 0.002625038584867999,
+              "minimum": 0.0018723245356444549
             },
             "RIM": {
-              "maximum": 0.002799680743032408,
-              "median": 0.0020121571868842673,
-              "minimum": 0.001234732975698677
+              "maximum": 0.002342492756817753,
+              "median": 0.001774592996513653,
+              "minimum": 0.0012066932362095537
             }
           },
-          "maximumCavityDepth": 0.0051729693909631546,
-          "maximumGeneratedDepth": 0.0051729693909631546,
+          "maximumCavityDepth": 0.0033777526340915435,
+          "maximumGeneratedDepth": 0.0033777526340915435,
           "maximumProudness": 0.0,
-          "medianLinerDepth": 0.0037785920549625015,
-          "minimumSkinToLinerSeparation": 0.0017880501127489254,
+          "medianLinerDepth": 0.002625038584867999,
+          "minimumSkinToLinerSeparation": 0.0018723245356444549,
           "percentVerticesAboveLimit": 0.0,
-          "triangleCount": 1104
+          "triangleCount": 600
         },
         "previewOnly": false
       },
       {
-        "meshId": "gore_mesh_86d85885ad64fb52cfee",
-        "nodeName": "DSB_GORE_DETACHED_head_Left_Head_Impact_v003",
+        "meshId": "gore_mesh_57ec45eb14fc7bbbb5ef",
+        "nodeName": "DSB_GORE_DETACHED_head_Left_Head_Impact_v003_v001",
         "regionId": "head",
-        "deformationKey": "Left_Head_Impact_v003",
+        "deformationKey": "Left_Head_Impact_v003_v001",
         "attachedDetachedRole": "DETACHED",
         "ownershipRole": "DETACHED",
         "sourceObject": "DSB_SEGMENT_HEAD",
         "defaultVisible": false,
         "activationWeight": 0.01,
-        "triangleCount": 1104,
-        "recipeDigest": "86e16d40fa827832362e8dc52105caf1b6000a72ff180469b89c4a955a9c7d39",
-        "generationDigest": "ef26750080988ed4e0aaeaa3a1e1070d260a1aaf2f56d7aefd84dbc149f3dc7c",
-        "geometryDigest": "550146b7190398515336d22997fca1c5190737abbbb444894b9a4a131110ea72",
+        "triangleCount": 600,
+        "recipeDigest": "70cafc6251bb0e4a9dfcafa9997554a3076e33c6a70fdf8d03c38712bf983a4f",
+        "generationDigest": "3e32362a6b9b71e29e537127bc08f511932d0b29b0735aa391e2c1fad10ffd06",
+        "geometryDigest": "f5ac8f516dd842214158e69d89cf249f5560488003b278c76497de791b551e11",
         "geometryMode": "CAVITY_INLAY",
         "component": "INLAY",
-        "parentRecipeDigest": "86e16d40fa827832362e8dc52105caf1b6000a72ff180469b89c4a955a9c7d39",
+        "parentRecipeDigest": "70cafc6251bb0e4a9dfcafa9997554a3076e33c6a70fdf8d03c38712bf983a4f",
         "identityId": "BLOODY_CRATER",
         "materialIds": [
           "DSB_GORE_WET_CRIMSON",
@@ -7593,41 +8104,259 @@
           "DSB_GORE_EXPOSED_BONE"
         ],
         "materialNames": [
-          "DSB_GORE_WET_CRIMSON_86e16d40",
-          "DSB_GORE_DARK_CLOT_86e16d40",
-          "DSB_GORE_ROUGH_EDGE_86e16d40",
-          "DSB_GORE_DEEP_WOUND_BED_86e16d40",
-          "DSB_GORE_CRUSHED_TISSUE_86e16d40",
-          "DSB_GORE_EXPOSED_BONE_86e16d40"
+          "DSB_GORE_WET_CRIMSON_70cafc62",
+          "DSB_GORE_DARK_CLOT_70cafc62",
+          "DSB_GORE_ROUGH_EDGE_70cafc62",
+          "DSB_GORE_DEEP_WOUND_BED_70cafc62",
+          "DSB_GORE_CRUSHED_TISSUE_70cafc62",
+          "DSB_GORE_EXPOSED_BONE_70cafc62"
         ],
         "validationMeasurements": {
-          "generatedVertexCount": 630,
+          "generatedVertexCount": 354,
           "layerDepths": {
             "BARRIER": {
-              "maximum": 0.0033160710637457668,
-              "median": 0.003073900855379179,
-              "minimum": 0.0028317306470125913
+              "maximum": 0.0027553303400054572,
+              "median": 0.0025022897985763847,
+              "minimum": 0.002249249257147312
+            },
+            "CLOT": {
+              "maximum": 0.002193018142133951,
+              "median": 0.0019399776007048785,
+              "minimum": 0.001686937059275806
             },
             "LINER": {
-              "maximum": 0.0051729693909631546,
-              "median": 0.0037785920549625015,
-              "minimum": 0.0017880501127489254
+              "maximum": 0.0033777526340915435,
+              "median": 0.002625038584867999,
+              "minimum": 0.0018723245356444549
             },
             "RIM": {
-              "maximum": 0.002799680743032408,
-              "median": 0.0020121571868842673,
-              "minimum": 0.001234732975698677
+              "maximum": 0.002342492756817753,
+              "median": 0.001774592996513653,
+              "minimum": 0.0012066932362095537
             }
           },
-          "maximumCavityDepth": 0.0051729693909631546,
-          "maximumGeneratedDepth": 0.0051729693909631546,
+          "maximumCavityDepth": 0.0033777526340915435,
+          "maximumGeneratedDepth": 0.0033777526340915435,
           "maximumProudness": 0.0,
-          "medianLinerDepth": 0.0037785920549625015,
-          "minimumSkinToLinerSeparation": 0.0017880501127489254,
+          "medianLinerDepth": 0.002625038584867999,
+          "minimumSkinToLinerSeparation": 0.0018723245356444549,
           "percentVerticesAboveLimit": 0.0,
-          "triangleCount": 1104
+          "triangleCount": 600
         },
         "previewOnly": false
+      }
+    ],
+    "surfaceStainBindingSchema": "dreadstone.surface_stain_binding.v1",
+    "surfaceStainMeshes": [
+      {
+        "schema": "dreadstone.surface_stain_binding.v1",
+        "meshId": "stain_mesh_539f887ae29abd6152de",
+        "nodeName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v001",
+        "materialName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v001_MAT",
+        "textureName": "",
+        "attributeName": "DSB_Surface_Stain_RGBA",
+        "attributeSemantic": "COLOR_0",
+        "maskEncoding": "COLOR_0_RGBA_ALPHA",
+        "regionId": "head",
+        "deformationKey": "Left_Head_Impact_v001",
+        "ownershipRole": "ATTACHED",
+        "sourceObject": "DSB_ATTACHED_HEAD",
+        "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+        "morphTarget": "Left_Head_Impact_v001",
+        "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 140,
+        "alphaMode": "BLEND",
+        "portableRepresentation": "VERTEX_COLOR_RGBA",
+        "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+        "portableArtifactIncluded": true,
+        "runtimeImplementationIncluded": false,
+        "rendererRequirements": {
+          "glTFVersion": "2.0",
+          "materialModel": "PBR_METALLIC_ROUGHNESS",
+          "alphaMode": "BLEND",
+          "embeddedTexture": false,
+          "vertexColorSemantic": "COLOR_0",
+          "requiresNodeVisibilityToggle": true,
+          "requiresMorphWeightBinding": true,
+          "threeJsLoader": "GLTFLoader"
+        }
+      },
+      {
+        "schema": "dreadstone.surface_stain_binding.v1",
+        "meshId": "stain_mesh_6d346d3a59e01774166b",
+        "nodeName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v001",
+        "materialName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v001_MAT",
+        "textureName": "",
+        "attributeName": "DSB_Surface_Stain_RGBA",
+        "attributeSemantic": "COLOR_0",
+        "maskEncoding": "COLOR_0_RGBA_ALPHA",
+        "regionId": "head",
+        "deformationKey": "Left_Head_Impact_v001",
+        "ownershipRole": "DETACHED",
+        "sourceObject": "DSB_SEGMENT_HEAD",
+        "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+        "morphTarget": "Left_Head_Impact_v001",
+        "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 140,
+        "alphaMode": "BLEND",
+        "portableRepresentation": "VERTEX_COLOR_RGBA",
+        "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+        "portableArtifactIncluded": true,
+        "runtimeImplementationIncluded": false,
+        "rendererRequirements": {
+          "glTFVersion": "2.0",
+          "materialModel": "PBR_METALLIC_ROUGHNESS",
+          "alphaMode": "BLEND",
+          "embeddedTexture": false,
+          "vertexColorSemantic": "COLOR_0",
+          "requiresNodeVisibilityToggle": true,
+          "requiresMorphWeightBinding": true,
+          "threeJsLoader": "GLTFLoader"
+        }
+      },
+      {
+        "schema": "dreadstone.surface_stain_binding.v1",
+        "meshId": "stain_mesh_ac95213280779b39ad4d",
+        "nodeName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v002",
+        "materialName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v002_MAT",
+        "textureName": "",
+        "attributeName": "DSB_Surface_Stain_RGBA",
+        "attributeSemantic": "COLOR_0",
+        "maskEncoding": "COLOR_0_RGBA_ALPHA",
+        "regionId": "head",
+        "deformationKey": "Left_Head_Impact_v002",
+        "ownershipRole": "ATTACHED",
+        "sourceObject": "DSB_ATTACHED_HEAD",
+        "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+        "morphTarget": "Left_Head_Impact_v002",
+        "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 140,
+        "alphaMode": "BLEND",
+        "portableRepresentation": "VERTEX_COLOR_RGBA",
+        "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+        "portableArtifactIncluded": true,
+        "runtimeImplementationIncluded": false,
+        "rendererRequirements": {
+          "glTFVersion": "2.0",
+          "materialModel": "PBR_METALLIC_ROUGHNESS",
+          "alphaMode": "BLEND",
+          "embeddedTexture": false,
+          "vertexColorSemantic": "COLOR_0",
+          "requiresNodeVisibilityToggle": true,
+          "requiresMorphWeightBinding": true,
+          "threeJsLoader": "GLTFLoader"
+        }
+      },
+      {
+        "schema": "dreadstone.surface_stain_binding.v1",
+        "meshId": "stain_mesh_0842f5439095adbc9791",
+        "nodeName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v002",
+        "materialName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v002_MAT",
+        "textureName": "",
+        "attributeName": "DSB_Surface_Stain_RGBA",
+        "attributeSemantic": "COLOR_0",
+        "maskEncoding": "COLOR_0_RGBA_ALPHA",
+        "regionId": "head",
+        "deformationKey": "Left_Head_Impact_v002",
+        "ownershipRole": "DETACHED",
+        "sourceObject": "DSB_SEGMENT_HEAD",
+        "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+        "morphTarget": "Left_Head_Impact_v002",
+        "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 140,
+        "alphaMode": "BLEND",
+        "portableRepresentation": "VERTEX_COLOR_RGBA",
+        "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+        "portableArtifactIncluded": true,
+        "runtimeImplementationIncluded": false,
+        "rendererRequirements": {
+          "glTFVersion": "2.0",
+          "materialModel": "PBR_METALLIC_ROUGHNESS",
+          "alphaMode": "BLEND",
+          "embeddedTexture": false,
+          "vertexColorSemantic": "COLOR_0",
+          "requiresNodeVisibilityToggle": true,
+          "requiresMorphWeightBinding": true,
+          "threeJsLoader": "GLTFLoader"
+        }
+      },
+      {
+        "schema": "dreadstone.surface_stain_binding.v1",
+        "meshId": "stain_mesh_c1bbdc776cc4cf7e157d",
+        "nodeName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v003_v001",
+        "materialName": "DSB_STAIN_ATTACHED_head_Left_Head_Impact_v003_v001_MAT",
+        "textureName": "",
+        "attributeName": "DSB_Surface_Stain_RGBA",
+        "attributeSemantic": "COLOR_0",
+        "maskEncoding": "COLOR_0_RGBA_ALPHA",
+        "regionId": "head",
+        "deformationKey": "Left_Head_Impact_v003_v001",
+        "ownershipRole": "ATTACHED",
+        "sourceObject": "DSB_ATTACHED_HEAD",
+        "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+        "morphTarget": "Left_Head_Impact_v003_v001",
+        "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 86,
+        "alphaMode": "BLEND",
+        "portableRepresentation": "VERTEX_COLOR_RGBA",
+        "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+        "portableArtifactIncluded": true,
+        "runtimeImplementationIncluded": false,
+        "rendererRequirements": {
+          "glTFVersion": "2.0",
+          "materialModel": "PBR_METALLIC_ROUGHNESS",
+          "alphaMode": "BLEND",
+          "embeddedTexture": false,
+          "vertexColorSemantic": "COLOR_0",
+          "requiresNodeVisibilityToggle": true,
+          "requiresMorphWeightBinding": true,
+          "threeJsLoader": "GLTFLoader"
+        }
+      },
+      {
+        "schema": "dreadstone.surface_stain_binding.v1",
+        "meshId": "stain_mesh_8d649fd4cdd2e45a8f1f",
+        "nodeName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v003_v001",
+        "materialName": "DSB_STAIN_DETACHED_head_Left_Head_Impact_v003_v001_MAT",
+        "textureName": "",
+        "attributeName": "DSB_Surface_Stain_RGBA",
+        "attributeSemantic": "COLOR_0",
+        "maskEncoding": "COLOR_0_RGBA_ALPHA",
+        "regionId": "head",
+        "deformationKey": "Left_Head_Impact_v003_v001",
+        "ownershipRole": "DETACHED",
+        "sourceObject": "DSB_SEGMENT_HEAD",
+        "sourceTopologyFingerprint": "1fcc54919496d5c6c76824a26e866f99c3cef6436fcf18718766aaf5c34fdff6",
+        "morphTarget": "Left_Head_Impact_v003_v001",
+        "morphWeightSource": "MATCHING_DEFORMATION_KEY_WEIGHT",
+        "defaultVisible": false,
+        "activationWeight": 0.01,
+        "triangleCount": 86,
+        "alphaMode": "BLEND",
+        "portableRepresentation": "VERTEX_COLOR_RGBA",
+        "depthBehavior": "NORMAL_OFFSET_NO_DEPTH_WRITE_OVERRIDE",
+        "portableArtifactIncluded": true,
+        "runtimeImplementationIncluded": false,
+        "rendererRequirements": {
+          "glTFVersion": "2.0",
+          "materialModel": "PBR_METALLIC_ROUGHNESS",
+          "alphaMode": "BLEND",
+          "embeddedTexture": false,
+          "vertexColorSemantic": "COLOR_0",
+          "requiresNodeVisibilityToggle": true,
+          "requiresMorphWeightBinding": true,
+          "threeJsLoader": "GLTFLoader"
+        }
       }
     ],
     "compoundTraumaEvents": [],
@@ -7636,7 +8365,48 @@
       "activationSource": "semantic compound event synchronized weight",
       "runtimeImplementationIncluded": false
     },
-    "maceHeadGuardActions": [],
+    "maceHeadGuardActions": [
+      {
+        "actionName": "DSB_Mace_Brace_Head_LeftArm_v001",
+        "guardVariant": "LEFT_ARM_EMERGENCY_HEAD_GUARD",
+        "guardActiveFrame": 5,
+        "guardActiveTimeSeconds": 0.16666666666666666,
+        "presentedRegions": [
+          "forearm_left",
+          "head"
+        ],
+        "interruptible": true,
+        "rootMotionPolicy": "IN_PLACE",
+        "validationStatus": "PASS"
+      },
+      {
+        "actionName": "DSB_Mace_Brace_Head_RightArm_v001",
+        "guardVariant": "RIGHT_ARM_EMERGENCY_HEAD_GUARD",
+        "guardActiveFrame": 23,
+        "guardActiveTimeSeconds": 0.9166666666666666,
+        "presentedRegions": [
+          "forearm_right",
+          "head"
+        ],
+        "interruptible": true,
+        "rootMotionPolicy": "IN_PLACE",
+        "validationStatus": "PASS"
+      },
+      {
+        "actionName": "DSB_Mace_Brace_Head_TwoArm_v001",
+        "guardVariant": "TWO_ARM_HEAD_GUARD",
+        "guardActiveFrame": 23,
+        "guardActiveTimeSeconds": 0.9166666666666666,
+        "presentedRegions": [
+          "forearm_left",
+          "forearm_right",
+          "head"
+        ],
+        "interruptible": true,
+        "rootMotionPolicy": "IN_PLACE",
+        "validationStatus": "PASS"
+      }
+    ],
     "goreActivationContract": {
       "undamagedState": "INACTIVE",
       "activationSource": "matching deformation key weight/state",
@@ -7645,300 +8415,23 @@
     },
     "validationStatus": "PASS",
     "progressiveDamageSiteSchema": "dreadstone.progressive_damage_sites.v1",
-    "progressiveDamageSites": [
+    "progressiveDamageSites": [],
+    "progressiveDamageSiteWarnings": [
       {
-        "schema": "dreadstone.progressive_damage_sites.v1",
-        "version": 1,
         "siteId": "damage_site",
         "siteGuid": "site_9516243fee05472998641a696b301d8f",
-        "displayName": "Left Head",
-        "regionId": "head",
-        "structuralGroup": "head",
-        "anchorLocal": [
-          0.0,
-          0.0,
-          0.0
-        ],
-        "radius": 0.10000000149011612,
-        "preferredDirectionLocal": [
-          0.7922517896593416,
-          -0.6004434409317817,
-          -0.1086497861183932
-        ],
-        "severityAnchors": {
-          "light": 0.33000001311302185,
-          "medium": 0.6600000262260437,
-          "heavy": 1.0
-        },
-        "transitionMode": "ADJACENT_CROSSFADE",
-        "transitionCurve": "SMOOTHSTEP",
-        "goreTransitionMode": "MIDPOINT_REPLACE",
-        "stageOrder": [
-          "LIGHT",
-          "MEDIUM",
-          "HEAVY"
-        ],
-        "stages": [
-          {
-            "stage": "LIGHT",
-            "stageId": "stage_7b94d1649b65f203658a1f751b7b1c08",
-            "damageKeyId": "damage_key_9b070fdc8a7ed2abd5dc97d03cbaa422",
-            "deformationKeyName": "Left_Head_Impact_v003",
-            "activeStampId": "stamp_33e7f442ee924ff39a47dbf16d439cf7",
-            "regionId": "head",
-            "regionMode": "PAIRED_SEGMENT",
-            "targetObject": "DSB_ATTACHED_HEAD",
-            "attachedObject": "DSB_ATTACHED_HEAD",
-            "detachedObject": "DSB_SEGMENT_HEAD",
-            "recipeDigest": "a571f003a08a2c2e85abd1354d27cc55cc1d831ef2addd6c0eb2684053eed5c6",
-            "deformationDigest": "bab80f29921a22ef49115c0c82fb91f5b222602f02f8f5ef19958e5d48c11313",
-            "captureDigest": "b15522d3979953f90f90aaed4d360118b53ff110d63dce353a2d88adf2bd9f21",
-            "generatedComponentIds": {
-              "ATTACHED:INLAY": "gore_mesh_a3509a1c22cc61927cfe",
-              "DETACHED:INLAY": "gore_mesh_86d85885ad64fb52cfee"
-            },
-            "generatedNodeNames": {
-              "ATTACHED:INLAY": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
-              "DETACHED:INLAY": "DSB_GORE_DETACHED_head_Left_Head_Impact_v003"
-            },
-            "ownershipRoles": [
-              "ATTACHED",
-              "DETACHED"
-            ],
-            "saved": true,
-            "validationStatus": "PASS",
-            "triangleCount": 2208,
-            "visibleTriangleCount": 1104,
-            "recommendedSeverity": 0.33000001311302185,
-            "measurements": {
-              "captureCenterLocal": [
-                -0.040580134838819504,
-                0.06774935126304626,
-                1.4481897354125977
-              ],
-              "errors": [],
-              "generatedComponentIds": {
-                "ATTACHED:INLAY": "gore_mesh_a3509a1c22cc61927cfe",
-                "DETACHED:INLAY": "gore_mesh_86d85885ad64fb52cfee"
-              },
-              "generatedNodeNames": {
-                "ATTACHED:INLAY": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
-                "DETACHED:INLAY": "DSB_GORE_DETACHED_head_Left_Head_Impact_v003"
-              },
-              "measuredMaximumDisplacement": 0.007964796998660761,
-              "ownershipRoles": [
-                "ATTACHED",
-                "DETACHED"
-              ],
-              "siteAnchorDistance": 1.4503414366215364,
-              "status": "PASS",
-              "triangleCount": 2208,
-              "visibleTriangleCount": 1104
-            }
-          },
-          {
-            "stage": "MEDIUM",
-            "stageId": "stage_e4db37972e51d478f0e34128fb52403d",
-            "damageKeyId": "damage_key_d706b05c08d67f84b0912b9d2e94c2b5",
-            "deformationKeyName": "Left_Head_Impact_v002",
-            "activeStampId": "stamp_8c9120e5e878458786cc6cf2947faa70",
-            "regionId": "head",
-            "regionMode": "PAIRED_SEGMENT",
-            "targetObject": "DSB_ATTACHED_HEAD",
-            "attachedObject": "DSB_ATTACHED_HEAD",
-            "detachedObject": "DSB_SEGMENT_HEAD",
-            "recipeDigest": "d57e7d9891f5f3ecc7e9e6180e80ec9aa0822efe00a4917b12b80b2d163df881",
-            "deformationDigest": "251084b3beefac3c2aa34eda6808ecd0372af2395e295b910dbcf4bd99c95825",
-            "captureDigest": "90c4d78dbbb78b2e03c1ba5efbb1ac29a7e84ec876ee88c09453500d0dade80b",
-            "generatedComponentIds": {
-              "ATTACHED:INLAY": "gore_mesh_f59364e57f85dae50fb4",
-              "ATTACHED:RAISED": "gore_mesh_b75b50f276cb986b7ba8",
-              "DETACHED:INLAY": "gore_mesh_4ee4c32804b5706185f7",
-              "DETACHED:RAISED": "gore_mesh_3126ab74ceafe1a08b81"
-            },
-            "generatedNodeNames": {
-              "ATTACHED:INLAY": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v002_INLAY",
-              "ATTACHED:RAISED": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v002_RAISED",
-              "DETACHED:INLAY": "DSB_GORE_DETACHED_head_Left_Head_Impact_v002_INLAY",
-              "DETACHED:RAISED": "DSB_GORE_DETACHED_head_Left_Head_Impact_v002_RAISED"
-            },
-            "ownershipRoles": [
-              "ATTACHED",
-              "DETACHED"
-            ],
-            "saved": true,
-            "validationStatus": "PASS",
-            "triangleCount": 6104,
-            "visibleTriangleCount": 3052,
-            "recommendedSeverity": 0.6600000262260437,
-            "measurements": {
-              "captureCenterLocal": [
-                -0.03496432304382324,
-                0.07522126287221909,
-                1.4404948949813843
-              ],
-              "errors": [],
-              "generatedComponentIds": {
-                "ATTACHED:INLAY": "gore_mesh_f59364e57f85dae50fb4",
-                "ATTACHED:RAISED": "gore_mesh_b75b50f276cb986b7ba8",
-                "DETACHED:INLAY": "gore_mesh_4ee4c32804b5706185f7",
-                "DETACHED:RAISED": "gore_mesh_3126ab74ceafe1a08b81"
-              },
-              "generatedNodeNames": {
-                "ATTACHED:INLAY": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v002_INLAY",
-                "ATTACHED:RAISED": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v002_RAISED",
-                "DETACHED:INLAY": "DSB_GORE_DETACHED_head_Left_Head_Impact_v002_INLAY",
-                "DETACHED:RAISED": "DSB_GORE_DETACHED_head_Left_Head_Impact_v002_RAISED"
-              },
-              "measuredMaximumDisplacement": 0.009278442400500436,
-              "ownershipRoles": [
-                "ATTACHED",
-                "DETACHED"
-              ],
-              "siteAnchorDistance": 1.44288124961958,
-              "status": "PASS",
-              "triangleCount": 6104,
-              "visibleTriangleCount": 3052
-            }
-          },
-          {
-            "stage": "HEAVY",
-            "stageId": "stage_7fd5c9ed1d06d490ac77d985b9ea8b51",
-            "damageKeyId": "damage_key_b582bc132d4554056f5b215562e085d9",
-            "deformationKeyName": "Left_Head_Impact_v001",
-            "activeStampId": "stamp_ed6dd8537f7b4b33bd19925acff93064",
-            "regionId": "head",
-            "regionMode": "PAIRED_SEGMENT",
-            "targetObject": "DSB_ATTACHED_HEAD",
-            "attachedObject": "DSB_ATTACHED_HEAD",
-            "detachedObject": "DSB_SEGMENT_HEAD",
-            "recipeDigest": "b80cadfe0d02017f099274b16a97f3151e201e2026450b5302ba424cf364343b",
-            "deformationDigest": "54dd699be05b268f7f394f9ce1ac3aac23fe0fde446e43d5ed53275ad8b51b60",
-            "captureDigest": "90c4d78dbbb78b2e03c1ba5efbb1ac29a7e84ec876ee88c09453500d0dade80b",
-            "generatedComponentIds": {
-              "ATTACHED:INLAY": "gore_mesh_0ed530dc698ee17d697e",
-              "ATTACHED:RAISED": "gore_mesh_fdfdfa19245f761b290d",
-              "DETACHED:INLAY": "gore_mesh_3e6fab996e490514c34a",
-              "DETACHED:RAISED": "gore_mesh_3b1a9aec02aa206c6e9e"
-            },
-            "generatedNodeNames": {
-              "ATTACHED:INLAY": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v001_INLAY",
-              "ATTACHED:RAISED": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v001_RAISED",
-              "DETACHED:INLAY": "DSB_GORE_DETACHED_head_Left_Head_Impact_v001_INLAY",
-              "DETACHED:RAISED": "DSB_GORE_DETACHED_head_Left_Head_Impact_v001_RAISED"
-            },
-            "ownershipRoles": [
-              "ATTACHED",
-              "DETACHED"
-            ],
-            "saved": true,
-            "validationStatus": "PASS",
-            "triangleCount": 9472,
-            "visibleTriangleCount": 4736,
-            "recommendedSeverity": 1.0,
-            "measurements": {
-              "captureCenterLocal": [
-                -0.03496432304382324,
-                0.07522126287221909,
-                1.4404948949813843
-              ],
-              "errors": [],
-              "generatedComponentIds": {
-                "ATTACHED:INLAY": "gore_mesh_0ed530dc698ee17d697e",
-                "ATTACHED:RAISED": "gore_mesh_fdfdfa19245f761b290d",
-                "DETACHED:INLAY": "gore_mesh_3e6fab996e490514c34a",
-                "DETACHED:RAISED": "gore_mesh_3b1a9aec02aa206c6e9e"
-              },
-              "generatedNodeNames": {
-                "ATTACHED:INLAY": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v001_INLAY",
-                "ATTACHED:RAISED": "DSB_GORE_ATTACHED_head_Left_Head_Impact_v001_RAISED",
-                "DETACHED:INLAY": "DSB_GORE_DETACHED_head_Left_Head_Impact_v001_INLAY",
-                "DETACHED:RAISED": "DSB_GORE_DETACHED_head_Left_Head_Impact_v001_RAISED"
-              },
-              "measuredMaximumDisplacement": 0.05375060071897997,
-              "ownershipRoles": [
-                "ATTACHED",
-                "DETACHED"
-              ],
-              "siteAnchorDistance": 1.44288124961958,
-              "status": "PASS",
-              "triangleCount": 9472,
-              "visibleTriangleCount": 4736
-            }
-          }
-        ],
-        "attachedDetachedMapping": {
-          "LIGHT": {
-            "regionMode": "PAIRED_SEGMENT",
-            "targetObject": "DSB_ATTACHED_HEAD",
-            "attachedObject": "DSB_ATTACHED_HEAD",
-            "detachedObject": "DSB_SEGMENT_HEAD",
-            "ownershipRoles": [
-              "ATTACHED",
-              "DETACHED"
-            ]
-          },
-          "MEDIUM": {
-            "regionMode": "PAIRED_SEGMENT",
-            "targetObject": "DSB_ATTACHED_HEAD",
-            "attachedObject": "DSB_ATTACHED_HEAD",
-            "detachedObject": "DSB_SEGMENT_HEAD",
-            "ownershipRoles": [
-              "ATTACHED",
-              "DETACHED"
-            ]
-          },
-          "HEAVY": {
-            "regionMode": "PAIRED_SEGMENT",
-            "targetObject": "DSB_ATTACHED_HEAD",
-            "attachedObject": "DSB_ATTACHED_HEAD",
-            "detachedObject": "DSB_SEGMENT_HEAD",
-            "ownershipRoles": [
-              "ATTACHED",
-              "DETACHED"
-            ]
-          }
-        },
-        "status": "READY_FOR_EXPORT",
-        "validationStatus": "PASS",
-        "validationDigest": "86681e4ae0359510df068bbdffed49f63b16e2389ac2648481e0689a35fea9b0",
-        "cost": {
-          "residentStageGoreTriangles": 17784,
-          "maximumVisibleStageGoreTriangles": 4736,
-          "maximumTransitionGoreTriangles": 4736,
-          "managedStageMorphTargets": 3,
-          "maximumSimultaneousStageMorphs": 2,
-          "hiddenGeneratedNodeCount": 10,
-          "perStageVisibleTriangles": {
-            "LIGHT": 1104,
-            "MEDIUM": 3052,
-            "HEAVY": 4736
-          }
-        },
-        "runtimeImplementationIncluded": false,
-        "activationContract": {
-          "stageResults": "ABSOLUTE_RELATIVE_TO_BASIS",
-          "structuralTransition": "ADJACENT_SMOOTHSTEP_CROSSFADE",
-          "maximumSimultaneousStageMorphs": 2,
-          "maximumStructuralWeight": 1.0,
-          "detailedGoreTransition": "MIDPOINT_REPLACE",
-          "detailedGoreStagesStack": false,
-          "defaultState": "ALL_SITE_GEOMETRY_INACTIVE",
-          "gameplayThresholdsOwnedByRuntime": true,
-          "impactEnergyAccumulationOwnedByRuntime": true,
-          "runtimeImplementationIncluded": false
-        }
+        "status": "FAILED",
+        "message": "Draft site omitted because Include in Export is disabled."
       }
     ],
-    "progressiveDamageSiteWarnings": [],
     "progressiveDamageSiteCost": {
-      "totalResidentStageGoreTriangles": 17784,
-      "maximumVisibleStageGoreTriangles": 4736,
-      "maximumTransitionGoreTriangles": 4736,
-      "totalManagedStageMorphTargets": 3,
-      "maximumSimultaneousStageMorphs": 2,
-      "exportEnabledSiteCount": 1,
-      "hiddenGeneratedNodeCount": 10
+      "totalResidentStageGoreTriangles": 0,
+      "maximumVisibleStageGoreTriangles": 0,
+      "maximumTransitionGoreTriangles": 0,
+      "totalManagedStageMorphTargets": 0,
+      "maximumSimultaneousStageMorphs": 0,
+      "exportEnabledSiteCount": 0,
+      "hiddenGeneratedNodeCount": 0
     },
     "region": "head",
     "attachedObject": "DSB_ATTACHED_HEAD",
@@ -7947,14 +8440,16 @@
   },
   "validation": {
     "status": "PASS",
-    "validated_at_utc": "2026-07-29T14:09:30Z",
+    "validated_at_utc": "2026-07-30T01:44:08Z",
     "authoring_version": "3.9.1",
     "authoring_build_id": "2026-07-18.source-contract.1",
     "source_topology_sha256": "880eabb3e8810327a1e60bd9e8313ad1acd65dff33970f6ae3c01ce2a459a2c8",
     "source_weight_sha256": "17ab81330545a1a9c2506bf9151f3b99deaa7a674835bbb15d77228a2e5b9b97",
     "gap_tolerance_m": 0.0005000000237487257,
     "errors": [],
-    "warnings": [],
+    "warnings": [
+      "Draft site 'Left Head' is omitted from export (FAILED)."
+    ],
     "generated_object_count": 29,
     "source_readiness": {
       "status": "PASS",
@@ -7966,8 +8461,8 @@
     "deformation": {
       "status": "PASS",
       "schema": "dreadstone.damage_deformation.v1",
-      "authoringVersion": "3.20.0",
-      "authoringBuildId": "2026-07-28.progressive-damage-sites.1",
+      "authoringVersion": "4.0.0",
+      "authoringBuildId": "2026-07-29.portable-surface-stains.1",
       "topologyPair": {
         "status": "PASS",
         "errors": [],
@@ -8153,8 +8648,8 @@
                 "triangleCounts": {
                   "ATTACHED:RAISED": 2028,
                   "DETACHED:RAISED": 2028,
-                  "ATTACHED:INLAY": 1024,
-                  "DETACHED:INLAY": 1024
+                  "ATTACHED:INLAY": 1072,
+                  "DETACHED:INLAY": 1072
                 },
                 "materialIds": [
                   "DSB_GORE_CRUSHED_TISSUE",
@@ -8166,7 +8661,7 @@
                 ],
                 "measurements": {
                   "ATTACHED:INLAY": {
-                    "generatedVertexCount": 618,
+                    "generatedVertexCount": 646,
                     "layerDepths": {
                       "BARRIER": {
                         "maximum": 0.004126964523456991,
@@ -8174,9 +8669,9 @@
                         "minimum": 0.0036208834405988453
                       },
                       "CLOT": {
-                        "maximum": 0.0025175059447064994,
-                        "median": 0.002264465403277427,
-                        "minimum": 0.0020114248618483543
+                        "maximum": 0.0035318077309057115,
+                        "median": 0.003278767189476639,
+                        "minimum": 0.0030257266480475664
                       },
                       "LINER": {
                         "maximum": 0.0062684734573953535,
@@ -8185,7 +8680,7 @@
                       },
                       "RIM": {
                         "maximum": 0.003173401486974989,
-                        "median": 0.002221679737219992,
+                        "median": 0.002219541996013512,
                         "minimum": 0.0013575520087971797
                       }
                     },
@@ -8195,10 +8690,10 @@
                     "medianLinerDepth": 0.005024493748468151,
                     "minimumSkinToLinerSeparation": 0.0023796128822281574,
                     "percentVerticesAboveLimit": 0.0,
-                    "triangleCount": 1024
+                    "triangleCount": 1072
                   },
                   "DETACHED:INLAY": {
-                    "generatedVertexCount": 618,
+                    "generatedVertexCount": 646,
                     "layerDepths": {
                       "BARRIER": {
                         "maximum": 0.004126964523456991,
@@ -8206,9 +8701,9 @@
                         "minimum": 0.0036208834405988453
                       },
                       "CLOT": {
-                        "maximum": 0.0025175059447064994,
-                        "median": 0.002264465403277427,
-                        "minimum": 0.0020114248618483543
+                        "maximum": 0.0035318077309057115,
+                        "median": 0.003278767189476639,
+                        "minimum": 0.0030257266480475664
                       },
                       "LINER": {
                         "maximum": 0.0062684734573953535,
@@ -8217,7 +8712,7 @@
                       },
                       "RIM": {
                         "maximum": 0.003173401486974989,
-                        "median": 0.002221679737219992,
+                        "median": 0.002219541996013512,
                         "minimum": 0.0013575520087971797
                       }
                     },
@@ -8227,7 +8722,7 @@
                     "medianLinerDepth": 0.005024493748468151,
                     "minimumSkinToLinerSeparation": 0.0023796128822281574,
                     "percentVerticesAboveLimit": 0.0,
-                    "triangleCount": 1024
+                    "triangleCount": 1072
                   }
                 },
                 "defaultVisible": false,
@@ -8238,12 +8733,12 @@
               "goreOverlayEnabled": true
             },
             {
-              "name": "Left_Head_Impact_v003",
+              "name": "Left_Head_Impact_v003_v001",
               "regionId": "head",
               "maximumInfluence": 1.0,
-              "maximumDisplacement": 0.008335838094353676,
-              "measuredMaximumDisplacement": 0.007964796998660761,
-              "maximumPairDeltaError": 3.725290298461914e-09,
+              "maximumDisplacement": 0.004307036753743887,
+              "measuredMaximumDisplacement": 0.003062068867836048,
+              "maximumPairDeltaError": 3.4924596548080444e-09,
               "status": "TRAUMA_REBUILT",
               "recipeStatus": "PROCEDURAL_STACK",
               "stampCount": 1,
@@ -8255,16 +8750,16 @@
                 "geometryMode": "CAVITY_INLAY",
                 "identityId": "BLOODY_CRATER",
                 "nodeNames": [
-                  "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
-                  "DSB_GORE_DETACHED_head_Left_Head_Impact_v003"
+                  "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003_v001",
+                  "DSB_GORE_DETACHED_head_Left_Head_Impact_v003_v001"
                 ],
                 "meshIds": [
-                  "gore_mesh_a3509a1c22cc61927cfe",
-                  "gore_mesh_86d85885ad64fb52cfee"
+                  "gore_mesh_196738d0cdcf04c38f2e",
+                  "gore_mesh_57ec45eb14fc7bbbb5ef"
                 ],
                 "triangleCounts": {
-                  "ATTACHED": 1104,
-                  "DETACHED": 1104
+                  "ATTACHED": 600,
+                  "DETACHED": 600
                 },
                 "materialIds": [
                   "DSB_GORE_CRUSHED_TISSUE",
@@ -8276,58 +8771,68 @@
                 ],
                 "measurements": {
                   "ATTACHED": {
-                    "generatedVertexCount": 630,
+                    "generatedVertexCount": 354,
                     "layerDepths": {
                       "BARRIER": {
-                        "maximum": 0.0033160710637457668,
-                        "median": 0.003073900855379179,
-                        "minimum": 0.0028317306470125913
+                        "maximum": 0.0027553303400054572,
+                        "median": 0.0025022897985763847,
+                        "minimum": 0.002249249257147312
+                      },
+                      "CLOT": {
+                        "maximum": 0.002193018142133951,
+                        "median": 0.0019399776007048785,
+                        "minimum": 0.001686937059275806
                       },
                       "LINER": {
-                        "maximum": 0.0051729693909631546,
-                        "median": 0.0037785920549625015,
-                        "minimum": 0.0017880501127489254
+                        "maximum": 0.0033777526340915435,
+                        "median": 0.002625038584867999,
+                        "minimum": 0.0018723245356444549
                       },
                       "RIM": {
-                        "maximum": 0.002799680743032408,
-                        "median": 0.0020121571868842673,
-                        "minimum": 0.001234732975698677
+                        "maximum": 0.002342492756817753,
+                        "median": 0.001774592996513653,
+                        "minimum": 0.0012066932362095537
                       }
                     },
-                    "maximumCavityDepth": 0.0051729693909631546,
-                    "maximumGeneratedDepth": 0.0051729693909631546,
+                    "maximumCavityDepth": 0.0033777526340915435,
+                    "maximumGeneratedDepth": 0.0033777526340915435,
                     "maximumProudness": 0.0,
-                    "medianLinerDepth": 0.0037785920549625015,
-                    "minimumSkinToLinerSeparation": 0.0017880501127489254,
+                    "medianLinerDepth": 0.002625038584867999,
+                    "minimumSkinToLinerSeparation": 0.0018723245356444549,
                     "percentVerticesAboveLimit": 0.0,
-                    "triangleCount": 1104
+                    "triangleCount": 600
                   },
                   "DETACHED": {
-                    "generatedVertexCount": 630,
+                    "generatedVertexCount": 354,
                     "layerDepths": {
                       "BARRIER": {
-                        "maximum": 0.0033160710637457668,
-                        "median": 0.003073900855379179,
-                        "minimum": 0.0028317306470125913
+                        "maximum": 0.0027553303400054572,
+                        "median": 0.0025022897985763847,
+                        "minimum": 0.002249249257147312
+                      },
+                      "CLOT": {
+                        "maximum": 0.002193018142133951,
+                        "median": 0.0019399776007048785,
+                        "minimum": 0.001686937059275806
                       },
                       "LINER": {
-                        "maximum": 0.0051729693909631546,
-                        "median": 0.0037785920549625015,
-                        "minimum": 0.0017880501127489254
+                        "maximum": 0.0033777526340915435,
+                        "median": 0.002625038584867999,
+                        "minimum": 0.0018723245356444549
                       },
                       "RIM": {
-                        "maximum": 0.002799680743032408,
-                        "median": 0.0020121571868842673,
-                        "minimum": 0.001234732975698677
+                        "maximum": 0.002342492756817753,
+                        "median": 0.001774592996513653,
+                        "minimum": 0.0012066932362095537
                       }
                     },
-                    "maximumCavityDepth": 0.0051729693909631546,
-                    "maximumGeneratedDepth": 0.0051729693909631546,
+                    "maximumCavityDepth": 0.0033777526340915435,
+                    "maximumGeneratedDepth": 0.0033777526340915435,
                     "maximumProudness": 0.0,
-                    "medianLinerDepth": 0.0037785920549625015,
-                    "minimumSkinToLinerSeparation": 0.0017880501127489254,
+                    "medianLinerDepth": 0.002625038584867999,
+                    "minimumSkinToLinerSeparation": 0.0018723245356444549,
                     "percentVerticesAboveLimit": 0.0,
-                    "triangleCount": 1104
+                    "triangleCount": 600
                   }
                 },
                 "defaultVisible": false,
@@ -8411,7 +8916,7 @@
         }
       ],
       "managedKeyCount": 3,
-      "raisedGoreTriangleCount": 17784,
+      "raisedGoreTriangleCount": 16872,
       "raisedGoreTriangleLimit": 48000,
       "keys": [
         {
@@ -8562,8 +9067,8 @@
             "triangleCounts": {
               "ATTACHED:RAISED": 2028,
               "DETACHED:RAISED": 2028,
-              "ATTACHED:INLAY": 1024,
-              "DETACHED:INLAY": 1024
+              "ATTACHED:INLAY": 1072,
+              "DETACHED:INLAY": 1072
             },
             "materialIds": [
               "DSB_GORE_CRUSHED_TISSUE",
@@ -8575,7 +9080,7 @@
             ],
             "measurements": {
               "ATTACHED:INLAY": {
-                "generatedVertexCount": 618,
+                "generatedVertexCount": 646,
                 "layerDepths": {
                   "BARRIER": {
                     "maximum": 0.004126964523456991,
@@ -8583,9 +9088,9 @@
                     "minimum": 0.0036208834405988453
                   },
                   "CLOT": {
-                    "maximum": 0.0025175059447064994,
-                    "median": 0.002264465403277427,
-                    "minimum": 0.0020114248618483543
+                    "maximum": 0.0035318077309057115,
+                    "median": 0.003278767189476639,
+                    "minimum": 0.0030257266480475664
                   },
                   "LINER": {
                     "maximum": 0.0062684734573953535,
@@ -8594,7 +9099,7 @@
                   },
                   "RIM": {
                     "maximum": 0.003173401486974989,
-                    "median": 0.002221679737219992,
+                    "median": 0.002219541996013512,
                     "minimum": 0.0013575520087971797
                   }
                 },
@@ -8604,10 +9109,10 @@
                 "medianLinerDepth": 0.005024493748468151,
                 "minimumSkinToLinerSeparation": 0.0023796128822281574,
                 "percentVerticesAboveLimit": 0.0,
-                "triangleCount": 1024
+                "triangleCount": 1072
               },
               "DETACHED:INLAY": {
-                "generatedVertexCount": 618,
+                "generatedVertexCount": 646,
                 "layerDepths": {
                   "BARRIER": {
                     "maximum": 0.004126964523456991,
@@ -8615,9 +9120,9 @@
                     "minimum": 0.0036208834405988453
                   },
                   "CLOT": {
-                    "maximum": 0.0025175059447064994,
-                    "median": 0.002264465403277427,
-                    "minimum": 0.0020114248618483543
+                    "maximum": 0.0035318077309057115,
+                    "median": 0.003278767189476639,
+                    "minimum": 0.0030257266480475664
                   },
                   "LINER": {
                     "maximum": 0.0062684734573953535,
@@ -8626,7 +9131,7 @@
                   },
                   "RIM": {
                     "maximum": 0.003173401486974989,
-                    "median": 0.002221679737219992,
+                    "median": 0.002219541996013512,
                     "minimum": 0.0013575520087971797
                   }
                 },
@@ -8636,7 +9141,7 @@
                 "medianLinerDepth": 0.005024493748468151,
                 "minimumSkinToLinerSeparation": 0.0023796128822281574,
                 "percentVerticesAboveLimit": 0.0,
-                "triangleCount": 1024
+                "triangleCount": 1072
               }
             },
             "defaultVisible": false,
@@ -8647,12 +9152,12 @@
           "goreOverlayEnabled": true
         },
         {
-          "name": "Left_Head_Impact_v003",
+          "name": "Left_Head_Impact_v003_v001",
           "regionId": "head",
           "maximumInfluence": 1.0,
-          "maximumDisplacement": 0.008335838094353676,
-          "measuredMaximumDisplacement": 0.007964796998660761,
-          "maximumPairDeltaError": 3.725290298461914e-09,
+          "maximumDisplacement": 0.004307036753743887,
+          "measuredMaximumDisplacement": 0.003062068867836048,
+          "maximumPairDeltaError": 3.4924596548080444e-09,
           "status": "TRAUMA_REBUILT",
           "recipeStatus": "PROCEDURAL_STACK",
           "stampCount": 1,
@@ -8664,16 +9169,16 @@
             "geometryMode": "CAVITY_INLAY",
             "identityId": "BLOODY_CRATER",
             "nodeNames": [
-              "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
-              "DSB_GORE_DETACHED_head_Left_Head_Impact_v003"
+              "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003_v001",
+              "DSB_GORE_DETACHED_head_Left_Head_Impact_v003_v001"
             ],
             "meshIds": [
-              "gore_mesh_a3509a1c22cc61927cfe",
-              "gore_mesh_86d85885ad64fb52cfee"
+              "gore_mesh_196738d0cdcf04c38f2e",
+              "gore_mesh_57ec45eb14fc7bbbb5ef"
             ],
             "triangleCounts": {
-              "ATTACHED": 1104,
-              "DETACHED": 1104
+              "ATTACHED": 600,
+              "DETACHED": 600
             },
             "materialIds": [
               "DSB_GORE_CRUSHED_TISSUE",
@@ -8685,58 +9190,68 @@
             ],
             "measurements": {
               "ATTACHED": {
-                "generatedVertexCount": 630,
+                "generatedVertexCount": 354,
                 "layerDepths": {
                   "BARRIER": {
-                    "maximum": 0.0033160710637457668,
-                    "median": 0.003073900855379179,
-                    "minimum": 0.0028317306470125913
+                    "maximum": 0.0027553303400054572,
+                    "median": 0.0025022897985763847,
+                    "minimum": 0.002249249257147312
+                  },
+                  "CLOT": {
+                    "maximum": 0.002193018142133951,
+                    "median": 0.0019399776007048785,
+                    "minimum": 0.001686937059275806
                   },
                   "LINER": {
-                    "maximum": 0.0051729693909631546,
-                    "median": 0.0037785920549625015,
-                    "minimum": 0.0017880501127489254
+                    "maximum": 0.0033777526340915435,
+                    "median": 0.002625038584867999,
+                    "minimum": 0.0018723245356444549
                   },
                   "RIM": {
-                    "maximum": 0.002799680743032408,
-                    "median": 0.0020121571868842673,
-                    "minimum": 0.001234732975698677
+                    "maximum": 0.002342492756817753,
+                    "median": 0.001774592996513653,
+                    "minimum": 0.0012066932362095537
                   }
                 },
-                "maximumCavityDepth": 0.0051729693909631546,
-                "maximumGeneratedDepth": 0.0051729693909631546,
+                "maximumCavityDepth": 0.0033777526340915435,
+                "maximumGeneratedDepth": 0.0033777526340915435,
                 "maximumProudness": 0.0,
-                "medianLinerDepth": 0.0037785920549625015,
-                "minimumSkinToLinerSeparation": 0.0017880501127489254,
+                "medianLinerDepth": 0.002625038584867999,
+                "minimumSkinToLinerSeparation": 0.0018723245356444549,
                 "percentVerticesAboveLimit": 0.0,
-                "triangleCount": 1104
+                "triangleCount": 600
               },
               "DETACHED": {
-                "generatedVertexCount": 630,
+                "generatedVertexCount": 354,
                 "layerDepths": {
                   "BARRIER": {
-                    "maximum": 0.0033160710637457668,
-                    "median": 0.003073900855379179,
-                    "minimum": 0.0028317306470125913
+                    "maximum": 0.0027553303400054572,
+                    "median": 0.0025022897985763847,
+                    "minimum": 0.002249249257147312
+                  },
+                  "CLOT": {
+                    "maximum": 0.002193018142133951,
+                    "median": 0.0019399776007048785,
+                    "minimum": 0.001686937059275806
                   },
                   "LINER": {
-                    "maximum": 0.0051729693909631546,
-                    "median": 0.0037785920549625015,
-                    "minimum": 0.0017880501127489254
+                    "maximum": 0.0033777526340915435,
+                    "median": 0.002625038584867999,
+                    "minimum": 0.0018723245356444549
                   },
                   "RIM": {
-                    "maximum": 0.002799680743032408,
-                    "median": 0.0020121571868842673,
-                    "minimum": 0.001234732975698677
+                    "maximum": 0.002342492756817753,
+                    "median": 0.001774592996513653,
+                    "minimum": 0.0012066932362095537
                   }
                 },
-                "maximumCavityDepth": 0.0051729693909631546,
-                "maximumGeneratedDepth": 0.0051729693909631546,
+                "maximumCavityDepth": 0.0033777526340915435,
+                "maximumGeneratedDepth": 0.0033777526340915435,
                 "maximumProudness": 0.0,
-                "medianLinerDepth": 0.0037785920549625015,
-                "minimumSkinToLinerSeparation": 0.0017880501127489254,
+                "medianLinerDepth": 0.002625038584867999,
+                "minimumSkinToLinerSeparation": 0.0018723245356444549,
                 "percentVerticesAboveLimit": 0.0,
-                "triangleCount": 1104
+                "triangleCount": 600
               }
             },
             "defaultVisible": false,
@@ -8758,12 +9273,51 @@
       "progressiveDamageSites": {
         "status": "PASS",
         "errors": [],
-        "warnings": [],
+        "warnings": [
+          "Draft site 'Left Head' is omitted from export (FAILED)."
+        ],
         "siteCount": 1,
-        "exportEnabledSiteCount": 1
+        "exportEnabledSiteCount": 0
       },
       "errors": [],
-      "warnings": []
+      "warnings": [
+        "Draft site 'Left Head' is omitted from export (FAILED)."
+      ]
+    },
+    "finalGlb": {
+      "status": "PASS",
+      "schema": "dreadstone.final_glb_validation.v1",
+      "surfaceStains": {
+        "status": "PASS",
+        "schema": "dreadstone.surface_stain_binding.v1",
+        "enabledKeyCount": 3,
+        "progressiveStageCount": 0,
+        "bindingCount": 6,
+        "errors": []
+      },
+      "baseMaterials": {
+        "status": "PASS",
+        "errors": []
+      },
+      "raisedGoreGeometry": {
+        "status": "PASS",
+        "nodeCount": 10,
+        "errors": []
+      },
+      "errors": []
+    },
+    "surfaceStains": {
+      "status": "PASS",
+      "schema": "dreadstone.surface_stain_binding.v1",
+      "enabledKeyCount": 3,
+      "progressiveStageCount": 0,
+      "bindingCount": 6,
+      "errors": []
+    },
+    "raisedGoreGeometry": {
+      "status": "PASS",
+      "nodeCount": 10,
+      "errors": []
     }
   }
 }

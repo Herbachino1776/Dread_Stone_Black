@@ -193,7 +193,8 @@ export class FolsomCombatEncounter {
     const actor = this.actor;
     const adapter = actor?.visualAdapter;
     const manifest = adapter?.damageManifest;
-    const sites = manifest?.deformations?.progressiveDamageSites ?? [];
+    const manifestSites = manifest?.deformations?.progressiveDamageSites ?? [];
+    const sites = manifestSites.length ? manifestSites : (this.modelProfile.progressiveDamageSiteFallbacks ?? []);
     const site = sites.find((entry) => {
       if (entry?.regionId !== 'head') return false;
       const firstStageName = entry.stageOrder?.[0];

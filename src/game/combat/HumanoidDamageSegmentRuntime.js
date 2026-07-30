@@ -136,8 +136,11 @@ export function validateDamageAsset({ manifest, root, profile, clips = [], anima
 function configureDamageObject(object) {
   object?.traverse?.((child) => {
     if (!child.isMesh) return;
-    child.castShadow = true;
+    const isSurfaceStain = child.userData?.dsb_stain_owned === true
+      || child.userData?.dsb_generated_role === 'surface_stain_export';
+    child.castShadow = !isSurfaceStain;
     child.receiveShadow = true;
+    if (isSurfaceStain) return;
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     materials.filter(Boolean).forEach((material) => {
       material.opacity = 1;
@@ -256,6 +259,7 @@ export class HumanoidDamageSegmentRuntime {
       segmentRuntime: this,
       root: loadedGlbRoot,
       manifest: damageManifest,
+      progressiveDamageSiteFallbacks: adapter.profile.progressiveDamageSiteFallbacks,
     });
     this.captureSegmentBindings();
     this.applyIntactState();
@@ -304,7 +308,13 @@ export class HumanoidDamageSegmentRuntime {
 
   applyIntactState() {
     this.objects.forEach((object) => {
-      if (object.userData?.dsb_default_visible === false || object.userData?.dsb_gore_default_visible === false || object.name?.startsWith('DSB_GORE_')) object.visible = false;
+      if (
+        object.userData?.dsb_default_visible === false
+        || object.userData?.dsb_gore_default_visible === false
+        || object.userData?.dsb_stain_default_visible === false
+        || object.name?.startsWith('DSB_GORE_')
+        || object.name?.startsWith('DSB_STAIN_')
+      ) object.visible = false;
     });
     const intactNames = [this.manifest?.intact?.bodyCore, ...(this.manifest?.intact?.attachedSegments ?? [])].filter(Boolean);
     intactNames.forEach((name) => { this.objects.get(name).visible = true; });
@@ -315,11 +325,18 @@ export class HumanoidDamageSegmentRuntime {
 
   validateIntactState() {
     const intactNames = [this.manifest?.intact?.bodyCore, ...(this.manifest?.intact?.attachedSegments ?? [])].filter(Boolean);
-    const hiddenObjects = [...this.objects.values()].filter((object) => object.userData?.dsb_default_visible === false || object.userData?.dsb_gore_default_visible === false || object.name?.startsWith('DSB_GORE_'));
+    const hiddenObjects = [...this.objects.values()].filter((object) => (
+      object.userData?.dsb_default_visible === false
+      || object.userData?.dsb_gore_default_visible === false
+      || object.userData?.dsb_stain_default_visible === false
+      || object.name?.startsWith('DSB_GORE_')
+      || object.name?.startsWith('DSB_STAIN_')
+    ));
     const deformation = this.deformationRuntime?.getDiagnostics?.();
     return intactNames.every((name) => this.objects.get(name)?.visible === true)
       && hiddenObjects.every((object) => object.visible === false)
       && (deformation?.visibleGoreNodes?.length ?? 0) === 0
+      && (deformation?.visibleSurfaceStainNodes?.length ?? 0) === 0
       && Object.values(deformation?.morphWeights ?? {}).every((weights) => Math.abs(weights.attached ?? 0) <= 1e-6 && Math.abs(weights.detached ?? 0) <= 1e-6);
   }
 

@@ -1,13 +1,15 @@
 {
   "status": "PASS",
-  "validated_at_utc": "2026-07-29T14:09:30Z",
+  "validated_at_utc": "2026-07-30T01:44:08Z",
   "authoring_version": "3.9.1",
   "authoring_build_id": "2026-07-18.source-contract.1",
   "source_topology_sha256": "880eabb3e8810327a1e60bd9e8313ad1acd65dff33970f6ae3c01ce2a459a2c8",
   "source_weight_sha256": "17ab81330545a1a9c2506bf9151f3b99deaa7a674835bbb15d77228a2e5b9b97",
   "gap_tolerance_m": 0.0005000000237487257,
   "errors": [],
-  "warnings": [],
+  "warnings": [
+    "Draft site 'Left Head' is omitted from export (FAILED)."
+  ],
   "generated_object_count": 29,
   "source_readiness": {
     "status": "PASS",
@@ -19,8 +21,8 @@
   "deformation": {
     "status": "PASS",
     "schema": "dreadstone.damage_deformation.v1",
-    "authoringVersion": "3.20.0",
-    "authoringBuildId": "2026-07-28.progressive-damage-sites.1",
+    "authoringVersion": "4.0.0",
+    "authoringBuildId": "2026-07-29.portable-surface-stains.1",
     "topologyPair": {
       "status": "PASS",
       "errors": [],
@@ -206,8 +208,8 @@
               "triangleCounts": {
                 "ATTACHED:RAISED": 2028,
                 "DETACHED:RAISED": 2028,
-                "ATTACHED:INLAY": 1024,
-                "DETACHED:INLAY": 1024
+                "ATTACHED:INLAY": 1072,
+                "DETACHED:INLAY": 1072
               },
               "materialIds": [
                 "DSB_GORE_CRUSHED_TISSUE",
@@ -219,7 +221,7 @@
               ],
               "measurements": {
                 "ATTACHED:INLAY": {
-                  "generatedVertexCount": 618,
+                  "generatedVertexCount": 646,
                   "layerDepths": {
                     "BARRIER": {
                       "maximum": 0.004126964523456991,
@@ -227,9 +229,9 @@
                       "minimum": 0.0036208834405988453
                     },
                     "CLOT": {
-                      "maximum": 0.0025175059447064994,
-                      "median": 0.002264465403277427,
-                      "minimum": 0.0020114248618483543
+                      "maximum": 0.0035318077309057115,
+                      "median": 0.003278767189476639,
+                      "minimum": 0.0030257266480475664
                     },
                     "LINER": {
                       "maximum": 0.0062684734573953535,
@@ -238,7 +240,7 @@
                     },
                     "RIM": {
                       "maximum": 0.003173401486974989,
-                      "median": 0.002221679737219992,
+                      "median": 0.002219541996013512,
                       "minimum": 0.0013575520087971797
                     }
                   },
@@ -248,10 +250,10 @@
                   "medianLinerDepth": 0.005024493748468151,
                   "minimumSkinToLinerSeparation": 0.0023796128822281574,
                   "percentVerticesAboveLimit": 0.0,
-                  "triangleCount": 1024
+                  "triangleCount": 1072
                 },
                 "DETACHED:INLAY": {
-                  "generatedVertexCount": 618,
+                  "generatedVertexCount": 646,
                   "layerDepths": {
                     "BARRIER": {
                       "maximum": 0.004126964523456991,
@@ -259,9 +261,9 @@
                       "minimum": 0.0036208834405988453
                     },
                     "CLOT": {
-                      "maximum": 0.0025175059447064994,
-                      "median": 0.002264465403277427,
-                      "minimum": 0.0020114248618483543
+                      "maximum": 0.0035318077309057115,
+                      "median": 0.003278767189476639,
+                      "minimum": 0.0030257266480475664
                     },
                     "LINER": {
                       "maximum": 0.0062684734573953535,
@@ -270,7 +272,7 @@
                     },
                     "RIM": {
                       "maximum": 0.003173401486974989,
-                      "median": 0.002221679737219992,
+                      "median": 0.002219541996013512,
                       "minimum": 0.0013575520087971797
                     }
                   },
@@ -280,7 +282,7 @@
                   "medianLinerDepth": 0.005024493748468151,
                   "minimumSkinToLinerSeparation": 0.0023796128822281574,
                   "percentVerticesAboveLimit": 0.0,
-                  "triangleCount": 1024
+                  "triangleCount": 1072
                 }
               },
               "defaultVisible": false,
@@ -291,12 +293,12 @@
             "goreOverlayEnabled": true
           },
           {
-            "name": "Left_Head_Impact_v003",
+            "name": "Left_Head_Impact_v003_v001",
             "regionId": "head",
             "maximumInfluence": 1.0,
-            "maximumDisplacement": 0.008335838094353676,
-            "measuredMaximumDisplacement": 0.007964796998660761,
-            "maximumPairDeltaError": 3.725290298461914e-09,
+            "maximumDisplacement": 0.004307036753743887,
+            "measuredMaximumDisplacement": 0.003062068867836048,
+            "maximumPairDeltaError": 3.4924596548080444e-09,
             "status": "TRAUMA_REBUILT",
             "recipeStatus": "PROCEDURAL_STACK",
             "stampCount": 1,
@@ -308,16 +310,16 @@
               "geometryMode": "CAVITY_INLAY",
               "identityId": "BLOODY_CRATER",
               "nodeNames": [
-                "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
-                "DSB_GORE_DETACHED_head_Left_Head_Impact_v003"
+                "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003_v001",
+                "DSB_GORE_DETACHED_head_Left_Head_Impact_v003_v001"
               ],
               "meshIds": [
-                "gore_mesh_a3509a1c22cc61927cfe",
-                "gore_mesh_86d85885ad64fb52cfee"
+                "gore_mesh_196738d0cdcf04c38f2e",
+                "gore_mesh_57ec45eb14fc7bbbb5ef"
               ],
               "triangleCounts": {
-                "ATTACHED": 1104,
-                "DETACHED": 1104
+                "ATTACHED": 600,
+                "DETACHED": 600
               },
               "materialIds": [
                 "DSB_GORE_CRUSHED_TISSUE",
@@ -329,58 +331,68 @@
               ],
               "measurements": {
                 "ATTACHED": {
-                  "generatedVertexCount": 630,
+                  "generatedVertexCount": 354,
                   "layerDepths": {
                     "BARRIER": {
-                      "maximum": 0.0033160710637457668,
-                      "median": 0.003073900855379179,
-                      "minimum": 0.0028317306470125913
+                      "maximum": 0.0027553303400054572,
+                      "median": 0.0025022897985763847,
+                      "minimum": 0.002249249257147312
+                    },
+                    "CLOT": {
+                      "maximum": 0.002193018142133951,
+                      "median": 0.0019399776007048785,
+                      "minimum": 0.001686937059275806
                     },
                     "LINER": {
-                      "maximum": 0.0051729693909631546,
-                      "median": 0.0037785920549625015,
-                      "minimum": 0.0017880501127489254
+                      "maximum": 0.0033777526340915435,
+                      "median": 0.002625038584867999,
+                      "minimum": 0.0018723245356444549
                     },
                     "RIM": {
-                      "maximum": 0.002799680743032408,
-                      "median": 0.0020121571868842673,
-                      "minimum": 0.001234732975698677
+                      "maximum": 0.002342492756817753,
+                      "median": 0.001774592996513653,
+                      "minimum": 0.0012066932362095537
                     }
                   },
-                  "maximumCavityDepth": 0.0051729693909631546,
-                  "maximumGeneratedDepth": 0.0051729693909631546,
+                  "maximumCavityDepth": 0.0033777526340915435,
+                  "maximumGeneratedDepth": 0.0033777526340915435,
                   "maximumProudness": 0.0,
-                  "medianLinerDepth": 0.0037785920549625015,
-                  "minimumSkinToLinerSeparation": 0.0017880501127489254,
+                  "medianLinerDepth": 0.002625038584867999,
+                  "minimumSkinToLinerSeparation": 0.0018723245356444549,
                   "percentVerticesAboveLimit": 0.0,
-                  "triangleCount": 1104
+                  "triangleCount": 600
                 },
                 "DETACHED": {
-                  "generatedVertexCount": 630,
+                  "generatedVertexCount": 354,
                   "layerDepths": {
                     "BARRIER": {
-                      "maximum": 0.0033160710637457668,
-                      "median": 0.003073900855379179,
-                      "minimum": 0.0028317306470125913
+                      "maximum": 0.0027553303400054572,
+                      "median": 0.0025022897985763847,
+                      "minimum": 0.002249249257147312
+                    },
+                    "CLOT": {
+                      "maximum": 0.002193018142133951,
+                      "median": 0.0019399776007048785,
+                      "minimum": 0.001686937059275806
                     },
                     "LINER": {
-                      "maximum": 0.0051729693909631546,
-                      "median": 0.0037785920549625015,
-                      "minimum": 0.0017880501127489254
+                      "maximum": 0.0033777526340915435,
+                      "median": 0.002625038584867999,
+                      "minimum": 0.0018723245356444549
                     },
                     "RIM": {
-                      "maximum": 0.002799680743032408,
-                      "median": 0.0020121571868842673,
-                      "minimum": 0.001234732975698677
+                      "maximum": 0.002342492756817753,
+                      "median": 0.001774592996513653,
+                      "minimum": 0.0012066932362095537
                     }
                   },
-                  "maximumCavityDepth": 0.0051729693909631546,
-                  "maximumGeneratedDepth": 0.0051729693909631546,
+                  "maximumCavityDepth": 0.0033777526340915435,
+                  "maximumGeneratedDepth": 0.0033777526340915435,
                   "maximumProudness": 0.0,
-                  "medianLinerDepth": 0.0037785920549625015,
-                  "minimumSkinToLinerSeparation": 0.0017880501127489254,
+                  "medianLinerDepth": 0.002625038584867999,
+                  "minimumSkinToLinerSeparation": 0.0018723245356444549,
                   "percentVerticesAboveLimit": 0.0,
-                  "triangleCount": 1104
+                  "triangleCount": 600
                 }
               },
               "defaultVisible": false,
@@ -464,7 +476,7 @@
       }
     ],
     "managedKeyCount": 3,
-    "raisedGoreTriangleCount": 17784,
+    "raisedGoreTriangleCount": 16872,
     "raisedGoreTriangleLimit": 48000,
     "keys": [
       {
@@ -615,8 +627,8 @@
           "triangleCounts": {
             "ATTACHED:RAISED": 2028,
             "DETACHED:RAISED": 2028,
-            "ATTACHED:INLAY": 1024,
-            "DETACHED:INLAY": 1024
+            "ATTACHED:INLAY": 1072,
+            "DETACHED:INLAY": 1072
           },
           "materialIds": [
             "DSB_GORE_CRUSHED_TISSUE",
@@ -628,7 +640,7 @@
           ],
           "measurements": {
             "ATTACHED:INLAY": {
-              "generatedVertexCount": 618,
+              "generatedVertexCount": 646,
               "layerDepths": {
                 "BARRIER": {
                   "maximum": 0.004126964523456991,
@@ -636,9 +648,9 @@
                   "minimum": 0.0036208834405988453
                 },
                 "CLOT": {
-                  "maximum": 0.0025175059447064994,
-                  "median": 0.002264465403277427,
-                  "minimum": 0.0020114248618483543
+                  "maximum": 0.0035318077309057115,
+                  "median": 0.003278767189476639,
+                  "minimum": 0.0030257266480475664
                 },
                 "LINER": {
                   "maximum": 0.0062684734573953535,
@@ -647,7 +659,7 @@
                 },
                 "RIM": {
                   "maximum": 0.003173401486974989,
-                  "median": 0.002221679737219992,
+                  "median": 0.002219541996013512,
                   "minimum": 0.0013575520087971797
                 }
               },
@@ -657,10 +669,10 @@
               "medianLinerDepth": 0.005024493748468151,
               "minimumSkinToLinerSeparation": 0.0023796128822281574,
               "percentVerticesAboveLimit": 0.0,
-              "triangleCount": 1024
+              "triangleCount": 1072
             },
             "DETACHED:INLAY": {
-              "generatedVertexCount": 618,
+              "generatedVertexCount": 646,
               "layerDepths": {
                 "BARRIER": {
                   "maximum": 0.004126964523456991,
@@ -668,9 +680,9 @@
                   "minimum": 0.0036208834405988453
                 },
                 "CLOT": {
-                  "maximum": 0.0025175059447064994,
-                  "median": 0.002264465403277427,
-                  "minimum": 0.0020114248618483543
+                  "maximum": 0.0035318077309057115,
+                  "median": 0.003278767189476639,
+                  "minimum": 0.0030257266480475664
                 },
                 "LINER": {
                   "maximum": 0.0062684734573953535,
@@ -679,7 +691,7 @@
                 },
                 "RIM": {
                   "maximum": 0.003173401486974989,
-                  "median": 0.002221679737219992,
+                  "median": 0.002219541996013512,
                   "minimum": 0.0013575520087971797
                 }
               },
@@ -689,7 +701,7 @@
               "medianLinerDepth": 0.005024493748468151,
               "minimumSkinToLinerSeparation": 0.0023796128822281574,
               "percentVerticesAboveLimit": 0.0,
-              "triangleCount": 1024
+              "triangleCount": 1072
             }
           },
           "defaultVisible": false,
@@ -700,12 +712,12 @@
         "goreOverlayEnabled": true
       },
       {
-        "name": "Left_Head_Impact_v003",
+        "name": "Left_Head_Impact_v003_v001",
         "regionId": "head",
         "maximumInfluence": 1.0,
-        "maximumDisplacement": 0.008335838094353676,
-        "measuredMaximumDisplacement": 0.007964796998660761,
-        "maximumPairDeltaError": 3.725290298461914e-09,
+        "maximumDisplacement": 0.004307036753743887,
+        "measuredMaximumDisplacement": 0.003062068867836048,
+        "maximumPairDeltaError": 3.4924596548080444e-09,
         "status": "TRAUMA_REBUILT",
         "recipeStatus": "PROCEDURAL_STACK",
         "stampCount": 1,
@@ -717,16 +729,16 @@
           "geometryMode": "CAVITY_INLAY",
           "identityId": "BLOODY_CRATER",
           "nodeNames": [
-            "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003",
-            "DSB_GORE_DETACHED_head_Left_Head_Impact_v003"
+            "DSB_GORE_ATTACHED_head_Left_Head_Impact_v003_v001",
+            "DSB_GORE_DETACHED_head_Left_Head_Impact_v003_v001"
           ],
           "meshIds": [
-            "gore_mesh_a3509a1c22cc61927cfe",
-            "gore_mesh_86d85885ad64fb52cfee"
+            "gore_mesh_196738d0cdcf04c38f2e",
+            "gore_mesh_57ec45eb14fc7bbbb5ef"
           ],
           "triangleCounts": {
-            "ATTACHED": 1104,
-            "DETACHED": 1104
+            "ATTACHED": 600,
+            "DETACHED": 600
           },
           "materialIds": [
             "DSB_GORE_CRUSHED_TISSUE",
@@ -738,58 +750,68 @@
           ],
           "measurements": {
             "ATTACHED": {
-              "generatedVertexCount": 630,
+              "generatedVertexCount": 354,
               "layerDepths": {
                 "BARRIER": {
-                  "maximum": 0.0033160710637457668,
-                  "median": 0.003073900855379179,
-                  "minimum": 0.0028317306470125913
+                  "maximum": 0.0027553303400054572,
+                  "median": 0.0025022897985763847,
+                  "minimum": 0.002249249257147312
+                },
+                "CLOT": {
+                  "maximum": 0.002193018142133951,
+                  "median": 0.0019399776007048785,
+                  "minimum": 0.001686937059275806
                 },
                 "LINER": {
-                  "maximum": 0.0051729693909631546,
-                  "median": 0.0037785920549625015,
-                  "minimum": 0.0017880501127489254
+                  "maximum": 0.0033777526340915435,
+                  "median": 0.002625038584867999,
+                  "minimum": 0.0018723245356444549
                 },
                 "RIM": {
-                  "maximum": 0.002799680743032408,
-                  "median": 0.0020121571868842673,
-                  "minimum": 0.001234732975698677
+                  "maximum": 0.002342492756817753,
+                  "median": 0.001774592996513653,
+                  "minimum": 0.0012066932362095537
                 }
               },
-              "maximumCavityDepth": 0.0051729693909631546,
-              "maximumGeneratedDepth": 0.0051729693909631546,
+              "maximumCavityDepth": 0.0033777526340915435,
+              "maximumGeneratedDepth": 0.0033777526340915435,
               "maximumProudness": 0.0,
-              "medianLinerDepth": 0.0037785920549625015,
-              "minimumSkinToLinerSeparation": 0.0017880501127489254,
+              "medianLinerDepth": 0.002625038584867999,
+              "minimumSkinToLinerSeparation": 0.0018723245356444549,
               "percentVerticesAboveLimit": 0.0,
-              "triangleCount": 1104
+              "triangleCount": 600
             },
             "DETACHED": {
-              "generatedVertexCount": 630,
+              "generatedVertexCount": 354,
               "layerDepths": {
                 "BARRIER": {
-                  "maximum": 0.0033160710637457668,
-                  "median": 0.003073900855379179,
-                  "minimum": 0.0028317306470125913
+                  "maximum": 0.0027553303400054572,
+                  "median": 0.0025022897985763847,
+                  "minimum": 0.002249249257147312
+                },
+                "CLOT": {
+                  "maximum": 0.002193018142133951,
+                  "median": 0.0019399776007048785,
+                  "minimum": 0.001686937059275806
                 },
                 "LINER": {
-                  "maximum": 0.0051729693909631546,
-                  "median": 0.0037785920549625015,
-                  "minimum": 0.0017880501127489254
+                  "maximum": 0.0033777526340915435,
+                  "median": 0.002625038584867999,
+                  "minimum": 0.0018723245356444549
                 },
                 "RIM": {
-                  "maximum": 0.002799680743032408,
-                  "median": 0.0020121571868842673,
-                  "minimum": 0.001234732975698677
+                  "maximum": 0.002342492756817753,
+                  "median": 0.001774592996513653,
+                  "minimum": 0.0012066932362095537
                 }
               },
-              "maximumCavityDepth": 0.0051729693909631546,
-              "maximumGeneratedDepth": 0.0051729693909631546,
+              "maximumCavityDepth": 0.0033777526340915435,
+              "maximumGeneratedDepth": 0.0033777526340915435,
               "maximumProudness": 0.0,
-              "medianLinerDepth": 0.0037785920549625015,
-              "minimumSkinToLinerSeparation": 0.0017880501127489254,
+              "medianLinerDepth": 0.002625038584867999,
+              "minimumSkinToLinerSeparation": 0.0018723245356444549,
               "percentVerticesAboveLimit": 0.0,
-              "triangleCount": 1104
+              "triangleCount": 600
             }
           },
           "defaultVisible": false,
@@ -811,11 +833,50 @@
     "progressiveDamageSites": {
       "status": "PASS",
       "errors": [],
-      "warnings": [],
+      "warnings": [
+        "Draft site 'Left Head' is omitted from export (FAILED)."
+      ],
       "siteCount": 1,
-      "exportEnabledSiteCount": 1
+      "exportEnabledSiteCount": 0
     },
     "errors": [],
-    "warnings": []
+    "warnings": [
+      "Draft site 'Left Head' is omitted from export (FAILED)."
+    ]
+  },
+  "finalGlb": {
+    "status": "PASS",
+    "schema": "dreadstone.final_glb_validation.v1",
+    "surfaceStains": {
+      "status": "PASS",
+      "schema": "dreadstone.surface_stain_binding.v1",
+      "enabledKeyCount": 3,
+      "progressiveStageCount": 0,
+      "bindingCount": 6,
+      "errors": []
+    },
+    "baseMaterials": {
+      "status": "PASS",
+      "errors": []
+    },
+    "raisedGoreGeometry": {
+      "status": "PASS",
+      "nodeCount": 10,
+      "errors": []
+    },
+    "errors": []
+  },
+  "surfaceStains": {
+    "status": "PASS",
+    "schema": "dreadstone.surface_stain_binding.v1",
+    "enabledKeyCount": 3,
+    "progressiveStageCount": 0,
+    "bindingCount": 6,
+    "errors": []
+  },
+  "raisedGoreGeometry": {
+    "status": "PASS",
+    "nodeCount": 10,
+    "errors": []
   }
 }

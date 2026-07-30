@@ -206,7 +206,12 @@ export function isolateObjectMaterials(root) {
 
 export function isForgeGoreSurfaceObject(object) {
   for (let current = object; current; current = current.parent) {
-    if (current.userData?.dsb_gore_owned === true || current.userData?.dsb_generated_role === 'raised_gore') return true;
+    if (
+      current.userData?.dsb_gore_owned === true
+      || current.userData?.dsb_stain_owned === true
+      || current.userData?.dsb_generated_role === 'raised_gore'
+      || current.userData?.dsb_generated_role === 'surface_stain_export'
+    ) return true;
   }
   return false;
 }
@@ -308,7 +313,13 @@ export class HumanoidGlbVisualAdapter {
     this.damageManifest = damageManifest;
     if (this.isolateMaterials) this.ownedMaterials = isolateObjectMaterials(this.scene);
     this.scene.traverse((object) => {
-      if (object.userData?.dsb_default_visible === false || object.userData?.dsb_gore_default_visible === false || object.name?.startsWith('DSB_GORE_')) object.visible = false;
+      if (
+        object.userData?.dsb_default_visible === false
+        || object.userData?.dsb_gore_default_visible === false
+        || object.userData?.dsb_stain_default_visible === false
+        || object.name?.startsWith('DSB_GORE_')
+        || object.name?.startsWith('DSB_STAIN_')
+      ) object.visible = false;
       if (object.isBone) this.bones.set(object.name, object);
       if (!object.isMesh) return;
       enableCombatReadabilityLightLayer(object);

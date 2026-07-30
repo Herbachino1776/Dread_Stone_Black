@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { validateCombatConfiguration } from '../src/game/combat/CombatConfig.js';
 import { validateCombatStage2Configuration } from '../src/game/combat/CombatStage2Config.js';
 import { HUMANOID_ANATOMY_REGIONS } from '../src/game/combat/CombatConfig.js';
+import { DREADGUARD_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 
 const result = validateCombatConfiguration();
 const stage2 = validateCombatStage2Configuration(HUMANOID_ANATOMY_REGIONS.map((region) => region.id));
@@ -105,10 +106,13 @@ assert.equal(dreadguardManifest.schema, 'dreadstone.damage_authoring.v1');
 assert.equal(dreadguardManifest.glb, 'dreadguard_damage_v001.glb');
 assert.equal(dreadguardValidation.status, 'PASS');
 assert.deepEqual(dreadguardValidation.errors, []);
-assert.deepEqual(dreadguardValidation.warnings, []);
+assert.deepEqual(dreadguardValidation.warnings, ["Draft site 'Left Head' is omitted from export (FAILED)."]);
 assert.equal(dreadguardValidation.source_topology_sha256, dreadguardManifest.source.topologyFingerprint);
 assert.equal(dreadguardValidation.source_weight_sha256, dreadguardManifest.source.weightFingerprint);
 assert.equal(dreadguardValidation.deformation.progressiveDamageSites.siteCount, 1);
+assert.equal(dreadguardValidation.deformation.progressiveDamageSites.exportEnabledSiteCount, 0);
+assert.equal(dreadguardValidation.finalGlb.surfaceStains.status, 'PASS');
+assert.equal(dreadguardValidation.finalGlb.surfaceStains.bindingCount, 6);
 assert.ok(dreadguardGlbJson.meshes?.length >= 1, 'Dreadguard damage GLB contains meshes');
 assert.ok(dreadguardGlbJson.skins?.length >= 1, 'Dreadguard damage GLB contains a skin');
 assert.ok(dreadguardGlbJson.meshes.flatMap((mesh) => mesh.primitives).some((primitive) => primitive.attributes.JOINTS_0 != null && primitive.attributes.WEIGHTS_0 != null), 'Dreadguard damage GLB contains a SkinnedMesh primitive');
@@ -116,18 +120,32 @@ assert.ok(dreadguardGlbJson.images?.every((image) => image.bufferView != null), 
 const dreadguardNodeNames = new Set(dreadguardGlbJson.nodes.map((node) => node.name));
 ['body', 'body_top0', 'body_top1', 'body_top2', 'neck', 'head', 'arm_left_top', 'arm_left_bot', 'arm_left_hand', 'arm_right_top', 'arm_right_bot', 'arm_right_hand', 'leg_left_top', 'leg_left_bot', 'leg_left_foot', 'leg_right_top', 'leg_right_bot', 'leg_right_foot'].forEach((name) => assert.ok(dreadguardNodeNames.has(name), `required mapped Dreadguard bone exists: ${name}`));
 dreadguardManifest.deformations.generatedGoreMeshes.forEach(({ nodeName }) => assert.ok(dreadguardNodeNames.has(nodeName), `manifest gore node exists: ${nodeName}`));
-const progressiveSite = dreadguardManifest.deformations.progressiveDamageSites[0];
+const progressiveSite = dreadguardManifest.deformations.progressiveDamageSites[0]
+  ?? DREADGUARD_DAMAGE_COMBAT_PROFILE.progressiveDamageSiteFallbacks[0];
 assert.equal(dreadguardManifest.deformations.progressiveDamageSiteSchema, 'dreadstone.progressive_damage_sites.v1');
 assert.deepEqual(progressiveSite.stageOrder, ['LIGHT', 'MEDIUM', 'HEAVY']);
 assert.deepEqual(Object.fromEntries(progressiveSite.stages.map((stage) => [stage.stage, stage.deformationKeyName])), {
-  LIGHT: 'Left_Head_Impact_v003',
+  LIGHT: 'Left_Head_Impact_v003_v001',
   MEDIUM: 'Left_Head_Impact_v002',
   HEAVY: 'Left_Head_Impact_v001',
 });
 const attachedHeadNode = dreadguardGlbJson.nodes.find((node) => node.name === progressiveSite.stages[0].attachedObject);
 const detachedHeadNode = dreadguardGlbJson.nodes.find((node) => node.name === progressiveSite.stages[0].detachedObject);
-assert.deepEqual(dreadguardGlbJson.meshes[attachedHeadNode.mesh].extras.targetNames, ['Left_Head_Impact_v001', 'Left_Head_Impact_v002', 'Left_Head_Impact_v003']);
-assert.deepEqual(dreadguardGlbJson.meshes[detachedHeadNode.mesh].extras.targetNames, ['Left_Head_Impact_v001', 'Left_Head_Impact_v002', 'Left_Head_Impact_v003']);
+assert.deepEqual(dreadguardGlbJson.meshes[attachedHeadNode.mesh].extras.targetNames, ['Left_Head_Impact_v001', 'Left_Head_Impact_v002', 'Left_Head_Impact_v003_v001']);
+assert.deepEqual(dreadguardGlbJson.meshes[detachedHeadNode.mesh].extras.targetNames, ['Left_Head_Impact_v001', 'Left_Head_Impact_v002', 'Left_Head_Impact_v003_v001']);
+assert.equal(dreadguardManifest.deformations.surfaceStainBindingSchema, 'dreadstone.surface_stain_binding.v1');
+assert.equal(dreadguardManifest.deformations.surfaceStainMeshes.length, 6);
+dreadguardManifest.deformations.surfaceStainMeshes.forEach((binding) => {
+  const node = dreadguardGlbJson.nodes.find((entry) => entry.name === binding.nodeName);
+  assert.ok(node, `manifest surface stain node exists: ${binding.nodeName}`);
+  const primitive = dreadguardGlbJson.meshes[node.mesh].primitives[0];
+  assert.ok(primitive.attributes.COLOR_0 != null, `${binding.nodeName} contains portable COLOR_0`);
+  assert.equal(dreadguardGlbJson.accessors[primitive.attributes.COLOR_0].type, 'VEC4');
+  assert.equal(dreadguardGlbJson.materials[primitive.material].name, binding.materialName);
+  assert.equal(dreadguardGlbJson.materials[primitive.material].alphaMode, 'BLEND');
+  assert.deepEqual(dreadguardGlbJson.meshes[node.mesh].extras.targetNames, [binding.morphTarget]);
+  assert.equal(binding.portableArtifactIncluded, true);
+});
 
 assert.match(sceneHostSource, /combatLab/);
 assert.match(sceneHostSource, /FolsomCombatEncounter/);

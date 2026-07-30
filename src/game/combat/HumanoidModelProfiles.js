@@ -14,6 +14,81 @@ export const DREADGUARD_BONE_MAP = Object.freeze({
   right_thigh: 'leg_right_top', right_lower_leg: 'leg_right_bot', right_foot: 'leg_right_foot',
 });
 
+// The portable-surface-stain v001 bundle accidentally exported its authored site as a disabled
+// draft. Keep this asset-specific compatibility record until Forge re-exports the site itself.
+// Forge manifest sites always take precedence in the runtime.
+export const DREADGUARD_PROGRESSIVE_DAMAGE_SITE_FALLBACK = Object.freeze({
+  schema: 'dreadstone.progressive_damage_sites.v1',
+  version: 1,
+  siteId: 'damage_site',
+  siteGuid: 'site_9516243fee05472998641a696b301d8f',
+  displayName: 'Left Head',
+  regionId: 'head',
+  structuralGroup: 'head',
+  anchorLocal: Object.freeze([0, 0, 0]),
+  radius: 0.10000000149011612,
+  preferredDirectionLocal: Object.freeze([0.7922517896593416, -0.6004434409317817, -0.1086497861183932]),
+  severityAnchors: Object.freeze({
+    light: 0.33000001311302185,
+    medium: 0.6600000262260437,
+    heavy: 1,
+  }),
+  transitionMode: 'ADJACENT_CROSSFADE',
+  transitionCurve: 'SMOOTHSTEP',
+  goreTransitionMode: 'MIDPOINT_REPLACE',
+  stageOrder: Object.freeze(['LIGHT', 'MEDIUM', 'HEAVY']),
+  stages: Object.freeze([
+    Object.freeze({
+      stage: 'LIGHT',
+      stageId: 'stage_7b94d1649b65f203658a1f751b7b1c08',
+      damageKeyId: 'damage_key_7446127ace1ec130620c7570f54a620b',
+      deformationKeyName: 'Left_Head_Impact_v003_v001',
+      activeStampId: 'stamp_6c4f2c90718f4ffc97080f55467bc0f6',
+      regionId: 'head',
+      regionMode: 'PAIRED_SEGMENT',
+      targetObject: 'DSB_ATTACHED_HEAD',
+      attachedObject: 'DSB_ATTACHED_HEAD',
+      detachedObject: 'DSB_SEGMENT_HEAD',
+      recommendedSeverity: 0.33000001311302185,
+      measurements: Object.freeze({
+        captureCenterLocal: Object.freeze([-0.040580134838819504, 0.06774935126304626, 1.4481897354125977]),
+      }),
+    }),
+    Object.freeze({
+      stage: 'MEDIUM',
+      stageId: 'stage_e4db37972e51d478f0e34128fb52403d',
+      damageKeyId: 'damage_key_d706b05c08d67f84b0912b9d2e94c2b5',
+      deformationKeyName: 'Left_Head_Impact_v002',
+      activeStampId: 'stamp_8c9120e5e878458786cc6cf2947faa70',
+      regionId: 'head',
+      regionMode: 'PAIRED_SEGMENT',
+      targetObject: 'DSB_ATTACHED_HEAD',
+      attachedObject: 'DSB_ATTACHED_HEAD',
+      detachedObject: 'DSB_SEGMENT_HEAD',
+      recommendedSeverity: 0.6600000262260437,
+      measurements: Object.freeze({
+        captureCenterLocal: Object.freeze([-0.03496432304382324, 0.07522126287221909, 1.4404948949813843]),
+      }),
+    }),
+    Object.freeze({
+      stage: 'HEAVY',
+      stageId: 'stage_7fd5c9ed1d06d490ac77d985b9ea8b51',
+      damageKeyId: 'damage_key_b582bc132d4554056f5b215562e085d9',
+      deformationKeyName: 'Left_Head_Impact_v001',
+      activeStampId: 'stamp_ed6dd8537f7b4b33bd19925acff93064',
+      regionId: 'head',
+      regionMode: 'PAIRED_SEGMENT',
+      targetObject: 'DSB_ATTACHED_HEAD',
+      attachedObject: 'DSB_ATTACHED_HEAD',
+      detachedObject: 'DSB_SEGMENT_HEAD',
+      recommendedSeverity: 1,
+      measurements: Object.freeze({
+        captureCenterLocal: Object.freeze([-0.03496432304382324, 0.07522126287221909, 1.4404948949813843]),
+      }),
+    }),
+  ]),
+});
+
 export const CURRENT_HUMANOID_PROFILE = Object.freeze({
   name: 'human_retro_256_combat',
   voiceProfile: 'male_human',
@@ -70,6 +145,7 @@ export const DREADGUARD_DAMAGE_COMBAT_PROFILE = Object.freeze({
   damageAuthoringBuildId: '2026-07-18.source-contract.1',
   damageTopologyFingerprint: '880eabb3e8810327a1e60bd9e8313ad1acd65dff33970f6ae3c01ce2a459a2c8',
   damageWeightFingerprint: '17ab81330545a1a9c2506bf9151f3b99deaa7a674835bbb15d77228a2e5b9b97',
+  progressiveDamageSiteFallbacks: Object.freeze([DREADGUARD_PROGRESSIVE_DAMAGE_SITE_FALLBACK]),
   damageExpectedAnimationNames: Object.freeze([]),
   activeDamageSegmentIds: Object.freeze(['head_neck', 'left_elbow', 'right_elbow']),
   colliderFitNotes: 'Folsom and Combat Lab Forge v3.9.1 Dreadguard baseline. The exported 1.5 m rest pose and +Y authored forward axis are authoritative while alive; the profile yaw converts authored forward to runtime forward. Kinematic combat proxies hand off to dynamic ragdoll only for collapse/death. Manifest-authored head/forearm detachment remains active.',

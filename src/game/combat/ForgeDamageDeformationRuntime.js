@@ -3,6 +3,7 @@ import { BLUNT_IMPACT_CLASSIFICATIONS } from './weapons/BluntImpactInteraction.j
 
 export const FORGE_DAMAGE_DEFORMATION_SCHEMA = 'dreadstone.damage_deformation.v1';
 export const FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA = 'dreadstone.progressive_damage_sites.v1';
+export const FORGE_SURFACE_STAIN_BINDING_SCHEMA = 'dreadstone.surface_stain_binding.v1';
 
 const HEAD_REGIONS = new Set(['head', 'face', 'skull']);
 const BODY_REGIONS = new Set(['upper_chest', 'lower_chest', 'abdomen', 'pelvis']);
@@ -15,6 +16,7 @@ const QUALIFYING_PROGRESSIVE_IMPACTS = new Set([
 const SIDE_EPSILON = 0.015;
 const weightEpsilon = 1e-6;
 export const FORGE_GORE_RENDER_ORDER = 6;
+export const FORGE_SURFACE_STAIN_RENDER_ORDER = 5;
 
 function collectNamedObjects(root) {
   const objects = new Map();
@@ -100,6 +102,21 @@ function prepareGoreSubtreePresentation(node) {
   return meshCount;
 }
 
+function prepareSurfaceStainPresentation(node) {
+  let meshCount = 0;
+  node?.traverse?.((object) => {
+    if (!object.isMesh) return;
+    meshCount += 1;
+    object.frustumCulled = false;
+    object.renderOrder = Math.max(object.renderOrder, FORGE_SURFACE_STAIN_RENDER_ORDER);
+  });
+  return meshCount;
+}
+
+function setStainEntryWeight(entry, weight) {
+  return setBindingWeight(entry?.morphBinding, weight);
+}
+
 function finiteVector(value) {
   if (value?.isVector3 && value.toArray().every(Number.isFinite)) return value.clone();
   if (Array.isArray(value) && value.slice(0, 3).every(Number.isFinite)) return new THREE.Vector3().fromArray(value);
@@ -107,7 +124,7 @@ function finiteVector(value) {
   return null;
 }
 
-export function validateForgeDamageDeformationAsset({ manifest, root } = {}) {
+export function validateForgeDamageDeformationAsset({ manifest, root, progressiveDamageSiteFallbacks = [] } = {}) {
   const errors = [];
   const deformation = manifest?.deformations;
   const { objects, duplicates } = collectNamedObjects(root);
@@ -164,6 +181,7 @@ export function validateForgeDamageDeformationAsset({ manifest, root } = {}) {
         activationWeight: Math.max(0, Number(key.goreActivationContract?.activationWeight ?? key.goreActivationWeight) || 0),
         stampCenterX: Number(key.orderedStamps?.[0]?.center?.[0]),
         goreByRole: new Map(),
+        stainByRole: new Map(),
         manifest: key,
       };
       regionRecord.keys.push(record);
@@ -208,12 +226,73 @@ export function validateForgeDamageDeformationAsset({ manifest, root } = {}) {
     }
   }
 
+  const surfaceStainNodes = [];
+  const surfaceStainMeshes = deformation?.surfaceStainMeshes ?? [];
+  if (!Array.isArray(surfaceStainMeshes)) errors.push('surface stain mesh records are invalid');
+  if (surfaceStainMeshes.length && deformation?.surfaceStainBindingSchema !== FORGE_SURFACE_STAIN_BINDING_SCHEMA) {
+    errors.push(`invalid surface stain binding schema ${deformation?.surfaceStainBindingSchema ?? 'missing'}`);
+  }
+  for (const stain of Array.isArray(surfaceStainMeshes) ? surfaceStainMeshes : []) {
+    const keyRecord = keyRecords.get(stain?.deformationKey);
+    const node = objects.get(stain?.nodeName);
+    const role = stain?.ownershipRole;
+    if (stain?.schema !== FORGE_SURFACE_STAIN_BINDING_SCHEMA) errors.push(`${stain?.nodeName ?? 'surface stain'} has invalid binding schema`);
+    if (!keyRecord) errors.push(`${stain?.nodeName ?? 'surface stain'} references unknown deformation ${stain?.deformationKey ?? 'missing'}`);
+    if (!node?.isMesh) errors.push(`surface stain node ${stain?.nodeName ?? 'missing'} is not a mesh`);
+    if (duplicates.has(stain?.nodeName)) errors.push(`surface stain node ${stain.nodeName} is duplicated`);
+    if (!VALID_GORE_ROLES.has(role)) errors.push(`surface stain node ${stain?.nodeName ?? 'missing'} has invalid ownership ${role ?? 'missing'}`);
+    const extras = node?.userData ?? {};
+    if (extras.dsb_stain_owned !== true || extras.dsb_generated_role !== 'surface_stain_export') errors.push(`${stain?.nodeName ?? 'surface stain'} is missing exported stain ownership extras`);
+    if (extras.dsb_stain_binding_schema !== FORGE_SURFACE_STAIN_BINDING_SCHEMA) errors.push(`${stain?.nodeName ?? 'surface stain'} has mismatched exported binding schema`);
+    if (extras.dsb_stain_mesh_id !== stain?.meshId) errors.push(`${stain?.nodeName ?? 'surface stain'} mesh id extra does not match manifest`);
+    if (extras.dsb_stain_region_id !== stain?.regionId || extras.dsb_stain_deformation_key !== stain?.deformationKey) errors.push(`${stain?.nodeName ?? 'surface stain'} deformation extras do not match manifest`);
+    if (extras.dsb_stain_pair_role !== role || extras.dsb_stain_source_object !== stain?.sourceObject) errors.push(`${stain?.nodeName ?? 'surface stain'} ownership extras do not match manifest`);
+    if (extras.dsb_stain_default_visible !== false || stain?.defaultVisible !== false) errors.push(`${stain?.nodeName ?? 'surface stain'} must default hidden`);
+    if (!approximatelyEqual(Number(extras.dsb_stain_activation_weight), Number(stain?.activationWeight))) errors.push(`${stain?.nodeName ?? 'surface stain'} activation threshold extra does not match manifest`);
+    if (stain?.portableArtifactIncluded !== true || extras.dsb_stain_portable_artifact_included !== true) errors.push(`${stain?.nodeName ?? 'surface stain'} has no portable artifact`);
+    if (stain?.portableRepresentation !== 'VERTEX_COLOR_RGBA' || stain?.attributeSemantic !== 'COLOR_0') errors.push(`${stain?.nodeName ?? 'surface stain'} has unsupported portable representation`);
+    if (stain?.morphWeightSource !== 'MATCHING_DEFORMATION_KEY_WEIGHT' || stain?.morphTarget !== stain?.deformationKey) errors.push(`${stain?.nodeName ?? 'surface stain'} has unsupported morph binding`);
+    if (!node?.geometry?.getAttribute?.('color') || node.geometry.getAttribute('color').itemSize !== 4) errors.push(`${stain?.nodeName ?? 'surface stain'} is missing COLOR_0 RGBA`);
+    const nodeMaterials = (Array.isArray(node?.material) ? node.material : [node?.material]).filter(Boolean);
+    if (!nodeMaterials.some((material) => material.name === stain?.materialName)) errors.push(`${stain?.nodeName ?? 'surface stain'} is missing material ${stain?.materialName ?? 'binding'}`);
+    if (!nodeMaterials.every((material) => material.transparent === true && material.vertexColors === true)) errors.push(`${stain?.nodeName ?? 'surface stain'} material is not a vertex-color alpha blend`);
+    const morphBinding = node ? resolveMorphBinding(node, stain?.morphTarget, stain?.nodeName ?? 'surface stain', errors) : null;
+    if (keyRecord && node && morphBinding && VALID_GORE_ROLES.has(role)) {
+      const expectedNames = keyRecord.manifest.surfaceStainBindings?.map?.((binding) => binding.nodeName) ?? [];
+      if (stain.regionId !== keyRecord.regionId || !expectedNames.includes(stain.nodeName)) errors.push(`${stain.nodeName} is not registered by ${keyRecord.name}`);
+      if (!keyRecord.stainByRole.has(role)) keyRecord.stainByRole.set(role, []);
+      const entry = { ...stain, role, node, keyRecord, morphBinding };
+      keyRecord.stainByRole.get(role).push(entry);
+      keyRecord.activationWeight = Math.max(keyRecord.activationWeight, Number(stain.activationWeight) || 0);
+      surfaceStainNodes.push(entry);
+    }
+  }
+
+  for (const record of keyRecords.values()) {
+    const expectsSurfaceStain = record.manifest.goreOverlayMode?.includes?.('STAIN')
+      || (record.manifest.surfaceStainBindings?.length ?? 0) > 0;
+    if (!expectsSurfaceStain) continue;
+    const expectedRoles = record.regionMode === 'PAIRED_SEGMENT' ? ['ATTACHED', 'DETACHED'] : ['CORE'];
+    expectedRoles.forEach((role) => {
+      if ((record.stainByRole.get(role)?.length ?? 0) < 1) errors.push(`${record.name} requires at least one ${role} surface stain node`);
+    });
+    const expectedStainNames = new Set(record.manifest.surfaceStainBindings?.map?.((binding) => binding.nodeName) ?? []);
+    const resolvedStainNames = new Set([...record.stainByRole.values()].flat().map((entry) => entry.node.name));
+    if (expectedStainNames.size !== resolvedStainNames.size || [...expectedStainNames].some((name) => !resolvedStainNames.has(name))) {
+      errors.push(`${record.name} resolved surface stain nodes do not match its manifest binding`);
+    }
+  }
+
   const progressiveSites = new Map();
   const progressiveStageByKey = new Map();
-  if (deformation?.progressiveDamageSites?.length && deformation.progressiveDamageSiteSchema !== FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA) {
+  const manifestProgressiveSites = Array.isArray(deformation?.progressiveDamageSites) ? deformation.progressiveDamageSites : [];
+  const fallbackProgressiveSites = Array.isArray(progressiveDamageSiteFallbacks) ? progressiveDamageSiteFallbacks : [];
+  const progressiveSiteSource = manifestProgressiveSites.length ? 'manifest' : fallbackProgressiveSites.length ? 'profile-fallback' : 'none';
+  const authoredProgressiveSites = manifestProgressiveSites.length ? manifestProgressiveSites : fallbackProgressiveSites;
+  if (authoredProgressiveSites.length && deformation?.progressiveDamageSiteSchema !== FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA) {
     errors.push(`invalid progressive damage site schema ${deformation.progressiveDamageSiteSchema ?? 'missing'}`);
   }
-  for (const site of deformation?.progressiveDamageSites ?? []) {
+  for (const site of authoredProgressiveSites) {
     if (site?.schema !== FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA || !site.siteId || progressiveSites.has(site.siteId)) {
       errors.push(`invalid or duplicate progressive damage site ${site?.siteId ?? 'missing'}`);
       continue;
@@ -247,33 +326,45 @@ export function validateForgeDamageDeformationAsset({ manifest, root } = {}) {
     progressiveSites.set(site.siteId, { ...site, stageRecords });
   }
   if (errors.length) throw new Error(`Forge damage deformation asset failed validation: ${errors.join('; ')}`);
-  return { deformation, objects, regions, keyRecords, goreNodes, progressiveSites, progressiveStageByKey };
+  return {
+    deformation,
+    objects,
+    regions,
+    keyRecords,
+    goreNodes,
+    surfaceStainNodes,
+    progressiveSites,
+    progressiveStageByKey,
+    progressiveSiteSource,
+  };
 }
 
 export class ForgeDamageDeformationRuntime {
-  constructor({ actor, adapter, segmentRuntime, root, manifest } = {}) {
+  constructor({ actor, adapter, segmentRuntime, root, manifest, progressiveDamageSiteFallbacks = [] } = {}) {
     this.actor = actor;
     this.adapter = adapter;
     this.segmentRuntime = segmentRuntime;
     this.root = root;
     this.manifest = manifest;
-    this.validation = validateForgeDamageDeformationAsset({ manifest, root });
+    this.validation = validateForgeDamageDeformationAsset({ manifest, root, progressiveDamageSiteFallbacks });
     this.keyRecords = this.validation.keyRecords;
     this.goreNodes = this.validation.goreNodes;
+    this.surfaceStainNodes = this.validation.surfaceStainNodes;
     this.progressiveSites = this.validation.progressiveSites;
     this.progressiveStageByKey = this.validation.progressiveStageByKey;
     this.progressiveState = new Map();
     this.lastActivation = null;
     this.activationCount = 0;
     this.disposed = false;
-    this.parentDetachedGoreToOwnedSegments();
+    this.parentDetachedPresentationToOwnedSegments();
     this.gorePresentationMeshCount = this.goreNodes.reduce((count, { node }) => count + prepareGoreSubtreePresentation(node), 0);
+    this.surfaceStainPresentationMeshCount = this.surfaceStainNodes.reduce((count, { node }) => count + prepareSurfaceStainPresentation(node), 0);
     this.reset();
   }
 
-  parentDetachedGoreToOwnedSegments() {
+  parentDetachedPresentationToOwnedSegments() {
     this.root.updateMatrixWorld(true);
-    this.goreNodes.filter((entry) => entry.role === 'DETACHED').forEach((entry) => {
+    [...this.goreNodes, ...this.surfaceStainNodes].filter((entry) => entry.role === 'DETACHED').forEach((entry) => {
       const owner = this.validation.objects.get(entry.sourceObject);
       if (owner && entry.node.parent !== owner) owner.attach(entry.node);
     });
@@ -286,6 +377,10 @@ export class ForgeDamageDeformationRuntime {
       setBindingWeight(record.detachedMorph, 0);
     });
     this.goreNodes.forEach(({ node }) => setGoreSubtreeVisible(node, false));
+    this.surfaceStainNodes.forEach((entry) => {
+      setStainEntryWeight(entry, 0);
+      setGoreSubtreeVisible(entry.node, false);
+    });
     this.progressiveState.clear();
     this.progressiveSites.forEach((site, siteId) => {
       this.progressiveState.set(siteId, {
@@ -398,9 +493,21 @@ export class ForgeDamageDeformationRuntime {
     });
   }
 
+  hideRegionSurfaceStains(regionId) {
+    this.surfaceStainNodes.forEach((entry) => {
+      if (entry.regionId === regionId) setGoreSubtreeVisible(entry.node, false);
+    });
+  }
+
   hideProgressiveSiteGore(site) {
     site?.stageRecords?.forEach(({ keyRecord }) => {
       keyRecord.goreByRole.forEach((nodes) => nodes.forEach((node) => setGoreSubtreeVisible(node, false)));
+    });
+  }
+
+  hideProgressiveSiteSurfaceStains(site) {
+    site?.stageRecords?.forEach(({ keyRecord }) => {
+      keyRecord.stainByRole.forEach((entries) => entries.forEach((entry) => setGoreSubtreeVisible(entry.node, false)));
     });
   }
 
@@ -439,12 +546,23 @@ export class ForgeDamageDeformationRuntime {
     site.stageRecords.forEach(({ keyRecord }, index) => {
       setBindingWeight(keyRecord.targetMorph, blend.weights[index]);
       setBindingWeight(keyRecord.detachedMorph, blend.weights[index]);
+      keyRecord.stainByRole.forEach((entries) => entries.forEach((entry) => setStainEntryWeight(entry, blend.weights[index])));
     });
     this.hideProgressiveSiteGore(site);
+    this.hideProgressiveSiteSurfaceStains(site);
     const goreStage = blend.goreStageIndex >= 0 ? site.stageRecords[blend.goreStageIndex] : null;
     const ownershipRole = goreStage ? this.getOwnershipRole(goreStage.keyRecord) : null;
     const activatedGoreNodes = goreStage ? [...(goreStage.keyRecord.goreByRole.get(ownershipRole) ?? [])] : [];
     activatedGoreNodes.forEach((node) => setGoreSubtreeVisible(node, true));
+    const activatedSurfaceStainNodes = [];
+    site.stageRecords.forEach(({ keyRecord }, index) => {
+      const role = this.getOwnershipRole(keyRecord);
+      (keyRecord.stainByRole.get(role) ?? []).forEach((entry) => {
+        if (blend.weights[index] + weightEpsilon < entry.activationWeight) return;
+        setGoreSubtreeVisible(entry.node, true);
+        activatedSurfaceStainNodes.push(entry.node);
+      });
+    });
     let exactStageIndex = -1;
     site.stageRecords.forEach((stage, index) => {
       if (blend.severity + weightEpsilon >= stage.anchor) exactStageIndex = index;
@@ -470,6 +588,8 @@ export class ForgeDamageDeformationRuntime {
       ownershipRole,
       activatedGoreNode: activatedGoreNodes[0]?.name ?? null,
       activatedGoreNodes: activatedGoreNodes.map((node) => node.name),
+      activatedSurfaceStainNode: activatedSurfaceStainNodes[0]?.name ?? null,
+      activatedSurfaceStainNodes: activatedSurfaceStainNodes.map((node) => node.name),
       localPoint: null,
       localDirection: null,
     };
@@ -525,14 +645,21 @@ export class ForgeDamageDeformationRuntime {
       if (sibling.regionId !== record.regionId || sibling === record) continue;
       setBindingWeight(sibling.targetMorph, 0);
       setBindingWeight(sibling.detachedMorph, 0);
+      sibling.stainByRole.forEach((entries) => entries.forEach((entry) => setStainEntryWeight(entry, 0)));
     }
     this.hideRegionGore(record.regionId);
+    this.hideRegionSurfaceStains(record.regionId);
     const attachedActual = setBindingWeight(record.targetMorph, actualWeight);
     const detachedActual = record.detachedMorph ? setBindingWeight(record.detachedMorph, actualWeight) : null;
+    record.stainByRole.forEach((entries) => entries.forEach((entry) => setStainEntryWeight(entry, actualWeight)));
     const ownershipRole = this.getOwnershipRole(record);
     const thresholdPassed = attachedActual + weightEpsilon >= record.activationWeight;
     const activatedGoreNodes = thresholdPassed ? [...(record.goreByRole.get(ownershipRole) ?? [])] : [];
     activatedGoreNodes.forEach((node) => setGoreSubtreeVisible(node, true));
+    const activatedSurfaceStainNodes = thresholdPassed
+      ? (record.stainByRole.get(ownershipRole) ?? []).filter((entry) => actualWeight + weightEpsilon >= entry.activationWeight)
+      : [];
+    activatedSurfaceStainNodes.forEach((entry) => setGoreSubtreeVisible(entry.node, true));
     this.activationCount += 1;
     this.lastActivation = {
       source,
@@ -545,6 +672,9 @@ export class ForgeDamageDeformationRuntime {
       activationThreshold: record.activationWeight,
       ownershipRole,
       activatedGoreNode: activatedGoreNodes[0]?.name ?? null,
+      activatedGoreNodes: activatedGoreNodes.map((node) => node.name),
+      activatedSurfaceStainNode: activatedSurfaceStainNodes[0]?.node?.name ?? null,
+      activatedSurfaceStainNodes: activatedSurfaceStainNodes.map((entry) => entry.node.name),
       localPoint: null,
       localDirection: null,
     };
@@ -587,6 +717,10 @@ export class ForgeDamageDeformationRuntime {
       setBindingWeight(record.detachedMorph, weight);
       record.goreByRole.get('ATTACHED')?.forEach((node) => setGoreSubtreeVisible(node, false));
       record.goreByRole.get('DETACHED')?.forEach((node) => setGoreSubtreeVisible(node, false));
+      record.stainByRole.forEach((entries) => entries.forEach((entry) => {
+        setStainEntryWeight(entry, weight);
+        setGoreSubtreeVisible(entry.node, false);
+      }));
     });
     const progressiveKeys = new Set();
     for (const [siteId, site] of this.progressiveSites) {
@@ -595,10 +729,17 @@ export class ForgeDamageDeformationRuntime {
       const state = this.progressiveState.get(siteId);
       const goreStage = site.stageRecords.find((stage) => stage.stage === state?.goreStage);
       goreStage?.keyRecord.goreByRole.get('DETACHED')?.forEach((node) => setGoreSubtreeVisible(node, true));
+      site.stageRecords.forEach(({ keyRecord }) => {
+        const weight = readBindingWeight(keyRecord.targetMorph);
+        keyRecord.stainByRole.get('DETACHED')?.forEach((entry) => {
+          setGoreSubtreeVisible(entry.node, weight + weightEpsilon >= entry.activationWeight);
+        });
+      });
     }
     affected.filter((record) => !progressiveKeys.has(record.name)).forEach((record) => {
       const weight = readBindingWeight(record.targetMorph);
       record.goreByRole.get('DETACHED')?.forEach((node) => setGoreSubtreeVisible(node, weight + weightEpsilon >= record.activationWeight));
+      record.stainByRole.get('DETACHED')?.forEach((entry) => setGoreSubtreeVisible(entry.node, weight + weightEpsilon >= entry.activationWeight));
     });
     return affected.length > 0;
   }
@@ -621,6 +762,7 @@ export class ForgeDamageDeformationRuntime {
       detached: record.detachedMorph ? readBindingWeight(record.detachedMorph) : null,
     }]));
     const visibleGoreNodes = this.goreNodes.filter(({ node }) => node.visible).map(({ node }) => node.name);
+    const visibleSurfaceStainNodes = this.surfaceStainNodes.filter(({ node }) => node.visible).map(({ node }) => node.name);
     const visibleGoreMaterials = [];
     const recordedMaterials = new Set();
     this.goreNodes.filter(({ node }) => node.visible).forEach(({ node }) => node.traverse((object) => {
@@ -639,7 +781,9 @@ export class ForgeDamageDeformationRuntime {
       });
     }));
     const headOwnershipOverlap = [...this.keyRecords.values()].some((record) => {
-      return Boolean(record?.goreByRole.get('ATTACHED')?.some((node) => node.visible) && record?.goreByRole.get('DETACHED')?.some((node) => node.visible));
+      const goreOverlap = record?.goreByRole.get('ATTACHED')?.some((node) => node.visible) && record?.goreByRole.get('DETACHED')?.some((node) => node.visible);
+      const stainOverlap = record?.stainByRole.get('ATTACHED')?.some((entry) => entry.node.visible) && record?.stainByRole.get('DETACHED')?.some((entry) => entry.node.visible);
+      return Boolean(goreOverlap || stainOverlap);
     });
     const progressiveSites = Object.fromEntries([...this.progressiveSites].map(([siteId, site]) => {
       const state = this.progressiveState.get(siteId);
@@ -668,12 +812,17 @@ export class ForgeDamageDeformationRuntime {
       managedMorphNames: [...this.keyRecords.keys()],
       morphWeights,
       visibleGoreNodes,
+      visibleSurfaceStainNodes,
       visibleGoreMaterials,
       headOwnershipOverlap,
       progressiveSiteSchema: this.validation.deformation.progressiveDamageSiteSchema ?? null,
+      progressiveSiteSource: this.validation.progressiveSiteSource,
       progressiveSites,
       gorePresentationMeshCount: this.gorePresentationMeshCount,
       goreRenderOrder: FORGE_GORE_RENDER_ORDER,
+      surfaceStainBindingSchema: this.validation.deformation.surfaceStainBindingSchema ?? null,
+      surfaceStainPresentationMeshCount: this.surfaceStainPresentationMeshCount,
+      surfaceStainRenderOrder: FORGE_SURFACE_STAIN_RENDER_ORDER,
       activationCount: this.activationCount,
       lastActivation: this.lastActivation ? { ...this.lastActivation } : null,
     };

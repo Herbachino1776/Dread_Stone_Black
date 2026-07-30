@@ -5,8 +5,16 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CombatPhysicsWorld, initializeCombatPhysics } from '../src/game/combat/CombatPhysicsWorld.js';
 import { HumanoidDamageSegmentRuntime, validateDamageAsset } from '../src/game/combat/HumanoidDamageSegmentRuntime.js';
-import { DREADGUARD_DAMAGE_COMBAT_PROFILE, getHumanoidProfileScale } from '../src/game/combat/HumanoidModelProfiles.js';
-import { FORGE_GORE_RENDER_ORDER } from '../src/game/combat/ForgeDamageDeformationRuntime.js';
+import {
+  DREADGUARD_DAMAGE_COMBAT_PROFILE,
+  DREADGUARD_PROGRESSIVE_DAMAGE_SITE_FALLBACK,
+  getHumanoidProfileScale,
+} from '../src/game/combat/HumanoidModelProfiles.js';
+import {
+  FORGE_GORE_RENDER_ORDER,
+  FORGE_SURFACE_STAIN_BINDING_SCHEMA,
+  FORGE_SURFACE_STAIN_RENDER_ORDER,
+} from '../src/game/combat/ForgeDamageDeformationRuntime.js';
 import { isForgeGoreSurfaceObject, prepareHumanoidCombatMaterial } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { BLUNT_IMPACT_CLASSIFICATIONS } from '../src/game/combat/weapons/BluntImpactInteraction.js';
 
@@ -123,7 +131,9 @@ function requestDetachment(runtime, segmentId) {
 }
 
 function stageRecords() {
-  const [site] = damageManifest.deformations.progressiveDamageSites;
+  const [site] = damageManifest.deformations.progressiveDamageSites.length
+    ? damageManifest.deformations.progressiveDamageSites
+    : DREADGUARD_DAMAGE_COMBAT_PROFILE.progressiveDamageSiteFallbacks;
   return site.stageOrder.map((stageName) => {
     const stage = site.stages.find((entry) => entry.stage === stageName);
     return { site, stageName, stage, anchor: site.severityAnchors[stageName.toLowerCase()] };
@@ -137,6 +147,13 @@ function expectedGoreNames(keyName, role) {
     .sort();
 }
 
+function expectedSurfaceStainNames(keyName, role) {
+  return damageManifest.deformations.surfaceStainMeshes
+    .filter((entry) => entry.deformationKey === keyName && entry.ownershipRole === role)
+    .map((entry) => entry.nodeName)
+    .sort();
+}
+
 test('Forge bundle identity, GLB structure, and validation report agree', async () => {
   const json = parseGlbJson(readFileSync(glbUrl));
   const gltf = await loadDamageGltf();
@@ -144,19 +161,41 @@ test('Forge bundle identity, GLB structure, and validation report agree', async 
   assert.equal(damageManifest.glb, 'dreadguard_damage_v001.glb');
   assert.equal(validationReport.status, 'PASS');
   assert.deepEqual(validationReport.errors, []);
-  assert.deepEqual(validationReport.warnings, []);
+  assert.deepEqual(validationReport.warnings, ["Draft site 'Left Head' is omitted from export (FAILED)."]);
   assert.equal(validationReport.deformation.status, 'PASS');
   assert.equal(validationReport.deformation.progressiveDamageSites.status, 'PASS');
   assert.equal(validationReport.deformation.progressiveDamageSites.siteCount, 1);
+  assert.equal(validationReport.deformation.progressiveDamageSites.exportEnabledSiteCount, 0);
+  assert.equal(validationReport.finalGlb.surfaceStains.status, 'PASS');
+  assert.equal(validationReport.finalGlb.surfaceStains.bindingCount, 6);
+  assert.equal(damageManifest.deformations.surfaceStainBindingSchema, FORGE_SURFACE_STAIN_BINDING_SCHEMA);
+  assert.equal(damageManifest.deformations.surfaceStainMeshes.length, 6);
+  assert.deepEqual(damageManifest.deformations.progressiveDamageSites, []);
+  assert.equal(DREADGUARD_PROGRESSIVE_DAMAGE_SITE_FALLBACK.stages[0].deformationKeyName, 'Left_Head_Impact_v003_v001');
   assert.equal(json.skins.length, 1);
   assert.ok(json.nodes.length >= 50);
   assert.ok(json.meshes.length >= 27);
   assert.ok(json.materials.length >= 18);
   assert.ok(json.images.length >= 18);
-  assert.equal(gltf.animations.length, 1, 'the bundle contains one non-authoritative embedded walk clip');
+  assert.deepEqual(gltf.animations.map((clip) => clip.name), [
+    'DSB_Death_KneesFirst_RIGHT_v001',
+    'DSB_Hurt_LEFT_Flank_v001',
+    'DSB_Hurt_RIGHT_Flank_v001',
+    'DSB_Mace_Brace_Head_LeftArm_v001',
+    'DSB_Mace_Brace_Head_RightArm_v001',
+    'DSB_Mace_Brace_Head_TwoArm_v001',
+    'DSB_Walk_NORMAL_v001',
+  ], 'embedded Forge clips remain visible to validation but are not an approved animation pack');
   assert.deepEqual(DREADGUARD_DAMAGE_COMBAT_PROFILE.damageExpectedAnimationNames, []);
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.authoredForwardAxis, '+Y');
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.rootYaw, Math.PI, 'the +Y-authored Dreadguard is rotated into runtime forward instead of gliding backward');
+  for (const binding of damageManifest.deformations.surfaceStainMeshes) {
+    const node = json.nodes.find((entry) => entry.name === binding.nodeName);
+    const primitive = json.meshes[node.mesh].primitives[0];
+    assert.ok(primitive.attributes.COLOR_0 != null, `${binding.nodeName} exports COLOR_0`);
+    assert.equal(json.accessors[primitive.attributes.COLOR_0].type, 'VEC4');
+    assert.equal(json.materials[primitive.material].alphaMode, 'BLEND');
+  }
   assert.doesNotThrow(() => validateDamageAsset({
     manifest: damageManifest,
     root: gltf.scene,
@@ -212,6 +251,9 @@ test('intact startup visibility and all active segment relationships come from t
       assert.equal(fixture.gltf.scene.getObjectByName(record.bone).isBone, true);
     }
     assert.deepEqual(diagnostics.deformation.visibleGoreNodes, []);
+    assert.deepEqual(diagnostics.deformation.visibleSurfaceStainNodes, []);
+    assert.equal(diagnostics.deformation.surfaceStainPresentationMeshCount, 6);
+    assert.equal(diagnostics.deformation.progressiveSiteSource, 'profile-fallback');
     Object.values(diagnostics.deformation.morphWeights).forEach((weights) => {
       assert.equal(weights.attached, 0);
       assert.equal(weights.detached, 0);
@@ -256,12 +298,47 @@ test('Forge gore surfaces preserve authored wetness and render above the deforme
   }
 });
 
+test('portable surface stains preserve authored materials and follow exact deformation weights', async () => {
+  const fixture = await createRuntimeFixture();
+  try {
+    const [light] = stageRecords();
+    const expectedNames = expectedSurfaceStainNames(light.stage.deformationKeyName, 'ATTACHED');
+    assert.deepEqual(expectedNames, ['DSB_STAIN_ATTACHED_head_Left_Head_Impact_v003_v001']);
+    const stain = fixture.gltf.scene.getObjectByName(expectedNames[0]);
+    const authoredMaterial = {
+      color: stain.material.color.getHex(),
+      opacity: stain.material.opacity,
+      roughness: stain.material.roughness,
+      transparent: stain.material.transparent,
+      depthWrite: stain.material.depthWrite,
+      polygonOffset: stain.material.polygonOffset,
+    };
+    const result = fixture.runtime.setProgressiveDamageStage(light.site.siteId, 'LIGHT', { source: 'surface-stain-contract-test' });
+    const diagnostics = fixture.runtime.getDiagnostics().deformation;
+    assert.equal(result.selectedMorph, 'Left_Head_Impact_v003_v001');
+    assert.deepEqual(diagnostics.visibleSurfaceStainNodes, expectedNames);
+    assert.equal(stain.morphTargetInfluences[stain.morphTargetDictionary.Left_Head_Impact_v003_v001], 1);
+    assert.equal(stain.frustumCulled, false);
+    assert.ok(stain.renderOrder >= FORGE_SURFACE_STAIN_RENDER_ORDER);
+    assert.equal(stain.geometry.getAttribute('color').itemSize, 4);
+    assert.equal(stain.material.vertexColors, true);
+    assert.equal(stain.material.color.getHex(), authoredMaterial.color);
+    assert.equal(stain.material.opacity, authoredMaterial.opacity);
+    assert.equal(stain.material.roughness, authoredMaterial.roughness);
+    assert.equal(stain.material.transparent, authoredMaterial.transparent);
+    assert.equal(stain.material.depthWrite, authoredMaterial.depthWrite);
+    assert.equal(stain.material.polygonOffset, authoredMaterial.polygonOffset);
+  } finally {
+    fixture.dispose();
+  }
+});
+
 test('Light, Medium, and Heavy preserve the exact exported stage/key mapping', async () => {
   const fixture = await createRuntimeFixture();
   try {
     const records = stageRecords();
     assert.deepEqual(records.map(({ stageName, stage }) => [stageName, stage.deformationKeyName]), [
-      ['LIGHT', 'Left_Head_Impact_v003'],
+      ['LIGHT', 'Left_Head_Impact_v003_v001'],
       ['MEDIUM', 'Left_Head_Impact_v002'],
       ['HEAVY', 'Left_Head_Impact_v001'],
     ]);
@@ -283,6 +360,7 @@ test('Light, Medium, and Heavy preserve the exact exported stage/key mapping', a
         assert.equal(diagnostics.morphWeights[entry.stage.deformationKeyName].attached, 0);
       });
       assert.deepEqual(diagnostics.visibleGoreNodes.sort(), expectedGoreNames(stage.deformationKeyName, 'ATTACHED'));
+      assert.deepEqual(diagnostics.visibleSurfaceStainNodes.sort(), expectedSurfaceStainNames(stage.deformationKeyName, 'ATTACHED'));
     }
   } finally {
     fixture.dispose();
@@ -305,6 +383,10 @@ test('adjacent smoothstep crossfade uses at most two stage morphs and midpoint-r
     assert.equal(weights.HEAVY, 0);
     assert.equal(diagnostics.progressiveSites[light.site.siteId].goreStage, 'MEDIUM');
     assert.deepEqual(diagnostics.visibleGoreNodes.sort(), expectedGoreNames(medium.stage.deformationKeyName, 'ATTACHED'));
+    assert.deepEqual(diagnostics.visibleSurfaceStainNodes.sort(), [
+      ...expectedSurfaceStainNames(light.stage.deformationKeyName, 'ATTACHED'),
+      ...expectedSurfaceStainNames(medium.stage.deformationKeyName, 'ATTACHED'),
+    ].sort());
   } finally {
     fixture.dispose();
   }
@@ -328,6 +410,7 @@ test('a sub-Light blend cannot consume the first exact mace damage stage', async
     assert.ok(partialDiagnostics.morphWeights[light.stage.deformationKeyName].attached > 0);
     assert.ok(partialDiagnostics.morphWeights[light.stage.deformationKeyName].attached < 1);
     assert.deepEqual(partialDiagnostics.visibleGoreNodes, []);
+    assert.deepEqual(partialDiagnostics.visibleSurfaceStainNodes, []);
 
     const result = fixture.runtime.applyForgeMaceDamage({
       hit: { regionId: 'head', collisionPointWorld: new THREE.Vector3(-0.05, 1.45, 0) },
@@ -345,6 +428,7 @@ test('a sub-Light blend cannot consume the first exact mace damage stage', async
     assert.equal(result.severity, light.anchor);
     assert.equal(lightDiagnostics.morphWeights[light.stage.deformationKeyName].attached, 1);
     assert.deepEqual(lightDiagnostics.visibleGoreNodes.sort(), expectedGoreNames(light.stage.deformationKeyName, 'ATTACHED'));
+    assert.deepEqual(lightDiagnostics.visibleSurfaceStainNodes.sort(), expectedSurfaceStainNames(light.stage.deformationKeyName, 'ATTACHED'));
   } finally {
     fixture.dispose();
   }
@@ -414,6 +498,7 @@ test('active progressive damage transfers to detached head ownership without sta
     assert.equal(diagnostics.detachedHeadStumpVisible, true);
     assert.equal(diagnostics.deformation.morphWeights[heavy.stage.deformationKeyName].detached, 1);
     assert.deepEqual(diagnostics.deformation.visibleGoreNodes.sort(), expectedGoreNames(heavy.stage.deformationKeyName, 'DETACHED'));
+    assert.deepEqual(diagnostics.deformation.visibleSurfaceStainNodes.sort(), expectedSurfaceStainNames(heavy.stage.deformationKeyName, 'DETACHED'));
     assert.equal(diagnostics.deformation.headOwnershipOverlap, false);
     assert.equal(diagnostics.detachedRigidBodyCount, 1);
     assert.equal(diagnostics.detachedColliderCount, 1);
