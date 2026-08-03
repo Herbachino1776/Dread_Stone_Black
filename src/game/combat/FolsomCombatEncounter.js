@@ -4,7 +4,7 @@ import { HumanoidCombatActor } from './HumanoidCombatActor.js';
 import { CombatBloodEffects } from './CombatBloodEffects.js';
 import { CombatFeedbackSystem } from './CombatFeedbackSystem.js';
 import { resolveCombatMortalityMode } from './CombatMortality.js';
-import { DREADGUARD_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { CHEZWICK_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 import { CombatDirector } from './CombatDirector.js';
 import { KNIFE_COMBAT_CONFIG } from './CombatConfig.js';
 import { applyMeleeSpacingEnvelope } from './CombatPresentation.js';
@@ -43,19 +43,22 @@ export const FOLSOM_WALKER_CONFIG = Object.freeze({
   stopEnterDistance: 1.08,
   resumeDistance: 1.42,
   slowDistance: 1.9,
+  respawnDelaySeconds: 0,
+  groundedRespawnSeconds: 15,
 });
 
 const FOLSOM_WALKER_SPAWN_PATTERNS = Object.freeze([
   Object.freeze([{ angleDegrees: -18, radius: 6 }, { angleDegrees: 18, radius: 6 }]),
   Object.freeze([{ angleDegrees: -29, radius: 6.68 }, { angleDegrees: -50, radius: 6.2 }, { angleDegrees: 50, radius: 6.2 }]),
   Object.freeze([{ angleDegrees: 0, radius: 6 }, { angleDegrees: 50, radius: 6 }, { angleDegrees: -50, radius: 6 }, { angleDegrees: 160, radius: 6 }]),
+  Object.freeze([{ angleDegrees: 32, radius: 6.45 }, { angleDegrees: -68, radius: 6.75 }, { angleDegrees: 145, radius: 6.3 }]),
 ]);
 
 export const FOLSOM_ENEMY_WAVE_CONFIG = Object.freeze({
   size: 4,
-  corpseDespawnSeconds: 10,
-  corpseFadeSeconds: 1,
-  respawnDelaySeconds: 2,
+  corpseDespawnSeconds: 15,
+  corpseFadeSeconds: 0,
+  respawnDelaySeconds: 0,
 });
 
 const DEATH_STATES = new Set([WALKER_STATES.losingConsciousness, WALKER_STATES.grounded]);
@@ -101,7 +104,7 @@ export class FolsomCombatEncounter {
     this.combatRouter = new CombatActorRouter();
     this.weaponController = null;
     this.disposed = false;
-    this.modelProfile = DREADGUARD_DAMAGE_COMBAT_PROFILE;
+    this.modelProfile = CHEZWICK_DAMAGE_COMBAT_PROFILE;
     this.showcaseEnabled = isFolsomShowcaseEnabled(this.query);
     this.waveGeneration = 1;
     this.playerSpawn = new THREE.Vector3(...FOLSOM_AUTHORED_PLAYER_SPAWN);
@@ -119,14 +122,13 @@ export class FolsomCombatEncounter {
     this.stationaryDeathController = null;
     this.stationaryDeathCollisionReleased = false;
     this.meleeSpacing = null;
-    this.spawnStationaryActor();
 
     this.walkerController = new CombatLabWalkerController({
       scene: this.scene,
       physics: this.physics,
       collision: this.dungeon.collision,
       combatRouter: this.combatRouter,
-      stationaryActor: this.actor,
+      stationaryActor: null,
       feedbackSystem: this.feedbackSystem,
       acceptedCombatAudio: this.acceptedCombatAudio,
       playerProvider: () => this.player,
@@ -138,6 +140,7 @@ export class FolsomCombatEncounter {
       beforeActorDisposal: (actor, reason) => this.weaponController?.cancelTarget?.(actor, reason),
     });
     this.walkerController.prepareFrame(0, this.player);
+    this.syncPrimaryWalkerAliases();
     this.showcaseExtras = new FolsomShowcaseCombatExtras({
       scene: this.scene,
       physics: this.physics,
@@ -160,7 +163,14 @@ export class FolsomCombatEncounter {
   }
 
   createDamageProfileActor(options = {}) {
-    return new HumanoidCombatActor({ ...options, visualProfile: DREADGUARD_DAMAGE_COMBAT_PROFILE });
+    return new HumanoidCombatActor({ ...options, visualProfile: CHEZWICK_DAMAGE_COMBAT_PROFILE });
+  }
+
+  syncPrimaryWalkerAliases() {
+    this.actor = this.walkerController?.actor ?? null;
+    this.playerBlocker = this.walkerController?.playerBlocker ?? null;
+    this.bloodEffects = this.walkerController?.bloodEffects ?? null;
+    this.combatDirector = this.walkerController?.director ?? null;
   }
 
   installForgeDamageDebugCommands() {
@@ -169,33 +179,46 @@ export class FolsomCombatEncounter {
       Light: () => this.debugSetProgressiveDamageStage('LIGHT'),
       Medium: () => this.debugSetProgressiveDamageStage('MEDIUM'),
       Heavy: () => this.debugSetProgressiveDamageStage('HEAVY'),
+      LightRight: () => this.debugSetProgressiveDamageStage('LIGHT', 'right'),
+      MediumRight: () => this.debugSetProgressiveDamageStage('MEDIUM', 'right'),
+      HeavyRight: () => this.debugSetProgressiveDamageStage('HEAVY', 'right'),
       nextStage: () => this.debugAdvanceProgressiveDamage(),
       solidHeadImpact: () => this.debugApplySolidHeadImpact(),
       resetAllDamage: () => this.debugResetForgeDamage(),
       diagnostics: () => this.actor?.visualAdapter?.damageSegmentRuntime?.deformationRuntime?.getDiagnostics?.() ?? null,
       characterDiagnostics: () => this.actor?.getDiagnostics?.() ?? null,
-      deathDiagnostics: () => this.stationaryDeathController?.getDiagnostics?.() ?? null,
+      deathDiagnostics: () => this.walkerController?.getDiagnostics?.() ?? null,
     });
     this.forgeDamageDebugCommands = commands;
-    globalThis.__DSB_DREADGUARD_DAMAGE__ = commands;
-    console.info('[ForgeDamage] Folsom Dreadguard commands installed at __DSB_DREADGUARD_DAMAGE__.');
+    globalThis.__DSB_CHEZWICK_DAMAGE__ = commands;
+    console.info('[ForgeDamage] Folsom Chezwick commands installed at __DSB_CHEZWICK_DAMAGE__.');
     return commands;
   }
 
-  debugSetProgressiveDamageStage(stageName) {
-    return this.actor?.visualAdapter?.setProgressiveDamageStage?.(null, stageName, { source: 'folsom_debug_command', hitRegion: 'skull', hitSide: 'left' }) ?? { applied: false, reason: 'damage-runtime-not-ready', stage: stageName };
+  getConfiguredProgressiveSites() {
+    const manifestSites = this.actor?.visualAdapter?.damageManifest?.deformations?.progressiveDamageSites ?? [];
+    const sides = new Set(manifestSites.map((site) => Math.sign(Number(site.stages?.[0]?.measurements?.captureCenterLocal?.[0]) || 0)));
+    return [...manifestSites, ...(this.modelProfile.progressiveDamageSiteFallbacks ?? []).filter((site) => !sides.has(Math.sign(Number(site.stages?.[0]?.measurements?.captureCenterLocal?.[0]) || 0)))];
   }
 
-  debugAdvanceProgressiveDamage() {
-    return this.actor?.visualAdapter?.advanceProgressiveDamageSite?.(null, { source: 'folsom_debug_command', hitRegion: 'skull', hitSide: 'left' }) ?? { applied: false, reason: 'damage-runtime-not-ready' };
+  getProgressiveSiteId(side = 'left') {
+    const sign = side === 'right' ? 1 : -1;
+    return this.getConfiguredProgressiveSites().find((site) => Math.sign(Number(site.stages?.[0]?.measurements?.captureCenterLocal?.[0]) || 0) === sign)?.siteId ?? null;
+  }
+
+  debugSetProgressiveDamageStage(stageName, side = 'left') {
+    return this.actor?.visualAdapter?.setProgressiveDamageStage?.(this.getProgressiveSiteId(side), stageName, { source: 'folsom_debug_command', hitRegion: 'skull', hitSide: side }) ?? { applied: false, reason: 'damage-runtime-not-ready', stage: stageName };
+  }
+
+  debugAdvanceProgressiveDamage(side = 'left') {
+    return this.actor?.visualAdapter?.advanceProgressiveDamageSite?.(this.getProgressiveSiteId(side), { source: 'folsom_debug_command', hitRegion: 'skull', hitSide: side }) ?? { applied: false, reason: 'damage-runtime-not-ready' };
   }
 
   debugApplySolidHeadImpact() {
     const actor = this.actor;
     const adapter = actor?.visualAdapter;
     const manifest = adapter?.damageManifest;
-    const manifestSites = manifest?.deformations?.progressiveDamageSites ?? [];
-    const sites = manifestSites.length ? manifestSites : (this.modelProfile.progressiveDamageSiteFallbacks ?? []);
+    const sites = this.getConfiguredProgressiveSites();
     const site = sites.find((entry) => {
       if (entry?.regionId !== 'head') return false;
       const firstStageName = entry.stageOrder?.[0];
@@ -381,19 +404,15 @@ export class FolsomCombatEncounter {
   }
 
   getLivingCombatActors() {
-    const stationary = isFolsomCombatActorLiving(this.actor, null, this.stationaryDeathController) ? [this.actor] : [];
-    const walkers = this.getWalkerControllers()
+    return this.getWalkerControllers()
       .map((controller) => controller.actor)
       .filter((actor, index) => isFolsomCombatActorLiving(actor, this.getWalkerControllers()[index], null));
-    return [...stationary, ...walkers];
   }
 
   getContactableCombatActors() {
-    const stationary = isFolsomCombatActorContactable(this.actor, null, this.stationaryDeathController) ? [this.actor] : [];
     const controllers = this.getWalkerControllers();
-    const walkers = controllers.map((controller) => controller.actor)
+    return controllers.map((controller) => controller.actor)
       .filter((actor, index) => isFolsomCombatActorContactable(actor, controllers[index], null));
-    return [...stationary, ...walkers];
   }
 
   getActiveCombatActors() { return this.getLivingCombatActors(); }
@@ -451,7 +470,7 @@ export class FolsomCombatEncounter {
   }
 
   resetEnemyWaveLifecycle() {
-    this.enemyWaveCorpses = { stationary: createCorpseLifecycle() };
+    this.enemyWaveCorpses = {};
     this.getWalkerControllers().forEach((_controller, index) => {
       this.enemyWaveCorpses[index === 0 ? 'walker' : `showcaseWalker${index}`] = createCorpseLifecycle();
     });
@@ -513,14 +532,6 @@ export class FolsomCombatEncounter {
     const dt = Math.max(0, Math.min(0.05, Number(deltaSeconds) || 0));
     const slots = Object.values(this.enemyWaveCorpses);
     const allAlreadyDespawned = slots.every((slot) => slot.despawned);
-    this.advanceCorpseLifecycle(
-      this.enemyWaveCorpses.stationary,
-      this.actor,
-      this.stationaryDeathController?.state,
-      this.bloodEffects,
-      () => this.disposeStationaryActor('folsom-stationary-corpse-despawn'),
-      dt,
-    );
     this.getWalkerControllers().forEach((controller, index) => {
       const key = index === 0 ? 'walker' : `showcaseWalker${index}`;
       this.advanceCorpseLifecycle(
@@ -576,30 +587,22 @@ export class FolsomCombatEncounter {
     this.player = player ?? this.player;
     if (!this.physics.paused) this.walkerController?.prepareFrame(deltaSeconds, this.player);
     if (!this.physics.paused) this.showcaseExtras?.prepareFrame(deltaSeconds, this.player);
-    if (!this.physics.paused) this.stationaryDeathController?.prepareFrame(deltaSeconds);
-    this.actor?.prepareFrame(deltaSeconds);
     this.walkerController?.actor?.prepareFrame(deltaSeconds);
     this.showcaseExtras?.getActors?.().forEach((actor) => actor.prepareFrame(deltaSeconds));
     this.physics.step(deltaSeconds, (dt) => {
       this.acceptedCombatAudio.update(dt);
       this.feedbackSystem.update(dt);
       this.weaponController?.beforePhysics?.(dt);
-      this.combatDirector?.update(dt);
-      this.stationaryDeathController?.beforePhysics();
-      if (this.actor && !this.stationaryDeathController?.shouldHoldFinalPose?.()) this.actor.beforePhysics(dt, this.player?.position);
       this.walkerController?.beforePhysics(dt, this.player?.position);
       this.showcaseExtras?.beforePhysics(dt, this.player?.position);
     }, (dt) => {
       this.weaponController?.afterPhysicsStep?.(dt);
-      this.bloodEffects?.update(dt);
       this.walkerController?.afterPhysicsStep(dt);
       this.showcaseExtras?.afterPhysicsStep(dt);
     });
-    this.actor?.afterPhysics(this.physics.interpolationAlpha);
     this.walkerController?.afterPhysics(this.physics.interpolationAlpha);
     this.showcaseExtras?.afterPhysics(this.physics.interpolationAlpha);
-    if (this.actor && !this.stationaryDeathCollisionReleased) this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
-    this.updateEnemyWaveLifecycle(deltaSeconds);
+    this.syncPrimaryWalkerAliases();
     this.priorityCombatActor = this.getPriorityCombatActor(this.player);
     const combatShadowTarget = this.priorityCombatActor?.getBodyWorldPosition?.('upper_chest');
     if (combatShadowTarget) this.scene.userData.activeCombatShadowTarget = combatShadowTarget;
@@ -612,12 +615,12 @@ export class FolsomCombatEncounter {
     this.player = player ?? this.player;
     this.weaponController?.cancel?.(reason);
     if (!preserveWaveGeneration) this.waveGeneration = 1;
-    this.disposeStationaryActor(`${reason}-stationary-reset`);
     this.walkerController?.disposeWalker?.({ respawn: false });
     this.showcaseExtras?.getWalkerControllers?.().forEach((controller) => controller.disposeWalker?.({ respawn: false }));
-    this.spawnStationaryActor();
-    this.walkerController.stationaryActor = this.actor;
+    this.walkerController.stationaryActor = null;
     this.walkerController?.reset(this.player);
+    this.walkerController?.prepareFrame(0, this.player);
+    this.syncPrimaryWalkerAliases();
     this.showcaseExtras?.reset(this.player, this.actor);
     this.acceptedCombatAudio.reset();
     this.feedbackSystem.reset();
@@ -631,7 +634,7 @@ export class FolsomCombatEncounter {
     const routing = this.combatRouter.getDiagnostics();
     const weapon = this.weaponController?.getDiagnostics?.() ?? null;
     const swordShowcase = weapon?.sword?.edgeSweepObserver ?? null;
-    const ownedActors = [this.actor, ...this.getWalkerControllers().map((controller) => controller.actor)].filter(Boolean);
+    const ownedActors = this.getWalkerControllers().map((controller) => controller.actor).filter(Boolean);
     const maceChestPresent = this.dungeon?.outdoorInteractions?.some?.((interaction) => interaction.id === 'folsom_courtyard_mace_chest')
       ?? this.dungeon?.definition?.outdoorChests?.some?.((chest) => chest.id === 'folsom_courtyard_mace_chest')
       ?? false;
@@ -651,7 +654,7 @@ export class FolsomCombatEncounter {
       supportGroundVariation: this.supportGroundVariation,
       enemyWave: {
         generation: this.waveGeneration,
-        size: 1 + this.getWalkerControllers().length,
+        size: this.getWalkerControllers().length,
         corpseDespawnSeconds: FOLSOM_ENEMY_WAVE_CONFIG.corpseDespawnSeconds,
         corpseFadeSeconds: FOLSOM_ENEMY_WAVE_CONFIG.corpseFadeSeconds,
         respawnDelaySeconds: FOLSOM_ENEMY_WAVE_CONFIG.respawnDelaySeconds,
@@ -679,7 +682,7 @@ export class FolsomCombatEncounter {
         livingActorCount: this.getLivingCombatActors().length,
         contactableActorCount: this.getContactableCombatActors().length,
         additionalWalkerCount: this.showcaseExtras?.getActors?.().length ?? 0,
-        damageProfileActorCount: ownedActors.filter((actor) => actor.visualProfile === DREADGUARD_DAMAGE_COMBAT_PROFILE).length,
+        damageProfileActorCount: ownedActors.filter((actor) => actor.visualProfile === CHEZWICK_DAMAGE_COMBAT_PROFILE).length,
         maceChestPresent,
         maceControllerAvailable: weapon?.mace != null,
         swordShowcaseEnabled: swordShowcase?.enabled === true,
@@ -714,13 +717,12 @@ export class FolsomCombatEncounter {
     this.weaponController?.cancel?.('encounter-dispose');
     this.showcaseExtras?.dispose?.();
     this.walkerController?.dispose?.();
-    this.disposeStationaryActor('encounter-dispose');
     this.acceptedCombatAudio.dispose();
     this.disposeSupportFloors();
     this.combatRouter.dispose();
     this.feedbackSystem.dispose();
     this.physics.dispose();
-    if (globalThis.__DSB_DREADGUARD_DAMAGE__ === this.forgeDamageDebugCommands) delete globalThis.__DSB_DREADGUARD_DAMAGE__;
+    if (globalThis.__DSB_CHEZWICK_DAMAGE__ === this.forgeDamageDebugCommands) delete globalThis.__DSB_CHEZWICK_DAMAGE__;
     this.forgeDamageDebugCommands = null;
     delete this.scene.userData.activeCombatShadowTarget;
   }

@@ -12,6 +12,7 @@ import { CombatFeedbackSystem } from '../src/game/combat/CombatFeedbackSystem.js
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import {
   CURRENT_HUMANOID_PROFILE,
+  CHEZWICK_DAMAGE_COMBAT_PROFILE,
   DREADGUARD_DAMAGE_COMBAT_PROFILE,
   DREADGUARD_IGNORED_GUARD_ANIMATION_NAMES,
   DREADGUARD_RUNTIME_ANIMATION_NAMES,
@@ -1582,18 +1583,18 @@ test('combat feedback guards unsupported haptics, cooldowns contact audio, and h
   feedback.dispose();
 });
 
-test('Folsom keeps one stationary Dreadguard and routes all three walkers independently', async () => {
+test('Folsom routes four roaming Chezwick actors independently', async () => {
   const scene = new THREE.Scene();
   const dungeon = { scene, collision: { sampleWalkableY: () => ({ y: 0.16 }), canStandAtFloorPosition: () => true, getIntersectingBlockers: () => [] } };
   const encounter = await FolsomCombatEncounter.create({ dungeon });
   const pelvis = encounter.actor.getBodyWorldPosition('pelvis');
   const playerSpawn = new THREE.Vector3(-2, 1.71, -4);
   assert.equal(Math.hypot(encounter.spawnPosition.x - playerSpawn.x, encounter.spawnPosition.z - playerSpawn.z), 10);
-  assert.equal(encounter.actor.visualProfile, DREADGUARD_DAMAGE_COMBAT_PROFILE);
-  assert.ok(scene.getObjectByName('folsom-dreadguard-stationary-1'));
-  assert.equal(scene.children.filter((child) => child.name.startsWith('folsom-dreadguard-stationary-')).length, 1);
+  assert.equal(encounter.actor.visualProfile, CHEZWICK_DAMAGE_COMBAT_PROFILE);
+  assert.equal(encounter.getWalkerControllers().length, 4);
+  assert.equal(scene.children.filter((child) => child.name.includes('chezwick')).length, 0);
   assert.equal(scene.children.some((child) => child.name.toLowerCase().includes('testman')), false);
-  assert.ok(pelvis.x > 7 && pelvis.z < -3);
+  assert.ok(Number.isFinite(pelvis.x) && Number.isFinite(pelvis.z));
   assert.ok(encounter.walkerController.actor);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
   assert.equal(encounter.getActiveCombatActors().length, 4);
@@ -1601,9 +1602,8 @@ test('Folsom keeps one stationary Dreadguard and routes all three walkers indepe
   encounter.reset();
   assert.equal(encounter.physics.world.bodies.len(), 73);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
-  assert.equal(scene.children.filter((child) => child.name.startsWith('folsom-dreadguard-stationary-')).length, 1);
+  assert.equal(encounter.getWalkerControllers().length, 4);
   encounter.dispose();
-  assert.equal(scene.children.some((child) => child.name.startsWith('folsom-dreadguard-stationary-')), false);
   assert.equal(scene.children.some((child) => child.name.startsWith('folsom-authored-walker-')), false);
 });
 

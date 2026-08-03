@@ -85,6 +85,23 @@ export class CombatBloodEffects {
     return true;
   }
 
+  emitBluntImpact({ position, direction = null, stageTransition = false } = {}) {
+    if (!position?.isVector3) return false;
+    const outward = direction?.isVector3 ? direction.clone() : new THREE.Vector3(0, 0.3, 1);
+    if (outward.lengthSq() < 1e-8) outward.set(0, 0.3, 1);
+    outward.normalize();
+    const count = stageTransition ? 10 : 7;
+    for (let index = 0; index < count; index += 1) {
+      const spray = outward.clone();
+      spray.x += (Math.random() - 0.5) * 0.34;
+      spray.y += 0.12 + Math.random() * 0.26;
+      spray.z += (Math.random() - 0.5) * 0.34;
+      this.spawnParticle(null, position, spray.normalize().multiplyScalar(index === 0 ? 0.28 : 0.55 + Math.random() * 0.75), index === 0 ? 'impact_blob' : 'impact_spray');
+    }
+    this.eventSink?.('blood_spray', { position: position.clone(), severity: stageTransition ? 0.88 : 0.68 });
+    return true;
+  }
+
   emitBurst(wound, count, kind, direction = null) {
     const pose = this.woundSystem.getWorldPose(wound);
     if (!pose || !wound || wound.bleedingProfile.kind === 'none') return;

@@ -224,6 +224,31 @@ export function resolveAnimationPackManifest(manifest, clips, profileName = 'hum
   return { sourceEntriesByName, entriesByName, entriesByKind, clipsByName, ignoredEntries };
 }
 
+export function createEmbeddedAnimationPackManifest(clips, profile) {
+  const selectedNames = new Set(profile?.embeddedAnimationNames ?? []);
+  const selected = clips.filter((clip) => selectedNames.has(clip.name));
+  if (selected.length !== selectedNames.size) {
+    const present = new Set(selected.map((clip) => clip.name));
+    throw new Error(`Humanoid GLB profile ${profile?.name} is missing embedded runtime animations: ${[...selectedNames].filter((name) => !present.has(name)).join(', ')}`);
+  }
+  const animations = selected.map((clip) => {
+    const metadata = clip.userData ?? {};
+    const kind = metadata.dsb_approved_kind;
+    return {
+      name: clip.name,
+      approved_kind: kind,
+      frame_start: Number(metadata.dsb_approved_frame_start),
+      frame_end: Number(metadata.dsb_approved_frame_end),
+      duration_seconds: clip.duration,
+      loop: metadata.dsb_loop === true,
+      hold_final_pose: kind === 'DEATH',
+      return_to_previous_state: kind.startsWith('HURT_') || kind.startsWith('MACE_GUARD_'),
+      root_motion_policy: metadata.dsb_root_motion_policy ?? 'IN_PLACE',
+    };
+  });
+  return { schema: 'dreadstone.animation_pack.v1', fps: 24, approved_animation_count: animations.length, animations };
+}
+
 export function isolateObjectMaterials(root) {
   const clonesBySource = new Map();
   root?.traverse?.((object) => {
@@ -462,6 +487,7 @@ export class HumanoidGlbVisualAdapter {
     this.presentationRoot.name = `${this.profile.name}-animation-authoritative-root`;
     this.presentationRoot.add(this.scene);
     this.parent.add(this.presentationRoot);
+    if (!animationManifest && this.profile.embeddedAnimationPack === true) animationManifest = createEmbeddedAnimationPackManifest(clips, this.profile);
     this.animationManifest = animationManifest;
     this.animationPack = animationManifest ? resolveAnimationPackManifest(animationManifest, clips, this.profile.name, {
       allowedKinds: this.profile.animationRuntimeKinds,

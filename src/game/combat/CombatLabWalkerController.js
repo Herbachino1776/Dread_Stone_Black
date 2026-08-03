@@ -37,6 +37,7 @@ export const COMBAT_LAB_WALKER_CONFIG = Object.freeze({
   walkToIdleSeconds: 0.96,
   deathCollapseSeconds: 5.4,
   respawnDelaySeconds: 0.32,
+  groundedRespawnSeconds: null,
   firstStabSpeedMultiplier: 0.78,
   torsoQualifyingDepth: 0.05,
   neckQualifyingDepth: 0.045,
@@ -260,6 +261,9 @@ export class CombatLabWalkerController {
     this.distanceToPlayer = Infinity;
     this.maximumSpeed = this.baseMaximumSpeed;
     this.lethality = new WalkerVitalStabPolicy();
+    this.threatened = false;
+    this.threatElapsed = 0;
+    this.guardCycleCount = 0;
     this.reactionResumeState = WALKER_STATES.approaching;
     this.deathCollisionReleased = false;
     this.offensiveContactEnabled = false;
@@ -425,7 +429,14 @@ export class CombatLabWalkerController {
     this.playerBlocker.userData.tryPlayerDepenetration = (correction, context) => this.tryPlayerDepenetration(correction, context);
     this.collision?.addBlocker?.(this.playerBlocker);
     this.actor.setEnvironmentContactHints({ groundY: spawnPosition.y, wallX });
-    this.lethality = new WalkerVitalStabPolicy();
+    const piercingMultiplier = Math.max(1, Number(this.actor.visualProfile?.piercingLethalityMultiplier) || 1);
+    this.lethality = new WalkerVitalStabPolicy({ config: {
+      ...FOLSOM_PIERCING_LETHALITY_CONFIG,
+      terminalCreditThreshold: FOLSOM_PIERCING_LETHALITY_CONFIG.terminalCreditThreshold * piercingMultiplier,
+    } });
+    this.threatened = false;
+    this.threatElapsed = 0;
+    this.guardCycleCount = 0;
     this.currentSpeed = 0;
     this.desiredSpeed = 0;
     this.velocity.set(0, 0, 0);
@@ -480,6 +491,8 @@ export class CombatLabWalkerController {
       this.currentSpeed = 0;
       this.velocity.set(0, 0, 0);
       this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
+      const respawnSeconds = Number(this.config.groundedRespawnSeconds);
+      if (Number.isFinite(respawnSeconds) && respawnSeconds >= 0 && this.stateElapsed >= respawnSeconds) this.disposeWalker({ respawn: true });
       return;
     }
     if (this.state === WALKER_STATES.losingConsciousness) {
@@ -599,6 +612,18 @@ export class CombatLabWalkerController {
   }
 
   updateLivingState(dt, playerPosition) {
+    const acceptedInjury = Boolean(this.actor?.lastBluntImpact?.interactionId || this.actor?.woundSystem?.wounds?.length);
+    if (acceptedInjury && !this.threatened) {
+      this.threatened = true;
+      this.threatElapsed = 3.2;
+    }
+    if (this.threatened) {
+      this.threatElapsed += dt;
+      const guardPhase = this.threatElapsed % 3.2;
+      if (guardPhase <= dt * 1.01 && this.actor?.reflex?.time <= 0.04) {
+        if (this.actor.visualAdapter?.animationController?.playGuard?.({ side: this.guardCycleCount % 2 ? 'left' : 'right' })) this.guardCycleCount += 1;
+      }
+    }
     this.footprintActive = this.isInsideEncounter(playerPosition, 0);
     this.toPlayer.set(playerPosition.x - this.position.x, 0, playerPosition.z - this.position.z);
     this.distanceToPlayer = this.toPlayer.length();
@@ -692,7 +717,7 @@ export class CombatLabWalkerController {
       this.actor.balanceImpairment = Math.max(this.actor.balanceImpairment, 0.18);
       return;
     }
-    if (this.lethality.criticalStabCount >= 2 && LIVING_MOVEMENT_STATES.has(this.state)) {
+    if (this.lethality.criticalStabCount >= this.lethality.config.terminalCreditThreshold && LIVING_MOVEMENT_STATES.has(this.state)) {
       this.desiredSpeed = 0;
       this.deathInitialSpeed = this.currentSpeed;
       const region = this.lethality.lastQualifyingRegion ?? '';
@@ -848,6 +873,8 @@ export class CombatLabWalkerController {
       liveWalkers: this.actor ? 1 : 0,
       paused: this.pauseLocomotion,
       closeRangeMode: this.closeRangeMode,
+      threatened: this.threatened,
+      guardCycleCount: this.guardCycleCount,
       minimumPlayerDistance: Number(this.minimumPlayerDistance.toFixed(3)),
       playerOverlapDepth: Number(this.playerOverlapDepth.toFixed(3)),
       separationActive: this.separationActive,

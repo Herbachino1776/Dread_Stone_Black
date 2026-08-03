@@ -215,11 +215,11 @@ export function validateForgeDamageDeformationAsset({ manifest, root, progressiv
   }
 
   for (const record of keyRecords.values()) {
+    const expectedGoreNames = new Set(record.manifest.goreGeneratedNodeNames ?? []);
     const expectedRoles = record.regionMode === 'PAIRED_SEGMENT' ? ['ATTACHED', 'DETACHED'] : ['CORE'];
-    expectedRoles.forEach((role) => {
+    if (expectedGoreNames.size) expectedRoles.forEach((role) => {
       if ((record.goreByRole.get(role)?.length ?? 0) < 1) errors.push(`${record.name} requires at least one ${role} gore node`);
     });
-    const expectedGoreNames = new Set(record.manifest.goreGeneratedNodeNames ?? []);
     const resolvedGoreNames = new Set([...record.goreByRole.values()].flat().map((node) => node.name));
     if (expectedGoreNames.size !== resolvedGoreNames.size || [...expectedGoreNames].some((name) => !resolvedGoreNames.has(name))) {
       errors.push(`${record.name} resolved gore nodes do not match its manifest binding`);
@@ -287,8 +287,18 @@ export function validateForgeDamageDeformationAsset({ manifest, root, progressiv
   const progressiveStageByKey = new Map();
   const manifestProgressiveSites = Array.isArray(deformation?.progressiveDamageSites) ? deformation.progressiveDamageSites : [];
   const fallbackProgressiveSites = Array.isArray(progressiveDamageSiteFallbacks) ? progressiveDamageSiteFallbacks : [];
-  const progressiveSiteSource = manifestProgressiveSites.length ? 'manifest' : fallbackProgressiveSites.length ? 'profile-fallback' : 'none';
-  const authoredProgressiveSites = manifestProgressiveSites.length ? manifestProgressiveSites : fallbackProgressiveSites;
+  const siteSide = (site) => {
+    const stageName = site?.stageOrder?.[0];
+    const stage = site?.stages?.find?.((entry) => entry.stage === stageName);
+    const x = Number(stage?.measurements?.captureCenterLocal?.[0] ?? site?.anchorLocal?.[0]);
+    return Math.abs(x) <= SIDE_EPSILON ? 0 : Math.sign(x);
+  };
+  const manifestSides = new Set(manifestProgressiveSites.map(siteSide));
+  const compatibleFallbackSites = fallbackProgressiveSites.filter((site) => !manifestSides.has(siteSide(site)));
+  const authoredProgressiveSites = [...manifestProgressiveSites, ...compatibleFallbackSites];
+  const progressiveSiteSource = manifestProgressiveSites.length && compatibleFallbackSites.length
+    ? 'manifest+profile-compatibility'
+    : manifestProgressiveSites.length ? 'manifest' : compatibleFallbackSites.length ? 'profile-fallback' : 'none';
   if (authoredProgressiveSites.length && deformation?.progressiveDamageSiteSchema !== FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA) {
     errors.push(`invalid progressive damage site schema ${deformation.progressiveDamageSiteSchema ?? 'missing'}`);
   }
@@ -340,7 +350,7 @@ export function validateForgeDamageDeformationAsset({ manifest, root, progressiv
 }
 
 export class ForgeDamageDeformationRuntime {
-  constructor({ actor, adapter, segmentRuntime, root, manifest, progressiveDamageSiteFallbacks = [] } = {}) {
+  constructor({ actor, adapter, segmentRuntime, root, manifest, progressiveDamageSiteFallbacks = [], progressiveDamageHitsPerStage = 1 } = {}) {
     this.actor = actor;
     this.adapter = adapter;
     this.segmentRuntime = segmentRuntime;
@@ -353,6 +363,8 @@ export class ForgeDamageDeformationRuntime {
     this.progressiveSites = this.validation.progressiveSites;
     this.progressiveStageByKey = this.validation.progressiveStageByKey;
     this.progressiveState = new Map();
+    this.progressiveDamageHitsPerStage = Math.max(1, Math.trunc(Number(progressiveDamageHitsPerStage) || 1));
+    this.acceptedProgressiveInteractionIds = new Set();
     this.lastActivation = null;
     this.activationCount = 0;
     this.disposed = false;
@@ -389,11 +401,13 @@ export class ForgeDamageDeformationRuntime {
         currentStage: null,
         goreStage: null,
         activationCount: 0,
+        acceptedHitCount: 0,
         stageWeights: Object.fromEntries(site.stageOrder.map((stageName) => [stageName, 0])),
       });
     });
     this.lastActivation = null;
     this.activationCount = 0;
+    this.acceptedProgressiveInteractionIds.clear();
     return this.getDiagnostics();
   }
 
@@ -430,7 +444,9 @@ export class ForgeDamageDeformationRuntime {
   siteMatchesHitRegion(site, hitRegion) {
     if (!hitRegion) return false;
     if (site.regionId === hitRegion || site.structuralGroup === hitRegion) return true;
-    if (HEAD_REGIONS.has(hitRegion)) return site.regionId === 'head' || site.structuralGroup === 'head';
+    if (HEAD_REGIONS.has(hitRegion)) return site.regionId === 'head'
+      || site.structuralGroup === 'head'
+      || (site.regionId === 'body_core' && /face|head/i.test(`${site.displayName ?? ''} ${site.siteId ?? ''}`));
     if (BODY_REGIONS.has(hitRegion)) return site.regionId === 'body_core' || site.structuralGroup === 'body';
     if (hitRegion === 'left_forearm') return site.regionId === 'forearm_left';
     if (hitRegion === 'right_forearm') return site.regionId === 'forearm_right';
@@ -697,10 +713,26 @@ export class ForgeDamageDeformationRuntime {
         selectedMorph: null,
       };
     }
+    const interactionId = String(impact?.interactionId ?? '');
+    if (selection.site && interactionId && this.acceptedProgressiveInteractionIds.has(interactionId)) {
+      return { applied: false, reason: 'duplicate-progressive-interaction', siteId: selection.site.siteId, progressiveSite: true };
+    }
     const options = { requestedWeight, hitRegion: selection.hitRegion, hitSide: selection.hitSide, source: 'mace_hit' };
-    const result = selection.site
-      ? this.advanceProgressiveDamageSite(selection.site.siteId, options)
-      : this.activate(selection.record.name, options);
+    let result;
+    if (selection.site) {
+      const state = this.progressiveState.get(selection.site.siteId);
+      if (this.progressiveDamageHitsPerStage === 1 && state?.stageIndex >= selection.site.stageRecords.length - 1) {
+        return this.advanceProgressiveDamageSite(selection.site.siteId, options);
+      }
+      const acceptedHitCount = (state?.acceptedHitCount ?? 0) + 1;
+      const stageIndex = Math.min(Math.floor((acceptedHitCount - 1) / this.progressiveDamageHitsPerStage), selection.site.stageRecords.length - 1);
+      result = this.setProgressiveSiteSeverity(selection.site.siteId, selection.site.stageRecords[stageIndex].anchor, options);
+      if (result.applied) {
+        state.acceptedHitCount = acceptedHitCount;
+        result.acceptedHitCount = acceptedHitCount;
+        if (interactionId) this.acceptedProgressiveInteractionIds.add(interactionId);
+      }
+    } else result = this.activate(selection.record.name, options);
     if (result.applied) {
       this.lastActivation.localPoint = selection.localPoint.toArray();
       this.lastActivation.localDirection = selection.localDirection.toArray();
@@ -802,6 +834,7 @@ export class ForgeDamageDeformationRuntime {
         goreStage: state?.goreStage ?? null,
         stageWeights: { ...(state?.stageWeights ?? {}) },
         activationCount: state?.activationCount ?? 0,
+        acceptedHitCount: state?.acceptedHitCount ?? 0,
       }];
     }));
     return {
@@ -817,6 +850,8 @@ export class ForgeDamageDeformationRuntime {
       headOwnershipOverlap,
       progressiveSiteSchema: this.validation.deformation.progressiveDamageSiteSchema ?? null,
       progressiveSiteSource: this.validation.progressiveSiteSource,
+      progressiveDamageHitsPerStage: this.progressiveDamageHitsPerStage,
+      compatibilityDiagnostics: [...this.progressiveSites.values()].map((site) => site.compatibilityDiagnostic).filter(Boolean),
       progressiveSites,
       gorePresentationMeshCount: this.gorePresentationMeshCount,
       goreRenderOrder: FORGE_GORE_RENDER_ORDER,

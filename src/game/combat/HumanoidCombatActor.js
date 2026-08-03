@@ -636,7 +636,7 @@ export class HumanoidCombatActor {
       return { accepted: false, damageApplied: 0, reactionEmitted: false, collapseRequested: false };
     }
     const traumaProfile = deriveBluntImpactTrauma({ impact, region: hit.region });
-    const damageApplied = traumaProfile.trauma;
+    const damageApplied = traumaProfile.trauma / Math.max(1, Number(this.visualProfile?.durabilityMultiplier) || 1);
     if (damageApplied <= 0) return { accepted: false, damageApplied: 0, reactionEmitted: false, collapseRequested: false };
     const state = this.regionState.get(hit.regionId) ?? { trauma: 0, pain: 0, structural: 0, motorWeakness: 0, maximumDepth: 0, wounds: 0 };
     state.trauma += damageApplied;
@@ -658,7 +658,9 @@ export class HumanoidCombatActor {
       ? this.visualAdapter?.applyForgeMaceDamage?.({ hit, impact, requestedWeight: 1 }) ?? { applied: false, reason: 'damage-runtime-not-ready' }
       : { applied: false, reason: 'non-mace-head-primitive' };
     const progressiveHeadImpact = headImpact && forgeDamage.applied === true && forgeDamage.progressiveSite === true;
-    const terminalProgressiveHeadImpact = progressiveHeadImpact && forgeDamage.terminalStageReached === true;
+    const terminalProgressiveHeadImpact = progressiveHeadImpact
+      && forgeDamage.terminalStageReached === true
+      && this.visualProfile?.terminalProgressiveDamageFatal !== false;
     this.physiology?.onBluntImpact?.({ hit, impact, severity: damageApplied });
     if (progressiveHeadImpact && !terminalProgressiveHeadImpact) {
       this.physiology.neurologicalIntegrity = Math.max(0.11, this.physiology.neurologicalIntegrity);

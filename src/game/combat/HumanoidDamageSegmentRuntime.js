@@ -64,7 +64,7 @@ export function validateDamageAsset({ manifest, root, profile, clips = [], anima
   if (!manifest || manifest.schema !== DAMAGE_MANIFEST_SCHEMA) errors.push(`invalid damage manifest schema ${manifest?.schema ?? 'missing'}`);
   if (manifest?.authoringVersion !== profile?.damageAuthoringVersion) errors.push(`authoring version ${manifest?.authoringVersion ?? 'missing'} does not match ${profile?.damageAuthoringVersion ?? 'profile'}`);
   if (manifest?.authoringBuildId !== profile?.damageAuthoringBuildId) errors.push(`authoring build ${manifest?.authoringBuildId ?? 'missing'} does not match ${profile?.damageAuthoringBuildId ?? 'profile'}`);
-  if (manifest?.glb !== basename(profile?.assetPath)) errors.push(`damage manifest targets ${manifest?.glb ?? 'missing'}, expected ${basename(profile?.assetPath)}`);
+  if (String(manifest?.glb ?? '').toLowerCase() !== basename(profile?.assetPath).toLowerCase()) errors.push(`damage manifest targets ${manifest?.glb ?? 'missing'}, expected ${basename(profile?.assetPath)}`);
   if (manifest?.source?.topologyFingerprint !== profile?.damageTopologyFingerprint) errors.push('source topology fingerprint mismatch');
   if (manifest?.source?.weightFingerprint !== profile?.damageWeightFingerprint) errors.push('source weight fingerprint mismatch');
 
@@ -264,6 +264,7 @@ export class HumanoidDamageSegmentRuntime {
       root: loadedGlbRoot,
       manifest: damageManifest,
       progressiveDamageSiteFallbacks: adapter.profile.progressiveDamageSiteFallbacks,
+      progressiveDamageHitsPerStage: adapter.profile.progressiveDamageHitsPerStage,
     });
     this.captureSegmentBindings();
     this.applyIntactState();

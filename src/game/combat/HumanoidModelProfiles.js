@@ -89,6 +89,48 @@ export const DREADGUARD_PROGRESSIVE_DAMAGE_SITE_FALLBACK = Object.freeze({
   ]),
 });
 
+export const CHEZWICK_BONE_MAP = DREADGUARD_BONE_MAP;
+
+const chezwickStage = (stage, key, center) => Object.freeze({
+  stage,
+  stageId: `chezwick-left-${stage.toLowerCase()}`,
+  damageKeyId: `chezwick-${key}`,
+  deformationKeyName: key,
+  activeStampId: `chezwick-${key}-stamp`,
+  regionId: 'body_core',
+  regionMode: 'CORE_SINGLE',
+  targetObject: 'DSB_BODY_CORE',
+  attachedObject: 'DSB_BODY_CORE',
+  detachedObject: '',
+  recommendedSeverity: stage === 'LIGHT' ? 0.33 : stage === 'MEDIUM' ? 0.66 : 1,
+  measurements: Object.freeze({ captureCenterLocal: Object.freeze(center) }),
+});
+
+// Forge 3.9.1 exported every left artifact, but intentionally omitted the draft left site.
+// These coordinates come from the corresponding authored stamp captures in Chezwick_v001.json.
+export const CHEZWICK_LEFT_PROGRESSIVE_DAMAGE_SITE_COMPATIBILITY = Object.freeze({
+  schema: 'dreadstone.progressive_damage_sites.v1', version: 1,
+  siteId: 'damage_site_face_left_compatibility', displayName: 'Face Left',
+  regionId: 'body_core', structuralGroup: 'body_core',
+  anchorLocal: Object.freeze([-0.04232534021139145, 0.05473930016160011, 1.3806248903274536]),
+  radius: 0.07535883784294128,
+  preferredDirectionLocal: Object.freeze([0.8441301282377759, -0.5290202309255155, 0.08707423196784572]),
+  severityAnchors: Object.freeze({ light: 0.33, medium: 0.66, heavy: 1 }),
+  transitionMode: 'ADJACENT_CROSSFADE', transitionCurve: 'SMOOTHSTEP', goreTransitionMode: 'MIDPOINT_REPLACE',
+  stageOrder: Object.freeze(['LIGHT', 'MEDIUM', 'HEAVY']),
+  stages: Object.freeze([
+    chezwickStage('LIGHT', 'Body_Core_Damage_Left_v003', [-0.04232534021139145, 0.05473930016160011, 1.3806248903274536]),
+    chezwickStage('MEDIUM', 'Body_Core_Damage_Left_v002', [-0.04232534021139145, 0.05473930016160011, 1.3806248903274536]),
+    chezwickStage('HEAVY', 'Body_Core_Damage_Left_v001', [-0.04232534021139145, 0.05473930016160011, 1.3806248903274536]),
+  ]),
+  compatibilityDiagnostic: 'CHEZWICK_LEFT_SITE_USING_COMPATIBILITY_FALLBACK',
+});
+
+export const CHEZWICK_RUNTIME_ANIMATION_NAMES = Object.freeze([
+  'DSB_Death_InstantUnconscious_v001', 'DSB_Hurt_LEFT_Flank_v001', 'DSB_Hurt_RIGHT_Flank_v001',
+  'DSB_Idle_Humanoid_v001', 'DSB_Mace_Brace_Head_v001', 'DSB_Walk_NORMAL_v001',
+]);
+
 export const DREADGUARD_RUNTIME_ANIMATION_KINDS = Object.freeze([
   'WALK',
   'HURT_LEFT',
@@ -177,6 +219,37 @@ export const DREADGUARD_DAMAGE_COMBAT_PROFILE = Object.freeze({
   damageExpectedAnimationNames: DREADGUARD_RUNTIME_ANIMATION_NAMES,
   activeDamageSegmentIds: Object.freeze(['head_neck', 'left_elbow', 'right_elbow']),
   colliderFitNotes: 'Folsom and Combat Lab Forge Dreadguard baseline. Approved pack v003 owns walk, side hurt, and knees-first death while the exported rest pose remains the stationary holding pose. The three embedded mace guard clips are intentionally unregistered. The +Y authored forward axis is converted by the profile yaw. Manifest-authored head/forearm detachment remains active.',
+});
+
+export const CHEZWICK_DAMAGE_COMBAT_PROFILE = Object.freeze({
+  ...DREADGUARD_DAMAGE_COMBAT_PROFILE,
+  name: 'chezwick_damage_v001',
+  assetPath: './assets/enemies/chezwick/damage/chezwick_v001.glb',
+  animationManifestPath: null,
+  animationValidationReportPath: null,
+  animationManifestAssetName: null,
+  damageManifestPath: './assets/enemies/chezwick/damage/chezwick_v001.json',
+  damageValidationReportPath: './assets/enemies/chezwick/damage/chezwick_v001_validation.json',
+  rawHeight: 1.500000114288579,
+  targetHeight: 1.5,
+  rootYaw: Math.PI,
+  animationRuntimeKinds: Object.freeze(['IDLE', 'WALK', 'HURT_LEFT', 'HURT_RIGHT', 'MACE_GUARD_RIGHT_ARM', 'DEATH']),
+  embeddedAnimationNames: CHEZWICK_RUNTIME_ANIMATION_NAMES,
+  ignoredEmbeddedAnimationNames: null,
+  embeddedAnimationPack: true,
+  progressiveDamageSiteFallbacks: Object.freeze([CHEZWICK_LEFT_PROGRESSIVE_DAMAGE_SITE_COMPATIBILITY]),
+  progressiveDamageHitsPerStage: 2,
+  terminalProgressiveDamageFatal: false,
+  durabilityMultiplier: 2,
+  piercingLethalityMultiplier: 2,
+  maceImpactBlood: true,
+  damageAuthoringVersion: '3.9.1',
+  damageAuthoringBuildId: '2026-07-18.source-contract.1',
+  damageTopologyFingerprint: '243b1dd1253950ad92a27385f429c427c25d002519e510e5f7e9e55735e255a4',
+  damageWeightFingerprint: 'b8ea4c943563c8831f9975bfdbe1249f236ad782f07f8d1825a6e474d6d97050',
+  damageExpectedAnimationNames: CHEZWICK_RUNTIME_ANIMATION_NAMES,
+  activeDamageSegmentIds: Object.freeze(['head_neck', 'left_elbow', 'right_elbow']),
+  colliderFitNotes: 'Chezwick Folsom baseline: 1.5 m +Y humanoid, embedded approved combat clips, bilateral face damage, and two-times survivability.',
 });
 
 export function getHumanoidProfileScale(profile) {

@@ -597,13 +597,13 @@ test('runtime configuration uses only approved walk, hurt, and death clips and r
   const deformationSource = readFileSync(new URL('../src/game/combat/ForgeDamageDeformationRuntime.js', import.meta.url), 'utf8');
   assert.doesNotMatch(deformationSource, /['"]damage_site['"]|Left_Head_Impact_v00[123]/);
   const folsomSource = readFileSync(new URL('../src/game/combat/FolsomCombatEncounter.js', import.meta.url), 'utf8');
-  assert.match(folsomSource, /this\.modelProfile = DREADGUARD_DAMAGE_COMBAT_PROFILE/);
-  assert.match(folsomSource, /__DSB_DREADGUARD_DAMAGE__/);
+  assert.match(folsomSource, /this\.modelProfile = CHEZWICK_DAMAGE_COMBAT_PROFILE/);
+  assert.match(folsomSource, /__DSB_CHEZWICK_DAMAGE__/);
   assert.match(folsomSource, /Light: \(\) => this\.debugSetProgressiveDamageStage\('LIGHT'\)/);
   assert.match(folsomSource, /Medium: \(\) => this\.debugSetProgressiveDamageStage\('MEDIUM'\)/);
   assert.match(folsomSource, /Heavy: \(\) => this\.debugSetProgressiveDamageStage\('HEAVY'\)/);
   assert.match(folsomSource, /solidHeadImpact: \(\) => this\.debugApplySolidHeadImpact\(\)/);
   assert.match(folsomSource, /captureCenterLocal/);
   assert.match(folsomSource, /characterDiagnostics: \(\) => this\.actor\?\.getDiagnostics/);
-  assert.match(folsomSource, /deathDiagnostics: \(\) => this\.stationaryDeathController\?\.getDiagnostics/);
+  assert.match(folsomSource, /deathDiagnostics: \(\) => this\.walkerController\?\.getDiagnostics/);
 });

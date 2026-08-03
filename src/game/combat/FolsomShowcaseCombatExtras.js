@@ -1,9 +1,9 @@
 import { CombatLabWalkerController } from './CombatLabWalkerController.js';
-import { DREADGUARD_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
+import { CHEZWICK_DAMAGE_COMBAT_PROFILE } from './HumanoidModelProfiles.js';
 
 export const FOLSOM_SHOWCASE_COMBAT_CONFIG = Object.freeze({
   enabled: true,
-  additionalWalkerCount: 2,
+  additionalWalkerCount: 3,
   swordDismembermentEnabled: true,
   minimumSwordEdgeSpeed: 0.86,
   minimumSwordLateralMotionRatio: 0.68,
@@ -41,7 +41,7 @@ export class FolsomShowcaseCombatExtras {
   } = {}) {
     this.config = config;
     this.query = query;
-    this.enabled = isFolsomShowcaseEnabled(query, config);
+    this.enabled = config.enabled === true;
     this.controllers = [];
     if (!this.enabled) return;
 
@@ -110,7 +110,7 @@ export class FolsomShowcaseCombatExtras {
       enabled: this.enabled,
       configuredAdditionalWalkerCount: this.config.additionalWalkerCount,
       additionalWalkerCount: actors.length,
-      damageProfileActorCount: actors.filter((actor) => actor.visualProfile === DREADGUARD_DAMAGE_COMBAT_PROFILE).length,
+      damageProfileActorCount: actors.filter((actor) => actor.visualProfile === CHEZWICK_DAMAGE_COMBAT_PROFILE).length,
       walkers: this.controllers.map((controller) => controller.getDiagnostics()),
     };
   }

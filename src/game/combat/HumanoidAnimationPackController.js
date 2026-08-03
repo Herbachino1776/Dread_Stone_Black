@@ -4,6 +4,7 @@ export const HUMANOID_ANIMATION_STATES = Object.freeze({
   holding: 'HOLDING',
   walking: 'WALKING',
   hurt: 'HURT',
+  guarding: 'GUARDING',
   dying: 'DYING',
   dead: 'DEAD',
 });
@@ -113,7 +114,9 @@ export class HumanoidAnimationPackController {
     this.walkAction = this.actionsByName.get(this.walkMetadata.name);
     this.walkAction.stop();
     this.walkAction.paused = true;
-    this.restAction = mixer.clipAction(restPoseClip);
+    const idleMetadata = animationPack.entriesByKind.get('IDLE')?.[0] ?? null;
+    this.idleMetadata = idleMetadata;
+    this.restAction = idleMetadata ? this.actionsByName.get(idleMetadata.name) : mixer.clipAction(restPoseClip);
     this.restAction.enabled = true;
     this.restAction.clampWhenFinished = false;
     this.restAction.setLoop(THREE.LoopRepeat, Infinity);
@@ -171,6 +174,16 @@ export class HumanoidAnimationPackController {
     this.deathCompleted = false;
     this.playOneShot(metadata, HUMANOID_ANIMATION_STATES.dying);
     return { name: metadata.name, durationSeconds: metadata.duration_seconds, holdFinalPose: metadata.hold_final_pose === true };
+  }
+
+  playGuard({ side = 'right' } = {}) {
+    if (this.disposed || this.state === HUMANOID_ANIMATION_STATES.dying || this.state === HUMANOID_ANIMATION_STATES.dead) return null;
+    const requested = side === 'left' ? 'MACE_GUARD_LEFT_ARM' : 'MACE_GUARD_RIGHT_ARM';
+    const metadata = this.animationPack.entriesByKind.get(requested)?.[0]
+      ?? this.animationPack.entriesByKind.get('MACE_GUARD_TWO_ARM')?.[0]
+      ?? [...this.animationPack.entriesByKind.entries()].find(([kind]) => kind.startsWith('MACE_GUARD_'))?.[1]?.[0];
+    if (!metadata || (this.state === HUMANOID_ANIMATION_STATES.guarding && this.activeMetadata === metadata)) return null;
+    return this.playOneShot(metadata, HUMANOID_ANIMATION_STATES.guarding);
   }
 
   playOneShot(metadata, state) {
@@ -249,7 +262,7 @@ export class HumanoidAnimationPackController {
     return {
       state: this.state,
       activeAnimation: this.activeMetadata?.name ?? (this.moving ? this.walkMetadata.name : null),
-      holdingPose: this.moving || this.activeMetadata ? null : 'exported_rest_pose',
+      holdingPose: this.moving || this.activeMetadata ? null : (this.idleMetadata?.name ?? 'exported_rest_pose'),
       holdingPoseClip: this.restAction.getClip().name,
       walkAnimation: this.walkMetadata.name,
       walkLooping: this.walkMetadata.loop === true,

@@ -72,6 +72,7 @@ export class CombatDirector {
     this.eventLog = [];
     this.impactMemory = { torso: 0, leftArm: 0, rightArm: 0, leftLeg: 0, rightLeg: 0 };
     this.extractionReactionAttempted = false;
+    this.bluntBloodInteractionIds = new Set();
     this.disposed = false;
     this.connectDefaultSubscribers();
   }
@@ -628,6 +629,16 @@ export class CombatDirector {
     const record = payload.record;
     const actorResult = this.actor?.applyBluntImpact?.({ hit: payload.hit, impact: record }) ?? { accepted: false, damageApplied: 0, reactionEmitted: false, collapseRequested: false };
     interaction.result.bluntActorResult = actorResult;
+    if (actorResult.accepted && this.actor?.visualProfile?.maceImpactBlood === true && !this.bluntBloodInteractionIds.has(interaction.id)) {
+      this.bluntBloodInteractionIds.add(interaction.id);
+      const hitCount = actorResult.forgeDamage?.acceptedHitCount ?? 0;
+      const stageTransition = hitCount > 0 && (hitCount - 1) % Math.max(1, this.actor.visualProfile.progressiveDamageHitsPerStage ?? 1) === 0;
+      this.bloodEffects?.emitBluntImpact?.({
+        position: record.worldPoint,
+        direction: record.impactDirection,
+        stageTransition,
+      });
+    }
     completeBluntImpactInteraction(record, { completedAt: time, actorResult });
   }
 

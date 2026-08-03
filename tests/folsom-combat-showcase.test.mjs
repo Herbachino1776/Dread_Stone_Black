@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { CollisionWorld } from '../src/game/Collision.js';
 import { FOLSOM_COMBAT_FOOTPRINT, FOLSOM_RAPIER_SUPPORT, FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
-import { DREADGUARD_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
+import { CHEZWICK_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { FOLSOM_SHOWCASE_COMBAT_CONFIG } from '../src/game/combat/FolsomShowcaseCombatExtras.js';
 import { FOLSOM_SHOWCASE_VISIBLE_PHYSICAL_EDGE_TOLERANCE, FolsomShowcaseSwordDismemberment } from '../src/game/combat/FolsomShowcaseSwordDismemberment.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
@@ -59,14 +59,14 @@ function inside(position, bounds, margin = 0) {
     && position.z >= bounds.minZ + margin && position.z <= bounds.maxZ - margin;
 }
 
-test('default Folsom showcase owns four distinct damage-profile actors on one router', async () => {
+test('default Folsom population owns four distinct roaming Chezwick actors on one router', async () => {
   const { encounter, collision, player } = await createAuthoredFolsomShowcaseEncounter();
   const controllers = encounter.getWalkerControllers();
-  const actors = [encounter.actor, ...controllers.map((controller) => controller.actor)];
+  const actors = controllers.map((controller) => controller.actor);
   assert.equal(actors.length, 4);
-  assert.equal(controllers.length, 3);
-  assert.equal(encounter.showcaseExtras.getWalkerControllers().length, 2);
-  assert.ok(actors.every((actor) => actor.visualProfile === DREADGUARD_DAMAGE_COMBAT_PROFILE));
+  assert.equal(controllers.length, 4);
+  assert.equal(encounter.showcaseExtras.getWalkerControllers().length, 3);
+  assert.ok(actors.every((actor) => actor.visualProfile === CHEZWICK_DAMAGE_COMBAT_PROFILE));
   assert.ok(actors.every((actor) => actor.visualProfile.activeDamageSegmentIds.join(',') === 'head_neck,left_elbow,right_elbow'));
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
   assert.equal(encounter.combatRouter.getDiagnostics().colliderCount, actors.reduce((sum, actor) => sum + actor.colliders.size, 0));
@@ -79,7 +79,7 @@ test('default Folsom showcase owns four distinct damage-profile actors on one ro
     }
   }
 
-  const spawnPoints = [encounter.spawnPosition, ...controllers.map((controller) => controller.position)];
+  const spawnPoints = controllers.map((controller) => controller.position);
   for (let index = 0; index < spawnPoints.length; index += 1) {
     const point = spawnPoints[index];
     assert.ok(inside(point, FOLSOM_COMBAT_FOOTPRINT, 0.4));
@@ -94,58 +94,45 @@ test('default Folsom showcase owns four distinct damage-profile actors on one ro
   assert.equal(diagnostics.enabled, true);
   assert.equal(diagnostics.totalActorCount, 4);
   assert.equal(diagnostics.livingActorCount, 4);
-  assert.equal(diagnostics.additionalWalkerCount, 2);
+  assert.equal(diagnostics.additionalWalkerCount, 3);
   assert.equal(diagnostics.damageProfileActorCount, 4);
   const authoredSpawnPoints = spawnPoints.map((point) => point.toArray());
   encounter.reset(player);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
   assert.equal(encounter.getActiveCombatActors().length, 4);
-  assert.deepEqual(
-    [encounter.spawnPosition, ...encounter.getWalkerControllers().map((controller) => controller.position)].map((point) => point.toArray()),
-    authoredSpawnPoints,
-  );
+  assert.equal(encounter.getWalkerControllers().length, authoredSpawnPoints.length);
   encounter.dispose();
 });
 
-test('folsomShowcase=0 removes only the two extra walkers and temporary sword qualification', async () => {
+test('folsomShowcase=0 disables temporary sword qualification without removing the population', async () => {
   const { encounter } = await createShowcaseEncounter(new URLSearchParams('folsomShowcase=0'));
   assert.equal(encounter.showcaseEnabled, false);
-  assert.equal(encounter.getWalkerControllers().length, 1);
-  assert.equal(encounter.getActiveCombatActors().length, 2);
-  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 2);
-  assert.ok(encounter.getActiveCombatActors().every((actor) => actor.visualProfile === DREADGUARD_DAMAGE_COMBAT_PROFILE));
+  assert.equal(encounter.getWalkerControllers().length, 4);
+  assert.equal(encounter.getActiveCombatActors().length, 4);
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
+  assert.ok(encounter.getActiveCombatActors().every((actor) => actor.visualProfile === CHEZWICK_DAMAGE_COMBAT_PROFILE));
   encounter.dispose();
 });
 
-test('all four Folsom actors own independent death, voice, corpse cleanup, and wave replacement', async () => {
+test('each Folsom Chezwick slot replaces only its own corpse after fifteen seconds', async () => {
   const { encounter, collision } = await createShowcaseEncounter();
-  const firstActors = [encounter.actor, ...encounter.getWalkerControllers().map((controller) => controller.actor)];
+  const controllers = encounter.getWalkerControllers();
+  const firstActors = controllers.map((controller) => controller.actor);
   const firstActorIds = firstActors.map((actor) => actor.instanceId);
   assert.equal(new Set(firstActorIds).size, 4);
   assert.equal(encounter.acceptedCombatAudio.actorStates.size, 4);
 
-  encounter.stationaryDeathController.forceQualifyingStab('upper_chest');
-  encounter.stationaryDeathController.forceQualifyingStab('abdomen');
-  encounter.getWalkerControllers().forEach((controller) => {
-    controller.forceQualifyingStab();
-    controller.forceQualifyingStab();
-  });
-  assert.ok(Object.values(encounter.enemyWaveCorpses).every((slot) => slot.despawned === false));
-  for (let frame = 0; frame < 200; frame += 1) encounter.updateEnemyWaveLifecycle(0.05);
-  assert.ok(Object.values(encounter.enemyWaveCorpses).every((slot) => slot.despawned === true));
-  assert.equal(encounter.actor, null);
-  assert.ok(encounter.getWalkerControllers().every((controller) => controller.actor === null));
-  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 0);
-  assert.equal(encounter.acceptedCombatAudio.actorStates.size, 0);
-  assert.equal(collision.blockerRects.filter((entry) => entry.type === 'combatActor').length, 0);
-  assert.ok(firstActors.every((actor) => actor.disposed && actor.bodies.size === 0 && actor.colliders.size === 0));
-
-  for (let frame = 0; frame < 40; frame += 1) encounter.updateEnemyWaveLifecycle(0.05);
-  const replacements = [encounter.actor, ...encounter.getWalkerControllers().map((controller) => controller.actor)];
-  assert.equal(replacements.length, 4);
-  assert.ok(replacements.every(Boolean));
-  assert.ok(replacements.every((actor) => !firstActorIds.includes(actor.instanceId)));
-  assert.ok(replacements.every((actor) => actor.visualProfile === DREADGUARD_DAMAGE_COMBAT_PROFILE));
+  const target = controllers[0];
+  for (let hit = 0; hit < 4; hit += 1) target.forceQualifyingStab();
+  target.holdGroundedPose();
+  for (let frame = 0; frame < 299; frame += 1) target.prepareFrame(0.05, encounter.player);
+  assert.equal(target.actor.instanceId, firstActorIds[0]);
+  target.prepareFrame(0.05, encounter.player);
+  assert.equal(target.actor, null);
+  target.prepareFrame(0, encounter.player);
+  assert.ok(target.actor && target.actor.instanceId !== firstActorIds[0]);
+  assert.deepEqual(controllers.slice(1).map((controller) => controller.actor.instanceId), firstActorIds.slice(1));
+  assert.ok(controllers.every((controller) => controller.actor.visualProfile === CHEZWICK_DAMAGE_COMBAT_PROFILE));
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 4);
   assert.equal(encounter.acceptedCombatAudio.actorStates.size, 4);
   encounter.reset();
@@ -156,12 +143,9 @@ test('all four Folsom actors own independent death, voice, corpse cleanup, and w
   assert.equal(collision.blockerRects.filter((entry) => entry.type === 'combatActor').length, 0);
 });
 
-test('stationary Dreadguard and all three walkers share corrected two-hit sword thrust mortality', async () => {
+test('all four Chezwick walkers require doubled sword-thrust terminal credit', async () => {
   const { encounter } = await createShowcaseEncounter();
-  const slots = [
-    { actor: encounter.actor, controller: encounter.stationaryDeathController },
-    ...encounter.getWalkerControllers().map((controller) => ({ actor: controller.actor, controller })),
-  ];
+  const slots = encounter.getWalkerControllers().map((controller) => ({ actor: controller.actor, controller }));
   for (const [actorIndex, { actor, controller }] of slots.entries()) {
     for (let hitIndex = 0; hitIndex < 10; hitIndex += 1) {
       const wound = {
@@ -179,7 +163,7 @@ test('stationary Dreadguard and all three walkers share corrected two-hit sword 
       const accepted = controller.lethality.evaluate([wound]);
       if (accepted.length) controller.handleQualifyingStabChange();
     }
-    assert.equal(controller.lethality.criticalStabCount, 2);
+    assert.equal(controller.lethality.criticalStabCount, 4);
     assert.equal(controller.lethality.locked, true);
     assert.equal(actor.lifeState, 'dying');
   }
@@ -188,15 +172,16 @@ test('stationary Dreadguard and all three walkers share corrected two-hit sword 
   encounter.dispose();
 });
 
-test('fatal manifest-authored head consequences enter the existing Folsom corpse lifecycle', async () => {
+test('fatal manifest-authored head consequences enter independent walker death lifecycles', async () => {
   const { encounter } = await createShowcaseEncounter();
-  const stationary = encounter.actor;
+  const stationaryController = encounter.getWalkerControllers()[0];
+  const stationary = stationaryController.actor;
   const walkerController = encounter.getWalkerControllers()[1];
   const walker = walkerController.actor;
   assert.equal(stationary.requestFatalSegmentDetachment({ segmentId: 'head_neck', cause: 'test' }), true);
-  encounter.stationaryDeathController.prepareFrame(0.01);
+  stationaryController.prepareFrame(0.01, encounter.player);
   assert.equal(stationary.lifeState, 'dying');
-  assert.equal(encounter.stationaryDeathController.state, 'LOSING_CONSCIOUSNESS');
+  assert.equal(stationaryController.state, 'LOSING_CONSCIOUSNESS');
   assert.equal(encounter.combatRouter.getDirector(stationary), encounter.combatDirector);
   assert.equal(encounter.getContactableCombatActors().includes(stationary), true);
   assert.equal(walker.requestFatalSegmentDetachment({ segmentId: 'head_neck', cause: 'test' }), true);
@@ -475,14 +460,14 @@ test('Folsom mace chest is unique, walkable, persistent, and preserves other rig
 
 test('showcase configuration remains in the requested tuning bands and waist stays inactive', () => {
   assert.equal(FOLSOM_SHOWCASE_COMBAT_CONFIG.enabled, true);
-  assert.equal(FOLSOM_SHOWCASE_COMBAT_CONFIG.additionalWalkerCount, 2);
+  assert.equal(FOLSOM_SHOWCASE_COMBAT_CONFIG.additionalWalkerCount, 3);
   assert.equal(FOLSOM_SHOWCASE_COMBAT_CONFIG.swordDismembermentEnabled, true);
   assert.ok(FOLSOM_SHOWCASE_COMBAT_CONFIG.minimumSwordEdgeSpeed >= 0.75 && FOLSOM_SHOWCASE_COMBAT_CONFIG.minimumSwordEdgeSpeed <= 0.95);
   assert.ok(FOLSOM_SHOWCASE_COMBAT_CONFIG.minimumSwordLateralMotionRatio >= 0.62 && FOLSOM_SHOWCASE_COMBAT_CONFIG.minimumSwordLateralMotionRatio <= 0.72);
   assert.ok(FOLSOM_SHOWCASE_COMBAT_CONFIG.minimumSwordAccumulatedEdgeTravel >= 0.08 && FOLSOM_SHOWCASE_COMBAT_CONFIG.minimumSwordAccumulatedEdgeTravel <= 0.12);
   assert.deepEqual(FOLSOM_SHOWCASE_COMBAT_CONFIG.maximumSwordSeamDistance, { head_neck: 0.18, left_elbow: 0.16, right_elbow: 0.16 });
   assert.equal(FOLSOM_SHOWCASE_COMBAT_CONFIG.maximumSwordDetachmentsPerGesture, 2);
-  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.activeDamageSegmentIds.includes('lower_spine'), false);
+  assert.equal(CHEZWICK_DAMAGE_COMBAT_PROFILE.activeDamageSegmentIds.includes('lower_spine'), false);
 });
 
 test('combat mace runtime is available only for Combat Lab and Folsom and cannot request detachment', () => {
