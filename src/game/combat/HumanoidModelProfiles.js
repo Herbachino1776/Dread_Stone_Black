@@ -230,7 +230,7 @@ export const CHEZWICK_DAMAGE_COMBAT_PROFILE = Object.freeze({
   animationManifestAssetName: null,
   damageManifestPath: './assets/enemies/chezwick/damage/chezwick_v001.json',
   damageValidationReportPath: './assets/enemies/chezwick/damage/chezwick_v001_validation.json',
-  rawHeight: 1.500000114288579,
+  rawHeight: 1.5001617883459184,
   targetHeight: 1.5,
   rootYaw: Math.PI,
   animationRuntimeKinds: Object.freeze(['IDLE', 'WALK', 'HURT_LEFT', 'HURT_RIGHT', 'MACE_GUARD_RIGHT_ARM', 'DEATH']),
