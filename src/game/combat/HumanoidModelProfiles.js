@@ -239,7 +239,7 @@ export const CHEZWICK_DAMAGE_COMBAT_PROFILE = Object.freeze({
   embeddedAnimationPack: true,
   progressiveDamageSiteFallbacks: Object.freeze([CHEZWICK_LEFT_PROGRESSIVE_DAMAGE_SITE_COMPATIBILITY]),
   progressiveDamageHitsPerStage: 2,
-  terminalProgressiveDamageFatal: false,
+  terminalProgressiveDamageFatal: true,
   durabilityMultiplier: 2,
   piercingLethalityMultiplier: 2,
   maceImpactBlood: true,
