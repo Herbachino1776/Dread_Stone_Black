@@ -1,0 +1,56 @@
+{
+  "id": "folsom_weathered_oak_01",
+  "display_name": "Folsom Weathered Oak 01",
+  "material_family": "wood",
+  "intended_use": [
+    "folsom_tool_shed_exterior_boards",
+    "folsom_tool_shed_interior_boards"
+  ],
+  "status": "candidate_needs_seam_processing",
+  "physical_traits": [
+    "aged",
+    "rough_sawn",
+    "gray_brown",
+    "weathered",
+    "restrained_moisture_staining"
+  ],
+  "candidates": [
+    {
+      "generator": "local_comfyui_sdxl",
+      "file": "candidates/folsom_weathered_oak_01_sdxl.png",
+      "model": "sd_xl_base_1.0.safetensors",
+      "comfyui_prompt_id": "f3d88e95-104a-4f95-bd5a-d26a345276af",
+      "seed": 284775621,
+      "steps": 30,
+      "cfg": 6.5,
+      "sampler": "dpmpp_2m_sde_gpu",
+      "scheduler": "karras",
+      "dimensions": [1024, 1024],
+      "edge_mae": {
+        "left_right": 15.1,
+        "top_bottom": 14.24
+      },
+      "prompt": "seamless tileable game texture, orthographic straight-on surface scan of aged rough-sawn Appalachian oak boards from an abandoned rural tool shed, gray-brown weathered timber, restrained dark moisture staining, shallow checking and fibrous grain, subtle uneven wear, physically believable natural wood, flat uniform diffuse illumination, even color across the entire square, high-frequency material detail, PBR base-color reference, no single focal feature",
+      "negative_prompt": "perspective, angled camera, room, wall scene, objects, tools, window, door, frame, border, vignette, directional light, cast shadow, hard highlight, dramatic lighting, deep black shadow, strong color gradient, repeating obvious knot, large isolated knot, text, letters, logo, watermark, painted symbol, moss, leaves, insects, fantasy",
+      "review": "Strong character and damage variation. Visible repetition and stronger color bands make it better suited to selective boards or a processed atlas than an untouched repeating wall material."
+    },
+    {
+      "generator": "codex_builtin_imagegen",
+      "file": "candidates/folsom_weathered_oak_01_imagegen.png",
+      "reference": "candidates/folsom_weathered_oak_01_sdxl.png",
+      "dimensions": [1254, 1254],
+      "edge_mae": {
+        "left_right": 10.76,
+        "top_bottom": 10.17
+      },
+      "prompt": "Create a distinct alternate seamless tileable game texture from the SDXL material-family reference: aged rough-sawn Appalachian oak tool-shed boards, gray-brown weathering, restrained moisture staining, shallow checking and fibrous grain, straight-on square framing, uniform diffuse illumination, no baked directional lighting, no dominant focal feature, and seamless wrapping on both axes.",
+      "review": "More uniform and easier to use as a base material. Still requires offset/seam correction and repetition reduction before approval."
+    }
+  ],
+  "qa": {
+    "tiling_preview": "previews/folsom_weathered_oak_01_tiling_comparison.png",
+    "tiling_preview_layout": "left: local SDXL 2x2; right: Codex ImageGen 2x2",
+    "approved_for_production": false,
+    "next_action": "Create corrected seamless derivatives, test them on the shed at game scale, then select or combine the strongest candidate."
+  }
+}

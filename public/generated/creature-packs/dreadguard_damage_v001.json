@@ -1,0 +1,162 @@
+{
+  "schema": "dreadstone.creature_pack.v1",
+  "version": 1,
+  "packId": "dreadguard_damage_v001",
+  "displayName": "Dreadguard",
+  "assets": {
+    "glb": "./assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb",
+    "damageManifest": "./assets/enemies/dreadguard/damage/dreadguard_damage_v001.json",
+    "damageValidationReport": "./assets/enemies/dreadguard/damage/dreadguard_damage_v001_validation.json",
+    "animationManifest": "./assets/enemies/dreadguard/animations/dreadguard_animpack_v003.json",
+    "animationValidationReport": "./assets/enemies/dreadguard/animations/dreadguard_animpack_v003_validation.json"
+  },
+  "source": {
+    "object": "SBF_CLEAN_CHARACTER",
+    "armature": "SBF_ProductionRig",
+    "readinessContractSchema": "dreadstone.source_readiness.v1",
+    "objectId": "e202751c127e46e19ee3b760654297d8",
+    "meshDataId": "8f1e12d38fb14ca2bd69020a6e483fd3",
+    "armatureObjectId": "6efc563532864e51ba850c6060ba0f1b",
+    "armatureDataId": "f6abeb04e7aa4eaca5d1eb8683611ce7",
+    "topologyFingerprint": "880eabb3e8810327a1e60bd9e8313ad1acd65dff33970f6ae3c01ce2a459a2c8",
+    "weightFingerprint": "17ab81330545a1a9c2506bf9151f3b99deaa7a674835bbb15d77228a2e5b9b97",
+    "readinessAnalyzerRevision": "hierarchical_weight_partition_v3.16.3",
+    "readinessAnalyzerBuildId": "2026-07-18.source-contract.1",
+    "exportGeneratedAtUtc": "2026-07-30T01:44:10Z"
+  },
+  "authoring": {
+    "damageVersion": "3.9.1",
+    "damageBuildId": "2026-07-18.source-contract.1",
+    "deformationVersion": "4.0.0",
+    "deformationBuildId": "2026-07-29.portable-surface-stains.1"
+  },
+  "presentation": {
+    "rawBounds": {
+      "min": [
+        -0.363884002,
+        -0.002720246,
+        -0.346037845
+      ],
+      "max": [
+        0.367269026,
+        1.460877656,
+        0.33716608
+      ],
+      "size": [
+        0.731153029,
+        1.463597902,
+        0.683203926
+      ]
+    },
+    "rawHeight": 1.463597902,
+    "authoredForwardAxis": "+Y",
+    "upAxis": "+Z",
+    "unitScaleMeters": 1,
+    "skeletonFamilyId": "DSB_HUMANOID_V1",
+    "boneMapProfileId": "dreadstone.humanoid.current_bone_map.v1"
+  },
+  "capabilities": {
+    "progressiveDamage": false,
+    "deformations": true,
+    "gore": true,
+    "surfaceStains": true,
+    "pairedDetachableSegments": true,
+    "embeddedAnimations": true,
+    "separatelyValidatedAnimations": true
+  },
+  "damage": {
+    "availableSegmentIds": [
+      "head_neck",
+      "left_elbow",
+      "lower_spine",
+      "right_elbow"
+    ],
+    "activeRuntimeSegmentIds": [
+      "head_neck",
+      "left_elbow",
+      "right_elbow"
+    ],
+    "deformationRegionIds": [
+      "body_core",
+      "forearm_left",
+      "forearm_right",
+      "head"
+    ],
+    "progressiveDamageSiteIds": []
+  },
+  "animations": {
+    "delivery": "embedded",
+    "manifestValidated": true,
+    "approvedClips": [
+      {
+        "name": "DSB_Death_KneesFirst_RIGHT_v001",
+        "kind": "DEATH"
+      },
+      {
+        "name": "DSB_Hurt_LEFT_Flank_v001",
+        "kind": "HURT_LEFT"
+      },
+      {
+        "name": "DSB_Hurt_RIGHT_Flank_v001",
+        "kind": "HURT_RIGHT"
+      },
+      {
+        "name": "DSB_Mace_Brace_Head_LeftArm_v001",
+        "kind": "MACE_GUARD_LEFT_ARM"
+      },
+      {
+        "name": "DSB_Mace_Brace_Head_RightArm_v001",
+        "kind": "MACE_GUARD_RIGHT_ARM"
+      },
+      {
+        "name": "DSB_Mace_Brace_Head_TwoArm_v001",
+        "kind": "MACE_GUARD_TWO_ARM"
+      },
+      {
+        "name": "DSB_Walk_NORMAL_v001",
+        "kind": "WALK"
+      }
+    ],
+    "unapprovedClipCount": 0
+  },
+  "importDiagnostics": [
+    {
+      "level": "warning",
+      "code": "FORGE_WARNING",
+      "message": "Draft site 'Left Head' is omitted from export (FAILED)."
+    },
+    {
+      "level": "warning",
+      "code": "FORGE_PROGRESSIVE_SITES_NOT_EXPORTED",
+      "message": "1 authored progressive site(s) were not exported; Creature Pack capabilities include native exported sites only."
+    },
+    {
+      "level": "info",
+      "code": "LEGACY_SKELETON_FAMILY_INFERRED",
+      "message": "No Forge anatomy profile was exported; the current humanoid bone signature supplied the skeleton and bone-map profile identifiers."
+    }
+  ],
+  "cost": {
+    "glbFileBytes": 10907460,
+    "glbMeshDefinitionCount": 33,
+    "meshCount": 57,
+    "visibleMeshCount": 4,
+    "skinnedMeshCount": 27,
+    "visibleSkinnedMeshCount": 4,
+    "vertexCount": 55857,
+    "triangleCount": 39958,
+    "morphTargetCount": 12,
+    "uniqueMorphTargetNameCount": 3,
+    "progressiveSiteCount": 0,
+    "deformationKeyCount": 3,
+    "generatedGoreMeshCount": 10,
+    "stainMeshCount": 6,
+    "detachableSegmentCount": 4,
+    "activeDetachableSegmentCount": 3,
+    "animationCount": 7,
+    "approvedAnimationCount": 7,
+    "imageCount": 19,
+    "textureCount": 19,
+    "materialCount": 25
+  }
+}

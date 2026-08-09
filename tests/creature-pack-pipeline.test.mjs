@@ -1,0 +1,230 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import {
+  assertValidCreaturePack,
+  CREATURE_PACK_SCHEMA,
+  validateCreaturePack,
+  validateCreaturePackRegistry,
+} from '../src/contracts/CreaturePack.js';
+import {
+  createCreaturePackRegistry,
+  DEFAULT_GENERATED_DIRECTORY,
+  DEFAULT_PRODUCTION_CREATURE_PACKS,
+  DEFAULT_REPOSITORY_ROOT,
+  importCreaturePack,
+  serializeGeneratedJson,
+} from '../scripts/lib/creature-pack-importer.mjs';
+import {
+  CHEZWICK_DAMAGE_COMBAT_PROFILE,
+  DREADGUARD_DAMAGE_COMBAT_PROFILE,
+} from '../src/game/combat/HumanoidModelProfiles.js';
+
+const dreadguardSource = path.join(DEFAULT_REPOSITORY_ROOT, 'public/assets/enemies/dreadguard/damage');
+const chezwickSource = path.join(DEFAULT_REPOSITORY_ROOT, 'public/assets/enemies/chezwick/damage');
+const dreadguardManifestPath = path.join(dreadguardSource, 'dreadguard_damage_v001.json');
+const dreadguardGlbPath = path.join(dreadguardSource, 'dreadguard_damage_v001.glb');
+const dreadguardReportPath = path.join(dreadguardSource, 'dreadguard_damage_v001_validation.json');
+const chezwickManifestPath = path.join(chezwickSource, 'chezwick_v001.json');
+const chezwickGlbPath = path.join(chezwickSource, 'chezwick_v001.glb');
+const chezwickReportPath = path.join(chezwickSource, 'chezwick_v001_validation.json');
+
+let productionPacksPromise = null;
+function loadProductionPacks() {
+  productionPacksPromise ??= Promise.all(DEFAULT_PRODUCTION_CREATURE_PACKS.map((fixture) => importCreaturePack({
+    ...fixture,
+    repositoryRoot: DEFAULT_REPOSITORY_ROOT,
+  })));
+  return productionPacksPromise;
+}
+
+async function temporaryDirectory(t) {
+  const directory = await mkdtemp(path.join(tmpdir(), 'dreadstone-creature-pack-'));
+  t.after(async () => {
+    const { rm } = await import('node:fs/promises');
+    await rm(directory, { recursive: true, force: true });
+  });
+  return directory;
+}
+
+test('dreadstone.creature_pack.v1 schema accepts generated packs and rejects malformed descriptors', async () => {
+  const [chezwick] = await loadProductionPacks();
+  assert.equal(chezwick.schema, CREATURE_PACK_SCHEMA);
+  assert.equal(validateCreaturePack(chezwick).valid, true);
+  assert.equal(assertValidCreaturePack(chezwick), chezwick);
+
+  const invalid = structuredClone(chezwick);
+  invalid.packId = 'Chezwick Damage';
+  invalid.presentation.rawBounds.size = [1, Number.NaN, 1];
+  invalid.capabilities.gore = 'yes';
+  const result = validateCreaturePack(invalid);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((error) => error.startsWith('packId')));
+  assert.ok(result.errors.some((error) => error.startsWith('presentation.rawBounds.size')));
+  assert.ok(result.errors.some((error) => error.startsWith('capabilities.gore')));
+  assert.throws(() => assertValidCreaturePack(invalid), /Invalid dreadstone\.creature_pack\.v1/);
+});
+
+test('Dreadguard production bundle imports through Forge and runtime validators', async () => {
+  const packs = await loadProductionPacks();
+  const pack = packs.find((entry) => entry.packId === 'dreadguard_damage_v001');
+  assert.ok(pack);
+  assert.equal(pack.assets.glb, './assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb');
+  assert.equal(pack.assets.animationManifest, './assets/enemies/dreadguard/animations/dreadguard_animpack_v003.json');
+  assert.equal(pack.capabilities.progressiveDamage, false, 'disabled Forge draft sites are not promoted into native pack truth');
+  assert.equal(pack.capabilities.separatelyValidatedAnimations, true);
+  assert.equal(pack.cost.glbFileBytes, 10907460);
+  assert.equal(pack.cost.deformationKeyCount, 3);
+  assert.equal(pack.cost.generatedGoreMeshCount, 10);
+  assert.equal(pack.cost.stainMeshCount, 6);
+  assert.equal(pack.cost.approvedAnimationCount, 7);
+  assert.deepEqual(pack.damage.activeRuntimeSegmentIds, ['head_neck', 'left_elbow', 'right_elbow']);
+  assert.ok(pack.importDiagnostics.some((entry) => entry.code === 'FORGE_PROGRESSIVE_SITES_NOT_EXPORTED'));
+});
+
+test('Chezwick production bundle imports native right-face truth without copying the left compatibility site', async () => {
+  const packs = await loadProductionPacks();
+  const pack = packs.find((entry) => entry.packId === 'chezwick_damage_v001');
+  assert.ok(pack);
+  assert.equal(pack.assets.glb, './assets/enemies/chezwick/damage/chezwick_v001.glb');
+  assert.equal(pack.assets.animationManifest, null);
+  assert.equal(pack.capabilities.progressiveDamage, true);
+  assert.equal(pack.capabilities.separatelyValidatedAnimations, false);
+  assert.deepEqual(pack.damage.progressiveDamageSiteIds, ['damage_site_face_right']);
+  assert.equal(pack.cost.animationCount, 12);
+  assert.equal(pack.cost.approvedAnimationCount, 7);
+  assert.equal(pack.animations.unapprovedClipCount, 5);
+  assert.ok(pack.importDiagnostics.some((entry) => entry.code === 'CASE_INSENSITIVE_GLB_NAME_MATCH'));
+  assert.ok(!serializeGeneratedJson(pack).includes('damage_site_face_left_compatibility'));
+});
+
+test('import rejects a missing GLB with an actionable bundle error', async (t) => {
+  const directory = await temporaryDirectory(t);
+  const manifest = JSON.parse(await readFile(dreadguardManifestPath, 'utf8'));
+  manifest.glb = 'missing_damage.glb';
+  await writeFile(path.join(directory, 'fixture.json'), JSON.stringify(manifest), 'utf8');
+  await assert.rejects(
+    importCreaturePack({ packId: 'missing_glb_fixture', sourceDir: directory }),
+    /damage GLB is missing.*missing_damage\.glb/,
+  );
+});
+
+test('import rejects a missing damage manifest before attempting GLB parsing', async (t) => {
+  const directory = await temporaryDirectory(t);
+  await writeFile(path.join(directory, 'orphan.glb'), 'not-a-real-glb', 'utf8');
+  await assert.rejects(
+    importCreaturePack({ packId: 'missing_manifest_fixture', sourceDir: directory }),
+    /damage manifest is missing.*dreadstone\.damage_authoring\.v1/,
+  );
+});
+
+test('import rejects a Forge validation report whose status is FAIL', async (t) => {
+  const directory = await temporaryDirectory(t);
+  const report = JSON.parse(await readFile(dreadguardReportPath, 'utf8'));
+  report.status = 'FAIL';
+  report.errors = ['fixture failure'];
+  const reportPath = path.join(directory, 'failed_validation.json');
+  await writeFile(reportPath, JSON.stringify(report), 'utf8');
+  await assert.rejects(
+    importCreaturePack({
+      packId: 'failed_report_fixture',
+      sourceDir: dreadguardSource,
+      glbPath: dreadguardGlbPath,
+      manifestPath: dreadguardManifestPath,
+      validationReportPath: reportPath,
+    }),
+    /validation report status must be PASS, received FAIL/,
+  );
+});
+
+test('import rejects mismatched source identity and fingerprints', async (t) => {
+  const directory = await temporaryDirectory(t);
+  const report = JSON.parse(await readFile(dreadguardReportPath, 'utf8'));
+  report.source_topology_sha256 = '0'.repeat(64);
+  const reportPath = path.join(directory, 'mismatched_validation.json');
+  await writeFile(reportPath, JSON.stringify(report), 'utf8');
+  await assert.rejects(
+    importCreaturePack({
+      packId: 'mismatched_fingerprint_fixture',
+      sourceDir: dreadguardSource,
+      glbPath: dreadguardGlbPath,
+      manifestPath: dreadguardManifestPath,
+      validationReportPath: reportPath,
+    }),
+    /source topology fingerprint does not match/,
+  );
+});
+
+test('import rejects malformed progressive site records without fixing the Forge export', async (t) => {
+  const directory = await temporaryDirectory(t);
+  const manifest = JSON.parse(await readFile(chezwickManifestPath, 'utf8'));
+  manifest.deformations.progressiveDamageSites[0].severityAnchors.medium = 0.2;
+  const manifestPath = path.join(directory, 'malformed_progressive.json');
+  await writeFile(manifestPath, JSON.stringify(manifest), 'utf8');
+  await assert.rejects(
+    importCreaturePack({
+      packId: 'malformed_progressive_fixture',
+      sourceDir: chezwickSource,
+      glbPath: chezwickGlbPath,
+      manifestPath,
+      validationReportPath: chezwickReportPath,
+    }),
+    /stage MEDIUM has invalid severity anchor/,
+  );
+});
+
+test('registry and descriptor output are deterministic and match committed generated files', async () => {
+  const packs = await loadProductionPacks();
+  const first = createCreaturePackRegistry(packs, { repositoryRoot: DEFAULT_REPOSITORY_ROOT, generatedDirectory: DEFAULT_GENERATED_DIRECTORY });
+  const second = createCreaturePackRegistry([...packs].reverse(), { repositoryRoot: DEFAULT_REPOSITORY_ROOT, generatedDirectory: DEFAULT_GENERATED_DIRECTORY });
+  assert.equal(serializeGeneratedJson(first), serializeGeneratedJson(second));
+  assert.equal(validateCreaturePackRegistry(first).valid, true);
+  assert.deepEqual(first.packs.map((entry) => entry.packId), ['chezwick_damage_v001', 'dreadguard_damage_v001']);
+  assert.equal(await readFile(path.join(DEFAULT_GENERATED_DIRECTORY, 'index.json'), 'utf8'), serializeGeneratedJson(first));
+  for (const pack of packs) {
+    assert.equal(await readFile(path.join(DEFAULT_GENERATED_DIRECTORY, `${pack.packId}.json`), 'utf8'), serializeGeneratedJson(pack));
+  }
+
+  const repeated = await importCreaturePack({
+    ...DEFAULT_PRODUCTION_CREATURE_PACKS.find((entry) => entry.packId === 'dreadguard_damage_v001'),
+    repositoryRoot: DEFAULT_REPOSITORY_ROOT,
+  });
+  const original = packs.find((entry) => entry.packId === repeated.packId);
+  assert.equal(serializeGeneratedJson(repeated), serializeGeneratedJson(original));
+});
+
+test('generated packs agree with legacy profiles on shared export truth while gameplay tuning remains hand-authored', async () => {
+  const packs = await loadProductionPacks();
+  const cases = [
+    [packs.find((entry) => entry.packId === 'dreadguard_damage_v001'), DREADGUARD_DAMAGE_COMBAT_PROFILE],
+    [packs.find((entry) => entry.packId === 'chezwick_damage_v001'), CHEZWICK_DAMAGE_COMBAT_PROFILE],
+  ];
+  for (const [pack, profile] of cases) {
+    assert.equal(pack.assets.glb, profile.assetPath);
+    assert.equal(pack.assets.damageManifest, profile.damageManifestPath);
+    assert.equal(pack.assets.damageValidationReport, profile.damageValidationReportPath);
+    assert.equal(pack.assets.animationManifest, profile.animationManifestPath);
+    assert.equal(pack.assets.animationValidationReport, profile.animationValidationReportPath);
+    assert.equal(pack.source.topologyFingerprint, profile.damageTopologyFingerprint);
+    assert.equal(pack.source.weightFingerprint, profile.damageWeightFingerprint);
+    assert.equal(pack.authoring.damageVersion, profile.damageAuthoringVersion);
+    assert.equal(pack.authoring.damageBuildId, profile.damageAuthoringBuildId);
+    assert.ok(Math.abs(pack.presentation.rawHeight - profile.rawHeight) < 0.000001);
+    assert.equal(pack.presentation.authoredForwardAxis, profile.authoredForwardAxis);
+    assert.deepEqual(pack.damage.activeRuntimeSegmentIds, [...profile.activeDamageSegmentIds].sort());
+    const approvedNames = new Set(pack.animations.approvedClips.map((clip) => clip.name));
+    assert.ok(profile.damageExpectedAnimationNames.every((name) => approvedNames.has(name)));
+  }
+
+  for (const forbidden of ['hostility', 'faction', 'health', 'damageMultipliers', 'ai', 'morale', 'loot', 'dialogue', 'questState', 'persistenceState']) {
+    assert.ok(packs.every((pack) => !(forbidden in pack)), `${forbidden} remains outside the Creature Pack contract`);
+  }
+  const dreadguard = cases[0][0];
+  const chezwick = cases[1][0];
+  assert.equal(dreadguard.capabilities.progressiveDamage, false);
+  assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.progressiveDamageSiteFallbacks.length, 1);
+  assert.deepEqual(chezwick.damage.progressiveDamageSiteIds, ['damage_site_face_right']);
+  assert.equal(CHEZWICK_DAMAGE_COMBAT_PROFILE.progressiveDamageSiteFallbacks.length, 1);
+});

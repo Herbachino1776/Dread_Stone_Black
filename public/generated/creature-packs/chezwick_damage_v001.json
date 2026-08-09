@@ -1,0 +1,169 @@
+{
+  "schema": "dreadstone.creature_pack.v1",
+  "version": 1,
+  "packId": "chezwick_damage_v001",
+  "displayName": "Chezwick",
+  "assets": {
+    "glb": "./assets/enemies/chezwick/damage/chezwick_v001.glb",
+    "damageManifest": "./assets/enemies/chezwick/damage/chezwick_v001.json",
+    "damageValidationReport": "./assets/enemies/chezwick/damage/chezwick_v001_validation.json",
+    "animationManifest": null,
+    "animationValidationReport": null
+  },
+  "source": {
+    "object": "SBF_CLEAN_CHARACTER",
+    "armature": "SBF_ProductionRig",
+    "readinessContractSchema": "dreadstone.source_readiness.v1",
+    "objectId": "f564cac63c43466ab6739256ae170c37",
+    "meshDataId": "0a035008089849cc9768cbd5bc59f024",
+    "armatureObjectId": "7d5dc90a4c034e90a60d0b99a84605f9",
+    "armatureDataId": "3b72713f0111436fb66ae88d61b8c81d",
+    "topologyFingerprint": "243b1dd1253950ad92a27385f429c427c25d002519e510e5f7e9e55735e255a4",
+    "weightFingerprint": "b8ea4c943563c8831f9975bfdbe1249f236ad782f07f8d1825a6e474d6d97050",
+    "readinessAnalyzerRevision": "hierarchical_weight_partition_v3.16.3",
+    "readinessAnalyzerBuildId": "2026-07-18.source-contract.1",
+    "exportGeneratedAtUtc": "2026-08-03T19:50:17Z"
+  },
+  "authoring": {
+    "damageVersion": "3.9.1",
+    "damageBuildId": "2026-07-18.source-contract.1",
+    "deformationVersion": "5.1.2",
+    "deformationBuildId": "2026-07-29.portable-surface-stains.1"
+  },
+  "presentation": {
+    "rawBounds": {
+      "min": [
+        -0.24039059,
+        -0.000178558,
+        -0.146336069
+      ],
+      "max": [
+        0.234081694,
+        1.499983309,
+        0.145916624
+      ],
+      "size": [
+        0.474472284,
+        1.500161867,
+        0.292252694
+      ]
+    },
+    "rawHeight": 1.500161867,
+    "authoredForwardAxis": "+Y",
+    "upAxis": "+Z",
+    "unitScaleMeters": 1,
+    "skeletonFamilyId": "DSB_HUMANOID_V1",
+    "boneMapProfileId": "dreadstone.humanoid.current_bone_map.v1"
+  },
+  "capabilities": {
+    "progressiveDamage": true,
+    "deformations": true,
+    "gore": true,
+    "surfaceStains": true,
+    "pairedDetachableSegments": true,
+    "embeddedAnimations": true,
+    "separatelyValidatedAnimations": false
+  },
+  "damage": {
+    "availableSegmentIds": [
+      "head_neck",
+      "left_elbow",
+      "lower_spine",
+      "right_elbow"
+    ],
+    "activeRuntimeSegmentIds": [
+      "head_neck",
+      "left_elbow",
+      "right_elbow"
+    ],
+    "deformationRegionIds": [
+      "body_core",
+      "forearm_left",
+      "forearm_right",
+      "head"
+    ],
+    "progressiveDamageSiteIds": [
+      "damage_site_face_right"
+    ]
+  },
+  "animations": {
+    "delivery": "embedded",
+    "manifestValidated": false,
+    "approvedClips": [
+      {
+        "name": "DSB_Death_InstantUnconscious_v001",
+        "kind": "DEATH"
+      },
+      {
+        "name": "DSB_Hurt_LEFT_Flank_v001",
+        "kind": "HURT_LEFT"
+      },
+      {
+        "name": "DSB_Hurt_RIGHT_Flank_v001",
+        "kind": "HURT_RIGHT"
+      },
+      {
+        "name": "DSB_Idle_Humanoid_v001",
+        "kind": "IDLE"
+      },
+      {
+        "name": "DSB_Mace_Brace_Head_v001",
+        "kind": "MACE_GUARD_RIGHT_ARM"
+      },
+      {
+        "name": "DSB_Walk_NORMAL_v001",
+        "kind": "WALK"
+      },
+      {
+        "name": "DSB_Walk_NORMAL_v002",
+        "kind": "WALK"
+      }
+    ],
+    "unapprovedClipCount": 5
+  },
+  "importDiagnostics": [
+    {
+      "level": "warning",
+      "code": "CASE_INSENSITIVE_GLB_NAME_MATCH",
+      "message": "Manifest GLB identity Chezwick_v001.glb differs in case from repository file chezwick_v001.glb."
+    },
+    {
+      "level": "warning",
+      "code": "FORGE_WARNING",
+      "message": "Draft site 'Damage Site Face Left' is omitted from export (NEEDS_VALIDATION)."
+    },
+    {
+      "level": "warning",
+      "code": "FORGE_PROGRESSIVE_SITES_NOT_EXPORTED",
+      "message": "1 authored progressive site(s) were not exported; Creature Pack capabilities include native exported sites only."
+    },
+    {
+      "level": "info",
+      "code": "UNAPPROVED_EMBEDDED_ANIMATIONS_IGNORED",
+      "message": "5 embedded clip(s) are not approved Forge animation capabilities."
+    }
+  ],
+  "cost": {
+    "glbFileBytes": 31841288,
+    "glbMeshDefinitionCount": 31,
+    "meshCount": 51,
+    "visibleMeshCount": 4,
+    "skinnedMeshCount": 41,
+    "visibleSkinnedMeshCount": 4,
+    "vertexCount": 76661,
+    "triangleCount": 57821,
+    "morphTargetCount": 12,
+    "uniqueMorphTargetNameCount": 6,
+    "progressiveSiteCount": 1,
+    "deformationKeyCount": 6,
+    "generatedGoreMeshCount": 8,
+    "stainMeshCount": 6,
+    "detachableSegmentCount": 4,
+    "activeDetachableSegmentCount": 3,
+    "animationCount": 12,
+    "approvedAnimationCount": 7,
+    "imageCount": 30,
+    "textureCount": 30,
+    "materialCount": 36
+  }
+}

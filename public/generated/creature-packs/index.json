@@ -1,0 +1,38 @@
+{
+  "schema": "dreadstone.creature_pack_registry.v1",
+  "version": 1,
+  "packs": [
+    {
+      "packId": "chezwick_damage_v001",
+      "displayName": "Chezwick",
+      "descriptorPath": "./generated/creature-packs/chezwick_damage_v001.json",
+      "assetPath": "./assets/enemies/chezwick/damage/chezwick_v001.glb",
+      "sourceTopologyFingerprint": "243b1dd1253950ad92a27385f429c427c25d002519e510e5f7e9e55735e255a4",
+      "capabilities": {
+        "progressiveDamage": true,
+        "deformations": true,
+        "gore": true,
+        "surfaceStains": true,
+        "pairedDetachableSegments": true,
+        "embeddedAnimations": true,
+        "separatelyValidatedAnimations": false
+      }
+    },
+    {
+      "packId": "dreadguard_damage_v001",
+      "displayName": "Dreadguard",
+      "descriptorPath": "./generated/creature-packs/dreadguard_damage_v001.json",
+      "assetPath": "./assets/enemies/dreadguard/damage/dreadguard_damage_v001.glb",
+      "sourceTopologyFingerprint": "880eabb3e8810327a1e60bd9e8313ad1acd65dff33970f6ae3c01ce2a459a2c8",
+      "capabilities": {
+        "progressiveDamage": false,
+        "deformations": true,
+        "gore": true,
+        "surfaceStains": true,
+        "pairedDetachableSegments": true,
+        "embeddedAnimations": true,
+        "separatelyValidatedAnimations": true
+      }
+    }
+  ]
+}
