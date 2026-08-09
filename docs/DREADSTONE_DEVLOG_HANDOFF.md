@@ -1,40 +1,76 @@
 # Dreadstone Black 2.0 Development Handoff
 
-<!-- last_processed_sha: bf12345828997d5d1326a2203329ee35862112c0 -->
+<!-- last_processed_sha: 0a3c9464a69a30530b436d1b299ac2c31f1223fe -->
 
 ## Current Handoff Snapshot
 
 ### Verified implementation
 
-- **Folsom Field now uses Chezwick as its active humanoid damage profile, while Combat Lab retains the Dreadguard profile.** `CHEZWICK_DAMAGE_COMBAT_PROFILE` points to `public/assets/enemies/chezwick/damage/chezwick_v001.glb` and its Forge manifest/validation files. Folsom encounter, showcase extras, diagnostics, and tests were rerouted from the Dreadguard profile to Chezwick.
-- **Chezwick carries an embedded animation pack and manifest-driven damage contract.** The profile inherits the established humanoid combat baseline, enables authored idle/walk/hurt/right-arm mace guard/death runtime kinds, uses a `Math.PI` root yaw, and normalizes the measured raw height `1.5001617883459184` to the 1.5 m target.
-- **The checked-in Chezwick Forge asset contract reports `PASS`.** The new GLB, JSON manifest, and validation report include progressive deformation, gore overlays, surface-stain data, segmentation, and source-readiness metadata. The validation artifact includes a warning that draft site `Damage Site Face Left` was omitted from export.
-- **Folsom encounter lifecycle and population changed with the Chezwick integration.** The primary walker alias is synchronized from the walker controller, grounded actors are configured to respawn after 15 seconds, and showcase additional walkers increased from two to three. Combat blood/director hooks and Folsom diagnostics were updated alongside the profile migration.
-- **Humanoid actor implementation was split into a reusable base plus a focused subclass.** The prior large `HumanoidCombatActor.js` implementation moved to `HumanoidCombatActorBase.js`; `HumanoidCombatActor` now extends the base and adds Chezwick terminal progressive-damage handling. This is a structural refactor intended to isolate profile-specific fatal-site behavior without duplicating the general actor system.
-- **Chezwick terminal Heavy progressive damage is fatal.** The profile sets `terminalProgressiveDamageFatal: true`. The subclass override now treats an explicitly terminal progressive site as authoritative even when the selected Forge facial site is hosted on `body_core` and the physics collider reports a torso region, avoiding a region-label mismatch that previously prevented the fatal transition.
-- **Existing Dreadguard systems remain active outside the Folsom profile swap.** Approved Dreadguard animation playback, Forge portable surface stains, exact-anchor mace progression, sword `0.85` presentation/collision scale, close-range heel-probe thrust fallback, detachment ownership, and ragdoll handoff remain part of the shared combat foundation.
-- **Validation evidence is limited to committed artifacts and assertions.** `tests/chezwick-integration.test.mjs` was added and included in `validate:combat`; Folsom, walker, combat-foundation, Dreadguard, and validation assertions were updated. This record does not claim that the full test suite, build, CI, or live-play validation completed successfully.
+- **Creature Pack Milestones 1–3 are now implemented as an isolated migration path without replacing canonical Folsom's legacy profile path.** `dreadstone.creature_pack.v1` descriptors are generated from validated Forge output, resolved in-browser, combined with game-authored runtime policy, and exercised through the opt-in Creature Lab.
+- **Milestone 1 established a deterministic repository ingest contract and registry.** `src/contracts/CreaturePack.js`, `scripts/import-creature-pack.mjs`, and `scripts/lib/creature-pack-importer.mjs` validate Forge manifests/reports/GLBs, require PASS reports and identity consistency, reuse damage/deformation validators, measure bounds/costs, and emit `public/generated/creature-packs/{chezwick_damage_v001,dreadguard_damage_v001,index}.json`. Generated pack truth deliberately excludes gameplay identity, AI, persistence, mortality policy, collision tuning, and other game-authored decisions.
+- **Creature Pack compatibility is explicit rather than silently normalized.** Dreadguard's omitted draft progressive site is not advertised as native pack truth; Chezwick advertises its native right facial site while the left facial site remains game-owned compatibility data. Unapproved legacy animation clips are excluded from advertised capabilities, and the Chezwick GLB filename case mismatch is diagnosed rather than rewritten.
+- **Milestone 2 added a browser-safe registry and policy/profile composition bridge.** `CreaturePackRegistry.js` validates and caches generated registry/descriptors using deploy-safe URLs. `CreatureRuntimePolicies.js` owns presentation/gameplay decisions and rejects duplication of pack-owned technical fields. The composed result remains compatible with `HumanoidCombatActor`/`HumanoidGlbVisualAdapter`, allowing gradual migration while `HumanoidModelProfiles.js` remains for legacy consumers.
+- **An isolated mobile Creature Lab now runs through Folsom only when `?creatureLab=1` is explicitly present.** `CreatureLabController.js` and `CreatureLabPanel.js` replace the normal multi-Chezwick development wave with one controlled subject, support pack switching, damage reset, animation actions, progressive-site controls, real blunt-impact probes, detachment/death/respawn operations, diagnostics, and cleanup. The lab uses a read-only save-storage view and an ephemeral Dreadstone Mace loadout so lab operations do not persist equipment/progression writes.
+- **Milestone 3 replaces axis/region-only progressive-site authority with animation-following 3D targeting.** `ProgressiveDamageSiteTargeting.js` builds actor-owned normalized site records from native and compatibility sites, resolves authored capture centers/radii, converts Forge Blender Z-up coordinates to runtime Y-up, projects sites to intended skinned deformation surfaces when possible, reconstructs current-pose centers/directions, and falls back to diagnosed static actor-local points when binding cannot be maintained.
+- **Progressive-site selection is deterministic and radius-bounded.** Selection first filters by broad semantic physics region, then requires world-space distance within the scaled authored radius plus an explicit 0.008 m tolerance. Normalized distance dominates scoring; preferred direction contributes only a bounded adjustment, with stable tie breaking. If no progressive site qualifies, the existing non-progressive Forge region/key fallback remains available.
+- **Creature Lab now visualizes and probes the same production targeting records.** `CreatureLabSiteMarkerRenderer.js` renders non-physical instanced site markers and an optional selected-radius sphere. Center/Edge/Outside probe controls route through `HumanoidCombatActor.applyBluntImpact` without forcing a `siteId`, so the production selector—not the panel—decides the site.
+- **Testing/validation coverage expanded but successful execution is not asserted here.** `validate:creature-packs` and `validate:combat` now include creature-pack, Creature Lab, progressive-targeting, and asset-targeting tests; validation scripts were adjusted for the actor base/subclass and lab paths. No commit evidence reviewed in this range proves that the full suite, production build, CI, deployed-iPhone acceptance procedure, or live combat playtest completed successfully.
+- **A separate Folsom weathered-oak material candidate set was added.** The first milestone commit added SDXL/image-generation candidates, a material metadata record, and tiling comparison output under `output/imagegen/texture_library/folsom_weathered_oak_01/`. The metadata marks it as a candidate needing seam processing, not a production-ready repeating material.
 
 ### Important design decisions
 
-- Forge manifests remain authoritative for progressive sites, stages, morphs, gore nodes, surface stains, segmentation, and attached/detached ownership.
-- Folsom's active character identity is now profile-driven Chezwick; shared humanoid mechanics remain in the base actor rather than being forked into encounter-specific code.
-- An explicitly fatal terminal progressive site is authoritative over coarse physics-region labels when Forge site hosting and collider anatomy differ.
-- Embedded animation metadata may be consumed directly from the Chezwick asset contract; Dreadguard continues to use its separate approved animation-pack manifest.
-- Actor lifecycle aliases and respawn ownership should flow through walker controllers rather than parallel encounter-owned actor state.
-- Interpolated deformation below the first authored anchor is still not a named damage stage and must not expose named-stage gore.
+- Forge remains authoritative for exported damage/deformation structure, source fingerprints, progressive-site/stage truth, gore/stain records, segments, and approved animation metadata; generated Creature Packs add repository integration facts only.
+- Runtime/game policy must remain separate from generated technical body truth. Scale targets, root presentation, proxy fit, mortality/lethality tuning, active supported segment subset, voice, compatibility sites, and animation selection stay game-authored.
+- Native progressive sites always take precedence; compatibility sites may fill only a missing side and must remain visibly labeled as compatibility authority.
+- Progressive-site targeting must use authored 3D centers/radii and current-pose reconstruction, not arbitrary mesh proximity, left/right X heuristics, or oversized inferred hit bubbles.
+- Surface binding is prepared once; combat hot paths reconstruct only bounded candidate records and do not traverse the scene or perform topology searches.
+- Creature Lab is an explicit development proving ground. It must not mutate canonical progression/save state or silently become the production Folsom spawn path.
+- Existing legacy humanoid profile/runtime code is being bridged rather than replaced in one step; Creature Definitions, semantic damage consequences, persistence, simulation tiers, and non-humanoid support remain future work.
 
 ### Risks, inference, and next logical work
 
-- **Verified risk surface:** Chezwick's new asset and manifest are large, newly integrated files. Confirm the GLB loads in a clean checkout and packaged build, embedded animation clips resolve, and source/manifest node names match runtime bindings.
-- **Verified risk surface:** The validation report passes but explicitly omits draft site `Damage Site Face Left`; verify the exported progressive site actually used for facial/head trauma is the intended production site.
-- **Verified risk surface:** The terminal-fatal override deliberately crosses a `body_core`/torso collider mismatch. Verify it only triggers for an accepted terminal progressive site and cannot make unrelated torso Heavy damage fatal.
-- **Verified risk surface:** Splitting `HumanoidCombatActor` into base/subclass changes import and inheritance boundaries across combat code. Check constructor behavior, diagnostics, wound/physiology ownership, detachment, animation authority, and ragdoll transitions for regressions.
-- **Verified risk surface:** Folsom now owns more simultaneous walkers and 15-second grounded respawns. Verify blocker cleanup, actor-router ownership, blood/audio cleanup, deterministic aliases, and performance over repeated deaths/respawns.
-- **Inference:** Chezwick appears intended to become Folsom's production enemy while Dreadguard remains a Combat Lab/reference profile, but the diffs do not establish a broader project-wide character replacement.
-- **Next logical work:** Run `npm run validate:combat`, focused Chezwick/Folsom/walker/combat-foundation tests, and the production build. In live play, verify Chezwick idle height and ground contact, facing, embedded walk/hurt/guard/death playback, mace Light/Medium/Heavy progression, terminal Heavy fatality on the authored facial site despite torso-hosted geometry, nonfatal behavior on unrelated sites, gore/stain visibility and cleanup, three-walker spacing, death-to-respawn lifecycle, and absence of visible/physical proxy drift.
+- **Verified risk surface:** The new pack importer is a large validation boundary spanning Forge reports, GLB parsing, animation approval, deformation validation, deterministic measurements, filename case handling, and generated descriptors. Run the committed `validate:creature-packs` path in a clean checkout and verify deterministic no-diff regeneration.
+- **Verified risk surface:** Creature Lab pack switching touches actor disposal, combat routing, blockers, blood/director ownership, weapon targeting, visual initialization, and marker cleanup. Repeated switch/respawn/death cycles should be checked for stale actors, collision bodies, routes, bindings, markers, or retained event/input ownership.
+- **Verified risk surface:** 3D progressive targeting depends on authored capture centers/radii and skinned-surface reconstruction. Verify marker/strike alignment through idle, walk, hurt, and guard poses on both Chezwick and Dreadguard; static fallback intentionally cannot follow local limb articulation.
+- **Verified limit:** Post-authored-death/ragdoll progressive-site targeting is not certified, and progressive bindings are not transferred to separately detached segment meshes. Grounded actors removed from combat routing are not targetable.
+- **Verified risk surface:** The 0.008 m tolerance and preferred-direction scoring are new contact-selection parameters. Confirm physical mace hits near overlapping/edge sites select deterministically without expanding damage reach beyond authored intent.
+- **Verified risk surface:** The lab is now allowed in local or built/deployed games when the exact hidden query is present. Confirm `?creatureLab=0` and normal URLs produce no lab UI, marker renderer, loadout override, save-write behavior, or spawn override.
+- **Inference:** The architecture is moving toward generated technical creature bodies plus small hand-authored Creature Definitions/policies, but the reviewed diffs do not establish a production Creature Definition Registry yet.
+- **Next logical work:** Execute `npm run validate:creature-packs`, `npm run validate:combat`, production build checks, and the documented deployed mobile acceptance procedure. Then implement Milestone 4 as a small Creature Definition Registry/factory referencing validated packs plus game-authored identity/policy, without duplicating Forge truth or prematurely adding AI, persistence, faction, dialogue, inventory, or unrelated systems.
 
 ## Development History
+
+### 2026-08-09 09:59 EDT — Update through `0a3c946`
+
+**Scanned range:** after canonical checkpoint `bf12345828997d5d1326a2203329ee35862112c0` through observed `main` HEAD `0a3c9464a69a30530b436d1b299ac2c31f1223fe`. Commit `fe13608` was ignored because its message begins with `docs(devlog):`. Three development commits were included.
+
+**Included commits, chronological:**
+
+- `0f5b2fd` — update
+- `810c4f3` — Implement runtime creature lab milestone 2
+- `0a3c946` — Implement 3D progressive damage site targeting
+
+**Grouped development steps:**
+
+1. **Creature Pack receiving contract, importer, and generated registry (`0f5b2fd`)**
+   - Added `src/contracts/CreaturePack.js`, `scripts/import-creature-pack.mjs`, `scripts/lib/creature-pack-importer.mjs`, `tests/creature-pack-pipeline.test.mjs`, and generated descriptors/index under `public/generated/creature-packs/`.
+   - Added `docs/architecture/CREATURE_PACK_PIPELINE.md` documenting Forge authority, repository integration facts, compatibility exceptions, segment support, fingerprints, deterministic import/check commands, and the future Creature Pack / Creature Definition / Creature Instance boundary.
+   - The importer requires matching Forge damage validation reports, validates PASS/error state and manifest/report identity, parses GLBs, reuses runtime damage/deformation validators, checks animation approval, measures bounds/costs, and rejects inconsistent output instead of rewriting Forge assets.
+   - Added the `folsom_weathered_oak_01` material candidate package under `output/imagegen/texture_library/`, including two generated candidates, metadata, and a tiling comparison. The metadata records that seam processing is still needed.
+
+2. **Runtime Creature Lab and policy composition bridge (`810c4f3`)**
+   - Added `CreaturePackRegistry.js` for browser-safe generated-pack resolution and validation, plus `CreatureRuntimePolicies.js` to hold game-authored presentation/combat decisions and compose them with validated pack truth into the existing humanoid runtime profile shape.
+   - Added `CreatureLabController.js` and `CreatureLabPanel.js`; integrated lab mode through `FolsomCombatEncounter.js`, input ownership, walker reset paths, Forge damage runtime accessors, segment/runtime adapters, and validation scripts.
+   - The lab supports generated-pack switching, direct progressive stage controls, real blunt-impact probes, animation/death/detachment/respawn operations, diagnostics, and clean actor/router/blocker/blood/director disposal without changing canonical Folsom when the lab flag is absent.
+   - Added `tests/creature-lab-runtime.test.mjs` and included it in `validate:combat`. No successful execution result is asserted by this record.
+
+3. **Animation-following 3D Progressive Damage Site targeting (`0a3c946`)**
+   - Added `ProgressiveDamageSiteTargeting.js`, integrated it into `ForgeDamageDeformationRuntime.js`, and extended `SkinnedSurfaceBinding.js`, `HumanoidGlbVisualAdapter.js`, and `HumanoidDamageSegmentRuntime.js` to expose actor-specific target reconstruction data.
+   - Site records retain native/compatibility authority, authored capture center/radius/direction, semantic region/group, surface/static/untargetable binding mode, current reconstructed center/direction, and bounded targeting diagnostics without mutating Forge manifests or generated descriptors.
+   - Selection now uses semantic-region filtering plus authored 3D radius eligibility, normalized distance, bounded direction preference, and deterministic tie breaks. Existing non-progressive Forge fallback remains when no progressive site qualifies.
+   - Added `CreatureLabSiteMarkerRenderer.js` and expanded Creature Lab controls to show production site centers/radii and issue Center/Edge/Outside blunt probes without specifying a requested site ID.
+   - Updated `Game.js` so exact `?creatureLab=1` can run in local or built/deployed environments through read-only save storage and an ephemeral mace loadout; ordinary Folsom URLs remain unaffected.
+   - Added `tests/progressive-damage-site-targeting.test.mjs` and `tests/progressive-damage-site-assets.test.mjs`, expanded Creature Lab/Chezwick tests, and added them to `validate:combat`. The documented mobile acceptance procedure is planned validation, not evidence that it was completed.
 
 ### 2026-08-03 22:01 EDT — Update through `bf12345`
 
