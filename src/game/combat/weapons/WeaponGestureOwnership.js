@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export const DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR = 'button,[data-control="move"],[data-control="look"],[data-equipment-panel]';
+export const DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR = 'button,[data-control="move"],[data-control="look"],[data-equipment-panel],[data-creature-lab-panel]';
 
 export class WeaponGestureOwnership {
   constructor(workspace) {

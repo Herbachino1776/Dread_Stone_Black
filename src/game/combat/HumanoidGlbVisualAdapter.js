@@ -880,6 +880,14 @@ export class HumanoidGlbVisualAdapter {
     return this.damageSegmentRuntime?.advanceProgressiveDamageSite?.(siteId, options) ?? { applied: false, reason: 'damage-runtime-not-ready', siteId };
   }
 
+  listProgressiveDamageSites() {
+    return this.damageSegmentRuntime?.listProgressiveDamageSites?.() ?? [];
+  }
+
+  resetProgressiveDamageSite(siteId) {
+    return this.damageSegmentRuntime?.resetProgressiveDamageSite?.(siteId) ?? { applied: false, reason: 'damage-runtime-not-ready', siteId: siteId ?? null };
+  }
+
   resetForgeDamage() {
     return this.damageSegmentRuntime?.resetForgeDamage?.() ?? null;
   }

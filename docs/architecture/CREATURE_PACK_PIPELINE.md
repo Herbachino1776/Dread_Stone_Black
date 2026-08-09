@@ -2,7 +2,7 @@
 
 `dreadstone.creature_pack.v1` is the repository receiving contract for a validated technical creature body. It is generated from Forge output and contains no gameplay identity, behavior, encounter, or persistence state.
 
-This is Milestone 1 only. The generated registry is not consumed by `HumanoidCombatActor` yet, and the canonical Folsom runtime is unchanged.
+Milestone 1 established the repository receiving contract and deterministic generated registry. Milestone 2 adds a browser-safe resolver, a separate game-policy layer, an effective-profile composition bridge, and an isolated mobile Creature Lab. Canonical Folsom still uses its legacy direct profile and remains unchanged unless the explicit development lab flag is active.
 
 ## Current bundle audit
 
@@ -84,7 +84,7 @@ The importer never rewrites the GLB, Forge manifest, or Forge validation report.
 
 ## `dreadstone.creature_pack.v1`
 
-The schema validator is `src/contracts/CreaturePack.js`. It stays outside the current creature runtime because Milestone 1 does not add a browser consumer. A descriptor has this shape:
+The schema validator is `src/contracts/CreaturePack.js`. The Milestone 2 browser resolver reuses that validator before any descriptor is composed into an actor profile. A descriptor has this shape:
 
 ```text
 schema, version, packId, displayName
@@ -197,6 +197,87 @@ Game-authored fields that remain in profiles:
 
 `activeDamageSegmentIds` is a migration bridge: the IDs originate in Forge, but enabling only `head_neck`, `left_elbow`, and `right_elbow` is a current game-runtime support decision. Both bundles also export `lower_spine`; it is available in pack metadata but not active because `ACTIVE_DAMAGE_SEGMENT_CONTRACTS` does not support it yet.
 
+## Milestone 2 runtime resolution
+
+`src/game/creatures/CreaturePackRegistry.js` is the browser-safe runtime receiving dock. It uses `fetch`, never Node filesystem APIs, and resolves URLs against Vite's `BASE_URL` and the document base so deployed GitHub Pages paths remain valid. It:
+
+- loads and validates `public/generated/creature-packs/index.json`;
+- lists registered summaries and checks or resolves a `packId`;
+- loads and validates the referenced `dreadstone.creature_pack.v1` descriptor;
+- verifies registry/descriptor ID and display-name agreement;
+- caches the index and individual descriptor promises;
+- reports stable error codes for request, JSON, registry, descriptor, and unknown-pack failures.
+
+The resolver does not fetch Forge validation reports or reconstruct compact descriptor facts. `HumanoidGlbVisualAdapter` still loads the GLB, optional animation manifest, and detailed Forge damage manifest required by the actual actor runtime.
+
+## Runtime policy and effective-profile bridge
+
+`src/game/creatures/CreatureRuntimePolicies.js` owns game-authored decisions for the current humanoid host. It currently registers a small policy for Chezwick and Dreadguard. Policies may contain presentation scale, grounding, rotation, collision fit, animation selection, holding/death behavior, voice, damage cadence, mortality/lethality tuning, compatibility sites, and the current supported segment subset.
+
+Policies are explicitly rejected if they duplicate descriptor-owned technical fields such as asset paths, raw exported height, Forge authoring identity, or source fingerprints. `composeHumanoidCreatureRuntimeProfile(pack, policy)` combines the two authorities into the compatibility profile already accepted by `HumanoidCombatActor` and `HumanoidGlbVisualAdapter`:
+
+```text
+validated generated Creature Pack
+  technical/export truth
+             +
+validated game-authored runtime policy
+  presentation and gameplay decisions
+             =
+effective current humanoid profile
+```
+
+This bridge lets both production fixtures use one generic resolution/composition path without rewriting the actor. `HumanoidModelProfiles.js` remains in place for canonical Folsom and other existing consumers; it is legacy duplication to remove gradually only after parity is proven.
+
+## Supported runtime boundary
+
+The Milestone 2 Creature Lab supports only:
+
+- skeleton family `DSB_HUMANOID_V1`;
+- bone-map profile `dreadstone.humanoid.current_bone_map.v1`;
+- packs with an explicit game-authored runtime policy;
+- active segments that exist in the pack and have current semantic-body contracts;
+- selected animations that appear in the pack's approved animation metadata.
+
+A registered pack outside that boundary remains visible as `REGISTERED BUT CURRENT RUNTIME UNSUPPORTED` with a reason. The resolver does not guess a bone map, claim quadruped support, or enable an exported lower-spine boundary that the actor cannot safely run.
+
+## Mobile Creature Lab
+
+`src/game/creatures/CreatureLabController.js` owns the isolated development session. `src/game/creatures/CreatureLabPanel.js` is its touch-first UI. Activate it in a Vite development build with:
+
+```text
+?creatureLab=1
+```
+
+The flag is ignored outside a development build. In lab mode Folsom hosts one stationary, deliberately placed test subject and suppresses the normal four-Chezwick development combat wave. Without the flag, no lab controller, panel, toggle, lab actor, or spawn override exists.
+
+The floating `LAB` button opens a safe-area-aware portrait panel. Core controls use 48 CSS-pixel minimum targets, readable labels, two-column/one-column responsive grids, vertical touch scrolling, no hover-only workflow, and no horizontal core-control overflow. Pointer, touch, and wheel events inside the panel are stopped from reaching world controls; the normal weapon-input ownership selectors also treat the panel as blocked input. Closing the panel restores the normal world control surface.
+
+Button-driven operations include:
+
+- close, respawn, and reset all damage;
+- generated registered-pack selection without a page reload;
+- compact pack technical/cost information;
+- only resolvable idle, walk, hurt, guard, and death actions;
+- progressive site listing and selection with `NATIVE` or `COMPATIBILITY` authority labels;
+- direct Light, Medium, Heavy, Next Stage, and Reset Site controls;
+- a supported real blunt strike through `HumanoidCombatActor.applyBluntImpact` at the authored capture center;
+- detachment controls for pack-available boundaries, enabled only for the actor's supported subset;
+- production-path death, safe ragdoll only when a pack does not retain authored-death authority, and respawn;
+- on-screen diagnostics and clipboard copy with selectable-text fallback.
+
+Console access is secondary only. The generic lab commands are exposed as `__DSB_CREATURE_LAB__` in development for diagnostics, while the existing `__DSB_CHEZWICK_DAMAGE__` commands remain available only on the legacy non-lab path for compatibility.
+
+### Pack switching lifecycle
+
+Selecting another supported pack cancels the current weapon target, disposes the current walker actor/director/blood ownership, unregisters combat routing, removes its player blocker, composes the new pack and policy, and spawns one clean replacement through the same `HumanoidCombatActor` factory path. The controller then waits for visual-adapter initialization before exposing resolved damage sites. Switching does not reload Folsom and does not write progression or save state.
+
+Chezwick and Dreadguard preserve their existing compatibility behavior without changing generated truth:
+
+- Chezwick exposes the native right-face site from Forge plus the policy-owned left-face reconstruction.
+- Dreadguard exposes zero native sites from its pack and the existing policy-owned left-head compatibility site.
+
+Native manifest sites take precedence. Compatibility sites are added only for a side not supplied by Forge, and diagnostics report the two counts separately.
+
 ## Compatibility exceptions
 
 Compatibility metadata is never promoted into native Creature Pack truth.
@@ -244,17 +325,16 @@ Creature Instance:
 - one world individual and its persistent state;
 - not implemented here.
 
-The planned migration remains:
+The planned migration now continues from the first two completed milestones:
 
-1. Creature Pack contract/importer.
-2. Generated registry.
-3. Generic Folsom development proving ground, isolated from canonical progression.
-4. Generic 3D progressive-site targeting.
-5. Creature Definitions and factory.
-6. Damage consequence vocabulary.
-7. Gradual extraction from `HumanoidCombatActor`.
-8. Persistence.
-9. Simulation tiers.
-10. Non-humanoid profiles.
+1. Creature Pack contract/importer and generated registry (Milestone 1, complete).
+2. Runtime resolver, policy composition, and mobile Folsom proving ground (Milestone 2, complete).
+3. Generic 3D Progressive Damage Site Targeting + Site-Driven Damage Harness (Milestone 3, next).
+4. Creature Definitions and factory.
+5. Damage consequence vocabulary.
+6. Gradual extraction from `HumanoidCombatActor`.
+7. Persistence.
+8. Simulation tiers.
+9. Non-humanoid profiles.
 
-Milestone 2 should stop at an isolated generic development proving ground that resolves a selected generated pack without changing canonical Folsom, combat ownership, creature definitions, AI, or persistence.
+Milestone 3 should replace panel-only site selection with generic in-world 3D site targeting and a site-driven damage harness. It must reuse the resolved native/compatibility site authority, not infer sites from arbitrary meshes. It is intentionally not implemented in Milestone 2.

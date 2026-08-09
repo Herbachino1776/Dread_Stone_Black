@@ -811,6 +811,32 @@ export class CombatLabWalkerController {
     else if (this.enabled && this.state === WALKER_STATES.disposed) this.setState(WALKER_STATES.respawning);
   }
 
+  resetActorDamage() {
+    if (!this.actor || this.actor.lifeState !== 'alive' || !LIVING_MOVEMENT_STATES.has(this.state)) return false;
+    this.beforeActorDisposal?.(this.actor, 'walker-damage-reset');
+    this.actor.reset();
+    this.actor.combatContactState = 'alive';
+    this.combatRouter?.refresh?.(this.actor);
+    this.director?.reset?.();
+    this.bloodEffects?.clear?.();
+    this.lethality = new WalkerVitalStabPolicy();
+    this.threatened = false;
+    this.threatElapsed = 0;
+    this.guardCycleCount = 0;
+    this.deathCollisionReleased = false;
+    this.offensiveContactEnabled = true;
+    this.currentSpeed = 0;
+    this.desiredSpeed = 0;
+    this.velocity.set(0, 0, 0);
+    if (this.playerBlocker) {
+      this.collision?.removeBlocker?.(this.playerBlocker);
+      this.actor.updatePlayerCollisionBlocker(this.playerBlocker);
+      this.playerBlocker.userData.tryPlayerDepenetration = (correction, context) => this.tryPlayerDepenetration(correction, context);
+      this.collision?.addBlocker?.(this.playerBlocker);
+    }
+    return true;
+  }
+
   reset(player = this.playerProvider?.()) {
     if (this.actor) this.disposeWalker({ respawn: false });
     this.stateElapsed = 0;

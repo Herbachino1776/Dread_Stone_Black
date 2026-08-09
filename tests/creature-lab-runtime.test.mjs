@@ -1,0 +1,307 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { CollisionWorld } from '../src/game/Collision.js';
+import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
+import { validateDamageAsset } from '../src/game/combat/HumanoidDamageSegmentRuntime.js';
+import { validateForgeDamageDeformationAsset } from '../src/game/combat/ForgeDamageDeformationRuntime.js';
+import { createEmbeddedAnimationPackManifest, resolveAnimationPackManifest } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
+import { CHEZWICK_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
+import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
+import { CreatureLabController, resolveCreatureLabMode } from '../src/game/creatures/CreatureLabController.js';
+import {
+  CREATURE_LAB_TOUCH_TARGET_PX,
+  getCreatureLabAnimationPanelActions,
+  getCreatureLabBodyStateActions,
+  getCreatureLabDamagePanelActions,
+  getCreatureLabDetachmentPanelActions,
+  getCreatureLabPackActions,
+  getCreatureLabPrimaryActions,
+} from '../src/game/creatures/CreatureLabPanel.js';
+import { CreaturePackRegistry } from '../src/game/creatures/CreaturePackRegistry.js';
+import {
+  CREATURE_PACK_TECHNICAL_PROFILE_FIELDS,
+  assessCreaturePackRuntimeSupport,
+  composeHumanoidCreatureRuntimeProfile,
+  getCreatureRuntimePolicy,
+} from '../src/game/creatures/CreatureRuntimePolicies.js';
+
+globalThis.self ??= globalThis;
+globalThis.ProgressEvent ??= class ProgressEvent {
+  constructor(type, init = {}) { this.type = type; Object.assign(this, init); }
+};
+globalThis.createImageBitmap ??= async () => ({ width: 1, height: 1, close() {} });
+
+const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
+const fixtureBaseUrl = 'https://example.test/Dread_Stone_Black/';
+const fixtureBasePath = new URL(fixtureBaseUrl).pathname;
+
+installKnifeWoundManifestForHeadlessTests(JSON.parse(readFileSync(
+  new URL('../public/assets/textures/combat/wounds/knife/knife_wound_decals.manifest.json', import.meta.url),
+  'utf8',
+)));
+
+function createPublicFetch({ transform = null } = {}) {
+  const requests = [];
+  const fetchImplementation = async (input) => {
+    const url = new URL(input);
+    requests.push(url.href);
+    if (!url.pathname.startsWith(fixtureBasePath)) return { ok: false, status: 404, json: async () => null };
+    const relativePath = decodeURIComponent(url.pathname.slice(fixtureBasePath.length));
+    try {
+      const text = await readFile(path.join(publicDirectory, relativePath), 'utf8');
+      const parsed = JSON.parse(text);
+      return { ok: true, status: 200, json: async () => transform?.(relativePath, parsed) ?? parsed };
+    } catch {
+      return { ok: false, status: 404, json: async () => null };
+    }
+  };
+  return { requests, fetchImplementation };
+}
+
+function createRegistry(options = {}) {
+  const fixture = createPublicFetch(options);
+  return {
+    ...fixture,
+    registry: new CreaturePackRegistry({ baseUrl: fixtureBaseUrl, fetchImplementation: fixture.fetchImplementation }),
+  };
+}
+
+async function loadDamageFixture(pack, profile) {
+  const glbPath = path.join(publicDirectory, pack.assets.glb.replace(/^\.\//, ''));
+  const glbBytes = readFileSync(glbPath);
+  const gltf = await new GLTFLoader().parseAsync(
+    glbBytes.buffer.slice(glbBytes.byteOffset, glbBytes.byteOffset + glbBytes.byteLength),
+    new URL(pack.assets.glb.replace(/^\.\//, ''), fixtureBaseUrl).href,
+  );
+  const manifest = JSON.parse(await readFile(path.join(publicDirectory, pack.assets.damageManifest.replace(/^\.\//, '')), 'utf8'));
+  const animationManifest = pack.assets.animationManifest
+    ? JSON.parse(await readFile(path.join(publicDirectory, pack.assets.animationManifest.replace(/^\.\//, '')), 'utf8'))
+    : createEmbeddedAnimationPackManifest(gltf.animations, profile);
+  return { gltf, manifest, animationManifest };
+}
+
+function createFolsomFixture() {
+  const scene = new THREE.Scene();
+  const collision = new CollisionWorld({
+    walkableRects: [{ minX: -18, maxX: 22, minZ: -20, maxZ: 18 }],
+    blockerRects: [],
+    defaultFloorY: 0.16,
+    outdoorTerrainSampler: { sampleOutdoorY: () => 0.16 },
+    sourceLocationId: 'folsom',
+  });
+  const player = { position: new THREE.Vector3(-2, 1.71, -4), yaw: 0 };
+  const dungeon = { scene, collision, isPositionInFishingWater: () => false };
+  return { scene, collision, player, dungeon };
+}
+
+test('browser registry resolves the generated index and descriptors through the configured public base with caching', async () => {
+  const { registry, requests } = createRegistry();
+  assert.equal(registry.resolvePublicUrl('./generated/creature-packs/index.json'), `${fixtureBaseUrl}generated/creature-packs/index.json`);
+  assert.deepEqual((await registry.listPacks()).map((entry) => entry.packId), ['chezwick_damage_v001', 'dreadguard_damage_v001']);
+  assert.equal(await registry.hasPack('chezwick_damage_v001'), true);
+  assert.equal((await registry.getPackSummary('dreadguard_damage_v001')).displayName, 'Dreadguard');
+  const first = await registry.loadPack('chezwick_damage_v001');
+  const second = await registry.loadPack('chezwick_damage_v001');
+  assert.equal(first, second);
+  assert.equal(requests.filter((url) => url.endsWith('/index.json')).length, 1);
+  assert.equal(requests.filter((url) => url.endsWith('/chezwick_damage_v001.json')).length, 1);
+  registry.clearCache();
+  await registry.loadIndex();
+  assert.equal(requests.filter((url) => url.endsWith('/index.json')).length, 2);
+});
+
+test('runtime registry reports unknown packs and malformed descriptors cleanly', async () => {
+  const { registry } = createRegistry();
+  await assert.rejects(registry.loadPack('not_registered'), (error) => error.code === 'UNKNOWN_PACK' && /not_registered/.test(error.message));
+
+  const malformed = createRegistry({
+    transform: (relativePath, descriptor) => relativePath.endsWith('/chezwick_damage_v001.json')
+      ? { ...descriptor, presentation: { ...descriptor.presentation, rawHeight: -1 } }
+      : descriptor,
+  }).registry;
+  await assert.rejects(malformed.loadPack('chezwick_damage_v001'), (error) => error.code === 'INVALID_DESCRIPTOR' && /rawHeight/.test(error.message));
+});
+
+test('Chezwick and Dreadguard compose descriptor truth with separate game-authored policy', async () => {
+  const { registry } = createRegistry();
+  for (const packId of ['chezwick_damage_v001', 'dreadguard_damage_v001']) {
+    const pack = await registry.loadPack(packId);
+    const policy = getCreatureRuntimePolicy(packId);
+    const profile = composeHumanoidCreatureRuntimeProfile(pack, policy);
+    assert.equal(assessCreaturePackRuntimeSupport(pack, policy).supported, true);
+    assert.equal(profile.assetPath, pack.assets.glb);
+    assert.equal(profile.damageManifestPath, pack.assets.damageManifest);
+    assert.equal(profile.damageValidationReportPath, pack.assets.damageValidationReport);
+    assert.equal(profile.animationManifestPath, pack.assets.animationManifest);
+    assert.equal(profile.rawHeight, pack.presentation.rawHeight);
+    assert.equal(profile.damageTopologyFingerprint, pack.source.topologyFingerprint);
+    assert.equal(profile.damageWeightFingerprint, pack.source.weightFingerprint);
+    assert.equal(profile.damageAuthoringVersion, pack.authoring.damageVersion);
+    assert.equal(profile.damageAuthoringBuildId, pack.authoring.damageBuildId);
+    assert.equal(profile.targetHeight, policy.targetHeight);
+    assert.equal(profile.rootYaw, policy.rootYaw);
+    assert.equal(profile.walkReferenceSpeed, policy.walkReferenceSpeed);
+    assert.equal(profile.durabilityMultiplier, policy.durabilityMultiplier);
+    assert.deepEqual(profile.activeDamageSegmentIds, policy.activeDamageSegmentIds);
+    CREATURE_PACK_TECHNICAL_PROFILE_FIELDS.forEach((field) => assert.equal(field in policy, false, `${field} must remain descriptor-owned`));
+  }
+
+  const chezwickPack = await registry.loadPack('chezwick_damage_v001');
+  const dreadguardPack = await registry.loadPack('dreadguard_damage_v001');
+  assert.deepEqual(chezwickPack.damage.progressiveDamageSiteIds, ['damage_site_face_right']);
+  assert.deepEqual(getCreatureRuntimePolicy(chezwickPack.packId).progressiveDamageSiteFallbacks.map((site) => site.siteId), ['damage_site_face_left_compatibility']);
+  assert.deepEqual(dreadguardPack.damage.progressiveDamageSiteIds, []);
+  assert.deepEqual(getCreatureRuntimePolicy(dreadguardPack.packId).progressiveDamageSiteFallbacks.map((site) => site.siteId), ['damage_site']);
+});
+
+test('both composed effective profiles pass the current damage and deformation validators', async () => {
+  const { registry } = createRegistry();
+  for (const packId of ['chezwick_damage_v001', 'dreadguard_damage_v001']) {
+    const pack = await registry.loadPack(packId);
+    const profile = composeHumanoidCreatureRuntimeProfile(pack);
+    const { gltf, manifest, animationManifest } = await loadDamageFixture(pack, profile);
+    assert.doesNotThrow(() => validateDamageAsset({
+      manifest,
+      root: gltf.scene,
+      profile,
+      clips: gltf.animations,
+      animationManifest,
+    }));
+    const animationPack = resolveAnimationPackManifest(animationManifest, gltf.animations, profile.name, {
+      allowedKinds: profile.animationRuntimeKinds,
+      expectedIgnoredNames: profile.ignoredEmbeddedAnimationNames,
+      requireEmbeddedApprovalMetadata: profile.requireEmbeddedAnimationApprovalMetadata,
+    });
+    assert.deepEqual([...animationPack.entriesByName.keys()].sort(), [...profile.damageExpectedAnimationNames].sort());
+    const deformation = validateForgeDamageDeformationAsset({
+      manifest,
+      root: gltf.scene,
+      progressiveDamageSiteFallbacks: profile.progressiveDamageSiteFallbacks,
+    });
+    const nativeSiteCount = pack.damage.progressiveDamageSiteIds.length;
+    assert.equal([...deformation.progressiveSites.values()].filter((site) => site.authority === 'NATIVE').length, nativeSiteCount);
+    assert.equal([...deformation.progressiveSites.values()].filter((site) => site.authority === 'COMPATIBILITY').length, profile.progressiveDamageSiteFallbacks.length);
+  }
+});
+
+test('unsupported skeleton families are registered but rejected by the current humanoid runtime', async () => {
+  const pack = await createRegistry().registry.loadPack('chezwick_damage_v001');
+  const unsupported = structuredClone(pack);
+  unsupported.presentation.skeletonFamilyId = 'DSB_QUADRUPED_V1';
+  const support = assessCreaturePackRuntimeSupport(unsupported, getCreatureRuntimePolicy(pack.packId));
+  assert.equal(support.supported, false);
+  assert.equal(support.code, 'UNSUPPORTED_SKELETON_FAMILY');
+  assert.match(support.reason, /DSB_QUADRUPED_V1/);
+});
+
+test('Creature Lab mode is development-only and explicitly opt-in', () => {
+  assert.equal(resolveCreatureLabMode(new URLSearchParams('creatureLab=1'), { development: true }), true);
+  assert.equal(resolveCreatureLabMode(new URLSearchParams('creatureLab=0'), { development: true }), false);
+  assert.equal(resolveCreatureLabMode(new URLSearchParams('creatureLab=1'), { development: false }), false);
+  assert.equal(resolveCreatureLabMode(new URLSearchParams(), { development: true }), false);
+});
+
+test('Folsom Creature Lab switches Chezwick to Dreadguard and back without stale actors, routes, or blockers', async () => {
+  const { registry } = createRegistry();
+  const { collision, player, dungeon } = createFolsomFixture();
+  const encounter = await FolsomCombatEncounter.create({
+    dungeon,
+    player,
+    creatureLabEnabled: true,
+    creaturePackRegistry: registry,
+  });
+  const lab = encounter.creatureLabController;
+  const blockerCount = () => collision.blockerRects.filter((entry) => entry.type === 'combatActor').length;
+  assert.ok(lab instanceof CreatureLabController);
+  assert.equal(encounter.getWalkerControllers().length, 1);
+  assert.equal(encounter.showcaseExtras, null);
+  assert.equal(lab.selectedPack.packId, 'chezwick_damage_v001');
+  assert.equal(encounter.actor.visualProfile.creaturePackId, 'chezwick_damage_v001');
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
+  assert.equal(blockerCount(), 1);
+
+  const firstActor = encounter.actor;
+  const firstCollider = firstActor.colliders.get('upper_chest');
+  assert.equal((await lab.selectPack('dreadguard_damage_v001')).accepted, true);
+  assert.equal(firstActor.disposed, true);
+  assert.equal(encounter.combatRouter.resolveCollider(firstCollider, new THREE.Vector3()), null);
+  assert.equal(encounter.actor.visualProfile.creaturePackId, 'dreadguard_damage_v001');
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
+  assert.equal(blockerCount(), 1);
+
+  const secondActor = encounter.actor;
+  const secondCollider = secondActor.colliders.get('upper_chest');
+  assert.equal((await lab.selectPack('chezwick_damage_v001')).accepted, true);
+  assert.equal(secondActor.disposed, true);
+  assert.equal(encounter.combatRouter.resolveCollider(secondCollider, new THREE.Vector3()), null);
+  assert.equal(encounter.actor.visualProfile.creaturePackId, 'chezwick_damage_v001');
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
+  assert.equal(blockerCount(), 1);
+
+  const thirdActor = encounter.actor;
+  assert.equal(lab.kill().accepted, true);
+  assert.equal(thirdActor.lifeState, 'dying');
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1, 'the authored falling body remains contactable until grounded');
+  assert.equal((await lab.respawn()).accepted, true);
+  assert.equal(thirdActor.disposed, true);
+  assert.equal(encounter.actor.lifeState, 'alive');
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
+  assert.equal(blockerCount(), 1);
+
+  encounter.dispose();
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 0);
+  assert.equal(blockerCount(), 0);
+});
+
+test('default Folsom remains the legacy four-Chezwick wave outside explicit lab mode', async () => {
+  const { player, dungeon } = createFolsomFixture();
+  const encounter = await FolsomCombatEncounter.create({ dungeon, player, creatureLabEnabled: false });
+  assert.equal(encounter.creatureLabController, null);
+  assert.equal(encounter.getWalkerControllers().length, 4);
+  assert.ok(encounter.getWalkerControllers().every((controller) => controller.actor.visualProfile === CHEZWICK_DAMAGE_COMBAT_PROFILE));
+  encounter.dispose();
+});
+
+test('touch-first panel actions invoke controller operations without console access', async () => {
+  const calls = [];
+  const controller = {
+    selectPack: async (packId) => { calls.push(`selectPack:${packId}`); },
+    respawn: async () => { calls.push('respawn'); },
+    resetDamage: () => { calls.push('resetDamage'); },
+    playAnimation: (actionId) => { calls.push(`playAnimation:${actionId}`); },
+    setSelectedSiteStage: (stage) => { calls.push(`setStage:${stage}`); },
+    advanceSelectedSite: () => { calls.push('advanceSite'); },
+    resetSelectedSite: () => { calls.push('resetSite'); },
+    strikeSelectedSite: () => { calls.push('strikeSite'); },
+    detachSegment: (segmentId) => { calls.push(`detach:${segmentId}`); },
+    kill: () => { calls.push('kill'); },
+    ragdoll: () => { calls.push('ragdoll'); },
+  };
+  const state = {
+    packs: [{ packId: 'future_pack', displayName: 'Future Pack', supported: true }],
+    animationActions: [{ id: 'walk', label: 'Walk' }],
+    detachmentActions: [{ segmentId: 'head_neck', label: 'Head / Neck', supportedByRuntime: true }],
+    ragdollAvailable: true,
+  };
+  const actions = [
+    ...getCreatureLabPrimaryActions(controller),
+    ...getCreatureLabPackActions(controller, state),
+    ...getCreatureLabAnimationPanelActions(controller, state),
+    ...getCreatureLabDamagePanelActions(controller),
+    ...getCreatureLabDetachmentPanelActions(controller, state),
+    ...getCreatureLabBodyStateActions(controller, state),
+  ];
+  assert.ok(CREATURE_LAB_TOUCH_TARGET_PX >= 44);
+  for (const action of actions) await action.run();
+  assert.deepEqual(calls, [
+    'respawn', 'resetDamage', 'selectPack:future_pack', 'playAnimation:walk',
+    'setStage:LIGHT', 'setStage:MEDIUM', 'setStage:HEAVY', 'advanceSite', 'resetSite', 'strikeSite',
+    'detach:head_neck', 'kill', 'ragdoll', 'respawn',
+  ]);
+});

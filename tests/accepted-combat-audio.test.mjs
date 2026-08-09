@@ -272,7 +272,7 @@ test('direct death, actor-time spatial capture, independent emitters, reset, dis
 test('male voice metadata is explicit and detachment audio remains terminal-state owned', async () => {
   assert.equal(CURRENT_HUMANOID_PROFILE.voiceProfile, 'male_human');
   assert.equal(DREADGUARD_DAMAGE_COMBAT_PROFILE.voiceProfile, 'male_human');
-  const actorSource = await readFile(`${repoRoot}/src/game/combat/HumanoidCombatActor.js`, 'utf8');
+  const actorSource = await readFile(`${repoRoot}/src/game/combat/HumanoidCombatActorBase.js`, 'utf8');
   const segmentSource = await readFile(`${repoRoot}/src/game/combat/HumanoidDamageSegmentRuntime.js`, 'utf8');
   assert.match(actorSource, /requestFatalSegmentDetachment[\s\S]*transitionLifeState\('dying'/);
   assert.doesNotMatch(segmentSource, /deathSigh|male_death_sigh|acceptedCombatAudio/);

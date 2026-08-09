@@ -21,7 +21,10 @@ const [gameSource, sceneHostSource, viewmodelHostSource, knifeSource, directorSo
   readFile(new URL('../src/game/Feedback.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/MeleeIntentWeapon.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/physical-tools/PhysicalToolViewmodel.js', import.meta.url), 'utf8'),
-  readFile(new URL('../src/game/combat/HumanoidCombatActor.js', import.meta.url), 'utf8'),
+  Promise.all([
+    readFile(new URL('../src/game/combat/HumanoidCombatActor.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/game/combat/HumanoidCombatActorBase.js', import.meta.url), 'utf8'),
+  ]).then((sources) => sources.join('\n')),
   readFile(new URL('../src/game/combat/HumanoidGlbVisualAdapter.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/HumanoidModelProfiles.js', import.meta.url), 'utf8'),
   readFile(new URL('../src/game/combat/CombatWoundSystem.js', import.meta.url), 'utf8'),

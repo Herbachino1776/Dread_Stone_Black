@@ -11,6 +11,7 @@ const ignoredFiles = new Set([
 ]);
 const permittedPatternLabelsByFile = new Map([
   ['src/game/combat/ForgeDamageDeformationRuntime.js', new Set(['gore runtime'])], // Manifest-authored Forge damage presentation.
+  ['src/game/creatures/CreatureLabPanel.js', new Set(['gore runtime'])], // Development-only diagnostics display imported pack cost/capability truth.
 ]);
 
 const bannedPatterns = [

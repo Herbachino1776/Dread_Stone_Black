@@ -295,6 +295,7 @@ export function validateForgeDamageDeformationAsset({ manifest, root, progressiv
   };
   const manifestSides = new Set(manifestProgressiveSites.map(siteSide));
   const compatibleFallbackSites = fallbackProgressiveSites.filter((site) => !manifestSides.has(siteSide(site)));
+  const nativeProgressiveSiteIds = new Set(manifestProgressiveSites.map((site) => site.siteId));
   const authoredProgressiveSites = [...manifestProgressiveSites, ...compatibleFallbackSites];
   const progressiveSiteSource = manifestProgressiveSites.length && compatibleFallbackSites.length
     ? 'manifest+profile-compatibility'
@@ -333,7 +334,11 @@ export function validateForgeDamageDeformationAsset({ manifest, root, progressiv
       previousAnchor = anchor;
     }
     if (stageRecords.length !== site.stageOrder.length) errors.push(`${site.siteId} did not resolve every stage in manifest order`);
-    progressiveSites.set(site.siteId, { ...site, stageRecords });
+    progressiveSites.set(site.siteId, {
+      ...site,
+      authority: nativeProgressiveSiteIds.has(site.siteId) ? 'NATIVE' : 'COMPATIBILITY',
+      stageRecords,
+    });
   }
   if (errors.length) throw new Error(`Forge damage deformation asset failed validation: ${errors.join('; ')}`);
   return {
@@ -531,6 +536,39 @@ export class ForgeDamageDeformationRuntime {
     if (siteId && this.progressiveSites.has(siteId)) return this.progressiveSites.get(siteId);
     if (!siteId && this.progressiveSites.size === 1) return this.progressiveSites.values().next().value;
     return null;
+  }
+
+  listProgressiveDamageSites() {
+    return [...this.progressiveSites.values()].map((site) => {
+      const firstStage = site.stageRecords[0];
+      const captureCenterLocal = firstStage?.measurements?.captureCenterLocal ?? site.anchorLocal ?? null;
+      return {
+        siteId: site.siteId,
+        displayName: site.displayName ?? site.siteId,
+        authority: site.authority,
+        regionId: site.regionId,
+        structuralGroup: site.structuralGroup,
+        stageOrder: [...site.stageOrder],
+        captureCenterLocal: Array.isArray(captureCenterLocal) ? [...captureCenterLocal] : null,
+        preferredDirectionLocal: Array.isArray(site.preferredDirectionLocal) ? [...site.preferredDirectionLocal] : null,
+      };
+    });
+  }
+
+  resetProgressiveDamageSite(siteId) {
+    const site = this.resolveProgressiveSite(siteId);
+    if (!site) return { applied: false, reason: 'unknown-site', siteId: siteId ?? null };
+    const result = this.setProgressiveSiteSeverity(site.siteId, 0, {
+      source: 'progressive_site_reset',
+      hitRegion: site.regionId,
+      hitSide: 'manual',
+    });
+    const state = this.progressiveState.get(site.siteId);
+    if (state) {
+      state.acceptedHitCount = 0;
+      state.activationCount = 0;
+    }
+    return { ...result, reset: result.applied === true };
   }
 
   calculateProgressiveWeights(site, severity) {

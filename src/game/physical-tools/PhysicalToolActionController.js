@@ -254,7 +254,7 @@ export class PhysicalToolActionController {
   isInputBlocked(event) {
     if (this.app?.classList?.contains?.('is-paused')) return true;
     if (this.app?.querySelector?.('[data-equipment-panel][aria-hidden="false"]')) return true;
-    return Boolean(event?.target?.closest?.('button, [data-equipment-panel], [data-pause-overlay], [data-control="move"]'));
+    return Boolean(event?.target?.closest?.('button, [data-equipment-panel], [data-creature-lab-panel], [data-pause-overlay], [data-control="move"]'));
   }
 
   cancelGesture(_reason = 'cancelled') {
