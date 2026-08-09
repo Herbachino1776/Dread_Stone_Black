@@ -23,14 +23,20 @@ export function getCreatureLabAnimationPanelActions(controller, state) {
   }));
 }
 
-export function getCreatureLabDamagePanelActions(controller) {
+export function getCreatureLabDamagePanelActions(controller, state = {}) {
   return [
+    { id: 'site:previous', label: 'Previous Site', run: () => controller.selectRelativeSite(-1) },
+    { id: 'site:next', label: 'Next Site', run: () => controller.selectRelativeSite(1) },
+    { id: 'sites:show', label: state.showSites ? 'Hide Sites' : 'Show Sites', run: () => controller.toggleSiteMarkers(), pressed: state.showSites === true },
+    { id: 'sites:radius', label: state.showSelectedRadius ? 'Hide Selected Radius' : 'Show Selected Radius', run: () => controller.toggleSelectedRadius(), pressed: state.showSelectedRadius === true },
     { id: 'damage:light', label: 'Light', run: () => controller.setSelectedSiteStage('LIGHT') },
     { id: 'damage:medium', label: 'Medium', run: () => controller.setSelectedSiteStage('MEDIUM') },
     { id: 'damage:heavy', label: 'Heavy', run: () => controller.setSelectedSiteStage('HEAVY') },
     { id: 'damage:next', label: 'Next Stage', run: () => controller.advanceSelectedSite() },
     { id: 'damage:reset_site', label: 'Reset Site', run: () => controller.resetSelectedSite() },
-    { id: 'damage:strike', label: 'Strike Selected Site', run: () => controller.strikeSelectedSite(), wide: true },
+    { id: 'damage:center', label: 'Center Hit', run: () => controller.strikeSelectedSite('center') },
+    { id: 'damage:edge', label: 'Edge Hit', run: () => controller.strikeSelectedSite('edge') },
+    { id: 'damage:outside', label: 'Outside Hit', run: () => controller.strikeSelectedSite('outside'), wide: true },
   ];
 }
 
@@ -94,6 +100,10 @@ export class CreatureLabPanel {
       .creature-lab-button[aria-pressed="true"]{border-color:#d2ae7b;background:#513c27;color:#fff3dc}
       .creature-lab-button:disabled{opacity:.48;color:#c3b8aa}
       .creature-lab-wide{grid-column:1/-1}
+      .creature-lab-region{margin:10px 0 5px;color:#a99c8b;font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+      .creature-lab-site-row{display:block;width:100%;text-align:left}
+      .creature-lab-site-name{display:block;color:inherit;font-size:14px}
+      .creature-lab-site-meta{display:block;margin-top:4px;color:#b9ad9c;font:11px/1.35 ui-monospace,monospace;white-space:pre-line;overflow-wrap:anywhere}
       .creature-lab-info{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;margin:0;font-size:12px}
       .creature-lab-info dt{color:#a99c8b;overflow-wrap:anywhere}.creature-lab-info dd{margin:0;text-align:right;overflow-wrap:anywhere}
       .creature-lab-note{margin:8px 0 0;color:#bdb1a3;font-size:12px;overflow-wrap:anywhere}
@@ -141,6 +151,20 @@ export class CreatureLabPanel {
   }
 
   createGrid() { return element('div', null, 'creature-lab-grid'); }
+
+  createSiteButton(site, selected) {
+    const bindingLabel = site.bindingMode === 'SKINNED_SURFACE'
+      ? 'SKINNED'
+      : site.bindingMode === 'STATIC_ACTOR_LOCAL_FALLBACK' ? 'STATIC FALLBACK' : 'UNTARGETABLE';
+    const radius = Number.isFinite(site.radius) ? site.radius.toFixed(3) : 'n/a';
+    const button = this.createButton('', () => this.controller.selectSite(site.siteId), { pressed: selected, wide: true });
+    button.classList.add('creature-lab-site-row');
+    button.replaceChildren(
+      element('span', `${site.displayName} — ${site.authority}`, 'creature-lab-site-name'),
+      element('span', `${site.siteId}\nr=${radius} m · stage=${site.currentStage ?? 'INTACT'} · hits=${site.acceptedHitCount ?? 0} · ${bindingLabel}`, 'creature-lab-site-meta'),
+    );
+    return button;
+  }
 
   render() {
     if (!this.panel) return;
@@ -224,19 +248,27 @@ export class CreatureLabPanel {
       section.append(element('p', 'No native or compatibility progressive sites resolved.', 'creature-lab-note'));
       return section;
     }
-    const siteGrid = this.createGrid();
-    state.sites.forEach((site) => siteGrid.append(this.createButton(`${site.displayName} — ${site.authority}`, () => this.controller.selectSite(site.siteId), {
-      pressed: state.selectedSiteId === site.siteId,
-      wide: true,
-    })));
-    section.append(siteGrid);
+    let activeRegion = null;
+    state.sites.forEach((site) => {
+      const region = site.regionId ?? site.structuralGroup ?? 'unassigned';
+      if (region !== activeRegion) {
+        activeRegion = region;
+        section.append(element('p', region.replaceAll('_', ' '), 'creature-lab-region'));
+      }
+      section.append(this.createSiteButton(site, state.selectedSiteId === site.siteId));
+    });
     section.append(element('p', `Selected site: ${state.selectedSiteId ?? 'None'}`, 'creature-lab-note'));
     const controls = this.createGrid();
-    getCreatureLabDamagePanelActions(this.controller).forEach((action) => controls.append(this.createButton(action.label, action.run, {
+    getCreatureLabDamagePanelActions(this.controller, state).forEach((action) => controls.append(this.createButton(action.label, action.run, {
       disabled: !state.selectedSiteId,
       wide: action.wide === true,
+      pressed: action.pressed === true,
     })));
     section.append(controls);
+    const physical = state.lastPhysicalTargetingDecision;
+    section.append(element('p', physical?.selectedSiteId
+      ? `LAST PHYSICAL SITE: ${physical.selectedSiteId} · stage=${physical.stage ?? 'INTACT'} · region=${physical.impactRegion ?? 'n/a'} · distance=${physical.selectedDistance?.toFixed?.(3) ?? 'n/a'} · radius=${physical.selectedRadius?.toFixed?.(3) ?? 'n/a'} · alignment=${physical.directionAlignment?.toFixed?.(2) ?? 'n/a'}`
+      : 'LAST PHYSICAL SITE: none', 'creature-lab-note'));
     return section;
   }
 
@@ -281,7 +313,10 @@ export class CreatureLabPanel {
     if (!operation) return 'Ready. Open a control group to begin.';
     if (operation.error) return `${operation.operation}: ERROR — ${operation.error}`;
     const reason = operation.result?.reason;
-    return `${operation.operation}: ${operation.ok ? 'OK' : 'NOT APPLIED'}${reason ? ` — ${reason}` : ''}`;
+    const probe = operation.result?.probe;
+    const actualSiteId = operation.result?.actualSiteId;
+    const probeResult = probe ? ` · ${probe.toUpperCase()} actual=${actualSiteId ?? 'none'} expected=${operation.result?.expectedSiteId ?? 'none'} ${operation.result?.probePassed ? 'PASS' : 'FAIL'}` : '';
+    return `${operation.operation}: ${operation.ok ? 'OK' : 'NOT APPLIED'}${reason ? ` — ${reason}` : ''}${probeResult}`;
   }
 
   open() {

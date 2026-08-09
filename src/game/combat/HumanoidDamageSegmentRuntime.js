@@ -365,6 +365,10 @@ export class HumanoidDamageSegmentRuntime {
     return this.deformationRuntime?.listProgressiveDamageSites?.() ?? [];
   }
 
+  getProgressiveDamageSiteTargeting() {
+    return this.deformationRuntime?.getProgressiveDamageSiteTargeting?.() ?? null;
+  }
+
   resetProgressiveDamageSite(siteId) {
     return this.deformationRuntime?.resetProgressiveDamageSite?.(siteId) ?? { applied: false, reason: 'deformation-runtime-not-ready', siteId: siteId ?? null };
   }

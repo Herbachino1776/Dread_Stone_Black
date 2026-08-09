@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { BLUNT_IMPACT_CLASSIFICATIONS } from './weapons/BluntImpactInteraction.js';
+import {
+  ProgressiveDamageSiteTargeting,
+} from './ProgressiveDamageSiteTargeting.js';
 
 export const FORGE_DAMAGE_DEFORMATION_SCHEMA = 'dreadstone.damage_deformation.v1';
 export const FORGE_PROGRESSIVE_DAMAGE_SITE_SCHEMA = 'dreadstone.progressive_damage_sites.v1';
@@ -287,6 +290,8 @@ export function validateForgeDamageDeformationAsset({ manifest, root, progressiv
   const progressiveStageByKey = new Map();
   const manifestProgressiveSites = Array.isArray(deformation?.progressiveDamageSites) ? deformation.progressiveDamageSites : [];
   const fallbackProgressiveSites = Array.isArray(progressiveDamageSiteFallbacks) ? progressiveDamageSiteFallbacks : [];
+  // Compatibility insertion preserves the Milestone 2 native-side precedence.
+  // It is validation/composition policy only, never physical impact targeting.
   const siteSide = (site) => {
     const stageName = site?.stageOrder?.[0];
     const stage = site?.stages?.find?.((entry) => entry.stage === stageName);
@@ -373,10 +378,16 @@ export class ForgeDamageDeformationRuntime {
     this.lastActivation = null;
     this.activationCount = 0;
     this.disposed = false;
+    this.progressiveSiteTargeting = null;
     this.parentDetachedPresentationToOwnedSegments();
     this.gorePresentationMeshCount = this.goreNodes.reduce((count, { node }) => count + prepareGoreSubtreePresentation(node), 0);
     this.surfaceStainPresentationMeshCount = this.surfaceStainNodes.reduce((count, { node }) => count + prepareSurfaceStainPresentation(node), 0);
     this.reset();
+    this.progressiveSiteTargeting = new ProgressiveDamageSiteTargeting({
+      sites: this.progressiveSites.values(),
+      adapter: this.adapter,
+      root: this.root,
+    });
   }
 
   parentDetachedPresentationToOwnedSegments() {
@@ -413,6 +424,7 @@ export class ForgeDamageDeformationRuntime {
     this.lastActivation = null;
     this.activationCount = 0;
     this.acceptedProgressiveInteractionIds.clear();
+    this.progressiveSiteTargeting?.resetDiagnostics?.();
     return this.getDiagnostics();
   }
 
@@ -433,41 +445,10 @@ export class ForgeDamageDeformationRuntime {
     return quaternion ? direction.applyQuaternion(quaternion).normalize() : direction.normalize();
   }
 
-  getSiteCenterX(site) {
-    const keyCenters = site.stageRecords.map(({ keyRecord }) => keyRecord.stampCenterX).filter(Number.isFinite);
-    if (keyCenters.length) return keyCenters.reduce((total, value) => total + value, 0) / keyCenters.length;
-    const anchorX = Number(site.anchorLocal?.[0]);
-    return Number.isFinite(anchorX) ? anchorX : 0;
-  }
-
   resolveHitSideX(localPoint, localDirection) {
     let sideX = localPoint.x;
     if (Math.abs(sideX) <= SIDE_EPSILON && Math.abs(localDirection.x) > SIDE_EPSILON) sideX = -localDirection.x;
     return sideX;
-  }
-
-  siteMatchesHitRegion(site, hitRegion) {
-    if (!hitRegion) return false;
-    if (site.regionId === hitRegion || site.structuralGroup === hitRegion) return true;
-    if (HEAD_REGIONS.has(hitRegion)) return site.regionId === 'head'
-      || site.structuralGroup === 'head'
-      || (site.regionId === 'body_core' && /face|head/i.test(`${site.displayName ?? ''} ${site.siteId ?? ''}`));
-    if (BODY_REGIONS.has(hitRegion)) return site.regionId === 'body_core' || site.structuralGroup === 'body';
-    if (hitRegion === 'left_forearm') return site.regionId === 'forearm_left';
-    if (hitRegion === 'right_forearm') return site.regionId === 'forearm_right';
-    return false;
-  }
-
-  selectProgressiveSite(localPoint, localDirection, hitRegion) {
-    const sideX = this.resolveHitSideX(localPoint, localDirection);
-    const candidates = [...this.progressiveSites.values()].filter((site) => this.siteMatchesHitRegion(site, hitRegion));
-    const sideCompatible = candidates.filter((site) => {
-      const centerX = this.getSiteCenterX(site);
-      return Math.abs(sideX) <= SIDE_EPSILON || Math.abs(centerX) <= SIDE_EPSILON || Math.sign(sideX) === Math.sign(centerX);
-    });
-    const available = sideCompatible.length ? sideCompatible : (Math.abs(sideX) <= SIDE_EPSILON ? candidates : []);
-    if (!available.length) return null;
-    return available.sort((first, second) => Math.abs(sideX - this.getSiteCenterX(first)) - Math.abs(sideX - this.getSiteCenterX(second)))[0];
   }
 
   selectRegionFallback(localPoint, localDirection, hitRegion) {
@@ -491,16 +472,29 @@ export class ForgeDamageDeformationRuntime {
     if (impact?.primitive !== 'mace_head') return null;
     const localPoint = this.getActorLocalPoint(hit, impact);
     const localDirection = this.getActorLocalDirection(impact);
-    const site = this.selectProgressiveSite(localPoint, localDirection, hit?.regionId);
+    const impactWorld = finiteVector(impact?.worldPoint)
+      ?? finiteVector(hit?.collisionPointWorld)
+      ?? this.adapter?.actorLocalToWorld?.(localPoint, new THREE.Vector3())
+      ?? null;
+    const impactWorldDirection = finiteVector(impact?.impactDirection);
+    const targeting = this.progressiveSiteTargeting?.select?.({
+      impactRegion: hit?.regionId,
+      impactWorld,
+      impactActorLocal: localPoint,
+      impactDirection: impactWorldDirection,
+      source: impact?.targetingSource ?? 'physical',
+    }) ?? { record: null, decision: null };
+    const site = targeting.record ? this.progressiveSites.get(targeting.record.siteId) : null;
     if (site) {
-      const centerX = this.getSiteCenterX(site);
+      const centerX = this.adapter?.worldToActorLocal?.(targeting.record.currentWorldCenter, new THREE.Vector3())?.x ?? localPoint.x;
       const hitSide = centerX < -SIDE_EPSILON ? 'left' : centerX > SIDE_EPSILON ? 'right' : 'center';
-      return { site, record: null, hitRegion: hit.regionId, hitSide, localPoint, localDirection };
+      return { site, record: null, hitRegion: hit.regionId, hitSide, localPoint, localDirection, targetingDecision: targeting.decision };
     }
     const record = this.selectRegionFallback(localPoint, localDirection, hit?.regionId);
+    this.progressiveSiteTargeting?.noteRegionFallback?.(Boolean(record));
     if (!record) return null;
     const hitSide = record.stampCenterX < -SIDE_EPSILON ? 'left' : record.stampCenterX > SIDE_EPSILON ? 'right' : 'center';
-    return { site: null, record, hitRegion: hit.regionId, hitSide, localPoint, localDirection };
+    return { site: null, record, hitRegion: hit.regionId, hitSide, localPoint, localDirection, targetingDecision: targeting.decision };
   }
 
   getOwnershipRole(record) {
@@ -539,9 +533,11 @@ export class ForgeDamageDeformationRuntime {
   }
 
   listProgressiveDamageSites() {
+    const resolvedTargetingRecords = this.progressiveSiteTargeting?.listRecords?.({ includeActorLocal: true }) ?? [];
+    const targetingRecords = new Map(resolvedTargetingRecords.map((record) => [record.siteId, record]));
     return [...this.progressiveSites.values()].map((site) => {
-      const firstStage = site.stageRecords[0];
-      const captureCenterLocal = firstStage?.measurements?.captureCenterLocal ?? site.anchorLocal ?? null;
+      const target = targetingRecords.get(site.siteId);
+      const state = this.progressiveState.get(site.siteId);
       return {
         siteId: site.siteId,
         displayName: site.displayName ?? site.siteId,
@@ -549,10 +545,26 @@ export class ForgeDamageDeformationRuntime {
         regionId: site.regionId,
         structuralGroup: site.structuralGroup,
         stageOrder: [...site.stageOrder],
-        captureCenterLocal: Array.isArray(captureCenterLocal) ? [...captureCenterLocal] : null,
+        captureCenterLocal: target?.captureCenterLocal ? [...target.captureCenterLocal] : null,
+        captureCenterSource: target?.captureCenterSource ?? null,
+        radius: target?.radius ?? null,
+        radiusWorld: target?.radiusWorld ?? null,
         preferredDirectionLocal: Array.isArray(site.preferredDirectionLocal) ? [...site.preferredDirectionLocal] : null,
+        targetObject: target?.targetObjectName ?? null,
+        bindingMode: target?.bindingMode ?? 'UNTARGETABLE',
+        bindingDiagnostic: target?.bindingDiagnostic ?? 'targeting-runtime-unavailable',
+        reconstructionMode: target?.reconstructionMode ?? 'UNAVAILABLE',
+        currentWorldCenter: target?.currentWorldCenter?.toArray?.() ?? null,
+        currentActorLocalCenter: target?.currentActorLocalCenter?.toArray?.() ?? null,
+        currentWorldPreferredDirection: target?.currentWorldPreferredDirection?.toArray?.() ?? null,
+        currentStage: state?.currentStage ?? null,
+        acceptedHitCount: state?.acceptedHitCount ?? 0,
       };
     });
+  }
+
+  getProgressiveDamageSiteTargeting() {
+    return this.progressiveSiteTargeting;
   }
 
   resetProgressiveDamageSite(siteId) {
@@ -740,6 +752,13 @@ export class ForgeDamageDeformationRuntime {
     const selection = this.selectMaceDamage({ hit, impact });
     if (!selection) return { applied: false, reason: 'unmanaged-hit', hitRegion: hit?.regionId ?? null, hitSide: 'none', selectedMorph: null };
     if (selection.site && !QUALIFYING_PROGRESSIVE_IMPACTS.has(impact?.classification)) {
+      const state = this.progressiveState.get(selection.site.siteId);
+      this.progressiveSiteTargeting?.noteProgressiveDamageResult?.({
+        siteId: selection.site.siteId,
+        stage: state?.currentStage ?? null,
+        acceptedHitCount: state?.acceptedHitCount ?? 0,
+        reason: 'insufficient-progressive-impact',
+      });
       return {
         applied: false,
         reason: 'insufficient-progressive-impact',
@@ -753,6 +772,13 @@ export class ForgeDamageDeformationRuntime {
     }
     const interactionId = String(impact?.interactionId ?? '');
     if (selection.site && interactionId && this.acceptedProgressiveInteractionIds.has(interactionId)) {
+      const state = this.progressiveState.get(selection.site.siteId);
+      this.progressiveSiteTargeting?.noteProgressiveDamageResult?.({
+        siteId: selection.site.siteId,
+        stage: state?.currentStage ?? null,
+        acceptedHitCount: state?.acceptedHitCount ?? 0,
+        reason: 'duplicate-progressive-interaction',
+      });
       return { applied: false, reason: 'duplicate-progressive-interaction', siteId: selection.site.siteId, progressiveSite: true };
     }
     const options = { requestedWeight, hitRegion: selection.hitRegion, hitSide: selection.hitSide, source: 'mace_hit' };
@@ -760,7 +786,15 @@ export class ForgeDamageDeformationRuntime {
     if (selection.site) {
       const state = this.progressiveState.get(selection.site.siteId);
       if (this.progressiveDamageHitsPerStage === 1 && state?.stageIndex >= selection.site.stageRecords.length - 1) {
-        return this.advanceProgressiveDamageSite(selection.site.siteId, options);
+        const terminalResult = this.advanceProgressiveDamageSite(selection.site.siteId, options);
+        this.progressiveSiteTargeting?.noteProgressiveDamageResult?.({
+          siteId: selection.site.siteId,
+          stage: state?.currentStage ?? null,
+          acceptedHitCount: state?.acceptedHitCount ?? 0,
+          applied: terminalResult.applied,
+          reason: terminalResult.reason ?? null,
+        });
+        return terminalResult;
       }
       const acceptedHitCount = (state?.acceptedHitCount ?? 0) + 1;
       const stageIndex = Math.min(Math.floor((acceptedHitCount - 1) / this.progressiveDamageHitsPerStage), selection.site.stageRecords.length - 1);
@@ -776,6 +810,16 @@ export class ForgeDamageDeformationRuntime {
       this.lastActivation.localDirection = selection.localDirection.toArray();
       result.localPoint = [...this.lastActivation.localPoint];
       result.localDirection = [...this.lastActivation.localDirection];
+    }
+    if (selection.site) {
+      const state = this.progressiveState.get(selection.site.siteId);
+      this.progressiveSiteTargeting?.noteProgressiveDamageResult?.({
+        siteId: selection.site.siteId,
+        stage: state?.currentStage ?? result.stage ?? null,
+        acceptedHitCount: state?.acceptedHitCount ?? result.acceptedHitCount ?? 0,
+        applied: result.applied,
+        reason: result.reason ?? null,
+      });
     }
     return result;
   }
@@ -891,6 +935,7 @@ export class ForgeDamageDeformationRuntime {
       progressiveDamageHitsPerStage: this.progressiveDamageHitsPerStage,
       compatibilityDiagnostics: [...this.progressiveSites.values()].map((site) => site.compatibilityDiagnostic).filter(Boolean),
       progressiveSites,
+      progressiveTargeting: this.progressiveSiteTargeting?.getDiagnostics?.() ?? null,
       gorePresentationMeshCount: this.gorePresentationMeshCount,
       goreRenderOrder: FORGE_GORE_RENDER_ORDER,
       surfaceStainBindingSchema: this.validation.deformation.surfaceStainBindingSchema ?? null,
@@ -904,6 +949,8 @@ export class ForgeDamageDeformationRuntime {
   dispose() {
     if (this.disposed) return;
     this.reset();
+    this.progressiveSiteTargeting?.dispose?.();
+    this.progressiveSiteTargeting = null;
     this.disposed = true;
     this.actor = null;
     this.adapter = null;

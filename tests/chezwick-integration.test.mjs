@@ -70,8 +70,14 @@ test('Chezwick left and right counters independently resolve 1-2 Light, 3-4 Medi
     impact: {
       interactionId: `${side}-${index}`, primitive: 'mace_head',
       classification: BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt,
-      worldPoint: new THREE.Vector3(side === 'left' ? -0.042 : 0.035, 0.06, 1.38),
-      impactDirection: new THREE.Vector3(side === 'left' ? 0.8 : -0.8, -0.5, 0.1),
+      // Forge centers are Blender Z-up; runtime target records convert them to
+      // glTF Y-up before performing the 3D/radius selection.
+      worldPoint: side === 'left'
+        ? new THREE.Vector3(-0.042, 1.381, -0.055)
+        : new THREE.Vector3(0.035, 1.387, -0.061),
+      impactDirection: side === 'left'
+        ? new THREE.Vector3(0.844, 0.087, 0.529)
+        : new THREE.Vector3(1, 0, 0),
     },
   });
   assert.equal(strike('left', 1).stage, 'LIGHT');
@@ -85,6 +91,9 @@ test('Chezwick left and right counters independently resolve 1-2 Light, 3-4 Medi
   const diagnostics = runtime.getDiagnostics();
   assert.equal(diagnostics.progressiveSites.damage_site_face_left_compatibility.acceptedHitCount, 5);
   assert.equal(diagnostics.progressiveSites.damage_site_face_right.acceptedHitCount, 3);
+  assert.equal(diagnostics.progressiveTargeting.lastPhysicalTargetingDecision.selectedSiteId, 'damage_site_face_right');
+  assert.equal(diagnostics.progressiveTargeting.lastPhysicalTargetingDecision.stage, 'MEDIUM');
+  assert.ok(diagnostics.progressiveTargeting.lastPhysicalTargetingDecision.selectedDistance < 0.01);
   assert.ok(diagnostics.visibleSurfaceStainNodes.some((name) => name.includes('Left_v001')));
   assert.ok(diagnostics.visibleSurfaceStainNodes.some((name) => name.includes('Right_v002')));
   runtime.dispose();

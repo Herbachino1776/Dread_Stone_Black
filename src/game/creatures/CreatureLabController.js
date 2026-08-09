@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { HumanoidCombatActor } from '../combat/HumanoidCombatActor.js';
+import { PROGRESSIVE_SITE_RADIUS_TOLERANCE_METERS } from '../combat/ProgressiveDamageSiteTargeting.js';
 import { BLUNT_IMPACT_CLASSIFICATIONS, BLUNT_IMPACT_SCHEMA } from '../combat/weapons/BluntImpactInteraction.js';
 import { CreatureLabPanel } from './CreatureLabPanel.js';
 import { CreaturePackRegistry } from './CreaturePackRegistry.js';
+import { CreatureLabSiteMarkerRenderer } from './CreatureLabSiteMarkerRenderer.js';
 import {
   assessCreaturePackRuntimeSupport,
   composeHumanoidCreatureRuntimeProfile,
@@ -34,8 +36,20 @@ function serializable(value, depth = 0, seen = new WeakSet()) {
   return result;
 }
 
-export function resolveCreatureLabMode(query = new URLSearchParams(), { development = import.meta.env?.DEV === true } = {}) {
-  return development === true && query?.get?.(CREATURE_LAB_QUERY_KEY) === '1';
+export function resolveCreatureLabMode(query = new URLSearchParams()) {
+  return query?.get?.(CREATURE_LAB_QUERY_KEY) === '1';
+}
+
+export function createCreatureLabReadOnlyStorage(storage) {
+  const readOnly = {
+    getItem: (key) => storage?.getItem?.(key) ?? null,
+    key: (index) => storage?.key?.(index) ?? null,
+    setItem() {},
+    removeItem() {},
+    clear() {},
+  };
+  Object.defineProperty(readOnly, 'length', { enumerable: true, get: () => Number(storage?.length) || 0 });
+  return readOnly;
 }
 
 export class CreatureLabController {
@@ -63,6 +77,9 @@ export class CreatureLabController {
     this.selectedPolicy = null;
     this.effectiveProfile = null;
     this.selectedSiteId = null;
+    this.showSites = false;
+    this.showSelectedRadius = false;
+    this.siteMarkerRenderer = null;
     this.lastOperation = null;
     this.loading = false;
     this.disposed = false;
@@ -132,6 +149,7 @@ export class CreatureLabController {
       const policy = option.policy ?? getCreatureRuntimePolicy(packId);
       const profile = composeHumanoidCreatureRuntimeProfile(descriptor, policy);
       this.weaponControllerProvider?.()?.cancel?.('creature-lab-pack-switch');
+      this.disposeSiteMarkers();
       if (this.actor) this.walkerController.disposeWalker({ respawn: false });
       this.selectedPack = descriptor;
       this.selectedPolicy = policy;
@@ -146,9 +164,11 @@ export class CreatureLabController {
       await this.actor.visualAdapter?.ready;
       if (serial !== this.selectionSerial || this.disposed) return { accepted: false, reason: 'Pack selection was superseded.' };
       this.selectedSiteId = this.getProgressiveSites()[0]?.siteId ?? null;
+      this.createSiteMarkers();
       this.onSubjectChanged?.(this.getSubjectState());
       return this.recordOperation('selectPack', { accepted: true, packId, actorInstanceId: this.actor.instanceId });
     } catch (error) {
+      this.disposeSiteMarkers();
       if (serial === this.selectionSerial && this.actor) this.walkerController.disposeWalker({ respawn: false });
       this.onSubjectChanged?.(this.getSubjectState());
       return this.recordOperation('selectPack', null, error);
@@ -186,11 +206,58 @@ export class CreatureLabController {
     return this.actor?.visualAdapter?.listProgressiveDamageSites?.() ?? [];
   }
 
+  getSiteTargeting() {
+    return this.actor?.visualAdapter?.getProgressiveDamageSiteTargeting?.() ?? null;
+  }
+
+  createSiteMarkers() {
+    this.disposeSiteMarkers();
+    const targeting = this.getSiteTargeting();
+    if (!targeting || !this.actor?.scene) return null;
+    this.siteMarkerRenderer = new CreatureLabSiteMarkerRenderer({ scene: this.actor.scene, targeting });
+    this.updateSiteMarkers();
+    return this.siteMarkerRenderer;
+  }
+
+  disposeSiteMarkers() {
+    this.siteMarkerRenderer?.dispose?.();
+    this.siteMarkerRenderer = null;
+  }
+
+  updateSiteMarkers() {
+    this.siteMarkerRenderer?.setSettings?.({
+      selectedSiteId: this.selectedSiteId,
+      showSites: this.showSites,
+      showSelectedRadius: this.showSelectedRadius,
+    });
+  }
+
   selectSite(siteId) {
     const site = this.getProgressiveSites().find((entry) => entry.siteId === siteId);
     if (!site) return this.recordOperation('selectSite', { accepted: false, reason: `Progressive site ${siteId} is unavailable.` });
     this.selectedSiteId = site.siteId;
+    this.updateSiteMarkers();
     return this.recordOperation('selectSite', { accepted: true, siteId: site.siteId, authority: site.authority });
+  }
+
+  selectRelativeSite(offset) {
+    const sites = this.getProgressiveSites();
+    if (!sites.length) return this.recordOperation('selectRelativeSite', { accepted: false, reason: 'No progressive sites are available.' });
+    const currentIndex = Math.max(0, sites.findIndex((site) => site.siteId === this.selectedSiteId));
+    const nextIndex = (currentIndex + offset + sites.length) % sites.length;
+    return this.selectSite(sites[nextIndex].siteId);
+  }
+
+  toggleSiteMarkers() {
+    this.showSites = !this.showSites;
+    this.updateSiteMarkers();
+    return this.recordOperation('showSites', { accepted: true, enabled: this.showSites });
+  }
+
+  toggleSelectedRadius() {
+    this.showSelectedRadius = !this.showSelectedRadius;
+    this.updateSiteMarkers();
+    return this.recordOperation('showSelectedRadius', { accepted: true, enabled: this.showSelectedRadius });
   }
 
   setSelectedSiteStage(stageName) {
@@ -228,27 +295,34 @@ export class CreatureLabController {
     return null;
   }
 
-  strikeSelectedSite() {
+  strikeSelectedSite(probe = 'center') {
     const actor = this.actor;
     const adapter = actor?.visualAdapter;
     const site = this.getProgressiveSites().find((entry) => entry.siteId === this.selectedSiteId);
+    const target = adapter?.getProgressiveDamageSiteTarget?.(this.selectedSiteId, { refresh: true });
     const bodyId = this.resolveSiteStrikeBodyId(site);
     const collider = bodyId ? actor?.colliders?.get?.(bodyId) : null;
-    if (!actor || !adapter || !site || !collider || !Array.isArray(site.captureCenterLocal)) {
-      return this.recordOperation('strikeSelectedSite', { accepted: false, reason: 'The selected site has no safe authored strike path in the current humanoid runtime.' });
+    if (!actor || !adapter || !site || !target || !collider || !target.currentWorldCenter || !(target.radiusWorld > 0)) {
+      return this.recordOperation('strikeSelectedSite', { accepted: false, probe, reason: 'The selected site has no current production target pose or safe semantic collider path.' });
     }
-    const worldPoint = adapter.actorLocalToWorld(new THREE.Vector3().fromArray(site.captureCenterLocal));
+    const worldDirection = target.currentWorldPreferredDirection?.clone?.() ?? new THREE.Vector3(0, 0, -1);
+    if (worldDirection.lengthSq() < 1e-8) worldDirection.set(0, 0, -1);
+    worldDirection.normalize();
+    const tangent = new THREE.Vector3().crossVectors(worldDirection, Math.abs(worldDirection.y) < 0.9
+      ? new THREE.Vector3(0, 1, 0)
+      : new THREE.Vector3(1, 0, 0)).normalize();
+    const probeDistance = probe === 'edge'
+      ? target.radiusWorld * 0.96
+      : probe === 'outside' ? target.radiusWorld + PROGRESSIVE_SITE_RADIUS_TOLERANCE_METERS + Math.max(0.012, target.radiusWorld * 0.15) : 0;
+    const worldPoint = target.currentWorldCenter.clone().addScaledVector(tangent, probeDistance);
     const hit = actor.resolveHit(collider, worldPoint);
     if (!hit?.region) return this.recordOperation('strikeSelectedSite', { accepted: false, reason: `Could not resolve the ${bodyId} collider at the authored capture center.` });
-    const preferredLocal = new THREE.Vector3().fromArray(site.preferredDirectionLocal ?? [0, 0, -1]);
-    if (preferredLocal.lengthSq() < 1e-8) preferredLocal.set(0, 0, -1);
-    const rootQuaternion = adapter.getActorCoordinateRoot()?.getWorldQuaternion?.(new THREE.Quaternion()) ?? new THREE.Quaternion();
-    const worldDirection = preferredLocal.normalize().applyQuaternion(rootQuaternion).normalize();
     const result = actor.applyBluntImpact({
       hit,
       impact: {
         schema: BLUNT_IMPACT_SCHEMA,
         interactionId: `creature-lab-site-strike-${++this.impactSerial}`,
+        targetingSource: 'creature_lab_probe',
         primitive: 'mace_head',
         classification: BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt,
         worldPoint,
@@ -263,7 +337,23 @@ export class CreatureLabController {
         impactRadiusEstimate: 0.11,
       },
     });
-    return this.recordOperation('strikeSelectedSite', result);
+    const decision = this.getSiteTargeting()?.getDiagnostics?.().lastTargetingDecision ?? null;
+    const actualSiteId = decision?.selectedSiteId ?? null;
+    const expectedToResolve = probe !== 'outside';
+    const probePassed = expectedToResolve ? actualSiteId === site.siteId : actualSiteId !== site.siteId;
+    this.updateSiteMarkers();
+    return this.recordOperation('strikeSelectedSite', {
+      ...result,
+      accepted: probePassed,
+      probe,
+      expectedSiteId: site.siteId,
+      actualSiteId,
+      expectedToResolve,
+      probePassed,
+      impactRegion: hit.regionId,
+      distance: decision?.selectedDistance ?? decision?.candidates?.find?.((candidate) => candidate.siteId === site.siteId)?.distance ?? null,
+      radius: target.radiusWorld,
+    });
   }
 
   getAnimationActions() {
@@ -360,6 +450,8 @@ export class CreatureLabController {
       selectedPackId: this.selectedPack?.packId ?? null,
       selectedDisplayName: this.selectedPack?.displayName ?? 'None',
       selectedSiteId: this.selectedSiteId,
+      showSites: this.showSites,
+      showSelectedRadius: this.showSelectedRadius,
       sites: this.getProgressiveSites(),
       animationActions: this.getAnimationActions(),
       detachmentActions: this.getDetachmentActions(),
@@ -367,6 +459,7 @@ export class CreatureLabController {
       pack: this.selectedPack,
       profile: this.effectiveProfile,
       lastOperation: this.lastOperation,
+      lastPhysicalTargetingDecision: this.getSiteTargeting()?.getDiagnostics?.().lastPhysicalTargetingDecision ?? null,
     };
   }
 
@@ -393,6 +486,7 @@ export class CreatureLabController {
       compatibilitySiteCount,
       selectedSiteId: this.selectedSiteId,
       progressiveSites: siteStates,
+      progressiveTargeting: deformation?.progressiveTargeting ?? this.getSiteTargeting()?.getDiagnostics?.() ?? null,
       deformationRuntime: deformation ? {
         enabled: deformation.enabled,
         schema: deformation.schema,
@@ -410,6 +504,7 @@ export class CreatureLabController {
   }
 
   update() {
+    this.siteMarkerRenderer?.update?.();
     this.panel?.update?.();
   }
 
@@ -420,7 +515,7 @@ export class CreatureLabController {
       respawn: () => this.respawn(),
       resetDamage: () => this.resetDamage(),
       selectSite: (siteId) => this.selectSite(siteId),
-      strikeSelectedSite: () => this.strikeSelectedSite(),
+      strikeSelectedSite: (probe = 'center') => this.strikeSelectedSite(probe),
       diagnostics: () => this.getDiagnostics(),
     });
     globalThis.__DSB_CREATURE_LAB__ = this.debugCommands;
@@ -432,6 +527,7 @@ export class CreatureLabController {
     this.selectionSerial += 1;
     this.panel?.dispose?.();
     this.panel = null;
+    this.disposeSiteMarkers();
     if (this.actor) this.walkerController.disposeWalker({ respawn: false });
     this.onSubjectChanged?.(this.getSubjectState());
     this.listeners.clear();

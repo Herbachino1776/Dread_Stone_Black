@@ -296,6 +296,7 @@ export function findClosestSkinnedSurface(skinnedMeshes, worldPoint, {
   triangleMetadataByMesh = null,
   diagnostics = null,
   allowLegacyDistance = false,
+  maximumReconstructionError = null,
 } = {}) {
   incrementDiagnostic(diagnostics, 'bindingAttempts');
   let best = null;
@@ -390,7 +391,9 @@ export function findClosestSkinnedSurface(skinnedMeshes, worldPoint, {
         neighborhoodInfluences,
         neighborhoodNormalBone: neighborhoodBone,
         neighborhoodLocalNormal,
-        maximumReconstructionError: adjacent ? MAX_ADJACENT_SURFACE_RECONSTRUCTION_ERROR : MAX_SURFACE_RECONSTRUCTION_ERROR,
+        maximumReconstructionError: Number.isFinite(maximumReconstructionError) && maximumReconstructionError > 0
+          ? maximumReconstructionError
+          : adjacent ? MAX_ADJACENT_SURFACE_RECONSTRUCTION_ERROR : MAX_SURFACE_RECONSTRUCTION_ERROR,
       };
     }
   }

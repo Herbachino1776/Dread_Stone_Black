@@ -419,6 +419,9 @@ export class HumanoidGlbVisualAdapter {
 
   initializeDamageRuntime() {
     if (!this.damageManifest || this.damageSegmentRuntime) return this.damageSegmentRuntime;
+    // Surface-bound progressive targets are resolved while the damage runtime is
+    // constructed. The binder deliberately ignores hidden meshes.
+    this.scene.visible = true;
     this.damageSegmentRuntime = new HumanoidDamageSegmentRuntime({
       actor: this.actor,
       adapter: this,
@@ -427,7 +430,6 @@ export class HumanoidGlbVisualAdapter {
       physicsWorld: this.actor.physics,
       hostScene: this.actor.scene,
     });
-    this.scene.visible = true;
     return this.damageSegmentRuntime;
   }
 
@@ -769,10 +771,14 @@ export class HumanoidGlbVisualAdapter {
 
   bindVisibleSurface(worldPoint, options = {}) {
     if (!this.scene || !this.skinnedMeshes.length) return null;
-    this.prepareVisibleSurfaceFrame();
-    return findClosestSkinnedSurface(this.skinnedMeshes, worldPoint, {
-      ...options,
-      triangleMetadataByMesh: options.triangleMetadataByMesh ?? this.surfaceBindingMetadata,
+    if (options.refresh !== false) this.prepareVisibleSurfaceFrame();
+    const targetMeshes = Array.isArray(options.targetMeshes) && options.targetMeshes.length
+      ? options.targetMeshes.filter((mesh) => this.skinnedMeshes.includes(mesh))
+      : this.skinnedMeshes;
+    const { targetMeshes: ignoredTargetMeshes, refresh: ignoredRefresh, ...bindingOptions } = options;
+    return findClosestSkinnedSurface(targetMeshes, worldPoint, {
+      ...bindingOptions,
+      triangleMetadataByMesh: bindingOptions.triangleMetadataByMesh ?? this.surfaceBindingMetadata,
     });
   }
 
@@ -882,6 +888,14 @@ export class HumanoidGlbVisualAdapter {
 
   listProgressiveDamageSites() {
     return this.damageSegmentRuntime?.listProgressiveDamageSites?.() ?? [];
+  }
+
+  getProgressiveDamageSiteTargeting() {
+    return this.damageSegmentRuntime?.getProgressiveDamageSiteTargeting?.() ?? null;
+  }
+
+  getProgressiveDamageSiteTarget(siteId, options = {}) {
+    return this.getProgressiveDamageSiteTargeting()?.getRecord?.(siteId, options) ?? null;
   }
 
   resetProgressiveDamageSite(siteId) {

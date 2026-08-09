@@ -10,10 +10,11 @@ import { CollisionWorld } from '../src/game/Collision.js';
 import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.js';
 import { validateDamageAsset } from '../src/game/combat/HumanoidDamageSegmentRuntime.js';
 import { validateForgeDamageDeformationAsset } from '../src/game/combat/ForgeDamageDeformationRuntime.js';
+import { ProgressiveDamageSiteTargeting } from '../src/game/combat/ProgressiveDamageSiteTargeting.js';
 import { createEmbeddedAnimationPackManifest, resolveAnimationPackManifest } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { CHEZWICK_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
-import { CreatureLabController, resolveCreatureLabMode } from '../src/game/creatures/CreatureLabController.js';
+import { createCreatureLabReadOnlyStorage, CreatureLabController, resolveCreatureLabMode } from '../src/game/creatures/CreatureLabController.js';
 import {
   CREATURE_LAB_TOUCH_TARGET_PX,
   getCreatureLabAnimationPanelActions,
@@ -200,11 +201,38 @@ test('unsupported skeleton families are registered but rejected by the current h
   assert.match(support.reason, /DSB_QUADRUPED_V1/);
 });
 
-test('Creature Lab mode is development-only and explicitly opt-in', () => {
+test('Creature Lab mode is explicitly query-gated in development and deployed builds', () => {
   assert.equal(resolveCreatureLabMode(new URLSearchParams('creatureLab=1'), { development: true }), true);
+  assert.equal(resolveCreatureLabMode(new URLSearchParams('creatureLab=1'), { development: false }), true);
   assert.equal(resolveCreatureLabMode(new URLSearchParams('creatureLab=0'), { development: true }), false);
-  assert.equal(resolveCreatureLabMode(new URLSearchParams('creatureLab=1'), { development: false }), false);
+  assert.equal(resolveCreatureLabMode(new URLSearchParams('creatureLab=0'), { development: false }), false);
   assert.equal(resolveCreatureLabMode(new URLSearchParams(), { development: true }), false);
+  assert.equal(resolveCreatureLabMode(new URLSearchParams(), { development: false }), false);
+  const gameSource = readFileSync(new URL('../src/game/Game.js', import.meta.url), 'utf8');
+  assert.match(gameSource, /this\.creatureLabEnabled = resolveCreatureLabMode\(query\)/);
+  assert.match(gameSource, /this\.combatLabEnabled \|\| this\.creatureLabEnabled/);
+  assert.match(gameSource, /this\.creatureLabEnabled \? \['dreadstone_mace'\]/);
+});
+
+test('Creature Lab storage reads the current save but discards every lab-mode write', () => {
+  const values = new Map([['existing', 'kept']]);
+  let writes = 0;
+  const storage = {
+    get length() { return values.size; },
+    key: (index) => [...values.keys()][index] ?? null,
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => { writes += 1; values.set(key, value); },
+    removeItem: (key) => { writes += 1; values.delete(key); },
+    clear: () => { writes += 1; values.clear(); },
+  };
+  const readOnly = createCreatureLabReadOnlyStorage(storage);
+  assert.equal(readOnly.getItem('existing'), 'kept');
+  readOnly.setItem('new', 'value');
+  readOnly.removeItem('existing');
+  readOnly.clear();
+  assert.equal(writes, 0);
+  assert.equal(readOnly.getItem('existing'), 'kept');
+  assert.equal(readOnly.getItem('new'), null);
 });
 
 test('Folsom Creature Lab switches Chezwick to Dreadguard and back without stale actors, routes, or blockers', async () => {
@@ -225,7 +253,6 @@ test('Folsom Creature Lab switches Chezwick to Dreadguard and back without stale
   assert.equal(encounter.actor.visualProfile.creaturePackId, 'chezwick_damage_v001');
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
   assert.equal(blockerCount(), 1);
-
   const firstActor = encounter.actor;
   const firstCollider = firstActor.colliders.get('upper_chest');
   assert.equal((await lab.selectPack('dreadguard_damage_v001')).accepted, true);
@@ -278,7 +305,10 @@ test('touch-first panel actions invoke controller operations without console acc
     setSelectedSiteStage: (stage) => { calls.push(`setStage:${stage}`); },
     advanceSelectedSite: () => { calls.push('advanceSite'); },
     resetSelectedSite: () => { calls.push('resetSite'); },
-    strikeSelectedSite: () => { calls.push('strikeSite'); },
+    selectRelativeSite: (offset) => { calls.push(`selectRelative:${offset}`); },
+    toggleSiteMarkers: () => { calls.push('toggleSites'); },
+    toggleSelectedRadius: () => { calls.push('toggleRadius'); },
+    strikeSelectedSite: (probe) => { calls.push(`strikeSite:${probe}`); },
     detachSegment: (segmentId) => { calls.push(`detach:${segmentId}`); },
     kill: () => { calls.push('kill'); },
     ragdoll: () => { calls.push('ragdoll'); },
@@ -288,12 +318,14 @@ test('touch-first panel actions invoke controller operations without console acc
     animationActions: [{ id: 'walk', label: 'Walk' }],
     detachmentActions: [{ segmentId: 'head_neck', label: 'Head / Neck', supportedByRuntime: true }],
     ragdollAvailable: true,
+    showSites: false,
+    showSelectedRadius: false,
   };
   const actions = [
     ...getCreatureLabPrimaryActions(controller),
     ...getCreatureLabPackActions(controller, state),
     ...getCreatureLabAnimationPanelActions(controller, state),
-    ...getCreatureLabDamagePanelActions(controller),
+    ...getCreatureLabDamagePanelActions(controller, state),
     ...getCreatureLabDetachmentPanelActions(controller, state),
     ...getCreatureLabBodyStateActions(controller, state),
   ];
@@ -301,7 +333,42 @@ test('touch-first panel actions invoke controller operations without console acc
   for (const action of actions) await action.run();
   assert.deepEqual(calls, [
     'respawn', 'resetDamage', 'selectPack:future_pack', 'playAnimation:walk',
-    'setStage:LIGHT', 'setStage:MEDIUM', 'setStage:HEAVY', 'advanceSite', 'resetSite', 'strikeSite',
+    'selectRelative:-1', 'selectRelative:1', 'toggleSites', 'toggleRadius',
+    'setStage:LIGHT', 'setStage:MEDIUM', 'setStage:HEAVY', 'advanceSite', 'resetSite',
+    'strikeSite:center', 'strikeSite:edge', 'strikeSite:outside',
     'detach:head_neck', 'kill', 'ragdoll', 'respawn',
   ]);
+});
+
+test('center, edge, and outside lab probes route through actor blunt impact without injecting site identity', () => {
+  const targeting = new ProgressiveDamageSiteTargeting({ sites: [{
+    siteId: 'face_probe', displayName: 'Face Probe', authority: 'NATIVE', regionId: 'body_core', structuralGroup: 'head', radius: 0.1,
+    preferredDirectionLocal: [1, 0, 0], stageOrder: ['LIGHT'], stages: [{ stage: 'LIGHT', measurements: { captureCenterLocal: [0, 0, 1] } }],
+  }] });
+  const seenImpacts = [];
+  const adapter = {
+    getProgressiveDamageSiteTargeting: () => targeting,
+    getProgressiveDamageSiteTarget: (siteId, options) => targeting.getRecord(siteId, options),
+    listProgressiveDamageSites: () => [{
+      siteId: 'face_probe', displayName: 'Face Probe', authority: 'NATIVE', regionId: 'body_core', structuralGroup: 'head', radius: 0.1,
+    }],
+  };
+  const actor = {
+    visualAdapter: adapter,
+    colliders: new Map([['head', { handle: 1 }]]),
+    resolveHit: (_collider, worldPoint) => ({ regionId: 'head', region: { id: 'head' }, collisionPointWorld: worldPoint }),
+    applyBluntImpact: ({ hit, impact }) => {
+      seenImpacts.push(impact);
+      const selected = targeting.select({ impactRegion: hit.regionId, impactWorld: impact.worldPoint, impactDirection: impact.impactDirection, source: impact.targetingSource });
+      return { applied: selected.record != null, siteId: selected.record?.siteId ?? null };
+    },
+  };
+  const controller = new CreatureLabController({ walkerController: { actor, disposeWalker: () => {} } });
+  controller.selectedSiteId = 'face_probe';
+  assert.equal(controller.strikeSelectedSite('center').actualSiteId, 'face_probe');
+  assert.equal(controller.strikeSelectedSite('edge').actualSiteId, 'face_probe');
+  assert.equal(controller.strikeSelectedSite('outside').actualSiteId, null);
+  assert.ok(seenImpacts.every((impact) => impact.targetingSource === 'creature_lab_probe' && !Object.hasOwn(impact, 'siteId')));
+  controller.dispose();
+  targeting.dispose();
 });

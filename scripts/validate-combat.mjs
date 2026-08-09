@@ -194,7 +194,8 @@ dreadguardManifest.deformations.surfaceStainMeshes.forEach((binding) => {
 assert.match(sceneHostSource, /combatLab/);
 assert.match(sceneHostSource, /FolsomCombatEncounter/);
 assert.match(gameSource, /combatLabEnabled/);
-assert.match(gameSource, /if \(this\.combatLabEnabled\) return;/);
+assert.match(gameSource, /creatureLabEnabled/);
+assert.match(gameSource, /if \(this\.combatLabEnabled \|\| this\.creatureLabEnabled\) return;/);
 assert.match(knifeSource, /castWeaponTip/);
 assert.match(knifeSource, /resolveSweptEdgeContact/);
 assert.match(knifeSource, /classifySlashContact/);

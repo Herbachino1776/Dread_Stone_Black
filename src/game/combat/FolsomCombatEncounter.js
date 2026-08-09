@@ -247,6 +247,8 @@ export class FolsomCombatEncounter {
   }
 
   getProgressiveSiteId(side = 'left') {
+    // Legacy console stage control names an authored side explicitly. Physical
+    // impact selection never calls this path; Forge uses 3D target records.
     const sign = side === 'right' ? 1 : -1;
     return this.getConfiguredProgressiveSites().find((site) => Math.sign(Number(site.stages?.[0]?.measurements?.captureCenterLocal?.[0]) || 0) === sign)?.siteId ?? null;
   }
@@ -262,33 +264,24 @@ export class FolsomCombatEncounter {
   debugApplySolidHeadImpact() {
     const actor = this.actor;
     const adapter = actor?.visualAdapter;
-    const manifest = adapter?.damageManifest;
-    const sites = this.getConfiguredProgressiveSites();
-    const site = sites.find((entry) => {
-      if (entry?.regionId !== 'head') return false;
-      const firstStageName = entry.stageOrder?.[0];
-      const firstStage = entry.stages?.find?.((stage) => stage.stage === firstStageName);
-      return Number(firstStage?.measurements?.captureCenterLocal?.[0]) < 0;
-    });
-    const firstStageName = site?.stageOrder?.[0];
-    const firstStage = site?.stages?.find?.((stage) => stage.stage === firstStageName);
-    const captureCenterLocal = firstStage?.measurements?.captureCenterLocal;
+    const target = adapter?.getProgressiveDamageSiteTarget?.(this.getProgressiveSiteId('left'), { refresh: true });
     const headCollider = actor?.colliders?.get?.('head');
-    if (!actor || !adapter || !headCollider || !Array.isArray(captureCenterLocal)) {
+    if (!actor || !adapter || !headCollider || !target?.currentWorldCenter) {
       return { accepted: false, reason: 'left-head-progressive-site-not-ready' };
     }
-    const worldPoint = adapter.actorLocalToWorld(new THREE.Vector3().fromArray(captureCenterLocal));
+    const worldPoint = target.currentWorldCenter.clone();
     const hit = actor.resolveHit(headCollider, worldPoint);
     if (!hit?.region) return { accepted: false, reason: 'left-head-hit-resolution-failed' };
-    const preferredLocal = new THREE.Vector3().fromArray(site.preferredDirectionLocal ?? [0, 0, -1]);
-    if (preferredLocal.lengthSq() < 1e-8) preferredLocal.set(0, 0, -1);
-    const worldDirection = preferredLocal.normalize().applyQuaternion(adapter.getActorCoordinateRoot().getWorldQuaternion(new THREE.Quaternion())).normalize();
+    const worldDirection = target.currentWorldPreferredDirection?.clone?.() ?? new THREE.Vector3(0, 0, -1);
+    if (worldDirection.lengthSq() < 1e-8) worldDirection.set(0, 0, -1);
+    worldDirection.normalize();
     const worldNormal = worldDirection.clone().negate();
     return actor.applyBluntImpact({
       hit,
       impact: {
         schema: BLUNT_IMPACT_SCHEMA,
         interactionId: `folsom-debug-solid-head-impact-${actor.elapsed.toFixed(4)}`,
+        targetingSource: 'folsom_debug_probe',
         primitive: 'mace_head',
         classification: BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt,
         worldPoint,

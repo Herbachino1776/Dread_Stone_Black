@@ -2,7 +2,7 @@
 
 `dreadstone.creature_pack.v1` is the repository receiving contract for a validated technical creature body. It is generated from Forge output and contains no gameplay identity, behavior, encounter, or persistence state.
 
-Milestone 1 established the repository receiving contract and deterministic generated registry. Milestone 2 adds a browser-safe resolver, a separate game-policy layer, an effective-profile composition bridge, and an isolated mobile Creature Lab. Canonical Folsom still uses its legacy direct profile and remains unchanged unless the explicit development lab flag is active.
+Milestone 1 established the repository receiving contract and deterministic generated registry. Milestone 2 added a browser-safe resolver, a separate game-policy layer, an effective-profile composition bridge, and an isolated mobile Creature Lab. Milestone 3 adds animation-following 3D Progressive Damage Site targeting and the mobile site-driven damage harness. Canonical Folsom still uses its legacy direct profile and remains unchanged unless the explicit hidden lab query is active.
 
 ## Current bundle audit
 
@@ -242,13 +242,13 @@ A registered pack outside that boundary remains visible as `REGISTERED BUT CURRE
 
 ## Mobile Creature Lab
 
-`src/game/creatures/CreatureLabController.js` owns the isolated development session. `src/game/creatures/CreatureLabPanel.js` is its touch-first UI. Activate it in a Vite development build with:
+`src/game/creatures/CreatureLabController.js` owns the isolated development session. `src/game/creatures/CreatureLabPanel.js` is its touch-first UI. Activate it explicitly in a local or built/deployed game with:
 
 ```text
 ?creatureLab=1
 ```
 
-The flag is ignored outside a development build. In lab mode Folsom hosts one stationary, deliberately placed test subject and suppresses the normal four-Chezwick development combat wave. Without the flag, no lab controller, panel, toggle, lab actor, or spawn override exists.
+The exact value `1` is required. `creatureLab=0`, a missing flag, and every other value leave the lab disabled. In lab mode Folsom hosts one stationary, deliberately placed test subject and suppresses the normal four-Chezwick development combat wave. The player receives an ephemeral equipped Dreadstone Mace for physical testing. The current save is loaded through a read-only storage view, so equipment, survival, objective, route, and reset writes made during the lab session are discarded. The flag itself is never persisted. Without it, no lab controller, panel, toggle, marker renderer, lab actor, ephemeral loadout, or spawn override exists.
 
 The floating `LAB` button opens a safe-area-aware portrait panel. Core controls use 48 CSS-pixel minimum targets, readable labels, two-column/one-column responsive grids, vertical touch scrolling, no hover-only workflow, and no horizontal core-control overflow. Pointer, touch, and wheel events inside the panel are stopped from reaching world controls; the normal weapon-input ownership selectors also treat the panel as blocked input. Closing the panel restores the normal world control surface.
 
@@ -258,9 +258,11 @@ Button-driven operations include:
 - generated registered-pack selection without a page reload;
 - compact pack technical/cost information;
 - only resolvable idle, walk, hurt, guard, and death actions;
-- progressive site listing and selection with `NATIVE` or `COMPATIBILITY` authority labels;
+- a scrollable many-site list with display name, stable `siteId`, region, `NATIVE` or `COMPATIBILITY` authority, authored radius, current stage, accepted-hit count, and binding mode;
+- Previous Site and Next Site one-handed navigation;
+- Show Sites and Show Selected Radius visualization controls;
 - direct Light, Medium, Heavy, Next Stage, and Reset Site controls;
-- a supported real blunt strike through `HumanoidCombatActor.applyBluntImpact` at the authored capture center;
+- Center Hit, Edge Hit, and Outside Hit probes through `HumanoidCombatActor.applyBluntImpact`, without passing a requested `siteId` to the selector;
 - detachment controls for pack-available boundaries, enabled only for the actor's supported subset;
 - production-path death, safe ragdoll only when a pack does not retain authored-death authority, and respawn;
 - on-screen diagnostics and clipboard copy with selectable-text fallback.
@@ -277,6 +279,79 @@ Chezwick and Dreadguard preserve their existing compatibility behavior without c
 - Dreadguard exposes zero native sites from its pack and the existing policy-owned left-head compatibility site.
 
 Native manifest sites take precedence. Compatibility sites are added only for a side not supplied by Forge, and diagnostics report the two counts separately.
+
+## Milestone 3: 3D Progressive Damage Site targeting
+
+`src/game/combat/ProgressiveDamageSiteTargeting.js` owns normalized target records, one-time binding, current-pose reconstruction, deterministic selection math, and bounded diagnostics. `ForgeDamageDeformationRuntime` remains the production caller. Creature Lab reads and probes the same production records; it does not own a second targeting implementation.
+
+Each per-actor record contains:
+
+- stable `siteId`, display name, `NATIVE` or `COMPATIBILITY` authority, `regionId`, and `structuralGroup`;
+- immutable copies of authored capture center, authored radius, and preferred direction;
+- resolved deformation target object where available;
+- `SKINNED_SURFACE`, `STATIC_ACTOR_LOCAL_FALLBACK`, or `UNTARGETABLE` binding mode;
+- the one-time `SkinnedSurfaceBinding`, when successful;
+- current world center and preferred world direction, plus actor-local center only when requested;
+- explicit center-source, binding, reconstruction, and untargetable diagnostics.
+
+These records are actor-owned runtime state. The Forge manifest and generated Creature Pack descriptor are never mutated.
+
+### Center, radius, and authoring coordinates
+
+Target center resolution is deterministic:
+
+1. first finite `measurements.captureCenterLocal` in authored `stageOrder`;
+2. otherwise finite site `anchorLocal`;
+3. otherwise `UNTARGETABLE` with `missing-authored-capture-center`.
+
+Forge centers and directions are Blender Z-up coordinates. Runtime converts them once to glTF/Three Y-up (`[x, y, z] -> [x, z, -y]`) before surface binding. A numeric zero anchor never replaces valid stage capture data.
+
+The authored positive site radius is required. Selection measures world-space distance to the reconstructed center and computes `normalizedDistance = distance / scaledAuthoredRadius`. Eligibility ends at the scaled authored radius plus the explicit 0.008 m skin/collider tolerance. Invalid radii make a site untargetable; there are no inferred or oversized hit bubbles.
+
+### Animation-following binding
+
+After the GLB and damage runtime are ready, each valid center is projected once onto its intended stage deformation `SkinnedMesh` when that target is available. The existing `SkinnedSurfaceBinding` triangle/barycentric and weighted-bone neighborhood data are retained. Per hit or marker update, only the current bound surface point is reconstructed; no scene traversal, topology search, or nearest-surface query occurs in the combat hot path.
+
+Preferred direction uses the same converted source frame. When a binding has weighted bone influences, the direction is captured in those bone-local frames and reconstructed from the current pose. Otherwise the current actor/root transform is the diagnosed direction fallback. If surface binding fails, the authored converted point continues as `STATIC_ACTOR_LOCAL_FALLBACK`; a transient triangle reconstruction failure first tries the binding's weighted neighborhood, then the static point. This preserves a diagnosed playable fallback instead of silently discarding the site.
+
+### Selection and fallback order
+
+Selection performs:
+
+1. broad semantic physics-region filtering;
+2. authored-radius eligibility using current 3D distance;
+3. normalized-distance scoring;
+4. a bounded preferred-direction adjustment of at most 0.04 normalized-distance units;
+5. normalized distance, direction alignment, then lexical stable `siteId` as deterministic tie breakers.
+
+Distance therefore dominates and direction can resolve a near overlap without allowing an opposite-facing, clearly farther site to win. Authority remains visible but is not a score. Chezwick's explicit semantic exception still permits its face-named `body_core` sites for head/face/skull collider hits; this exception never supplies site position.
+
+If no progressive record is inside its authored radius, Forge retains the existing non-progressive region/key fallback. If neither system manages the contact, the impact remains an unmanaged Forge hit while the actor's ordinary blunt-impact path continues. X remains available for left/right diagnostics, reactions, and legacy non-progressive key selection, but is no longer Progressive Damage Site authority.
+
+### Diagnostics and mobile markers
+
+Only the most recent decision and most recent physical decision are retained. Each reports impact region/world/actor-local point/direction; selected ID and authority; distance, authored/scaled radius, normalized distance, direction alignment; fallback use; rejection reason; and bounded per-candidate eligibility data. Counters track attempts, matches, misses, overlap resolutions, and static-fallback uses.
+
+`src/game/creatures/CreatureLabSiteMarkerRenderer.js` displays the production record centers through one instanced marker mesh with shared geometry/material. Native, compatibility, and selected colors differ. A single cheap wireframe sphere can show only the selected radius. Markers have no physics body, disable raycasting, update from production reconstruction, and are removed before actor replacement or lab disposal.
+
+### Performance and current limits
+
+Normalized records, deformation-target lookup, triangle metadata, and surface bindings are built once. A hit refreshes only broad-region candidates and performs a bounded linear scan, appropriate for 10–30+ sites. No JSON cloning, whole-scene search, mesh topology analysis, or marker geometry allocation happens per hit.
+
+Idle, walk, hurt, and guard are verified with current-pose center strikes. Death and forced-ragdoll still update the same bound skeleton while attached, but Milestone 3 does not certify Progressive Damage Site targeting after authored animation authority ends. Progressive targeting does not transfer a site's binding to a separately detached segment mesh. A grounded actor removed from combat routing is not targetable. Static fallback follows actor/root motion but, by definition, cannot follow local limb articulation.
+
+### Deployed iPhone acceptance procedure
+
+1. Open deployed Folsom with `?creatureLab=1` and confirm one subject plus the floating `LAB` button.
+2. Open LAB, choose Chezwick, enable Show Sites, and optionally Show Selected Radius.
+3. Trigger Idle, Walk, Hurt Left/Right, and Guard; confirm facial markers remain on the animated surface.
+4. Select the native right facial site. Run Center Hit, Edge Hit, and Outside Hit; confirm the first two resolve right and Outside rejects right.
+5. Select the compatibility left facial site and repeat.
+6. Close LAB, walk around the subject, and strike visible authored areas with the equipped mace.
+7. Reopen LAB and inspect LAST PHYSICAL SITE plus distance, radius, alignment, and impact region.
+8. Switch to Dreadguard; confirm its one compatibility head marker and center probe, with zero native sites.
+9. Switch and respawn repeatedly; confirm no stale marker, actor, collider, binding, route, or blocker remains.
+10. Open normal Folsom without `?creatureLab=1`, and also with `?creatureLab=0`; confirm no lab behavior or ephemeral mace loadout exists.
 
 ## Compatibility exceptions
 
@@ -325,16 +400,16 @@ Creature Instance:
 - one world individual and its persistent state;
 - not implemented here.
 
-The planned migration now continues from the first two completed milestones:
+The planned migration now continues from the first three completed milestones:
 
 1. Creature Pack contract/importer and generated registry (Milestone 1, complete).
 2. Runtime resolver, policy composition, and mobile Folsom proving ground (Milestone 2, complete).
-3. Generic 3D Progressive Damage Site Targeting + Site-Driven Damage Harness (Milestone 3, next).
-4. Creature Definitions and factory.
-5. Damage consequence vocabulary.
-6. Gradual extraction from `HumanoidCombatActor`.
-7. Persistence.
+3. 3D Progressive Site Targeting (Milestone 3, complete).
+4. Creature Definition Registry + Factory (next).
+5. Semantic Damage Consequences.
+6. Reusable body/runtime extraction.
+7. Creature Instance Persistence.
 8. Simulation tiers.
 9. Non-humanoid profiles.
 
-Milestone 3 should replace panel-only site selection with generic in-world 3D site targeting and a site-driven damage harness. It must reuse the resolved native/compatibility site authority, not infer sites from arbitrary meshes. It is intentionally not implemented in Milestone 2.
+Milestone 4 should introduce a small Creature Definition Registry and factory that references validated Creature Packs plus game-authored identity/policy. It must not duplicate Forge technical truth or begin AI, persistence, factions, dialogue, inventories, or unrelated behavior systems as part of the registry proof.

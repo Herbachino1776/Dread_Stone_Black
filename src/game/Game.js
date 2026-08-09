@@ -20,6 +20,7 @@ import { reloadToNewGameStartupRoute } from './startupRoute.js';
 import { GameAudioRuntime } from './audio/GameAudioRuntime.js';
 import { resolveOutdoorTorchWarning } from './world-scene/OutdoorTorchRequirement.js';
 import { CombatLabDebugPanel } from './combat/CombatLabDebugPanel.js';
+import { createCreatureLabReadOnlyStorage, resolveCreatureLabMode } from './creatures/CreatureLabController.js';
 
 export class Game {
   constructor(app) {
@@ -41,6 +42,7 @@ export class Game {
   async startUnsafe() {
     const query = new URLSearchParams(window.location.search);
     this.combatLabEnabled = import.meta.env.DEV && query.get('combatLab') === '1';
+    this.creatureLabEnabled = resolveCreatureLabMode(query);
     this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
     this.perfDebugEnabled = query.get('perf') === '1';
     this.isPaused = false;
@@ -60,7 +62,9 @@ export class Game {
     this.audioRuntime.unlock({ reason: 'game-startup' });
 
     const objectiveDebugUiEnabled = import.meta.env.DEV && query.get('objectiveDebug') === '1';
-    this.saveHost = new SaveHost();
+    this.saveHost = new SaveHost({
+      storage: this.creatureLabEnabled ? createCreatureLabReadOnlyStorage(window.localStorage) : window.localStorage,
+    });
     this.gameState = this.saveHost.loadInitialState();
     const savedEquipment = this.gameState.getEquipmentSnapshot() ?? startingEquipment;
     const developmentLoadoutEnabled = import.meta.env.DEV && ((query.get('area') === 'north-road' && query.get('devLoadout') === '1') || this.combatLabEnabled);
@@ -72,11 +76,18 @@ export class Game {
       'keepers_lantern',
       ...(this.combatLabEnabled ? ['dreadstone_sword', 'dreadstone_mace'] : []),
     ];
-    this.devEphemeralEquipmentIds = new Set(developmentLoadoutEnabled ? developmentItems.filter((itemId) => !(savedEquipment.acquiredItemIds ?? []).includes(itemId)) : []);
-    const runtimeStartingEquipment = developmentLoadoutEnabled ? {
+    const ephemeralItems = [...new Set([
+      ...(developmentLoadoutEnabled ? developmentItems : []),
+      ...(this.creatureLabEnabled ? ['dreadstone_mace'] : []),
+    ])];
+    this.devEphemeralEquipmentIds = new Set(ephemeralItems.filter((itemId) => !(savedEquipment.acquiredItemIds ?? []).includes(itemId)));
+    const runtimeStartingEquipment = ephemeralItems.length ? {
       ...savedEquipment,
-      acquiredItemIds: [...new Set([...(savedEquipment.acquiredItemIds ?? ['unarmed']), ...developmentItems])],
-      equipped: { ...(savedEquipment.equipped ?? {}), weapon: this.combatLabEnabled ? 'unarmed' : 'wood_axe', tool: 'old_work_knife', offhand: this.combatLabEnabled ? null : 'keepers_lantern' },
+      acquiredItemIds: [...new Set([...(savedEquipment.acquiredItemIds ?? ['unarmed']), ...ephemeralItems])],
+      equipped: {
+        ...(savedEquipment.equipped ?? {}),
+        ...(this.creatureLabEnabled ? { weapon: 'dreadstone_mace' } : { weapon: this.combatLabEnabled ? 'unarmed' : 'wood_axe', tool: 'old_work_knife', offhand: this.combatLabEnabled ? null : 'keepers_lantern' }),
+      },
     } : savedEquipment;
     this.equipmentRuntime = new EquipmentRuntime({
       weaponProfiles: equipmentRegistry.weapons,
@@ -204,7 +215,7 @@ export class Game {
 
 
   saveEquipmentState() {
-    if (this.combatLabEnabled) return;
+    if (this.combatLabEnabled || this.creatureLabEnabled) return;
     if (!this.devEphemeralEquipmentIds?.size) {
       this.saveHost.saveEquipmentState(this.gameState, this.equipmentRuntime);
       return;
