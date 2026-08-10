@@ -11,6 +11,7 @@ import {
   validateCreaturePack,
   validateCreaturePackRegistry,
 } from '../../src/contracts/CreaturePack.js';
+import { extractForgeRuntimeArmamentCapabilities } from '../../src/contracts/ForgeRuntimeArmament.js';
 import { DREADGUARD_BONE_MAP } from '../../src/game/combat/HumanoidModelProfiles.js';
 import { measureVisibleSkinnedBounds, resolveAnimationPackManifest } from '../../src/game/combat/HumanoidGlbVisualAdapter.js';
 import {
@@ -303,6 +304,16 @@ export function validateForgeReportIdentity(manifest, report) {
     if (runtimeSkeleton.skeletonCount !== manifest.runtimeSkeleton.skeletonCount) throw actionableError('Forge report runtime skeleton count does not match the damage manifest');
     if (runtimeSkeleton.requiredBoneCount !== manifest.runtimeSkeleton.requiredBones.length) throw actionableError('Forge report runtime skeleton required-bone count does not match the damage manifest');
     requireEmptyErrors(runtimeSkeleton.missingBones, 'Forge runtime skeleton missing bones');
+  }
+  if (manifest.runtimeAttachmentSockets) {
+    const sockets = report.runtimeAttachmentSockets;
+    requirePass(sockets?.status, 'Forge runtime attachment socket validation status');
+    requireEmptyErrors(sockets?.errors, 'Forge runtime attachment socket validation');
+    if (sockets.schema !== manifest.runtimeAttachmentSockets.schema) throw actionableError('Forge report attachment socket schema does not match the damage manifest');
+    if (sockets.runtimeArmature !== manifest.runtimeAttachmentSockets.runtimeArmature) throw actionableError('Forge report attachment socket armature does not match the damage manifest');
+    if (sockets.socketCount !== manifest.runtimeAttachmentSockets.socketCount) throw actionableError('Forge report attachment socket count does not match the damage manifest');
+    if (sockets.runtimeBoneCount !== manifest.runtimeAttachmentSockets.runtimeBoneCount) throw actionableError('Forge report attachment socket bone count does not match the damage manifest');
+    if (sockets.helperNodeLeakCount !== 0 || sockets.socketJointLeakCount !== 0) throw actionableError('Forge report indicates attachment helper leakage into the runtime GLB');
   }
   if (!isDeepStrictEqual(manifest.validation, report)) throw actionableError('embedded manifest validation and sidecar validation report differ; the Forge export is stale or incomplete');
   return report;
@@ -604,7 +615,7 @@ function defaultDisplayName(packId) {
     .join(' ');
 }
 
-function collectImportDiagnostics({ manifest, report, glbPath, presentation, animations }) {
+function collectImportDiagnostics({ manifest, report, glbPath, presentation, animations, armament }) {
   const diagnostics = [];
   if (path.basename(glbPath) !== manifest.glb) diagnostics.push({
     level: 'warning',
@@ -633,6 +644,16 @@ function collectImportDiagnostics({ manifest, report, glbPath, presentation, ani
     level: 'warning',
     code: 'AUTHORED_FORWARD_AXIS_NOT_DERIVED',
     message: 'The Forge anatomy and approved animation metadata do not declare an authored forward axis.',
+  });
+  if (!armament.attachmentSockets.available) diagnostics.push({
+    level: 'info',
+    code: 'FORGE_ATTACHMENT_SOCKETS_UNAVAILABLE',
+    message: 'This Creature Pack has no Forge-authored runtime attachment sockets; production equipment attachment is unavailable.',
+  });
+  if (!armament.offensiveActions.available) diagnostics.push({
+    level: 'info',
+    code: 'FORGE_OFFENSIVE_ACTIONS_UNAVAILABLE',
+    message: 'This Creature Pack has no Forge-approved offensive Actions; animated armament attacks are unavailable.',
   });
   return diagnostics;
 }
@@ -671,6 +692,15 @@ export async function importCreaturePack({
     animationValidationReportPath: bundle.animationValidationReportPath,
     packId,
   });
+  let armament;
+  try {
+    armament = extractForgeRuntimeArmamentCapabilities(manifest, {
+      approvedClips: animationValidation.approvedClips,
+      supportedBones: manifest.runtimeSkeleton?.requiredBones ?? [],
+    });
+  } catch (error) {
+    throw actionableError(`runtime armament capability rejected ${packId}: ${error.message}`, error);
+  }
   const availableSegmentIds = manifest.segments.map((segment) => segment.segmentId);
   const activeRuntimeSegmentIds = availableSegmentIds.filter((segmentId) => ACTIVE_DAMAGE_SEGMENT_CONTRACTS[segmentId]);
   const validationAnimationManifest = animationValidation.manifest ?? { schema: 'dreadstone.animation_pack.v1', approved_animation_count: 0, animations: [] };
@@ -776,7 +806,11 @@ export async function importCreaturePack({
       pairedDetachableSegments: pairedSegments.length > 0,
       embeddedAnimations: cost.approvedAnimationCount > 0,
       separatelyValidatedAnimations: Boolean(bundle.animationManifestPath),
+      attachmentSockets: armament.attachmentSockets.available,
+      offensiveActions: armament.offensiveActions.available,
     },
+    attachmentSockets: armament.attachmentSockets,
+    offensiveActions: armament.offensiveActions,
     damage: {
       availableSegmentIds: [...availableSegmentIds].sort(),
       activeRuntimeSegmentIds: [...activeRuntimeSegmentIds].sort(),
@@ -786,7 +820,7 @@ export async function importCreaturePack({
     animations: {
       delivery: animationValidation.approvedClips.length ? 'embedded' : 'none',
       manifestValidated: Boolean(bundle.animationManifestPath),
-      approvedClips: animationValidation.approvedClips.map(({ name, kind }) => ({ name, kind })),
+      approvedClips: animationValidation.approvedClips.map(({ name, kind, durationSeconds }) => ({ name, kind, durationSeconds })),
       unapprovedClipCount: animationValidation.unapprovedClipCount,
     },
     importDiagnostics: collectImportDiagnostics({
@@ -795,6 +829,7 @@ export async function importCreaturePack({
       glbPath: bundle.glbPath,
       presentation: presentationInference,
       animations: animationValidation,
+      armament,
     }),
     cost,
   };

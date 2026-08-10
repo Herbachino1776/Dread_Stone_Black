@@ -15,7 +15,9 @@
         "surfaceStains": true,
         "pairedDetachableSegments": true,
         "embeddedAnimations": true,
-        "separatelyValidatedAnimations": false
+        "separatelyValidatedAnimations": false,
+        "attachmentSockets": false,
+        "offensiveActions": false
       }
     },
     {
@@ -31,7 +33,9 @@
         "surfaceStains": true,
         "pairedDetachableSegments": true,
         "embeddedAnimations": true,
-        "separatelyValidatedAnimations": false
+        "separatelyValidatedAnimations": false,
+        "attachmentSockets": false,
+        "offensiveActions": false
       }
     },
     {
@@ -47,7 +51,9 @@
         "surfaceStains": true,
         "pairedDetachableSegments": true,
         "embeddedAnimations": true,
-        "separatelyValidatedAnimations": true
+        "separatelyValidatedAnimations": true,
+        "attachmentSockets": false,
+        "offensiveActions": false
       }
     }
   ]

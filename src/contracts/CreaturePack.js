@@ -1,3 +1,8 @@
+import {
+  validateAttachmentSocketCapability,
+  validateOffensiveActionCapability,
+} from './ForgeRuntimeArmament.js';
+
 export const CREATURE_PACK_SCHEMA = 'dreadstone.creature_pack.v1';
 export const CREATURE_PACK_VERSION = 1;
 export const CREATURE_PACK_REGISTRY_SCHEMA = 'dreadstone.creature_pack_registry.v1';
@@ -104,6 +109,35 @@ export function validateCreaturePack(pack) {
     for (const key of ['progressiveDamage', 'deformations', 'gore', 'surfaceStains', 'pairedDetachableSegments', 'embeddedAnimations', 'separatelyValidatedAnimations']) {
       requireCondition(errors, typeof capabilities[key] === 'boolean', `capabilities.${key}`, 'must be boolean');
     }
+    for (const key of ['attachmentSockets', 'offensiveActions']) {
+      if (key in capabilities) requireCondition(errors, typeof capabilities[key] === 'boolean', `capabilities.${key}`, 'must be boolean');
+    }
+    if (capabilities.attachmentSockets === true) requireCondition(errors, pack.attachmentSockets?.available === true, 'capabilities.attachmentSockets', 'requires an available attachmentSockets record');
+    if (capabilities.offensiveActions === true) requireCondition(errors, pack.offensiveActions?.available === true, 'capabilities.offensiveActions', 'requires an available offensiveActions record');
+  }
+
+  if (pack.attachmentSockets != null) {
+    const validation = validateAttachmentSocketCapability(pack.attachmentSockets, {
+      supportedBones: pack.presentation?.runtimeSkeleton?.requiredBones,
+    });
+    validation.errors.forEach((error) => errors.push(error));
+    if (typeof capabilities?.attachmentSockets === 'boolean') {
+      requireCondition(errors, capabilities.attachmentSockets === pack.attachmentSockets.available, 'capabilities.attachmentSockets', 'must match attachmentSockets.available');
+    }
+  }
+  if (pack.offensiveActions != null) {
+    const validation = validateOffensiveActionCapability(pack.offensiveActions, {
+      approvedClips: pack.animations?.approvedClips?.map((clip) => ({
+        ...clip,
+        durationSeconds: clip.durationSeconds,
+      })),
+      availableSocketRoles: pack.attachmentSockets?.sockets?.map((socket) => socket.semanticRole),
+    });
+    validation.errors.forEach((error) => errors.push(error));
+    if (typeof capabilities?.offensiveActions === 'boolean') {
+      requireCondition(errors, capabilities.offensiveActions === pack.offensiveActions.available, 'capabilities.offensiveActions', 'must match offensiveActions.available');
+    }
+    if (pack.offensiveActions.available === true) requireCondition(errors, pack.attachmentSockets?.available === true, 'offensiveActions.available', 'requires available attachmentSockets');
   }
 
   const damage = pack.damage;
@@ -131,6 +165,7 @@ export function validateCreaturePack(pack) {
         if (!isRecord(clip)) return;
         requireCondition(errors, isNonemptyString(clip.name), `animations.approvedClips[${index}].name`, 'must be a non-empty string');
         requireCondition(errors, isNonemptyString(clip.kind), `animations.approvedClips[${index}].kind`, 'must be a non-empty string');
+        if ('durationSeconds' in clip) requireCondition(errors, Number.isFinite(clip.durationSeconds) && clip.durationSeconds > 0, `animations.approvedClips[${index}].durationSeconds`, 'must be finite and positive');
         names.push(clip.name);
       });
       requireCondition(errors, new Set(names).size === names.length, 'animations.approvedClips', 'must not contain duplicate names');

@@ -5,6 +5,7 @@ export const HUMANOID_ANIMATION_STATES = Object.freeze({
   walking: 'WALKING',
   hurt: 'HURT',
   guarding: 'GUARDING',
+  attacking: 'ATTACKING',
   dying: 'DYING',
   dead: 'DEAD',
 });
@@ -99,6 +100,7 @@ export class HumanoidAnimationPackController {
     this.activeMetadata = null;
     this.selectedDeathName = null;
     this.hurtRecoveryCount = 0;
+    this.offensiveCompletionCount = 0;
     this.deathCompleted = false;
     this.disposed = false;
     this.walkStopFadeRemaining = 0;
@@ -186,6 +188,20 @@ export class HumanoidAnimationPackController {
     return this.playOneShot(metadata, HUMANOID_ANIMATION_STATES.guarding);
   }
 
+  playOffensiveAction(actionName) {
+    if (this.disposed || this.state === HUMANOID_ANIMATION_STATES.dying || this.state === HUMANOID_ANIMATION_STATES.dead) return null;
+    const metadata = this.animationPack.entriesByName.get(actionName);
+    if (!metadata || !String(metadata.approved_kind).startsWith('ATTACK_')) return null;
+    if (this.state === HUMANOID_ANIMATION_STATES.attacking && this.activeMetadata === metadata) return null;
+    return this.playOneShot(metadata, HUMANOID_ANIMATION_STATES.attacking);
+  }
+
+  getActionClipTime(actionName) {
+    const action = this.actionsByName.get(actionName);
+    if (!action) return null;
+    return Math.max(0, Number(action.time) || 0);
+  }
+
   playOneShot(metadata, state) {
     const nextAction = this.actionsByName.get(metadata.name);
     if (!nextAction) return null;
@@ -215,6 +231,7 @@ export class HumanoidAnimationPackController {
       return;
     }
     if (metadata?.return_to_previous_state === true) {
+      const completedOffensive = String(metadata.approved_kind).startsWith('ATTACK_');
       const baseAction = this.moving ? this.walkAction : this.restAction;
       baseAction.enabled = true;
       baseAction.paused = false;
@@ -227,6 +244,7 @@ export class HumanoidAnimationPackController {
       this.walkStopFadeRemaining = this.moving ? 0 : this.fadeSeconds;
       this.state = this.moving ? HUMANOID_ANIMATION_STATES.walking : HUMANOID_ANIMATION_STATES.holding;
       this.hurtRecoveryCount += 1;
+      if (completedOffensive) this.offensiveCompletionCount += 1;
     }
   }
 
@@ -248,6 +266,7 @@ export class HumanoidAnimationPackController {
     this.selectedDeathName = null;
     this.deathCompleted = false;
     this.hurtRecoveryCount = 0;
+    this.offensiveCompletionCount = 0;
     this.moving = false;
     this.speed = 0;
     this.walkAction.stop();
@@ -269,6 +288,7 @@ export class HumanoidAnimationPackController {
       walkPaused: !this.walkAction.isRunning() || this.walkAction.paused,
       moving: this.moving,
       hurtRecoveryCount: this.hurtRecoveryCount,
+      offensiveCompletionCount: this.offensiveCompletionCount,
       selectedDeathName: this.selectedDeathName,
       deathCompleted: this.deathCompleted,
       finalPoseHeld: this.state === HUMANOID_ANIMATION_STATES.dead && this.activeMetadata?.hold_final_pose === true,

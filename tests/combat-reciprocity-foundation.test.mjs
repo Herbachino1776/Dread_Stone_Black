@@ -144,76 +144,31 @@ function createHarnessFixture() {
   return { scene, player, receiver, actor, harness };
 }
 
-function runAttackToCompletion(harness) {
-  assert.equal(harness.triggerAttack().accepted, true);
-  for (let frame = 0; frame < 100 && harness.lifecycle.getState().phase !== PHYSICAL_ATTACK_PHASES.complete; frame += 1) harness.update(1 / 60);
-  return harness.getDiagnostics();
-}
-
-test('lab harness visibly drives committed hit, miss, repeat-hit, lethal, reset, and cleanup proofs', () => {
-  const { scene, player, receiver, actor, harness } = createHarnessFixture();
-  harness.toggleAttackGeometry();
-  let diagnostics = runAttackToCompletion(harness);
-  assert.equal(diagnostics.outcome, 'hit');
-  assert.equal(diagnostics.acceptedPlayerHitCount, 1);
-  assert.equal(receiver.currentHealth, 66);
-
-  player.position.set(0, 1.55, -4);
-  diagnostics = runAttackToCompletion(harness);
-  assert.equal(diagnostics.outcome, 'miss');
-  assert.equal(receiver.currentHealth, 66);
-
-  player.position.copy(player.spawnPosition);
-  diagnostics = runAttackToCompletion(harness);
-  assert.equal(diagnostics.outcome, 'hit');
-  diagnostics = runAttackToCompletion(harness);
-  assert.equal(diagnostics.playerDead, true);
-  assert.equal(receiver.currentHealth, 0);
-  assert.equal(diagnostics.acceptedPlayerHitCount, 3);
-
+test('lab harness refuses to recreate the M5 procedural fallback for an unupgraded pack', () => {
+  const { receiver, harness } = createHarnessFixture();
+  assert.equal(harness.getDiagnostics().capabilityAvailable, false);
+  assert.equal(harness.equip().reason, 'attachment-capability-unavailable');
+  assert.equal(harness.triggerAttack().reason, 'armament-not-equipped');
+  assert.equal(receiver.currentHealth, 100);
   assert.equal(harness.resetPlayer().accepted, true);
-  assert.equal(receiver.currentHealth, 100);
-  assert.equal(harness.getDiagnostics().attackId, null);
-  assert.equal(harness.getDiagnostics().acceptedPlayerHitCount, 0);
-
-  harness.setSubject({ ...actor, instanceId: 'lab-subject-b' });
-  diagnostics = harness.getDiagnostics();
-  assert.equal(diagnostics.subjectInstanceId, 'lab-subject-b');
-  assert.equal(diagnostics.attackId, null);
-  assert.equal(diagnostics.acceptedPlayerHitCount, 0);
-  assert.equal(receiver.getDiagnostics().retainedAttackIdentityCount, 0);
-  assert.equal(receiver.currentHealth, 100);
-  assert.equal(receiver.getDiagnostics().lastImpact, null);
-
-  const presentation = harness.presentation;
   harness.dispose();
   assert.equal(harness.disposed, true);
-  assert.equal(harness.source.disposed, true);
-  assert.equal(scene.children.includes(presentation), false);
-});
-
-test('moving away after windup commitment produces zero damage when ACTIVE sweep misses', () => {
-  const { player, receiver, harness } = createHarnessFixture();
-  assert.equal(harness.triggerAttack().accepted, true);
-  harness.update(0.3);
-  player.position.set(4, 1.55, 4);
-  for (let frame = 0; frame < 100 && harness.lifecycle.getState().phase !== PHYSICAL_ATTACK_PHASES.complete; frame += 1) harness.update(1 / 60);
-  assert.equal(harness.getDiagnostics().outcome, 'miss');
-  assert.equal(receiver.currentHealth, 100);
-  harness.dispose();
+  assert.equal(harness.source, null);
 });
 
 test('touch-first offensive controls require no console access', async () => {
   const calls = [];
   const controller = {
+    equipArmament: () => calls.push('equipArmament'),
+    selectOffensiveAction: (combatActionId) => calls.push(`selectOffensiveAction:${combatActionId}`),
     triggerAttack: () => calls.push('triggerAttack'),
     resetPlayer: () => calls.push('resetPlayer'),
     toggleAttackGeometry: () => calls.push('toggleAttackGeometry'),
   };
-  const actions = getCreatureLabOffensiveCombatActions(controller, { offensiveCombat: { showAttackGeometry: false } });
-  assert.deepEqual(actions.map((action) => action.label), ['Trigger Attack', 'Reset Player', 'Show Attack Geometry']);
+  const actions = getCreatureLabOffensiveCombatActions(controller, { offensiveCombat: { showAttackGeometry: false, compatibleActions: [{ combatActionId: 'humanoid_one_hand_slash_rtl' }] } });
+  assert.deepEqual(actions.map((action) => action.label), ['Equip Test Weapon', 'humanoid one hand slash rtl', 'Trigger Attack', 'Reset Player', 'Show Attack Geometry']);
   for (const action of actions) await action.run();
-  assert.deepEqual(calls, ['triggerAttack', 'resetPlayer', 'toggleAttackGeometry']);
+  assert.deepEqual(calls, ['equipArmament', 'selectOffensiveAction:humanoid_one_hand_slash_rtl', 'triggerAttack', 'resetPlayer', 'toggleAttackGeometry']);
 });
 
 test('combat reciprocity activates only for explicit Creature Lab and leaves canonical Folsom gated', () => {
@@ -221,9 +176,12 @@ test('combat reciprocity activates only for explicit Creature Lab and leaves can
   assert.equal(resolveCreatureLabMode(new URLSearchParams()), false);
   const gameSource = readFileSync(new URL('../src/game/Game.js', import.meta.url), 'utf8');
   const encounterSource = readFileSync(new URL('../src/game/combat/FolsomCombatEncounter.js', import.meta.url), 'utf8');
+  const harnessSource = readFileSync(new URL('../src/game/creatures/CreatureLabAttackHarness.js', import.meta.url), 'utf8');
   assert.match(gameSource, /this\.playerCombatDamageReceiver = this\.creatureLabEnabled \? new PlayerCombatDamageReceiver/);
   assert.match(encounterSource, /this\.creatureLabAttackHarness = this\.creatureLabEnabled \? new CreatureLabAttackHarness/);
   assert.doesNotMatch(encounterSource, /this\.showcaseEnabled[^\n]+CreatureLabAttackHarness/);
+  assert.match(harnessSource, /NpcArmamentRuntime/);
+  assert.doesNotMatch(harnessSource, /PhysicalAttackLifecycle|computePose|poseAlongDirection/);
 });
 
 test('physical attack source disposal clears shapes, ownership, and rejects later contact', () => {

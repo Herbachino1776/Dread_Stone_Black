@@ -1,5 +1,12 @@
 # Creature Pack Pipeline
 
+Milestone 6 optionally imports Forge `runtimeAttachmentSockets` and approved
+offensive Action records into technical Creature Pack capability. Missing
+records normalize to explicit unavailable capability and never trigger guessed
+hand offsets, filename-derived attack timing, or gameplay weapon metadata. NPC
+weapons and loadouts remain game-owned; see
+[NPC_ARMAMENT_ARCHITECTURE.md](NPC_ARMAMENT_ARCHITECTURE.md).
+
 `dreadstone.creature_pack.v1` is the repository receiving contract for a validated technical creature body. It is generated from Forge output and contains no gameplay identity, behavior, encounter, or persistence state.
 
 Milestone 1 established the repository receiving contract and deterministic generated registry. Milestone 2 added a browser-safe resolver, a temporary game-policy layer, an effective-profile composition bridge, and an isolated mobile Creature Lab. Milestone 3 added animation-following 3D Progressive Damage Site targeting and the mobile site-driven damage harness. Milestone 3.5 integrated Dread Ram God as the third production fixture. Milestone 4 now adds `dreadstone.creature_definition.v1`, an explicit definition registry, and one generic factory while preserving the current actor. Canonical Folsom still uses its legacy direct profile and remains unchanged unless the explicit hidden lab query is active.

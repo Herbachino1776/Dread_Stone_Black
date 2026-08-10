@@ -242,7 +242,7 @@ export function createEmbeddedAnimationPackManifest(clips, profile) {
       duration_seconds: clip.duration,
       loop: metadata.dsb_loop === true,
       hold_final_pose: kind === 'DEATH',
-      return_to_previous_state: kind.startsWith('HURT_') || kind.startsWith('MACE_GUARD_'),
+      return_to_previous_state: kind.startsWith('HURT_') || kind.startsWith('MACE_GUARD_') || kind.startsWith('ATTACK_'),
       root_motion_policy: metadata.dsb_root_motion_policy ?? 'IN_PLACE',
     };
   });
@@ -780,6 +780,10 @@ export class HumanoidGlbVisualAdapter {
       ...bindingOptions,
       triangleMetadataByMesh: bindingOptions.triangleMetadataByMesh ?? this.surfaceBindingMetadata,
     });
+  }
+
+  getRuntimeBone(boneName) {
+    return this.bones.get(boneName) ?? null;
   }
 
   prepareVisibleSurfaceFrame() {

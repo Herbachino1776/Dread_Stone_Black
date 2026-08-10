@@ -33,6 +33,8 @@ export const CREATURE_PACK_TECHNICAL_PROFILE_FIELDS = Object.freeze([
   'damageTopologyFingerprint',
   'damageWeightFingerprint',
   'embeddedAnimationPack',
+  'attachmentSockets',
+  'offensiveActions',
 ]);
 
 const COLLISION_PROFILES = new Map([
@@ -127,7 +129,18 @@ export function composeHumanoidCreatureRuntimeProfile(pack, definition = getCrea
   if (!support.supported) throw new Error(`Creature Definition ${definition?.definitionId ?? 'unknown'} cannot compose with Creature Pack ${pack?.packId ?? 'unknown'}: ${support.reason}`);
   const collisionProfile = resolveCollisionProfile(definition);
   const progressiveDamageSiteFallbacks = resolveProgressiveSiteCompatibilityProfile(definition);
-  const selectedAnimationNames = [...definition.animation.selectedAnimationNames];
+  const offensiveAnimationNames = pack.offensiveActions?.available
+    ? pack.offensiveActions.actions.map((action) => action.actionName)
+    : [];
+  const selectedAnimationNames = [...new Set([
+    ...definition.animation.selectedAnimationNames,
+    ...offensiveAnimationNames,
+  ])];
+  const approvedKindsByName = new Map(pack.animations.approvedClips.map((clip) => [clip.name, clip.kind]));
+  const animationRuntimeKinds = [...new Set([
+    ...definition.animation.runtimeKinds,
+    ...offensiveAnimationNames.map((name) => approvedKindsByName.get(name)).filter(Boolean),
+  ])];
   const embeddedAnimationPack = pack.animations.delivery === 'embedded' && !pack.assets.animationManifest;
   return Object.freeze({
     name: `creature-definition:${definition.definitionId}`,
@@ -152,7 +165,7 @@ export function composeHumanoidCreatureRuntimeProfile(pack, definition = getCrea
     holdingPoseMode: definition.animation.holdingPoseMode,
     animationFadeSeconds: definition.animation.fadeSeconds,
     walkReferenceSpeed: definition.movement.walkReferenceSpeed,
-    animationRuntimeKinds: definition.animation.runtimeKinds,
+    animationRuntimeKinds: Object.freeze(animationRuntimeKinds),
     embeddedAnimationNames: embeddedAnimationPack ? Object.freeze(selectedAnimationNames) : undefined,
     embeddedAnimationPack,
     ignoredEmbeddedAnimationNames: definition.animation.ignoredEmbeddedAnimationNames,
@@ -167,6 +180,8 @@ export function composeHumanoidCreatureRuntimeProfile(pack, definition = getCrea
     damageAuthoringBuildId: pack.authoring.damageBuildId,
     damageTopologyFingerprint: pack.source.topologyFingerprint,
     damageWeightFingerprint: pack.source.weightFingerprint,
+    attachmentSockets: pack.attachmentSockets ?? null,
+    offensiveActions: pack.offensiveActions ?? null,
     progressiveDamageSiteFallbacks,
     progressiveDamageHitsPerStage: definition.damage.progressiveHitsPerStage,
     terminalProgressiveDamageFatal: definition.mortality.terminalProgressiveDamageFatal,

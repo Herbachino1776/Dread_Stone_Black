@@ -62,7 +62,21 @@
     "surfaceStains": true,
     "pairedDetachableSegments": true,
     "embeddedAnimations": true,
-    "separatelyValidatedAnimations": false
+    "separatelyValidatedAnimations": false,
+    "attachmentSockets": false,
+    "offensiveActions": false
+  },
+  "attachmentSockets": {
+    "schema": "dreadstone.attachment_sockets.v1",
+    "available": false,
+    "runtimeArmature": null,
+    "runtimeBoneCount": 0,
+    "sockets": []
+  },
+  "offensiveActions": {
+    "schema": "dreadstone.offensive_action.v1",
+    "available": false,
+    "actions": []
   },
   "damage": {
     "availableSegmentIds": [
@@ -92,31 +106,38 @@
     "approvedClips": [
       {
         "name": "DSB_Death_InstantUnconscious_v001",
-        "kind": "DEATH"
+        "kind": "DEATH",
+        "durationSeconds": 1.7083333730697632
       },
       {
         "name": "DSB_Hurt_LEFT_Flank_v001",
-        "kind": "HURT_LEFT"
+        "kind": "HURT_LEFT",
+        "durationSeconds": 0.75
       },
       {
         "name": "DSB_Hurt_RIGHT_Flank_v001",
-        "kind": "HURT_RIGHT"
+        "kind": "HURT_RIGHT",
+        "durationSeconds": 0.75
       },
       {
         "name": "DSB_Idle_Humanoid_v001",
-        "kind": "IDLE"
+        "kind": "IDLE",
+        "durationSeconds": 2.25
       },
       {
         "name": "DSB_Mace_Brace_Head_v001",
-        "kind": "MACE_GUARD_RIGHT_ARM"
+        "kind": "MACE_GUARD_RIGHT_ARM",
+        "durationSeconds": 2.25
       },
       {
         "name": "DSB_Walk_NORMAL_v001",
-        "kind": "WALK"
+        "kind": "WALK",
+        "durationSeconds": 1.2083333730697632
       },
       {
         "name": "DSB_Walk_NORMAL_v002",
-        "kind": "WALK"
+        "kind": "WALK",
+        "durationSeconds": 0.9166666865348816
       }
     ],
     "unapprovedClipCount": 5
@@ -141,6 +162,16 @@
       "level": "info",
       "code": "UNAPPROVED_EMBEDDED_ANIMATIONS_IGNORED",
       "message": "5 embedded clip(s) are not approved Forge animation capabilities."
+    },
+    {
+      "level": "info",
+      "code": "FORGE_ATTACHMENT_SOCKETS_UNAVAILABLE",
+      "message": "This Creature Pack has no Forge-authored runtime attachment sockets; production equipment attachment is unavailable."
+    },
+    {
+      "level": "info",
+      "code": "FORGE_OFFENSIVE_ACTIONS_UNAVAILABLE",
+      "message": "This Creature Pack has no Forge-approved offensive Actions; animated armament attacks are unavailable."
     }
   ],
   "cost": {

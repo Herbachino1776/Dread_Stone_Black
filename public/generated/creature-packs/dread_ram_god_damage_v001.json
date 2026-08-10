@@ -69,7 +69,21 @@
     "surfaceStains": true,
     "pairedDetachableSegments": true,
     "embeddedAnimations": true,
-    "separatelyValidatedAnimations": false
+    "separatelyValidatedAnimations": false,
+    "attachmentSockets": false,
+    "offensiveActions": false
+  },
+  "attachmentSockets": {
+    "schema": "dreadstone.attachment_sockets.v1",
+    "available": false,
+    "runtimeArmature": "DSB_DAMAGE_RIG",
+    "runtimeBoneCount": 21,
+    "sockets": []
+  },
+  "offensiveActions": {
+    "schema": "dreadstone.offensive_action.v1",
+    "available": false,
+    "actions": []
   },
   "damage": {
     "availableSegmentIds": [
@@ -102,32 +116,49 @@
     "approvedClips": [
       {
         "name": "DSB_Death_ChestHold_LEFT_v001",
-        "kind": "DEATH"
+        "kind": "DEATH",
+        "durationSeconds": 3.125
       },
       {
         "name": "DSB_Death_ChestHold_LEFT_v002",
-        "kind": "DEATH"
+        "kind": "DEATH",
+        "durationSeconds": 3.125
       },
       {
         "name": "DSB_Hurt_LEFT_Flank_v001",
-        "kind": "HURT_LEFT"
+        "kind": "HURT_LEFT",
+        "durationSeconds": 0.75
       },
       {
         "name": "DSB_Hurt_RIGHT_Flank_v001",
-        "kind": "HURT_RIGHT"
+        "kind": "HURT_RIGHT",
+        "durationSeconds": 0.75
       },
       {
         "name": "DSB_Idle_Humanoid_v002",
-        "kind": "IDLE"
+        "kind": "IDLE",
+        "durationSeconds": 3.25
       },
       {
         "name": "DSB_Walk_NORMAL_v002",
-        "kind": "WALK"
+        "kind": "WALK",
+        "durationSeconds": 2.2083332538604736
       }
     ],
     "unapprovedClipCount": 0
   },
-  "importDiagnostics": [],
+  "importDiagnostics": [
+    {
+      "level": "info",
+      "code": "FORGE_ATTACHMENT_SOCKETS_UNAVAILABLE",
+      "message": "This Creature Pack has no Forge-authored runtime attachment sockets; production equipment attachment is unavailable."
+    },
+    {
+      "level": "info",
+      "code": "FORGE_OFFENSIVE_ACTIONS_UNAVAILABLE",
+      "message": "This Creature Pack has no Forge-approved offensive Actions; animated armament attacks are unavailable."
+    }
+  ],
   "cost": {
     "glbFileBytes": 43851428,
     "glbMeshDefinitionCount": 44,

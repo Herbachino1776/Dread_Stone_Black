@@ -78,6 +78,11 @@ test('dreadstone.creature_pack.v1 schema accepts generated packs and rejects mal
   assert.ok(result.errors.some((error) => error.startsWith('presentation.rawBounds.size')));
   assert.ok(result.errors.some((error) => error.startsWith('capabilities.gore')));
   assert.throws(() => assertValidCreaturePack(invalid), /Invalid dreadstone\.creature_pack\.v1/);
+
+  const driftedCapability = structuredClone(chezwick);
+  driftedCapability.capabilities.attachmentSockets = true;
+  const driftResult = validateCreaturePack(driftedCapability);
+  assert.ok(driftResult.errors.some((error) => error === 'capabilities.attachmentSockets must match attachmentSockets.available'));
 });
 
 test('Dreadguard production bundle imports through Forge and runtime validators', async () => {
@@ -147,7 +152,14 @@ test('Dread Ram God production bundle imports all Forge-authored technical truth
   assert.equal(pack.animations.approvedClips.length, 6);
   assert.equal(pack.animations.unapprovedClipCount, 0, 'source-only animations are absent');
   assert.deepEqual(pack.animations.approvedClips.map((clip) => clip.name).sort(), [...DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES].sort());
-  assert.deepEqual(pack.importDiagnostics, []);
+  assert.equal(pack.capabilities.attachmentSockets, false);
+  assert.equal(pack.capabilities.offensiveActions, false);
+  assert.equal(pack.attachmentSockets.available, false);
+  assert.equal(pack.offensiveActions.available, false);
+  assert.deepEqual(pack.importDiagnostics.map((entry) => entry.code), [
+    'FORGE_ATTACHMENT_SOCKETS_UNAVAILABLE',
+    'FORGE_OFFENSIVE_ACTIONS_UNAVAILABLE',
+  ]);
 
   const repeated = await importCreaturePack({
     packId: 'dread_ram_god_damage_v001',

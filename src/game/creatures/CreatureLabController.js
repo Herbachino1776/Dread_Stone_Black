@@ -195,7 +195,7 @@ export class CreatureLabController {
       if (!spawned || !this.actor) throw new Error(`Creature Lab could not find a safe Folsom spawn for ${definitionId}.`);
       await this.actor.visualAdapter?.ready;
       if (serial !== this.selectionSerial || this.disposed) return { accepted: false, reason: 'Definition selection was superseded.' };
-      this.attackHarness?.setSubject?.(this.actor);
+      this.attackHarness?.setSubject?.(this.actor, { pack: this.selectedPack });
       this.selectedSiteId = this.getProgressiveSites()[0]?.siteId ?? null;
       this.createSiteMarkers();
       this.onSubjectChanged?.(this.getSubjectState());
@@ -254,6 +254,21 @@ export class CreatureLabController {
   triggerAttack() {
     return this.recordOperation('triggerAttack', this.attackHarness?.triggerAttack?.()
       ?? { accepted: false, reason: 'Creature Lab offensive harness is unavailable.' });
+  }
+
+  equipArmament() {
+    return this.recordOperation('equipArmament', this.attackHarness?.equip?.()
+      ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' });
+  }
+
+  unequipArmament() {
+    return this.recordOperation('unequipArmament', this.attackHarness?.unequip?.()
+      ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' });
+  }
+
+  selectOffensiveAction(combatActionId) {
+    return this.recordOperation('selectOffensiveAction', this.attackHarness?.selectOffensiveAction?.(combatActionId)
+      ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' });
   }
 
   resetPlayer() {
@@ -588,6 +603,9 @@ export class CreatureLabController {
       selectSite: (siteId) => this.selectSite(siteId),
       strikeSelectedSite: (probe = 'center') => this.strikeSelectedSite(probe),
       triggerAttack: () => this.triggerAttack(),
+      equipArmament: () => this.equipArmament(),
+      unequipArmament: () => this.unequipArmament(),
+      selectOffensiveAction: (combatActionId) => this.selectOffensiveAction(combatActionId),
       resetPlayer: () => this.resetPlayer(),
       toggleAttackGeometry: () => this.toggleAttackGeometry(),
       diagnostics: () => this.getDiagnostics(),

@@ -1,5 +1,11 @@
 # Combat Reciprocity Foundation
 
+Milestone 6 supersedes the temporary Creature Lab procedural swing with the
+Forge-authored socket/offensive Action and game-owned NPC armament path. See
+[NPC_ARMAMENT_ARCHITECTURE.md](NPC_ARMAMENT_ARCHITECTURE.md). The M5
+`PhysicalAttackSource` and player receiver remain the downstream physical-hit
+authority.
+
 Milestone 5 proves hostile physical attack -> authoritative player damage -> player death only in `?creatureLab=1`. It does not add production attacks, offensive animation metadata, armament, AI, encounters, blocking, armor, stamina, loot, or canonical progression.
 
 ```text
