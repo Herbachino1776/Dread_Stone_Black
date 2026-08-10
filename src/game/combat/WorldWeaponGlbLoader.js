@@ -1,6 +1,18 @@
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneObject3D } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
+function resolveDocumentBaseUrl() {
+  return globalThis.document?.baseURI
+    ?? globalThis.location?.href
+    ?? 'http://localhost/';
+}
+
+export function resolveWorldWeaponPublicBaseUrl(explicitBaseUrl = null) {
+  if (explicitBaseUrl) return new URL(explicitBaseUrl, resolveDocumentBaseUrl());
+  const viteBase = import.meta.env?.BASE_URL ?? './';
+  return new URL(viteBase, resolveDocumentBaseUrl());
+}
+
 const TEXTURE_FIELDS = Object.freeze([
   'map',
   'alphaMap',
@@ -85,11 +97,13 @@ export class WorldWeaponGlbLoadError extends Error {
  * it has no player-viewmodel or NPC-host assumptions.
  */
 export class WorldWeaponGlbLoader {
-  constructor({ loader = new GLTFLoader(), cloneScene = cloneObject3D } = {}) {
+  constructor({ loader = new GLTFLoader(), cloneScene = cloneObject3D, baseUrl = null } = {}) {
     this.loader = loader;
     this.cloneScene = cloneScene;
+    this.baseUrl = resolveWorldWeaponPublicBaseUrl(baseUrl);
     this.sourcePromises = new Map();
     this.sources = new Map();
+    this.resolvedAssetUrls = new Map();
     this.instances = new Set();
     this.loadAttempts = new Map();
     this.disposed = false;
@@ -99,7 +113,9 @@ export class WorldWeaponGlbLoader {
     if (this.disposed) throw new Error('World weapon GLB loader is disposed');
     if (this.sourcePromises.has(assetPath)) return this.sourcePromises.get(assetPath);
     this.loadAttempts.set(assetPath, (this.loadAttempts.get(assetPath) ?? 0) + 1);
-    const promise = this.loader.loadAsync(assetPath)
+    const resolvedAssetUrl = new URL(assetPath.replace(/^\/+/, ''), this.baseUrl).href;
+    this.resolvedAssetUrls.set(assetPath, resolvedAssetUrl);
+    const promise = this.loader.loadAsync(resolvedAssetUrl)
       .then((gltf) => {
         if (!gltf?.scene?.isObject3D) throw new Error('GLTFLoader returned no scene Object3D');
         if (this.disposed) {
@@ -149,6 +165,7 @@ export class WorldWeaponGlbLoader {
     return {
       cachedAssetPaths: [...this.sources.keys()],
       pendingAssetPaths: [...this.sourcePromises.keys()].filter((path) => !this.sources.has(path)),
+      resolvedAssetUrls: Object.fromEntries(this.resolvedAssetUrls),
       activeInstanceCount: this.instances.size,
       loadAttempts: Object.fromEntries(this.loadAttempts),
       disposed: this.disposed,
@@ -162,6 +179,7 @@ export class WorldWeaponGlbLoader {
     this.sources.forEach((gltf) => disposeObjectResources(gltf.scene, { textures: true }));
     this.sources.clear();
     this.sourcePromises.clear();
+    this.resolvedAssetUrls.clear();
     this.loader = null;
     this.cloneScene = null;
   }

@@ -162,6 +162,27 @@ test('world weapon loader caches one source load and clones independently dispos
   assert.equal(loader.getDiagnostics().disposed, true);
 });
 
+test('world weapon loader resolves canonical asset paths under the configured game base', async () => {
+  let requestedUrl = null;
+  const source = new THREE.Group();
+  const loader = new WorldWeaponGlbLoader({
+    baseUrl: 'http://localhost:5173/Dread_Stone_Black/',
+    loader: {
+      async loadAsync(url) {
+        requestedUrl = url;
+        return { scene: source };
+      },
+    },
+    cloneScene: (value) => value.clone(true),
+  });
+  const instance = await loader.instantiate(DREADSTONE_MACE_WEAPON.assetPath);
+  const expectedUrl = 'http://localhost:5173/Dread_Stone_Black/assets/weapons/melee/dreadmacev001_mobile_1k.glb';
+  assert.equal(requestedUrl, expectedUrl);
+  assert.equal(loader.getDiagnostics().resolvedAssetUrls[DREADSTONE_MACE_WEAPON.assetPath], expectedUrl);
+  assert.equal(instance.userData.worldWeaponAssetPath, DREADSTONE_MACE_WEAPON.assetPath);
+  loader.dispose();
+});
+
 test('world weapon load failures include the asset path and failed loads remain retryable', async () => {
   let attempts = 0;
   const loader = new WorldWeaponGlbLoader({

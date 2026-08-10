@@ -42,12 +42,13 @@ Creature Pack attachment + offensive capability
   -> PlayerCombatDamageReceiver
 ```
 
-`WorldWeaponGlbLoader` uses Three.js `GLTFLoader`, caches each parsed source GLB,
-and creates a fresh Object3D tree with independently disposable geometry and
-materials for every instance. Source textures remain shared until the loader
-itself is disposed. A failed load names the exact asset path and is removed
-from the cache so a later attempt can retry. The loader is world-item neutral
-and has no first-person/viewmodel coupling.
+`WorldWeaponGlbLoader` resolves canonical `/assets/...` weapon paths against
+Vite's `BASE_URL` and the document base, uses Three.js `GLTFLoader`, caches each
+parsed source GLB, and creates a fresh Object3D tree with independently
+disposable geometry and materials for every instance. Source textures remain
+shared until the loader itself is disposed. A failed load names the exact asset
+path and is removed from the cache so a later attempt can retry. The loader is
+world-item neutral and has no first-person/viewmodel coupling.
 
 The socket resolver finds the runtime bone once after the visual adapter is
 ready and constructs this explicit transform stack:
@@ -86,8 +87,9 @@ be equipped weapons.
 
 Old Creature Packs remain valid. Import normalizes absent metadata to explicit
 `available: false` attachment/offensive records and diagnostics; it never
-manufactures production offsets or timing. Chezwick, Dreadguard, and Dread Ram
-God therefore require new Forge exports before live animated-armament testing.
+manufactures production offsets or timing. Chezwick and Dreadguard retain that
+legacy path, while Dread Ram God now carries two authored hand sockets and one
+approved overhead offensive Action.
 
 Creature Lab exposes the three production GLB weapons, Equip/Unequip, live
 uniform scale, grip position, pitch/yaw/roll, attack-capsule endpoints/radius,
