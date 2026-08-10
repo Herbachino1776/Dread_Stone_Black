@@ -21,16 +21,21 @@ import {
   getCreatureLabAnimationPanelActions,
   getCreatureLabBodyStateActions,
   getCreatureLabDamagePanelActions,
+  getCreatureLabDefinitionActions,
   getCreatureLabDetachmentPanelActions,
-  getCreatureLabPackActions,
   getCreatureLabPrimaryActions,
 } from '../src/game/creatures/CreatureLabPanel.js';
+import {
+  CHEZWICK_CREATURE_DEFINITION,
+  CreatureDefinitionRegistry,
+  DREADGUARD_CREATURE_DEFINITION,
+  DREAD_RAM_GOD_CREATURE_DEFINITION,
+} from '../src/game/creatures/CreatureDefinitionRegistry.js';
 import { CreaturePackRegistry } from '../src/game/creatures/CreaturePackRegistry.js';
 import {
   CREATURE_PACK_TECHNICAL_PROFILE_FIELDS,
   assessCreaturePackRuntimeSupport,
   composeHumanoidCreatureRuntimeProfile,
-  getCreatureRuntimePolicy,
 } from '../src/game/creatures/CreatureRuntimePolicies.js';
 
 globalThis.self ??= globalThis;
@@ -164,13 +169,13 @@ test('runtime registry reports unknown packs and malformed descriptors cleanly',
   await assert.rejects(malformed.loadPack('chezwick_damage_v001'), (error) => error.code === 'INVALID_DESCRIPTOR' && /rawHeight/.test(error.message));
 });
 
-test('all three production packs compose descriptor truth with separate game-authored policy', async () => {
+test('all three production definitions compose gameplay policy with separate pack truth', async () => {
   const { registry } = createRegistry();
-  for (const packId of ['chezwick_damage_v001', 'dreadguard_damage_v001', 'dread_ram_god_damage_v001']) {
-    const pack = await registry.loadPack(packId);
-    const policy = getCreatureRuntimePolicy(packId);
-    const profile = composeHumanoidCreatureRuntimeProfile(pack, policy);
-    assert.equal(assessCreaturePackRuntimeSupport(pack, policy).supported, true);
+  const definitionRegistry = new CreatureDefinitionRegistry();
+  for (const definition of definitionRegistry.listDefinitions()) {
+    const pack = await registry.loadPack(definition.creaturePackId);
+    const profile = composeHumanoidCreatureRuntimeProfile(pack, definition);
+    assert.equal(assessCreaturePackRuntimeSupport(pack, definition).supported, true);
     assert.equal(profile.assetPath, pack.assets.glb);
     assert.equal(profile.damageManifestPath, pack.assets.damageManifest);
     assert.equal(profile.damageValidationReportPath, pack.assets.damageValidationReport);
@@ -180,30 +185,31 @@ test('all three production packs compose descriptor truth with separate game-aut
     assert.equal(profile.damageWeightFingerprint, pack.source.weightFingerprint);
     assert.equal(profile.damageAuthoringVersion, pack.authoring.damageVersion);
     assert.equal(profile.damageAuthoringBuildId, pack.authoring.damageBuildId);
-    assert.equal(profile.targetHeight, policy.targetHeight);
-    assert.equal(profile.rootYaw, policy.rootYaw);
-    assert.equal(profile.walkReferenceSpeed, policy.walkReferenceSpeed);
-    assert.equal(profile.durabilityMultiplier, policy.durabilityMultiplier);
-    assert.deepEqual(profile.activeDamageSegmentIds, policy.activeDamageSegmentIds);
-    CREATURE_PACK_TECHNICAL_PROFILE_FIELDS.forEach((field) => assert.equal(field in policy, false, `${field} must remain descriptor-owned`));
+    assert.equal(profile.creatureDefinitionId, definition.definitionId);
+    assert.equal(profile.targetHeight, definition.presentation.targetHeight);
+    assert.equal(profile.rootYaw, definition.presentation.rootYaw);
+    assert.equal(profile.walkReferenceSpeed, definition.movement.walkReferenceSpeed);
+    assert.equal(profile.durabilityMultiplier, definition.durability.multiplier);
+    assert.deepEqual(profile.activeDamageSegmentIds, definition.damage.supportedSegmentIds);
+    CREATURE_PACK_TECHNICAL_PROFILE_FIELDS.forEach((field) => assert.equal(field in definition, false, `${field} must remain descriptor-owned`));
   }
 
   const chezwickPack = await registry.loadPack('chezwick_damage_v001');
   const dreadguardPack = await registry.loadPack('dreadguard_damage_v001');
   const dreadRamGodPack = await registry.loadPack('dread_ram_god_damage_v001');
   assert.deepEqual(chezwickPack.damage.progressiveDamageSiteIds, ['damage_site_face_right']);
-  assert.deepEqual(getCreatureRuntimePolicy(chezwickPack.packId).progressiveDamageSiteFallbacks.map((site) => site.siteId), ['damage_site_face_left_compatibility']);
+  assert.deepEqual(composeHumanoidCreatureRuntimeProfile(chezwickPack, CHEZWICK_CREATURE_DEFINITION).progressiveDamageSiteFallbacks.map((site) => site.siteId), ['damage_site_face_left_compatibility']);
   assert.deepEqual(dreadguardPack.damage.progressiveDamageSiteIds, []);
-  assert.deepEqual(getCreatureRuntimePolicy(dreadguardPack.packId).progressiveDamageSiteFallbacks.map((site) => site.siteId), ['damage_site']);
+  assert.deepEqual(composeHumanoidCreatureRuntimeProfile(dreadguardPack, DREADGUARD_CREATURE_DEFINITION).progressiveDamageSiteFallbacks.map((site) => site.siteId), ['damage_site']);
   assert.equal(dreadRamGodPack.damage.progressiveDamageSiteIds.length, 4);
-  assert.deepEqual(getCreatureRuntimePolicy(dreadRamGodPack.packId).progressiveDamageSiteFallbacks, []);
+  assert.deepEqual(composeHumanoidCreatureRuntimeProfile(dreadRamGodPack, DREAD_RAM_GOD_CREATURE_DEFINITION).progressiveDamageSiteFallbacks, []);
 });
 
 test('all composed effective profiles pass the current damage and deformation validators', async () => {
   const { registry } = createRegistry();
-  for (const packId of ['chezwick_damage_v001', 'dreadguard_damage_v001', 'dread_ram_god_damage_v001']) {
-    const pack = await registry.loadPack(packId);
-    const profile = composeHumanoidCreatureRuntimeProfile(pack);
+  for (const definition of new CreatureDefinitionRegistry().listDefinitions()) {
+    const pack = await registry.loadPack(definition.creaturePackId);
+    const profile = composeHumanoidCreatureRuntimeProfile(pack, definition);
     const { gltf, manifest, animationManifest } = await loadDamageFixture(pack, profile);
     assert.doesNotThrow(() => validateDamageAsset({
       manifest,
@@ -233,7 +239,7 @@ test('unsupported skeleton families are registered but rejected by the current h
   const pack = await createRegistry().registry.loadPack('chezwick_damage_v001');
   const unsupported = structuredClone(pack);
   unsupported.presentation.skeletonFamilyId = 'DSB_QUADRUPED_V1';
-  const support = assessCreaturePackRuntimeSupport(unsupported, getCreatureRuntimePolicy(pack.packId));
+  const support = assessCreaturePackRuntimeSupport(unsupported, CHEZWICK_CREATURE_DEFINITION);
   assert.equal(support.supported, false);
   assert.equal(support.code, 'UNSUPPORTED_SKELETON_FAMILY');
   assert.match(support.reason, /DSB_QUADRUPED_V1/);
@@ -273,7 +279,7 @@ test('Creature Lab storage reads the current save but discards every lab-mode wr
   assert.equal(readOnly.getItem('new'), null);
 });
 
-test('Folsom Creature Lab switches through Dread Ram God, Chezwick, Dreadguard, and back without stale actors, routes, or blockers', async (t) => {
+test('Folsom Creature Lab switches definitions through Dread Ram God, Chezwick, Dreadguard, and back without stale actors, routes, or blockers', async (t) => {
   installBrowserAssetRuntime(t);
   const { registry } = createRegistry({ transform: browserAssetDescriptor });
   const { collision, player, dungeon } = createFolsomFixture();
@@ -288,16 +294,21 @@ test('Folsom Creature Lab switches through Dread Ram God, Chezwick, Dreadguard, 
   assert.ok(lab instanceof CreatureLabController);
   assert.equal(encounter.getWalkerControllers().length, 1);
   assert.equal(encounter.showcaseExtras, null);
+  assert.deepEqual(lab.getViewState().definitions.map((definition) => definition.definitionId), ['chezwick', 'dreadguard', 'dread_ram_god']);
+  assert.equal(lab.selectedDefinition.definitionId, 'chezwick');
   assert.equal(lab.selectedPack.packId, 'chezwick_damage_v001');
+  assert.equal(encounter.actor.visualProfile.creatureDefinitionId, 'chezwick');
   assert.equal(encounter.actor.visualProfile.creaturePackId, 'chezwick_damage_v001');
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
   assert.equal(blockerCount(), 1);
   const initialActor = encounter.actor;
   const initialCollider = initialActor.colliders.get('upper_chest');
-  assert.equal((await lab.selectPack('dread_ram_god_damage_v001')).accepted, true);
+  assert.equal((await lab.selectDefinition('dread_ram_god')).accepted, true);
   assert.equal(initialActor.disposed, true);
   assert.equal(encounter.combatRouter.resolveCollider(initialCollider, new THREE.Vector3()), null);
   assert.equal(encounter.actor.visualProfile.creaturePackId, 'dread_ram_god_damage_v001');
+  assert.equal(encounter.actor.visualProfile.creatureDefinitionId, 'dread_ram_god');
+  assert.equal(encounter.actor.visualProfile.targetHeight, 1.7);
   assert.equal(lab.getDiagnostics().nativeSiteCount, 4);
   assert.equal(lab.getDiagnostics().compatibilitySiteCount, 0);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
@@ -393,7 +404,7 @@ test('Folsom Creature Lab switches through Dread Ram God, Chezwick, Dreadguard, 
   const firstCollider = firstActor.colliders.get('upper_chest');
   const firstTargeting = lab.getSiteTargeting();
   const firstMarkers = lab.siteMarkerRenderer;
-  assert.equal((await lab.selectPack('chezwick_damage_v001')).accepted, true);
+  assert.equal((await lab.selectDefinition('chezwick')).accepted, true);
   assert.equal(firstActor.disposed, true);
   assert.equal(firstTargeting.disposed, true);
   assert.equal(firstMarkers.disposed, true);
@@ -404,7 +415,7 @@ test('Folsom Creature Lab switches through Dread Ram God, Chezwick, Dreadguard, 
 
   const secondActor = encounter.actor;
   const secondCollider = secondActor.colliders.get('upper_chest');
-  assert.equal((await lab.selectPack('dreadguard_damage_v001')).accepted, true);
+  assert.equal((await lab.selectDefinition('dreadguard')).accepted, true);
   assert.equal(secondActor.disposed, true);
   assert.equal(encounter.combatRouter.resolveCollider(secondCollider, new THREE.Vector3()), null);
   assert.equal(encounter.actor.visualProfile.creaturePackId, 'dreadguard_damage_v001');
@@ -413,7 +424,7 @@ test('Folsom Creature Lab switches through Dread Ram God, Chezwick, Dreadguard, 
 
   const thirdActor = encounter.actor;
   const thirdCollider = thirdActor.colliders.get('upper_chest');
-  assert.equal((await lab.selectPack('dread_ram_god_damage_v001')).accepted, true);
+  assert.equal((await lab.selectDefinition('dread_ram_god')).accepted, true);
   assert.equal(thirdActor.disposed, true);
   assert.equal(encounter.combatRouter.resolveCollider(thirdCollider, new THREE.Vector3()), null);
   assert.equal(encounter.actor.visualProfile.creaturePackId, 'dread_ram_god_damage_v001');
@@ -450,7 +461,7 @@ test('default Folsom remains the legacy four-Chezwick wave outside explicit lab 
 test('touch-first panel actions invoke controller operations without console access', async () => {
   const calls = [];
   const controller = {
-    selectPack: async (packId) => { calls.push(`selectPack:${packId}`); },
+    selectDefinition: async (definitionId) => { calls.push(`selectDefinition:${definitionId}`); },
     respawn: async () => { calls.push('respawn'); },
     resetDamage: () => { calls.push('resetDamage'); },
     playAnimation: (actionId) => { calls.push(`playAnimation:${actionId}`); },
@@ -466,7 +477,7 @@ test('touch-first panel actions invoke controller operations without console acc
     ragdoll: () => { calls.push('ragdoll'); },
   };
   const state = {
-    packs: [{ packId: 'future_pack', displayName: 'Future Pack', supported: true }],
+    definitions: [{ definitionId: 'future_creature', creaturePackId: 'future_pack', displayName: 'Future Creature', supported: true }],
     animationActions: [{ id: 'walk', label: 'Walk' }],
     detachmentActions: [{ segmentId: 'head_neck', label: 'Head / Neck', supportedByRuntime: true }],
     ragdollAvailable: true,
@@ -475,7 +486,7 @@ test('touch-first panel actions invoke controller operations without console acc
   };
   const actions = [
     ...getCreatureLabPrimaryActions(controller),
-    ...getCreatureLabPackActions(controller, state),
+    ...getCreatureLabDefinitionActions(controller, state),
     ...getCreatureLabAnimationPanelActions(controller, state),
     ...getCreatureLabDamagePanelActions(controller, state),
     ...getCreatureLabDetachmentPanelActions(controller, state),
@@ -484,7 +495,7 @@ test('touch-first panel actions invoke controller operations without console acc
   assert.ok(CREATURE_LAB_TOUCH_TARGET_PX >= 44);
   for (const action of actions) await action.run();
   assert.deepEqual(calls, [
-    'respawn', 'resetDamage', 'selectPack:future_pack', 'playAnimation:walk',
+    'respawn', 'resetDamage', 'selectDefinition:future_creature', 'playAnimation:walk',
     'selectRelative:-1', 'selectRelative:1', 'toggleSites', 'toggleRadius',
     'setStage:LIGHT', 'setStage:MEDIUM', 'setStage:HEAVY', 'advanceSite', 'resetSite',
     'strikeSite:center', 'strikeSite:edge', 'strikeSite:outside',

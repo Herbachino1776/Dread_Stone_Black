@@ -19,10 +19,12 @@ import {
   resolveAnimationPackManifest,
 } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import {
-  DREAD_RAM_GOD_CREATURE_RUNTIME_POLICY,
-  DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES,
   composeHumanoidCreatureRuntimeProfile,
 } from '../src/game/creatures/CreatureRuntimePolicies.js';
+import {
+  DREAD_RAM_GOD_CREATURE_DEFINITION,
+  DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES,
+} from '../src/game/creatures/CreatureDefinitionRegistry.js';
 
 globalThis.self ??= globalThis;
 globalThis.ProgressEvent ??= class ProgressEvent {
@@ -127,7 +129,7 @@ test('Dread Ram God Forge report, GLB skeleton, sites, and embedded animation in
 
 test('all four native sites bind to animated skin and remain independently selectable through every approved pose', async () => {
   const { gltf, manifest, descriptor } = await loadAsset();
-  const profile = composeHumanoidCreatureRuntimeProfile(descriptor, DREAD_RAM_GOD_CREATURE_RUNTIME_POLICY);
+  const profile = composeHumanoidCreatureRuntimeProfile(descriptor, DREAD_RAM_GOD_CREATURE_DEFINITION);
   const deformation = validateForgeDamageDeformationAsset({
     manifest,
     root: gltf.scene,

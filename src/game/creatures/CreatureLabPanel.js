@@ -7,14 +7,17 @@ export function getCreatureLabPrimaryActions(controller) {
   ];
 }
 
-export function getCreatureLabPackActions(controller, state) {
-  return state.packs.map((pack) => ({
-    id: `pack:${pack.packId}`,
-    label: pack.supported ? pack.displayName : `${pack.displayName} — Unsupported`,
-    pack,
-    run: () => controller.selectPack(pack.packId),
+export function getCreatureLabDefinitionActions(controller, state) {
+  return state.definitions.map((definition) => ({
+    id: `definition:${definition.definitionId}`,
+    label: definition.supported ? definition.displayName : `${definition.displayName} — Unsupported`,
+    definition,
+    run: () => controller.selectDefinition(definition.definitionId),
   }));
 }
+
+// Temporary helper name retained for external lab tooling; it delegates to definitions.
+export const getCreatureLabPackActions = getCreatureLabDefinitionActions;
 
 export function getCreatureLabAnimationPanelActions(controller, state) {
   return state.animationActions.map((action) => ({
@@ -173,25 +176,25 @@ export class CreatureLabPanel {
     this.panel.replaceChildren();
     const header = element('header', null, 'creature-lab-header');
     header.append(element('h2', 'CREATURE LAB', 'creature-lab-title'));
-    header.append(element('p', `Current pack: ${state.selectedDisplayName}${state.loading ? ' — loading…' : ''}`, 'creature-lab-current'));
+    header.append(element('p', `Current definition: ${state.selectedDisplayName}${state.loading ? ' — loading…' : ''}`, 'creature-lab-current'));
     const top = this.createGrid();
     top.append(this.createButton('Close', () => this.close()));
     getCreatureLabPrimaryActions(this.controller).forEach((action) => top.append(this.createButton(action.label, action.run, { disabled: state.loading })));
     header.append(top);
     this.panel.append(header);
 
-    const packs = this.createSection('Pack Selector');
-    const packGrid = this.createGrid();
-    getCreatureLabPackActions(this.controller, state).forEach(({ label, pack, run }) => {
-      packGrid.append(this.createButton(label, run, {
-        pressed: state.selectedPackId === pack.packId,
-        disabled: state.loading || !pack.supported,
-        title: pack.supported ? 'Registered and supported' : `REGISTERED BUT CURRENT RUNTIME UNSUPPORTED: ${pack.reason}`,
+    const definitions = this.createSection('Definition Selector');
+    const definitionGrid = this.createGrid();
+    getCreatureLabDefinitionActions(this.controller, state).forEach(({ label, definition, run }) => {
+      definitionGrid.append(this.createButton(label, run, {
+        pressed: state.selectedDefinitionId === definition.definitionId,
+        disabled: state.loading || !definition.supported,
+        title: definition.supported ? `Resolves Creature Pack ${definition.creaturePackId}` : `REGISTERED BUT CURRENT RUNTIME UNSUPPORTED: ${definition.reason}`,
       }));
-      if (!pack.supported) packs.append(element('p', `${pack.displayName}: REGISTERED BUT CURRENT RUNTIME UNSUPPORTED — ${pack.reason}`, 'creature-lab-note'));
+      if (!definition.supported) definitions.append(element('p', `${definition.displayName}: REGISTERED BUT CURRENT RUNTIME UNSUPPORTED — ${definition.reason}`, 'creature-lab-note'));
     });
-    packs.prepend(packGrid);
-    this.panel.append(packs);
+    definitions.prepend(definitionGrid);
+    this.panel.append(definitions);
 
     if (state.pack) this.panel.append(this.renderPackInfo(state));
     this.panel.append(this.renderAnimations(state));
@@ -208,11 +211,14 @@ export class CreatureLabPanel {
 
   renderPackInfo(state) {
     const pack = state.pack;
-    const section = this.createSection('Pack Info');
+    const definition = state.definition;
+    const section = this.createSection('Definition + Pack Info');
     const info = element('dl', null, 'creature-lab-info');
     const rows = [
+      ['Definition ID', definition.definitionId],
+      ['Target height', `${definition.presentation.targetHeight.toFixed(2)} m`],
       ['Pack ID', pack.packId],
-      ['Character', pack.displayName],
+      ['Technical body', pack.displayName],
       ['Raw height', `${pack.presentation.rawHeight.toFixed(3)} m`],
       ['GLB', `${formatBytesAsMb(pack.cost.glbFileBytes)} MB`],
       ['Triangles', pack.cost.triangleCount.toLocaleString()],

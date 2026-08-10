@@ -191,7 +191,8 @@ export class FolsomCombatEncounter {
       combatRouter: this.combatRouter,
       playerProvider: () => this.player,
       weaponControllerProvider: () => this.weaponController,
-      initialPackId: this.query.get('creaturePack') ?? 'chezwick_damage_v001',
+      initialDefinitionId: this.query.get('creatureDefinition'),
+      initialPackId: this.query.has('creatureDefinition') ? null : this.query.get('creaturePack'),
       onSubjectChanged: (subject) => this.syncCreatureLabSubject(subject),
     });
     await this.creatureLabController.initialize();

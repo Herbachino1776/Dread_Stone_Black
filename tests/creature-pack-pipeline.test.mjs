@@ -23,11 +23,13 @@ import {
 } from '../src/game/combat/HumanoidModelProfiles.js';
 import {
   CREATURE_PACK_TECHNICAL_PROFILE_FIELDS,
-  DREAD_RAM_GOD_CREATURE_RUNTIME_POLICY,
-  DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES,
   assessCreaturePackRuntimeSupport,
   composeHumanoidCreatureRuntimeProfile,
 } from '../src/game/creatures/CreatureRuntimePolicies.js';
+import {
+  DREAD_RAM_GOD_CREATURE_DEFINITION,
+  DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES,
+} from '../src/game/creatures/CreatureDefinitionRegistry.js';
 
 const dreadguardSource = path.join(DEFAULT_REPOSITORY_ROOT, 'public/assets/enemies/dreadguard/damage');
 const chezwickSource = path.join(DEFAULT_REPOSITORY_ROOT, 'public/assets/enemies/chezwick/damage');
@@ -156,21 +158,21 @@ test('Dread Ram God production bundle imports all Forge-authored technical truth
   assert.equal(serializeGeneratedJson(repeated), serializeGeneratedJson(pack));
 });
 
-test('Dread Ram God runtime policy composes without duplicating Forge truth', async () => {
+test('Dread Ram God definition composes without duplicating Forge truth', async () => {
   const pack = (await loadProductionPacks()).find((entry) => entry.packId === 'dread_ram_god_damage_v001');
-  const policy = DREAD_RAM_GOD_CREATURE_RUNTIME_POLICY;
-  const support = assessCreaturePackRuntimeSupport(pack, policy);
+  const definition = DREAD_RAM_GOD_CREATURE_DEFINITION;
+  const support = assessCreaturePackRuntimeSupport(pack, definition);
   assert.deepEqual(support, { supported: true, reason: null, code: 'SUPPORTED' });
-  assert.deepEqual(policy.progressiveDamageSiteFallbacks, []);
-  assert.equal(policy.progressiveDamageHitsPerStage, 1);
-  assert.equal(policy.terminalProgressiveDamageFatal, false);
-  assert.deepEqual(policy.activeDamageSegmentIds, ['head_neck', 'left_elbow', 'right_elbow']);
+  assert.equal(definition.damage.compatibilityProgressiveSiteProfileId, null);
+  assert.equal(definition.damage.progressiveHitsPerStage, 1);
+  assert.equal(definition.mortality.terminalProgressiveDamageFatal, false);
+  assert.deepEqual(definition.damage.supportedSegmentIds, ['head_neck', 'left_elbow', 'right_elbow']);
   assert.equal(pack.damage.availableSegmentIds.includes('lower_spine'), true);
-  assert.equal(policy.activeDamageSegmentIds.includes('lower_spine'), false);
-  assert.deepEqual(policy.animationRuntimeKinds, ['IDLE', 'WALK', 'HURT_LEFT', 'HURT_RIGHT', 'DEATH']);
-  assert.deepEqual(policy.selectedAnimationNames, DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES);
-  CREATURE_PACK_TECHNICAL_PROFILE_FIELDS.forEach((field) => assert.equal(field in policy, false, `${field} must remain descriptor-owned`));
-  const profile = composeHumanoidCreatureRuntimeProfile(pack, policy);
+  assert.equal(definition.damage.supportedSegmentIds.includes('lower_spine'), false);
+  assert.deepEqual(definition.animation.runtimeKinds, ['IDLE', 'WALK', 'HURT_LEFT', 'HURT_RIGHT', 'DEATH']);
+  assert.deepEqual(definition.animation.selectedAnimationNames, DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES);
+  CREATURE_PACK_TECHNICAL_PROFILE_FIELDS.forEach((field) => assert.equal(field in definition, false, `${field} must remain descriptor-owned`));
+  const profile = composeHumanoidCreatureRuntimeProfile(pack, definition);
   assert.equal(profile.embeddedAnimationPack, true);
   assert.deepEqual(profile.embeddedAnimationNames, DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES);
   assert.deepEqual(profile.progressiveDamageSiteFallbacks, []);

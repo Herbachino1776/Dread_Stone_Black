@@ -2,7 +2,7 @@
 
 `dreadstone.creature_pack.v1` is the repository receiving contract for a validated technical creature body. It is generated from Forge output and contains no gameplay identity, behavior, encounter, or persistence state.
 
-Milestone 1 established the repository receiving contract and deterministic generated registry. Milestone 2 added a browser-safe resolver, a separate game-policy layer, an effective-profile composition bridge, and an isolated mobile Creature Lab. Milestone 3 added animation-following 3D Progressive Damage Site targeting and the mobile site-driven damage harness. Milestone 3.5 integrates Dread Ram God as the third production fixture and proves four native sites, multi-site coexistence, physical mace routing, and three-pack cleanup without character-specific combat architecture. Canonical Folsom still uses its legacy direct profile and remains unchanged unless the explicit hidden lab query is active.
+Milestone 1 established the repository receiving contract and deterministic generated registry. Milestone 2 added a browser-safe resolver, a temporary game-policy layer, an effective-profile composition bridge, and an isolated mobile Creature Lab. Milestone 3 added animation-following 3D Progressive Damage Site targeting and the mobile site-driven damage harness. Milestone 3.5 integrated Dread Ram God as the third production fixture. Milestone 4 now adds `dreadstone.creature_definition.v1`, an explicit definition registry, and one generic factory while preserving the current actor. Canonical Folsom still uses its legacy direct profile and remains unchanged unless the explicit hidden lab query is active.
 
 ## Current bundle audit
 
@@ -216,23 +216,23 @@ Game-authored fields that remain in profiles:
 
 The resolver does not fetch Forge validation reports or reconstruct compact descriptor facts. `HumanoidGlbVisualAdapter` still loads the GLB, optional animation manifest, and detailed Forge damage manifest required by the actual actor runtime.
 
-## Runtime policy and effective-profile bridge
+## Creature Definitions and effective-profile bridge
 
-`src/game/creatures/CreatureRuntimePolicies.js` owns game-authored decisions for the current humanoid host. It currently registers a small policy for Chezwick, Dreadguard, and Dread Ram God. Policies may contain presentation scale, grounding, rotation, collision fit, animation selection, holding/death behavior, voice, damage cadence, mortality/lethality tuning, compatibility sites, and the current supported segment subset.
+`src/contracts/CreatureDefinition.js` defines `dreadstone.creature_definition.v1`, and `src/game/creatures/CreatureDefinitionRegistry.js` owns the gameplay definitions for Chezwick, Dreadguard, and Dread Ram God. Definitions contain stable gameplay identity, a pack reference, target height, voice, presentation/movement tuning, animation selection, damage cadence, mortality/lethality tuning, and the current supported segment subset.
 
-Policies are explicitly rejected if they duplicate descriptor-owned technical fields such as asset paths, raw exported height, Forge authoring identity, or source fingerprints. `composeHumanoidCreatureRuntimeProfile(pack, policy)` combines the two authorities into the compatibility profile already accepted by `HumanoidCombatActor` and `HumanoidGlbVisualAdapter`:
+Definitions are rejected if they duplicate descriptor-owned technical fields such as asset paths, raw exported height, Forge authoring identity, source fingerprints, Forge sites, bindings, segment definitions, or skeleton metadata. `CreatureRuntimePolicies.js` now acts as a temporary current-humanoid compatibility/composition bridge rather than an independent policy registry. `composeHumanoidCreatureRuntimeProfile(pack, definition)` combines the two authorities into the compatibility profile already accepted by `HumanoidCombatActor` and `HumanoidGlbVisualAdapter`:
 
 ```text
 validated generated Creature Pack
   technical/export truth
              +
-validated game-authored runtime policy
-  presentation and gameplay decisions
+validated game-authored Creature Definition
+  identity, presentation, and gameplay decisions
              =
 effective current humanoid profile
 ```
 
-This bridge lets all three production fixtures use one generic resolution/composition path without rewriting the actor. `HumanoidModelProfiles.js` remains in place for canonical Folsom and other existing consumers; it is legacy duplication to remove gradually only after parity is proven.
+`src/game/creatures/CreatureFactory.js` resolves definition → pack → support → profile and constructs the existing actor. This bridge lets all three production definitions use one generic path without rewriting the actor. Full bone maps, proxy fits, and omitted-site compatibility records remain in the runtime bridge and are referenced by profile ID instead of copied into definitions. `HumanoidModelProfiles.js` remains in place for canonical Folsom and other existing consumers; it is legacy duplication to remove gradually only after parity is proven.
 
 ## Supported runtime boundary
 
@@ -240,7 +240,7 @@ The Milestone 2 Creature Lab supports only:
 
 - skeleton family `DSB_HUMANOID_V1`;
 - bone-map profile `dreadstone.humanoid.current_bone_map.v1`;
-- packs with an explicit game-authored runtime policy;
+- definitions with a valid referenced pack and supported collision profile;
 - active segments that exist in the pack and have current semantic-body contracts;
 - selected animations that appear in the pack's approved animation metadata.
 
@@ -261,7 +261,7 @@ The floating `LAB` button opens a safe-area-aware portrait panel. Core controls 
 Button-driven operations include:
 
 - close, respawn, and reset all damage;
-- generated registered-pack selection without a page reload;
+- registered Creature Definition selection without a page reload;
 - compact pack technical/cost information;
 - only resolvable idle, walk, hurt, guard, and death actions;
 - a scrollable many-site list with display name, stable `siteId`, region, `NATIVE` or `COMPATIBILITY` authority, authored radius, current stage, accepted-hit count, and binding mode;
@@ -275,15 +275,15 @@ Button-driven operations include:
 
 Console access is secondary only. The generic lab commands are exposed as `__DSB_CREATURE_LAB__` in development for diagnostics, while the existing `__DSB_CHEZWICK_DAMAGE__` commands remain available only on the legacy non-lab path for compatibility.
 
-### Pack switching lifecycle
+### Definition switching lifecycle
 
-Selecting another supported pack cancels the current weapon target, disposes the current walker actor/director/blood ownership, unregisters combat routing, removes its player blocker, composes the new pack and policy, and spawns one clean replacement through the same `HumanoidCombatActor` factory path. The controller then waits for visual-adapter initialization before exposing resolved damage sites. Switching does not reload Folsom and does not write progression or save state.
+Selecting another supported definition cancels the current weapon target, disposes the current walker actor/director/blood ownership, unregisters combat routing, removes its player blocker, resolves the definition and pack, and spawns one clean replacement through `CreatureFactory` and the same `HumanoidCombatActor` path. The controller then waits for visual-adapter initialization before exposing resolved damage sites. Switching does not reload Folsom and does not write progression or save state.
 
-All three production fixtures preserve generated truth while applying only their explicit runtime policy:
+All three production definitions preserve generated truth while applying only their explicit gameplay policy:
 
-- Chezwick exposes the native right-face site from Forge plus the policy-owned left-face reconstruction.
-- Dreadguard exposes zero native sites from its pack and the existing policy-owned left-head compatibility site.
-- Dread Ram God exposes all four native Forge sites and no policy-owned compatibility site.
+- Chezwick exposes the native right-face site from Forge plus the definition-referenced left-face compatibility profile.
+- Dreadguard exposes zero native sites from its pack and the definition-referenced left-head compatibility profile.
+- Dread Ram God exposes all four native Forge sites and references no compatibility profile.
 
 Native manifest sites take precedence. Compatibility sites are added only for a side not supplied by Forge, and diagnostics report the two counts separately.
 
@@ -350,7 +350,7 @@ Idle, walk, hurt, and guard are verified with current-pose center strikes. Death
 ### Deployed iPhone acceptance procedure
 
 1. Open deployed Folsom on iPhone with `?creatureLab=1`; confirm one subject and the floating `LAB` button.
-2. Open LAB and select Dread Ram God from the generated pack list.
+2. Open LAB and select Dread Ram God from the Creature Definition list.
 3. Enable Show Sites and confirm four anatomical markers. Each site row must show its stable `siteId`, display name, `NATIVE`, authored radius, current stage, accepted-hit count, and `SKINNED SURFACE` binding.
 4. Tap Idle and confirm all four markers stay on the animated surface.
 5. Tap Walk and confirm all four markers follow the body.
@@ -412,7 +412,12 @@ Creature Pack:
 Creature Definition:
 
 - hand-authored gameplay identity and behavior;
-- not implemented here.
+- implemented by Milestone 4.
+
+Creature Factory:
+
+- generic definition/pack resolution, runtime composition, and current actor construction;
+- implemented by Milestone 4.
 
 Creature Instance:
 
@@ -425,11 +430,11 @@ The planned migration now continues from the completed Creature Pack foundation 
 2. Runtime resolver, policy composition, and mobile Folsom proving ground (Milestone 2, complete).
 3. 3D Progressive Site Targeting (Milestone 3, complete).
 4. Dread Ram God multi-site production proof (Milestone 3.5, complete).
-5. Creature Definition Registry + Factory (next; not begun here).
-6. Semantic Damage Consequences.
+5. Creature Definition Registry + Factory (Milestone 4, complete).
+6. Semantic Damage Consequences (next).
 7. Reusable body/runtime extraction.
 8. Creature Instance Persistence.
 9. Simulation tiers.
 10. Non-humanoid profiles.
 
-Milestone 4 should introduce a small Creature Definition Registry and factory that references validated Creature Packs plus game-authored identity/policy. It must not duplicate Forge technical truth or begin AI, persistence, factions, dialogue, inventories, or unrelated behavior systems as part of the registry proof.
+See `CREATURE_DEFINITION_FACTORY.md` for the Milestone 4 contract, production registry, factory flow, compatibility bridge, focused tests, and current limitations. The next architecture milestone should add semantic damage consequences without folding physiology, AI, persistence, or encounter systems into Creature Definitions.

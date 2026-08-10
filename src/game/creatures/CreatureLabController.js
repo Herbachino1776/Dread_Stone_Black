@@ -1,18 +1,14 @@
 import * as THREE from 'three';
-import { HumanoidCombatActor } from '../combat/HumanoidCombatActor.js';
 import { PROGRESSIVE_SITE_RADIUS_TOLERANCE_METERS } from '../combat/ProgressiveDamageSiteTargeting.js';
 import { BLUNT_IMPACT_CLASSIFICATIONS, BLUNT_IMPACT_SCHEMA } from '../combat/weapons/BluntImpactInteraction.js';
 import { CreatureLabPanel } from './CreatureLabPanel.js';
+import { CreatureDefinitionRegistry } from './CreatureDefinitionRegistry.js';
+import { CreatureFactory } from './CreatureFactory.js';
 import { CreaturePackRegistry } from './CreaturePackRegistry.js';
 import { CreatureLabSiteMarkerRenderer } from './CreatureLabSiteMarkerRenderer.js';
-import {
-  assessCreaturePackRuntimeSupport,
-  composeHumanoidCreatureRuntimeProfile,
-  getCreatureRuntimePolicy,
-  summarizeCreatureRuntimePolicy,
-} from './CreatureRuntimePolicies.js';
+import { summarizeCreatureDefinition } from './CreatureRuntimePolicies.js';
 
-const DEFAULT_PACK_ID = 'chezwick_damage_v001';
+const DEFAULT_DEFINITION_ID = 'chezwick';
 const CREATURE_LAB_QUERY_KEY = 'creatureLab';
 const SEGMENT_LABELS = Object.freeze({
   head_neck: 'Head / Neck',
@@ -55,26 +51,36 @@ export function createCreatureLabReadOnlyStorage(storage) {
 export class CreatureLabController {
   constructor({
     registry = new CreaturePackRegistry(),
+    definitionRegistry = new CreatureDefinitionRegistry(),
+    creatureFactory = null,
     walkerController,
     combatRouter = null,
     playerProvider = null,
     weaponControllerProvider = null,
     onSubjectChanged = null,
-    initialPackId = DEFAULT_PACK_ID,
+    initialDefinitionId = DEFAULT_DEFINITION_ID,
+    initialPackId = null,
     panelFactory = (options) => new CreatureLabPanel(options),
   } = {}) {
     if (!walkerController) throw new Error('Creature Lab requires one isolated walker lifecycle host.');
     this.registry = registry;
+    this.definitionRegistry = definitionRegistry;
+    this.creatureFactory = creatureFactory ?? new CreatureFactory({
+      definitionRegistry: this.definitionRegistry,
+      creaturePackRegistry: this.registry,
+    });
     this.walkerController = walkerController;
     this.combatRouter = combatRouter;
     this.playerProvider = playerProvider;
     this.weaponControllerProvider = weaponControllerProvider;
     this.onSubjectChanged = onSubjectChanged;
+    this.initialDefinitionId = initialDefinitionId;
     this.initialPackId = initialPackId;
     this.panelFactory = panelFactory;
-    this.packOptions = [];
+    this.definitionOptions = [];
+    this.selectedDefinition = null;
     this.selectedPack = null;
-    this.selectedPolicy = null;
+    this.resolvedCreature = null;
     this.effectiveProfile = null;
     this.selectedSiteId = null;
     this.showSites = false;
@@ -93,21 +99,44 @@ export class CreatureLabController {
   get actor() { return this.walkerController?.actor ?? null; }
 
   async initialize() {
-    const summaries = await this.registry.listPacks();
-    this.packOptions = await Promise.all(summaries.map(async (summary) => {
+    const definitions = this.definitionRegistry.listDefinitions();
+    this.definitionOptions = await Promise.all(definitions.map(async (definition) => {
       try {
-        const descriptor = await this.registry.loadPack(summary.packId);
-        const policy = getCreatureRuntimePolicy(summary.packId);
-        const support = assessCreaturePackRuntimeSupport(descriptor, policy);
-        return { ...summary, descriptor, policy, ...support };
+        const resolved = await this.creatureFactory.resolve(definition.definitionId);
+        return {
+          definitionId: definition.definitionId,
+          displayName: definition.displayName,
+          creaturePackId: definition.creaturePackId,
+          definition,
+          resolved,
+          descriptor: resolved.pack,
+          profile: resolved.profile,
+          supported: true,
+          code: 'SUPPORTED',
+          reason: null,
+        };
       } catch (error) {
-        return { ...summary, descriptor: null, policy: null, supported: false, code: error.code ?? 'DESCRIPTOR_LOAD_FAILED', reason: error.message };
+        return {
+          definitionId: definition.definitionId,
+          displayName: definition.displayName,
+          creaturePackId: definition.creaturePackId,
+          definition,
+          resolved: null,
+          descriptor: null,
+          profile: null,
+          supported: false,
+          code: error.code ?? 'DEFINITION_RESOLUTION_FAILED',
+          reason: error.message,
+        };
       }
     }));
-    const requested = this.packOptions.find((entry) => entry.packId === this.initialPackId && entry.supported);
-    const initial = requested ?? this.packOptions.find((entry) => entry.supported) ?? null;
-    if (initial) await this.selectPack(initial.packId);
-    else this.recordOperation('initialize', { accepted: false, reason: 'No registered Creature Pack is supported by the current humanoid runtime.' });
+    const requested = this.definitionOptions.find((entry) => entry.definitionId === this.initialDefinitionId && entry.supported);
+    const legacyRequested = this.initialPackId
+      ? this.definitionOptions.filter((entry) => entry.creaturePackId === this.initialPackId && entry.supported)
+      : [];
+    const initial = requested ?? (legacyRequested.length === 1 ? legacyRequested[0] : null) ?? this.definitionOptions.find((entry) => entry.supported) ?? null;
+    if (initial) await this.selectDefinition(initial.definitionId);
+    else this.recordOperation('initialize', { accepted: false, reason: 'No registered Creature Definition is supported by the current humanoid runtime.' });
     if (globalThis.document?.body && !this.disposed) this.panel = this.panelFactory({ controller: this, parent: document.body });
     this.installDebugCommands();
     return this.getDiagnostics();
@@ -136,46 +165,62 @@ export class CreatureLabController {
     return error ? { accepted: false, reason: error.message } : result;
   }
 
-  async selectPack(packId) {
+  async selectDefinition(definitionId) {
     if (this.disposed) return { accepted: false, reason: 'Creature Lab is disposed.' };
-    const option = this.packOptions.find((entry) => entry.packId === packId);
-    if (!option) return this.recordOperation('selectPack', { accepted: false, reason: `Unknown registered pack ${packId}.` });
-    if (!option.supported) return this.recordOperation('selectPack', { accepted: false, reason: option.reason, code: option.code });
+    const option = this.definitionOptions.find((entry) => entry.definitionId === definitionId);
+    if (!option) return this.recordOperation('selectDefinition', { accepted: false, reason: `Unknown registered definition ${definitionId}.` });
+    if (!option.supported) return this.recordOperation('selectDefinition', { accepted: false, reason: option.reason, code: option.code });
     const serial = ++this.selectionSerial;
     this.loading = true;
     this.notify();
     try {
-      const descriptor = option.descriptor ?? await this.registry.loadPack(packId);
-      const policy = option.policy ?? getCreatureRuntimePolicy(packId);
-      const profile = composeHumanoidCreatureRuntimeProfile(descriptor, policy);
-      this.weaponControllerProvider?.()?.cancel?.('creature-lab-pack-switch');
+      const resolved = option.resolved ?? await this.creatureFactory.resolve(definitionId);
+      const { definition, pack, profile } = resolved;
+      this.weaponControllerProvider?.()?.cancel?.('creature-lab-definition-switch');
       this.disposeSiteMarkers();
       if (this.actor) this.walkerController.disposeWalker({ respawn: false });
-      this.selectedPack = descriptor;
-      this.selectedPolicy = policy;
+      this.selectedDefinition = definition;
+      this.selectedPack = pack;
+      this.resolvedCreature = resolved;
       this.effectiveProfile = profile;
       this.selectedSiteId = null;
-      this.walkerController.actorFactory = (options) => new HumanoidCombatActor({ ...options, visualProfile: profile });
+      this.walkerController.actorFactory = (options) => this.creatureFactory.createActorFromResolved(resolved, options).actor;
       this.walkerController.enabled = true;
       this.walkerController.pauseLocomotion = true;
       const spawned = this.walkerController.reset(this.playerProvider?.());
       this.onSubjectChanged?.(this.getSubjectState());
-      if (!spawned || !this.actor) throw new Error(`Creature Lab could not find a safe Folsom spawn for ${packId}.`);
+      if (!spawned || !this.actor) throw new Error(`Creature Lab could not find a safe Folsom spawn for ${definitionId}.`);
       await this.actor.visualAdapter?.ready;
-      if (serial !== this.selectionSerial || this.disposed) return { accepted: false, reason: 'Pack selection was superseded.' };
+      if (serial !== this.selectionSerial || this.disposed) return { accepted: false, reason: 'Definition selection was superseded.' };
       this.selectedSiteId = this.getProgressiveSites()[0]?.siteId ?? null;
       this.createSiteMarkers();
       this.onSubjectChanged?.(this.getSubjectState());
-      return this.recordOperation('selectPack', { accepted: true, packId, actorInstanceId: this.actor.instanceId });
+      return this.recordOperation('selectDefinition', {
+        accepted: true,
+        definitionId,
+        creaturePackId: pack.packId,
+        actorInstanceId: this.actor.instanceId,
+      });
     } catch (error) {
       this.disposeSiteMarkers();
       if (serial === this.selectionSerial && this.actor) this.walkerController.disposeWalker({ respawn: false });
       this.onSubjectChanged?.(this.getSubjectState());
-      return this.recordOperation('selectPack', null, error);
+      return this.recordOperation('selectDefinition', null, error);
     } finally {
       if (serial === this.selectionSerial) this.loading = false;
       this.notify();
     }
+  }
+
+  async selectPack(packId) {
+    const matches = this.definitionOptions.filter((entry) => entry.creaturePackId === packId);
+    if (matches.length !== 1) {
+      const reason = matches.length === 0
+        ? `No Creature Definition references pack ${packId}.`
+        : `Pack ${packId} is referenced by multiple Creature Definitions; select a definition ID explicitly.`;
+      return this.recordOperation('selectPackCompatibility', { accepted: false, reason });
+    }
+    return this.selectDefinition(matches[0].definitionId);
   }
 
   getSubjectState() {
@@ -189,8 +234,8 @@ export class CreatureLabController {
   }
 
   async respawn() {
-    if (!this.selectedPack) return this.recordOperation('respawn', { accepted: false, reason: 'No supported pack is selected.' });
-    return this.selectPack(this.selectedPack.packId);
+    if (!this.selectedDefinition) return this.recordOperation('respawn', { accepted: false, reason: 'No supported definition is selected.' });
+    return this.selectDefinition(this.selectedDefinition.definitionId);
   }
 
   resetDamage() {
@@ -446,9 +491,10 @@ export class CreatureLabController {
   getViewState() {
     return {
       loading: this.loading,
-      packs: this.packOptions.map(({ descriptor: _descriptor, policy: _policy, ...entry }) => entry),
+      definitions: this.definitionOptions.map(({ descriptor: _descriptor, definition: _definition, resolved: _resolved, profile: _profile, ...entry }) => entry),
+      selectedDefinitionId: this.selectedDefinition?.definitionId ?? null,
       selectedPackId: this.selectedPack?.packId ?? null,
-      selectedDisplayName: this.selectedPack?.displayName ?? 'None',
+      selectedDisplayName: this.selectedDefinition?.displayName ?? 'None',
       selectedSiteId: this.selectedSiteId,
       showSites: this.showSites,
       showSelectedRadius: this.showSelectedRadius,
@@ -456,6 +502,7 @@ export class CreatureLabController {
       animationActions: this.getAnimationActions(),
       detachmentActions: this.getDetachmentActions(),
       ragdollAvailable: this.canRagdoll(),
+      definition: this.selectedDefinition,
       pack: this.selectedPack,
       profile: this.effectiveProfile,
       lastOperation: this.lastOperation,
@@ -473,9 +520,10 @@ export class CreatureLabController {
     const compatibilitySiteCount = this.getProgressiveSites().filter((site) => site.authority === 'COMPATIBILITY').length;
     return {
       enabled: true,
+      selectedDefinition: this.selectedDefinition?.definitionId ?? null,
       selectedPack: this.selectedPack?.packId ?? null,
-      selectedDisplayName: this.selectedPack?.displayName ?? null,
-      effectiveRuntimePolicy: summarizeCreatureRuntimePolicy(this.selectedPolicy),
+      selectedDisplayName: this.selectedDefinition?.displayName ?? null,
+      effectiveCreatureDefinition: summarizeCreatureDefinition(this.selectedDefinition),
       effectiveProfileName: this.effectiveProfile?.name ?? null,
       actorInstanceId: this.actor?.instanceId ?? null,
       actorLifeState: this.actor?.lifeState ?? null,
@@ -498,7 +546,7 @@ export class CreatureLabController {
       activeDetachableSegments: actorDiagnostics?.dismemberment?.detachedSegments ?? [],
       colliderCount: (this.actor?.colliders?.size ?? 0) + (actorDiagnostics?.dismemberment?.detachedColliderCount ?? 0),
       packCost: this.selectedPack?.cost ?? null,
-      packSupport: this.packOptions.map(({ packId, displayName, supported, code, reason }) => ({ packId, displayName, supported, code, reason })),
+      definitionSupport: this.definitionOptions.map(({ definitionId, displayName, creaturePackId, supported, code, reason }) => ({ definitionId, displayName, creaturePackId, supported, code, reason })),
       lastOperation: this.lastOperation,
     };
   }
@@ -511,6 +559,7 @@ export class CreatureLabController {
   installDebugCommands() {
     if (import.meta.env?.DEV !== true || typeof globalThis === 'undefined') return;
     this.debugCommands = Object.freeze({
+      selectDefinition: (definitionId) => this.selectDefinition(definitionId),
       selectPack: (packId) => this.selectPack(packId),
       respawn: () => this.respawn(),
       resetDamage: () => this.resetDamage(),
