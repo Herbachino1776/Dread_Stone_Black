@@ -68,7 +68,7 @@ Dread Ram God — Great Mace
   -> MAIN_HAND_R
 ```
 
-Its initial height is the current 1.7 m Ram God presentation height. Its checked-in mace override intentionally begins at the current canonical calibration; it is a production destination for real Lab tuning, not a claim that those numbers are final art calibration.
+Its production calibration was promoted from Creature Lab at 2.1 m target height, 1.41 uniform mace scale, and grip position `[0.005, 0.085, -0.015]`. The Creature Definition remains at its base 1.7 m height, and the canonical mace remains unchanged.
 
 ## Resolution and failure behavior
 

@@ -132,6 +132,19 @@ test('dreadstone.enemy_preset.v1 accepts the checked-in Ram God preset', () => {
   assert.equal(validateEnemyPreset(DREAD_RAM_GOD_GREAT_MACE_PRESET).valid, true);
   assert.equal(DREAD_RAM_GOD_GREAT_MACE_PRESET.schema, 'dreadstone.enemy_preset.v1');
   assert.equal(DREAD_RAM_GOD_GREAT_MACE_PRESET.version, 1);
+  assert.deepEqual(DREAD_RAM_GOD_GREAT_MACE_PRESET.presentation, { targetHeight: 2.1 });
+  assert.deepEqual(DREAD_RAM_GOD_GREAT_MACE_PRESET.armament.weaponOverride, {
+    assetScale: 1.41,
+    gripTransform: {
+      position: [0.005, 0.085, -0.015],
+      quaternion: [0.70710678, 0, 0, 0.70710678],
+    },
+    attackCapsule: {
+      start: [0, 0, -0.48],
+      end: [0, 0, -0.29],
+      radius: 0.13,
+    },
+  });
 });
 
 test('Enemy Preset contract rejects malformed and foreign-authority fields', () => {
@@ -393,9 +406,9 @@ test('Creature Lab resolves and selects the Ram God production preset as a separ
   assert.equal(state.selectedPresetId, 'dread_ram_god_great_mace');
   assert.equal(state.selectedDefinitionId, 'dread_ram_god');
   assert.equal(state.selectedWeaponId, 'dreadstone_mace');
-  assert.equal(state.resultingCreatureHeight, 1.7);
+  assert.equal(state.resultingCreatureHeight, 2.1);
   assert.equal(harness.loadout.loadoutId, 'humanoid_dreadstone_mace_main_hand');
-  assert.equal(harness.calibration.assetScale, 1);
+  assert.equal(harness.calibration.assetScale, 1.41);
   controller.dispose();
 });
 
@@ -411,8 +424,8 @@ test('Reset to Preset Defaults clears height and weapon changes together', async
   assert.equal(storage.values.has(key), true);
   await controller.resetToPresetDefaults();
   assert.equal(controller.getViewState().hasUnsavedLabDraft, false);
-  assert.equal(controller.getViewState().resultingCreatureHeight, 1.7);
-  assert.equal(controller.getViewState().weaponCalibration.assetScale, 1);
+  assert.equal(controller.getViewState().resultingCreatureHeight, 2.1);
+  assert.equal(controller.getViewState().weaponCalibration.assetScale, 1.41);
   assert.equal(storage.values.has(key), false);
   controller.dispose();
 });

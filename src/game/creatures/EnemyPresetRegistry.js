@@ -25,15 +25,15 @@ export const DREAD_RAM_GOD_GREAT_MACE_PRESET = deepFreeze({
   displayName: 'Dread Ram God — Great Mace',
   creatureDefinitionId: 'dread_ram_god',
   presentation: {
-    targetHeight: 1.7,
+    targetHeight: 2.1,
   },
   armament: {
     loadoutId: 'humanoid_dreadstone_mace_main_hand',
     weaponOverride: {
-      assetScale: 1,
+      assetScale: 1.41,
       gripTransform: {
-        position: [0, 0, 0],
-        quaternion: [0.7071067811865476, 0, 0, 0.7071067811865476],
+        position: [0.005, 0.085, -0.015],
+        quaternion: [0.70710678, 0, 0, 0.70710678],
       },
       attackCapsule: {
         start: [0, 0, -0.48],
