@@ -1,5 +1,32 @@
 import { LOOT_GOLD_MODES } from '../../contracts/LootProfile.js';
 
+function deepFreeze(value) {
+  if (value == null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  Object.values(value).forEach(deepFreeze);
+  return Object.freeze(value);
+}
+
+export function createEnemyRuntimeRewardConfiguration({ lootProfile = null, fixedGoldOverride = null, spawnId = null } = {}) {
+  if (fixedGoldOverride != null) {
+    if (!Number.isSafeInteger(fixedGoldOverride) || fixedGoldOverride <= 0) {
+      throw new Error('Encounter fixed gold override must be a positive safe integer.');
+    }
+    return deepFreeze({
+      source: 'encounter-fixed-gold',
+      lootProfileId: null,
+      spawnId,
+      gold: { mode: LOOT_GOLD_MODES.fixed, amount: fixedGoldOverride },
+    });
+  }
+  if (!lootProfile) return null;
+  return deepFreeze({
+    source: 'enemy-preset-loot-profile',
+    lootProfileId: lootProfile.lootProfileId,
+    spawnId,
+    gold: structuredClone(lootProfile.currency.gold),
+  });
+}
+
 function resolveGold(gold, random) {
   if (gold.mode === LOOT_GOLD_MODES.fixed) return gold.amount;
   const sample = Number(random());
@@ -68,12 +95,15 @@ export class LootContainerState {
 }
 
 export class EnemyLootRuntime {
-  constructor({ actor, lootProfile = null, playerCurrencyState = null, random = Math.random } = {}) {
+  constructor({ actor, lootProfile = null, rewardConfiguration = undefined, playerCurrencyState = null, random = Math.random } = {}) {
     if (!actor) throw new Error('EnemyLootRuntime requires one runtime actor instance.');
     if (typeof random !== 'function') throw new Error('EnemyLootRuntime random source must be a function.');
     this.actor = actor;
     this.actorInstanceId = actor.instanceId ?? null;
     this.lootProfile = lootProfile;
+    this.rewardConfiguration = rewardConfiguration === undefined
+      ? createEnemyRuntimeRewardConfiguration({ lootProfile })
+      : rewardConfiguration;
     this.playerCurrencyState = playerCurrencyState;
     this.random = random;
     this.container = null;
@@ -88,17 +118,20 @@ export class EnemyLootRuntime {
     if (this.disposed) return false;
     const lifeState = this.actor?.lifeState ?? null;
     this.lastObservedLifeState = lifeState;
-    if (lifeState !== 'dead' || this.resolutionAttempted || !this.lootProfile) return false;
+    if (lifeState !== 'dead' || this.resolutionAttempted || !this.rewardConfiguration) return false;
     this.resolutionAttempted = true;
     try {
-      const gold = resolveGold(this.lootProfile.currency.gold, this.random);
+      const gold = resolveGold(this.rewardConfiguration.gold, this.random);
+      if (gold <= 0) return false;
       this.container = new LootContainerState({
         gold,
         playerCurrencyState: this.playerCurrencyState,
         context: Object.freeze({
           source: 'enemy-loot',
           actorInstanceId: this.actorInstanceId,
-          lootProfileId: this.lootProfile.lootProfileId,
+          spawnId: this.rewardConfiguration.spawnId,
+          rewardSource: this.rewardConfiguration.source,
+          lootProfileId: this.rewardConfiguration.lootProfileId,
         }),
       });
       this.resolutionCount = 1;
@@ -118,9 +151,9 @@ export class EnemyLootRuntime {
   getSnapshot() {
     const container = this.container?.getSnapshot?.() ?? null;
     const state = container?.claimed ? 'claimed' : container ? 'available' : 'unavailable';
-    return Object.freeze({
+    const snapshot = {
       actorInstanceId: this.actorInstanceId,
-      lootProfileId: this.lootProfile?.lootProfileId ?? null,
+      lootProfileId: this.rewardConfiguration?.lootProfileId ?? null,
       resolvedGold: container?.gold ?? null,
       state,
       claimed: container?.claimed ?? false,
@@ -129,7 +162,12 @@ export class EnemyLootRuntime {
       resolutionError: this.resolutionError,
       lastObservedLifeState: this.lastObservedLifeState,
       disposed: this.disposed,
-    });
+    };
+    if (this.rewardConfiguration?.source === 'encounter-fixed-gold') {
+      snapshot.rewardSource = this.rewardConfiguration.source;
+      snapshot.spawnId = this.rewardConfiguration.spawnId;
+    }
+    return Object.freeze(snapshot);
   }
 
   dispose() {

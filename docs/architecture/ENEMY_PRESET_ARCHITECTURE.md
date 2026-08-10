@@ -1,6 +1,6 @@
 # Enemy Preset architecture
 
-Milestone 6.7 adds the reusable production-tuning layer between a Creature Definition and a future placed encounter individual.
+Milestone 6.7 adds the reusable production-tuning layer between a Creature Definition and a placed encounter individual. M9 now supplies that placed-individual contract and runtime.
 
 ```text
 Creature Pack
@@ -12,7 +12,7 @@ Creature Definition
 Enemy Preset
   reusable production-tuned variant
         ↓
-future Encounter Instance
+Encounter Spawn Record (M9)
   placed individual
 ```
 
@@ -41,7 +41,7 @@ The layers remain separate:
 - Enemy Preset owns one reusable variant's target height, loadout selection,
   optional character-specific weapon calibration, and in v2 one default Loot
   Profile reference.
-- A future Encounter Instance will own placement, facing, home radius, identity, and deliberate per-instance state or overrides.
+- An Encounter Spawn Record owns placement, facing, home radius, stable authored identity, and the narrow fixed-gold individual override.
 
 Enemy Presets never contain Forge technical records, Creature Pack paths,
 bones, socket transforms, Action phase timing, weapon asset paths, weapon

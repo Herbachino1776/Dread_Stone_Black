@@ -178,13 +178,14 @@ test('touch-first offensive controls require no console access', async () => {
   assert.deepEqual(calls, ['enableCombatBrain', 'disableCombatBrain', 'respawn', 'equipArmament', 'selectOffensiveAction:humanoid_one_hand_slash_rtl', 'triggerAttack', 'resetPlayer', 'toggleAttackGeometry']);
 });
 
-test('combat reciprocity activates only for explicit Creature Lab and leaves canonical Folsom gated', () => {
+test('the player damage receiver is normal game infrastructure while the temporary Lab harness stays explicitly gated', () => {
   assert.equal(resolveCreatureLabMode(new URLSearchParams('creatureLab=1')), true);
   assert.equal(resolveCreatureLabMode(new URLSearchParams()), false);
   const gameSource = readFileSync(new URL('../src/game/Game.js', import.meta.url), 'utf8');
   const encounterSource = readFileSync(new URL('../src/game/combat/FolsomCombatEncounter.js', import.meta.url), 'utf8');
   const harnessSource = readFileSync(new URL('../src/game/creatures/CreatureLabAttackHarness.js', import.meta.url), 'utf8');
-  assert.match(gameSource, /this\.playerCombatDamageReceiver = this\.creatureLabEnabled \? new PlayerCombatDamageReceiver/);
+  assert.match(gameSource, /this\.playerCombatDamageReceiver = new PlayerCombatDamageReceiver/);
+  assert.doesNotMatch(gameSource, /this\.creatureLabEnabled \? new PlayerCombatDamageReceiver/);
   assert.match(encounterSource, /this\.creatureLabAttackHarness = this\.creatureLabEnabled \? new CreatureLabAttackHarness/);
   assert.doesNotMatch(encounterSource, /this\.showcaseEnabled[^\n]+CreatureLabAttackHarness/);
   assert.match(harnessSource, /NpcArmamentRuntime/);

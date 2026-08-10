@@ -17,7 +17,7 @@ Enemy Preset v1 or v2
   reusable production-tuned variant
   v2 may reference one default Loot Profile
         ->
-future Encounter Instance
+Encounter Spawn Record (M9)
   one placed individual and deliberate per-instance overrides
 ```
 
@@ -38,7 +38,7 @@ GameState persistence adapter in the normal game
 ```
 
 Enemy Preset owns the default reward profile.
-A future Encounter Instance may override one individual.
+An M9 Encounter Spawn Record may override one individual with fixed positive gold.
 The runtime loot container owns the resolved unclaimed reward.
 PlayerCurrencyState owns the player's actual gold.
 GameState persists the wallet but is not the runtime wallet.
@@ -170,12 +170,12 @@ milestone may own records such as `spawnId.dead`, `spawnId.lootClaimed`, and
 `spawnId.resolvedGold`; those records must not turn GameState into a competing
 runtime wallet.
 
-The intended future flow is:
+M9 now consumes the intended flow as:
 
 ```text
-Encounter Instance
+Encounter Spawn Record
   spawnId, transform, facing, home radius
-        ->
+        -> immutable runtime reward configuration ->
 EnemyPresetResolver default Loot Profile
         ->
 optional deliberate instance reward override

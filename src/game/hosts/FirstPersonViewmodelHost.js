@@ -22,7 +22,7 @@ const ROD_VIEWMODEL_LIGHTING = Object.freeze({
 });
 
 export function resolveSupportedCombatRuntime(dungeon) {
-  return dungeon?.isCombatLab === true ? dungeon : dungeon?.combatEncounter ?? null;
+  return dungeon?.isCombatLab === true ? dungeon : dungeon?.combatEncounter ?? dungeon?.encounterRuntimeHost ?? null;
 }
 
 export class FirstPersonViewmodelHost {

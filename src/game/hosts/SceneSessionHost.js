@@ -139,7 +139,7 @@ export class SceneSessionHost {
     if (destinationArea !== 'field' && destinationSpawnId) params.set('spawn', destinationSpawnId);
     this.query = params;
     window.history?.pushState?.({ area: destinationArea, spawnId: destinationSpawnId }, '', `${window.location.pathname}?${params.toString()}`);
-    this.onSessionChanged?.(this, summary);
+    await this.onSessionChanged?.(this, summary);
     return summary;
   }
 
@@ -257,6 +257,7 @@ export class SceneSessionHost {
 
   disposeCurrentSession() {
     if (!this.scene) return;
+    this.dungeon?.encounterRuntimeHost?.detachSession?.('scene-session-dispose');
     this.player?.dispose?.();
     this.dungeon?.lanternConeRevealRuntime?.dispose?.();
     this.dungeon?.beneathFolsomHiddenGrowthGateRuntime?.dispose?.();

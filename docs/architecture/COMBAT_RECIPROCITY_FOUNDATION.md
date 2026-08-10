@@ -32,8 +32,8 @@ transition, dev reset/revive, and subscriptions for HUD/input/runtime consumers.
 It is intentionally not saved in M7.
 
 `PlayerCombatDamageReceiver` remains the explicit physical combat entry point.
-`Game` creates it only for explicit Creature Lab sessions and binds it to the
-current `PlayerController`, but supplies the same game-owned
+M9 promotes one receiver into every normal game session and binds it to the
+current `PlayerController`, while supplying the same game-owned
 `PlayerCombatState` used by HUD and living-player gates. The receiver owns only
 accepted attack identities, physical hurt-capsule resolution, impact
 diagnostics, and accepted-hit feedback. An accepted impact contains:
@@ -100,7 +100,7 @@ The touch-first Creature Lab panel adds:
 - `Show/Hide Attack Geometry`
 - live phase, attack ID, active state, hit/miss outcome, accepted hit count, HP/death, last impact point/direction, and rejection reason
 
-Switching Creature Definitions keeps the existing Definition -> Pack -> Factory -> walker cleanup path and additionally clears/disposes the old attack subject before binding the replacement actor. Normal Folsom never constructs the harness or player receiver.
+Switching Creature Definitions keeps the existing Definition -> Pack -> Factory -> walker cleanup path and additionally clears/disposes the old attack subject before binding the replacement actor. Normal play does not construct the Lab harness, but it now owns the same player receiver required by production Encounter enemies.
 
 ## M6 consumption contract
 
@@ -136,5 +136,5 @@ M6 must supply a stable execution identity, explicit phase changes, and actual p
   GLBs are game-owned, while current checked-in creature packs still require a
   future Forge re-export before their socket/offensive capability is available.
 - Player hit audio is deferred because the existing audited cues do not provide a clean, source-neutral hostile-player impact event. HP, flash, camera response, and death remain unmistakable without misusing flesh-stab or creature-death cues.
-- Combat HP is deliberately lab-session-only until a canonical encounter defines persistence/respawn policy.
+- Combat HP is active normal-session authority in M9. HP persistence and a canonical death/respawn policy remain deferred.
 - Device-level iPhone touch, performance, and visual-readability acceptance remain manual hardware checks.

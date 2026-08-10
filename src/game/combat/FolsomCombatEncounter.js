@@ -127,12 +127,13 @@ export class FolsomCombatEncounter {
     this.creaturePackRegistry = creaturePackRegistry;
     this.playerCurrencyState = playerCurrencyState;
     this.creatureLabController = null;
+    this.encounterRuntimeHost = null;
     this.creatureLabAttackHarness = this.creatureLabEnabled ? new CreatureLabAttackHarness({
       scene: this.scene,
       playerProvider: () => this.player,
       damageReceiverProvider: () => this.player?.combatDamageReceiver ?? null,
     }) : null;
-    this.showcaseEnabled = !this.creatureLabEnabled && isFolsomShowcaseEnabled(this.query);
+    this.showcaseEnabled = !this.creatureLabEnabled && this.query.get('m9EncounterProof') !== '1' && isFolsomShowcaseEnabled(this.query);
     this.waveGeneration = 1;
     this.playerSpawn = new THREE.Vector3(...FOLSOM_AUTHORED_PLAYER_SPAWN);
     this.supportFloors = [];
@@ -159,7 +160,7 @@ export class FolsomCombatEncounter {
       feedbackSystem: this.feedbackSystem,
       acceptedCombatAudio: this.acceptedCombatAudio,
       playerProvider: () => this.player,
-      enabled: !this.creatureLabEnabled && this.query.get('folsomWalker') !== '0',
+      enabled: !this.creatureLabEnabled && this.query.get('m9EncounterProof') !== '1' && this.query.get('folsomWalker') !== '0',
       query: this.query,
       config: this.creatureLabEnabled ? FOLSOM_CREATURE_LAB_WALKER_CONFIG : FOLSOM_WALKER_CONFIG,
       environment: this.creatureLabEnabled
@@ -170,7 +171,7 @@ export class FolsomCombatEncounter {
     });
     this.walkerController.prepareFrame(0, this.player);
     this.syncPrimaryWalkerAliases();
-    this.showcaseExtras = this.creatureLabEnabled ? null : new FolsomShowcaseCombatExtras({
+    this.showcaseExtras = this.creatureLabEnabled || this.query.get('m9EncounterProof') === '1' ? null : new FolsomShowcaseCombatExtras({
       scene: this.scene,
       physics: this.physics,
       collision: this.dungeon.collision,
@@ -454,9 +455,11 @@ export class FolsomCombatEncounter {
   }
 
   getLivingCombatActors() {
-    return this.getWalkerControllers()
+    const controllers = this.getWalkerControllers();
+    const legacyActors = controllers
       .map((controller) => controller.actor)
-      .filter((actor, index) => isFolsomCombatActorLiving(actor, this.getWalkerControllers()[index], null));
+      .filter((actor, index) => isFolsomCombatActorLiving(actor, controllers[index], null));
+    return [...legacyActors, ...(this.encounterRuntimeHost?.getActiveCombatActors?.() ?? [])];
   }
 
   createCreatureLabWalkerEnvironment() {
@@ -476,8 +479,9 @@ export class FolsomCombatEncounter {
 
   getContactableCombatActors() {
     const controllers = this.getWalkerControllers();
-    return controllers.map((controller) => controller.actor)
+    const legacyActors = controllers.map((controller) => controller.actor)
       .filter((actor, index) => isFolsomCombatActorContactable(actor, controllers[index], null));
+    return [...legacyActors, ...(this.encounterRuntimeHost?.getContactableActors?.() ?? [])];
   }
 
   getActiveCombatActors() { return this.getLivingCombatActors(); }
@@ -532,6 +536,17 @@ export class FolsomCombatEncounter {
     if (this.weaponController === controller) return;
     this.weaponController?.cancel?.('controller-replaced');
     this.weaponController = controller;
+  }
+
+  attachEncounterRuntimeHost(host) {
+    this.encounterRuntimeHost = host ?? null;
+    return this.encounterRuntimeHost;
+  }
+
+  detachEncounterRuntimeHost(host) {
+    if (host && this.encounterRuntimeHost !== host) return false;
+    this.encounterRuntimeHost = null;
+    return true;
   }
 
   resetEnemyWaveLifecycle() {
@@ -654,19 +669,23 @@ export class FolsomCombatEncounter {
     if (!this.physics.paused) this.showcaseExtras?.prepareFrame(deltaSeconds, this.player);
     this.walkerController?.actor?.prepareFrame(deltaSeconds);
     this.showcaseExtras?.getActors?.().forEach((actor) => actor.prepareFrame(deltaSeconds));
+    this.encounterRuntimeHost?.updateEncounterFrames?.(deltaSeconds);
     this.physics.step(deltaSeconds, (dt) => {
       this.acceptedCombatAudio.update(dt);
       this.feedbackSystem.update(dt);
       this.weaponController?.beforePhysics?.(dt);
       this.walkerController?.beforePhysics(dt, this.player?.position);
       this.showcaseExtras?.beforePhysics(dt, this.player?.position);
+      this.encounterRuntimeHost?.beforePhysics?.(dt);
     }, (dt) => {
       this.weaponController?.afterPhysicsStep?.(dt);
       this.walkerController?.afterPhysicsStep(dt);
       this.showcaseExtras?.afterPhysicsStep(dt);
+      this.encounterRuntimeHost?.afterPhysicsStep?.(dt);
     });
     this.walkerController?.afterPhysics(this.physics.interpolationAlpha);
     this.showcaseExtras?.afterPhysics(this.physics.interpolationAlpha);
+    this.encounterRuntimeHost?.afterPhysics?.(this.physics.interpolationAlpha);
     this.syncPrimaryWalkerAliases();
     this.priorityCombatActor = this.getPriorityCombatActor(this.player);
     const combatShadowTarget = this.priorityCombatActor?.getBodyWorldPosition?.('upper_chest');
@@ -788,6 +807,7 @@ export class FolsomCombatEncounter {
     this.weaponController?.cancel?.('encounter-dispose');
     this.creatureLabController?.dispose?.();
     this.creatureLabController = null;
+    this.encounterRuntimeHost = null;
     this.creatureLabAttackHarness = null;
     this.showcaseExtras?.dispose?.();
     this.walkerController?.dispose?.();

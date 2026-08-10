@@ -25,6 +25,8 @@ import { PlayerCombatState } from './combat/PlayerCombatState.js';
 import { createCreatureLabReadOnlyStorage, resolveCreatureLabMode } from './creatures/CreatureLabController.js';
 import { PlayerCurrencyState } from './economy/PlayerCurrencyState.js';
 import { createPlayerCurrencyPersistence } from './economy/PlayerCurrencyPersistence.js';
+import { EncounterRuntimeHost } from './encounters/EncounterRuntimeHost.js';
+import { EncounterProofPanel } from './encounters/EncounterProofPanel.js';
 
 export class Game {
   constructor(app) {
@@ -47,6 +49,7 @@ export class Game {
     const query = new URLSearchParams(window.location.search);
     this.combatLabEnabled = import.meta.env.DEV && query.get('combatLab') === '1';
     this.creatureLabEnabled = resolveCreatureLabMode(query);
+    this.m9EncounterProofEnabled = import.meta.env.DEV && query.get('m9EncounterProof') === '1';
     this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
     this.perfDebugEnabled = query.get('perf') === '1';
     this.isPaused = false;
@@ -78,7 +81,7 @@ export class Game {
       }),
     });
     const savedEquipment = this.gameState.getEquipmentSnapshot() ?? startingEquipment;
-    const developmentLoadoutEnabled = import.meta.env.DEV && ((query.get('area') === 'north-road' && query.get('devLoadout') === '1') || this.combatLabEnabled);
+    const developmentLoadoutEnabled = import.meta.env.DEV && ((query.get('area') === 'north-road' && query.get('devLoadout') === '1') || this.combatLabEnabled || this.m9EncounterProofEnabled);
     const developmentItems = [
       'old_work_knife',
       'wood_axe',
@@ -97,7 +100,7 @@ export class Game {
       acquiredItemIds: [...new Set([...(savedEquipment.acquiredItemIds ?? ['unarmed']), ...ephemeralItems])],
       equipped: {
         ...(savedEquipment.equipped ?? {}),
-        ...(this.creatureLabEnabled ? { weapon: 'dreadstone_mace' } : { weapon: this.combatLabEnabled ? 'unarmed' : 'wood_axe', tool: 'old_work_knife', offhand: this.combatLabEnabled ? null : 'keepers_lantern' }),
+        ...(this.creatureLabEnabled ? { weapon: 'dreadstone_mace' } : { weapon: this.combatLabEnabled ? 'unarmed' : this.m9EncounterProofEnabled ? 'old_work_knife' : 'wood_axe', tool: 'old_work_knife', offhand: this.combatLabEnabled ? null : 'keepers_lantern' }),
       },
     } : savedEquipment;
     this.equipmentRuntime = new EquipmentRuntime({
@@ -144,17 +147,25 @@ export class Game {
     this.disposers.push(this.playerCombatState.subscribe((snapshot, event) => {
       this.hudHost?.updateVitals?.({ hp: snapshot.currentHealth });
       this.viewmodelHost?.setLivingPlayerEnabled?.(snapshot.alive);
-      if (event.type === 'death') this.hud?.showHint?.('You have fallen. Use Reset Player in Creature Lab.');
+      if (event.type === 'death') this.hud?.showHint?.(this.creatureLabEnabled || this.m9EncounterProofEnabled ? 'You have fallen. Use Reset Player in the dev panel.' : 'You have fallen.');
       else if (event.type === 'reset') this.hud?.showHint?.('');
     }));
-    this.playerCombatDamageReceiver = this.creatureLabEnabled ? new PlayerCombatDamageReceiver({
+    this.playerCombatDamageReceiver = new PlayerCombatDamageReceiver({
       player: this.player,
       hudHost: this.hudHost,
       feedback: this.feedback,
       combatState: this.playerCombatState,
-    }) : null;
+    });
     this.playerCombatDamageReceiver?.bindPlayer?.(this.player);
-    this.playerCombatDamageReceiver?.reset?.();
+    this.playerCombatDamageReceiver?.clearAttackOwnership?.();
+    this.encounterRuntimeHost = new EncounterRuntimeHost({
+      audioRuntime: this.audioRuntime,
+      playerProvider: () => this.player,
+      playerDamageReceiverProvider: () => this.playerCombatDamageReceiver,
+      playerCombatState: this.playerCombatState,
+      playerCurrencyState: this.playerCurrencyState,
+    });
+    await this.encounterRuntimeHost.initializeForSession(this.sceneSessionHost);
     this.inputHost = new InputHost({ root: this.app });
     this.controls = this.inputHost.controls;
     this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
@@ -182,6 +193,12 @@ export class Game {
       objectiveRuntime: this.objectiveRuntime,
       transitionToLocation: (...args) => this.sceneSessionHost.transitionToLocation(...args),
       survivalHost: this.survivalHost,
+    });
+    if (this.m9EncounterProofEnabled) this.encounterProofPanel = new EncounterProofPanel({
+      root: this.app,
+      encounterRuntimeHost: this.encounterRuntimeHost,
+      playerDamageReceiver: this.playerCombatDamageReceiver,
+      playerProvider: () => this.player,
     });
     this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.equippedChanged, () => this.interactions.cancelActiveTimedAction?.()));
     const cancelTimedAction = () => this.interactions.cancelActiveTimedAction?.();
@@ -229,10 +246,11 @@ export class Game {
     }, 260);
   }
 
-  handleSceneSessionChanged(session = this.sceneSessionHost) {
+  async handleSceneSessionChanged(session = this.sceneSessionHost) {
     this.playerCombatDamageReceiver?.bindPlayer?.(session.player);
-    if (this.playerCombatDamageReceiver) this.playerCombatDamageReceiver.reset();
-    else this.playerCombatState?.reset?.({ reason: 'scene-session-changed' });
+    this.playerCombatDamageReceiver?.clearAttackOwnership?.();
+    const encounterInitialization = this.encounterRuntimeHost?.initializeForSession?.(session);
+    if (encounterInitialization) await encounterInitialization;
     this.interactions?.initializeForSession?.({ player: session.player, dungeon: session.dungeon });
     this.viewmodelHost?.rebindSession?.(session);
     void session.warmBloodMaterials?.();
@@ -300,6 +318,7 @@ export class Game {
       isPaused: false,
       isPlayerDead: this.isPlayerDead,
     });
+    this.encounterRuntimeHost?.update?.(deltaSeconds);
     this.audioRuntime?.update(deltaSeconds, {
       camera: this.camera,
       player: this.player,
@@ -319,7 +338,7 @@ export class Game {
     const attackPressed = this.controls.consumeAttack();
     if (attackPressed && !this.combatLabEnabled && !this.isPlayerDead) this.interactions.attack?.();
     if (!this.isPlayerDead) this.interactions.updateHint();
-    else this.hud?.showHint?.('You have fallen. Use Reset Player in Creature Lab.');
+    else this.hud?.showHint?.(this.creatureLabEnabled || this.m9EncounterProofEnabled ? 'You have fallen. Use Reset Player in the dev panel.' : 'You have fallen.');
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
     const keyboardInteractPressed = keyboardInteractHeld && !this.wasKeyboardInteractHeld;
     const timedActionCancelRequested = this.equipmentPanel?.isOpen || this.isPaused || this.isPlayerDead;
@@ -476,6 +495,9 @@ export class Game {
     this.disposers = [];
     this.viewmodelHost?.dispose?.();
     this.combatLabDebugPanel?.dispose?.();
+    this.encounterProofPanel?.dispose?.();
+    this.encounterRuntimeHost?.dispose?.();
+    this.encounterRuntimeHost = null;
     this.playerCombatDamageReceiver?.dispose?.();
     this.playerCombatDamageReceiver = null;
     this.playerCombatState?.dispose?.();

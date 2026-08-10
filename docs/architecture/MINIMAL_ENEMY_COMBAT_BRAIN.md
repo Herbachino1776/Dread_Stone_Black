@@ -1,7 +1,9 @@
 # Minimal enemy combat brain
 
 Milestone 7 proves one autonomous armed enemy in Creature Lab without adding a
-canonical encounter or a broad AI framework.
+canonical encounter or a broad AI framework. M9 reuses that same brain for
+placed Encounter Spawn Records through the production-neutral world-motion host;
+placement owns home position, yaw, and leash radius.
 
 ## Runtime chain
 

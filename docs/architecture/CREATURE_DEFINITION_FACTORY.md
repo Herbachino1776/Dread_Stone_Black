@@ -19,7 +19,7 @@ HumanoidCombatActor
 The production ownership chain is now:
 
 ```text
-Creature Pack -> Creature Definition -> Enemy Preset -> future Encounter Instance
+Creature Pack -> Creature Definition -> Enemy Preset -> Encounter Spawn Record
 ```
 
 A preset is reusable production tuning. An encounter instance is a placed individual.
