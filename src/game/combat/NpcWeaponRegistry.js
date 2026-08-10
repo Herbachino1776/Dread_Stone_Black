@@ -61,6 +61,24 @@ export function validateNpcWeaponDefinition(definition) {
   return { valid: errors.length === 0, errors };
 }
 
+export function resolveNpcWeaponDefinitionOverride(canonicalWeapon, weaponOverride = null) {
+  const canonicalValidation = validateNpcWeaponDefinition(canonicalWeapon);
+  if (!canonicalValidation.valid) {
+    throw new Error(`Invalid canonical ${NPC_WEAPON_SCHEMA}: ${canonicalValidation.errors.join('; ')}`);
+  }
+  const candidate = structuredClone(canonicalWeapon);
+  if (weaponOverride != null) {
+    candidate.assetScale = weaponOverride.assetScale;
+    candidate.gripTransform = structuredClone(weaponOverride.gripTransform);
+    candidate.attackCapsule = structuredClone(weaponOverride.attackCapsule);
+  }
+  const resolvedValidation = validateNpcWeaponDefinition(candidate);
+  if (!resolvedValidation.valid) {
+    throw new Error(`Invalid NPC weapon calibration override for ${canonicalWeapon.weaponId}: ${resolvedValidation.errors.join('; ')}`);
+  }
+  return freezeWeapon(candidate);
+}
+
 export const DREADSTONE_MACE_WEAPON = freezeWeapon({
   schema: NPC_WEAPON_SCHEMA,
   weaponId: 'dreadstone_mace',

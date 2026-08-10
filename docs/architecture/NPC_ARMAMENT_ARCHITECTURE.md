@@ -1,5 +1,7 @@
 # NPC armament architecture
 
+Milestone 6.7 adds registered production-neutral loadout IDs and immutable Enemy Preset weapon calibration on top of this M6 runtime. See [ENEMY_PRESET_ARCHITECTURE.md](ENEMY_PRESET_ARCHITECTURE.md).
+
 Milestone 6 establishes animated armed-creature execution without adding AI,
 loot, economy, or permanent weapons to Creature Definitions.
 
@@ -27,6 +29,10 @@ Action IDs for a particular combatant. The same Creature Pack and Creature
 Definition can therefore be instantiated with different loadouts. Weapon IDs
 do not enter Forge output, and specific equipped weapons do not enter Creature
 Definitions.
+
+Production loadouts now live in `NpcLoadoutRegistry` and use stable IDs plus
+`mainHandWeaponId` and `allowedOffensiveActionIds`. Existing Creature Lab export
+names are compatibility aliases to those same records, not a second registry.
 
 ## Runtime path
 

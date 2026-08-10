@@ -18,6 +18,15 @@ export function getCreatureLabDefinitionActions(controller, state) {
   }));
 }
 
+export function getCreatureLabPresetActions(controller, state) {
+  return (state.presets ?? []).map((preset) => ({
+    id: `preset:${preset.presetId}`,
+    label: preset.supported ? preset.displayName : `${preset.displayName} — Unsupported`,
+    preset,
+    run: () => controller.selectPreset(preset.presetId),
+  }));
+}
+
 // Temporary helper name retained for external lab tooling; it delegates to definitions.
 export const getCreatureLabPackActions = getCreatureLabDefinitionActions;
 
@@ -159,6 +168,8 @@ export class CreatureLabPanel {
       .creature-lab-range input{width:100%;min-height:34px;margin:5px 0 0;accent-color:#c99c65;touch-action:pan-x}
       .creature-lab-note{margin:8px 0 0;color:#bdb1a3;font-size:12px;overflow-wrap:anywhere}
       .creature-lab-status{margin:9px 0 0;padding:8px;border-radius:5px;background:#090807;color:#b9d7ce;font:12px/1.35 ui-monospace,monospace;overflow-wrap:anywhere}
+      .creature-lab-draft{margin:9px 0;padding:8px;border:1px solid #b47b41;border-radius:5px;background:#2a180d;color:#ffd39b;font:700 12px/1.35 ui-monospace,monospace;letter-spacing:.08em;text-align:center}
+      .creature-lab-defaults{margin:9px 0;padding:8px;border:1px solid #537368;border-radius:5px;background:#0b1713;color:#b9d7ce;font:700 12px/1.35 ui-monospace,monospace;letter-spacing:.08em;text-align:center}
       .creature-lab-diagnostics{max-height:42vh;overflow:auto;margin:9px 0 0;padding:9px;border:1px solid #3e514b;background:#070908;color:#b9d7ce;font:11px/1.4 ui-monospace,monospace;white-space:pre-wrap;user-select:text;overflow-wrap:anywhere}
       @media (max-width:380px){.creature-lab-panel{width:calc(100vw - 8px);right:4px;padding-left:9px;padding-right:9px}.creature-lab-header{margin-left:-9px;margin-right:-9px}.creature-lab-grid{grid-template-columns:1fr}}
     `;
@@ -268,18 +279,32 @@ export class CreatureLabPanel {
     this.panel.replaceChildren();
     const header = element('header', null, 'creature-lab-header');
     header.append(element('h2', 'CREATURE LAB', 'creature-lab-title'));
-    header.append(element('p', `Current definition: ${state.selectedDisplayName}${state.loading ? ' — loading…' : ''}`, 'creature-lab-current'));
+    header.append(element('p', `Current ${state.selectedPresetId ? 'preset' : 'definition'}: ${state.selectedDisplayName}${state.loading ? ' — loading…' : ''}`, 'creature-lab-current'));
     const top = this.createGrid();
     top.append(this.createButton('Close', () => this.close()));
     getCreatureLabPrimaryActions(this.controller).forEach((action) => top.append(this.createButton(action.label, action.run, { disabled: state.loading })));
     header.append(top);
     this.panel.append(header);
 
+    const presets = this.createSection('Enemy Preset Selector');
+    const presetGrid = this.createGrid();
+    getCreatureLabPresetActions(this.controller, state).forEach(({ label, preset, run }) => {
+      presetGrid.append(this.createButton(label, run, {
+        pressed: state.selectedPresetId === preset.presetId,
+        disabled: state.loading || !preset.supported,
+        title: preset.supported ? `Resolves Creature Definition ${preset.creatureDefinitionId}` : `REGISTERED BUT CURRENT RUNTIME UNSUPPORTED: ${preset.reason}`,
+      }));
+      if (!preset.supported) presets.append(element('p', `${preset.displayName}: REGISTERED BUT CURRENT RUNTIME UNSUPPORTED — ${preset.reason}`, 'creature-lab-note'));
+    });
+    presets.prepend(presetGrid);
+    presets.append(element('p', 'A preset is reusable production tuning. Select a Creature Definition below for definition-only or ad-hoc Lab work.', 'creature-lab-note'));
+    this.panel.append(presets);
+
     const definitions = this.createSection('Definition Selector');
     const definitionGrid = this.createGrid();
     getCreatureLabDefinitionActions(this.controller, state).forEach(({ label, definition, run }) => {
       definitionGrid.append(this.createButton(label, run, {
-        pressed: state.selectedDefinitionId === definition.definitionId,
+        pressed: !state.selectedPresetId && state.selectedDefinitionId === definition.definitionId,
         disabled: state.loading || !definition.supported,
         title: definition.supported ? `Resolves Creature Pack ${definition.creaturePackId}` : `REGISTERED BUT CURRENT RUNTIME UNSUPPORTED: ${definition.reason}`,
       }));
@@ -347,12 +372,30 @@ export class CreatureLabPanel {
       this.createButton('Reset Creature Height', () => this.controller.resetCreatureHeight(), { wide: true }),
     );
     section.append(grid);
-    section.append(element('p', `Production height ${Number(state.productionCreatureHeight).toFixed(2)} m · resulting height ${Number(state.resultingCreatureHeight).toFixed(2)} m. This uniform override rebuilds only the lab actor and never writes the Creature Definition.`, 'creature-lab-note'));
+    section.append(element('p', `${state.selectedPresetId ? 'Production preset' : 'Creature Definition'} height ${Number(state.productionCreatureHeight).toFixed(2)} m · resulting height ${Number(state.resultingCreatureHeight).toFixed(2)} m. This uniform override uses the production presentation path and never mutates source data.`, 'creature-lab-note'));
     return section;
   }
 
   renderWeaponCalibration(state) {
     const section = this.createSection('Weapon Calibration');
+    if (state.selectedPresetId) {
+      section.append(element('p', 'PRODUCTION PRESET DEFAULTS', 'creature-lab-defaults'));
+      section.append(element('pre', JSON.stringify({
+        targetHeight: state.productionCreatureHeight,
+        weaponOverride: state.productionWeaponCalibrationReadout && {
+          assetScale: state.productionWeaponCalibrationReadout.assetScale,
+          gripTransform: state.productionWeaponCalibrationReadout.gripTransform,
+          attackCapsule: state.productionWeaponCalibrationReadout.attackCapsule,
+        },
+      }, null, 2), 'creature-lab-diagnostics'));
+      section.append(element(
+        'p',
+        state.hasUnsavedLabDraft ? 'UNSAVED LAB DRAFT' : 'LOCAL LAB DRAFT — MATCHES PRODUCTION',
+        state.hasUnsavedLabDraft ? 'creature-lab-draft' : 'creature-lab-defaults',
+      ));
+    } else {
+      section.append(element('p', 'LOCAL DEFINITION-SCOPED LAB DRAFT', 'creature-lab-defaults'));
+    }
     const selector = this.createGrid();
     getCreatureLabWeaponActions(this.controller, state).forEach((action) => selector.append(this.createButton(action.label, action.run, {
       pressed: action.pressed,
@@ -401,13 +444,23 @@ export class CreatureLabPanel {
     }));
 
     const controls = this.createGrid();
-    controls.append(
-      this.createButton('Reset Weapon Calibration', () => this.controller.resetWeaponCalibration(), { wide: true }),
-      this.createButton('Copy Calibration JSON', () => this.copyCalibrationJson(), { wide: true }),
-    );
+    if (state.selectedPresetId) {
+      controls.append(
+        this.createButton('Reset to Preset Defaults', () => this.controller.resetToPresetDefaults(), { wide: true }),
+        this.createButton('COPY ENEMY PRESET JSON', () => this.copyEnemyPresetJson(), { wide: true }),
+      );
+    } else {
+      controls.append(
+        this.createButton('Reset Weapon Calibration', () => this.controller.resetWeaponCalibration(), { wide: true }),
+        this.createButton('Copy Calibration JSON', () => this.copyCalibrationJson(), { wide: true }),
+      );
+    }
     section.append(controls);
-    this.calibrationReadout = element('pre', JSON.stringify(state.weaponCalibrationReadout, null, 2), 'creature-lab-diagnostics');
-    this.calibrationReadout.setAttribute('aria-label', 'Weapon calibration JSON');
+    const readoutText = state.selectedPresetId ? state.enemyPresetJson : JSON.stringify(state.weaponCalibrationReadout, null, 2);
+    this.calibrationReadout = element('pre', readoutText, 'creature-lab-diagnostics');
+    this.calibrationReadout.setAttribute('aria-label', state.selectedPresetId ? 'Enemy Preset JSON' : 'Weapon calibration JSON');
+    this.calibrationReadout.tabIndex = 0;
+    this.enemyPresetReadout = state.selectedPresetId ? this.calibrationReadout : null;
     section.append(this.calibrationReadout);
     if (state.offensiveCombat?.capabilityAvailable !== true) section.append(element('p', `This pack cannot equip weapons: ${state.offensiveCombat?.capabilityReason ?? 'Forge socket/offensive Action capability unavailable'}. Calibration values remain isolated lab data.`, 'creature-lab-note'));
     return section;
@@ -577,6 +630,30 @@ export class CreatureLabPanel {
     this.updateDiagnostics();
     if (this.offensiveReadout) this.offensiveReadout.textContent = this.formatOffensiveCombat(this.controller.getViewState().offensiveCombat);
     if (this.status) this.status.textContent = this.transientStatus ?? this.formatLastOperation(this.controller.lastOperation);
+  }
+
+  async copyEnemyPresetJson() {
+    const text = this.controller.getEnemyPresetJson();
+    if (!text) {
+      this.transientStatus = 'Select an Enemy Preset before copying production JSON.';
+      if (this.status) this.status.textContent = this.transientStatus;
+      return;
+    }
+    try {
+      if (!globalThis.navigator?.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(text);
+      this.transientStatus = 'Enemy Preset JSON copied.';
+    } catch {
+      if (this.enemyPresetReadout) {
+        this.enemyPresetReadout.textContent = text;
+        this.enemyPresetReadout.focus?.();
+        const selection = globalThis.getSelection?.();
+        const range = document.createRange?.();
+        if (selection && range) { range.selectNodeContents(this.enemyPresetReadout); selection.removeAllRanges(); selection.addRange(range); }
+      }
+      this.transientStatus = 'Clipboard permission failed. Enemy Preset JSON is visible and selected for manual copy.';
+    }
+    if (this.status) this.status.textContent = this.transientStatus;
   }
 
   async copyCalibrationJson() {

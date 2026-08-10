@@ -272,13 +272,14 @@ test('Creature Lab weapon calibration persists only in its namespace, resets, an
   const productionSnapshot = structuredClone(DREADSTONE_SWORD_WEAPON);
   const storage = memoryStorage({ 'dreadstone.production.weapon': 'untouched' });
   const store = new CreatureLabCalibrationStore({ storage });
-  const calibration = store.load(DREADSTONE_SWORD_WEAPON);
+  const context = { kind: 'definition', id: 'dreadguard' };
+  const calibration = store.load(DREADSTONE_SWORD_WEAPON, context);
   calibration.assetScale = 3.25;
   calibration.gripPosition[0] = 0.175;
   calibration.gripEulerDegrees = [12, -34, 56];
   calibration.attackCapsule.radius = 0.09;
-  const saved = store.save(DREADSTONE_SWORD_WEAPON, calibration);
-  const key = `${CREATURE_LAB_WEAPON_CALIBRATION_NAMESPACE}.dreadstone_sword`;
+  const saved = store.save(DREADSTONE_SWORD_WEAPON, calibration, context);
+  const key = `${CREATURE_LAB_WEAPON_CALIBRATION_NAMESPACE}.definition.dreadguard.dreadstone_sword`;
   assert.ok(storage.values.has(key));
   assert.equal(storage.values.get('dreadstone.production.weapon'), 'untouched');
   const patch = labCalibrationToWeaponDefinitionPatch(DREADSTONE_SWORD_WEAPON, saved);
@@ -286,7 +287,7 @@ test('Creature Lab weapon calibration persists only in its namespace, resets, an
   assert.deepEqual(patch.gripTransform.position, [0.175, 0, 0]);
   assert.equal(patch.gripTransform.quaternion.length, 4);
   assert.equal(patch.attackCapsule.radius, 0.09);
-  const reset = store.reset(DREADSTONE_SWORD_WEAPON);
+  const reset = store.reset(DREADSTONE_SWORD_WEAPON, context);
   assert.equal(reset.assetScale, DREADSTONE_SWORD_WEAPON.assetScale);
   assert.equal(storage.values.has(key), false);
   assert.deepEqual(DREADSTONE_SWORD_WEAPON, productionSnapshot);

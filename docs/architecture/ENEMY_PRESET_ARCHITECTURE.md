@@ -1,0 +1,160 @@
+# Enemy Preset architecture
+
+Milestone 6.7 adds the reusable production-tuning layer between a Creature Definition and a future placed encounter individual.
+
+```text
+Creature Pack
+  technical body/export capability
+        ↓
+Creature Definition
+  gameplay and body archetype
+        ↓
+Enemy Preset
+  reusable production-tuned variant
+        ↓
+future Encounter Instance
+  placed individual
+```
+
+**A preset is reusable production tuning. An encounter instance is a placed individual.**
+
+M6.7 does not add encounter placement, spawning, AI, health/death behavior, gold, loot, shops, persistence, or save-game state.
+
+## Authority boundaries
+
+The layers remain separate:
+
+- Animation Forge owns the body's authored sockets and offensive Action capability, including action timing and compatible weapon classes.
+- Creature Pack owns validated technical body/export truth and repository asset paths.
+- Creature Definition owns the base gameplay/body archetype and its ordinary presentation policy.
+- `NpcWeapon` owns canonical weapon identity, asset, class, stats, base grip, base uniform scale, and base attack capsule.
+- `NpcLoadout` owns a game-authored main-hand weapon reference and the offensive Action IDs that loadout permits. Forge capability filtering remains authoritative.
+- Enemy Preset owns one reusable variant's target height, loadout selection, and optional character-specific weapon calibration.
+- A future Encounter Instance will own placement, facing, home radius, identity, and deliberate per-instance state or overrides.
+
+Enemy Presets never contain Forge technical records, Creature Pack paths, bones, socket transforms, Action phase timing, weapon asset paths, weapon damage, AI, currency, loot, encounter coordinates, or persistence state.
+
+## `dreadstone.enemy_preset.v1`
+
+The strict contract is validated by `src/contracts/EnemyPreset.js`.
+
+```text
+schema, version
+presetId, displayName, creatureDefinitionId
+presentation
+  targetHeight
+armament
+  loadoutId
+  weaponOverride (optional)
+    assetScale
+    gripTransform
+      position
+      quaternion
+    attackCapsule
+      start
+      end
+      radius
+```
+
+`EnemyPresetRegistry` validates, clones, deep-freezes, and rejects duplicate records. The first production record is:
+
+```text
+dread_ram_god_great_mace
+Dread Ram God — Great Mace
+  -> dread_ram_god
+  -> humanoid_dreadstone_mace_main_hand
+  -> dreadstone_mace
+  -> humanoid_one_hand_overhead
+  -> MAIN_HAND_R
+```
+
+Its initial height is the current 1.7 m Ram God presentation height. Its checked-in mace override intentionally begins at the current canonical calibration; it is a production destination for real Lab tuning, not a claim that those numbers are final art calibration.
+
+## Resolution and failure behavior
+
+`EnemyPresetResolver` performs one explicit fail-closed resolution:
+
+```text
+presetId
+  -> validated Enemy Preset
+  -> Creature Definition
+  -> Creature Pack
+  -> composed humanoid runtime profile
+  -> shared production height composition
+  -> registered NPC Loadout
+  -> canonical NPC weapon
+  -> new immutable preset-resolved weapon
+  -> Forge-compatible offensive Actions
+  -> required authored attachment socket
+```
+
+Unknown definitions, packs, loadouts, weapons, incompatible Action capability, unavailable hand sockets, invalid target heights, and invalid weapon overrides are reported rather than hidden or guessed.
+
+The canonical weapon registry object is never mutated. Preset resolution clones the canonical weapon and replaces only uniform `assetScale`, `gripTransform`, and `attackCapsule`. Identity, asset path, class, socket roles, damage, damage type, impact strength, and reach remain canonical.
+
+The runtime transform law remains:
+
+```text
+animated hand bone
+  -> Forge socket
+  -> preset-resolved grip transform
+  -> uniform asset scale below the grip transform
+  -> real weapon GLB
+```
+
+Grip translation therefore does not change when asset scale changes. Capsule endpoints pass through the same asset-scale frame as the GLB, and capsule radius is multiplied by the same uniform scalar.
+
+## Production height composition
+
+`CreaturePresentationResolution.js` is the neutral shared humanoid presentation-height helper. Both Enemy Preset resolution and Creature Lab use it. It creates a new runtime profile with the requested `targetHeight`; it does not scale arbitrary scene roots, edit bones, use non-uniform scaling, or mutate the Creature Definition.
+
+The established visual adapter presentation path still applies that target height, preserving rig, socket, damage-site, collision-profile, and weapon-attachment alignment assumptions.
+
+## Production loadouts
+
+`NpcLoadoutRegistry` resolves stable production-neutral loadout IDs. Canonical records use `mainHandWeaponId` and `allowedOffensiveActionIds`. The former Creature-Lab-named exports remain API aliases to the same production records so existing Lab and test callers continue to work without a second loadout authority.
+
+Loadout permission plus Forge body capability is authoritative. A loadout cannot manufacture an Action, socket, timing interval, or compatible weapon class that Forge did not export.
+
+## Creature Lab calibration workflow
+
+Creature Lab keeps its existing Creature Definition inspection workflow and adds an explicit Enemy Preset selector. Selecting `Dread Ram God — Great Mace` resolves the Ram God body, preset height, real Dreadstone Mace, preset weapon calibration, `MAIN_HAND_R`, and the real overhead Action.
+
+Use the production calibration workflow:
+
+1. Select `Dread Ram God — Great Mace`.
+2. Tune height.
+3. Tune weapon scale and grip.
+4. Tune the attack capsule.
+5. Trigger the real attack.
+6. Reset or check preset defaults as needed.
+7. Use **COPY ENEMY PRESET JSON**.
+8. Promote that JSON into the checked-in preset definition.
+
+The panel labels the checked-in values as **PRODUCTION PRESET DEFAULTS** and the current browser values as a **LOCAL LAB DRAFT**. Any difference displays **UNSAVED LAB DRAFT**. **Reset to Preset Defaults** resets height, scale, grip, and capsule together without changing source files.
+
+Selecting a different Lab weapon exits preset mode into the selected Creature Definition's ad-hoc workflow. This prevents a Lab-only alternate weapon from being mistaken for the preset's production loadout.
+
+## Local draft ownership and migration
+
+Drafts use the versioned namespace:
+
+```text
+dreadstone.creature_lab.weapon_calibration.v2.<scope>.<contextId>.<weaponId>
+```
+
+Preset work uses `scope=preset` and definition-only work uses `scope=definition`. Consequently, two presets using `dreadstone_mace` cannot leak calibration into each other, and definition-only testing cannot overwrite preset drafts.
+
+The old `dreadstone.creature_lab.weapon_calibration.v1.<weaponId>` namespace is intentionally not interpreted as preset production tuning. Existing v1 entries may remain in localStorage, but v2 starts from the checked-in preset or definition-scoped canonical defaults.
+
+## Copy Enemy Preset JSON
+
+The copy action emits the complete `dreadstone.enemy_preset.v1` record in canonical field order using the current live Lab height, uniform asset scale, grip, and capsule. Numbers are rounded to stable eight-place precision. The grip quaternion is normalized and uses a deterministic sign. The payload contains no localStorage keys or draft metadata.
+
+The formatted JSON is always visible in a selectable readout. If the Clipboard API is unavailable or permission is denied, the Lab focuses and selects that readout for touch-friendly manual copying. The browser never mutates the checked-in preset.
+
+Focused coverage is in `tests/enemy-preset.test.mjs` and runs with:
+
+```powershell
+npm run validate:m67-enemy-presets
+```

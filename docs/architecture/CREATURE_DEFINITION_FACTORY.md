@@ -2,6 +2,8 @@
 
 Milestone 4 adds the gameplay-owned layer between validated Creature Packs and the existing humanoid combat actor. It does not change Forge assets, rewrite `HumanoidCombatActor`, add AI or persistence, or migrate canonical Folsom.
 
+Milestone 6.7 now adds Enemy Presets after Creature Definitions without changing this base factory authority. See [ENEMY_PRESET_ARCHITECTURE.md](ENEMY_PRESET_ARCHITECTURE.md).
+
 ```text
 Creature Definition ID
         ↓
@@ -13,6 +15,14 @@ current humanoid runtime profile
         ↓
 HumanoidCombatActor
 ```
+
+The production ownership chain is now:
+
+```text
+Creature Pack -> Creature Definition -> Enemy Preset -> future Encounter Instance
+```
+
+A preset is reusable production tuning. An encounter instance is a placed individual.
 
 ## Authority boundary
 

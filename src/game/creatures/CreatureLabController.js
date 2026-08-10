@@ -7,12 +7,17 @@ import { CreatureFactory } from './CreatureFactory.js';
 import { CreaturePackRegistry } from './CreaturePackRegistry.js';
 import { CreatureLabSiteMarkerRenderer } from './CreatureLabSiteMarkerRenderer.js';
 import {
+  createEnemyPresetRecordFromLabCalibration,
   createCreatureLabHeightResolution,
   CreatureLabCalibrationStore,
   labCalibrationToWeaponDefinitionPatch,
+  serializeEnemyPresetFromLabCalibration,
   setLabCalibrationField,
+  weaponDefinitionToLabCalibration,
 } from './CreatureLabCalibration.js';
 import { summarizeCreatureDefinition } from './CreatureRuntimePolicies.js';
+import { EnemyPresetRegistry } from './EnemyPresetRegistry.js';
+import { EnemyPresetResolver } from './EnemyPresetResolver.js';
 
 const DEFAULT_DEFINITION_ID = 'chezwick';
 const CREATURE_LAB_QUERY_KEY = 'creatureLab';
@@ -59,6 +64,8 @@ export class CreatureLabController {
     registry = new CreaturePackRegistry(),
     definitionRegistry = new CreatureDefinitionRegistry(),
     creatureFactory = null,
+    presetRegistry = new EnemyPresetRegistry(),
+    enemyPresetResolver = null,
     walkerController,
     combatRouter = null,
     playerProvider = null,
@@ -66,6 +73,7 @@ export class CreatureLabController {
     onSubjectChanged = null,
     initialDefinitionId = DEFAULT_DEFINITION_ID,
     initialPackId = null,
+    initialPresetId = null,
     attackHarness = null,
     calibrationStorage = globalThis.localStorage,
     panelFactory = (options) => new CreatureLabPanel(options),
@@ -77,6 +85,14 @@ export class CreatureLabController {
       definitionRegistry: this.definitionRegistry,
       creaturePackRegistry: this.registry,
     });
+    this.presetRegistry = presetRegistry;
+    this.enemyPresetResolver = enemyPresetResolver ?? new EnemyPresetResolver({
+      presetRegistry: this.presetRegistry,
+      definitionRegistry: this.definitionRegistry,
+      creaturePackRegistry: this.registry,
+      creatureFactory: this.creatureFactory,
+      weaponRegistry: attackHarness?.weaponRegistry,
+    });
     this.walkerController = walkerController;
     this.combatRouter = combatRouter;
     this.playerProvider = playerProvider;
@@ -84,14 +100,20 @@ export class CreatureLabController {
     this.onSubjectChanged = onSubjectChanged;
     this.initialDefinitionId = initialDefinitionId;
     this.initialPackId = initialPackId;
+    this.initialPresetId = initialPresetId;
     this.attackHarness = attackHarness;
     this.calibrationStore = new CreatureLabCalibrationStore({ storage: calibrationStorage });
     this.panelFactory = panelFactory;
     this.definitionOptions = [];
+    this.presetOptions = [];
     this.weaponOptions = this.attackHarness?.listWeapons?.() ?? [];
     this.selectedWeaponId = this.attackHarness?.getSelectedWeaponId?.() ?? this.weaponOptions[0]?.weaponId ?? null;
     this.weaponCalibration = null;
     this.creatureHeightOverride = null;
+    this.calibrationContext = null;
+    this.productionWeaponDefinition = null;
+    this.selectedPreset = null;
+    this.resolvedPreset = null;
     this.selectedDefinition = null;
     this.selectedPack = null;
     this.resolvedCreature = null;
@@ -113,8 +135,6 @@ export class CreatureLabController {
   get actor() { return this.walkerController?.actor ?? null; }
 
   async initialize() {
-    const initialWeapon = this.getSelectedWeaponDefinition();
-    if (initialWeapon) this.weaponCalibration = this.calibrationStore.load(initialWeapon);
     const definitions = this.definitionRegistry.listDefinitions();
     this.definitionOptions = await Promise.all(definitions.map(async (definition) => {
       try {
@@ -146,12 +166,40 @@ export class CreatureLabController {
         };
       }
     }));
+    this.presetOptions = await Promise.all(this.presetRegistry.listPresets().map(async (preset) => {
+      try {
+        const resolved = await this.enemyPresetResolver.resolve(preset.presetId);
+        return {
+          presetId: preset.presetId,
+          displayName: preset.displayName,
+          creatureDefinitionId: preset.creatureDefinitionId,
+          preset,
+          resolved,
+          supported: true,
+          code: 'SUPPORTED',
+          reason: null,
+        };
+      } catch (error) {
+        return {
+          presetId: preset.presetId,
+          displayName: preset.displayName,
+          creatureDefinitionId: preset.creatureDefinitionId,
+          preset,
+          resolved: null,
+          supported: false,
+          code: error.code ?? 'PRESET_RESOLUTION_FAILED',
+          reason: error.message,
+        };
+      }
+    }));
+    const requestedPreset = this.presetOptions.find((entry) => entry.presetId === this.initialPresetId && entry.supported);
     const requested = this.definitionOptions.find((entry) => entry.definitionId === this.initialDefinitionId && entry.supported);
     const legacyRequested = this.initialPackId
       ? this.definitionOptions.filter((entry) => entry.creaturePackId === this.initialPackId && entry.supported)
       : [];
     const initial = requested ?? (legacyRequested.length === 1 ? legacyRequested[0] : null) ?? this.definitionOptions.find((entry) => entry.supported) ?? null;
-    if (initial) await this.selectDefinition(initial.definitionId);
+    if (requestedPreset) await this.selectPreset(requestedPreset.presetId);
+    else if (initial) await this.selectDefinition(initial.definitionId);
     else this.recordOperation('initialize', { accepted: false, reason: 'No registered Creature Definition is supported by the current humanoid runtime.' });
     if (globalThis.document?.body && !this.disposed) this.panel = this.panelFactory({ controller: this, parent: document.body });
     this.installDebugCommands();
@@ -186,47 +234,96 @@ export class CreatureLabController {
     const option = this.definitionOptions.find((entry) => entry.definitionId === definitionId);
     if (!option) return this.recordOperation('selectDefinition', { accepted: false, reason: `Unknown registered definition ${definitionId}.` });
     if (!option.supported) return this.recordOperation('selectDefinition', { accepted: false, reason: option.reason, code: option.code });
+    return this.activateCreatureSelection({
+      baseResolved: option.resolved ?? await this.creatureFactory.resolve(definitionId),
+      presetResolution: null,
+      options,
+      operation: options.operation ?? 'selectDefinition',
+    });
+  }
+
+  async selectPreset(presetId, options = {}) {
+    if (this.disposed) return { accepted: false, reason: 'Creature Lab is disposed.' };
+    const option = this.presetOptions.find((entry) => entry.presetId === presetId);
+    if (!option) return this.recordOperation('selectPreset', { accepted: false, reason: `Unknown registered Enemy Preset ${presetId}.` });
+    if (!option.supported) return this.recordOperation('selectPreset', { accepted: false, reason: option.reason, code: option.code });
+    const resolved = option.resolved ?? await this.enemyPresetResolver.resolve(presetId);
+    return this.activateCreatureSelection({
+      baseResolved: resolved,
+      presetResolution: resolved,
+      options,
+      operation: 'selectPreset',
+    });
+  }
+
+  async activateCreatureSelection({ baseResolved, presetResolution = null, options = {}, operation }) {
     const serial = ++this.selectionSerial;
     this.loading = true;
     this.notify();
     try {
-      const baseResolved = option.resolved ?? await this.creatureFactory.resolve(definitionId);
-      const sameDefinition = this.selectedDefinition?.definitionId === definitionId;
+      const definition = baseResolved.definition;
+      const productionHeight = presetResolution?.preset.presentation.targetHeight
+        ?? definition.presentation.targetHeight;
+      const requestedWeaponId = presetResolution?.weapon.weaponId
+        ?? options.selectedWeaponId
+        ?? this.selectedWeaponId
+        ?? this.weaponOptions[0]?.weaponId;
+      const productionWeapon = presetResolution?.weapon
+        ?? this.weaponOptions.find((weapon) => weapon.weaponId === requestedWeaponId);
+      if (!productionWeapon) throw new Error(`Creature Lab weapon ${requestedWeaponId ?? 'unknown'} is unavailable.`);
+      const calibrationContext = presetResolution
+        ? { kind: 'preset', id: presetResolution.preset.presetId }
+        : { kind: 'definition', id: definition.definitionId };
+      const draft = this.calibrationStore.loadDraft({
+        context: calibrationContext,
+        weaponDefinition: productionWeapon,
+        targetHeight: productionHeight,
+      });
       const requestedHeight = Object.hasOwn(options, 'heightOverride')
-        ? options.heightOverride
-        : sameDefinition ? this.creatureHeightOverride : null;
+        ? (options.heightOverride ?? productionHeight)
+        : draft.targetHeight;
       const restoreArmament = options.restoreArmament === true
         && this.attackHarness?.getDiagnostics?.().equipped === true;
       const resolved = createCreatureLabHeightResolution(baseResolved, requestedHeight);
-      const { definition, pack, profile } = resolved;
+      const { pack, profile } = resolved;
       this.weaponControllerProvider?.()?.cancel?.('creature-lab-definition-switch');
       this.attackHarness?.clearSubject?.('creature-lab-definition-switch');
       this.disposeSiteMarkers();
       if (this.actor) this.walkerController.disposeWalker({ respawn: false });
       this.selectedDefinition = definition;
+      this.selectedPreset = presetResolution?.preset ?? null;
+      this.resolvedPreset = presetResolution;
       this.selectedPack = pack;
       this.resolvedCreature = resolved;
       this.effectiveProfile = profile;
-      this.creatureHeightOverride = requestedHeight;
+      this.calibrationContext = calibrationContext;
+      this.productionWeaponDefinition = productionWeapon;
+      this.selectedWeaponId = requestedWeaponId;
+      this.weaponCalibration = draft.weaponCalibration;
+      this.creatureHeightOverride = Math.abs(requestedHeight - productionHeight) > 1e-8 ? requestedHeight : null;
       this.selectedSiteId = null;
       this.walkerController.actorFactory = (options) => this.creatureFactory.createActorFromResolved(resolved, options).actor;
       this.walkerController.enabled = true;
       this.walkerController.pauseLocomotion = true;
       const spawned = this.walkerController.reset(this.playerProvider?.());
       this.onSubjectChanged?.(this.getSubjectState());
-      if (!spawned || !this.actor) throw new Error(`Creature Lab could not find a safe Folsom spawn for ${definitionId}.`);
+      if (!spawned || !this.actor) throw new Error(`Creature Lab could not find a safe Folsom spawn for ${definition.definitionId}.`);
       await this.actor.visualAdapter?.ready;
       if (serial !== this.selectionSerial || this.disposed) return { accepted: false, reason: 'Definition selection was superseded.' };
-      this.attackHarness?.setSubject?.(this.actor, { pack: this.selectedPack });
-      if (this.selectedWeaponId) this.attackHarness?.selectWeapon?.(this.selectedWeaponId);
+      this.attackHarness?.setSubject?.(this.actor, {
+        pack: this.selectedPack,
+        ...(presetResolution ? { loadout: presetResolution.loadout } : {}),
+      });
+      if (!presetResolution && this.selectedWeaponId) this.attackHarness?.selectWeapon?.(this.selectedWeaponId);
       this.applyWeaponCalibrationToHarness();
       const armamentRestoreResult = restoreArmament ? await this.attackHarness?.equip?.() : null;
       this.selectedSiteId = this.getProgressiveSites()[0]?.siteId ?? null;
       this.createSiteMarkers();
       this.onSubjectChanged?.(this.getSubjectState());
-      return this.recordOperation('selectDefinition', {
+      return this.recordOperation(operation, {
         accepted: true,
-        definitionId,
+        definitionId: definition.definitionId,
+        presetId: presetResolution?.preset.presetId ?? null,
         creaturePackId: pack.packId,
         actorInstanceId: this.actor.instanceId,
         resultingHeight: profile.targetHeight,
@@ -239,7 +336,7 @@ export class CreatureLabController {
       this.disposeSiteMarkers();
       if (serial === this.selectionSerial && this.actor) this.walkerController.disposeWalker({ respawn: false });
       this.onSubjectChanged?.(this.getSubjectState());
-      return this.recordOperation('selectDefinition', null, error);
+      return this.recordOperation(operation, null, error);
     } finally {
       if (serial === this.selectionSerial) this.loading = false;
       this.notify();
@@ -269,10 +366,10 @@ export class CreatureLabController {
 
   async respawn() {
     if (!this.selectedDefinition) return this.recordOperation('respawn', { accepted: false, reason: 'No supported definition is selected.' });
-    return this.selectDefinition(this.selectedDefinition.definitionId, {
-      heightOverride: this.creatureHeightOverride,
-      restoreArmament: true,
-    });
+    const options = { restoreArmament: true, operation: 'respawn' };
+    return this.selectedPreset
+      ? this.selectPreset(this.selectedPreset.presetId, options)
+      : this.selectDefinition(this.selectedDefinition.definitionId, options);
   }
 
   getSelectedWeaponDefinition() {
@@ -287,14 +384,48 @@ export class CreatureLabController {
       ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' };
   }
 
-  selectWeapon(weaponId) {
+  getProductionTargetHeight() {
+    return this.selectedPreset?.presentation?.targetHeight
+      ?? this.selectedDefinition?.presentation?.targetHeight
+      ?? null;
+  }
+
+  saveCurrentCalibrationDraft({ targetHeight = this.effectiveProfile?.targetHeight, weaponCalibration = this.weaponCalibration } = {}) {
+    if (!this.calibrationContext || !this.productionWeaponDefinition) {
+      throw new Error('Creature Lab calibration context is unavailable.');
+    }
+    return this.calibrationStore.saveDraft({
+      context: this.calibrationContext,
+      weaponDefinition: this.productionWeaponDefinition,
+      targetHeight,
+      weaponCalibration,
+    });
+  }
+
+  async selectWeapon(weaponId) {
     const definition = this.weaponOptions.find((weapon) => weapon.weaponId === weaponId);
     if (!definition) return this.recordOperation('selectWeapon', { accepted: false, reason: `Unknown Creature Lab weapon ${weaponId}.` });
+    if (this.selectedPreset && weaponId === this.selectedWeaponId) {
+      return this.recordOperation('selectWeapon', { accepted: true, weaponId, presetId: this.selectedPreset.presetId, alreadySelected: true });
+    }
+    if (this.selectedDefinition) {
+      return this.selectDefinition(this.selectedDefinition.definitionId, {
+        selectedWeaponId: weaponId,
+        restoreArmament: this.attackHarness?.getDiagnostics?.().equipped === true,
+        operation: 'selectWeapon',
+      });
+    }
     const selected = this.attackHarness?.selectWeapon?.(weaponId)
       ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' };
     if (selected.accepted === false) return this.recordOperation('selectWeapon', selected);
     this.selectedWeaponId = weaponId;
-    this.weaponCalibration = this.calibrationStore.load(definition);
+    this.productionWeaponDefinition = definition;
+    this.calibrationContext = { kind: 'definition', id: 'definition_only' };
+    this.weaponCalibration = this.calibrationStore.loadDraft({
+      context: this.calibrationContext,
+      weaponDefinition: definition,
+      targetHeight: 1,
+    }).weaponCalibration;
     const applied = this.applyWeaponCalibrationToHarness();
     return this.recordOperation('selectWeapon', {
       accepted: true,
@@ -308,7 +439,7 @@ export class CreatureLabController {
     const definition = this.getSelectedWeaponDefinition();
     if (!definition || !this.weaponCalibration) return { accepted: false, reason: 'No Creature Lab weapon is selected.' };
     const updated = setLabCalibrationField(this.weaponCalibration, field, value);
-    this.weaponCalibration = this.calibrationStore.save(definition, updated);
+    this.weaponCalibration = this.saveCurrentCalibrationDraft({ weaponCalibration: updated }).weaponCalibration;
     const applied = this.applyWeaponCalibrationToHarness();
     this.lastOperation = {
       operation: 'weaponCalibration',
@@ -324,7 +455,8 @@ export class CreatureLabController {
   resetWeaponCalibration() {
     const definition = this.getSelectedWeaponDefinition();
     if (!definition) return this.recordOperation('resetWeaponCalibration', { accepted: false, reason: 'No Creature Lab weapon is selected.' });
-    this.weaponCalibration = this.calibrationStore.reset(definition);
+    this.weaponCalibration = weaponDefinitionToLabCalibration(this.productionWeaponDefinition ?? definition);
+    this.saveCurrentCalibrationDraft({ weaponCalibration: this.weaponCalibration });
     const applied = this.applyWeaponCalibrationToHarness();
     return this.recordOperation('resetWeaponCalibration', {
       accepted: true,
@@ -344,10 +476,10 @@ export class CreatureLabController {
     if (!this.selectedDefinition) return this.recordOperation('creatureHeight', { accepted: false, reason: 'No supported definition is selected.' });
     const height = Number(targetHeight);
     try {
-      return await this.selectDefinition(this.selectedDefinition.definitionId, {
-        heightOverride: height,
-        restoreArmament: true,
-      });
+      this.saveCurrentCalibrationDraft({ targetHeight: height });
+      return this.selectedPreset
+        ? await this.selectPreset(this.selectedPreset.presetId, { restoreArmament: true, operation: 'creatureHeight' })
+        : await this.selectDefinition(this.selectedDefinition.definitionId, { restoreArmament: true, operation: 'creatureHeight' });
     } catch (error) {
       return this.recordOperation('creatureHeight', null, error);
     }
@@ -355,9 +487,53 @@ export class CreatureLabController {
 
   async resetCreatureHeight() {
     if (!this.selectedDefinition) return this.recordOperation('resetCreatureHeight', { accepted: false, reason: 'No supported definition is selected.' });
-    return this.selectDefinition(this.selectedDefinition.definitionId, {
-      heightOverride: null,
-      restoreArmament: true,
+    this.saveCurrentCalibrationDraft({ targetHeight: this.getProductionTargetHeight() });
+    return this.selectedPreset
+      ? this.selectPreset(this.selectedPreset.presetId, { restoreArmament: true, operation: 'resetCreatureHeight' })
+      : this.selectDefinition(this.selectedDefinition.definitionId, { restoreArmament: true, operation: 'resetCreatureHeight' });
+  }
+
+  async resetToPresetDefaults() {
+    if (!this.selectedPreset || !this.resolvedPreset) {
+      return this.recordOperation('resetToPresetDefaults', { accepted: false, reason: 'Select an Enemy Preset before resetting production defaults.' });
+    }
+    const presetId = this.selectedPreset.presetId;
+    this.calibrationStore.resetDraft({
+      context: this.calibrationContext,
+      weaponDefinition: this.resolvedPreset.weapon,
+      targetHeight: this.selectedPreset.presentation.targetHeight,
+    });
+    return this.selectPreset(presetId, { restoreArmament: true, operation: 'resetToPresetDefaults' });
+  }
+
+  hasUnsavedLabDraft() {
+    if (!this.productionWeaponDefinition || !this.weaponCalibration) return false;
+    const definition = this.getSelectedWeaponDefinition();
+    if (!definition) return false;
+    const currentPatch = labCalibrationToWeaponDefinitionPatch(definition, this.weaponCalibration);
+    const baselineCalibration = weaponDefinitionToLabCalibration(this.productionWeaponDefinition);
+    const baselinePatch = labCalibrationToWeaponDefinitionPatch(this.productionWeaponDefinition, baselineCalibration);
+    return Math.abs((this.effectiveProfile?.targetHeight ?? 0) - (this.getProductionTargetHeight() ?? 0)) > 1e-8
+      || JSON.stringify(currentPatch) !== JSON.stringify(baselinePatch);
+  }
+
+  getEnemyPresetRecord() {
+    if (!this.selectedPreset || !this.weaponCalibration) return null;
+    return createEnemyPresetRecordFromLabCalibration({
+      preset: this.selectedPreset,
+      targetHeight: this.effectiveProfile?.targetHeight,
+      weaponDefinition: this.getSelectedWeaponDefinition(),
+      calibration: this.weaponCalibration,
+    });
+  }
+
+  getEnemyPresetJson() {
+    if (!this.selectedPreset || !this.weaponCalibration) return null;
+    return serializeEnemyPresetFromLabCalibration({
+      preset: this.selectedPreset,
+      targetHeight: this.effectiveProfile?.targetHeight,
+      weaponDefinition: this.getSelectedWeaponDefinition(),
+      calibration: this.weaponCalibration,
     });
   }
 
@@ -645,10 +821,12 @@ export class CreatureLabController {
   getViewState() {
     return {
       loading: this.loading,
+      presets: this.presetOptions.map(({ preset: _preset, resolved: _resolved, ...entry }) => entry),
       definitions: this.definitionOptions.map(({ descriptor: _descriptor, definition: _definition, resolved: _resolved, profile: _profile, ...entry }) => entry),
+      selectedPresetId: this.selectedPreset?.presetId ?? null,
       selectedDefinitionId: this.selectedDefinition?.definitionId ?? null,
       selectedPackId: this.selectedPack?.packId ?? null,
-      selectedDisplayName: this.selectedDefinition?.displayName ?? 'None',
+      selectedDisplayName: this.selectedPreset?.displayName ?? this.selectedDefinition?.displayName ?? 'None',
       selectedSiteId: this.selectedSiteId,
       showSites: this.showSites,
       showSelectedRadius: this.showSelectedRadius,
@@ -668,9 +846,16 @@ export class CreatureLabController {
       selectedWeaponId: this.selectedWeaponId,
       weaponCalibration: this.weaponCalibration ? structuredClone(this.weaponCalibration) : null,
       weaponCalibrationReadout: this.getWeaponCalibrationReadout(),
-      productionCreatureHeight: this.selectedDefinition?.presentation?.targetHeight ?? null,
+      productionWeaponCalibrationReadout: this.productionWeaponDefinition
+        ? labCalibrationToWeaponDefinitionPatch(this.productionWeaponDefinition, weaponDefinitionToLabCalibration(this.productionWeaponDefinition))
+        : null,
+      productionCreatureHeight: this.getProductionTargetHeight(),
       resultingCreatureHeight: this.effectiveProfile?.targetHeight ?? null,
       creatureHeightOverride: this.creatureHeightOverride,
+      calibrationContext: this.calibrationContext ? { ...this.calibrationContext } : null,
+      hasUnsavedLabDraft: this.hasUnsavedLabDraft(),
+      enemyPresetRecord: this.getEnemyPresetRecord(),
+      enemyPresetJson: this.getEnemyPresetJson(),
       lastOperation: this.lastOperation,
       lastPhysicalTargetingDecision: this.getSiteTargeting()?.getDiagnostics?.().lastPhysicalTargetingDecision ?? null,
       offensiveCombat: this.attackHarness?.getDiagnostics?.() ?? { enabled: false },
@@ -687,16 +872,20 @@ export class CreatureLabController {
     const compatibilitySiteCount = this.getProgressiveSites().filter((site) => site.authority === 'COMPATIBILITY').length;
     return {
       enabled: true,
+      selectedPreset: this.selectedPreset?.presetId ?? null,
       selectedDefinition: this.selectedDefinition?.definitionId ?? null,
       selectedPack: this.selectedPack?.packId ?? null,
-      selectedDisplayName: this.selectedDefinition?.displayName ?? null,
+      selectedDisplayName: this.selectedPreset?.displayName ?? this.selectedDefinition?.displayName ?? null,
       effectiveCreatureDefinition: summarizeCreatureDefinition(this.selectedDefinition),
       effectiveProfileName: this.effectiveProfile?.name ?? null,
-      productionCreatureHeight: this.selectedDefinition?.presentation?.targetHeight ?? null,
+      productionCreatureHeight: this.getProductionTargetHeight(),
       resultingCreatureHeight: this.effectiveProfile?.targetHeight ?? null,
       creatureHeightOverride: this.creatureHeightOverride,
       selectedWeaponId: this.selectedWeaponId,
       weaponCalibration: this.getWeaponCalibrationReadout(),
+      calibrationContext: this.calibrationContext,
+      hasUnsavedLabDraft: this.hasUnsavedLabDraft(),
+      enemyPresetRecord: this.getEnemyPresetRecord(),
       actorInstanceId: this.actor?.instanceId ?? null,
       actorLifeState: this.actor?.lifeState ?? null,
       activeAnimation: actorDiagnostics?.visualAdapter?.animation?.activeAnimation
@@ -719,6 +908,7 @@ export class CreatureLabController {
       colliderCount: (this.actor?.colliders?.size ?? 0) + (actorDiagnostics?.dismemberment?.detachedColliderCount ?? 0),
       packCost: this.selectedPack?.cost ?? null,
       definitionSupport: this.definitionOptions.map(({ definitionId, displayName, creaturePackId, supported, code, reason }) => ({ definitionId, displayName, creaturePackId, supported, code, reason })),
+      presetSupport: this.presetOptions.map(({ presetId, displayName, creatureDefinitionId, supported, code, reason }) => ({ presetId, displayName, creatureDefinitionId, supported, code, reason })),
       lastOperation: this.lastOperation,
       offensiveCombat: this.attackHarness?.getDiagnostics?.() ?? { enabled: false },
     };
@@ -733,6 +923,7 @@ export class CreatureLabController {
   installDebugCommands() {
     if (import.meta.env?.DEV !== true || typeof globalThis === 'undefined') return;
     this.debugCommands = Object.freeze({
+      selectPreset: (presetId) => this.selectPreset(presetId),
       selectDefinition: (definitionId) => this.selectDefinition(definitionId),
       selectPack: (packId) => this.selectPack(packId),
       respawn: () => this.respawn(),
@@ -746,6 +937,8 @@ export class CreatureLabController {
       selectWeapon: (weaponId) => this.selectWeapon(weaponId),
       setWeaponCalibrationField: (field, value) => this.setWeaponCalibrationField(field, value, { notify: true }),
       resetWeaponCalibration: () => this.resetWeaponCalibration(),
+      resetToPresetDefaults: () => this.resetToPresetDefaults(),
+      copyEnemyPresetJson: () => this.getEnemyPresetJson(),
       setCreatureHeight: (height) => this.setCreatureHeight(height),
       resetCreatureHeight: () => this.resetCreatureHeight(),
       resetPlayer: () => this.resetPlayer(),

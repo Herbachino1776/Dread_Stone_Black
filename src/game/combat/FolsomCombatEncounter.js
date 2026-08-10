@@ -197,8 +197,9 @@ export class FolsomCombatEncounter {
       combatRouter: this.combatRouter,
       playerProvider: () => this.player,
       weaponControllerProvider: () => this.weaponController,
+      initialPresetId: this.query.get('enemyPreset'),
       initialDefinitionId: this.query.get('creatureDefinition'),
-      initialPackId: this.query.has('creatureDefinition') ? null : this.query.get('creaturePack'),
+      initialPackId: this.query.has('creatureDefinition') || this.query.has('enemyPreset') ? null : this.query.get('creaturePack'),
       attackHarness: this.creatureLabAttackHarness,
       onSubjectChanged: (subject) => this.syncCreatureLabSubject(subject),
     });
