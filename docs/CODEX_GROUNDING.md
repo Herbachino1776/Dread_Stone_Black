@@ -4,27 +4,55 @@
 
 Dread Stone Black is a mobile-first, browser-playable first-person dungeon crawler built with Vite, Three.js, and plain JavaScript/TypeScript tooling. Its target feel is slow, physical, readable, ominous, and tactile. The player forces a buried world to reveal what it has sealed away.
 
-This is an original game, not a generic Three.js demo or a fantasy prototype. Older first-PR and test-dungeon plans describe project history, not the current target.
+This is an original game, not a generic Three.js demo or a literal implementation of the old strategy guide. Older guides, audits, blueprints, first-PR plans, and test-dungeon plans describe design history and useful raw ideas, not automatic implementation requirements.
 
 ## Source of current direction
 
 Read these before implementation work:
 
 1. `AGENTS.md`
-2. `docs/current_milestone_folsom_growth.md`
-3. `docs/chapter_2_closure_chapter_3_readiness.md`
-4. the relevant runtime definitions and systems
-5. longer strategy, architecture, and blueprint documents only as supporting reference
+2. `docs/CURRENT_PRODUCTION_NOTE.md`
+3. the active milestone document, currently `docs/current_milestone_folsom_growth.md`
+4. `docs/ACTUAL_GAME_TRAJECTORY.md`
+5. the relevant runtime/architecture documents for the system being changed
+6. longer strategy, architecture, and blueprint documents only as supporting reference
 
-Current locks override older documents when they conflict.
+The immediate production lock overrides the macro trajectory for narrow implementation details. Both override older strategy material when they conflict.
 
-## Current target
+## Current game position
 
-The Folsom tool loop, physical Shrine Side Room/crawlspace, canonical Keeper's Lantern pickup, reveal-gated surface endpoints, Underworks transition, drain loop, hidden five-hit growth gate, and blue-flame threshold form the integrated Chapter 2 spine. See [`chapter_2_integrated_flow_map.md`](chapter_2_integrated_flow_map.md).
+The rewritten Folsom Chapters 1-2 spine is implemented through the physical tool-shed proof, Shrine Side Room/crawlspace, Keeper's Lantern reveal network, connected surface endpoints, Underworks, drain-bar pry, hidden Lantern-revealed growth gate, blue-flame threshold, explicit lower shrine hatch, impossible White-Scab front threshold, remote lower-knot release, and the separate under-shrine labyrinth bypass.
 
-The next target is the missing lower shrine hatch at the blue-hall/Lower Shrine Stair seam. Preserve the Chapter 3 room skeleton, but keep White-Scab Hall mechanics paused.
+The current production boundary is behind the denied White-Scab threshold after exiting the labyrinth end hatch.
 
-Do not add tutorial popups, progression tokens, enemies, Records UI, Memory UI, Pale Gates, a broad white-machinery framework, bosses, or unrelated route expansion.
+Do not replace that route with the old guide's direct Chapter 3 entry.
+
+## Current design language
+
+- Black growth/scab is physical material that covers, binds, feeds, seals, or protects something real.
+- The old prescribed Severing-gesture ladder is no longer the core mechanic.
+- Knife, Axe, and Drain Bar interactions succeed through the correct held tool, physical motion/contact, active tool part, authored stage, and prerequisite state. Interact/A is not a blocker-victory fallback.
+- The Keeper's Lantern is a bounded reveal instrument for hidden glyphs, lines, feeds, stains, and structures. It is not merely a stronger Torch or a generic objective highlighter.
+- Prefer environmental comprehension and persistent world changes over map/checklist dependence and progression-token inventory clutter.
+- White architecture should feel ancient, pale, sacred, intricate, embedded, and impossible rather than generic sci-fi machinery.
+
+The next lower-shrine production work should establish the live game's black covering -> reveal -> physical manipulation -> exposed pale structure -> readable architectural response language with a narrow playable proof before any broad framework is built.
+
+## Creature platform status
+
+The production creature chain is now:
+
+```text
+Forge export
+  -> validated Creature Pack
+  -> Creature Definition
+  -> Creature Factory
+  -> current runtime actor
+```
+
+Creature Lab has proven multiple production bodies and multi-site animated damage. Creature-platform work is now demand-driven. Do not automatically add physiology, universal creature persistence, simulation tiers, non-humanoid abstraction, or a broad AI framework until a real production encounter requires them.
+
+Do not use raw Forge `siteId` strings as gameplay semantics.
 
 ## Technical and workflow grounding
 
@@ -33,9 +61,16 @@ Do not add tutorial popups, progression tokens, enemies, Records UI, Memory UI, 
 - Preserve GitHub Pages behavior and the Vite base path.
 - Prefer small named modules and existing good helpers over speculative frameworks.
 - Preserve working starter systems outside the requested scope.
-- Use world state for routes, opened structures, and cleared seals.
+- Use world state for routes, opened structures, destroyed growth, and cleared seals.
 - Run the narrowest relevant validation, then `npm run build` for code changes or when explicitly requested.
+- Manual device-scale testing matters for held-tool ergonomics and real creature encounters.
 
 ## Scope discipline
 
-Do not turn Chapter 3 readiness into a broad combat, enemy, town, Records, Memory, Pale Gate, church, boss, or route-expansion pass. The near-term standard is a narrow playable proof that survives reload and remains readable on mobile.
+Do not interpret divergence from the strategy guide as missing work by default.
+
+When adapting an old beat, preserve useful purpose — atmosphere, realization, pressure, location idea, physical object, enemy, or story clue — and rebuild it using the live game's current interaction language.
+
+Do not turn a narrow Chapter 3 proof into a general white-machinery framework, map system, Records/Memory system, creature physiology pass, AI platform, boss ladder, or unrelated route expansion unless explicitly requested.
+
+The near-term bias is toward playable world production: stabilize physical tool ergonomics, cross the current Chapter 3 boundary with one strong White-Scab/pale-system proof, then introduce a real production creature encounter when the authored location calls for it.
