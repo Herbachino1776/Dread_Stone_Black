@@ -302,6 +302,8 @@ test('Folsom Creature Lab switches definitions through Dread Ram God, Chezwick, 
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
   assert.equal(blockerCount(), 1);
   const initialActor = encounter.actor;
+  assert.equal(lab.getDiagnostics().offensiveCombat.subjectInstanceId, initialActor.instanceId);
+  assert.equal(lab.getDiagnostics().offensiveCombat.attackId, null);
   const initialCollider = initialActor.colliders.get('upper_chest');
   assert.equal((await lab.selectDefinition('dread_ram_god')).accepted, true);
   assert.equal(initialActor.disposed, true);
@@ -309,6 +311,8 @@ test('Folsom Creature Lab switches definitions through Dread Ram God, Chezwick, 
   assert.equal(encounter.actor.visualProfile.creaturePackId, 'dread_ram_god_damage_v001');
   assert.equal(encounter.actor.visualProfile.creatureDefinitionId, 'dread_ram_god');
   assert.equal(encounter.actor.visualProfile.targetHeight, 1.7);
+  assert.equal(lab.getDiagnostics().offensiveCombat.subjectInstanceId, encounter.actor.instanceId);
+  assert.equal(lab.getDiagnostics().offensiveCombat.acceptedPlayerHitCount, 0);
   assert.equal(lab.getDiagnostics().nativeSiteCount, 4);
   assert.equal(lab.getDiagnostics().compatibilitySiteCount, 0);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
@@ -410,6 +414,8 @@ test('Folsom Creature Lab switches definitions through Dread Ram God, Chezwick, 
   assert.equal(firstMarkers.disposed, true);
   assert.equal(encounter.combatRouter.resolveCollider(firstCollider, new THREE.Vector3()), null);
   assert.equal(encounter.actor.visualProfile.creaturePackId, 'chezwick_damage_v001');
+  assert.equal(lab.getDiagnostics().offensiveCombat.subjectInstanceId, encounter.actor.instanceId);
+  assert.equal(lab.getDiagnostics().offensiveCombat.attackId, null);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
   assert.equal(blockerCount(), 1);
 
@@ -419,6 +425,8 @@ test('Folsom Creature Lab switches definitions through Dread Ram God, Chezwick, 
   assert.equal(secondActor.disposed, true);
   assert.equal(encounter.combatRouter.resolveCollider(secondCollider, new THREE.Vector3()), null);
   assert.equal(encounter.actor.visualProfile.creaturePackId, 'dreadguard_damage_v001');
+  assert.equal(lab.getDiagnostics().offensiveCombat.subjectInstanceId, encounter.actor.instanceId);
+  assert.equal(lab.getDiagnostics().offensiveCombat.acceptedPlayerHitCount, 0);
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
   assert.equal(blockerCount(), 1);
 
@@ -428,6 +436,8 @@ test('Folsom Creature Lab switches definitions through Dread Ram God, Chezwick, 
   assert.equal(thirdActor.disposed, true);
   assert.equal(encounter.combatRouter.resolveCollider(thirdCollider, new THREE.Vector3()), null);
   assert.equal(encounter.actor.visualProfile.creaturePackId, 'dread_ram_god_damage_v001');
+  assert.equal(lab.getDiagnostics().offensiveCombat.subjectInstanceId, encounter.actor.instanceId);
+  assert.equal(lab.getDiagnostics().offensiveCombat.attackId, null);
   assert.equal(lab.getDiagnostics().nativeSiteCount, 4);
   assert.equal(lab.getDiagnostics().activeGoreCount, 0);
   assert.equal(lab.getDiagnostics().activeStainCount, 0);
@@ -453,6 +463,7 @@ test('default Folsom remains the legacy four-Chezwick wave outside explicit lab 
   const { player, dungeon } = createFolsomFixture();
   const encounter = await FolsomCombatEncounter.create({ dungeon, player, creatureLabEnabled: false });
   assert.equal(encounter.creatureLabController, null);
+  assert.equal(encounter.creatureLabAttackHarness, null);
   assert.equal(encounter.getWalkerControllers().length, 4);
   assert.ok(encounter.getWalkerControllers().every((controller) => controller.actor.visualProfile === CHEZWICK_DAMAGE_COMBAT_PROFILE));
   encounter.dispose();

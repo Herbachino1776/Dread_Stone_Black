@@ -20,6 +20,7 @@ import { reloadToNewGameStartupRoute } from './startupRoute.js';
 import { GameAudioRuntime } from './audio/GameAudioRuntime.js';
 import { resolveOutdoorTorchWarning } from './world-scene/OutdoorTorchRequirement.js';
 import { CombatLabDebugPanel } from './combat/CombatLabDebugPanel.js';
+import { PlayerCombatDamageReceiver } from './combat/PlayerCombatDamageReceiver.js';
 import { createCreatureLabReadOnlyStorage, resolveCreatureLabMode } from './creatures/CreatureLabController.js';
 
 export class Game {
@@ -46,6 +47,7 @@ export class Game {
     this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
     this.perfDebugEnabled = query.get('perf') === '1';
     this.isPaused = false;
+    this.isPlayerDead = false;
     this.outdoorTorchWarningArmed = true;
     this.resetConfirmTimer = null;
     this.wasKeyboardInteractHeld = false;
@@ -129,6 +131,21 @@ export class Game {
     this.objectiveRuntime = this.progressionHost.getObjectiveRuntime();
     this.hud = this.hudHost.hud;
     this.feedback = new Feedback(this.camera);
+    this.playerCombatDamageReceiver = this.creatureLabEnabled ? new PlayerCombatDamageReceiver({
+      player: this.player,
+      hudHost: this.hudHost,
+      feedback: this.feedback,
+      onDeath: () => {
+        this.isPlayerDead = true;
+        this.hud?.showHint?.('You have fallen. Use Reset Player in Creature Lab.');
+      },
+      onReset: () => {
+        this.isPlayerDead = false;
+        this.hud?.showHint?.('');
+      },
+    }) : null;
+    this.playerCombatDamageReceiver?.bindPlayer?.(this.player);
+    this.playerCombatDamageReceiver?.reset?.();
     this.inputHost = new InputHost({ root: this.app });
     this.controls = this.inputHost.controls;
     this.equipmentPanel = new EquipmentPanel({ root: this.app, equipmentRuntime: this.equipmentRuntime, gameState: this.gameState });
@@ -162,7 +179,6 @@ export class Game {
     window.addEventListener('field-offhand-equipped-changed', cancelTimedAction);
     this.disposers.push(() => window.removeEventListener('field-item-equipped-changed', cancelTimedAction));
     this.disposers.push(() => window.removeEventListener('field-offhand-equipped-changed', cancelTimedAction));
-    this.isPlayerDead = false;
     this.hasFatalRuntimeError = false;
     this.hasRenderedFirstFrame = false;
     this.firstFramePromise = new Promise((resolve) => {
@@ -204,6 +220,8 @@ export class Game {
   }
 
   handleSceneSessionChanged(session = this.sceneSessionHost) {
+    this.playerCombatDamageReceiver?.bindPlayer?.(session.player);
+    this.playerCombatDamageReceiver?.reset?.();
     this.interactions?.initializeForSession?.({ player: session.player, dungeon: session.dungeon });
     this.viewmodelHost?.rebindSession?.(session);
     void session.warmBloodMaterials?.();
@@ -287,20 +305,23 @@ export class Game {
       isPlayerDead: this.isPlayerDead,
     });
     this.progressionHost.update(deltaSeconds);
-    if (this.controls.consumeAttack() && !this.combatLabEnabled) this.interactions.attack?.();
-    this.interactions.updateHint();
+    const attackPressed = this.controls.consumeAttack();
+    if (attackPressed && !this.combatLabEnabled && !this.isPlayerDead) this.interactions.attack?.();
+    if (!this.isPlayerDead) this.interactions.updateHint();
+    else this.hud?.showHint?.('You have fallen. Use Reset Player in Creature Lab.');
     const keyboardInteractHeld = this.player.keyboard?.has('KeyX') ?? false;
     const keyboardInteractPressed = keyboardInteractHeld && !this.wasKeyboardInteractHeld;
     const timedActionCancelRequested = this.equipmentPanel?.isOpen || this.isPaused || this.isPlayerDead;
     this.interactions.updateTimedAction(deltaSeconds, timedActionCancelRequested);
 
-    if (this.controls.consumeInteract() || keyboardInteractPressed) {
+    if ((this.controls.consumeInteract() || keyboardInteractPressed) && !this.isPlayerDead) {
       if (!this.interactions.useEquippedConsumable?.()) this.interactions.interact();
     }
     this.wasKeyboardInteractHeld = keyboardInteractHeld;
 
     this.viewmodelHost?.updateDebugHud(this.player);
     this.combatLabDebugPanel?.update?.(performance.now(), deltaSeconds * 1000);
+    if (this.isPlayerDead) this.player?.syncCamera?.();
     this.feedback.update(deltaSeconds);
     this.sceneSessionHost.render();
     this.perfDebugPanel?.render();
@@ -443,6 +464,8 @@ export class Game {
     this.disposers = [];
     this.viewmodelHost?.dispose?.();
     this.combatLabDebugPanel?.dispose?.();
+    this.playerCombatDamageReceiver?.dispose?.();
+    this.playerCombatDamageReceiver = null;
     this.survivalHost?.dispose?.();
     this.progressionHost?.dispose?.();
     this.inputHost?.dispose?.();

@@ -60,6 +60,7 @@ export class CreatureLabController {
     onSubjectChanged = null,
     initialDefinitionId = DEFAULT_DEFINITION_ID,
     initialPackId = null,
+    attackHarness = null,
     panelFactory = (options) => new CreatureLabPanel(options),
   } = {}) {
     if (!walkerController) throw new Error('Creature Lab requires one isolated walker lifecycle host.');
@@ -76,6 +77,7 @@ export class CreatureLabController {
     this.onSubjectChanged = onSubjectChanged;
     this.initialDefinitionId = initialDefinitionId;
     this.initialPackId = initialPackId;
+    this.attackHarness = attackHarness;
     this.panelFactory = panelFactory;
     this.definitionOptions = [];
     this.selectedDefinition = null;
@@ -177,6 +179,7 @@ export class CreatureLabController {
       const resolved = option.resolved ?? await this.creatureFactory.resolve(definitionId);
       const { definition, pack, profile } = resolved;
       this.weaponControllerProvider?.()?.cancel?.('creature-lab-definition-switch');
+      this.attackHarness?.clearSubject?.('creature-lab-definition-switch');
       this.disposeSiteMarkers();
       if (this.actor) this.walkerController.disposeWalker({ respawn: false });
       this.selectedDefinition = definition;
@@ -192,6 +195,7 @@ export class CreatureLabController {
       if (!spawned || !this.actor) throw new Error(`Creature Lab could not find a safe Folsom spawn for ${definitionId}.`);
       await this.actor.visualAdapter?.ready;
       if (serial !== this.selectionSerial || this.disposed) return { accepted: false, reason: 'Definition selection was superseded.' };
+      this.attackHarness?.setSubject?.(this.actor);
       this.selectedSiteId = this.getProgressiveSites()[0]?.siteId ?? null;
       this.createSiteMarkers();
       this.onSubjectChanged?.(this.getSubjectState());
@@ -245,6 +249,21 @@ export class CreatureLabController {
       accepted,
       reason: accepted ? null : 'Damage reset is available only while the current subject is alive; use Respawn after death.',
     });
+  }
+
+  triggerAttack() {
+    return this.recordOperation('triggerAttack', this.attackHarness?.triggerAttack?.()
+      ?? { accepted: false, reason: 'Creature Lab offensive harness is unavailable.' });
+  }
+
+  resetPlayer() {
+    return this.recordOperation('resetPlayer', this.attackHarness?.resetPlayer?.()
+      ?? { accepted: false, reason: 'Creature Lab player receiver is unavailable.' });
+  }
+
+  toggleAttackGeometry() {
+    return this.recordOperation('attackGeometry', this.attackHarness?.toggleAttackGeometry?.()
+      ?? { accepted: false, reason: 'Creature Lab attack diagnostics are unavailable.' });
   }
 
   getProgressiveSites() {
@@ -507,6 +526,7 @@ export class CreatureLabController {
       profile: this.effectiveProfile,
       lastOperation: this.lastOperation,
       lastPhysicalTargetingDecision: this.getSiteTargeting()?.getDiagnostics?.().lastPhysicalTargetingDecision ?? null,
+      offensiveCombat: this.attackHarness?.getDiagnostics?.() ?? { enabled: false },
     };
   }
 
@@ -548,10 +568,12 @@ export class CreatureLabController {
       packCost: this.selectedPack?.cost ?? null,
       definitionSupport: this.definitionOptions.map(({ definitionId, displayName, creaturePackId, supported, code, reason }) => ({ definitionId, displayName, creaturePackId, supported, code, reason })),
       lastOperation: this.lastOperation,
+      offensiveCombat: this.attackHarness?.getDiagnostics?.() ?? { enabled: false },
     };
   }
 
-  update() {
+  update(deltaSeconds = 1 / 60) {
+    this.attackHarness?.update?.(deltaSeconds);
     this.siteMarkerRenderer?.update?.();
     this.panel?.update?.();
   }
@@ -565,6 +587,9 @@ export class CreatureLabController {
       resetDamage: () => this.resetDamage(),
       selectSite: (siteId) => this.selectSite(siteId),
       strikeSelectedSite: (probe = 'center') => this.strikeSelectedSite(probe),
+      triggerAttack: () => this.triggerAttack(),
+      resetPlayer: () => this.resetPlayer(),
+      toggleAttackGeometry: () => this.toggleAttackGeometry(),
       diagnostics: () => this.getDiagnostics(),
     });
     globalThis.__DSB_CREATURE_LAB__ = this.debugCommands;
@@ -576,6 +601,8 @@ export class CreatureLabController {
     this.selectionSerial += 1;
     this.panel?.dispose?.();
     this.panel = null;
+    this.attackHarness?.dispose?.();
+    this.attackHarness = null;
     this.disposeSiteMarkers();
     if (this.actor) this.walkerController.disposeWalker({ respawn: false });
     this.onSubjectChanged?.(this.getSubjectState());

@@ -26,6 +26,21 @@ export function getCreatureLabAnimationPanelActions(controller, state) {
   }));
 }
 
+export function getCreatureLabOffensiveCombatActions(controller, state = {}) {
+  const combat = state.offensiveCombat ?? {};
+  return [
+    { id: 'offense:trigger', label: 'Trigger Attack', run: () => controller.triggerAttack() },
+    { id: 'offense:reset_player', label: 'Reset Player', run: () => controller.resetPlayer() },
+    {
+      id: 'offense:geometry',
+      label: combat.showAttackGeometry ? 'Hide Attack Geometry' : 'Show Attack Geometry',
+      run: () => controller.toggleAttackGeometry(),
+      pressed: combat.showAttackGeometry === true,
+      wide: true,
+    },
+  ];
+}
+
 export function getCreatureLabDamagePanelActions(controller, state = {}) {
   return [
     { id: 'site:previous', label: 'Previous Site', run: () => controller.selectRelativeSite(-1) },
@@ -198,6 +213,7 @@ export class CreatureLabPanel {
 
     if (state.pack) this.panel.append(this.renderPackInfo(state));
     this.panel.append(this.renderAnimations(state));
+    this.panel.append(this.renderOffensiveCombat(state));
     this.panel.append(this.renderDamage(state));
     this.panel.append(this.renderDetachments(state));
     this.panel.append(this.renderBodyState(state));
@@ -242,6 +258,34 @@ export class CreatureLabPanel {
     getCreatureLabAnimationPanelActions(this.controller, state).forEach((action) => grid.append(this.createButton(action.label, action.run, { disabled: state.loading })));
     if (!state.animationActions.length) section.append(element('p', 'Animation runtime is not ready.', 'creature-lab-note'));
     else section.append(grid);
+    return section;
+  }
+
+  formatOffensiveCombat(combat = {}) {
+    const point = Array.isArray(combat.lastImpactPoint) ? combat.lastImpactPoint.map((value) => Number(value).toFixed(2)).join(', ') : 'none';
+    const direction = Array.isArray(combat.lastImpactDirection) ? combat.lastImpactDirection.map((value) => Number(value).toFixed(2)).join(', ') : 'none';
+    return [
+      `PHASE ${combat.attackPhase ?? 'COMPLETE'} | ${combat.active ? 'ACTIVE' : 'INACTIVE'} | ${String(combat.outcome ?? 'idle').toUpperCase()}`,
+      `ATTACK ${combat.attackId ?? 'none'} | HITS ${combat.acceptedPlayerHitCount ?? 0} | PLAYER HP ${combat.currentPlayerHealth ?? 'n/a'}${combat.playerDead ? ' | DEAD' : ''}`,
+      `IMPACT ${point} | DIR ${direction}`,
+      `REJECTION ${combat.lastRejectionReason ?? 'none'}`,
+    ].join('\n');
+  }
+
+  renderOffensiveCombat(state) {
+    const section = this.createSection('Offensive Combat Proof');
+    const combat = state.offensiveCombat ?? { enabled: false };
+    const grid = this.createGrid();
+    getCreatureLabOffensiveCombatActions(this.controller, state).forEach((action) => grid.append(this.createButton(action.label, action.run, {
+      disabled: state.loading || combat.enabled !== true,
+      pressed: action.pressed === true,
+      wide: action.wide === true,
+    })));
+    section.append(grid);
+    this.offensiveReadout = element('pre', this.formatOffensiveCombat(combat), 'creature-lab-status');
+    this.offensiveReadout.setAttribute('aria-label', 'Creature Lab offensive combat diagnostics');
+    section.append(this.offensiveReadout);
+    section.append(element('p', 'The visible lab proxy drives a committed world-space sweep. Only ACTIVE geometric contact can damage the player.', 'creature-lab-note'));
     return section;
   }
 
@@ -349,6 +393,7 @@ export class CreatureLabPanel {
 
   update() {
     this.updateDiagnostics();
+    if (this.offensiveReadout) this.offensiveReadout.textContent = this.formatOffensiveCombat(this.controller.getViewState().offensiveCombat);
     if (this.status) this.status.textContent = this.transientStatus ?? this.formatLastOperation(this.controller.lastOperation);
   }
 

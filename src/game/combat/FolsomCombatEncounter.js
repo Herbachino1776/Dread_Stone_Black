@@ -16,6 +16,7 @@ import { CombatAcceptedAudioSystem } from './CombatAcceptedAudioSystem.js';
 import { FolsomShowcaseCombatExtras, isFolsomShowcaseEnabled } from './FolsomShowcaseCombatExtras.js';
 import { BLUNT_IMPACT_CLASSIFICATIONS, BLUNT_IMPACT_SCHEMA } from './weapons/BluntImpactInteraction.js';
 import { CreatureLabController, resolveCreatureLabMode } from '../creatures/CreatureLabController.js';
+import { CreatureLabAttackHarness } from '../creatures/CreatureLabAttackHarness.js';
 import { CreaturePackRegistry } from '../creatures/CreaturePackRegistry.js';
 
 const FOLSOM_AUTHORED_PLAYER_SPAWN = Object.freeze([-2, 1.71, -4]);
@@ -124,6 +125,11 @@ export class FolsomCombatEncounter {
     this.creatureLabEnabled = creatureLabEnabled ?? resolveCreatureLabMode(this.query);
     this.creaturePackRegistry = creaturePackRegistry;
     this.creatureLabController = null;
+    this.creatureLabAttackHarness = this.creatureLabEnabled ? new CreatureLabAttackHarness({
+      scene: this.scene,
+      playerProvider: () => this.player,
+      damageReceiverProvider: () => this.player?.combatDamageReceiver ?? null,
+    }) : null;
     this.showcaseEnabled = !this.creatureLabEnabled && isFolsomShowcaseEnabled(this.query);
     this.waveGeneration = 1;
     this.playerSpawn = new THREE.Vector3(...FOLSOM_AUTHORED_PLAYER_SPAWN);
@@ -193,6 +199,7 @@ export class FolsomCombatEncounter {
       weaponControllerProvider: () => this.weaponController,
       initialDefinitionId: this.query.get('creatureDefinition'),
       initialPackId: this.query.has('creatureDefinition') ? null : this.query.get('creaturePack'),
+      attackHarness: this.creatureLabAttackHarness,
       onSubjectChanged: (subject) => this.syncCreatureLabSubject(subject),
     });
     await this.creatureLabController.initialize();
@@ -662,7 +669,7 @@ export class FolsomCombatEncounter {
     if (combatShadowTarget) this.scene.userData.activeCombatShadowTarget = combatShadowTarget;
     else delete this.scene.userData.activeCombatShadowTarget;
     this.weaponController?.afterPhysics?.(this.physics.interpolationAlpha, deltaSeconds);
-    this.creatureLabController?.update?.();
+    this.creatureLabController?.update?.(deltaSeconds);
   }
 
   reset(player = this.player, { preserveWaveGeneration = false, reason = 'encounter-reset' } = {}) {
@@ -777,6 +784,7 @@ export class FolsomCombatEncounter {
     this.weaponController?.cancel?.('encounter-dispose');
     this.creatureLabController?.dispose?.();
     this.creatureLabController = null;
+    this.creatureLabAttackHarness = null;
     this.showcaseExtras?.dispose?.();
     this.walkerController?.dispose?.();
     this.acceptedCombatAudio.dispose();
