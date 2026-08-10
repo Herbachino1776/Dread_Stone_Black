@@ -28,24 +28,6 @@ const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_REPOSITORY_ROOT = path.resolve(moduleDirectory, '..', '..');
 export const DEFAULT_GENERATED_DIRECTORY = path.join(DEFAULT_REPOSITORY_ROOT, 'public', 'generated', 'creature-packs');
 
-export const DEFAULT_PRODUCTION_CREATURE_PACKS = Object.freeze([
-  Object.freeze({
-    packId: 'chezwick_damage_v001',
-    displayName: 'Chezwick',
-    sourceDir: 'public/assets/enemies/chezwick/damage',
-  }),
-  Object.freeze({
-    packId: 'dreadguard_damage_v001',
-    displayName: 'Dreadguard',
-    sourceDir: 'public/assets/enemies/dreadguard/damage',
-  }),
-  Object.freeze({
-    packId: 'dread_ram_god_damage_v001',
-    displayName: 'Dread Ram God',
-    sourceDir: 'public/assets/enemies/dread_ram_god/damage',
-  }),
-]);
-
 const KNOWN_HUMANOID_BONES = Object.freeze([...new Set(Object.values(DREADGUARD_BONE_MAP))]);
 const CURRENT_HUMANOID_SKELETON_FAMILY = 'DSB_HUMANOID_V1';
 const CURRENT_HUMANOID_BONE_MAP_PROFILE = 'dreadstone.humanoid.current_bone_map.v1';
@@ -317,6 +299,15 @@ export function validateForgeReportIdentity(manifest, report) {
   }
   if (!isDeepStrictEqual(manifest.validation, report)) throw actionableError('embedded manifest validation and sidecar validation report differ; the Forge export is stale or incomplete');
   return report;
+}
+
+export async function inspectCreatureBundleMetadata(options = {}) {
+  const bundle = await discoverDamageBundle(options);
+  validateDamageManifestShape(bundle.manifest);
+  validateProgressiveSiteRecords(bundle.manifest);
+  const report = await readJson(bundle.validationReportPath, 'damage validation report');
+  validateForgeReportIdentity(bundle.manifest, report);
+  return { ...bundle, report };
 }
 
 export function parseGlbJsonChunk(buffer) {
@@ -670,7 +661,7 @@ export async function importCreaturePack({
   animationValidationReportPath = null,
 } = {}) {
   requireString(packId, 'packId');
-  const bundle = await discoverDamageBundle({
+  const bundle = await inspectCreatureBundleMetadata({
     sourceDir,
     repositoryRoot,
     glbPath,
@@ -680,10 +671,7 @@ export async function importCreaturePack({
     animationValidationReportPath,
   });
   const manifest = bundle.manifest;
-  validateDamageManifestShape(manifest);
-  validateProgressiveSiteRecords(manifest);
-  const report = await readJson(bundle.validationReportPath, 'damage validation report');
-  validateForgeReportIdentity(manifest, report);
+  const report = bundle.report;
 
   const { bytes, json: glbJson, gltf } = await loadGlb(bundle.glbPath);
   const animationValidation = await validateAnimations({

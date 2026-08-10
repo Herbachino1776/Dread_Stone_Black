@@ -3,12 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_GENERATED_DIRECTORY,
-  DEFAULT_PRODUCTION_CREATURE_PACKS,
   DEFAULT_REPOSITORY_ROOT,
   emitCreaturePacks,
   importCreaturePack,
   loadGeneratedCreaturePacks,
 } from './lib/creature-pack-importer.mjs';
+import { DEFAULT_CATALOG_PATH } from './lib/creature-pack-catalog.mjs';
+import { importProductionCreaturePacks } from './lib/production-creature-pack-import.mjs';
 
 const optionNames = new Set([
   '--id',
@@ -19,6 +20,7 @@ const optionNames = new Set([
   '--validation-report',
   '--animation-manifest',
   '--animation-validation-report',
+  '--catalog',
   '--out',
 ]);
 
@@ -38,7 +40,8 @@ Options:
   --animation-validation-report <path> Optional Animation Forge validation report
   --out <directory>                     Generated output directory
   --check                               Verify committed generated output without writing
-  --all                                 Import the Chezwick, Dreadguard, and Dread Ram God production fixtures
+  --catalog <path>                      Production source catalog (normally config/production-creature-packs.json)
+  --all                                 Import every entry in the production source catalog
   --help                                Show this help
 `;
 }
@@ -97,10 +100,10 @@ async function main() {
 
   let imported;
   if (importAll) {
-    imported = [];
-    for (const fixture of DEFAULT_PRODUCTION_CREATURE_PACKS) {
-      imported.push(await importCreaturePack({ ...fixture, repositoryRoot }));
-    }
+    const catalogPath = values.has('--catalog')
+      ? path.resolve(repositoryRoot, values.get('--catalog'))
+      : DEFAULT_CATALOG_PATH;
+    imported = await importProductionCreaturePacks({ catalogPath, repositoryRoot });
   } else {
     const packId = values.get('--id');
     const sourceDir = values.get('--source');

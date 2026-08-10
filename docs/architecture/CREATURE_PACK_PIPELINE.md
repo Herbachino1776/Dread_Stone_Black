@@ -139,6 +139,43 @@ The descriptor deliberately excludes hostility, faction, health, damage multipli
 
 Generated descriptors are small summaries. They do not copy Forge deformation records, morph definitions, gore bindings, stain bindings, segment definitions, or progressive stage records.
 
+## Easiest workflow — Windows
+
+1. Export the completed Forge Damage bundle.
+2. Drag its `damage` folder onto `IMPORT_CREATURE.cmd` at the repository root.
+3. Review the discovered GLB, manifests, Forge status, and capabilities, then press Enter to accept the suggested name.
+4. Wait for the authoritative import and Creature Pack validation to report `PASS`.
+5. Done. The final screen identifies the installed bundle and generated descriptor.
+
+The three names have deliberately small, distinct jobs:
+
+- **Display Name** is the human-readable game/debug name, such as `North Road Bandit`.
+- **Enemy Slug** is the stable lowercase filesystem identity, such as `north_road_bandit`. It uses ASCII letters, numbers, and underscores and should not change after registration.
+- **Pack ID** is the generated technical identity, normally `<enemy_slug>_damage_v001`. Routine Forge re-exports update that stable ID; they do not create `v002`.
+
+Double-clicking `IMPORT_CREATURE.cmd` with no argument prompts for a damage-folder path. The launcher uses `-ExecutionPolicy Bypass` for that invocation only; it does not change the machine's permanent PowerShell policy. The workflow copies only the discovered Damage GLB, Damage manifest/report, and recognized optional sibling animation manifest/report. Blender files, backups, screenshots, and unrelated export-directory files are ignored.
+
+Incoming files are first copied to a temporary repository staging directory and run through the existing Node importer. Only a passing staged bundle can replace production files. The production damage directory, generated Creature Pack output, and source catalog are backed up around the real import and `npm run validate:creature-packs`; any importer or validation failure restores the known-good state. An existing animation sidecar is preserved when the incoming bundle has no replacement sidecar.
+
+The committed technical source inventory is `config/production-creature-packs.json`, using `dreadstone.production_creature_pack_sources.v1`. It records only `packId`, `displayName`, `enemySlug`, and the canonical Damage source directory. It owns no Creature Definition, loadout, AI, encounter, or other gameplay behavior. New successful imports are inserted once and sorted by `packId`; updates preserve the registered slug and Pack ID.
+
+### Terminal and advanced Windows use
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Import-CreaturePack.ps1 -Source "E:\exports\North Road Bandit\damage"
+```
+
+Optional flags are:
+
+- `-DisplayName <name>` and `-EnemySlug <slug>` to skip those prompts;
+- `-PackId <id>` as an advanced override for a genuinely new technical identity;
+- `-Yes` to accept safe suggested naming without prompts;
+- `-WhatIf` to show the resolved mode, identity, and destination without copying or importing;
+- `-Verbose` to show underlying importer/validator output;
+- `-FullValidation` to add `npm run validate:combat` and `npm run build` after the normal Creature Pack gate.
+
+Routine intake intentionally runs only `npm run validate:creature-packs`. Creature Definition, equipment/loadout, behavior, and encounter placement remain separate production steps.
+
 ## Import command and generated registry
 
 Import one existing bundle:
@@ -147,7 +184,7 @@ Import one existing bundle:
 node scripts/import-creature-pack.mjs --id chezwick_damage_v001 --source public/assets/enemies/chezwick/damage
 ```
 
-Regenerate all three production fixtures:
+Regenerate every source registered in the persistent production catalog:
 
 ```powershell
 node scripts/import-creature-pack.mjs --all

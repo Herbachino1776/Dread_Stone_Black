@@ -12,11 +12,11 @@ import {
 import {
   createCreaturePackRegistry,
   DEFAULT_GENERATED_DIRECTORY,
-  DEFAULT_PRODUCTION_CREATURE_PACKS,
   DEFAULT_REPOSITORY_ROOT,
   importCreaturePack,
   serializeGeneratedJson,
 } from '../scripts/lib/creature-pack-importer.mjs';
+import { loadProductionCreaturePackCatalog } from '../scripts/lib/creature-pack-catalog.mjs';
 import {
   CHEZWICK_DAMAGE_COMBAT_PROFILE,
   DREADGUARD_DAMAGE_COMBAT_PROFILE,
@@ -46,10 +46,10 @@ const dreadRamGodReportPath = path.join(dreadRamGodSource, 'Dread_Ram_God_valida
 
 let productionPacksPromise = null;
 function loadProductionPacks() {
-  productionPacksPromise ??= Promise.all(DEFAULT_PRODUCTION_CREATURE_PACKS.map((fixture) => importCreaturePack({
+  productionPacksPromise ??= loadProductionCreaturePackCatalog().then((catalog) => Promise.all(catalog.creatures.map((fixture) => importCreaturePack({
     ...fixture,
     repositoryRoot: DEFAULT_REPOSITORY_ROOT,
-  })));
+  }))));
   return productionPacksPromise;
 }
 
@@ -296,8 +296,9 @@ test('registry and descriptor output are deterministic and match committed gener
     assert.equal(normalizeLineEndings(await readFile(path.join(DEFAULT_GENERATED_DIRECTORY, `${pack.packId}.json`), 'utf8')), serializeGeneratedJson(pack));
   }
 
+  const catalog = await loadProductionCreaturePackCatalog();
   const repeated = await importCreaturePack({
-    ...DEFAULT_PRODUCTION_CREATURE_PACKS.find((entry) => entry.packId === 'dreadguard_damage_v001'),
+    ...catalog.creatures.find((entry) => entry.packId === 'dreadguard_damage_v001'),
     repositoryRoot: DEFAULT_REPOSITORY_ROOT,
   });
   const original = packs.find((entry) => entry.packId === repeated.packId);
