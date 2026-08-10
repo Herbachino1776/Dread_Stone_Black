@@ -85,6 +85,17 @@ export function validateCreaturePack(pack) {
     requireCondition(errors, Number.isFinite(presentation.unitScaleMeters) && presentation.unitScaleMeters > 0, 'presentation.unitScaleMeters', 'must be positive');
     requireCondition(errors, isNonemptyString(presentation.skeletonFamilyId), 'presentation.skeletonFamilyId', 'must be a non-empty string');
     requireCondition(errors, isNonemptyString(presentation.boneMapProfileId), 'presentation.boneMapProfileId', 'must be a non-empty string');
+    if (presentation.runtimeSkeleton != null) {
+      const runtimeSkeleton = presentation.runtimeSkeleton;
+      requireCondition(errors, isRecord(runtimeSkeleton), 'presentation.runtimeSkeleton', 'must be an object');
+      if (isRecord(runtimeSkeleton)) {
+        requireCondition(errors, runtimeSkeleton.schema === 'dreadstone.runtime_skeleton.v1', 'presentation.runtimeSkeleton.schema', 'must be dreadstone.runtime_skeleton.v1');
+        requireCondition(errors, isNonemptyString(runtimeSkeleton.armature), 'presentation.runtimeSkeleton.armature', 'must be a non-empty string');
+        for (const key of ['skeletonCount', 'skinCount', 'requiredBoneCount']) {
+          requireCondition(errors, Number.isInteger(runtimeSkeleton[key]) && runtimeSkeleton[key] > 0, `presentation.runtimeSkeleton.${key}`, 'must be a positive integer');
+        }
+      }
+    }
   }
 
   const capabilities = pack.capabilities;

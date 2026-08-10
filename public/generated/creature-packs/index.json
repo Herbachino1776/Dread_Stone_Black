@@ -19,6 +19,22 @@
       }
     },
     {
+      "packId": "dread_ram_god_damage_v001",
+      "displayName": "Dread Ram God",
+      "descriptorPath": "./generated/creature-packs/dread_ram_god_damage_v001.json",
+      "assetPath": "./assets/enemies/dread_ram_god/damage/Dread_Ram_God.glb",
+      "sourceTopologyFingerprint": "9092454fd441ac855aa789370e9d32e35d63b48852ecf03046a4e727381bec32",
+      "capabilities": {
+        "progressiveDamage": true,
+        "deformations": true,
+        "gore": true,
+        "surfaceStains": true,
+        "pairedDetachableSegments": true,
+        "embeddedAnimations": true,
+        "separatelyValidatedAnimations": false
+      }
+    },
+    {
       "packId": "dreadguard_damage_v001",
       "displayName": "Dreadguard",
       "descriptorPath": "./generated/creature-packs/dreadguard_damage_v001.json",

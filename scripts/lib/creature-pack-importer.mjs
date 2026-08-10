@@ -38,6 +38,11 @@ export const DEFAULT_PRODUCTION_CREATURE_PACKS = Object.freeze([
     displayName: 'Dreadguard',
     sourceDir: 'public/assets/enemies/dreadguard/damage',
   }),
+  Object.freeze({
+    packId: 'dread_ram_god_damage_v001',
+    displayName: 'Dread Ram God',
+    sourceDir: 'public/assets/enemies/dread_ram_god/damage',
+  }),
 ]);
 
 const KNOWN_HUMANOID_BONES = Object.freeze([...new Set(Object.values(DREADGUARD_BONE_MAP))]);
@@ -221,6 +226,16 @@ function validateDamageManifestShape(manifest) {
   if (!manifest.deformations || typeof manifest.deformations !== 'object') throw actionableError('damage manifest deformations are missing');
   if (!Array.isArray(manifest.deformations.registeredRegions)) throw actionableError('damage manifest deformation regions must be an array');
   if (!Array.isArray(manifest.deformations.generatedGoreMeshes)) throw actionableError('damage manifest generated gore meshes must be an array');
+  if (manifest.runtimeSkeleton != null) {
+    if (manifest.runtimeSkeleton.schema !== 'dreadstone.runtime_skeleton.v1') throw actionableError('runtime skeleton schema must be dreadstone.runtime_skeleton.v1');
+    requireString(manifest.runtimeSkeleton.armature, 'runtime skeleton armature');
+    if (!Number.isInteger(manifest.runtimeSkeleton.skeletonCount) || manifest.runtimeSkeleton.skeletonCount < 1) {
+      throw actionableError('runtime skeleton count must be a positive integer');
+    }
+    if (!Array.isArray(manifest.runtimeSkeleton.requiredBones) || !manifest.runtimeSkeleton.requiredBones.every((name) => typeof name === 'string' && name.trim())) {
+      throw actionableError('runtime skeleton requiredBones must be an array of non-empty strings');
+    }
+  }
 }
 
 export function validateProgressiveSiteRecords(manifest) {
@@ -280,6 +295,15 @@ export function validateForgeReportIdentity(manifest, report) {
   requireEmptyErrors(report.finalGlb?.errors, 'Forge final GLB validation');
   if ((manifest.deformations.surfaceStainMeshes?.length ?? 0) > 0) requirePass(report.finalGlb?.surfaceStains?.status, 'Forge final GLB surface stain validation status');
   if ((manifest.deformations.generatedGoreMeshes?.length ?? 0) > 0) requirePass(report.finalGlb?.raisedGoreGeometry?.status, 'Forge final GLB raised gore validation status');
+  if (manifest.runtimeSkeleton) {
+    const runtimeSkeleton = report.runtimeSkeleton;
+    requirePass(runtimeSkeleton?.status, 'Forge runtime skeleton validation status');
+    requireEmptyErrors(runtimeSkeleton?.errors, 'Forge runtime skeleton validation');
+    if (runtimeSkeleton.armature !== manifest.runtimeSkeleton.armature) throw actionableError('Forge report runtime skeleton armature does not match the damage manifest');
+    if (runtimeSkeleton.skeletonCount !== manifest.runtimeSkeleton.skeletonCount) throw actionableError('Forge report runtime skeleton count does not match the damage manifest');
+    if (runtimeSkeleton.requiredBoneCount !== manifest.runtimeSkeleton.requiredBones.length) throw actionableError('Forge report runtime skeleton required-bone count does not match the damage manifest');
+    requireEmptyErrors(runtimeSkeleton.missingBones, 'Forge runtime skeleton missing bones');
+  }
   if (!isDeepStrictEqual(manifest.validation, report)) throw actionableError('embedded manifest validation and sidecar validation report differ; the Forge export is stale or incomplete');
   return report;
 }
@@ -536,6 +560,34 @@ function inferPresentationContract(manifest, root, clips) {
   };
 }
 
+function validateRuntimeSkeletonContract(manifest, report, root, glbJson) {
+  if (!manifest.runtimeSkeleton) return null;
+  const skeletons = new Set();
+  root.traverse((object) => {
+    if (object.isSkinnedMesh && object.skeleton) skeletons.add(object.skeleton);
+  });
+  const skeletonCount = skeletons.size;
+  const skinCount = glbJson.skins?.length ?? 0;
+  const runtimeArmature = root.getObjectByName(manifest.runtimeSkeleton.armature);
+  if (!runtimeArmature) throw actionableError(`runtime skeleton armature ${manifest.runtimeSkeleton.armature} is missing from the damage GLB`);
+  if (skeletonCount !== manifest.runtimeSkeleton.skeletonCount) {
+    throw actionableError(`damage GLB runtime skeleton count ${skeletonCount} does not match manifest count ${manifest.runtimeSkeleton.skeletonCount}`);
+  }
+  if (skinCount !== report.runtimeSkeleton.skinCount) {
+    throw actionableError(`damage GLB skin count ${skinCount} does not match Forge report count ${report.runtimeSkeleton.skinCount}`);
+  }
+  const boneNames = new Set([...skeletons].flatMap((skeleton) => skeleton.bones.map((bone) => bone.name)));
+  const missingBones = manifest.runtimeSkeleton.requiredBones.filter((name) => !boneNames.has(name));
+  if (missingBones.length) throw actionableError(`damage GLB runtime skeleton is missing required bone(s): ${missingBones.join(', ')}`);
+  return {
+    schema: manifest.runtimeSkeleton.schema,
+    armature: manifest.runtimeSkeleton.armature,
+    skeletonCount,
+    skinCount,
+    requiredBoneCount: manifest.runtimeSkeleton.requiredBones.length,
+  };
+}
+
 function toPublicUrl(repositoryRoot, filePath) {
   const publicRoot = path.resolve(repositoryRoot, 'public');
   const relative = path.relative(publicRoot, filePath);
@@ -655,6 +707,7 @@ export async function importCreaturePack({
   const rawSize = rawBounds.getSize(new THREE.Vector3());
   if (!(rawSize.y > 0)) throw actionableError(`${packId} has an invalid measured height`);
   const presentationInference = inferPresentationContract(manifest, gltf.scene, gltf.animations);
+  const runtimeSkeleton = validateRuntimeSkeletonContract(manifest, report, gltf.scene, glbJson);
   const presentation = {
     rawBounds: {
       min: roundedVector(rawBounds.min),
@@ -667,6 +720,7 @@ export async function importCreaturePack({
     unitScaleMeters: presentationInference.unitScaleMeters,
     skeletonFamilyId: presentationInference.skeletonFamilyId,
     boneMapProfileId: presentationInference.boneMapProfileId,
+    ...(runtimeSkeleton ? { runtimeSkeleton } : {}),
   };
   const cost = collectAssetStatistics({
     root: gltf.scene,

@@ -38,7 +38,7 @@ Options:
   --animation-validation-report <path> Optional Animation Forge validation report
   --out <directory>                     Generated output directory
   --check                               Verify committed generated output without writing
-  --all                                 Import the Dreadguard and Chezwick production fixtures
+  --all                                 Import the Chezwick, Dreadguard, and Dread Ram God production fixtures
   --help                                Show this help
 `;
 }
@@ -135,4 +135,3 @@ main().catch((error) => {
   process.stderr.write(`${scriptName}: ${error.message}\n`);
   process.exitCode = 1;
 });
-

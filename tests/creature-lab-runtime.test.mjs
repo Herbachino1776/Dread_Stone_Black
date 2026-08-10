@@ -11,6 +11,7 @@ import { FolsomCombatEncounter } from '../src/game/combat/FolsomCombatEncounter.
 import { validateDamageAsset } from '../src/game/combat/HumanoidDamageSegmentRuntime.js';
 import { validateForgeDamageDeformationAsset } from '../src/game/combat/ForgeDamageDeformationRuntime.js';
 import { ProgressiveDamageSiteTargeting } from '../src/game/combat/ProgressiveDamageSiteTargeting.js';
+import { BLUNT_IMPACT_CLASSIFICATIONS, BLUNT_IMPACT_SCHEMA } from '../src/game/combat/weapons/BluntImpactInteraction.js';
 import { createEmbeddedAnimationPackManifest, resolveAnimationPackManifest } from '../src/game/combat/HumanoidGlbVisualAdapter.js';
 import { CHEZWICK_DAMAGE_COMBAT_PROFILE } from '../src/game/combat/HumanoidModelProfiles.js';
 import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/KnifeWoundDecalLibrary.js';
@@ -73,6 +74,40 @@ function createRegistry(options = {}) {
   };
 }
 
+function browserAssetDescriptor(relativePath, value) {
+  if (!relativePath.startsWith('generated/creature-packs/') || relativePath.endsWith('/index.json')) return value;
+  return {
+    ...value,
+    assets: Object.fromEntries(Object.entries(value.assets).map(([key, assetPath]) => [
+      key,
+      assetPath ? new URL(assetPath.replace(/^\.\//, ''), fixtureBaseUrl).href : null,
+    ])),
+  };
+}
+
+function installBrowserAssetRuntime(t) {
+  const previousWindow = globalThis.window;
+  const previousFetch = globalThis.fetch;
+  globalThis.window = globalThis;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+    if (!url.pathname.startsWith(fixtureBasePath)) return previousFetch(input, init);
+    const relativePath = decodeURIComponent(url.pathname.slice(fixtureBasePath.length));
+    try {
+      const bytes = await readFile(path.join(publicDirectory, relativePath));
+      const contentType = relativePath.endsWith('.json') ? 'application/json' : 'model/gltf-binary';
+      return new Response(bytes, { status: 200, headers: { 'content-type': contentType } });
+    } catch {
+      return new Response(null, { status: 404 });
+    }
+  };
+  t.after(() => {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    globalThis.fetch = previousFetch;
+  });
+}
+
 async function loadDamageFixture(pack, profile) {
   const glbPath = path.join(publicDirectory, pack.assets.glb.replace(/^\.\//, ''));
   const glbBytes = readFileSync(glbPath);
@@ -104,7 +139,7 @@ function createFolsomFixture() {
 test('browser registry resolves the generated index and descriptors through the configured public base with caching', async () => {
   const { registry, requests } = createRegistry();
   assert.equal(registry.resolvePublicUrl('./generated/creature-packs/index.json'), `${fixtureBaseUrl}generated/creature-packs/index.json`);
-  assert.deepEqual((await registry.listPacks()).map((entry) => entry.packId), ['chezwick_damage_v001', 'dreadguard_damage_v001']);
+  assert.deepEqual((await registry.listPacks()).map((entry) => entry.packId), ['chezwick_damage_v001', 'dread_ram_god_damage_v001', 'dreadguard_damage_v001']);
   assert.equal(await registry.hasPack('chezwick_damage_v001'), true);
   assert.equal((await registry.getPackSummary('dreadguard_damage_v001')).displayName, 'Dreadguard');
   const first = await registry.loadPack('chezwick_damage_v001');
@@ -129,9 +164,9 @@ test('runtime registry reports unknown packs and malformed descriptors cleanly',
   await assert.rejects(malformed.loadPack('chezwick_damage_v001'), (error) => error.code === 'INVALID_DESCRIPTOR' && /rawHeight/.test(error.message));
 });
 
-test('Chezwick and Dreadguard compose descriptor truth with separate game-authored policy', async () => {
+test('all three production packs compose descriptor truth with separate game-authored policy', async () => {
   const { registry } = createRegistry();
-  for (const packId of ['chezwick_damage_v001', 'dreadguard_damage_v001']) {
+  for (const packId of ['chezwick_damage_v001', 'dreadguard_damage_v001', 'dread_ram_god_damage_v001']) {
     const pack = await registry.loadPack(packId);
     const policy = getCreatureRuntimePolicy(packId);
     const profile = composeHumanoidCreatureRuntimeProfile(pack, policy);
@@ -155,15 +190,18 @@ test('Chezwick and Dreadguard compose descriptor truth with separate game-author
 
   const chezwickPack = await registry.loadPack('chezwick_damage_v001');
   const dreadguardPack = await registry.loadPack('dreadguard_damage_v001');
+  const dreadRamGodPack = await registry.loadPack('dread_ram_god_damage_v001');
   assert.deepEqual(chezwickPack.damage.progressiveDamageSiteIds, ['damage_site_face_right']);
   assert.deepEqual(getCreatureRuntimePolicy(chezwickPack.packId).progressiveDamageSiteFallbacks.map((site) => site.siteId), ['damage_site_face_left_compatibility']);
   assert.deepEqual(dreadguardPack.damage.progressiveDamageSiteIds, []);
   assert.deepEqual(getCreatureRuntimePolicy(dreadguardPack.packId).progressiveDamageSiteFallbacks.map((site) => site.siteId), ['damage_site']);
+  assert.equal(dreadRamGodPack.damage.progressiveDamageSiteIds.length, 4);
+  assert.deepEqual(getCreatureRuntimePolicy(dreadRamGodPack.packId).progressiveDamageSiteFallbacks, []);
 });
 
-test('both composed effective profiles pass the current damage and deformation validators', async () => {
+test('all composed effective profiles pass the current damage and deformation validators', async () => {
   const { registry } = createRegistry();
-  for (const packId of ['chezwick_damage_v001', 'dreadguard_damage_v001']) {
+  for (const packId of ['chezwick_damage_v001', 'dreadguard_damage_v001', 'dread_ram_god_damage_v001']) {
     const pack = await registry.loadPack(packId);
     const profile = composeHumanoidCreatureRuntimeProfile(pack);
     const { gltf, manifest, animationManifest } = await loadDamageFixture(pack, profile);
@@ -235,8 +273,9 @@ test('Creature Lab storage reads the current save but discards every lab-mode wr
   assert.equal(readOnly.getItem('new'), null);
 });
 
-test('Folsom Creature Lab switches Chezwick to Dreadguard and back without stale actors, routes, or blockers', async () => {
-  const { registry } = createRegistry();
+test('Folsom Creature Lab switches through Dread Ram God, Chezwick, Dreadguard, and back without stale actors, routes, or blockers', async (t) => {
+  installBrowserAssetRuntime(t);
+  const { registry } = createRegistry({ transform: browserAssetDescriptor });
   const { collision, player, dungeon } = createFolsomFixture();
   const encounter = await FolsomCombatEncounter.create({
     dungeon,
@@ -253,30 +292,143 @@ test('Folsom Creature Lab switches Chezwick to Dreadguard and back without stale
   assert.equal(encounter.actor.visualProfile.creaturePackId, 'chezwick_damage_v001');
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
   assert.equal(blockerCount(), 1);
+  const initialActor = encounter.actor;
+  const initialCollider = initialActor.colliders.get('upper_chest');
+  assert.equal((await lab.selectPack('dread_ram_god_damage_v001')).accepted, true);
+  assert.equal(initialActor.disposed, true);
+  assert.equal(encounter.combatRouter.resolveCollider(initialCollider, new THREE.Vector3()), null);
+  assert.equal(encounter.actor.visualProfile.creaturePackId, 'dread_ram_god_damage_v001');
+  assert.equal(lab.getDiagnostics().nativeSiteCount, 4);
+  assert.equal(lab.getDiagnostics().compatibilitySiteCount, 0);
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
+  assert.equal(blockerCount(), 1);
+
+  const ramSites = lab.getProgressiveSites();
+  assert.equal(ramSites.length, 4);
+  assert.ok(ramSites.every((site) => site.authority === 'NATIVE' && site.radius > 0));
+  assert.ok(ramSites.every((site) => site.bindingMode === 'SKINNED_SURFACE'));
+  assert.equal(lab.toggleSiteMarkers().enabled, true);
+  assert.equal(lab.siteMarkerRenderer.markers.visible, true);
+  assert.equal(lab.siteMarkerRenderer.markers.count, 4);
+  for (const site of ramSites) {
+    assert.equal(lab.selectSite(site.siteId).accepted, true);
+    const center = lab.strikeSelectedSite('center');
+    assert.equal(center.actualSiteId, site.siteId, `${site.siteId} center probe must select itself`);
+    assert.equal(lab.resetDamage().accepted, true);
+    const edge = lab.strikeSelectedSite('edge');
+    assert.equal(edge.actualSiteId, site.siteId, `${site.siteId} edge probe must select itself`);
+    assert.equal(lab.resetDamage().accepted, true);
+    const outside = lab.strikeSelectedSite('outside');
+    assert.equal(outside.actualSiteId, null, `${site.siteId} outside probe must not select a neighboring site`);
+    assert.equal(lab.resetDamage().accepted, true);
+  }
+
+  const hitTargets = ramSites.slice(0, 3);
+  for (let siteIndex = 0; siteIndex < hitTargets.length; siteIndex += 1) {
+    const site = hitTargets[siteIndex];
+    assert.equal(lab.selectSite(site.siteId).accepted, true);
+    for (let hitIndex = 0; hitIndex <= siteIndex; hitIndex += 1) {
+      assert.equal(lab.strikeSelectedSite('center').actualSiteId, site.siteId);
+    }
+  }
+  let ramDiagnostics = lab.getDiagnostics();
+  assert.deepEqual(hitTargets.map((site) => ramDiagnostics.progressiveSites[site.siteId].currentStage), ['LIGHT', 'MEDIUM', 'HEAVY']);
+  assert.deepEqual(hitTargets.map((site) => ramDiagnostics.progressiveSites[site.siteId].acceptedHitCount), [1, 2, 3]);
+  assert.equal(ramDiagnostics.progressiveSites[ramSites[3].siteId].currentStage, null);
+  assert.equal(ramDiagnostics.progressiveSites[ramSites[3].siteId].acceptedHitCount, 0);
+  assert.ok(ramDiagnostics.activeGoreCount > 0);
+  assert.ok(ramDiagnostics.activeStainCount > 0);
+  assert.equal(encounter.actor.lifeState, 'alive', 'one Heavy progressive site must not globally kill Dread Ram God');
+  assert.equal(lab.siteMarkerRenderer.markers.count, 4);
+
+  const physicalSite = ramSites[3];
+  const physicalTarget = lab.getSiteTargeting().getRecord(physicalSite.siteId, { refresh: true });
+  const physicalBodyId = lab.resolveSiteStrikeBodyId(physicalSite);
+  const physicalHit = encounter.actor.resolveHit(encounter.actor.colliders.get(physicalBodyId), physicalTarget.currentWorldCenter.clone());
+  const physicalDirection = physicalTarget.currentWorldPreferredDirection.clone().normalize();
+  const physicalImpact = encounter.actor.applyBluntImpact({
+    hit: physicalHit,
+    impact: {
+      schema: BLUNT_IMPACT_SCHEMA,
+      interactionId: 'dread-ram-god-real-mace-path',
+      primitive: 'mace_head',
+      classification: BLUNT_IMPACT_CLASSIFICATIONS.committedBlunt,
+      worldPoint: physicalTarget.currentWorldCenter.clone(),
+      worldNormal: physicalDirection.clone().negate(),
+      impactDirection: physicalDirection,
+      normalImpactSpeed: 4,
+      tangentialSpeed: 0.3,
+      estimatedImpulse: 21.6,
+      estimatedEnergy: 43.2,
+      loadProgress: 0.76,
+      gesturePower: 0.7,
+      impactRadiusEstimate: 0.11,
+    },
+  });
+  assert.equal(physicalImpact.accepted, true);
+  assert.equal(physicalImpact.deformationApplied, true);
+  ramDiagnostics = lab.getDiagnostics();
+  assert.equal(ramDiagnostics.progressiveTargeting.lastPhysicalTargetingDecision.source, 'physical');
+  assert.equal(ramDiagnostics.progressiveTargeting.lastPhysicalTargetingDecision.selectedSiteId, physicalSite.siteId);
+  assert.equal(ramDiagnostics.progressiveSites[physicalSite.siteId].acceptedHitCount, 1);
+
+  assert.equal(lab.detachSegment('left_elbow').accepted, true);
+  assert.equal(lab.detachSegment('right_elbow').accepted, true);
+  assert.equal(lab.detachSegment('lower_spine').accepted, false);
+  assert.equal(encounter.actor.lifeState, 'alive');
+  assert.equal(lab.detachSegment('head_neck').accepted, true);
+  assert.equal(encounter.actor.lifeState, 'dying');
+  const damagedRamActor = encounter.actor;
+  const damagedRamTargeting = lab.getSiteTargeting();
+  const damagedRamMarkers = lab.siteMarkerRenderer;
+  assert.equal((await lab.respawn()).accepted, true);
+  assert.equal(damagedRamActor.disposed, true);
+  assert.equal(damagedRamTargeting.disposed, true);
+  assert.equal(damagedRamMarkers.disposed, true);
+  assert.equal(encounter.actor.lifeState, 'alive');
+  assert.equal(lab.getDiagnostics().activeGoreCount, 0);
+  assert.equal(lab.getDiagnostics().activeStainCount, 0);
+
   const firstActor = encounter.actor;
   const firstCollider = firstActor.colliders.get('upper_chest');
-  assert.equal((await lab.selectPack('dreadguard_damage_v001')).accepted, true);
+  const firstTargeting = lab.getSiteTargeting();
+  const firstMarkers = lab.siteMarkerRenderer;
+  assert.equal((await lab.selectPack('chezwick_damage_v001')).accepted, true);
   assert.equal(firstActor.disposed, true);
+  assert.equal(firstTargeting.disposed, true);
+  assert.equal(firstMarkers.disposed, true);
   assert.equal(encounter.combatRouter.resolveCollider(firstCollider, new THREE.Vector3()), null);
-  assert.equal(encounter.actor.visualProfile.creaturePackId, 'dreadguard_damage_v001');
+  assert.equal(encounter.actor.visualProfile.creaturePackId, 'chezwick_damage_v001');
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
   assert.equal(blockerCount(), 1);
 
   const secondActor = encounter.actor;
   const secondCollider = secondActor.colliders.get('upper_chest');
-  assert.equal((await lab.selectPack('chezwick_damage_v001')).accepted, true);
+  assert.equal((await lab.selectPack('dreadguard_damage_v001')).accepted, true);
   assert.equal(secondActor.disposed, true);
   assert.equal(encounter.combatRouter.resolveCollider(secondCollider, new THREE.Vector3()), null);
-  assert.equal(encounter.actor.visualProfile.creaturePackId, 'chezwick_damage_v001');
+  assert.equal(encounter.actor.visualProfile.creaturePackId, 'dreadguard_damage_v001');
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
   assert.equal(blockerCount(), 1);
 
   const thirdActor = encounter.actor;
+  const thirdCollider = thirdActor.colliders.get('upper_chest');
+  assert.equal((await lab.selectPack('dread_ram_god_damage_v001')).accepted, true);
+  assert.equal(thirdActor.disposed, true);
+  assert.equal(encounter.combatRouter.resolveCollider(thirdCollider, new THREE.Vector3()), null);
+  assert.equal(encounter.actor.visualProfile.creaturePackId, 'dread_ram_god_damage_v001');
+  assert.equal(lab.getDiagnostics().nativeSiteCount, 4);
+  assert.equal(lab.getDiagnostics().activeGoreCount, 0);
+  assert.equal(lab.getDiagnostics().activeStainCount, 0);
+  assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
+  assert.equal(blockerCount(), 1);
+
+  const fourthActor = encounter.actor;
   assert.equal(lab.kill().accepted, true);
-  assert.equal(thirdActor.lifeState, 'dying');
+  assert.equal(fourthActor.lifeState, 'dying');
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1, 'the authored falling body remains contactable until grounded');
   assert.equal((await lab.respawn()).accepted, true);
-  assert.equal(thirdActor.disposed, true);
+  assert.equal(fourthActor.disposed, true);
   assert.equal(encounter.actor.lifeState, 'alive');
   assert.equal(encounter.combatRouter.getDiagnostics().actorCount, 1);
   assert.equal(blockerCount(), 1);

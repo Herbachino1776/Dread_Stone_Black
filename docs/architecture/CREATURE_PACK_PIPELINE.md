@@ -2,7 +2,7 @@
 
 `dreadstone.creature_pack.v1` is the repository receiving contract for a validated technical creature body. It is generated from Forge output and contains no gameplay identity, behavior, encounter, or persistence state.
 
-Milestone 1 established the repository receiving contract and deterministic generated registry. Milestone 2 added a browser-safe resolver, a separate game-policy layer, an effective-profile composition bridge, and an isolated mobile Creature Lab. Milestone 3 adds animation-following 3D Progressive Damage Site targeting and the mobile site-driven damage harness. Canonical Folsom still uses its legacy direct profile and remains unchanged unless the explicit hidden lab query is active.
+Milestone 1 established the repository receiving contract and deterministic generated registry. Milestone 2 added a browser-safe resolver, a separate game-policy layer, an effective-profile composition bridge, and an isolated mobile Creature Lab. Milestone 3 added animation-following 3D Progressive Damage Site targeting and the mobile site-driven damage harness. Milestone 3.5 integrates Dread Ram God as the third production fixture and proves four native sites, multi-site coexistence, physical mace routing, and three-pack cleanup without character-specific combat architecture. Canonical Folsom still uses its legacy direct profile and remains unchanged unless the explicit hidden lab query is active.
 
 ## Current bundle audit
 
@@ -16,13 +16,17 @@ Each proven damage bundle has exactly three required files:
   - `public/assets/enemies/chezwick/damage/chezwick_v001.glb`
   - `public/assets/enemies/chezwick/damage/chezwick_v001.json`
   - `public/assets/enemies/chezwick/damage/chezwick_v001_validation.json`
+- Dread Ram God:
+  - `public/assets/enemies/dread_ram_god/damage/Dread_Ram_God.glb`
+  - `public/assets/enemies/dread_ram_god/damage/Dread_Ram_God.json`
+  - `public/assets/enemies/dread_ram_god/damage/Dread_Ram_God_validation.json`
 
 Dreadguard also has an Animation Forge sidecar manifest and report:
 
 - `public/assets/enemies/dreadguard/animations/dreadguard_animpack_v003.json`
 - `public/assets/enemies/dreadguard/animations/dreadguard_animpack_v003_validation.json`
 
-The standalone animation GLB named by that sidecar is not present in the repository. Its seven approved clips are embedded in the combined Dreadguard DamageGLB. Chezwick has no separate animation sidecars; approved clip metadata is embedded in its DamageGLB.
+The standalone animation GLB named by that sidecar is not present in the repository. Its seven approved clips are embedded in the combined Dreadguard DamageGLB. Chezwick and Dread Ram God have no separate animation sidecars; approved clip metadata is embedded in each DamageGLB. Dread Ram God contains exactly the six selected runtime clips and no source-only clips.
 
 ### Existing browser loading path
 
@@ -53,7 +57,7 @@ The browser does **not** fetch or inspect `damageValidationReportPath` or `anima
 - `resolveAnimationPackManifest` in `src/game/combat/HumanoidGlbVisualAdapter.js` validates approved manifest clips and, when requested, their embedded `dreadstone.animation_clip.v1` approval metadata.
 - `scripts/validate-combat.mjs` performs additional Dreadguard manifest/report/GLB assertions, but it is not a generic importer.
 
-The Creature Pack importer reuses these runtime validators. It adds repository-only validation for the required PASS report, embedded-report equality, manifest/report identity, animation sidecar report, GLB structure, deterministic measurement, and generated descriptor schema.
+The Creature Pack importer reuses these runtime validators. It adds repository-only validation for the required PASS report, embedded-report equality, manifest/report identity, optional runtime-skeleton identity/count/bone checks, animation sidecar report, GLB structure, deterministic measurement, and generated descriptor schema.
 
 ## Authority boundaries
 
@@ -106,6 +110,7 @@ presentation
   raw bounds and height
   authored forward/up axes and unit scale
   skeleton family and bone-map profile IDs
+  optional Forge runtime skeleton armature/counts
 capabilities
   progressive damage, deformations, gore, stains
   paired detachable segments
@@ -135,7 +140,7 @@ Import one existing bundle:
 node scripts/import-creature-pack.mjs --id chezwick_damage_v001 --source public/assets/enemies/chezwick/damage
 ```
 
-Regenerate both production fixtures:
+Regenerate all three production fixtures:
 
 ```powershell
 node scripts/import-creature-pack.mjs --all
@@ -151,6 +156,7 @@ npm run validate:creature-packs
 Generated output is under `public/generated/creature-packs/`:
 
 - `chezwick_damage_v001.json`
+- `dread_ram_god_damage_v001.json`
 - `dreadguard_damage_v001.json`
 - `index.json`, using `dreadstone.creature_pack_registry.v1`
 
@@ -195,7 +201,7 @@ Game-authored fields that remain in profiles:
 - durability, piercing lethality, and mace-blood tuning;
 - collider fit notes.
 
-`activeDamageSegmentIds` is a migration bridge: the IDs originate in Forge, but enabling only `head_neck`, `left_elbow`, and `right_elbow` is a current game-runtime support decision. Both bundles also export `lower_spine`; it is available in pack metadata but not active because `ACTIVE_DAMAGE_SEGMENT_CONTRACTS` does not support it yet.
+`activeDamageSegmentIds` is a migration bridge: the IDs originate in Forge, but enabling only `head_neck`, `left_elbow`, and `right_elbow` is a current game-runtime support decision. All three bundles also export `lower_spine`; it is available in pack metadata but not active because `ACTIVE_DAMAGE_SEGMENT_CONTRACTS` does not support it yet.
 
 ## Milestone 2 runtime resolution
 
@@ -212,7 +218,7 @@ The resolver does not fetch Forge validation reports or reconstruct compact desc
 
 ## Runtime policy and effective-profile bridge
 
-`src/game/creatures/CreatureRuntimePolicies.js` owns game-authored decisions for the current humanoid host. It currently registers a small policy for Chezwick and Dreadguard. Policies may contain presentation scale, grounding, rotation, collision fit, animation selection, holding/death behavior, voice, damage cadence, mortality/lethality tuning, compatibility sites, and the current supported segment subset.
+`src/game/creatures/CreatureRuntimePolicies.js` owns game-authored decisions for the current humanoid host. It currently registers a small policy for Chezwick, Dreadguard, and Dread Ram God. Policies may contain presentation scale, grounding, rotation, collision fit, animation selection, holding/death behavior, voice, damage cadence, mortality/lethality tuning, compatibility sites, and the current supported segment subset.
 
 Policies are explicitly rejected if they duplicate descriptor-owned technical fields such as asset paths, raw exported height, Forge authoring identity, or source fingerprints. `composeHumanoidCreatureRuntimeProfile(pack, policy)` combines the two authorities into the compatibility profile already accepted by `HumanoidCombatActor` and `HumanoidGlbVisualAdapter`:
 
@@ -226,7 +232,7 @@ validated game-authored runtime policy
 effective current humanoid profile
 ```
 
-This bridge lets both production fixtures use one generic resolution/composition path without rewriting the actor. `HumanoidModelProfiles.js` remains in place for canonical Folsom and other existing consumers; it is legacy duplication to remove gradually only after parity is proven.
+This bridge lets all three production fixtures use one generic resolution/composition path without rewriting the actor. `HumanoidModelProfiles.js` remains in place for canonical Folsom and other existing consumers; it is legacy duplication to remove gradually only after parity is proven.
 
 ## Supported runtime boundary
 
@@ -273,10 +279,11 @@ Console access is secondary only. The generic lab commands are exposed as `__DSB
 
 Selecting another supported pack cancels the current weapon target, disposes the current walker actor/director/blood ownership, unregisters combat routing, removes its player blocker, composes the new pack and policy, and spawns one clean replacement through the same `HumanoidCombatActor` factory path. The controller then waits for visual-adapter initialization before exposing resolved damage sites. Switching does not reload Folsom and does not write progression or save state.
 
-Chezwick and Dreadguard preserve their existing compatibility behavior without changing generated truth:
+All three production fixtures preserve generated truth while applying only their explicit runtime policy:
 
 - Chezwick exposes the native right-face site from Forge plus the policy-owned left-face reconstruction.
 - Dreadguard exposes zero native sites from its pack and the existing policy-owned left-head compatibility site.
+- Dread Ram God exposes all four native Forge sites and no policy-owned compatibility site.
 
 Native manifest sites take precedence. Compatibility sites are added only for a side not supplied by Forge, and diagnostics report the two counts separately.
 
@@ -342,16 +349,27 @@ Idle, walk, hurt, and guard are verified with current-pose center strikes. Death
 
 ### Deployed iPhone acceptance procedure
 
-1. Open deployed Folsom with `?creatureLab=1` and confirm one subject plus the floating `LAB` button.
-2. Open LAB, choose Chezwick, enable Show Sites, and optionally Show Selected Radius.
-3. Trigger Idle, Walk, Hurt Left/Right, and Guard; confirm facial markers remain on the animated surface.
-4. Select the native right facial site. Run Center Hit, Edge Hit, and Outside Hit; confirm the first two resolve right and Outside rejects right.
-5. Select the compatibility left facial site and repeat.
-6. Close LAB, walk around the subject, and strike visible authored areas with the equipped mace.
-7. Reopen LAB and inspect LAST PHYSICAL SITE plus distance, radius, alignment, and impact region.
-8. Switch to Dreadguard; confirm its one compatibility head marker and center probe, with zero native sites.
-9. Switch and respawn repeatedly; confirm no stale marker, actor, collider, binding, route, or blocker remains.
-10. Open normal Folsom without `?creatureLab=1`, and also with `?creatureLab=0`; confirm no lab behavior or ephemeral mace loadout exists.
+1. Open deployed Folsom on iPhone with `?creatureLab=1`; confirm one subject and the floating `LAB` button.
+2. Open LAB and select Dread Ram God from the generated pack list.
+3. Enable Show Sites and confirm four anatomical markers. Each site row must show its stable `siteId`, display name, `NATIVE`, authored radius, current stage, accepted-hit count, and `SKINNED SURFACE` binding.
+4. Tap Idle and confirm all four markers stay on the animated surface.
+5. Tap Walk and confirm all four markers follow the body.
+6. Tap Hurt Left and confirm all four markers follow without a rest-pose reset.
+7. Tap Hurt Right and confirm all four markers follow without a rest-pose reset.
+8. Select each of the four sites in turn and tap Center Hit; confirm LAST PROBE SITE equals the selected stable `siteId`.
+9. For each site, reset its damage and tap Edge Hit; confirm the selected site still wins at the authored-radius edge.
+10. For each site, reset its damage and tap Outside Hit; confirm the selected site and its same-side neighbor do not win.
+11. Reset All Damage. Apply one Center Hit to site A, two to site B, and three to site C; leave site D untouched.
+12. Confirm A is Light with 1 accepted hit, B is Medium with 2, C is Heavy with 3, D is undamaged with 0, and the actor remains alive.
+13. Inspect the damaged body and diagnostics; confirm independent deformation morphs, portable stains, raised gore, four marker positions, and animation playback remain correct together.
+14. Close LAB, walk around the subject, and physically strike a visible authored site with the ephemeral mace.
+15. Reopen LAB and confirm LAST PHYSICAL SITE reports the anatomically struck site, with production distance/radius/impact diagnostics.
+16. Test Left Elbow and Right Elbow detachment, respawning as needed. Confirm Lower Spine is visible as available but disabled/unsupported.
+17. Test Head / Neck detachment and confirm the production fatal-detachment path.
+18. Respawn, tap Death, confirm the authored death path, then respawn again to a clean actor.
+19. Switch Dread Ram God -> Chezwick -> Dreadguard -> Dread Ram God.
+20. After every switch, confirm exactly one actor/blocker/marker set and no stale damage, gore, stains, binding, animation, collider, route, or weapon target.
+21. Confirm the final Dread Ram God respawn is clean. Then open normal Folsom without `?creatureLab=1` (and once with `?creatureLab=0`) and confirm the normal four-Chezwick wave and non-lab loadout remain unchanged.
 
 ## Compatibility exceptions
 
@@ -361,6 +379,7 @@ Compatibility metadata is never promoted into native Creature Pack truth.
 - Chezwick natively exports only `damage_site_face_right`. Forge exported the left deformation artifacts but omitted the draft left site. `CHEZWICK_LEFT_PROGRESSIVE_DAMAGE_SITE_COMPATIBILITY` reconstructs the current left runtime site from exact stamp captures. The generated Chezwick pack lists only the native right site.
 - Chezwick embeds five legacy `SBF_Production_*` clips without `dreadstone.animation_clip.v1` approval metadata. They are counted as unapproved and are not advertised as pack capabilities.
 - Chezwick's manifest spells `Chezwick_v001.glb` while the repository file is lowercase. The importer resolves this known case-insensitive identity and emits a diagnostic because GitHub Pages paths are case-sensitive.
+- Dread Ram God exports four enabled native sites and therefore has no compatibility progressive-site policy. Its Forge runtime-skeleton contract identifies `DSB_DAMAGE_RIG`, one skeleton, one skin, and the current 21-bone requirement; the importer cross-checks these against the PASS report and parsed GLB.
 
 Runtime fallback precedence remains unchanged: native manifest sites win, and a compatibility site is added only for a side not supplied by Forge.
 
@@ -400,16 +419,17 @@ Creature Instance:
 - one world individual and its persistent state;
 - not implemented here.
 
-The planned migration now continues from the first three completed milestones:
+The planned migration now continues from the completed Creature Pack foundation and Milestone 3.5 torture test:
 
 1. Creature Pack contract/importer and generated registry (Milestone 1, complete).
 2. Runtime resolver, policy composition, and mobile Folsom proving ground (Milestone 2, complete).
 3. 3D Progressive Site Targeting (Milestone 3, complete).
-4. Creature Definition Registry + Factory (next).
-5. Semantic Damage Consequences.
-6. Reusable body/runtime extraction.
-7. Creature Instance Persistence.
-8. Simulation tiers.
-9. Non-humanoid profiles.
+4. Dread Ram God multi-site production proof (Milestone 3.5, complete).
+5. Creature Definition Registry + Factory (next; not begun here).
+6. Semantic Damage Consequences.
+7. Reusable body/runtime extraction.
+8. Creature Instance Persistence.
+9. Simulation tiers.
+10. Non-humanoid profiles.
 
 Milestone 4 should introduce a small Creature Definition Registry and factory that references validated Creature Packs plus game-authored identity/policy. It must not duplicate Forge technical truth or begin AI, persistence, factions, dialogue, inventories, or unrelated behavior systems as part of the registry proof.

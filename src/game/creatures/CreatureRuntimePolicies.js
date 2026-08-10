@@ -3,6 +3,7 @@ import {
   CHEZWICK_BONE_MAP,
   CHEZWICK_LEFT_PROGRESSIVE_DAMAGE_SITE_COMPATIBILITY,
   CHEZWICK_RUNTIME_ANIMATION_NAMES,
+  CURRENT_HUMANOID_BONE_MAP,
   DREADGUARD_BONE_MAP,
   DREADGUARD_DAMAGE_COMBAT_PROFILE,
   DREADGUARD_IGNORED_GUARD_ANIMATION_NAMES,
@@ -47,6 +48,30 @@ const SHARED_HUMANOID_POLICY = Object.freeze({
   activeDamageSegmentIds: Object.freeze(['head_neck', 'left_elbow', 'right_elbow']),
 });
 
+export const DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES = Object.freeze([
+  'DSB_Idle_Humanoid_v002',
+  'DSB_Walk_NORMAL_v002',
+  'DSB_Hurt_LEFT_Flank_v001',
+  'DSB_Hurt_RIGHT_Flank_v001',
+  'DSB_Death_ChestHold_LEFT_v001',
+  'DSB_Death_ChestHold_LEFT_v002',
+]);
+
+export const DREAD_RAM_GOD_CREATURE_RUNTIME_POLICY = Object.freeze({
+  ...SHARED_HUMANOID_POLICY,
+  policyId: 'dread_ram_god_damage_v001.runtime.v1',
+  packId: 'dread_ram_god_damage_v001',
+  boneMap: CURRENT_HUMANOID_BONE_MAP,
+  animationRuntimeKinds: Object.freeze(['IDLE', 'WALK', 'HURT_LEFT', 'HURT_RIGHT', 'DEATH']),
+  selectedAnimationNames: DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES,
+  ignoredEmbeddedAnimationNames: null,
+  requireEmbeddedAnimationApprovalMetadata: true,
+  progressiveDamageSiteFallbacks: Object.freeze([]),
+  progressiveDamageHitsPerStage: 1,
+  terminalProgressiveDamageFatal: false,
+  colliderFitNotes: 'Creature Lab Dread Ram God policy: current humanoid collision fit, six selected embedded clips, four native progressive sites, and the three currently certified detachable segments.',
+});
+
 export const DREADGUARD_CREATURE_RUNTIME_POLICY = Object.freeze({
   ...SHARED_HUMANOID_POLICY,
   policyId: 'dreadguard_damage_v001.runtime.v1',
@@ -80,6 +105,7 @@ export const CHEZWICK_CREATURE_RUNTIME_POLICY = Object.freeze({
 
 const POLICIES = new Map([
   [CHEZWICK_CREATURE_RUNTIME_POLICY.packId, CHEZWICK_CREATURE_RUNTIME_POLICY],
+  [DREAD_RAM_GOD_CREATURE_RUNTIME_POLICY.packId, DREAD_RAM_GOD_CREATURE_RUNTIME_POLICY],
   [DREADGUARD_CREATURE_RUNTIME_POLICY.packId, DREADGUARD_CREATURE_RUNTIME_POLICY],
 ]);
 

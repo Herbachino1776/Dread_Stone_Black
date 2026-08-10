@@ -21,6 +21,13 @@ import {
   CHEZWICK_DAMAGE_COMBAT_PROFILE,
   DREADGUARD_DAMAGE_COMBAT_PROFILE,
 } from '../src/game/combat/HumanoidModelProfiles.js';
+import {
+  CREATURE_PACK_TECHNICAL_PROFILE_FIELDS,
+  DREAD_RAM_GOD_CREATURE_RUNTIME_POLICY,
+  DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES,
+  assessCreaturePackRuntimeSupport,
+  composeHumanoidCreatureRuntimeProfile,
+} from '../src/game/creatures/CreatureRuntimePolicies.js';
 
 const dreadguardSource = path.join(DEFAULT_REPOSITORY_ROOT, 'public/assets/enemies/dreadguard/damage');
 const chezwickSource = path.join(DEFAULT_REPOSITORY_ROOT, 'public/assets/enemies/chezwick/damage');
@@ -30,6 +37,10 @@ const dreadguardReportPath = path.join(dreadguardSource, 'dreadguard_damage_v001
 const chezwickManifestPath = path.join(chezwickSource, 'chezwick_v001.json');
 const chezwickGlbPath = path.join(chezwickSource, 'chezwick_v001.glb');
 const chezwickReportPath = path.join(chezwickSource, 'chezwick_v001_validation.json');
+const dreadRamGodSource = path.join(DEFAULT_REPOSITORY_ROOT, 'public/assets/enemies/dread_ram_god/damage');
+const dreadRamGodManifestPath = path.join(dreadRamGodSource, 'Dread_Ram_God.json');
+const dreadRamGodGlbPath = path.join(dreadRamGodSource, 'Dread_Ram_God.glb');
+const dreadRamGodReportPath = path.join(dreadRamGodSource, 'Dread_Ram_God_validation.json');
 
 let productionPacksPromise = null;
 function loadProductionPacks() {
@@ -100,6 +111,71 @@ test('Chezwick production bundle imports native right-face truth without copying
   assert.ok(!serializeGeneratedJson(pack).includes('damage_site_face_left_compatibility'));
 });
 
+test('Dread Ram God production bundle imports all Forge-authored technical truth', async () => {
+  const packs = await loadProductionPacks();
+  const pack = packs.find((entry) => entry.packId === 'dread_ram_god_damage_v001');
+  assert.ok(pack);
+  assert.equal(pack.displayName, 'Dread Ram God');
+  assert.equal(pack.assets.glb, './assets/enemies/dread_ram_god/damage/Dread_Ram_God.glb');
+  assert.equal(pack.assets.damageManifest, './assets/enemies/dread_ram_god/damage/Dread_Ram_God.json');
+  assert.equal(pack.assets.damageValidationReport, './assets/enemies/dread_ram_god/damage/Dread_Ram_God_validation.json');
+  assert.equal(pack.assets.animationManifest, null);
+  assert.equal(pack.presentation.skeletonFamilyId, 'DSB_HUMANOID_V1');
+  assert.deepEqual(pack.presentation.runtimeSkeleton, {
+    schema: 'dreadstone.runtime_skeleton.v1',
+    armature: 'DSB_DAMAGE_RIG',
+    skeletonCount: 1,
+    skinCount: 1,
+    requiredBoneCount: 21,
+  });
+  assert.equal(pack.cost.progressiveSiteCount, 4);
+  assert.equal(pack.cost.deformationKeyCount, 12);
+  assert.equal(pack.cost.generatedGoreMeshCount, 15);
+  assert.equal(pack.cost.stainMeshCount, 12);
+  assert.deepEqual(pack.damage.availableSegmentIds, ['head_neck', 'left_elbow', 'lower_spine', 'right_elbow']);
+  assert.deepEqual(pack.damage.activeRuntimeSegmentIds, ['head_neck', 'left_elbow', 'right_elbow']);
+  assert.deepEqual(pack.damage.progressiveDamageSiteIds, [
+    'damage_site',
+    'damage_site_left_body',
+    'damage_site_left_body_2',
+    'damage_site_left_face',
+  ]);
+  assert.equal(pack.animations.delivery, 'embedded');
+  assert.equal(pack.animations.manifestValidated, false);
+  assert.equal(pack.animations.approvedClips.length, 6);
+  assert.equal(pack.animations.unapprovedClipCount, 0, 'source-only animations are absent');
+  assert.deepEqual(pack.animations.approvedClips.map((clip) => clip.name).sort(), [...DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES].sort());
+  assert.deepEqual(pack.importDiagnostics, []);
+
+  const repeated = await importCreaturePack({
+    packId: 'dread_ram_god_damage_v001',
+    displayName: 'Dread Ram God',
+    sourceDir: dreadRamGodSource,
+    repositoryRoot: DEFAULT_REPOSITORY_ROOT,
+  });
+  assert.equal(serializeGeneratedJson(repeated), serializeGeneratedJson(pack));
+});
+
+test('Dread Ram God runtime policy composes without duplicating Forge truth', async () => {
+  const pack = (await loadProductionPacks()).find((entry) => entry.packId === 'dread_ram_god_damage_v001');
+  const policy = DREAD_RAM_GOD_CREATURE_RUNTIME_POLICY;
+  const support = assessCreaturePackRuntimeSupport(pack, policy);
+  assert.deepEqual(support, { supported: true, reason: null, code: 'SUPPORTED' });
+  assert.deepEqual(policy.progressiveDamageSiteFallbacks, []);
+  assert.equal(policy.progressiveDamageHitsPerStage, 1);
+  assert.equal(policy.terminalProgressiveDamageFatal, false);
+  assert.deepEqual(policy.activeDamageSegmentIds, ['head_neck', 'left_elbow', 'right_elbow']);
+  assert.equal(pack.damage.availableSegmentIds.includes('lower_spine'), true);
+  assert.equal(policy.activeDamageSegmentIds.includes('lower_spine'), false);
+  assert.deepEqual(policy.animationRuntimeKinds, ['IDLE', 'WALK', 'HURT_LEFT', 'HURT_RIGHT', 'DEATH']);
+  assert.deepEqual(policy.selectedAnimationNames, DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES);
+  CREATURE_PACK_TECHNICAL_PROFILE_FIELDS.forEach((field) => assert.equal(field in policy, false, `${field} must remain descriptor-owned`));
+  const profile = composeHumanoidCreatureRuntimeProfile(pack, policy);
+  assert.equal(profile.embeddedAnimationPack, true);
+  assert.deepEqual(profile.embeddedAnimationNames, DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES);
+  assert.deepEqual(profile.progressiveDamageSiteFallbacks, []);
+});
+
 test('import rejects a missing GLB with an actionable bundle error', async (t) => {
   const directory = await temporaryDirectory(t);
   const manifest = JSON.parse(await readFile(dreadguardManifestPath, 'utf8'));
@@ -157,6 +233,24 @@ test('import rejects mismatched source identity and fingerprints', async (t) => 
   );
 });
 
+test('import rejects a Forge runtime-skeleton count that disagrees with the manifest', async (t) => {
+  const directory = await temporaryDirectory(t);
+  const report = JSON.parse(await readFile(dreadRamGodReportPath, 'utf8'));
+  report.runtimeSkeleton.skeletonCount = 2;
+  const reportPath = path.join(directory, 'mismatched_runtime_skeleton_validation.json');
+  await writeFile(reportPath, JSON.stringify(report), 'utf8');
+  await assert.rejects(
+    importCreaturePack({
+      packId: 'mismatched_runtime_skeleton_fixture',
+      sourceDir: dreadRamGodSource,
+      glbPath: dreadRamGodGlbPath,
+      manifestPath: dreadRamGodManifestPath,
+      validationReportPath: reportPath,
+    }),
+    /runtime skeleton count does not match/,
+  );
+});
+
 test('import rejects malformed progressive site records without fixing the Forge export', async (t) => {
   const directory = await temporaryDirectory(t);
   const manifest = JSON.parse(await readFile(chezwickManifestPath, 'utf8'));
@@ -181,7 +275,7 @@ test('registry and descriptor output are deterministic and match committed gener
   const second = createCreaturePackRegistry([...packs].reverse(), { repositoryRoot: DEFAULT_REPOSITORY_ROOT, generatedDirectory: DEFAULT_GENERATED_DIRECTORY });
   assert.equal(serializeGeneratedJson(first), serializeGeneratedJson(second));
   assert.equal(validateCreaturePackRegistry(first).valid, true);
-  assert.deepEqual(first.packs.map((entry) => entry.packId), ['chezwick_damage_v001', 'dreadguard_damage_v001']);
+  assert.deepEqual(first.packs.map((entry) => entry.packId), ['chezwick_damage_v001', 'dread_ram_god_damage_v001', 'dreadguard_damage_v001']);
   assert.equal(await readFile(path.join(DEFAULT_GENERATED_DIRECTORY, 'index.json'), 'utf8'), serializeGeneratedJson(first));
   for (const pack of packs) {
     assert.equal(await readFile(path.join(DEFAULT_GENERATED_DIRECTORY, `${pack.packId}.json`), 'utf8'), serializeGeneratedJson(pack));
