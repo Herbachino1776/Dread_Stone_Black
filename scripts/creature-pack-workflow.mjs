@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import {
+  formatFailedProcessOutput,
   inspectCreatureImportSource,
   installCreaturePack,
   publicInspectionSummary,
@@ -65,7 +66,10 @@ async function main() {
 }
 
 main().catch((error) => {
-  const details = error.stderr?.trim() || error.stdout?.trim();
+  const messageIncludesProcessOutput = /(?:stdout|stderr):\n/.test(error.message);
+  const details = !messageIncludesProcessOutput && (error.stdout?.trim() || error.stderr?.trim())
+    ? formatFailedProcessOutput({ stdout: error.stdout, stderr: error.stderr, exitCode: error.exitCode })
+    : null;
   process.stderr.write(`${path.basename(process.argv[1])}: ${error.message}${details && !error.message.includes(details) ? `\n${details}` : ''}\n`);
   process.exitCode = 1;
 });

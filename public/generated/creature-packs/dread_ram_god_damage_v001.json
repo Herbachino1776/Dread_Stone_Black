@@ -22,33 +22,33 @@
     "weightFingerprint": "14024b812a445c78ded1d6e3eb9ed4478a354f0cd544902d0c3077b516ba397e",
     "readinessAnalyzerRevision": "hierarchical_weight_partition_v3.16.3",
     "readinessAnalyzerBuildId": "2026-07-18.source-contract.1",
-    "exportGeneratedAtUtc": "2026-08-10T00:50:09Z"
+    "exportGeneratedAtUtc": "2026-08-10T16:53:01Z"
   },
   "authoring": {
     "damageVersion": "3.9.1",
-    "damageBuildId": "2026-08-09.runtime-skeleton-export.1",
-    "deformationVersion": "5.1.3",
+    "damageBuildId": "2026-08-10.runtime-armament-contract.1",
+    "deformationVersion": "5.2.2",
     "deformationBuildId": "2026-07-29.portable-surface-stains.1"
   },
   "presentation": {
     "rawBounds": {
       "min": [
-        -0.318720646,
-        0.000210257,
-        -0.173704312
+        -0.318717608,
+        0.000281769,
+        -0.173682593
       ],
       "max": [
-        0.3210389,
-        1.496246025,
-        0.173947108
+        0.321052592,
+        1.496161152,
+        0.173944515
       ],
       "size": [
-        0.639759547,
-        1.496035767,
-        0.34765142
+        0.6397702,
+        1.495879383,
+        0.347627108
       ]
     },
-    "rawHeight": 1.496035767,
+    "rawHeight": 1.495879383,
     "authoredForwardAxis": "+Y",
     "upAxis": "+Z",
     "unitScaleMeters": 1,
@@ -70,20 +70,86 @@
     "pairedDetachableSegments": true,
     "embeddedAnimations": true,
     "separatelyValidatedAnimations": false,
-    "attachmentSockets": false,
-    "offensiveActions": false
+    "attachmentSockets": true,
+    "offensiveActions": true
   },
   "attachmentSockets": {
     "schema": "dreadstone.attachment_sockets.v1",
-    "available": false,
+    "available": true,
     "runtimeArmature": "DSB_DAMAGE_RIG",
     "runtimeBoneCount": 21,
-    "sockets": []
+    "sockets": [
+      {
+        "socketId": "hand_left_weapon",
+        "semanticRole": "MAIN_HAND_L",
+        "parentRuntimeBone": "arm_left_hand",
+        "localPosition": [
+          0,
+          0.0524012,
+          1e-7
+        ],
+        "localQuaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "socketId": "hand_right_weapon",
+        "semanticRole": "MAIN_HAND_R",
+        "parentRuntimeBone": "arm_right_hand",
+        "localPosition": [
+          1e-7,
+          0.0438956,
+          0
+        ],
+        "localQuaternion": [
+          0,
+          0,
+          0,
+          1
+        ]
+      }
+    ]
   },
   "offensiveActions": {
     "schema": "dreadstone.offensive_action.v1",
-    "available": false,
-    "actions": []
+    "available": true,
+    "actions": [
+      {
+        "actionName": "DSB_Attack_Overhead_OneHand_v001",
+        "attackFamily": "OVERHEAD_STRIKE",
+        "attackSourceRole": "EQUIPPED_MAIN_HAND",
+        "clipDurationSeconds": 1.958333,
+        "combatActionId": "humanoid_one_hand_overhead",
+        "commitment": {
+          "lockOrientationThroughActive": true,
+          "timeSeconds": 1.5
+        },
+        "compatibleWeaponClasses": [
+          "ONE_HAND_BLADE",
+          "ONE_HAND_BLUNT"
+        ],
+        "phases": {
+          "active": {
+            "endSeconds": 1.625,
+            "startSeconds": 1.5
+          },
+          "recovery": {
+            "endSeconds": 1.958333,
+            "startSeconds": 1.625
+          },
+          "windup": {
+            "endSeconds": 1.5,
+            "startSeconds": 0
+          }
+        },
+        "rootMotionPolicy": "IN_PLACE",
+        "schema": "dreadstone.offensive_action.v1",
+        "socketRole": "MAIN_HAND_R"
+      }
+    ]
   },
   "damage": {
     "availableSegmentIds": [
@@ -115,52 +181,46 @@
     "manifestValidated": false,
     "approvedClips": [
       {
+        "name": "DSB_Attack_Overhead_OneHand_v001",
+        "kind": "ATTACK_OVERHEAD_ONE_HAND",
+        "durationSeconds": 1.9583333730697632
+      },
+      {
         "name": "DSB_Death_ChestHold_LEFT_v001",
         "kind": "DEATH",
-        "durationSeconds": 3.125
+        "durationSeconds": 3.0833332538604736
       },
       {
         "name": "DSB_Death_ChestHold_LEFT_v002",
         "kind": "DEATH",
-        "durationSeconds": 3.125
+        "durationSeconds": 3.0833332538604736
       },
       {
         "name": "DSB_Hurt_LEFT_Flank_v001",
         "kind": "HURT_LEFT",
-        "durationSeconds": 0.75
+        "durationSeconds": 0.7083333134651184
       },
       {
         "name": "DSB_Hurt_RIGHT_Flank_v001",
         "kind": "HURT_RIGHT",
-        "durationSeconds": 0.75
+        "durationSeconds": 0.7083333134651184
       },
       {
         "name": "DSB_Idle_Humanoid_v002",
         "kind": "IDLE",
-        "durationSeconds": 3.25
+        "durationSeconds": 3.2083332538604736
       },
       {
         "name": "DSB_Walk_NORMAL_v002",
         "kind": "WALK",
-        "durationSeconds": 2.2083332538604736
+        "durationSeconds": 2.1666667461395264
       }
     ],
     "unapprovedClipCount": 0
   },
-  "importDiagnostics": [
-    {
-      "level": "info",
-      "code": "FORGE_ATTACHMENT_SOCKETS_UNAVAILABLE",
-      "message": "This Creature Pack has no Forge-authored runtime attachment sockets; production equipment attachment is unavailable."
-    },
-    {
-      "level": "info",
-      "code": "FORGE_OFFENSIVE_ACTIONS_UNAVAILABLE",
-      "message": "This Creature Pack has no Forge-approved offensive Actions; animated armament attacks are unavailable."
-    }
-  ],
+  "importDiagnostics": [],
   "cost": {
-    "glbFileBytes": 43851428,
+    "glbFileBytes": 43883776,
     "glbMeshDefinitionCount": 44,
     "meshCount": 81,
     "visibleMeshCount": 4,
@@ -176,8 +236,8 @@
     "stainMeshCount": 12,
     "detachableSegmentCount": 4,
     "activeDetachableSegmentCount": 3,
-    "animationCount": 6,
-    "approvedAnimationCount": 6,
+    "animationCount": 7,
+    "approvedAnimationCount": 7,
     "imageCount": 54,
     "textureCount": 54,
     "materialCount": 66

@@ -36,6 +36,7 @@ const glbUrl = new URL('../public/assets/enemies/dread_ram_god/damage/Dread_Ram_
 const manifestUrl = new URL('../public/assets/enemies/dread_ram_god/damage/Dread_Ram_God.json', import.meta.url);
 const validationUrl = new URL('../public/assets/enemies/dread_ram_god/damage/Dread_Ram_God_validation.json', import.meta.url);
 const descriptorUrl = new URL('../public/generated/creature-packs/dread_ram_god_damage_v001.json', import.meta.url);
+const DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME = 'DSB_Attack_Overhead_OneHand_v001';
 
 let assetPromise = null;
 async function loadAsset() {
@@ -98,6 +99,23 @@ function strikePoint(record, probe) {
   return record.currentWorldCenter.clone().addScaledVector(outward, distance);
 }
 
+function assertProductionAnimationInventory(clips, descriptor) {
+  const embeddedNames = clips.map((clip) => clip.name).sort();
+  const approvedNames = descriptor.animations.approvedClips.map((clip) => clip.name).sort();
+  const offensiveNames = descriptor.offensiveActions.actions.map((action) => action.actionName).sort();
+  const explainedNames = [...new Set([
+    ...DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES,
+    ...offensiveNames,
+  ])].sort();
+  for (const animationName of DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES) {
+    assert.ok(embeddedNames.includes(animationName), `${animationName} selected by the Creature Definition must exist in the GLB`);
+  }
+  assert.deepEqual(embeddedNames, approvedNames, 'unapproved/source-only GLB animations may not survive the production export');
+  assert.deepEqual(embeddedNames, explainedNames, 'every additional approved GLB animation must be an explicit Forge offensive Action');
+  assert.equal(descriptor.animations.unapprovedClipCount, 0);
+  assert.ok(clips.every((clip) => clip.userData?.dsb_approved === true && clip.userData?.dsb_draft === false));
+}
+
 test('Dread Ram God Forge report, GLB skeleton, sites, and embedded animation inventory agree', async () => {
   const { gltf, manifest, validation, descriptor } = await loadAsset();
   assert.equal(validation.status, 'PASS');
@@ -123,8 +141,33 @@ test('Dread Ram God Forge report, GLB skeleton, sites, and embedded animation in
   assert.equal(descriptor.cost.deformationKeyCount, 12);
   assert.equal(manifest.deformations.surfaceStainMeshes.length, 12);
   assert.equal(manifest.deformations.generatedGoreMeshes.length, 15);
-  assert.deepEqual(gltf.animations.map((clip) => clip.name).sort(), [...DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES].sort(), 'no source-only animations may survive the production export');
-  assert.ok(gltf.animations.every((clip) => clip.userData?.dsb_approved === true && clip.userData?.dsb_draft === false));
+  assert.equal(descriptor.attachmentSockets.available, true);
+  assert.equal(descriptor.attachmentSockets.sockets.length, 2);
+  assert.equal(descriptor.offensiveActions.available, true);
+  assert.deepEqual(descriptor.offensiveActions.actions, manifest.runtimeAnimations.offensiveActions);
+  assert.deepEqual(descriptor.offensiveActions.actions.map((action) => action.actionName), [DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME]);
+  assertProductionAnimationInventory(gltf.animations, descriptor);
+});
+
+test('Dread Ram God inventory guard rejects unapproved and approved-but-unexplained additions', async () => {
+  const { gltf, descriptor } = await loadAsset();
+  const unapproved = new THREE.AnimationClip('SourceOnly_Garbage', 1, []);
+  assert.throws(
+    () => assertProductionAnimationInventory([...gltf.animations, unapproved], descriptor),
+    /unapproved\/source-only/,
+  );
+  const unexplained = new THREE.AnimationClip('Approved_But_Unexplained', 1, []);
+  unexplained.userData = { dsb_approved: true, dsb_draft: false };
+  const descriptorWithApprovedExtra = structuredClone(descriptor);
+  descriptorWithApprovedExtra.animations.approvedClips.push({
+    name: unexplained.name,
+    kind: 'ATTACK_UNKNOWN',
+    durationSeconds: 1,
+  });
+  assert.throws(
+    () => assertProductionAnimationInventory([...gltf.animations, unexplained], descriptorWithApprovedExtra),
+    /explicit Forge offensive Action/,
+  );
 });
 
 test('all four native sites bind to animated skin and remain independently selectable through every approved pose', async () => {
@@ -150,11 +193,18 @@ test('all four native sites bind to animated skin and remain independently selec
   assert.equal(new Set(initialRecords.map((record) => record.captureCenterLocal.join(','))).size, 4);
 
   const animationManifest = createEmbeddedAnimationPackManifest(gltf.animations, profile);
+  assert.equal(animationManifest.approved_animation_count, DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES.length + 1);
+  assert.equal(animationManifest.animations.some((entry) => entry.name === DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME), true);
   const animationPack = resolveAnimationPackManifest(animationManifest, gltf.animations, profile.name, {
     allowedKinds: profile.animationRuntimeKinds,
     requireEmbeddedApprovalMetadata: true,
   });
-  assert.deepEqual([...animationPack.entriesByName.keys()].sort(), [...DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES].sort());
+  assert.deepEqual([...animationPack.entriesByName.keys()].sort(), [
+    ...DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES,
+    DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME,
+  ].sort());
+  assert.deepEqual(DREAD_RAM_GOD_CREATURE_DEFINITION.animation.selectedAnimationNames, DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES);
+  assert.equal(DREAD_RAM_GOD_CREATURE_DEFINITION.animation.selectedAnimationNames.includes(DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME), false);
   const mixer = new THREE.AnimationMixer(gltf.scene);
   const positionsBySite = new Map(initialRecords.map((record) => [record.siteId, []]));
   for (const animationName of DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES) {

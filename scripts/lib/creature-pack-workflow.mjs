@@ -108,7 +108,25 @@ export function publicInspectionSummary(inspection) {
   return summary;
 }
 
-function runProcess(command, args, { cwd, verbose = false, phase = 'command' } = {}) {
+const FAILED_PROCESS_STREAM_LIMIT = 4000;
+
+function summarizeFailedProcessStream(label, value) {
+  const output = value.trim();
+  if (!output) return null;
+  if (output.length <= FAILED_PROCESS_STREAM_LIMIT) return `${label}:\n${output}`;
+  const omitted = output.length - FAILED_PROCESS_STREAM_LIMIT;
+  return `${label}:\n[... ${omitted} earlier characters omitted ...]\n${output.slice(-FAILED_PROCESS_STREAM_LIMIT)}`;
+}
+
+export function formatFailedProcessOutput({ stdout = '', stderr = '', exitCode = null } = {}) {
+  const sections = [
+    summarizeFailedProcessStream('stdout', stdout),
+    summarizeFailedProcessStream('stderr', stderr),
+  ].filter(Boolean);
+  return sections.join('\n\n') || `exit code ${exitCode}`;
+}
+
+export function runProcess(command, args, { cwd, verbose = false, phase = 'command' } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
@@ -130,7 +148,7 @@ function runProcess(command, args, { cwd, verbose = false, phase = 'command' } =
     child.on('close', (exitCode) => {
       if (exitCode === 0) resolve({ exitCode, stdout, stderr });
       else {
-        const detail = stderr.trim() || stdout.trim() || `exit code ${exitCode}`;
+        const detail = formatFailedProcessOutput({ stdout, stderr, exitCode });
         const error = workflowError(`${phase} failed: ${detail}`);
         error.exitCode = exitCode;
         error.stdout = stdout;

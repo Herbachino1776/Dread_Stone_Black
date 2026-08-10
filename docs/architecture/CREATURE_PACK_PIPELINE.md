@@ -33,7 +33,7 @@ Dreadguard also has an Animation Forge sidecar manifest and report:
 - `public/assets/enemies/dreadguard/animations/dreadguard_animpack_v003.json`
 - `public/assets/enemies/dreadguard/animations/dreadguard_animpack_v003_validation.json`
 
-The standalone animation GLB named by that sidecar is not present in the repository. Its seven approved clips are embedded in the combined Dreadguard DamageGLB. Chezwick and Dread Ram God have no separate animation sidecars; approved clip metadata is embedded in each DamageGLB. Dread Ram God contains exactly the six selected runtime clips and no source-only clips.
+The standalone animation GLB named by that sidecar is not present in the repository. Its seven approved clips are embedded in the combined Dreadguard DamageGLB. Chezwick and Dread Ram God have no separate animation sidecars; approved clip metadata is embedded in each DamageGLB. Dread Ram God contains the six Creature Definition-selected locomotion/hurt/death clips plus one Forge-approved one-hand overhead offensive Action, two authored hand sockets, and no source-only clips. The offensive clip remains M6 armament capability rather than entering the definition's ordinary selected animation set.
 
 ### Existing browser loading path
 

@@ -412,12 +412,22 @@ test('unequip, actor death, definition switch, and disposal remove attachment/ru
   assert.equal(replacement.hand.children.some((child) => child.name.startsWith('DSB_RuntimeSocket_')), false, 'definition switch disposal must remove attachment');
 });
 
-test('current generated production packs explicitly report unupgraded armament capabilities', () => {
-  for (const name of ['chezwick_damage_v001', 'dreadguard_damage_v001', 'dread_ram_god_damage_v001']) {
+test('legacy generated production packs remain valid with unavailable armament capabilities', () => {
+  for (const name of ['chezwick_damage_v001', 'dreadguard_damage_v001']) {
     const pack = JSON.parse(readFileSync(new URL(`../public/generated/creature-packs/${name}.json`, import.meta.url), 'utf8'));
     assert.equal(pack.capabilities.attachmentSockets, false);
     assert.equal(pack.capabilities.offensiveActions, false);
     assert.equal(pack.attachmentSockets.available, false);
     assert.equal(pack.offensiveActions.available, false);
   }
+});
+
+test('Dread Ram God exposes its real Forge hand sockets and overhead offensive Action', () => {
+  const pack = JSON.parse(readFileSync(new URL('../public/generated/creature-packs/dread_ram_god_damage_v001.json', import.meta.url), 'utf8'));
+  assert.equal(pack.capabilities.attachmentSockets, true);
+  assert.equal(pack.attachmentSockets.available, true);
+  assert.equal(pack.attachmentSockets.sockets.length, 2);
+  assert.equal(pack.capabilities.offensiveActions, true);
+  assert.equal(pack.offensiveActions.available, true);
+  assert.deepEqual(pack.offensiveActions.actions.map((action) => action.combatActionId), ['humanoid_one_hand_overhead']);
 });

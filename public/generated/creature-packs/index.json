@@ -34,8 +34,8 @@
         "pairedDetachableSegments": true,
         "embeddedAnimations": true,
         "separatelyValidatedAnimations": false,
-        "attachmentSockets": false,
-        "offensiveActions": false
+        "attachmentSockets": true,
+        "offensiveActions": true
       }
     },
     {

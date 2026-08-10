@@ -43,6 +43,7 @@ const dreadRamGodSource = path.join(DEFAULT_REPOSITORY_ROOT, 'public/assets/enem
 const dreadRamGodManifestPath = path.join(dreadRamGodSource, 'Dread_Ram_God.json');
 const dreadRamGodGlbPath = path.join(dreadRamGodSource, 'Dread_Ram_God.glb');
 const dreadRamGodReportPath = path.join(dreadRamGodSource, 'Dread_Ram_God_validation.json');
+const DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME = 'DSB_Attack_Overhead_OneHand_v001';
 
 let productionPacksPromise = null;
 function loadProductionPacks() {
@@ -118,6 +119,22 @@ test('Chezwick production bundle imports native right-face truth without copying
   assert.ok(!serializeGeneratedJson(pack).includes('damage_site_face_left_compatibility'));
 });
 
+test('legacy production packs remain valid without Forge M6 armament capabilities', async () => {
+  const packs = await loadProductionPacks();
+  for (const packId of ['chezwick_damage_v001', 'dreadguard_damage_v001']) {
+    const pack = packs.find((entry) => entry.packId === packId);
+    assert.ok(pack, `${packId} must remain registered`);
+    assert.equal(validateCreaturePack(pack).valid, true);
+    assert.equal(pack.capabilities.attachmentSockets, false);
+    assert.equal(pack.capabilities.offensiveActions, false);
+    assert.equal(pack.attachmentSockets.available, false);
+    assert.equal(pack.offensiveActions.available, false);
+    const diagnosticCodes = pack.importDiagnostics.map((entry) => entry.code);
+    assert.ok(diagnosticCodes.includes('FORGE_ATTACHMENT_SOCKETS_UNAVAILABLE'));
+    assert.ok(diagnosticCodes.includes('FORGE_OFFENSIVE_ACTIONS_UNAVAILABLE'));
+  }
+});
+
 test('Dread Ram God production bundle imports all Forge-authored technical truth', async () => {
   const packs = await loadProductionPacks();
   const pack = packs.find((entry) => entry.packId === 'dread_ram_god_damage_v001');
@@ -149,17 +166,40 @@ test('Dread Ram God production bundle imports all Forge-authored technical truth
   ]);
   assert.equal(pack.animations.delivery, 'embedded');
   assert.equal(pack.animations.manifestValidated, false);
-  assert.equal(pack.animations.approvedClips.length, 6);
+  assert.equal(pack.cost.animationCount, 7);
+  assert.equal(pack.cost.approvedAnimationCount, 7);
+  assert.equal(pack.animations.approvedClips.length, 7);
   assert.equal(pack.animations.unapprovedClipCount, 0, 'source-only animations are absent');
-  assert.deepEqual(pack.animations.approvedClips.map((clip) => clip.name).sort(), [...DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES].sort());
-  assert.equal(pack.capabilities.attachmentSockets, false);
-  assert.equal(pack.capabilities.offensiveActions, false);
-  assert.equal(pack.attachmentSockets.available, false);
-  assert.equal(pack.offensiveActions.available, false);
-  assert.deepEqual(pack.importDiagnostics.map((entry) => entry.code), [
-    'FORGE_ATTACHMENT_SOCKETS_UNAVAILABLE',
-    'FORGE_OFFENSIVE_ACTIONS_UNAVAILABLE',
-  ]);
+  const approvedNames = new Set(pack.animations.approvedClips.map((clip) => clip.name));
+  assert.ok(DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES.every((name) => approvedNames.has(name)), 'every Creature Definition-selected animation remains approved');
+  assert.deepEqual(
+    [...approvedNames].filter((name) => !DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES.includes(name)),
+    [DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME],
+    'the only additional approved clip is the Forge offensive Action',
+  );
+  assert.equal(pack.capabilities.attachmentSockets, true);
+  assert.equal(pack.capabilities.offensiveActions, true);
+  assert.equal(pack.attachmentSockets.available, true);
+  assert.equal(pack.attachmentSockets.sockets.length, 2);
+  const socketsByRole = new Map(pack.attachmentSockets.sockets.map((socket) => [socket.semanticRole, socket]));
+  assert.equal(socketsByRole.get('MAIN_HAND_R')?.parentRuntimeBone, 'arm_right_hand');
+  assert.equal(socketsByRole.get('MAIN_HAND_L')?.parentRuntimeBone, 'arm_left_hand');
+  assert.equal(pack.offensiveActions.available, true);
+  assert.equal(pack.offensiveActions.actions.length, 1);
+  const [overheadAction] = pack.offensiveActions.actions;
+  assert.equal(overheadAction.actionName, DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME);
+  assert.equal(overheadAction.combatActionId, 'humanoid_one_hand_overhead');
+  assert.equal(overheadAction.socketRole, 'MAIN_HAND_R');
+  assert.deepEqual(overheadAction.compatibleWeaponClasses, ['ONE_HAND_BLADE', 'ONE_HAND_BLUNT']);
+  assert.equal(overheadAction.clipDurationSeconds, 1.958333);
+  assert.deepEqual(overheadAction.phases, {
+    active: { endSeconds: 1.625, startSeconds: 1.5 },
+    recovery: { endSeconds: 1.958333, startSeconds: 1.625 },
+    windup: { endSeconds: 1.5, startSeconds: 0 },
+  });
+  const diagnosticCodes = pack.importDiagnostics.map((entry) => entry.code);
+  assert.equal(diagnosticCodes.includes('FORGE_ATTACHMENT_SOCKETS_UNAVAILABLE'), false);
+  assert.equal(diagnosticCodes.includes('FORGE_OFFENSIVE_ACTIONS_UNAVAILABLE'), false);
 
   const repeated = await importCreaturePack({
     packId: 'dread_ram_god_damage_v001',
@@ -183,10 +223,16 @@ test('Dread Ram God definition composes without duplicating Forge truth', async 
   assert.equal(definition.damage.supportedSegmentIds.includes('lower_spine'), false);
   assert.deepEqual(definition.animation.runtimeKinds, ['IDLE', 'WALK', 'HURT_LEFT', 'HURT_RIGHT', 'DEATH']);
   assert.deepEqual(definition.animation.selectedAnimationNames, DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES);
+  assert.equal(definition.animation.selectedAnimationNames.includes(DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME), false);
+  assert.equal(pack.offensiveActions.actions.some((action) => action.actionName === DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME), true);
   CREATURE_PACK_TECHNICAL_PROFILE_FIELDS.forEach((field) => assert.equal(field in definition, false, `${field} must remain descriptor-owned`));
   const profile = composeHumanoidCreatureRuntimeProfile(pack, definition);
   assert.equal(profile.embeddedAnimationPack, true);
-  assert.deepEqual(profile.embeddedAnimationNames, DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES);
+  assert.deepEqual(profile.embeddedAnimationNames, [
+    ...DREAD_RAM_GOD_RUNTIME_ANIMATION_NAMES,
+    DREAD_RAM_GOD_OFFENSIVE_ACTION_NAME,
+  ]);
+  assert.equal(profile.animationRuntimeKinds.includes('ATTACK_OVERHEAD_ONE_HAND'), true);
   assert.deepEqual(profile.progressiveDamageSiteFallbacks, []);
 });
 

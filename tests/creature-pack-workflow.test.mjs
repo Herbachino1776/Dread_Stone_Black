@@ -21,7 +21,7 @@ import {
   upsertCreatureRegistration,
   writeProductionCreaturePackCatalog,
 } from '../scripts/lib/creature-pack-catalog.mjs';
-import { installCreaturePack } from '../scripts/lib/creature-pack-workflow.mjs';
+import { installCreaturePack, runProcess } from '../scripts/lib/creature-pack-workflow.mjs';
 import { importProductionCreaturePacks } from '../scripts/lib/production-creature-pack-import.mjs';
 
 const emptyCatalog = () => ({
@@ -201,6 +201,28 @@ test('failed authoritative production import rolls back bundle, descriptor regis
   assert.equal(await readFile(path.join(destination, 'known-good.glb'), 'utf8'), 'known good');
   assert.equal(await readFile(path.join(repo.generatedDirectory, 'index.json'), 'utf8'), 'known registry');
   assert.equal(await readFile(repo.catalogPath, 'utf8'), originalCatalog);
+});
+
+test('failed workflow processes report concise stdout and stderr together', async () => {
+  const command = [
+    "process.stdout.write('x'.repeat(5000) + '\\nactual assertion failure\\n');",
+    "process.stderr.write('npm wrapper failure\\n');",
+    'process.exitCode = 1;',
+  ].join('');
+  await assert.rejects(
+    runProcess(process.execPath, ['--eval', command], {
+      cwd: path.resolve(import.meta.dirname, '..'),
+      phase: 'fixture validation',
+    }),
+    (error) => {
+      assert.match(error.message, /stdout:\n[\s\S]*actual assertion failure/);
+      assert.match(error.message, /stderr:\n[\s\S]*npm wrapper failure/);
+      assert.match(error.message, /earlier characters omitted/);
+      assert.equal(error.stdout.endsWith('actual assertion failure\n'), true);
+      assert.equal(error.stderr, 'npm wrapper failure\n');
+      return true;
+    },
+  );
 });
 
 test('successful new install handles spaces, copies only required files, and registers once', async (t) => {
