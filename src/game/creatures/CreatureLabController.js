@@ -19,6 +19,7 @@ import { summarizeCreatureDefinition } from './CreatureRuntimePolicies.js';
 import { EnemyPresetRegistry } from './EnemyPresetRegistry.js';
 import { EnemyPresetResolver } from './EnemyPresetResolver.js';
 import { MinimalCombatBrain } from '../combat/MinimalCombatBrain.js';
+import { EnemyLootRuntime } from '../economy/EnemyLootRuntime.js';
 
 const DEFAULT_DEFINITION_ID = 'chezwick';
 const CREATURE_LAB_QUERY_KEY = 'creatureLab';
@@ -76,6 +77,8 @@ export class CreatureLabController {
     initialPackId = null,
     initialPresetId = null,
     attackHarness = null,
+    playerCurrencyState = null,
+    lootRandom = Math.random,
     calibrationStorage = globalThis.localStorage,
     panelFactory = (options) => new CreatureLabPanel(options),
   } = {}) {
@@ -103,6 +106,8 @@ export class CreatureLabController {
     this.initialPackId = initialPackId;
     this.initialPresetId = initialPresetId;
     this.attackHarness = attackHarness;
+    this.playerCurrencyState = playerCurrencyState;
+    this.lootRandom = lootRandom;
     this.calibrationStore = new CreatureLabCalibrationStore({ storage: calibrationStorage });
     this.panelFactory = panelFactory;
     this.definitionOptions = [];
@@ -133,6 +138,8 @@ export class CreatureLabController {
     this.debugCommands = null;
     this.combatBrain = null;
     this.combatBrainRequestedEnabled = false;
+    this.lootRuntime = null;
+    this.currencyUnsubscribe = this.playerCurrencyState?.subscribe?.(() => this.notify(), { emitCurrent: false }) ?? null;
   }
 
   get actor() { return this.walkerController?.actor ?? null; }
@@ -294,6 +301,7 @@ export class CreatureLabController {
       this.disposeCombatBrain('creature-lab-definition-switch');
       this.attackHarness?.clearSubject?.('creature-lab-definition-switch');
       this.disposeSiteMarkers();
+      this.disposeLootRuntime();
       if (this.actor) this.walkerController.disposeWalker({ respawn: false });
       this.selectedDefinition = definition;
       this.selectedPreset = presetResolution?.preset ?? null;
@@ -319,6 +327,12 @@ export class CreatureLabController {
         pack: this.selectedPack,
         ...(presetResolution ? { loadout: presetResolution.loadout } : {}),
       });
+      this.lootRuntime = new EnemyLootRuntime({
+        actor: this.actor,
+        lootProfile: presetResolution?.lootProfile ?? null,
+        playerCurrencyState: this.playerCurrencyState,
+        random: this.lootRandom,
+      });
       if (!presetResolution && this.selectedWeaponId) this.attackHarness?.selectWeapon?.(this.selectedWeaponId);
       this.applyWeaponCalibrationToHarness();
       const armamentRestoreResult = restoreArmament ? await this.attackHarness?.equip?.() : null;
@@ -339,6 +353,7 @@ export class CreatureLabController {
       });
     } catch (error) {
       this.disposeSiteMarkers();
+      this.disposeLootRuntime();
       if (serial === this.selectionSerial && this.actor) this.walkerController.disposeWalker({ respawn: false });
       this.onSubjectChanged?.(this.getSubjectState());
       return this.recordOperation(operation, null, error);
@@ -383,6 +398,39 @@ export class CreatureLabController {
       combatBrainRestored: brainResult.accepted === true,
       combatBrainRestoreReason: brainResult.accepted === false ? brainResult.reason : null,
     });
+  }
+
+  disposeLootRuntime() {
+    if (!this.lootRuntime) return false;
+    this.lootRuntime.dispose();
+    this.lootRuntime = null;
+    return true;
+  }
+
+  getLootEconomyDiagnostics() {
+    const runtime = this.lootRuntime?.getSnapshot?.() ?? null;
+    const lootProfile = this.resolvedPreset?.lootProfile ?? null;
+    return {
+      enemyPresetId: this.selectedPreset?.presetId ?? null,
+      lootProfileId: lootProfile?.lootProfileId ?? null,
+      resolvedGold: runtime?.resolvedGold ?? null,
+      lootState: runtime?.state ?? 'unavailable',
+      claimable: runtime?.state === 'available',
+      playerGold: this.playerCurrencyState?.currentGold ?? null,
+      persistenceKind: this.playerCurrencyState?.persistenceAdapter?.kind ?? 'unavailable',
+      actorInstanceId: runtime?.actorInstanceId ?? this.actor?.instanceId ?? null,
+      resolutionCount: runtime?.resolutionCount ?? 0,
+      resolutionError: runtime?.resolutionError ?? null,
+    };
+  }
+
+  claimLoot() {
+    const result = this.lootRuntime?.claim?.({
+      source: 'creature-lab-take-gold',
+      actorInstanceId: this.actor?.instanceId ?? null,
+      lootProfileId: this.resolvedPreset?.lootProfile?.lootProfileId ?? null,
+    }) ?? { accepted: false, reason: 'loot-unavailable' };
+    return this.recordOperation('takeGold', result);
   }
 
   getSelectedWeaponDefinition() {
@@ -971,6 +1019,7 @@ export class CreatureLabController {
       lastOperation: this.lastOperation,
       lastPhysicalTargetingDecision: this.getSiteTargeting()?.getDiagnostics?.().lastPhysicalTargetingDecision ?? null,
       offensiveCombat: this.getOffensiveCombatDiagnostics(),
+      lootEconomy: this.getLootEconomyDiagnostics(),
     };
   }
 
@@ -1023,6 +1072,7 @@ export class CreatureLabController {
       presetSupport: this.presetOptions.map(({ presetId, displayName, creatureDefinitionId, supported, code, reason }) => ({ presetId, displayName, creatureDefinitionId, supported, code, reason })),
       lastOperation: this.lastOperation,
       offensiveCombat: this.getOffensiveCombatDiagnostics(),
+      lootEconomy: this.getLootEconomyDiagnostics(),
     };
   }
 
@@ -1032,6 +1082,7 @@ export class CreatureLabController {
       this.walkerController.externalLocomotionAuthority = this.combatBrain.enabled === true;
     }
     else this.attackHarness?.update?.(deltaSeconds);
+    if (this.lootRuntime?.update?.() === true) this.notify();
     this.siteMarkerRenderer?.update?.();
     this.panel?.update?.();
   }
@@ -1060,6 +1111,7 @@ export class CreatureLabController {
       resetPlayer: () => this.resetPlayer(),
       enableCombatBrain: () => this.enableCombatBrain(),
       disableCombatBrain: () => this.disableCombatBrain(),
+      takeGold: () => this.claimLoot(),
       toggleAttackGeometry: () => this.toggleAttackGeometry(),
       diagnostics: () => this.getDiagnostics(),
     });
@@ -1075,10 +1127,13 @@ export class CreatureLabController {
     this.disposeCombatBrain('creature-lab-controller-disposed');
     this.attackHarness?.dispose?.();
     this.attackHarness = null;
+    this.disposeLootRuntime();
     this.disposeSiteMarkers();
     if (this.actor) this.walkerController.disposeWalker({ respawn: false });
     this.onSubjectChanged?.(this.getSubjectState());
     this.listeners.clear();
+    this.currencyUnsubscribe?.();
+    this.currencyUnsubscribe = null;
     if (globalThis.__DSB_CREATURE_LAB__ === this.debugCommands) delete globalThis.__DSB_CREATURE_LAB__;
     this.debugCommands = null;
     this.combatBrainRequestedEnabled = false;

@@ -5,6 +5,7 @@ import { CreatureFactory } from './CreatureFactory.js';
 import { CreaturePackRegistry } from './CreaturePackRegistry.js';
 import { composeCreaturePresentationHeight } from './CreaturePresentationResolution.js';
 import { EnemyPresetRegistry } from './EnemyPresetRegistry.js';
+import { LootProfileRegistry } from '../economy/LootProfileRegistry.js';
 
 export class EnemyPresetResolverError extends Error {
   constructor(code, message, options = {}) {
@@ -22,6 +23,7 @@ export class EnemyPresetResolver {
     creatureFactory = null,
     loadoutRegistry = new NpcLoadoutRegistry(),
     weaponRegistry = new NpcWeaponRegistry(),
+    lootProfileRegistry = new LootProfileRegistry(),
   } = {}) {
     this.presetRegistry = presetRegistry;
     this.definitionRegistry = definitionRegistry;
@@ -32,6 +34,7 @@ export class EnemyPresetResolver {
     });
     this.loadoutRegistry = loadoutRegistry;
     this.weaponRegistry = weaponRegistry;
+    this.lootProfileRegistry = lootProfileRegistry;
   }
 
   async resolve(presetId) {
@@ -40,6 +43,15 @@ export class EnemyPresetResolver {
       preset = this.presetRegistry.getPreset(presetId);
     } catch (error) {
       throw new EnemyPresetResolverError(error.code ?? 'UNKNOWN_PRESET', error.message, { cause: error });
+    }
+
+    let lootProfile = null;
+    if (preset.rewards?.lootProfileId) {
+      try {
+        lootProfile = this.lootProfileRegistry.getProfile(preset.rewards.lootProfileId);
+      } catch (error) {
+        throw new EnemyPresetResolverError(error.code ?? 'UNKNOWN_LOOT_PROFILE', `Enemy Preset "${presetId}" could not resolve Loot Profile "${preset.rewards.lootProfileId}": ${error.message}`, { cause: error });
+      }
     }
 
     let creature;
@@ -108,6 +120,7 @@ export class EnemyPresetResolver {
       weapon: resolvedWeapon,
       compatibleActions: armament.compatibleActions,
       attachmentSocket: socket,
+      lootProfile,
     });
   }
 }

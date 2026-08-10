@@ -8,11 +8,12 @@ import { FolsomCombatEncounter } from '../combat/FolsomCombatEncounter.js';
 import { warmBloodChromaMaterials } from '../combat/BloodChromaMaterial.js';
 
 export class SceneSessionHost {
-  constructor({ rendererHost, gameState, query = new URLSearchParams(window.location.search), audioRuntime = null, onSessionChanged = null } = {}) {
+  constructor({ rendererHost, gameState, query = new URLSearchParams(window.location.search), audioRuntime = null, playerCurrencyState = null, onSessionChanged = null } = {}) {
     this.rendererHost = rendererHost;
     this.gameState = gameState;
     this.query = query;
     this.audioRuntime = audioRuntime;
+    this.playerCurrencyState = playerCurrencyState;
     this.dungeon = null;
     this.scene = null;
     this.player = null;
@@ -48,7 +49,13 @@ export class SceneSessionHost {
 
   async attachFolsomCombatEncounter() {
     if (this.locationId !== 'folsom' || !this.dungeon?.scene || this.dungeon.combatEncounter) return null;
-    this.dungeon.combatEncounter = await FolsomCombatEncounter.create({ dungeon: this.dungeon, audioRuntime: this.audioRuntime, query: this.query, player: this.player });
+    this.dungeon.combatEncounter = await FolsomCombatEncounter.create({
+      dungeon: this.dungeon,
+      audioRuntime: this.audioRuntime,
+      query: this.query,
+      player: this.player,
+      playerCurrencyState: this.playerCurrencyState,
+    });
     return this.dungeon.combatEncounter;
   }
 

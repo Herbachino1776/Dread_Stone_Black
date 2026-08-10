@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import {
   assertValidEnemyPreset,
-  ENEMY_PRESET_SCHEMA,
-  ENEMY_PRESET_VERSION,
 } from '../../contracts/EnemyPreset.js';
 import {
   composeCreaturePresentationHeight,
@@ -104,8 +102,8 @@ export function createEnemyPresetRecordFromLabCalibration({
 } = {}) {
   const patch = labCalibrationToWeaponDefinitionPatch(weaponDefinition, calibration);
   const record = {
-    schema: ENEMY_PRESET_SCHEMA,
-    version: ENEMY_PRESET_VERSION,
+    schema: preset?.schema,
+    version: preset?.version,
     presetId: preset?.presetId,
     displayName: preset?.displayName,
     creatureDefinitionId: preset?.creatureDefinitionId,
@@ -120,6 +118,11 @@ export function createEnemyPresetRecordFromLabCalibration({
         attackCapsule: patch.attackCapsule,
       },
     },
+    ...(preset?.rewards ? {
+      rewards: {
+        lootProfileId: preset.rewards.lootProfileId,
+      },
+    } : {}),
   };
   assertValidEnemyPreset(record);
   return record;

@@ -18,7 +18,10 @@ future Encounter Instance
 
 **A preset is reusable production tuning. An encounter instance is a placed individual.**
 
-M6.7 does not add encounter placement, spawning, AI, health/death behavior, gold, loot, shops, persistence, or save-game state.
+M6.7 did not add encounter placement, spawning, AI, health/death behavior,
+gold, loot, shops, persistence, or save-game state. M8 now versions the preset
+contract narrowly so a v2 preset may reference one default Loot Profile; see
+[LOOT_ECONOMY_KERNEL.md](LOOT_ECONOMY_KERNEL.md).
 
 M7 consumes the unchanged v1 preset through the first minimal combat brain.
 Detection, approach speed, recovery delay, attack-range composition, and leash
@@ -35,10 +38,15 @@ The layers remain separate:
 - Creature Definition owns the base gameplay/body archetype and its ordinary presentation policy.
 - `NpcWeapon` owns canonical weapon identity, asset, class, stats, base grip, base uniform scale, and base attack capsule.
 - `NpcLoadout` owns a game-authored main-hand weapon reference and the offensive Action IDs that loadout permits. Forge capability filtering remains authoritative.
-- Enemy Preset owns one reusable variant's target height, loadout selection, and optional character-specific weapon calibration.
+- Enemy Preset owns one reusable variant's target height, loadout selection,
+  optional character-specific weapon calibration, and in v2 one default Loot
+  Profile reference.
 - A future Encounter Instance will own placement, facing, home radius, identity, and deliberate per-instance state or overrides.
 
-Enemy Presets never contain Forge technical records, Creature Pack paths, bones, socket transforms, Action phase timing, weapon asset paths, weapon damage, AI, currency, loot, encounter coordinates, or persistence state.
+Enemy Presets never contain Forge technical records, Creature Pack paths,
+bones, socket transforms, Action phase timing, weapon asset paths, weapon
+damage, AI, raw gold/currency values, resolved loot, encounter coordinates, or
+persistence state.
 
 ## `dreadstone.enemy_preset.v1`
 
@@ -75,6 +83,19 @@ Dread Ram God — Great Mace
 ```
 
 Its production calibration was promoted from Creature Lab at 2.1 m target height, 1.41 uniform mace scale, and grip position `[0.005, 0.085, -0.015]`. The Creature Definition remains at its base 1.7 m height, and the canonical mace remains unchanged.
+
+## `dreadstone.enemy_preset.v2`
+
+M8 preserves v1 compatibility and adds only an optional strict
+`rewards.lootProfileId` reference in v2. A v1 record remains reward-free and is
+never inferred or migrated at runtime. `dread_ram_god_great_mace` is now the
+first production v2 record and references `dread_ram_god_standard`; every
+existing presentation and armament calibration value is unchanged.
+
+The resolver resolves the referenced profile through `LootProfileRegistry` and
+returns it immutably as `lootProfile`. A missing reference fails closed. The
+resolver never rolls gold; runtime reward resolution belongs to the actor-bound
+`EnemyLootRuntime` after authoritative death.
 
 ## Resolution and failure behavior
 
@@ -155,7 +176,12 @@ The old `dreadstone.creature_lab.weapon_calibration.v1.<weaponId>` namespace is 
 
 ## Copy Enemy Preset JSON
 
-The copy action emits the complete `dreadstone.enemy_preset.v1` record in canonical field order using the current live Lab height, uniform asset scale, grip, and capsule. Numbers are rounded to stable eight-place precision. The grip quaternion is normalized and uses a deterministic sign. The payload contains no localStorage keys or draft metadata.
+The copy action emits the complete selected Enemy Preset version in canonical
+field order using the current live Lab height, uniform asset scale, grip, and
+capsule. For v2 it preserves the checked-in `rewards.lootProfileId`. Numbers are
+rounded to stable eight-place precision. The grip quaternion is normalized and
+uses a deterministic sign. The payload contains no localStorage keys or draft
+metadata.
 
 The formatted JSON is always visible in a selectable readout. If the Clipboard API is unavailable or permission is denied, the Lab focuses and selects that readout for touch-friendly manual copying. The browser never mutates the checked-in preset.
 

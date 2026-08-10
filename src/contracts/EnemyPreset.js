@@ -1,8 +1,16 @@
-export const ENEMY_PRESET_SCHEMA = 'dreadstone.enemy_preset.v1';
-export const ENEMY_PRESET_VERSION = 1;
+export const ENEMY_PRESET_V1_SCHEMA = 'dreadstone.enemy_preset.v1';
+export const ENEMY_PRESET_V1_VERSION = 1;
+export const ENEMY_PRESET_V2_SCHEMA = 'dreadstone.enemy_preset.v2';
+export const ENEMY_PRESET_V2_VERSION = 2;
+
+// Compatibility aliases retain the original v1 contract identity. New
+// production records must opt into v2 explicitly rather than silently changing
+// the meaning of existing v1 callers.
+export const ENEMY_PRESET_SCHEMA = ENEMY_PRESET_V1_SCHEMA;
+export const ENEMY_PRESET_VERSION = ENEMY_PRESET_V1_VERSION;
 
 const STABLE_ID = /^[a-z0-9]+(?:[a-z0-9_-]*[a-z0-9])?$/;
-const TOP_LEVEL_FIELDS = Object.freeze([
+const V1_TOP_LEVEL_FIELDS = Object.freeze([
   'schema',
   'version',
   'presetId',
@@ -11,8 +19,10 @@ const TOP_LEVEL_FIELDS = Object.freeze([
   'presentation',
   'armament',
 ]);
+const V2_TOP_LEVEL_FIELDS = Object.freeze([...V1_TOP_LEVEL_FIELDS, 'rewards']);
 const PRESENTATION_FIELDS = Object.freeze(['targetHeight']);
 const ARMAMENT_FIELDS = Object.freeze(['loadoutId', 'weaponOverride']);
+const REWARDS_FIELDS = Object.freeze(['lootProfileId']);
 const WEAPON_OVERRIDE_FIELDS = Object.freeze(['assetScale', 'gripTransform', 'attackCapsule']);
 const GRIP_TRANSFORM_FIELDS = Object.freeze(['position', 'quaternion']);
 const ATTACK_CAPSULE_FIELDS = Object.freeze(['start', 'end', 'radius']);
@@ -63,11 +73,11 @@ function requireCondition(errors, condition, path, message) {
   if (!condition) errors.push(`${path} ${message}`);
 }
 
-function requireExactFields(errors, value, allowedFields, path) {
+function requireExactFields(errors, value, allowedFields, path, schema = 'supported Enemy Preset contracts') {
   if (!isRecord(value)) return;
   const allowed = new Set(allowedFields);
   Object.keys(value).forEach((field) => {
-    if (!allowed.has(field)) errors.push(`${path}.${field} is not part of ${ENEMY_PRESET_SCHEMA}`);
+    if (!allowed.has(field)) errors.push(`${path}.${field} is not part of ${schema}`);
   });
 }
 
@@ -120,9 +130,12 @@ export function validateEnemyPreset(preset) {
   requireCondition(errors, isRecord(preset), 'preset', 'must be an object');
   if (!isRecord(preset)) return { valid: false, errors };
 
-  requireExactFields(errors, preset, TOP_LEVEL_FIELDS, 'preset');
-  requireCondition(errors, preset.schema === ENEMY_PRESET_SCHEMA, 'preset.schema', `must be ${ENEMY_PRESET_SCHEMA}`);
-  requireCondition(errors, preset.version === ENEMY_PRESET_VERSION, 'preset.version', `must be ${ENEMY_PRESET_VERSION}`);
+  const isV1 = preset.schema === ENEMY_PRESET_V1_SCHEMA && preset.version === ENEMY_PRESET_V1_VERSION;
+  const isV2 = preset.schema === ENEMY_PRESET_V2_SCHEMA && preset.version === ENEMY_PRESET_V2_VERSION;
+  const supported = isV1 || isV2;
+  const schema = isV2 ? ENEMY_PRESET_V2_SCHEMA : ENEMY_PRESET_V1_SCHEMA;
+  requireExactFields(errors, preset, isV2 ? V2_TOP_LEVEL_FIELDS : V1_TOP_LEVEL_FIELDS, 'preset', schema);
+  requireCondition(errors, supported, 'preset.schema/version', `must be ${ENEMY_PRESET_V1_SCHEMA}@${ENEMY_PRESET_V1_VERSION} or ${ENEMY_PRESET_V2_SCHEMA}@${ENEMY_PRESET_V2_VERSION}`);
   requireCondition(errors, isStableId(preset.presetId), 'preset.presetId', 'must be a stable lowercase identifier');
   requireCondition(errors, isNonemptyString(preset.displayName), 'preset.displayName', 'must be a non-empty string');
   requireCondition(errors, isStableId(preset.creatureDefinitionId), 'preset.creatureDefinitionId', 'must reference a stable Creature Definition ID');
@@ -143,12 +156,20 @@ export function validateEnemyPreset(preset) {
     }
   }
 
+  if (isV2 && Object.hasOwn(preset, 'rewards')) {
+    requireCondition(errors, isRecord(preset.rewards), 'preset.rewards', 'must be an object');
+    if (isRecord(preset.rewards)) {
+      requireExactFields(errors, preset.rewards, REWARDS_FIELDS, 'preset.rewards', ENEMY_PRESET_V2_SCHEMA);
+      requireCondition(errors, isStableId(preset.rewards.lootProfileId), 'preset.rewards.lootProfileId', 'must reference a stable Loot Profile ID');
+    }
+  }
+
   findForbiddenFields(preset).forEach((path) => errors.push(`${path} belongs to another authority layer`));
   return { valid: errors.length === 0, errors };
 }
 
 export function assertValidEnemyPreset(preset) {
   const validation = validateEnemyPreset(preset);
-  if (!validation.valid) throw new Error(`Invalid ${ENEMY_PRESET_SCHEMA}: ${validation.errors.join('; ')}`);
+  if (!validation.valid) throw new Error(`Invalid Enemy Preset: ${validation.errors.join('; ')}`);
   return preset;
 }

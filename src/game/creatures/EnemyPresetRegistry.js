@@ -1,7 +1,7 @@
 import {
   assertValidEnemyPreset,
-  ENEMY_PRESET_SCHEMA,
-  ENEMY_PRESET_VERSION,
+  ENEMY_PRESET_V2_SCHEMA,
+  ENEMY_PRESET_V2_VERSION,
 } from '../../contracts/EnemyPreset.js';
 
 function deepFreeze(value) {
@@ -19,8 +19,8 @@ function cloneValue(value) {
 }
 
 export const DREAD_RAM_GOD_GREAT_MACE_PRESET = deepFreeze({
-  schema: ENEMY_PRESET_SCHEMA,
-  version: ENEMY_PRESET_VERSION,
+  schema: ENEMY_PRESET_V2_SCHEMA,
+  version: ENEMY_PRESET_V2_VERSION,
   presetId: 'dread_ram_god_great_mace',
   displayName: 'Dread Ram God — Great Mace',
   creatureDefinitionId: 'dread_ram_god',
@@ -41,6 +41,9 @@ export const DREAD_RAM_GOD_GREAT_MACE_PRESET = deepFreeze({
         radius: 0.13,
       },
     },
+  },
+  rewards: {
+    lootProfileId: 'dread_ram_god_standard',
   },
 });
 

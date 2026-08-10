@@ -16,6 +16,8 @@ const FOLSOM_SHRINE_CRAWLSPACE_TERMINAL_OPEN_KEY = 'folsom_shrine_crawlspace_ter
 const UNDER_SHRINE_LABYRINTH_END_HATCH_OPEN_KEY = 'under_shrine_labyrinth_end_hatch_open';
 const BENEATH_FOLSOM_LOWER_SHRINE_HATCH_MIGRATION_KEY = 'dreadStoneBlack.lowerShrineHatchMigrationV1';
 const PHYSICAL_TOOL_ACTION_MIGRATION_KEY = 'dreadStoneBlack.physicalToolActionMigrationV1';
+export const PLAYER_CURRENCY_STATE_KEY = 'dreadStoneBlack.currencyState.v1';
+export const PLAYER_CURRENCY_STATE_VERSION = 1;
 export const NORTH_ROAD_WORLD_KEYS = Object.freeze({
   folsomNorthGateOpen: 'folsom_north_gate_open',
   mapUpdated: 'north_road_map_updated',
@@ -104,6 +106,38 @@ export class GameState {
     this.migrateBeneathFolsomLowerShrineHatch();
     this.syncFolsomNorthGateWithChapter2Completion();
     this.migratePhysicalToolActions();
+  }
+
+  repairCurrencyState(record) {
+    const valid = record != null
+      && typeof record === 'object'
+      && !Array.isArray(record)
+      && Object.keys(record).length === 2
+      && record.version === PLAYER_CURRENCY_STATE_VERSION
+      && Number.isSafeInteger(record.gold)
+      && record.gold >= 0;
+    return valid
+      ? { version: PLAYER_CURRENCY_STATE_VERSION, gold: record.gold }
+      : { version: PLAYER_CURRENCY_STATE_VERSION, gold: 0 };
+  }
+
+  loadCurrencyState() {
+    const stored = this.readJson(PLAYER_CURRENCY_STATE_KEY, null);
+    const repaired = this.repairCurrencyState(stored);
+    if (JSON.stringify(stored) !== JSON.stringify(repaired)) this.writeJson(PLAYER_CURRENCY_STATE_KEY, repaired);
+    return Object.freeze(repaired);
+  }
+
+  saveCurrencyState(record) {
+    const repaired = this.repairCurrencyState(record);
+    const valid = record != null
+      && typeof record === 'object'
+      && !Array.isArray(record)
+      && Object.keys(record).length === 2
+      && record.version === repaired.version
+      && record.gold === repaired.gold;
+    if (!valid) return false;
+    return this.writeJson(PLAYER_CURRENCY_STATE_KEY, repaired);
   }
 
   collectSouthReliquaryFragment() {
@@ -670,9 +704,12 @@ export class GameState {
 
   writeFlag(key, value) {
     try {
-      this.storage?.setItem(key, value ? 'true' : 'false');
+      if (typeof this.storage?.setItem !== 'function') return false;
+      this.storage.setItem(key, value ? 'true' : 'false');
+      return true;
     } catch {
       // Progress still works for the current tab if storage is unavailable.
+      return false;
     }
   }
 
@@ -687,9 +724,12 @@ export class GameState {
 
   writeJson(key, value) {
     try {
-      this.storage?.setItem(key, JSON.stringify(value));
+      if (typeof this.storage?.setItem !== 'function') return false;
+      this.storage.setItem(key, JSON.stringify(value));
+      return true;
     } catch {
       // Equipment still works for the current tab if storage is unavailable.
+      return false;
     }
   }
 }

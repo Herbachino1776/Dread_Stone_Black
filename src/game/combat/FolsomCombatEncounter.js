@@ -110,6 +110,7 @@ export class FolsomCombatEncounter {
     player = null,
     creatureLabEnabled = null,
     creaturePackRegistry = null,
+    playerCurrencyState = null,
   } = {}) {
     this.dungeon = dungeon;
     this.scene = dungeon.scene;
@@ -124,6 +125,7 @@ export class FolsomCombatEncounter {
     this.modelProfile = CHEZWICK_DAMAGE_COMBAT_PROFILE;
     this.creatureLabEnabled = creatureLabEnabled ?? resolveCreatureLabMode(this.query);
     this.creaturePackRegistry = creaturePackRegistry;
+    this.playerCurrencyState = playerCurrencyState;
     this.creatureLabController = null;
     this.creatureLabAttackHarness = this.creatureLabEnabled ? new CreatureLabAttackHarness({
       scene: this.scene,
@@ -201,6 +203,7 @@ export class FolsomCombatEncounter {
       initialDefinitionId: this.query.get('creatureDefinition'),
       initialPackId: this.query.has('creatureDefinition') || this.query.has('enemyPreset') ? null : this.query.get('creaturePack'),
       attackHarness: this.creatureLabAttackHarness,
+      playerCurrencyState: this.playerCurrencyState,
       onSubjectChanged: (subject) => this.syncCreatureLabSubject(subject),
     });
     await this.creatureLabController.initialize();

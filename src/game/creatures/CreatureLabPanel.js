@@ -131,6 +131,18 @@ export function getCreatureLabBodyStateActions(controller, state) {
   ];
 }
 
+export function getCreatureLabLootActions(controller, state = {}) {
+  const loot = state.lootEconomy ?? {};
+  if (!loot.lootProfileId) return [];
+  return [{
+    id: 'loot:take_gold',
+    label: 'TAKE GOLD',
+    run: () => controller.claimLoot(),
+    disabled: loot.claimable !== true,
+    wide: true,
+  }];
+}
+
 function element(tag, text = null, className = '') {
   const node = document.createElement(tag);
   if (text != null) node.textContent = text;
@@ -336,6 +348,7 @@ export class CreatureLabPanel {
     this.panel.append(this.renderWeaponCalibration(state));
     this.panel.append(this.renderAnimations(state));
     this.panel.append(this.renderOffensiveCombat(state));
+    this.panel.append(this.renderLootEconomy(state));
     this.panel.append(this.renderDamage(state));
     this.panel.append(this.renderDetachments(state));
     this.panel.append(this.renderBodyState(state));
@@ -542,6 +555,30 @@ export class CreatureLabPanel {
     this.offensiveReadout.setAttribute('aria-label', 'Creature Lab offensive combat diagnostics');
     section.append(this.offensiveReadout);
     section.append(element('p', 'Forge-authored clip time gates a weapon capsule attached to the animated hand. Only ACTIVE physical intersection can damage the player.', 'creature-lab-note'));
+    return section;
+  }
+
+  renderLootEconomy(state) {
+    const section = this.createSection('Loot + Economy Proof');
+    const loot = state.lootEconomy ?? {};
+    const info = element('dl', null, 'creature-lab-info');
+    const rows = [
+      ['Enemy Preset', loot.enemyPresetId ?? 'None'],
+      ['Loot Profile', loot.lootProfileId ?? 'None'],
+      ['Resolved Gold', Number.isSafeInteger(loot.resolvedGold) ? loot.resolvedGold : 'Unavailable'],
+      ['Loot State', loot.lootState ?? 'unavailable'],
+      ['Player Gold', Number.isSafeInteger(loot.playerGold) ? loot.playerGold : 'Unavailable'],
+    ];
+    rows.forEach(([label, value]) => { info.append(element('dt', String(label)), element('dd', String(value))); });
+    section.append(info);
+    const grid = this.createGrid();
+    getCreatureLabLootActions(this.controller, state).forEach((action) => grid.append(this.createButton(action.label, action.run, {
+      disabled: action.disabled === true,
+      wide: action.wide === true,
+    })));
+    if (grid.childElementCount > 0) section.append(grid);
+    else section.append(element('p', 'The selected definition or legacy preset has no default economy reward.', 'creature-lab-note'));
+    section.append(element('p', `Wallet persistence: ${loot.persistenceKind ?? 'unavailable'}. Creature Lab currency is session-isolated and never writes normal saved gold.`, 'creature-lab-note'));
     return section;
   }
 

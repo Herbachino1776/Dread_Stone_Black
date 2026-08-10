@@ -23,6 +23,8 @@ import { CombatLabDebugPanel } from './combat/CombatLabDebugPanel.js';
 import { PlayerCombatDamageReceiver } from './combat/PlayerCombatDamageReceiver.js';
 import { PlayerCombatState } from './combat/PlayerCombatState.js';
 import { createCreatureLabReadOnlyStorage, resolveCreatureLabMode } from './creatures/CreatureLabController.js';
+import { PlayerCurrencyState } from './economy/PlayerCurrencyState.js';
+import { createPlayerCurrencyPersistence } from './economy/PlayerCurrencyPersistence.js';
 
 export class Game {
   constructor(app) {
@@ -68,6 +70,13 @@ export class Game {
       storage: this.creatureLabEnabled ? createCreatureLabReadOnlyStorage(window.localStorage) : window.localStorage,
     });
     this.gameState = this.saveHost.loadInitialState();
+    this.disposers = [];
+    this.playerCurrencyState = new PlayerCurrencyState({
+      persistenceAdapter: createPlayerCurrencyPersistence({
+        gameState: this.gameState,
+        isolated: this.creatureLabEnabled,
+      }),
+    });
     const savedEquipment = this.gameState.getEquipmentSnapshot() ?? startingEquipment;
     const developmentLoadoutEnabled = import.meta.env.DEV && ((query.get('area') === 'north-road' && query.get('devLoadout') === '1') || this.combatLabEnabled);
     const developmentItems = [
@@ -95,7 +104,6 @@ export class Game {
       weaponProfiles: equipmentRegistry.weapons,
       startingEquipment: runtimeStartingEquipment,
     });
-    this.disposers = [];
     this.disposers.push(this.equipmentRuntime.on(EQUIPMENT_EVENTS.itemAcquired, (payload) => {
       this.saveEquipmentState();
       this.handleEquipmentAcquired(payload);
@@ -107,6 +115,7 @@ export class Game {
       gameState: this.gameState,
       query,
       audioRuntime: this.audioRuntime,
+      playerCurrencyState: this.playerCurrencyState,
       onSessionChanged: (session) => this.handleSceneSessionChanged(session),
     });
     await this.sceneSessionHost.startInitialSession();
@@ -471,6 +480,8 @@ export class Game {
     this.playerCombatDamageReceiver = null;
     this.playerCombatState?.dispose?.();
     this.playerCombatState = null;
+    this.playerCurrencyState?.dispose?.();
+    this.playerCurrencyState = null;
     this.survivalHost?.dispose?.();
     this.progressionHost?.dispose?.();
     this.inputHost?.dispose?.();

@@ -128,10 +128,10 @@ function resolverFixture({
   return { resolver, presetRegistry, definitionRegistry, creaturePackRegistry, creatureFactory: factory, loadoutRegistry, weaponRegistry };
 }
 
-test('dreadstone.enemy_preset.v1 accepts the checked-in Ram God preset', () => {
+test('dreadstone.enemy_preset.v2 accepts the checked-in Ram God preset without changing its calibration', () => {
   assert.equal(validateEnemyPreset(DREAD_RAM_GOD_GREAT_MACE_PRESET).valid, true);
-  assert.equal(DREAD_RAM_GOD_GREAT_MACE_PRESET.schema, 'dreadstone.enemy_preset.v1');
-  assert.equal(DREAD_RAM_GOD_GREAT_MACE_PRESET.version, 1);
+  assert.equal(DREAD_RAM_GOD_GREAT_MACE_PRESET.schema, 'dreadstone.enemy_preset.v2');
+  assert.equal(DREAD_RAM_GOD_GREAT_MACE_PRESET.version, 2);
   assert.deepEqual(DREAD_RAM_GOD_GREAT_MACE_PRESET.presentation, { targetHeight: 2.1 });
   assert.deepEqual(DREAD_RAM_GOD_GREAT_MACE_PRESET.armament.weaponOverride, {
     assetScale: 1.41,
@@ -145,6 +145,7 @@ test('dreadstone.enemy_preset.v1 accepts the checked-in Ram God preset', () => {
       radius: 0.13,
     },
   });
+  assert.deepEqual(DREAD_RAM_GOD_GREAT_MACE_PRESET.rewards, { lootProfileId: 'dread_ram_god_standard' });
 });
 
 test('Enemy Preset contract rejects malformed and foreign-authority fields', () => {
@@ -280,6 +281,7 @@ test('Dread Ram God Great Mace resolves real body, MAIN_HAND_R, mace, and overhe
   assert.equal(resolved.weapon.weaponId, 'dreadstone_mace');
   assert.equal(resolved.attachmentSocket.semanticRole, 'MAIN_HAND_R');
   assert.deepEqual(resolved.compatibleActions.map((action) => action.combatActionId), ['humanoid_one_hand_overhead']);
+  assert.equal(resolved.lootProfile.lootProfileId, 'dread_ram_god_standard');
 });
 
 test('legacy Chezwick and Dreadguard definition composition remains preset-independent', async () => {
@@ -445,12 +447,13 @@ test('Enemy Preset JSON copy payload is deterministic, complete, normalized, and
   const second = serializeEnemyPresetFromLabCalibration(options);
   assert.equal(first, second);
   const record = JSON.parse(first);
-  assert.deepEqual(Object.keys(record), ['schema', 'version', 'presetId', 'displayName', 'creatureDefinitionId', 'presentation', 'armament']);
+  assert.deepEqual(Object.keys(record), ['schema', 'version', 'presetId', 'displayName', 'creatureDefinitionId', 'presentation', 'armament', 'rewards']);
   assert.deepEqual(Object.keys(record.armament.weaponOverride), ['assetScale', 'gripTransform', 'attackCapsule']);
   assert.equal(record.presentation.targetHeight, 2.12345679);
   assert.equal(record.armament.weaponOverride.assetScale, 1.23456789);
   assert.ok(Math.abs(Math.hypot(...record.armament.weaponOverride.gripTransform.quaternion) - 1) < 1e-7);
   assert.equal('weaponId' in record.armament.weaponOverride, false);
+  assert.deepEqual(record.rewards, { lootProfileId: 'dread_ram_god_standard' });
   assert.equal(first.includes('localStorage'), false);
   assert.equal(validateEnemyPreset(record).valid, true);
 });
