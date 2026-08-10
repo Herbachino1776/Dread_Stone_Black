@@ -18,6 +18,31 @@ function cloneCapsule(capsule) {
   return capsule ? { start: capsule.start.clone(), end: capsule.end.clone(), radius: capsule.radius } : null;
 }
 
+function finiteVector(value, length) {
+  return Array.isArray(value) && value.length === length && value.every(Number.isFinite);
+}
+
+function copyCalibration(weapon, override = null) {
+  const calibration = {
+    assetScale: override?.assetScale ?? weapon.assetScale,
+    gripTransform: {
+      position: [...(override?.gripTransform?.position ?? weapon.gripTransform.position)],
+      quaternion: [...(override?.gripTransform?.quaternion ?? weapon.gripTransform.quaternion)],
+    },
+    attackCapsule: {
+      start: [...(override?.attackCapsule?.start ?? weapon.attackCapsule.start)],
+      end: [...(override?.attackCapsule?.end ?? weapon.attackCapsule.end)],
+      radius: override?.attackCapsule?.radius ?? weapon.attackCapsule.radius,
+    },
+  };
+  if (!(Number.isFinite(calibration.assetScale) && calibration.assetScale > 0)) throw new Error('Weapon calibration assetScale must be one positive uniform scalar');
+  if (!finiteVector(calibration.gripTransform.position, 3)) throw new Error('Weapon calibration grip position must be a finite 3-vector');
+  if (!finiteVector(calibration.gripTransform.quaternion, 4) || Math.abs(Math.hypot(...calibration.gripTransform.quaternion) - 1) > 1e-4) throw new Error('Weapon calibration grip quaternion must be normalized');
+  if (!finiteVector(calibration.attackCapsule.start, 3) || !finiteVector(calibration.attackCapsule.end, 3)) throw new Error('Weapon calibration attack capsule endpoints must be finite 3-vectors');
+  if (!(Number.isFinite(calibration.attackCapsule.radius) && calibration.attackCapsule.radius > 0)) throw new Error('Weapon calibration attack capsule radius must be positive');
+  return calibration;
+}
+
 export class NpcArmamentRuntime {
   constructor({
     actor,
@@ -39,6 +64,8 @@ export class NpcArmamentRuntime {
     this.binding = null;
     this.weapon = null;
     this.weaponVisual = null;
+    this.calibrationOverride = null;
+    this.effectiveCalibration = null;
     this.physicalSource = null;
     this.compatibleActions = [];
     this.selectedAction = null;
@@ -53,6 +80,8 @@ export class NpcArmamentRuntime {
     this.showAttackGeometry = false;
     this.diagnosticLines = null;
     this.disposed = false;
+    this.equipSerial = 0;
+    this.equipInFlight = null;
     this.capabilityAvailable = Boolean(
       creaturePack?.attachmentSockets?.available
       && creaturePack?.offensiveActions?.available,
@@ -64,51 +93,72 @@ export class NpcArmamentRuntime {
         : 'offensive-action-capability-unavailable';
   }
 
-  equip() {
+  async equip() {
     if (this.disposed) return this.reject('armament-runtime-disposed');
     if (this.binding) return { accepted: true, alreadyEquipped: true, weaponId: this.weapon.weaponId };
+    if (this.equipInFlight) return this.equipInFlight;
     if (!this.actor || this.actor.disposed || this.actor.lifeState !== 'alive') return this.reject('living-creature-subject-unavailable');
     if (!this.capabilityAvailable) return this.reject(this.capabilityReason);
     if (!this.visualAdapter || !this.animationController) return this.reject('animated-visual-adapter-unavailable');
-    try {
-      const resolved = resolveNpcLoadout({
-        loadout: this.loadout,
-        weaponRegistry: this.weaponRegistry,
-        offensiveActions: this.creaturePack.offensiveActions,
-      });
-      this.weapon = resolved.weapon;
-      this.compatibleActions = resolved.compatibleActions;
-      this.selectedAction = this.compatibleActions[0];
-      const socket = this.creaturePack.attachmentSockets.sockets.find((entry) => (
-        this.weapon.compatibleSocketRoles.includes(entry.semanticRole)
-        && this.compatibleActions.some((action) => action.socketRole === entry.semanticRole)
-      ));
-      if (!socket) throw new Error(`No compatible authored socket exists for ${this.weapon.weaponId}`);
-      this.attachmentResolver = new RuntimeAttachmentSocketResolver({ visualAdapter: this.visualAdapter });
-      this.binding = this.attachmentResolver.resolve(socket);
-      this.weaponVisual = this.weaponRegistry.createVisual(this.weapon);
-      this.attachmentResolver.attachWeapon(this.weaponVisual, this.weapon.gripTransform);
-      this.physicalSource = new PhysicalAttackSource({
-        source: this.actor,
-        damageAmount: this.weapon.damage,
-        damageType: this.weapon.damageType,
-        impactStrength: this.weapon.impactStrength,
-      });
-      this.createDiagnosticsGeometry();
-      this.updateWeaponCapsule();
-      this.lastRejectionReason = null;
-      this.lastClearReason = null;
-      return {
-        accepted: true,
-        weaponId: this.weapon.weaponId,
-        socketId: socket.socketId,
-        parentRuntimeBone: socket.parentRuntimeBone,
-        compatibleActionIds: this.compatibleActions.map((action) => action.combatActionId),
-      };
-    } catch (error) {
-      this.unequip('equip-failed');
-      return this.reject(error.message);
-    }
+    const equipSerial = ++this.equipSerial;
+    this.equipInFlight = (async () => {
+      let loadedVisual = null;
+      try {
+        const resolved = resolveNpcLoadout({
+          loadout: this.loadout,
+          weaponRegistry: this.weaponRegistry,
+          offensiveActions: this.creaturePack.offensiveActions,
+        });
+        this.weapon = resolved.weapon;
+        this.compatibleActions = resolved.compatibleActions;
+        this.selectedAction = this.compatibleActions[0];
+        const socket = this.creaturePack.attachmentSockets.sockets.find((entry) => (
+          this.weapon.compatibleSocketRoles.includes(entry.semanticRole)
+          && this.compatibleActions.some((action) => action.socketRole === entry.semanticRole)
+        ));
+        if (!socket) throw new Error(`No compatible authored socket exists for ${this.weapon.weaponId}`);
+        this.effectiveCalibration = copyCalibration(this.weapon, this.calibrationOverride);
+        loadedVisual = await this.weaponRegistry.createVisual(this.weapon);
+        if (this.disposed || equipSerial !== this.equipSerial) {
+          this.weaponRegistry.disposeVisual(loadedVisual);
+          loadedVisual = null;
+          return this.reject('weapon-equip-superseded');
+        }
+        this.attachmentResolver = new RuntimeAttachmentSocketResolver({ visualAdapter: this.visualAdapter });
+        this.binding = this.attachmentResolver.resolve(socket);
+        this.weaponVisual = loadedVisual;
+        loadedVisual = null;
+        this.attachmentResolver.attachWeapon(
+          this.weaponVisual,
+          this.effectiveCalibration.gripTransform,
+          this.effectiveCalibration.assetScale,
+        );
+        this.physicalSource = new PhysicalAttackSource({
+          source: this.actor,
+          damageAmount: this.weapon.damage,
+          damageType: this.weapon.damageType,
+          impactStrength: this.weapon.impactStrength,
+        });
+        this.createDiagnosticsGeometry();
+        this.updateWeaponCapsule();
+        this.lastRejectionReason = null;
+        this.lastClearReason = null;
+        return {
+          accepted: true,
+          weaponId: this.weapon.weaponId,
+          socketId: socket.socketId,
+          parentRuntimeBone: socket.parentRuntimeBone,
+          compatibleActionIds: this.compatibleActions.map((action) => action.combatActionId),
+        };
+      } catch (error) {
+        if (loadedVisual) this.weaponRegistry.disposeVisual(loadedVisual);
+        this.unequip('equip-failed');
+        return this.reject(error.message);
+      } finally {
+        this.equipInFlight = null;
+      }
+    })();
+    return this.equipInFlight;
   }
 
   setLoadout(loadout) {
@@ -116,7 +166,27 @@ export class NpcArmamentRuntime {
     if (!validation.valid) return this.reject(`invalid-loadout: ${validation.errors.join('; ')}`);
     this.unequip('loadout-changed');
     this.loadout = loadout;
+    this.calibrationOverride = null;
+    this.effectiveCalibration = null;
     return { accepted: true, loadoutId: loadout.loadoutId };
+  }
+
+  setCalibrationOverride(override = null) {
+    try {
+      const weapon = this.weapon ?? this.weaponRegistry.require(this.loadout.mainHandWeaponId);
+      const effective = copyCalibration(weapon, override);
+      this.calibrationOverride = override ? copyCalibration(weapon, override) : null;
+      this.effectiveCalibration = effective;
+      if (this.binding) {
+        this.attachmentResolver.updateWeaponTransform(effective.gripTransform, effective.assetScale);
+        this.updateWeaponCapsule();
+        this.updateDiagnosticsGeometry();
+      }
+      this.lastRejectionReason = null;
+      return { accepted: true, weaponId: weapon.weaponId, calibration: structuredClone(effective) };
+    } catch (error) {
+      return this.reject(`invalid-weapon-calibration: ${error.message}`);
+    }
   }
 
   selectOffensiveAction(combatActionId) {
@@ -180,12 +250,13 @@ export class NpcArmamentRuntime {
 
   updateWeaponCapsule() {
     if (!this.weaponVisual || !this.weapon) return null;
+    const calibration = this.effectiveCalibration ?? copyCalibration(this.weapon, this.calibrationOverride);
     this.weaponVisual.updateWorldMatrix(true, true);
-    const start = new THREE.Vector3().fromArray(this.weapon.attackCapsule.start);
-    const end = new THREE.Vector3().fromArray(this.weapon.attackCapsule.end);
+    const start = new THREE.Vector3().fromArray(calibration.attackCapsule.start);
+    const end = new THREE.Vector3().fromArray(calibration.attackCapsule.end);
     this.weaponVisual.localToWorld(start);
     this.weaponVisual.localToWorld(end);
-    const shape = { start, end, radius: this.weapon.attackCapsule.radius };
+    const shape = { start, end, radius: calibration.attackCapsule.radius * calibration.assetScale };
     this.physicalSource?.updateShape?.(shape);
     return shape;
   }
@@ -193,11 +264,12 @@ export class NpcArmamentRuntime {
   getWorldCapsule() {
     if (this.physicalSource?.currentShape) return cloneCapsule(this.physicalSource.currentShape);
     if (!this.weaponVisual || !this.weapon) return null;
+    const calibration = this.effectiveCalibration ?? copyCalibration(this.weapon, this.calibrationOverride);
     this.weaponVisual.updateWorldMatrix(true, true);
     return {
-      start: this.weaponVisual.localToWorld(new THREE.Vector3().fromArray(this.weapon.attackCapsule.start)),
-      end: this.weaponVisual.localToWorld(new THREE.Vector3().fromArray(this.weapon.attackCapsule.end)),
-      radius: this.weapon.attackCapsule.radius,
+      start: this.weaponVisual.localToWorld(new THREE.Vector3().fromArray(calibration.attackCapsule.start)),
+      end: this.weaponVisual.localToWorld(new THREE.Vector3().fromArray(calibration.attackCapsule.end)),
+      radius: calibration.attackCapsule.radius * calibration.assetScale,
     };
   }
 
@@ -317,6 +389,7 @@ export class NpcArmamentRuntime {
   }
 
   unequip(reason = 'unequipped') {
+    this.equipSerial += 1;
     const wasEquipped = Boolean(this.binding);
     this.activeAttack = null;
     this.lastCompletedAttack = null;
@@ -324,13 +397,11 @@ export class NpcArmamentRuntime {
     this.physicalSource = null;
     this.attachmentResolver?.dispose?.();
     this.attachmentResolver = null;
-    if (this.weaponVisual) this.weaponVisual.traverse((object) => {
-      object.geometry?.dispose?.();
-      disposeMaterial(object.material);
-    });
+    if (this.weaponVisual) this.weaponRegistry.disposeVisual?.(this.weaponVisual);
     this.weaponVisual = null;
     this.binding = null;
     this.weapon = null;
+    this.effectiveCalibration = null;
     this.compatibleActions = [];
     this.selectedAction = null;
     this.outcome = 'idle';
@@ -350,12 +421,27 @@ export class NpcArmamentRuntime {
     const source = this.physicalSource?.getDiagnostics?.() ?? null;
     const receiver = this.damageReceiverProvider?.();
     const receiverDiagnostics = receiver?.getDiagnostics?.() ?? null;
+    const configuredWeapon = this.weapon ?? this.weaponRegistry.get?.(this.loadout?.mainHandWeaponId) ?? null;
+    const worldPosition = this.weaponVisual?.getWorldPosition?.(new THREE.Vector3()) ?? null;
+    const worldQuaternion = this.weaponVisual?.getWorldQuaternion?.(new THREE.Quaternion()) ?? null;
+    const worldScale = this.weaponVisual?.getWorldScale?.(new THREE.Vector3()) ?? null;
+    const calibration = this.effectiveCalibration ?? (configuredWeapon ? copyCalibration(configuredWeapon, this.calibrationOverride) : null);
     return {
       enabled: this.capabilityAvailable,
       capabilityAvailable: this.capabilityAvailable,
       capabilityReason: this.capabilityReason,
       equipped: Boolean(this.binding),
-      weaponId: this.weapon?.weaponId ?? null,
+      weaponId: configuredWeapon?.weaponId ?? null,
+      weaponDisplayName: configuredWeapon?.displayName ?? null,
+      assetPath: configuredWeapon?.assetPath ?? null,
+      assetScale: calibration?.assetScale ?? null,
+      gripTransform: calibration ? structuredClone(calibration.gripTransform) : null,
+      localAttackCapsule: calibration ? structuredClone(calibration.attackCapsule) : null,
+      weaponWorldTransform: this.weaponVisual ? {
+        position: vectorArray(worldPosition),
+        quaternion: vectorArray(worldQuaternion),
+        scale: vectorArray(worldScale),
+      } : null,
       loadoutId: this.loadout?.loadoutId ?? null,
       socketId: this.binding?.socket?.socketId ?? null,
       socketRole: this.binding?.socket?.semanticRole ?? null,

@@ -1,3 +1,5 @@
+import { CREATURE_LAB_HEIGHT_RANGE, CREATURE_LAB_WEAPON_SCALE_RANGE } from './CreatureLabCalibration.js';
+
 export const CREATURE_LAB_TOUCH_TARGET_PX = 48;
 
 export function getCreatureLabPrimaryActions(controller) {
@@ -28,10 +30,11 @@ export function getCreatureLabAnimationPanelActions(controller, state) {
 
 export function getCreatureLabOffensiveCombatActions(controller, state = {}) {
   const combat = state.offensiveCombat ?? {};
+  const selectedWeapon = state.weapons?.find?.((weapon) => weapon.weaponId === state.selectedWeaponId);
   return [
     {
       id: 'offense:equip',
-      label: combat.equipped ? 'Unequip Test Weapon' : 'Equip Test Weapon',
+      label: combat.equipped ? `Unequip ${selectedWeapon?.displayName ?? 'Weapon'}` : `Equip ${selectedWeapon?.displayName ?? 'Weapon'}`,
       run: () => combat.equipped ? controller.unequipArmament() : controller.equipArmament(),
       pressed: combat.equipped === true,
       wide: true,
@@ -48,13 +51,23 @@ export function getCreatureLabOffensiveCombatActions(controller, state = {}) {
     { id: 'offense:reset_player', label: 'Reset Player', run: () => controller.resetPlayer() },
     {
       id: 'offense:geometry',
-      label: combat.showAttackGeometry ? 'Hide Attack Geometry' : 'Show Attack Geometry',
+      label: combat.showAttackGeometry ? 'Hide Attack Capsule' : 'Show Attack Capsule',
       run: () => controller.toggleAttackGeometry(),
       pressed: combat.showAttackGeometry === true,
       wide: true,
       disabled: !combat.equipped,
     },
   ];
+}
+
+export function getCreatureLabWeaponActions(controller, state = {}) {
+  return (state.weapons ?? []).map((weapon) => ({
+    id: `weapon:${weapon.weaponId}`,
+    label: weapon.displayName,
+    weapon,
+    pressed: state.selectedWeaponId === weapon.weaponId,
+    run: () => controller.selectWeapon(weapon.weaponId),
+  }));
 }
 
 export function getCreatureLabDamagePanelActions(controller, state = {}) {
@@ -140,6 +153,10 @@ export class CreatureLabPanel {
       .creature-lab-site-meta{display:block;margin-top:4px;color:#b9ad9c;font:11px/1.35 ui-monospace,monospace;white-space:pre-line;overflow-wrap:anywhere}
       .creature-lab-info{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;margin:0;font-size:12px}
       .creature-lab-info dt{color:#a99c8b;overflow-wrap:anywhere}.creature-lab-info dd{margin:0;text-align:right;overflow-wrap:anywhere}
+      .creature-lab-range{display:block;margin:9px 0;padding:8px;border:1px solid #3f382f;border-radius:6px;background:#100e0b}
+      .creature-lab-range-title{display:flex;justify-content:space-between;gap:10px;color:#d8c8b4;font-size:13px}
+      .creature-lab-range output{color:#e6bd85;font:12px/1.2 ui-monospace,monospace}
+      .creature-lab-range input{width:100%;min-height:34px;margin:5px 0 0;accent-color:#c99c65;touch-action:pan-x}
       .creature-lab-note{margin:8px 0 0;color:#bdb1a3;font-size:12px;overflow-wrap:anywhere}
       .creature-lab-status{margin:9px 0 0;padding:8px;border-radius:5px;background:#090807;color:#b9d7ce;font:12px/1.35 ui-monospace,monospace;overflow-wrap:anywhere}
       .creature-lab-diagnostics{max-height:42vh;overflow:auto;margin:9px 0 0;padding:9px;border:1px solid #3e514b;background:#070908;color:#b9d7ce;font:11px/1.4 ui-monospace,monospace;white-space:pre-wrap;user-select:text;overflow-wrap:anywhere}
@@ -186,6 +203,50 @@ export class CreatureLabPanel {
 
   createGrid() { return element('div', null, 'creature-lab-grid'); }
 
+  createRangeControl({ label, value, min, max, step, field, suffix = '' }) {
+    const wrapper = element('label', null, 'creature-lab-range');
+    const title = element('span', null, 'creature-lab-range-title');
+    const output = element('output', `${Number(value).toFixed(step < 0.01 ? 3 : 2)}${suffix}`);
+    title.append(element('span', label), output);
+    const input = element('input');
+    input.type = 'range';
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.value = String(value);
+    input.setAttribute('aria-label', label);
+    input.addEventListener('input', () => {
+      const numeric = Number(input.value);
+      output.textContent = `${numeric.toFixed(step < 0.01 ? 3 : 2)}${suffix}`;
+      this.controller.setWeaponCalibrationField(field, numeric);
+      if (this.offensiveReadout) this.offensiveReadout.textContent = this.formatOffensiveCombat(this.controller.getViewState().offensiveCombat);
+    });
+    input.addEventListener('change', () => this.controller.notify());
+    wrapper.append(title, input);
+    return wrapper;
+  }
+
+  createHeightRangeControl(state) {
+    const wrapper = element('label', null, 'creature-lab-range');
+    const title = element('span', null, 'creature-lab-range-title');
+    const output = element('output', `${Number(state.resultingCreatureHeight).toFixed(2)} m`);
+    title.append(element('span', 'Creature Height / Creature Scale'), output);
+    const input = element('input');
+    input.type = 'range';
+    input.min = String(CREATURE_LAB_HEIGHT_RANGE.min);
+    input.max = String(CREATURE_LAB_HEIGHT_RANGE.max);
+    input.step = String(CREATURE_LAB_HEIGHT_RANGE.step);
+    input.value = String(state.resultingCreatureHeight);
+    input.setAttribute('aria-label', 'Creature Height / Creature Scale');
+    input.addEventListener('change', async () => {
+      input.disabled = true;
+      await this.controller.setCreatureHeight(Number(input.value));
+      this.render();
+    });
+    wrapper.append(title, input);
+    return wrapper;
+  }
+
   createSiteButton(site, selected) {
     const bindingLabel = site.bindingMode === 'SKINNED_SURFACE'
       ? 'SKINNED'
@@ -228,6 +289,8 @@ export class CreatureLabPanel {
     this.panel.append(definitions);
 
     if (state.pack) this.panel.append(this.renderPackInfo(state));
+    this.panel.append(this.renderCreatureCalibration(state));
+    this.panel.append(this.renderWeaponCalibration(state));
     this.panel.append(this.renderAnimations(state));
     this.panel.append(this.renderOffensiveCombat(state));
     this.panel.append(this.renderDamage(state));
@@ -268,6 +331,88 @@ export class CreatureLabPanel {
     return section;
   }
 
+  renderCreatureCalibration(state) {
+    const section = this.createSection('Creature Calibration');
+    if (!Number.isFinite(state.resultingCreatureHeight)) {
+      section.append(element('p', 'Creature presentation is not ready.', 'creature-lab-note'));
+      return section;
+    }
+    section.append(this.createHeightRangeControl(state));
+    const grid = this.createGrid();
+    const step = CREATURE_LAB_HEIGHT_RANGE.step;
+    const clamp = (value) => Math.max(CREATURE_LAB_HEIGHT_RANGE.min, Math.min(CREATURE_LAB_HEIGHT_RANGE.max, value));
+    grid.append(
+      this.createButton(`− ${step.toFixed(2)} m`, () => this.controller.setCreatureHeight(clamp(state.resultingCreatureHeight - step))),
+      this.createButton(`+ ${step.toFixed(2)} m`, () => this.controller.setCreatureHeight(clamp(state.resultingCreatureHeight + step))),
+      this.createButton('Reset Creature Height', () => this.controller.resetCreatureHeight(), { wide: true }),
+    );
+    section.append(grid);
+    section.append(element('p', `Production height ${Number(state.productionCreatureHeight).toFixed(2)} m · resulting height ${Number(state.resultingCreatureHeight).toFixed(2)} m. This uniform override rebuilds only the lab actor and never writes the Creature Definition.`, 'creature-lab-note'));
+    return section;
+  }
+
+  renderWeaponCalibration(state) {
+    const section = this.createSection('Weapon Calibration');
+    const selector = this.createGrid();
+    getCreatureLabWeaponActions(this.controller, state).forEach((action) => selector.append(this.createButton(action.label, action.run, {
+      pressed: action.pressed,
+      disabled: state.loading,
+    })));
+    section.append(selector);
+
+    const equipAction = getCreatureLabOffensiveCombatActions(this.controller, state).find((action) => action.id === 'offense:equip');
+    if (equipAction) section.append(this.createButton(equipAction.label, equipAction.run, {
+      pressed: equipAction.pressed,
+      disabled: state.loading || state.offensiveCombat?.capabilityAvailable !== true,
+      wide: true,
+    }));
+
+    const calibration = state.weaponCalibration;
+    if (!calibration) {
+      section.append(element('p', 'Select a registered real weapon to calibrate it.', 'creature-lab-note'));
+      return section;
+    }
+    section.append(element('p', 'Weapon Transform', 'creature-lab-region'));
+    section.append(this.createRangeControl({
+      label: 'Scale', value: calibration.assetScale,
+      min: CREATURE_LAB_WEAPON_SCALE_RANGE.min, max: CREATURE_LAB_WEAPON_SCALE_RANGE.max, step: CREATURE_LAB_WEAPON_SCALE_RANGE.step,
+      field: 'assetScale',
+    }));
+    ['X', 'Y', 'Z'].forEach((axis, index) => section.append(this.createRangeControl({
+      label: `Grip ${axis}`, value: calibration.gripPosition[index], min: -1.5, max: 1.5, step: 0.005,
+      field: `gripPosition.${index}`, suffix: ' m',
+    })));
+    ['Pitch', 'Yaw', 'Roll'].forEach((label, index) => section.append(this.createRangeControl({
+      label, value: calibration.gripEulerDegrees[index], min: -180, max: 180, step: 1,
+      field: `gripEulerDegrees.${index}`, suffix: '°',
+    })));
+
+    section.append(element('p', 'Attack Capsule', 'creature-lab-region'));
+    ['Start', 'End'].forEach((endpointLabel) => {
+      const endpoint = endpointLabel.toLowerCase();
+      ['X', 'Y', 'Z'].forEach((axis, index) => section.append(this.createRangeControl({
+        label: `${endpointLabel} ${axis}`, value: calibration.attackCapsule[endpoint][index], min: -3, max: 3, step: 0.01,
+        field: `attackCapsule.${endpoint}.${index}`, suffix: ' m',
+      })));
+    });
+    section.append(this.createRangeControl({
+      label: 'Radius', value: calibration.attackCapsule.radius, min: 0.005, max: 1, step: 0.005,
+      field: 'attackCapsule.radius', suffix: ' m',
+    }));
+
+    const controls = this.createGrid();
+    controls.append(
+      this.createButton('Reset Weapon Calibration', () => this.controller.resetWeaponCalibration(), { wide: true }),
+      this.createButton('Copy Calibration JSON', () => this.copyCalibrationJson(), { wide: true }),
+    );
+    section.append(controls);
+    this.calibrationReadout = element('pre', JSON.stringify(state.weaponCalibrationReadout, null, 2), 'creature-lab-diagnostics');
+    this.calibrationReadout.setAttribute('aria-label', 'Weapon calibration JSON');
+    section.append(this.calibrationReadout);
+    if (state.offensiveCombat?.capabilityAvailable !== true) section.append(element('p', `This pack cannot equip weapons: ${state.offensiveCombat?.capabilityReason ?? 'Forge socket/offensive Action capability unavailable'}. Calibration values remain isolated lab data.`, 'creature-lab-note'));
+    return section;
+  }
+
   renderAnimations(state) {
     const section = this.createSection('Animation Testing');
     const grid = this.createGrid();
@@ -283,16 +428,26 @@ export class CreatureLabPanel {
     const capsule = combat.currentWorldCapsule;
     const capsuleText = capsule ? `${capsule.start?.join?.(', ') ?? '?'} -> ${capsule.end?.join?.(', ') ?? '?'} r=${capsule.radius}` : 'none';
     const phases = combat.phases;
+    const grip = combat.gripTransform;
+    const gripText = grip ? `p=${grip.position?.join?.(', ') ?? '?'} q=${grip.quaternion?.join?.(', ') ?? '?'}` : 'none';
+    const world = combat.weaponWorldTransform;
+    const worldText = world ? `p=${world.position?.join?.(', ') ?? '?'} q=${world.quaternion?.join?.(', ') ?? '?'} s=${world.scale?.join?.(', ') ?? '?'}` : 'none';
+    const localCapsule = combat.localAttackCapsule;
+    const localCapsuleText = localCapsule ? `${localCapsule.start?.join?.(', ') ?? '?'} -> ${localCapsule.end?.join?.(', ') ?? '?'} r=${localCapsule.radius}` : 'none';
     const timing = phases
       ? `W ${phases.windup.startSeconds}-${phases.windup.endSeconds} | A ${phases.active.startSeconds}-${phases.active.endSeconds} | R ${phases.recovery.startSeconds}-${phases.recovery.endSeconds}`
       : 'unavailable';
     return [
       `CAPABILITY ${combat.capabilityAvailable ? 'AVAILABLE' : `UNAVAILABLE (${combat.capabilityReason ?? 'unknown'})`} | ${combat.equipped ? 'EQUIPPED' : 'UNEQUIPPED'}`,
       `WEAPON ${combat.weaponId ?? 'none'} | SOCKET ${combat.socketId ?? 'none'} -> ${combat.parentRuntimeBone ?? 'none'}`,
+      `GLB ${combat.assetPath ?? 'none'} | ASSET SCALE ${combat.assetScale ?? 'none'}`,
+      `GRIP ${gripText}`,
+      `WEAPON WORLD ${worldText}`,
       `ACTION ${combat.actionName ?? 'none'} | COMBAT ID ${combat.combatActionId ?? 'none'}`,
       `PHASE ${combat.attackPhase ?? 'COMPLETE'} | CLIP ${Number(combat.clipTimeSeconds ?? 0).toFixed(3)}s | ${String(combat.outcome ?? 'idle').toUpperCase()}`,
       `TIMING ${timing}`,
       `ATTACK ${combat.attackIdentity ?? combat.attackId ?? 'none'} | HITS ${combat.acceptedPlayerHitCount ?? 0} | PLAYER HP ${combat.currentPlayerHealth ?? 'n/a'}${combat.playerDead ? ' | DEAD' : ''}`,
+      `LOCAL CAPSULE ${localCapsuleText}`,
       `WORLD CAPSULE ${capsuleText}`,
       `IMPACT ${point} | DIR ${direction}`,
       `REJECTION ${combat.lastRejectionReason ?? 'none'}`,
@@ -303,7 +458,7 @@ export class CreatureLabPanel {
     const section = this.createSection('Offensive Combat Proof');
     const combat = state.offensiveCombat ?? { enabled: false };
     const grid = this.createGrid();
-    getCreatureLabOffensiveCombatActions(this.controller, state).forEach((action) => grid.append(this.createButton(action.label, action.run, {
+    getCreatureLabOffensiveCombatActions(this.controller, state).filter((action) => action.id !== 'offense:equip').forEach((action) => grid.append(this.createButton(action.label, action.run, {
       disabled: state.loading || combat.capabilityAvailable !== true || action.disabled === true,
       pressed: action.pressed === true,
       wide: action.wide === true,
@@ -422,6 +577,25 @@ export class CreatureLabPanel {
     this.updateDiagnostics();
     if (this.offensiveReadout) this.offensiveReadout.textContent = this.formatOffensiveCombat(this.controller.getViewState().offensiveCombat);
     if (this.status) this.status.textContent = this.transientStatus ?? this.formatLastOperation(this.controller.lastOperation);
+  }
+
+  async copyCalibrationJson() {
+    const text = JSON.stringify(this.controller.getWeaponCalibrationReadout(), null, 2);
+    try {
+      if (!globalThis.navigator?.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(text);
+      this.transientStatus = 'Weapon calibration JSON copied.';
+    } catch {
+      if (this.calibrationReadout) {
+        this.calibrationReadout.textContent = text;
+        this.calibrationReadout.focus?.();
+        const selection = globalThis.getSelection?.();
+        const range = document.createRange?.();
+        if (selection && range) { range.selectNodeContents(this.calibrationReadout); selection.removeAllRanges(); selection.addRange(range); }
+      }
+      this.transientStatus = 'Clipboard permission failed. Calibration JSON is visible and selected for manual copy.';
+    }
+    if (this.status) this.status.textContent = this.transientStatus;
   }
 
   async copyDiagnostics() {

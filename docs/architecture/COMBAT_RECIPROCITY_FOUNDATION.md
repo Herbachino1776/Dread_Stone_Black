@@ -108,7 +108,9 @@ M6 must supply a stable execution identity, explicit phase changes, and actual p
 ## Current limitations
 
 - The player hurt volume is one vertical capsule; there is no body-part physiology.
-- The lab proxy has procedural geometry and no authored offensive clip.
+- M6.6 removes the procedural proxy from the normal proof path. Real weapon
+  GLBs are game-owned, while current checked-in creature packs still require a
+  future Forge re-export before their socket/offensive capability is available.
 - Player hit audio is deferred because the existing audited cues do not provide a clean, source-neutral hostile-player impact event. HP, flash, camera response, and death remain unmistakable without misusing flesh-stab or creature-death cues.
 - Combat HP is deliberately lab-session-only until a canonical encounter defines persistence/respawn policy.
 - Device-level iPhone touch, performance, and visual-readability acceptance remain manual hardware checks.

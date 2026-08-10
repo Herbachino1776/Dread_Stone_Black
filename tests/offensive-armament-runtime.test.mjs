@@ -10,7 +10,14 @@ import {
 } from '../src/contracts/ForgeRuntimeArmament.js';
 import { NpcArmamentRuntime } from '../src/game/combat/NpcArmamentRuntime.js';
 import { CREATURE_LAB_MACE_LOADOUT, NPC_LOADOUT_SCHEMA, resolveNpcLoadout, validateNpcLoadout } from '../src/game/combat/NpcLoadout.js';
-import { DREADSTONE_LAB_MACE_WEAPON, NPC_WEAPON_SCHEMA, NpcWeaponRegistry, validateNpcWeaponDefinition } from '../src/game/combat/NpcWeaponRegistry.js';
+import {
+  DREADSTONE_MACE_WEAPON,
+  DREADSTONE_SWORD_WEAPON,
+  NPC_WEAPON_SCHEMA,
+  NpcWeaponRegistry,
+  OLD_WORK_KNIFE_WEAPON,
+  validateNpcWeaponDefinition,
+} from '../src/game/combat/NpcWeaponRegistry.js';
 import { PlayerCombatDamageReceiver } from '../src/game/combat/PlayerCombatDamageReceiver.js';
 import { RuntimeAttachmentSocketResolver } from '../src/game/combat/RuntimeAttachmentSocketResolver.js';
 import { HUMANOID_ANIMATION_STATES, HumanoidAnimationPackController } from '../src/game/combat/HumanoidAnimationPackController.js';
@@ -37,6 +44,25 @@ function makeAnimationController() {
     played: [],
     playOffensiveAction(name) { this.time = 0; this.played.push(name); return { name, durationSeconds: 1.333333 }; },
     getActionClipTime() { return this.time; },
+  };
+}
+
+function makeWeaponLoader() {
+  const instances = new Set();
+  return {
+    async instantiate(assetPath) {
+      const root = new THREE.Group();
+      root.name = `FixtureWeapon:${assetPath}`;
+      root.userData.assetPath = assetPath;
+      instances.add(root);
+      return root;
+    },
+    release(instance) {
+      if (!instances.delete(instance)) return false;
+      instance.removeFromParent();
+      return true;
+    },
+    instances,
   };
 }
 
@@ -72,13 +98,16 @@ function makeActorFixture({ playerPosition = new THREE.Vector3(0, 1.55, 0), rigS
     reset() { this.position.copy(this.spawnPosition); },
   };
   const receiver = new PlayerCombatDamageReceiver({ player });
+  const weaponLoader = makeWeaponLoader();
+  const weaponRegistry = new NpcWeaponRegistry({ weaponLoader });
   const runtime = new NpcArmamentRuntime({
     actor,
     creaturePack: makePack(),
     damageReceiverProvider: () => receiver,
     playerProvider: () => player,
+    weaponRegistry,
   });
-  return { scene, rigRoot, hand, animationController, visualAdapter, actor, player, receiver, runtime };
+  return { scene, rigRoot, hand, animationController, visualAdapter, actor, player, receiver, runtime, weaponLoader, weaponRegistry };
 }
 
 function sample(runtime, controller, hand, time, x) {
@@ -166,18 +195,20 @@ test('offensive import rejects invalid phases, duplicate identities, unknown cli
 });
 
 test('weapon and loadout contracts validate and resolve without entering Creature Definitions', () => {
-  assert.equal(validateNpcWeaponDefinition(DREADSTONE_LAB_MACE_WEAPON).valid, true);
+  for (const weapon of [DREADSTONE_MACE_WEAPON, DREADSTONE_SWORD_WEAPON, OLD_WORK_KNIFE_WEAPON]) {
+    assert.equal(validateNpcWeaponDefinition(weapon).valid, true);
+  }
   assert.equal(validateNpcLoadout(CREATURE_LAB_MACE_LOADOUT).valid, true);
-  const malformedWeapon = { ...DREADSTONE_LAB_MACE_WEAPON, schema: 'wrong', damage: -1 };
+  const malformedWeapon = { ...DREADSTONE_MACE_WEAPON, schema: 'wrong', damage: -1, assetScale: [1, 1, 1] };
   assert.equal(validateNpcWeaponDefinition(malformedWeapon).valid, false);
   const malformedLoadout = { ...CREATURE_LAB_MACE_LOADOUT, offensiveActionIds: ['same', 'same'] };
   assert.equal(validateNpcLoadout(malformedLoadout).valid, false);
   const registry = new NpcWeaponRegistry();
   const resolved = resolveNpcLoadout({ loadout: CREATURE_LAB_MACE_LOADOUT, weaponRegistry: registry, offensiveActions: capabilities().offensiveActions });
-  assert.equal(resolved.weapon.weaponId, 'dreadstone_lab_mace');
+  assert.equal(resolved.weapon.weaponId, 'dreadstone_mace');
   assert.deepEqual(resolved.compatibleActions.map((entry) => entry.combatActionId), ['humanoid_one_hand_slash_rtl']);
 
-  const incompatibleWeapon = { ...DREADSTONE_LAB_MACE_WEAPON, compatibleSocketRoles: ['MAIN_HAND_L'] };
+  const incompatibleWeapon = { ...DREADSTONE_MACE_WEAPON, compatibleSocketRoles: ['MAIN_HAND_L'] };
   const incompatibleRegistry = new NpcWeaponRegistry({ definitions: [incompatibleWeapon] });
   assert.throws(() => resolveNpcLoadout({ loadout: CREATURE_LAB_MACE_LOADOUT, weaponRegistry: incompatibleRegistry, offensiveActions: capabilities().offensiveActions }), /no compatible Forge offensive Action/);
 });
@@ -265,9 +296,9 @@ test('authored animation controller plays named offensive clips and exposes actu
   controller.dispose();
 });
 
-test('armament transforms weapon-local capsule into retained previous/current world capsules', () => {
+test('armament transforms weapon-local capsule into retained previous/current world capsules', async () => {
   const { runtime, hand } = makeActorFixture();
-  assert.equal(runtime.equip().accepted, true);
+  assert.equal((await runtime.equip()).accepted, true);
   hand.position.x = -0.5;
   runtime.update();
   const first = runtime.getDiagnostics().currentWorldCapsule;
@@ -276,13 +307,13 @@ test('armament transforms weapon-local capsule into retained previous/current wo
   const diagnostics = runtime.getDiagnostics();
   assert.deepEqual(diagnostics.previousWorldCapsule.start, first.start);
   assert.ok(diagnostics.currentWorldCapsule.start[0] > diagnostics.previousWorldCapsule.start[0] + 1.2);
-  assert.equal(diagnostics.currentWorldCapsule.radius, DREADSTONE_LAB_MACE_WEAPON.attackCapsule.radius);
+  assert.equal(diagnostics.currentWorldCapsule.radius, DREADSTONE_MACE_WEAPON.attackCapsule.radius);
   runtime.dispose();
 });
 
-test('Forge WINDUP and RECOVERY never damage while animated ACTIVE intersection does', () => {
+test('Forge WINDUP and RECOVERY never damage while animated ACTIVE intersection does', async () => {
   const { runtime, hand, animationController, receiver } = makeActorFixture();
-  assert.equal(runtime.equip().accepted, true);
+  assert.equal((await runtime.equip()).accepted, true);
   assert.equal(runtime.triggerAttack().accepted, true);
   sample(runtime, animationController, hand, 0.2, -1);
   sample(runtime, animationController, hand, 0.3, 1);
@@ -296,9 +327,9 @@ test('Forge WINDUP and RECOVERY never damage while animated ACTIVE intersection 
   runtime.dispose();
 });
 
-test('physical miss remains zero damage and commitment does not continuously retarget', () => {
+test('physical miss remains zero damage and commitment does not continuously retarget', async () => {
   const { runtime, hand, animationController, receiver, player } = makeActorFixture({ playerPosition: new THREE.Vector3(0, 1.55, 5) });
-  runtime.equip();
+  await runtime.equip();
   runtime.triggerAttack();
   const committedTarget = runtime.getDiagnostics().commitment.targetAtCommit;
   player.position.set(8, 1.55, -8);
@@ -311,9 +342,9 @@ test('physical miss remains zero damage and commitment does not continuously ret
   runtime.dispose();
 });
 
-test('one hit per attack remains enforced and separate animated attacks may hit', () => {
+test('one hit per attack remains enforced and separate animated attacks may hit', async () => {
   const { runtime, hand, animationController, receiver } = makeActorFixture();
-  runtime.equip();
+  await runtime.equip();
   runtime.triggerAttack();
   sample(runtime, animationController, hand, 0.5, -1);
   sample(runtime, animationController, hand, 0.6, 1);
@@ -330,22 +361,19 @@ test('one hit per attack remains enforced and separate animated attacks may hit'
   runtime.dispose();
 });
 
-test('same body can switch to a distinct compatible game-owned loadout', () => {
+test('same body can switch to a distinct compatible game-owned loadout', async () => {
   const blade = {
-    ...structuredClone(DREADSTONE_LAB_MACE_WEAPON),
+    ...structuredClone(DREADSTONE_MACE_WEAPON),
     schema: NPC_WEAPON_SCHEMA,
     weaponId: 'lab_training_blade',
     displayName: 'Lab Training Blade',
     weaponClass: 'ONE_HAND_BLADE',
-    visual: { factoryId: 'lab_training_blade_world_v1' },
+    assetPath: '/assets/weapons/melee/lab_training_blade_fixture.glb',
     damageType: 'slash',
   };
   const registry = new NpcWeaponRegistry({
-    definitions: [DREADSTONE_LAB_MACE_WEAPON, blade],
-    visualFactories: {
-      dreadstone_lab_mace_world_v1: () => new THREE.Group(),
-      lab_training_blade_world_v1: () => new THREE.Group(),
-    },
+    definitions: [DREADSTONE_MACE_WEAPON, blade],
+    weaponLoader: makeWeaponLoader(),
   });
   const { actor, receiver, player } = makeActorFixture();
   const bladeLoadout = {
@@ -355,22 +383,22 @@ test('same body can switch to a distinct compatible game-owned loadout', () => {
     offensiveActionIds: ['humanoid_one_hand_slash_rtl'],
   };
   const runtime = new NpcArmamentRuntime({ actor, creaturePack: makePack(), loadout: bladeLoadout, weaponRegistry: registry, damageReceiverProvider: () => receiver, playerProvider: () => player });
-  assert.equal(runtime.equip().accepted, true);
+  assert.equal((await runtime.equip()).accepted, true);
   assert.equal(runtime.getDiagnostics().weaponId, 'lab_training_blade');
   runtime.setLoadout(CREATURE_LAB_MACE_LOADOUT);
-  assert.equal(runtime.equip().accepted, true);
-  assert.equal(runtime.getDiagnostics().weaponId, 'dreadstone_lab_mace');
+  assert.equal((await runtime.equip()).accepted, true);
+  assert.equal(runtime.getDiagnostics().weaponId, 'dreadstone_mace');
   runtime.dispose();
 });
 
-test('unequip, actor death, definition switch, and disposal remove attachment/runtime state', () => {
+test('unequip, actor death, definition switch, and disposal remove attachment/runtime state', async () => {
   const fixture = makeActorFixture();
   const { runtime, actor, hand } = fixture;
-  runtime.equip();
+  await runtime.equip();
   assert.ok(hand.children.some((child) => child.name.startsWith('DSB_RuntimeSocket_')));
   assert.equal(runtime.unequip().wasEquipped, true);
   assert.equal(hand.children.some((child) => child.name.startsWith('DSB_RuntimeSocket_')), false);
-  runtime.equip();
+  await runtime.equip();
   actor.lifeState = 'dead';
   runtime.update();
   assert.equal(runtime.getDiagnostics().equipped, false);
@@ -379,7 +407,7 @@ test('unequip, actor death, definition switch, and disposal remove attachment/ru
   assert.equal(runtime.disposed, true);
 
   const replacement = makeActorFixture();
-  replacement.runtime.equip();
+  await replacement.runtime.equip();
   replacement.runtime.dispose();
   assert.equal(replacement.hand.children.some((child) => child.name.startsWith('DSB_RuntimeSocket_')), false, 'definition switch disposal must remove attachment');
 });

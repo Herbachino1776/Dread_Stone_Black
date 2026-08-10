@@ -144,10 +144,10 @@ function createHarnessFixture() {
   return { scene, player, receiver, actor, harness };
 }
 
-test('lab harness refuses to recreate the M5 procedural fallback for an unupgraded pack', () => {
+test('lab harness refuses to recreate the M5 procedural fallback for an unupgraded pack', async () => {
   const { receiver, harness } = createHarnessFixture();
   assert.equal(harness.getDiagnostics().capabilityAvailable, false);
-  assert.equal(harness.equip().reason, 'attachment-capability-unavailable');
+  assert.equal((await harness.equip()).reason, 'attachment-capability-unavailable');
   assert.equal(harness.triggerAttack().reason, 'armament-not-equipped');
   assert.equal(receiver.currentHealth, 100);
   assert.equal(harness.resetPlayer().accepted, true);
@@ -166,7 +166,7 @@ test('touch-first offensive controls require no console access', async () => {
     toggleAttackGeometry: () => calls.push('toggleAttackGeometry'),
   };
   const actions = getCreatureLabOffensiveCombatActions(controller, { offensiveCombat: { showAttackGeometry: false, compatibleActions: [{ combatActionId: 'humanoid_one_hand_slash_rtl' }] } });
-  assert.deepEqual(actions.map((action) => action.label), ['Equip Test Weapon', 'humanoid one hand slash rtl', 'Trigger Attack', 'Reset Player', 'Show Attack Geometry']);
+  assert.deepEqual(actions.map((action) => action.label), ['Equip Weapon', 'humanoid one hand slash rtl', 'Trigger Attack', 'Reset Player', 'Show Attack Capsule']);
   for (const action of actions) await action.run();
   assert.deepEqual(calls, ['equipArmament', 'selectOffensiveAction:humanoid_one_hand_slash_rtl', 'triggerAttack', 'resetPlayer', 'toggleAttackGeometry']);
 });

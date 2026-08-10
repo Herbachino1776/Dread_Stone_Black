@@ -1,5 +1,9 @@
 import { NpcArmamentRuntime } from '../combat/NpcArmamentRuntime.js';
-import { CREATURE_LAB_MACE_LOADOUT } from '../combat/NpcLoadout.js';
+import {
+  CREATURE_LAB_MACE_LOADOUT,
+  CREATURE_LAB_WEAPON_LOADOUTS,
+  getCreatureLabLoadoutForWeapon,
+} from '../combat/NpcLoadout.js';
 import { npcWeaponRegistry } from '../combat/NpcWeaponRegistry.js';
 
 // The historical integration name remains stable for Folsom/Creature Lab.
@@ -17,6 +21,7 @@ export class CreatureLabAttackHarness {
     this.damageReceiverProvider = damageReceiverProvider;
     this.weaponRegistry = weaponRegistry;
     this.defaultLoadout = defaultLoadout;
+    this.selectedLoadout = defaultLoadout;
     this.subject = null;
     this.creaturePack = null;
     this.armament = null;
@@ -27,11 +32,12 @@ export class CreatureLabAttackHarness {
 
   get source() { return this.armament?.physicalSource ?? null; }
 
-  setSubject(actor, { pack = null, loadout = this.defaultLoadout } = {}) {
+  setSubject(actor, { pack = null, loadout = this.selectedLoadout } = {}) {
     if (this.disposed) return { accepted: false, reason: 'attack-harness-disposed' };
     this.clearSubject('creature-lab-subject-replaced');
     this.subject = actor ?? null;
     this.creaturePack = pack ?? null;
+    this.selectedLoadout = loadout;
     this.subjectGeneration += 1;
     this.lastClearReason = null;
     if (!this.subject) return { accepted: false, reason: 'creature-lab-subject-unavailable' };
@@ -60,8 +66,8 @@ export class CreatureLabAttackHarness {
     return { accepted: true, reason };
   }
 
-  equip() {
-    return this.armament?.equip?.() ?? { accepted: false, reason: 'creature-lab-armament-unavailable' };
+  async equip() {
+    return await this.armament?.equip?.() ?? { accepted: false, reason: 'creature-lab-armament-unavailable' };
   }
 
   unequip() {
@@ -70,6 +76,27 @@ export class CreatureLabAttackHarness {
 
   selectOffensiveAction(combatActionId) {
     return this.armament?.selectOffensiveAction?.(combatActionId) ?? { accepted: false, reason: 'creature-lab-armament-unavailable' };
+  }
+
+  listWeapons() {
+    return CREATURE_LAB_WEAPON_LOADOUTS.map((loadout) => this.weaponRegistry.require(loadout.mainHandWeaponId));
+  }
+
+  getSelectedWeaponId() {
+    return this.selectedLoadout?.mainHandWeaponId ?? null;
+  }
+
+  selectWeapon(weaponId) {
+    const loadout = getCreatureLabLoadoutForWeapon(weaponId);
+    if (!loadout || !this.weaponRegistry.get(weaponId)) return { accepted: false, reason: `creature-lab-weapon-unavailable:${weaponId}` };
+    this.selectedLoadout = loadout;
+    const result = this.armament?.setLoadout?.(loadout) ?? { accepted: true, loadoutId: loadout.loadoutId };
+    return { ...result, weaponId };
+  }
+
+  setCalibrationOverride(calibration) {
+    return this.armament?.setCalibrationOverride?.(calibration)
+      ?? { accepted: false, reason: 'creature-lab-armament-unavailable' };
   }
 
   triggerAttack() {

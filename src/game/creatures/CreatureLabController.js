@@ -6,6 +6,12 @@ import { CreatureDefinitionRegistry } from './CreatureDefinitionRegistry.js';
 import { CreatureFactory } from './CreatureFactory.js';
 import { CreaturePackRegistry } from './CreaturePackRegistry.js';
 import { CreatureLabSiteMarkerRenderer } from './CreatureLabSiteMarkerRenderer.js';
+import {
+  createCreatureLabHeightResolution,
+  CreatureLabCalibrationStore,
+  labCalibrationToWeaponDefinitionPatch,
+  setLabCalibrationField,
+} from './CreatureLabCalibration.js';
 import { summarizeCreatureDefinition } from './CreatureRuntimePolicies.js';
 
 const DEFAULT_DEFINITION_ID = 'chezwick';
@@ -61,6 +67,7 @@ export class CreatureLabController {
     initialDefinitionId = DEFAULT_DEFINITION_ID,
     initialPackId = null,
     attackHarness = null,
+    calibrationStorage = globalThis.localStorage,
     panelFactory = (options) => new CreatureLabPanel(options),
   } = {}) {
     if (!walkerController) throw new Error('Creature Lab requires one isolated walker lifecycle host.');
@@ -78,8 +85,13 @@ export class CreatureLabController {
     this.initialDefinitionId = initialDefinitionId;
     this.initialPackId = initialPackId;
     this.attackHarness = attackHarness;
+    this.calibrationStore = new CreatureLabCalibrationStore({ storage: calibrationStorage });
     this.panelFactory = panelFactory;
     this.definitionOptions = [];
+    this.weaponOptions = this.attackHarness?.listWeapons?.() ?? [];
+    this.selectedWeaponId = this.attackHarness?.getSelectedWeaponId?.() ?? this.weaponOptions[0]?.weaponId ?? null;
+    this.weaponCalibration = null;
+    this.creatureHeightOverride = null;
     this.selectedDefinition = null;
     this.selectedPack = null;
     this.resolvedCreature = null;
@@ -101,6 +113,8 @@ export class CreatureLabController {
   get actor() { return this.walkerController?.actor ?? null; }
 
   async initialize() {
+    const initialWeapon = this.getSelectedWeaponDefinition();
+    if (initialWeapon) this.weaponCalibration = this.calibrationStore.load(initialWeapon);
     const definitions = this.definitionRegistry.listDefinitions();
     this.definitionOptions = await Promise.all(definitions.map(async (definition) => {
       try {
@@ -167,7 +181,7 @@ export class CreatureLabController {
     return error ? { accepted: false, reason: error.message } : result;
   }
 
-  async selectDefinition(definitionId) {
+  async selectDefinition(definitionId, options = {}) {
     if (this.disposed) return { accepted: false, reason: 'Creature Lab is disposed.' };
     const option = this.definitionOptions.find((entry) => entry.definitionId === definitionId);
     if (!option) return this.recordOperation('selectDefinition', { accepted: false, reason: `Unknown registered definition ${definitionId}.` });
@@ -176,7 +190,14 @@ export class CreatureLabController {
     this.loading = true;
     this.notify();
     try {
-      const resolved = option.resolved ?? await this.creatureFactory.resolve(definitionId);
+      const baseResolved = option.resolved ?? await this.creatureFactory.resolve(definitionId);
+      const sameDefinition = this.selectedDefinition?.definitionId === definitionId;
+      const requestedHeight = Object.hasOwn(options, 'heightOverride')
+        ? options.heightOverride
+        : sameDefinition ? this.creatureHeightOverride : null;
+      const restoreArmament = options.restoreArmament === true
+        && this.attackHarness?.getDiagnostics?.().equipped === true;
+      const resolved = createCreatureLabHeightResolution(baseResolved, requestedHeight);
       const { definition, pack, profile } = resolved;
       this.weaponControllerProvider?.()?.cancel?.('creature-lab-definition-switch');
       this.attackHarness?.clearSubject?.('creature-lab-definition-switch');
@@ -186,6 +207,7 @@ export class CreatureLabController {
       this.selectedPack = pack;
       this.resolvedCreature = resolved;
       this.effectiveProfile = profile;
+      this.creatureHeightOverride = requestedHeight;
       this.selectedSiteId = null;
       this.walkerController.actorFactory = (options) => this.creatureFactory.createActorFromResolved(resolved, options).actor;
       this.walkerController.enabled = true;
@@ -196,6 +218,9 @@ export class CreatureLabController {
       await this.actor.visualAdapter?.ready;
       if (serial !== this.selectionSerial || this.disposed) return { accepted: false, reason: 'Definition selection was superseded.' };
       this.attackHarness?.setSubject?.(this.actor, { pack: this.selectedPack });
+      if (this.selectedWeaponId) this.attackHarness?.selectWeapon?.(this.selectedWeaponId);
+      this.applyWeaponCalibrationToHarness();
+      const armamentRestoreResult = restoreArmament ? await this.attackHarness?.equip?.() : null;
       this.selectedSiteId = this.getProgressiveSites()[0]?.siteId ?? null;
       this.createSiteMarkers();
       this.onSubjectChanged?.(this.getSubjectState());
@@ -204,6 +229,11 @@ export class CreatureLabController {
         definitionId,
         creaturePackId: pack.packId,
         actorInstanceId: this.actor.instanceId,
+        resultingHeight: profile.targetHeight,
+        armamentRestored: armamentRestoreResult?.accepted === true,
+        armamentRestoreReason: restoreArmament && armamentRestoreResult?.accepted !== true
+          ? armamentRestoreResult?.reason ?? 'armament-restore-unavailable'
+          : null,
       });
     } catch (error) {
       this.disposeSiteMarkers();
@@ -239,7 +269,96 @@ export class CreatureLabController {
 
   async respawn() {
     if (!this.selectedDefinition) return this.recordOperation('respawn', { accepted: false, reason: 'No supported definition is selected.' });
-    return this.selectDefinition(this.selectedDefinition.definitionId);
+    return this.selectDefinition(this.selectedDefinition.definitionId, {
+      heightOverride: this.creatureHeightOverride,
+      restoreArmament: true,
+    });
+  }
+
+  getSelectedWeaponDefinition() {
+    return this.weaponOptions.find((weapon) => weapon.weaponId === this.selectedWeaponId) ?? null;
+  }
+
+  applyWeaponCalibrationToHarness() {
+    const definition = this.getSelectedWeaponDefinition();
+    if (!definition || !this.weaponCalibration) return { accepted: false, reason: 'No Creature Lab weapon calibration is selected.' };
+    const patch = labCalibrationToWeaponDefinitionPatch(definition, this.weaponCalibration);
+    return this.attackHarness?.setCalibrationOverride?.(patch)
+      ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' };
+  }
+
+  selectWeapon(weaponId) {
+    const definition = this.weaponOptions.find((weapon) => weapon.weaponId === weaponId);
+    if (!definition) return this.recordOperation('selectWeapon', { accepted: false, reason: `Unknown Creature Lab weapon ${weaponId}.` });
+    const selected = this.attackHarness?.selectWeapon?.(weaponId)
+      ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' };
+    if (selected.accepted === false) return this.recordOperation('selectWeapon', selected);
+    this.selectedWeaponId = weaponId;
+    this.weaponCalibration = this.calibrationStore.load(definition);
+    const applied = this.applyWeaponCalibrationToHarness();
+    return this.recordOperation('selectWeapon', {
+      accepted: true,
+      weaponId,
+      loadoutId: selected.loadoutId,
+      calibrationApplied: applied.accepted === true,
+    });
+  }
+
+  setWeaponCalibrationField(field, value, { notify = false } = {}) {
+    const definition = this.getSelectedWeaponDefinition();
+    if (!definition || !this.weaponCalibration) return { accepted: false, reason: 'No Creature Lab weapon is selected.' };
+    const updated = setLabCalibrationField(this.weaponCalibration, field, value);
+    this.weaponCalibration = this.calibrationStore.save(definition, updated);
+    const applied = this.applyWeaponCalibrationToHarness();
+    this.lastOperation = {
+      operation: 'weaponCalibration',
+      ok: true,
+      result: { accepted: true, weaponId: definition.weaponId, field, value: Number(value), runtimeApplied: applied.accepted === true },
+      error: null,
+      at: new Date().toISOString(),
+    };
+    if (notify) this.notify();
+    return this.lastOperation.result;
+  }
+
+  resetWeaponCalibration() {
+    const definition = this.getSelectedWeaponDefinition();
+    if (!definition) return this.recordOperation('resetWeaponCalibration', { accepted: false, reason: 'No Creature Lab weapon is selected.' });
+    this.weaponCalibration = this.calibrationStore.reset(definition);
+    const applied = this.applyWeaponCalibrationToHarness();
+    return this.recordOperation('resetWeaponCalibration', {
+      accepted: true,
+      weaponId: definition.weaponId,
+      runtimeApplied: applied.accepted === true,
+    });
+  }
+
+  getWeaponCalibrationReadout() {
+    const definition = this.getSelectedWeaponDefinition();
+    return definition && this.weaponCalibration
+      ? labCalibrationToWeaponDefinitionPatch(definition, this.weaponCalibration)
+      : null;
+  }
+
+  async setCreatureHeight(targetHeight) {
+    if (!this.selectedDefinition) return this.recordOperation('creatureHeight', { accepted: false, reason: 'No supported definition is selected.' });
+    const height = Number(targetHeight);
+    try {
+      return await this.selectDefinition(this.selectedDefinition.definitionId, {
+        heightOverride: height,
+        restoreArmament: true,
+      });
+    } catch (error) {
+      return this.recordOperation('creatureHeight', null, error);
+    }
+  }
+
+  async resetCreatureHeight() {
+    if (!this.selectedDefinition) return this.recordOperation('resetCreatureHeight', { accepted: false, reason: 'No supported definition is selected.' });
+    return this.selectDefinition(this.selectedDefinition.definitionId, {
+      heightOverride: null,
+      restoreArmament: true,
+    });
   }
 
   resetDamage() {
@@ -256,9 +375,10 @@ export class CreatureLabController {
       ?? { accepted: false, reason: 'Creature Lab offensive harness is unavailable.' });
   }
 
-  equipArmament() {
-    return this.recordOperation('equipArmament', this.attackHarness?.equip?.()
-      ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' });
+  async equipArmament() {
+    const result = await this.attackHarness?.equip?.()
+      ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' };
+    return this.recordOperation('equipArmament', result);
   }
 
   unequipArmament() {
@@ -539,6 +659,18 @@ export class CreatureLabController {
       definition: this.selectedDefinition,
       pack: this.selectedPack,
       profile: this.effectiveProfile,
+      weapons: this.weaponOptions.map((weapon) => ({
+        weaponId: weapon.weaponId,
+        displayName: weapon.displayName,
+        assetPath: weapon.assetPath,
+        weaponClass: weapon.weaponClass,
+      })),
+      selectedWeaponId: this.selectedWeaponId,
+      weaponCalibration: this.weaponCalibration ? structuredClone(this.weaponCalibration) : null,
+      weaponCalibrationReadout: this.getWeaponCalibrationReadout(),
+      productionCreatureHeight: this.selectedDefinition?.presentation?.targetHeight ?? null,
+      resultingCreatureHeight: this.effectiveProfile?.targetHeight ?? null,
+      creatureHeightOverride: this.creatureHeightOverride,
       lastOperation: this.lastOperation,
       lastPhysicalTargetingDecision: this.getSiteTargeting()?.getDiagnostics?.().lastPhysicalTargetingDecision ?? null,
       offensiveCombat: this.attackHarness?.getDiagnostics?.() ?? { enabled: false },
@@ -560,6 +692,11 @@ export class CreatureLabController {
       selectedDisplayName: this.selectedDefinition?.displayName ?? null,
       effectiveCreatureDefinition: summarizeCreatureDefinition(this.selectedDefinition),
       effectiveProfileName: this.effectiveProfile?.name ?? null,
+      productionCreatureHeight: this.selectedDefinition?.presentation?.targetHeight ?? null,
+      resultingCreatureHeight: this.effectiveProfile?.targetHeight ?? null,
+      creatureHeightOverride: this.creatureHeightOverride,
+      selectedWeaponId: this.selectedWeaponId,
+      weaponCalibration: this.getWeaponCalibrationReadout(),
       actorInstanceId: this.actor?.instanceId ?? null,
       actorLifeState: this.actor?.lifeState ?? null,
       activeAnimation: actorDiagnostics?.visualAdapter?.animation?.activeAnimation
@@ -606,6 +743,11 @@ export class CreatureLabController {
       equipArmament: () => this.equipArmament(),
       unequipArmament: () => this.unequipArmament(),
       selectOffensiveAction: (combatActionId) => this.selectOffensiveAction(combatActionId),
+      selectWeapon: (weaponId) => this.selectWeapon(weaponId),
+      setWeaponCalibrationField: (field, value) => this.setWeaponCalibrationField(field, value, { notify: true }),
+      resetWeaponCalibration: () => this.resetWeaponCalibration(),
+      setCreatureHeight: (height) => this.setCreatureHeight(height),
+      resetCreatureHeight: () => this.resetCreatureHeight(),
       resetPlayer: () => this.resetPlayer(),
       toggleAttackGeometry: () => this.toggleAttackGeometry(),
       diagnostics: () => this.getDiagnostics(),

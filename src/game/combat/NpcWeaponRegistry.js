@@ -1,10 +1,11 @@
-import * as THREE from 'three';
 import { FORGE_SOCKET_ROLES, FORGE_WEAPON_CLASSES } from '../../contracts/ForgeRuntimeArmament.js';
+import { worldWeaponGlbLoader } from './WorldWeaponGlbLoader.js';
 
 export const NPC_WEAPON_SCHEMA = 'dreadstone.npc_weapon.v1';
-export const NPC_WEAPON_VISUAL_FACTORY_SCHEMA = 'dreadstone.npc_weapon_visual_factory.v1';
 
 const STABLE_ID = /^[a-z0-9]+(?:[a-z0-9_-]*[a-z0-9])?$/;
+const GAME_GLB_ASSET_PATH = /^\/assets\/[a-zA-Z0-9_./-]+\.glb$/;
+const QUARTER_TURN_X = Object.freeze([Math.SQRT1_2, 0, 0, Math.SQRT1_2]);
 
 function isRecord(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -12,6 +13,22 @@ function isRecord(value) {
 
 function finiteVector(value, length) {
   return Array.isArray(value) && value.length === length && value.every(Number.isFinite);
+}
+
+function freezeWeapon(definition) {
+  return Object.freeze({
+    ...definition,
+    compatibleSocketRoles: Object.freeze([...definition.compatibleSocketRoles]),
+    gripTransform: Object.freeze({
+      position: Object.freeze([...definition.gripTransform.position]),
+      quaternion: Object.freeze([...definition.gripTransform.quaternion]),
+    }),
+    attackCapsule: Object.freeze({
+      start: Object.freeze([...definition.attackCapsule.start]),
+      end: Object.freeze([...definition.attackCapsule.end]),
+      radius: definition.attackCapsule.radius,
+    }),
+  });
 }
 
 export function validateNpcWeaponDefinition(definition) {
@@ -22,9 +39,10 @@ export function validateNpcWeaponDefinition(definition) {
   requireCondition(definition.schema === NPC_WEAPON_SCHEMA, 'weapon.schema', `must be ${NPC_WEAPON_SCHEMA}`);
   requireCondition(typeof definition.weaponId === 'string' && STABLE_ID.test(definition.weaponId), 'weapon.weaponId', 'must be a stable lowercase identifier');
   requireCondition(typeof definition.displayName === 'string' && definition.displayName.length > 0, 'weapon.displayName', 'must be a non-empty string');
+  requireCondition(typeof definition.assetPath === 'string' && GAME_GLB_ASSET_PATH.test(definition.assetPath) && !definition.assetPath.includes('..'), 'weapon.assetPath', 'must be an absolute game-owned .glb asset path');
+  requireCondition(Number.isFinite(definition.assetScale) && definition.assetScale > 0, 'weapon.assetScale', 'must be one finite positive uniform scalar');
   requireCondition(FORGE_WEAPON_CLASSES.includes(definition.weaponClass), 'weapon.weaponClass', 'is unsupported');
   requireCondition(Array.isArray(definition.compatibleSocketRoles) && definition.compatibleSocketRoles.length > 0 && definition.compatibleSocketRoles.every((role) => FORGE_SOCKET_ROLES.includes(role)) && new Set(definition.compatibleSocketRoles).size === definition.compatibleSocketRoles.length, 'weapon.compatibleSocketRoles', 'must contain supported unique roles');
-  requireCondition(isRecord(definition.visual) && typeof definition.visual.factoryId === 'string' && STABLE_ID.test(definition.visual.factoryId), 'weapon.visual.factoryId', 'must be a stable game-owned factory ID');
   requireCondition(isRecord(definition.gripTransform), 'weapon.gripTransform', 'must be an object');
   if (isRecord(definition.gripTransform)) {
     requireCondition(finiteVector(definition.gripTransform.position, 3), 'weapon.gripTransform.position', 'must be a finite 3-vector');
@@ -43,59 +61,64 @@ export function validateNpcWeaponDefinition(definition) {
   return { valid: errors.length === 0, errors };
 }
 
-export function createLabWorldMaceVisual() {
-  const root = new THREE.Group();
-  root.name = 'DreadstoneLabNpcMaceWorldVisual';
-  root.userData.npcWorldEquipment = true;
-  const shaft = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.035, 0.045, 0.82, 8),
-    new THREE.MeshStandardMaterial({ color: 0x36281e, roughness: 0.9, metalness: 0.02 }),
-  );
-  shaft.position.y = 0.41;
-  const head = new THREE.Mesh(
-    new THREE.DodecahedronGeometry(0.15, 0),
-    new THREE.MeshStandardMaterial({ color: 0x3f4242, roughness: 0.62, metalness: 0.58 }),
-  );
-  head.position.y = 0.91;
-  const pommel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.055, 0.055, 0.16, 8),
-    new THREE.MeshStandardMaterial({ color: 0x17110e, roughness: 0.95 }),
-  );
-  pommel.position.y = 0.08;
-  root.add(shaft, head, pommel);
-  root.traverse((object) => { if (object.isMesh) object.castShadow = true; });
-  return root;
-}
-
-export const DREADSTONE_LAB_MACE_WEAPON = Object.freeze({
+export const DREADSTONE_MACE_WEAPON = freezeWeapon({
   schema: NPC_WEAPON_SCHEMA,
-  weaponId: 'dreadstone_lab_mace',
-  displayName: 'Dreadstone Lab Mace',
+  weaponId: 'dreadstone_mace',
+  displayName: 'Dreadstone Mace',
+  assetPath: '/assets/weapons/melee/dreadmacev001_mobile_1k.glb',
+  assetScale: 1,
   weaponClass: 'ONE_HAND_BLUNT',
-  visual: Object.freeze({ factoryId: 'dreadstone_lab_mace_world_v1' }),
-  compatibleSocketRoles: Object.freeze(['MAIN_HAND_R']),
-  gripTransform: Object.freeze({
-    position: Object.freeze([0, 0, 0]),
-    quaternion: Object.freeze([0, 0, 0, 1]),
-  }),
-  attackCapsule: Object.freeze({
-    start: Object.freeze([0, 0.67, 0]),
-    end: Object.freeze([0, 0.98, 0]),
-    radius: 0.16,
-  }),
+  compatibleSocketRoles: ['MAIN_HAND_R'],
+  gripTransform: { position: [0, 0, 0], quaternion: QUARTER_TURN_X },
+  attackCapsule: { start: [0, 0, -0.48], end: [0, 0, -0.29], radius: 0.13 },
   damage: 34,
   damageType: 'heavy-blunt',
   impactStrength: 0.82,
   reachCategory: 'medium',
 });
 
+export const DREADSTONE_SWORD_WEAPON = freezeWeapon({
+  schema: NPC_WEAPON_SCHEMA,
+  weaponId: 'dreadstone_sword',
+  displayName: 'Dreadstone Sword',
+  assetPath: '/assets/weapons/melee/dreadstone_sword_v002.glb',
+  assetScale: 1,
+  weaponClass: 'ONE_HAND_BLADE',
+  compatibleSocketRoles: ['MAIN_HAND_R'],
+  gripTransform: { position: [0, 0, 0], quaternion: QUARTER_TURN_X },
+  attackCapsule: { start: [0, 0, -0.82], end: [0, 0, -0.16], radius: 0.055 },
+  damage: 30,
+  damageType: 'slash',
+  impactStrength: 0.7,
+  reachCategory: 'long',
+});
+
+export const OLD_WORK_KNIFE_WEAPON = freezeWeapon({
+  schema: NPC_WEAPON_SCHEMA,
+  weaponId: 'old_work_knife',
+  displayName: 'Old Work Knife',
+  assetPath: '/assets/weapons/melee/old_work_knife_v004.glb',
+  assetScale: 1,
+  weaponClass: 'ONE_HAND_BLADE',
+  compatibleSocketRoles: ['MAIN_HAND_R'],
+  gripTransform: { position: [0, 0, 0], quaternion: QUARTER_TURN_X },
+  attackCapsule: { start: [0, 0, -0.29], end: [0, 0, -0.065], radius: 0.025 },
+  damage: 20,
+  damageType: 'slash',
+  impactStrength: 0.42,
+  reachCategory: 'short',
+});
+
+export const PRODUCTION_WORLD_WEAPONS = Object.freeze([
+  DREADSTONE_MACE_WEAPON,
+  DREADSTONE_SWORD_WEAPON,
+  OLD_WORK_KNIFE_WEAPON,
+]);
+
 export class NpcWeaponRegistry {
-  constructor({
-    definitions = [DREADSTONE_LAB_MACE_WEAPON],
-    visualFactories = { dreadstone_lab_mace_world_v1: createLabWorldMaceVisual },
-  } = {}) {
+  constructor({ definitions = PRODUCTION_WORLD_WEAPONS, weaponLoader = worldWeaponGlbLoader } = {}) {
     this.definitions = new Map();
-    this.visualFactories = new Map(Object.entries(visualFactories));
+    this.weaponLoader = weaponLoader;
     for (const definition of definitions) this.register(definition);
   }
 
@@ -103,9 +126,9 @@ export class NpcWeaponRegistry {
     const validation = validateNpcWeaponDefinition(definition);
     if (!validation.valid) throw new Error(`Invalid ${NPC_WEAPON_SCHEMA}: ${validation.errors.join('; ')}`);
     if (this.definitions.has(definition.weaponId)) throw new Error(`NPC weapon ${definition.weaponId} is duplicated`);
-    if (!this.visualFactories.has(definition.visual.factoryId)) throw new Error(`NPC weapon ${definition.weaponId} references unknown visual factory ${definition.visual.factoryId}`);
-    this.definitions.set(definition.weaponId, definition);
-    return definition;
+    const stored = Object.isFrozen(definition) ? definition : freezeWeapon(structuredClone(definition));
+    this.definitions.set(stored.weaponId, stored);
+    return stored;
   }
 
   get(weaponId) {
@@ -118,13 +141,17 @@ export class NpcWeaponRegistry {
     return definition;
   }
 
-  createVisual(definitionOrId) {
+  async createVisual(definitionOrId) {
     const definition = typeof definitionOrId === 'string' ? this.require(definitionOrId) : definitionOrId;
-    const factory = this.visualFactories.get(definition.visual.factoryId);
-    if (!factory) throw new Error(`NPC weapon visual factory ${definition.visual.factoryId} is unavailable`);
-    const visual = factory(definition);
-    if (!visual?.isObject3D) throw new Error(`NPC weapon visual factory ${definition.visual.factoryId} returned no Object3D`);
-    return visual;
+    try {
+      return await this.weaponLoader.instantiate(definition.assetPath);
+    } catch (error) {
+      throw new Error(`NPC weapon ${definition.weaponId} failed to load ${definition.assetPath}: ${error.message}`, { cause: error });
+    }
+  }
+
+  disposeVisual(visual) {
+    return this.weaponLoader.release?.(visual) === true;
   }
 
   list() {

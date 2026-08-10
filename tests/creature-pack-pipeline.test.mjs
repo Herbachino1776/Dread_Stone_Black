@@ -284,15 +284,16 @@ test('import rejects malformed progressive site records without fixing the Forge
 });
 
 test('registry and descriptor output are deterministic and match committed generated files', async () => {
+  const normalizeLineEndings = (value) => value.replace(/\r\n/g, '\n');
   const packs = await loadProductionPacks();
   const first = createCreaturePackRegistry(packs, { repositoryRoot: DEFAULT_REPOSITORY_ROOT, generatedDirectory: DEFAULT_GENERATED_DIRECTORY });
   const second = createCreaturePackRegistry([...packs].reverse(), { repositoryRoot: DEFAULT_REPOSITORY_ROOT, generatedDirectory: DEFAULT_GENERATED_DIRECTORY });
   assert.equal(serializeGeneratedJson(first), serializeGeneratedJson(second));
   assert.equal(validateCreaturePackRegistry(first).valid, true);
   assert.deepEqual(first.packs.map((entry) => entry.packId), ['chezwick_damage_v001', 'dread_ram_god_damage_v001', 'dreadguard_damage_v001']);
-  assert.equal(await readFile(path.join(DEFAULT_GENERATED_DIRECTORY, 'index.json'), 'utf8'), serializeGeneratedJson(first));
+  assert.equal(normalizeLineEndings(await readFile(path.join(DEFAULT_GENERATED_DIRECTORY, 'index.json'), 'utf8')), serializeGeneratedJson(first));
   for (const pack of packs) {
-    assert.equal(await readFile(path.join(DEFAULT_GENERATED_DIRECTORY, `${pack.packId}.json`), 'utf8'), serializeGeneratedJson(pack));
+    assert.equal(normalizeLineEndings(await readFile(path.join(DEFAULT_GENERATED_DIRECTORY, `${pack.packId}.json`), 'utf8')), serializeGeneratedJson(pack));
   }
 
   const repeated = await importCreaturePack({

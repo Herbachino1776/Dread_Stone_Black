@@ -42,20 +42,54 @@ export class RuntimeAttachmentSocketResolver {
       reciprocalScale(worldScale.z),
     );
     socketFrame.updateWorldMatrix(true, true);
-    this.binding = { socket, bone, socketFrame, equipmentFrame, weaponRoot: null };
+    this.binding = {
+      socket,
+      bone,
+      socketFrame,
+      equipmentFrame,
+      gripFrame: null,
+      assetFrame: null,
+      weaponRoot: null,
+    };
     return this.binding;
   }
 
-  attachWeapon(weaponRoot, gripTransform) {
+  attachWeapon(weaponRoot, gripTransform, assetScale = 1) {
     if (!this.binding) throw new Error('Resolve an attachment socket before attaching equipment');
     if (!weaponRoot?.isObject3D) throw new Error('NPC weapon visual must be an Object3D');
     if (this.binding.weaponRoot) throw new Error('An NPC weapon is already attached');
-    weaponRoot.position.fromArray(gripTransform.position);
-    weaponRoot.quaternion.fromArray(gripTransform.quaternion).normalize();
-    this.binding.equipmentFrame.add(weaponRoot);
+    if (!(Number.isFinite(assetScale) && assetScale > 0)) throw new Error('NPC weapon assetScale must be one positive uniform scalar');
+
+    // Explicit transform order:
+    // animated hand -> Forge socket -> game grip -> uniform asset scale -> GLB.
+    // Keeping translation on its own frame prevents scale from changing grip position.
+    const gripFrame = new THREE.Group();
+    gripFrame.name = `DSB_RuntimeWeaponGrip_${this.binding.socket.socketId}`;
+    gripFrame.position.fromArray(gripTransform.position);
+    gripFrame.quaternion.fromArray(gripTransform.quaternion).normalize();
+    const assetFrame = new THREE.Group();
+    assetFrame.name = `DSB_RuntimeWeaponAssetScale_${this.binding.socket.socketId}`;
+    assetFrame.scale.setScalar(assetScale);
+    assetFrame.add(weaponRoot);
+    gripFrame.add(assetFrame);
+    this.binding.equipmentFrame.add(gripFrame);
     this.binding.socketFrame.updateWorldMatrix(true, true);
+    this.binding.gripFrame = gripFrame;
+    this.binding.assetFrame = assetFrame;
     this.binding.weaponRoot = weaponRoot;
     return weaponRoot;
+  }
+
+  updateWeaponTransform(gripTransform, assetScale) {
+    if (!this.binding?.weaponRoot || !this.binding.gripFrame || !this.binding.assetFrame) {
+      throw new Error('Attach an NPC weapon before updating its transform');
+    }
+    if (!(Number.isFinite(assetScale) && assetScale > 0)) throw new Error('NPC weapon assetScale must be one positive uniform scalar');
+    this.binding.gripFrame.position.fromArray(gripTransform.position);
+    this.binding.gripFrame.quaternion.fromArray(gripTransform.quaternion).normalize();
+    this.binding.assetFrame.scale.setScalar(assetScale);
+    this.binding.socketFrame.updateWorldMatrix(true, true);
+    return this.binding;
   }
 
   dispose() {
