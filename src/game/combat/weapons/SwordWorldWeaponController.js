@@ -184,7 +184,7 @@ function makePrimitiveRuntime(name) {
 }
 
 export class SwordWorldWeaponController {
-  constructor({ app, scene, camera, viewmodelAnchor = null, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, edgeSweepObserver = null, outdoorLightingDirector = null, visualAssetLoader = loadDreadstoneSwordAsset, bindPointerInput = true } = {}) {
+  constructor({ app, scene, camera, viewmodelAnchor = null, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, inputAllowedProvider = null, edgeSweepObserver = null, outdoorLightingDirector = null, visualAssetLoader = loadDreadstoneSwordAsset, bindPointerInput = true } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.scene = scene;
@@ -201,6 +201,7 @@ export class SwordWorldWeaponController {
     this.ownsCombatDirector = combatDirector == null;
     this.weaponContactRouter = new WeaponContactRouter({ combatRouter, fallbackActor: actor, fallbackDirector: this.combatDirector, cameraFeedback: feedback });
     this.contactActivationProvider = contactActivationProvider;
+    this.inputAllowedProvider = inputAllowedProvider;
     this.edgeSweepObserver = edgeSweepObserver;
     this.outdoorLightingDirector = outdoorLightingDirector;
     this.visualAssetLoader = visualAssetLoader;
@@ -491,7 +492,7 @@ export class SwordWorldWeaponController {
   }
 
   pointerDown(event) {
-    if (this.gripPointerId != null || !this.isEquipped() || event.target?.closest?.(DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR) || !this.projectGrabHit(event.clientX, event.clientY, this.viewport)) return;
+    if (this.inputAllowedProvider?.() === false || this.gripPointerId != null || !this.isEquipped() || event.target?.closest?.(DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR) || !this.projectGrabHit(event.clientX, event.clientY, this.viewport)) return;
     event.preventDefault();
     event.stopImmediatePropagation?.();
     this.acquireGrip(event.pointerId, event.clientX, event.clientY, performance.now());
@@ -518,7 +519,7 @@ export class SwordWorldWeaponController {
   }
 
   acquireGrip(pointerId, clientX, clientY, timeMs = performance.now()) {
-    if (!this.isEquipped() || !this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
+    if (this.inputAllowedProvider?.() === false || !this.isEquipped() || !this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
     if (this.entry) this.state = SWORD_IMPALEMENT_STATES.embedded;
     else if (this.state !== SWORD_IMPALEMENT_STATES.returning) this.state = SWORD_IMPALEMENT_STATES.ready;
     this.edgeSweepObserver?.beginGesture?.({ pointerId, controller: this });

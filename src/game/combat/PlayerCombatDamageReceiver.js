@@ -1,9 +1,6 @@
 import * as THREE from 'three';
 
-export const PLAYER_COMBAT_HEALTH = Object.freeze({
-  maximum: 100,
-  labAttackDamage: 34,
-});
+export { PLAYER_COMBAT_HEALTH } from './PlayerCombatState.js';
 
 const MAX_RETAINED_ATTACK_IDENTITIES = 128;
 
@@ -22,11 +19,14 @@ export class PlayerCombatDamageReceiver {
     player = null,
     hudHost = null,
     feedback = null,
-    maximumHealth = PLAYER_COMBAT_HEALTH.maximum,
+    combatState = null,
     onDeath = null,
     onReset = null,
   } = {}) {
-    this.maximumHealth = Math.max(1, Number(maximumHealth) || PLAYER_COMBAT_HEALTH.maximum);
+    if (!combatState || typeof combatState.applyDamage !== 'function' || typeof combatState.reset !== 'function') {
+      throw new Error('PlayerCombatDamageReceiver requires the game-owned PlayerCombatState authority.');
+    }
+    this.combatState = combatState;
     this.hudHost = hudHost;
     this.feedback = feedback;
     this.onDeath = onDeath;
@@ -35,6 +35,10 @@ export class PlayerCombatDamageReceiver {
     this.disposed = false;
     this.reset({ notify: false });
   }
+
+  get maximumHealth() { return this.combatState.maximumHealth; }
+  get currentHealth() { return this.combatState.currentHealth; }
+  get dead() { return this.combatState.dead; }
 
   bindPlayer(player) {
     if (this.player && this.player.combatDamageReceiver === this) delete this.player.combatDamageReceiver;
@@ -76,9 +80,13 @@ export class PlayerCombatDamageReceiver {
     const identity = String(attackIdentity);
     if (this.acceptedAttackIdentities.has(identity)) return this.reject('attack-already-accepted');
 
-    const previousHealth = this.currentHealth;
-    this.currentHealth = Math.max(0, this.currentHealth - damage);
-    this.dead = this.currentHealth <= 0;
+    const damageResult = this.combatState.applyDamage({
+      amount: damage,
+      source: sourceIdentity(source),
+      damageType,
+      attackIdentity: identity,
+    });
+    if (!damageResult.accepted) return this.reject(damageResult.reason);
     this.acceptedAttackIdentities.add(identity);
     if (this.acceptedAttackIdentities.size > MAX_RETAINED_ATTACK_IDENTITIES) {
       const oldest = this.acceptedAttackIdentities.values().next().value;
@@ -93,12 +101,11 @@ export class PlayerCombatDamageReceiver {
       impactDirection: impactDirection.clone().normalize(),
       impactStrength: strength,
       attackIdentity: identity,
-      previousHealth,
-      currentHealth: this.currentHealth,
-      lethal: this.dead,
+      previousHealth: damageResult.previousHealth,
+      currentHealth: damageResult.currentHealth,
+      lethal: damageResult.lethal,
     };
     this.lastRejectionReason = null;
-    this.hudHost?.updateVitals?.({ hp: this.currentHealth });
     this.hudHost?.hud?.flashDamage?.();
     this.feedback?.shake?.({
       durationMs: this.dead ? 520 : 340,
@@ -107,14 +114,14 @@ export class PlayerCombatDamageReceiver {
       polarity: 1,
       damping: this.dead ? 12 : 18,
     });
-    if (this.dead) this.onDeath?.(this.getDiagnostics());
+    if (damageResult.lethal) this.onDeath?.(this.getDiagnostics());
     return {
       accepted: true,
       attackIdentity: identity,
-      damageApplied: previousHealth - this.currentHealth,
-      previousHealth,
-      currentHealth: this.currentHealth,
-      lethal: this.dead,
+      damageApplied: damageResult.damageApplied,
+      previousHealth: damageResult.previousHealth,
+      currentHealth: damageResult.currentHealth,
+      lethal: damageResult.lethal,
     };
   }
 
@@ -130,18 +137,14 @@ export class PlayerCombatDamageReceiver {
   }
 
   reset({ notify = true } = {}) {
-    this.currentHealth = this.maximumHealth;
-    this.dead = false;
     this.acceptedAttackIdentities = new Set();
     this.acceptedImpactCount = 0;
     this.rejectedImpactCount = 0;
     this.lastImpact = null;
     this.lastRejectionReason = null;
-    if (notify) {
-      this.hudHost?.updateVitals?.({ hp: this.currentHealth });
-      this.onReset?.(this.getDiagnostics());
-    }
-    return { accepted: true, currentHealth: this.currentHealth, lethal: false };
+    const result = this.combatState.reset({ notify, reason: 'damage-receiver-reset' });
+    if (notify && result.accepted) this.onReset?.(this.getDiagnostics());
+    return result;
   }
 
   getDiagnostics() {
@@ -149,6 +152,7 @@ export class PlayerCombatDamageReceiver {
       currentHealth: this.currentHealth,
       maximumHealth: this.maximumHealth,
       dead: this.dead,
+      authoritativeState: this.combatState.getDiagnostics(),
       acceptedImpactCount: this.acceptedImpactCount,
       rejectedImpactCount: this.rejectedImpactCount,
       retainedAttackIdentityCount: this.acceptedAttackIdentities.size,

@@ -19,6 +19,7 @@ import {
   validateNpcWeaponDefinition,
 } from '../src/game/combat/NpcWeaponRegistry.js';
 import { PlayerCombatDamageReceiver } from '../src/game/combat/PlayerCombatDamageReceiver.js';
+import { PlayerCombatState } from '../src/game/combat/PlayerCombatState.js';
 import { RuntimeAttachmentSocketResolver } from '../src/game/combat/RuntimeAttachmentSocketResolver.js';
 import { HUMANOID_ANIMATION_STATES, HumanoidAnimationPackController } from '../src/game/combat/HumanoidAnimationPackController.js';
 
@@ -97,7 +98,7 @@ function makeActorFixture({ playerPosition = new THREE.Vector3(0, 1.55, 0), rigS
     collisionWorld: { playerRadius: 0.34 },
     reset() { this.position.copy(this.spawnPosition); },
   };
-  const receiver = new PlayerCombatDamageReceiver({ player });
+  const receiver = new PlayerCombatDamageReceiver({ combatState: new PlayerCombatState(), player });
   const weaponLoader = makeWeaponLoader();
   const weaponRegistry = new NpcWeaponRegistry({ weaponLoader });
   const runtime = new NpcArmamentRuntime({

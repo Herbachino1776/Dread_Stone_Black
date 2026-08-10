@@ -33,6 +33,7 @@
     "validate:m6-armament": "node --test tests/offensive-armament-runtime.test.mjs tests/m66-real-weapon-pipeline.test.mjs",
     "validate:m66-weapons": "node --test tests/m66-real-weapon-pipeline.test.mjs",
     "validate:m67-enemy-presets": "node --test tests/enemy-preset.test.mjs",
+    "validate:m7-combat-brain": "node --test tests/m7-combat-brain.test.mjs",
     "validate:combat": "node --test tests/offensive-armament-runtime.test.mjs tests/m66-real-weapon-pipeline.test.mjs tests/combat-reciprocity-foundation.test.mjs tests/progressive-damage-site-targeting.test.mjs tests/progressive-damage-site-assets.test.mjs tests/dread-ram-god-integration.test.mjs tests/creature-lab-runtime.test.mjs tests/chezwick-integration.test.mjs tests/accepted-combat-audio.test.mjs tests/dreadmace-vertical-slice.test.mjs tests/combat-foundation.test.mjs tests/puncture-only-weapons.test.mjs tests/combat-walker.test.mjs tests/combat-showcase-polish.test.mjs tests/folsom-combat-walker.test.mjs tests/folsom-combat-showcase.test.mjs tests/dreadguard-damage-segments.test.mjs tests/knife-wound-decals.test.mjs tests/slash-wound-visual.test.mjs tests/close-combat-torch-lighting.test.mjs tests/blood-chroma-material.test.mjs && node scripts/validate-combat.mjs"
   },
   "dependencies": {

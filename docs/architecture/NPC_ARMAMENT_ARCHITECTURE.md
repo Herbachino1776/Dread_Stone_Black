@@ -1,6 +1,10 @@
 # NPC armament architecture
 
-Milestone 6.7 adds registered production-neutral loadout IDs and immutable Enemy Preset weapon calibration on top of this M6 runtime. See [ENEMY_PRESET_ARCHITECTURE.md](ENEMY_PRESET_ARCHITECTURE.md).
+Milestone 7 adds a production-neutral minimal combat brain that drives this
+runtime without replacing any of its execution authority. See
+[MINIMAL_ENEMY_COMBAT_BRAIN.md](MINIMAL_ENEMY_COMBAT_BRAIN.md). Milestone 6.7
+added registered loadout IDs and immutable Enemy Preset weapon calibration; see
+[ENEMY_PRESET_ARCHITECTURE.md](ENEMY_PRESET_ARCHITECTURE.md).
 
 Milestone 6 establishes animated armed-creature execution without adding AI,
 loot, economy, or permanent weapons to Creature Definitions.

@@ -1,6 +1,12 @@
 # Combat Reciprocity Foundation
 
-Milestone 6 supersedes the temporary Creature Lab procedural swing with the
+Milestone 7 moves player combat HP/death into the game-owned
+`PlayerCombatState` and adds the first autonomous consumer of the surviving
+physical-hit chain. `PlayerCombatDamageReceiver` is now only the physical
+impact adapter and attack-identity dedupe boundary. See
+[MINIMAL_ENEMY_COMBAT_BRAIN.md](MINIMAL_ENEMY_COMBAT_BRAIN.md).
+
+Milestone 6 superseded the temporary Creature Lab procedural swing with the
 Forge-authored socket/offensive Action and game-owned NPC armament path. See
 [NPC_ARMAMENT_ARCHITECTURE.md](NPC_ARMAMENT_ARCHITECTURE.md). The M5
 `PhysicalAttackSource` and player receiver remain the downstream physical-hit
@@ -20,7 +26,17 @@ Creature Lab trigger and deterministic pose driver
 
 The inspected runtime previously had a static 100 HP HUD, `Hud.flashDamage`, bounded `Feedback.shake`, and `Game.isPlayerDead` movement gating, but no authoritative player HP mutation. `SurvivalHost.applyStarvationDamage` remains intentionally empty and is not a competing health model.
 
-`PlayerCombatDamageReceiver` is the explicit combat entry point. In M5, `Game` creates it only for explicit Creature Lab sessions and binds it to the current `PlayerController`. It owns maximum/current combat HP, accepted attack identities, the last finite impact record, and the lethal transition. An accepted impact contains:
+`PlayerCombatState` is the one game-owned combat HP/life authority. It owns
+maximum/current HP, alive/dead state, damage application, the idempotent death
+transition, dev reset/revive, and subscriptions for HUD/input/runtime consumers.
+It is intentionally not saved in M7.
+
+`PlayerCombatDamageReceiver` remains the explicit physical combat entry point.
+`Game` creates it only for explicit Creature Lab sessions and binds it to the
+current `PlayerController`, but supplies the same game-owned
+`PlayerCombatState` used by HUD and living-player gates. The receiver owns only
+accepted attack identities, physical hurt-capsule resolution, impact
+diagnostics, and accepted-hit feedback. An accepted impact contains:
 
 - `source`
 - `damageAmount`
@@ -30,7 +46,15 @@ The inspected runtime previously had a static 100 HP HUD, `Hud.flashDamage`, bou
 - `impactStrength`
 - `attackIdentity`
 
-It rejects invalid/non-finite data, missing identities, duplicate identities, and impacts after death. Acceptance updates the existing HP HUD, damage flash, camera response, and `Game.isPlayerDead`. Lethal damage stops player movement and ordinary player action dispatch while the lab continues rendering and updating. `Reset Player` restores 100 HP, clears identity ownership, clears death, and calls the existing player spawn reset. Combat HP and death are not saved.
+It rejects invalid/non-finite data, missing identities, duplicate identities,
+and impacts after death, then delegates accepted damage to
+`PlayerCombatState.applyDamage()`. State subscriptions update the existing HP
+HUD and living-player gate; the receiver retains damage flash and camera
+response. Lethal damage stops player movement, ordinary action dispatch, and
+held physical/combat-tool input while the lab continues rendering and updating.
+`Reset Player` restores 100 HP/alive, clears receiver and source attack
+ownership, resets held input authority, and calls the existing player spawn
+reset. There is no second Creature Lab HP model.
 
 The temporary lab attack deals 34 damage against 100 HP, so three clean hits kill. This tuning is centralized in `PLAYER_COMBAT_HEALTH` and `CREATURE_LAB_ATTACK_TUNING` and is not a progression-balance contract.
 

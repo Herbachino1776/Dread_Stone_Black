@@ -73,7 +73,7 @@ function setLine(line, start, end) {
 }
 
 export class WorldKnifeCombatController {
-  constructor({ app, scene, camera, viewmodelAnchor = null, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, bloodEffects = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, outdoorLightingDirector = null, visualAssetLoader = loadOldWorkKnifeAsset, bindPointerInput = true } = {}) {
+  constructor({ app, scene, camera, viewmodelAnchor = null, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, bloodEffects = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, inputAllowedProvider = null, outdoorLightingDirector = null, visualAssetLoader = loadOldWorkKnifeAsset, bindPointerInput = true } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.scene = scene;
@@ -93,6 +93,7 @@ export class WorldKnifeCombatController {
     if (feedback) this.combatDirector.setCameraFeedback(feedback);
     this.weaponContactRouter = new WeaponContactRouter({ combatRouter, fallbackActor: actor, fallbackDirector: this.combatDirector, cameraFeedback: feedback });
     this.contactActivationProvider = contactActivationProvider;
+    this.inputAllowedProvider = inputAllowedProvider;
     this.outdoorLightingDirector = outdoorLightingDirector;
     this.visualAssetLoader = visualAssetLoader;
     this.bindPointerInput = bindPointerInput;
@@ -474,7 +475,7 @@ export class WorldKnifeCombatController {
   }
 
   pointerDown(event) {
-    if (this.gripPointerId != null || !this.isEquipped() || event.target?.closest?.(DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR)) return;
+    if (this.inputAllowedProvider?.() === false || this.gripPointerId != null || !this.isEquipped() || event.target?.closest?.(DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR)) return;
     if (!this.projectGrabHit(event.clientX, event.clientY, this.viewport)) return;
     event.preventDefault();
     event.stopImmediatePropagation?.();
@@ -502,7 +503,7 @@ export class WorldKnifeCombatController {
   }
 
   acquireGrip(pointerId, clientX, clientY, timeMs = performance.now()) {
-    if (this.gripPointerId != null || !this.isEquipped()) return false;
+    if (this.inputAllowedProvider?.() === false || this.gripPointerId != null || !this.isEquipped()) return false;
     if (!this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
     this.state = this.entry ? KNIFE_CONTROL_STATES.embedded : KNIFE_CONTROL_STATES.gripped;
     this.reason = 'thumb-grip-acquired';

@@ -4,7 +4,7 @@ export const CREATURE_LAB_TOUCH_TARGET_PX = 48;
 
 export function getCreatureLabPrimaryActions(controller) {
   return [
-    { id: 'respawn', label: 'Respawn', run: () => controller.respawn() },
+    { id: 'respawn', label: 'Reset Enemy / Respawn', run: () => controller.respawn() },
     { id: 'reset_damage', label: 'Reset Damage', run: () => controller.resetDamage() },
   ];
 }
@@ -39,13 +39,31 @@ export function getCreatureLabAnimationPanelActions(controller, state) {
 
 export function getCreatureLabOffensiveCombatActions(controller, state = {}) {
   const combat = state.offensiveCombat ?? {};
+  const brainEnabled = combat.combatBrainEnabled === true;
   const selectedWeapon = state.weapons?.find?.((weapon) => weapon.weaponId === state.selectedWeaponId);
   return [
+    {
+      id: 'offense:brain_enable',
+      label: 'Enable Combat Brain',
+      run: () => controller.enableCombatBrain(),
+      pressed: brainEnabled,
+      disabled: brainEnabled || !state.selectedPresetId,
+      wide: true,
+    },
+    {
+      id: 'offense:brain_disable',
+      label: 'Disable Combat Brain',
+      run: () => controller.disableCombatBrain(),
+      disabled: !brainEnabled,
+      wide: true,
+    },
+    { id: 'offense:reset_enemy', label: 'Reset Enemy / Respawn', run: () => controller.respawn(), wide: true },
     {
       id: 'offense:equip',
       label: combat.equipped ? `Unequip ${selectedWeapon?.displayName ?? 'Weapon'}` : `Equip ${selectedWeapon?.displayName ?? 'Weapon'}`,
       run: () => combat.equipped ? controller.unequipArmament() : controller.equipArmament(),
       pressed: combat.equipped === true,
+      disabled: brainEnabled,
       wide: true,
     },
     ...(combat.compatibleActions ?? []).map((action) => ({
@@ -53,10 +71,10 @@ export function getCreatureLabOffensiveCombatActions(controller, state = {}) {
       label: action.combatActionId.replaceAll('_', ' '),
       run: () => controller.selectOffensiveAction(action.combatActionId),
       pressed: combat.combatActionId === action.combatActionId,
-      disabled: !combat.equipped,
+      disabled: !combat.equipped || brainEnabled,
       wide: true,
     })),
-    { id: 'offense:trigger', label: 'Trigger Attack', run: () => controller.triggerAttack(), disabled: !combat.equipped },
+    { id: 'offense:trigger', label: 'Trigger Attack', run: () => controller.triggerAttack(), disabled: !combat.equipped || brainEnabled },
     { id: 'offense:reset_player', label: 'Reset Player', run: () => controller.resetPlayer() },
     {
       id: 'offense:geometry',
@@ -109,7 +127,7 @@ export function getCreatureLabBodyStateActions(controller, state) {
   return [
     { id: 'body:kill', label: 'Kill / Death Test', run: () => controller.kill() },
     { id: 'body:ragdoll', label: state.ragdollAvailable ? 'Ragdoll Test' : 'Ragdoll Unavailable', run: () => controller.ragdoll(), disabled: !state.ragdollAvailable },
-    { id: 'body:respawn', label: 'Respawn', run: () => controller.respawn() },
+    { id: 'body:respawn', label: 'Reset Enemy / Respawn', run: () => controller.respawn() },
   ];
 }
 
@@ -406,7 +424,7 @@ export class CreatureLabPanel {
     const equipAction = getCreatureLabOffensiveCombatActions(this.controller, state).find((action) => action.id === 'offense:equip');
     if (equipAction) section.append(this.createButton(equipAction.label, equipAction.run, {
       pressed: equipAction.pressed,
-      disabled: state.loading || state.offensiveCombat?.capabilityAvailable !== true,
+      disabled: state.loading || state.offensiveCombat?.capabilityAvailable !== true || equipAction.disabled === true,
       wide: true,
     }));
 
@@ -476,6 +494,7 @@ export class CreatureLabPanel {
   }
 
   formatOffensiveCombat(combat = {}) {
+    const brain = combat.combatBrain ?? {};
     const point = Array.isArray(combat.lastImpactPoint) ? combat.lastImpactPoint.map((value) => Number(value).toFixed(2)).join(', ') : 'none';
     const direction = Array.isArray(combat.lastImpactDirection) ? combat.lastImpactDirection.map((value) => Number(value).toFixed(2)).join(', ') : 'none';
     const capsule = combat.currentWorldCapsule;
@@ -491,6 +510,8 @@ export class CreatureLabPanel {
       ? `W ${phases.windup.startSeconds}-${phases.windup.endSeconds} | A ${phases.active.startSeconds}-${phases.active.endSeconds} | R ${phases.recovery.startSeconds}-${phases.recovery.endSeconds}`
       : 'unavailable';
     return [
+      `BRAIN ${brain.enabled ? 'ENABLED' : 'DISABLED'} | STATE ${brain.state ?? 'IDLE'} | ${brain.orientationLocked ? 'FACING LOCKED' : 'TRACKING ALLOWED'}`,
+      `TARGET ${Number.isFinite(brain.targetDistance) ? `${brain.targetDistance.toFixed(2)} m` : 'none'} | HOME ${Number.isFinite(brain.homeDistance) ? `${brain.homeDistance.toFixed(2)} m` : 'n/a'} | ATTACK RANGE ${Number.isFinite(brain.attackRange) ? `${brain.attackRange.toFixed(2)} m` : 'n/a'}`,
       `CAPABILITY ${combat.capabilityAvailable ? 'AVAILABLE' : `UNAVAILABLE (${combat.capabilityReason ?? 'unknown'})`} | ${combat.equipped ? 'EQUIPPED' : 'UNEQUIPPED'}`,
       `WEAPON ${combat.weaponId ?? 'none'} | SOCKET ${combat.socketId ?? 'none'} -> ${combat.parentRuntimeBone ?? 'none'}`,
       `GLB ${combat.assetPath ?? 'none'} | ASSET SCALE ${combat.assetScale ?? 'none'}`,
@@ -499,7 +520,7 @@ export class CreatureLabPanel {
       `ACTION ${combat.actionName ?? 'none'} | COMBAT ID ${combat.combatActionId ?? 'none'}`,
       `PHASE ${combat.attackPhase ?? 'COMPLETE'} | CLIP ${Number(combat.clipTimeSeconds ?? 0).toFixed(3)}s | ${String(combat.outcome ?? 'idle').toUpperCase()}`,
       `TIMING ${timing}`,
-      `ATTACK ${combat.attackIdentity ?? combat.attackId ?? 'none'} | HITS ${combat.acceptedPlayerHitCount ?? 0} | PLAYER HP ${combat.currentPlayerHealth ?? 'n/a'}${combat.playerDead ? ' | DEAD' : ''}`,
+      `ATTACK ${combat.attackIdentity ?? combat.attackId ?? 'none'} | HITS ${combat.acceptedPlayerHitCount ?? 0} | PLAYER HP ${combat.currentPlayerHealth ?? 'n/a'} | PLAYER ${combat.playerDead ? 'DEAD' : 'ALIVE'}`,
       `LOCAL CAPSULE ${localCapsuleText}`,
       `WORLD CAPSULE ${capsuleText}`,
       `IMPACT ${point} | DIR ${direction}`,

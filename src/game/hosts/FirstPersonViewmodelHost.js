@@ -26,7 +26,7 @@ export function resolveSupportedCombatRuntime(dungeon) {
 }
 
 export class FirstPersonViewmodelHost {
-  constructor({ app, sceneSessionHost, equipmentRuntime, inventoryBridge = null, gameState = null, hudHost = null, inputHost = null, feedback = null, audioRuntime = null } = {}) {
+  constructor({ app, sceneSessionHost, equipmentRuntime, inventoryBridge = null, gameState = null, hudHost = null, inputHost = null, feedback = null, audioRuntime = null, playerCombatState = null } = {}) {
     this.app = app;
     this.sceneSessionHost = sceneSessionHost;
     this.equipmentRuntime = equipmentRuntime;
@@ -36,6 +36,8 @@ export class FirstPersonViewmodelHost {
     this.inputHost = inputHost;
     this.feedback = feedback;
     this.audioRuntime = audioRuntime;
+    this.playerCombatState = playerCombatState;
+    this.livingPlayerEnabled = playerCombatState?.isAlive !== false;
     this.session = null;
     this.disposers = [];
   }
@@ -74,6 +76,7 @@ export class FirstPersonViewmodelHost {
       feedback: this.feedback,
       controls: this.controls,
       audioRuntime: this.audioRuntime,
+      inputAllowedProvider: () => this.isLivingPlayerEnabled(),
     });
 
     this.disposers.push(this.equipmentRuntime?.on?.(EQUIPMENT_EVENTS.equippedChanged, (equipmentState) => this.handleEquipmentChanged(equipmentState)));
@@ -110,14 +113,17 @@ export class FirstPersonViewmodelHost {
 
   initializeCombatKnifeRuntime() {
     const combatRuntime = resolveSupportedCombatRuntime(this.dungeon);
-    const contactActivationProvider = this.dungeon?.isCombatLab ? () => true : combatRuntime ? () => combatRuntime.isPlayerInCombatRange(this.player) : () => false;
+    const contactActivationProvider = this.dungeon?.isCombatLab
+      ? () => this.isLivingPlayerEnabled()
+      : combatRuntime ? () => this.isLivingPlayerEnabled() && combatRuntime.isPlayerInCombatRange(this.player) : () => false;
+    const inputAllowedProvider = () => this.isLivingPlayerEnabled();
     const swordEdgeSweepObserver = this.dungeon?.isCombatLab !== true && combatRuntime?.showcaseEnabled === true
       ? new FolsomShowcaseSwordDismemberment({ enabled: true })
       : null;
-    this.combatKnifeController = new WorldKnifeCombatController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, viewmodelAnchor: this.weaponViewmodelAnchor, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, bloodEffects: combatRuntime?.bloodEffects ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: this.dungeon?.isCombatLab === true });
-    this.combatSwordController = new SwordWorldWeaponController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, viewmodelAnchor: this.weaponViewmodelAnchor, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, edgeSweepObserver: swordEdgeSweepObserver, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: true });
+    this.combatKnifeController = new WorldKnifeCombatController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, viewmodelAnchor: this.weaponViewmodelAnchor, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, bloodEffects: combatRuntime?.bloodEffects ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, inputAllowedProvider, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: this.dungeon?.isCombatLab === true });
+    this.combatSwordController = new SwordWorldWeaponController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, viewmodelAnchor: this.weaponViewmodelAnchor, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, inputAllowedProvider, edgeSweepObserver: swordEdgeSweepObserver, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: true });
     this.combatMaceController = combatRuntime
-      ? new MaceWorldWeaponController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, viewmodelAnchor: this.weaponViewmodelAnchor, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: true })
+      ? new MaceWorldWeaponController({ app: this.app, scene: combatRuntime?.scene ?? this.dungeon?.scene, camera: this.camera, viewmodelAnchor: this.weaponViewmodelAnchor, player: this.player, actor: combatRuntime?.actor ?? null, physics: combatRuntime?.physics ?? null, equipmentRuntime: this.equipmentRuntime, controls: this.controls, feedback: this.feedback, feedbackSystem: combatRuntime?.feedbackSystem ?? null, combatDirector: combatRuntime?.combatDirector ?? null, combatRouter: combatRuntime?.combatRouter ?? null, contactActivationProvider, inputAllowedProvider, outdoorLightingDirector: this.dungeon?.outdoorLightingDirector ?? null, bindPointerInput: true })
       : null;
     const controllers = [this.combatKnifeController, this.combatSwordController, this.combatMaceController].filter(Boolean);
     const active = () => controllers.find((controller) => controller?.isEquipped?.()) ?? this.combatKnifeController;
@@ -146,12 +152,27 @@ export class FirstPersonViewmodelHost {
         : this.combatKnifeController?.isEquipped?.() ? this.combatKnifeController : this.physicalToolViewmodel;
     return {
       getActiveToolId: () => active()?.getActiveToolId?.() ?? null,
-      projectGrabHit: (...args) => active()?.projectGrabHit?.(...args) ?? false,
+      projectGrabHit: (...args) => this.isLivingPlayerEnabled() && (active()?.projectGrabHit?.(...args) ?? false),
       getProjectedGrabPoint: (...args) => active()?.getProjectedGrabPoint?.(...args) ?? null,
       getProjectedActivePoint: (...args) => active()?.getProjectedActivePoint?.(...args) ?? null,
-      setGestureState: (gesture) => active()?.setGestureState?.(gesture),
-      impact: (context) => active()?.impact?.(context),
+      setGestureState: (gesture) => this.isLivingPlayerEnabled() ? active()?.setGestureState?.(gesture) : undefined,
+      impact: (context) => this.isLivingPlayerEnabled() ? active()?.impact?.(context) : undefined,
     };
+  }
+
+  isLivingPlayerEnabled() {
+    return this.livingPlayerEnabled !== false && this.playerCombatState?.isAlive !== false;
+  }
+
+  setLivingPlayerEnabled(enabled) {
+    const allowed = enabled !== false;
+    if (this.livingPlayerEnabled === allowed) return allowed;
+    this.livingPlayerEnabled = allowed;
+    if (!allowed) {
+      this.physicalToolActionController?.cancelGesture?.('player-dead');
+      this.combatWeaponController?.cancel?.('player-dead');
+    }
+    return allowed;
   }
 
   syncEquipmentVisuals() {

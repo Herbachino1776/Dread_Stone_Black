@@ -20,6 +20,12 @@ future Encounter Instance
 
 M6.7 does not add encounter placement, spawning, AI, health/death behavior, gold, loot, shops, persistence, or save-game state.
 
+M7 consumes the unchanged v1 preset through the first minimal combat brain.
+Detection, approach speed, recovery delay, attack-range composition, and leash
+remain runtime brain configuration; no AI or placement fields were added to the
+preset. Creature Lab supplies temporary home position/yaw, while a future
+Encounter Instance remains the intended owner of placement and home radius.
+
 ## Authority boundaries
 
 The layers remain separate:

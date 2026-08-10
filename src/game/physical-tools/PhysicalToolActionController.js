@@ -5,7 +5,7 @@ import { PhysicalToolTargetRegistry } from './PhysicalToolTargetRegistry.js';
 const GESTURE_HISTORY_MS = 140;
 
 export class PhysicalToolActionController {
-  constructor({ app, camera, player, dungeon, equipmentRuntime, viewmodel, feedback = null, controls = null, audioRuntime = null } = {}) {
+  constructor({ app, camera, player, dungeon, equipmentRuntime, viewmodel, feedback = null, controls = null, audioRuntime = null, inputAllowedProvider = null } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.camera = camera;
@@ -16,6 +16,7 @@ export class PhysicalToolActionController {
     this.feedback = feedback;
     this.controls = controls;
     this.audioRuntime = audioRuntime;
+    this.inputAllowedProvider = inputAllowedProvider;
     this.registry = new PhysicalToolTargetRegistry({ dungeon, camera, player, viewport: this.viewport });
     this.state = this.createIdleState();
     this.cooldownRemaining = 0;
@@ -48,7 +49,7 @@ export class PhysicalToolActionController {
   }
 
   pointerDown(event) {
-    if (this.cooldownRemaining > 0 || this.state.active || this.isInputBlocked(event)) return;
+    if (this.inputAllowedProvider?.() === false || this.cooldownRemaining > 0 || this.state.active || this.isInputBlocked(event)) return;
     const toolId = this.viewmodel?.getActiveToolId?.();
     const profile = getPhysicalToolProfile(toolId);
     // A generous invisible grip zone owns input capture. Blade/head/tip geometry is

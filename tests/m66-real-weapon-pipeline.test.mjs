@@ -17,6 +17,7 @@ import {
   validateNpcWeaponDefinition,
 } from '../src/game/combat/NpcWeaponRegistry.js';
 import { PlayerCombatDamageReceiver } from '../src/game/combat/PlayerCombatDamageReceiver.js';
+import { PlayerCombatState } from '../src/game/combat/PlayerCombatState.js';
 import { WorldWeaponGlbLoader, WorldWeaponGlbLoadError } from '../src/game/combat/WorldWeaponGlbLoader.js';
 import {
   createCreatureLabHeightResolution,
@@ -105,7 +106,7 @@ function armamentFixture({ rigScale = 1 } = {}) {
     eyeHeight: 1.55,
     collisionWorld: { playerRadius: 0.34 },
   };
-  const receiver = new PlayerCombatDamageReceiver({ player });
+  const receiver = new PlayerCombatDamageReceiver({ combatState: new PlayerCombatState(), player });
   const weaponLoader = disposableLoader();
   const weaponRegistry = new NpcWeaponRegistry({ weaponLoader });
   const runtime = new NpcArmamentRuntime({

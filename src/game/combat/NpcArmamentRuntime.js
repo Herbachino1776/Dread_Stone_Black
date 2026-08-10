@@ -371,6 +371,7 @@ export class NpcArmamentRuntime {
   }
 
   resetCombatState() {
+    this.animationController?.reset?.();
     this.physicalSource?.reset?.();
     if (this.physicalSource) this.physicalSource.source = this.actor;
     this.activeAttack = null;

@@ -9,6 +9,7 @@ import {
   intersectSweptCapsules,
 } from '../src/game/combat/PhysicalAttackSource.js';
 import { PlayerCombatDamageReceiver } from '../src/game/combat/PlayerCombatDamageReceiver.js';
+import { PlayerCombatState } from '../src/game/combat/PlayerCombatState.js';
 import { CreatureLabAttackHarness } from '../src/game/creatures/CreatureLabAttackHarness.js';
 import { getCreatureLabOffensiveCombatActions } from '../src/game/creatures/CreatureLabPanel.js';
 import { resolveCreatureLabMode } from '../src/game/creatures/CreatureLabController.js';
@@ -78,7 +79,7 @@ test('swept capsule catches a fast crossing and preserves a spatial miss', () =>
 });
 
 test('one attack hits once, while a separate attack identity can hit independently', () => {
-  const receiver = new PlayerCombatDamageReceiver();
+  const receiver = new PlayerCombatDamageReceiver({ combatState: new PlayerCombatState() });
   const source = new PhysicalAttackSource({ damageAmount: 10 });
   prepareCrossingSource(source, 'swing-1');
   assert.equal(source.tryHit({ hurtVolume: playerCapsule, receiver }).accepted, true);
@@ -95,8 +96,11 @@ test('player receiver applies authoritative HP, finite impact data, lethal damag
   let flashes = 0;
   let shakes = 0;
   let deaths = 0;
+  const combatState = new PlayerCombatState();
+  combatState.subscribe((snapshot) => vitals.push({ hp: snapshot.currentHealth }));
   const receiver = new PlayerCombatDamageReceiver({
-    hudHost: { updateVitals: (value) => vitals.push(value), hud: { flashDamage: () => { flashes += 1; } } },
+    combatState,
+    hudHost: { hud: { flashDamage: () => { flashes += 1; } } },
     feedback: { shake: () => { shakes += 1; } },
     onDeath: () => { deaths += 1; },
   });
@@ -126,7 +130,7 @@ function createHarnessFixture() {
     collisionWorld: { playerRadius: 0.34 },
     reset() { this.position.copy(this.spawnPosition); },
   };
-  const receiver = new PlayerCombatDamageReceiver({ player });
+  const receiver = new PlayerCombatDamageReceiver({ combatState: new PlayerCombatState(), player });
   const actor = {
     instanceId: 'lab-subject-a',
     lifeState: 'alive',
@@ -159,6 +163,9 @@ test('lab harness refuses to recreate the M5 procedural fallback for an unupgrad
 test('touch-first offensive controls require no console access', async () => {
   const calls = [];
   const controller = {
+    enableCombatBrain: () => calls.push('enableCombatBrain'),
+    disableCombatBrain: () => calls.push('disableCombatBrain'),
+    respawn: () => calls.push('respawn'),
     equipArmament: () => calls.push('equipArmament'),
     selectOffensiveAction: (combatActionId) => calls.push(`selectOffensiveAction:${combatActionId}`),
     triggerAttack: () => calls.push('triggerAttack'),
@@ -166,9 +173,9 @@ test('touch-first offensive controls require no console access', async () => {
     toggleAttackGeometry: () => calls.push('toggleAttackGeometry'),
   };
   const actions = getCreatureLabOffensiveCombatActions(controller, { offensiveCombat: { showAttackGeometry: false, compatibleActions: [{ combatActionId: 'humanoid_one_hand_slash_rtl' }] } });
-  assert.deepEqual(actions.map((action) => action.label), ['Equip Weapon', 'humanoid one hand slash rtl', 'Trigger Attack', 'Reset Player', 'Show Attack Capsule']);
+  assert.deepEqual(actions.map((action) => action.label), ['Enable Combat Brain', 'Disable Combat Brain', 'Reset Enemy / Respawn', 'Equip Weapon', 'humanoid one hand slash rtl', 'Trigger Attack', 'Reset Player', 'Show Attack Capsule']);
   for (const action of actions) await action.run();
-  assert.deepEqual(calls, ['equipArmament', 'selectOffensiveAction:humanoid_one_hand_slash_rtl', 'triggerAttack', 'resetPlayer', 'toggleAttackGeometry']);
+  assert.deepEqual(calls, ['enableCombatBrain', 'disableCombatBrain', 'respawn', 'equipArmament', 'selectOffensiveAction:humanoid_one_hand_slash_rtl', 'triggerAttack', 'resetPlayer', 'toggleAttackGeometry']);
 });
 
 test('combat reciprocity activates only for explicit Creature Lab and leaves canonical Folsom gated', () => {

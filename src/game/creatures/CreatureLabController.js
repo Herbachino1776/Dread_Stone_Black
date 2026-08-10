@@ -18,6 +18,7 @@ import {
 import { summarizeCreatureDefinition } from './CreatureRuntimePolicies.js';
 import { EnemyPresetRegistry } from './EnemyPresetRegistry.js';
 import { EnemyPresetResolver } from './EnemyPresetResolver.js';
+import { MinimalCombatBrain } from '../combat/MinimalCombatBrain.js';
 
 const DEFAULT_DEFINITION_ID = 'chezwick';
 const CREATURE_LAB_QUERY_KEY = 'creatureLab';
@@ -130,6 +131,8 @@ export class CreatureLabController {
     this.listeners = new Set();
     this.panel = null;
     this.debugCommands = null;
+    this.combatBrain = null;
+    this.combatBrainRequestedEnabled = false;
   }
 
   get actor() { return this.walkerController?.actor ?? null; }
@@ -258,6 +261,7 @@ export class CreatureLabController {
 
   async activateCreatureSelection({ baseResolved, presetResolution = null, options = {}, operation }) {
     const serial = ++this.selectionSerial;
+    if (options.restoreCombatBrain !== true) this.combatBrainRequestedEnabled = false;
     this.loading = true;
     this.notify();
     try {
@@ -287,6 +291,7 @@ export class CreatureLabController {
       const resolved = createCreatureLabHeightResolution(baseResolved, requestedHeight);
       const { pack, profile } = resolved;
       this.weaponControllerProvider?.()?.cancel?.('creature-lab-definition-switch');
+      this.disposeCombatBrain('creature-lab-definition-switch');
       this.attackHarness?.clearSubject?.('creature-lab-definition-switch');
       this.disposeSiteMarkers();
       if (this.actor) this.walkerController.disposeWalker({ respawn: false });
@@ -366,10 +371,18 @@ export class CreatureLabController {
 
   async respawn() {
     if (!this.selectedDefinition) return this.recordOperation('respawn', { accepted: false, reason: 'No supported definition is selected.' });
-    const options = { restoreArmament: true, operation: 'respawn' };
-    return this.selectedPreset
+    const restoreCombatBrain = this.combatBrainRequestedEnabled === true;
+    const options = { restoreArmament: !restoreCombatBrain, restoreCombatBrain, operation: 'respawn' };
+    const result = await (this.selectedPreset
       ? this.selectPreset(this.selectedPreset.presetId, options)
-      : this.selectDefinition(this.selectedDefinition.definitionId, options);
+      : this.selectDefinition(this.selectedDefinition.definitionId, options));
+    if (result?.accepted === false || !restoreCombatBrain) return result;
+    const brainResult = await this.enableCombatBrain({ record: false });
+    return this.recordOperation('respawn', {
+      ...result,
+      combatBrainRestored: brainResult.accepted === true,
+      combatBrainRestoreReason: brainResult.accepted === false ? brainResult.reason : null,
+    });
   }
 
   getSelectedWeaponDefinition() {
@@ -547,29 +560,128 @@ export class CreatureLabController {
   }
 
   triggerAttack() {
+    if (this.combatBrain?.enabled) return this.recordOperation('triggerAttack', { accepted: false, reason: 'Combat Brain owns autonomous attack requests. Disable it for manual Trigger Attack.' });
     return this.recordOperation('triggerAttack', this.attackHarness?.triggerAttack?.()
       ?? { accepted: false, reason: 'Creature Lab offensive harness is unavailable.' });
   }
 
   async equipArmament() {
+    if (this.combatBrain?.enabled) return this.recordOperation('equipArmament', { accepted: false, reason: 'Combat Brain owns armament while enabled.' });
     const result = await this.attackHarness?.equip?.()
       ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' };
     return this.recordOperation('equipArmament', result);
   }
 
   unequipArmament() {
+    if (this.combatBrain?.enabled) return this.recordOperation('unequipArmament', { accepted: false, reason: 'Disable Combat Brain before changing armament ownership.' });
     return this.recordOperation('unequipArmament', this.attackHarness?.unequip?.()
       ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' });
   }
 
   selectOffensiveAction(combatActionId) {
+    if (this.combatBrain?.enabled) return this.recordOperation('selectOffensiveAction', { accepted: false, reason: 'Combat Brain owns offensive Action selection while enabled.' });
     return this.recordOperation('selectOffensiveAction', this.attackHarness?.selectOffensiveAction?.(combatActionId)
       ?? { accepted: false, reason: 'Creature Lab armament runtime is unavailable.' });
   }
 
   resetPlayer() {
-    return this.recordOperation('resetPlayer', this.attackHarness?.resetPlayer?.()
-      ?? { accepted: false, reason: 'Creature Lab player receiver is unavailable.' });
+    const result = this.attackHarness?.resetPlayer?.()
+      ?? { accepted: false, reason: 'Creature Lab player receiver is unavailable.' };
+    if (result.accepted) this.combatBrain?.resetForDev?.('player-dev-reset');
+    return this.recordOperation('resetPlayer', result);
+  }
+
+  createCombatBrainMotionHost() {
+    const walker = this.walkerController;
+    return {
+      getPosition: () => walker?.position ?? this.actor?.visualRootPosition ?? null,
+      setFacing: (yaw) => {
+        if (!Number.isFinite(yaw) || !walker) return;
+        walker.currentYaw = yaw;
+        walker.desiredYaw = yaw;
+      },
+      move: (movement, context) => walker?.applyHorizontalMovement?.(movement, context) ?? new THREE.Vector3(),
+      setPose: (position, yaw, velocity) => {
+        if (!walker || !position) return;
+        walker.position.copy(position);
+        walker.currentYaw = yaw;
+        walker.desiredYaw = yaw;
+        walker.velocity.copy(velocity ?? new THREE.Vector3());
+        walker.actor?.setLivingRootTransform?.(walker.position, yaw, walker.velocity);
+      },
+      setLocomotion: (movement) => this.actor?.visualAdapter?.setMovementState?.(movement),
+    };
+  }
+
+  async enableCombatBrain({ record = true } = {}) {
+    let result;
+    if (this.loading) result = { accepted: false, reason: 'Creature Lab selection is still loading.' };
+    else if (!this.resolvedPreset) result = { accepted: false, reason: 'Select an Enemy Preset before enabling Combat Brain.' };
+    else if (!this.actor || this.actor.lifeState !== 'alive') result = { accepted: false, reason: 'Combat Brain requires a living enemy; use Reset Enemy / Respawn.' };
+    else if (!this.attackHarness?.armament) result = { accepted: false, reason: 'NpcArmamentRuntime is unavailable.' };
+    else {
+      if (!this.combatBrain || this.combatBrain.actor !== this.actor || this.combatBrain.disposed) {
+        this.disposeCombatBrain('combat-brain-replaced');
+        const action = this.resolvedPreset.compatibleActions[0];
+        this.combatBrain = new MinimalCombatBrain({
+          actor: this.actor,
+          armamentRuntime: this.attackHarness.armament,
+          playerProvider: this.playerProvider,
+          playerCombatState: this.playerProvider?.()?.combatDamageReceiver?.combatState ?? null,
+          homePosition: this.walkerController.position,
+          homeYaw: this.walkerController.currentYaw,
+          approvedActionId: action.combatActionId,
+          resolvedWeapon: this.resolvedPreset.weapon,
+          bodyHeight: this.effectiveProfile?.targetHeight,
+          motionHost: this.createCombatBrainMotionHost(),
+        });
+      }
+      result = this.combatBrain.enabled ? { accepted: true, alreadyEnabled: true } : await this.combatBrain.enable();
+      if (result.accepted) {
+        this.combatBrainRequestedEnabled = true;
+        this.walkerController.externalLocomotionAuthority = true;
+      }
+    }
+    return record ? this.recordOperation('enableCombatBrain', result) : result;
+  }
+
+  disableCombatBrain() {
+    const result = this.combatBrain?.disable?.('creature-lab-disabled')
+      ?? { accepted: true, alreadyDisabled: true };
+    this.walkerController.externalLocomotionAuthority = false;
+    this.combatBrainRequestedEnabled = false;
+    return this.recordOperation('disableCombatBrain', result);
+  }
+
+  disposeCombatBrain(reason = 'creature-lab-combat-brain-disposed') {
+    if (!this.combatBrain) return false;
+    this.walkerController.externalLocomotionAuthority = false;
+    this.combatBrain.disable?.(reason);
+    this.combatBrain.dispose?.();
+    this.combatBrain = null;
+    return true;
+  }
+
+  getOffensiveCombatDiagnostics() {
+    const armament = this.attackHarness?.getDiagnostics?.() ?? { enabled: false };
+    const brain = this.combatBrain?.getDiagnostics?.() ?? {
+      enabled: false,
+      state: 'IDLE',
+      targetDistance: null,
+      homeDistance: null,
+      attackRange: null,
+      orientationLocked: false,
+      lastTransitionReason: 'not-created',
+    };
+    return {
+      ...armament,
+      combatBrain: brain,
+      combatBrainEnabled: brain.enabled === true,
+      brainState: brain.state,
+      targetDistance: brain.targetDistance,
+      homeDistance: brain.homeDistance,
+      attackRange: brain.attackRange,
+    };
   }
 
   toggleAttackGeometry() {
@@ -858,7 +970,7 @@ export class CreatureLabController {
       enemyPresetJson: this.getEnemyPresetJson(),
       lastOperation: this.lastOperation,
       lastPhysicalTargetingDecision: this.getSiteTargeting()?.getDiagnostics?.().lastPhysicalTargetingDecision ?? null,
-      offensiveCombat: this.attackHarness?.getDiagnostics?.() ?? { enabled: false },
+      offensiveCombat: this.getOffensiveCombatDiagnostics(),
     };
   }
 
@@ -910,12 +1022,16 @@ export class CreatureLabController {
       definitionSupport: this.definitionOptions.map(({ definitionId, displayName, creaturePackId, supported, code, reason }) => ({ definitionId, displayName, creaturePackId, supported, code, reason })),
       presetSupport: this.presetOptions.map(({ presetId, displayName, creatureDefinitionId, supported, code, reason }) => ({ presetId, displayName, creatureDefinitionId, supported, code, reason })),
       lastOperation: this.lastOperation,
-      offensiveCombat: this.attackHarness?.getDiagnostics?.() ?? { enabled: false },
+      offensiveCombat: this.getOffensiveCombatDiagnostics(),
     };
   }
 
   update(deltaSeconds = 1 / 60) {
-    this.attackHarness?.update?.(deltaSeconds);
+    if (this.combatBrain?.enabled) {
+      this.combatBrain.update(deltaSeconds);
+      this.walkerController.externalLocomotionAuthority = this.combatBrain.enabled === true;
+    }
+    else this.attackHarness?.update?.(deltaSeconds);
     this.siteMarkerRenderer?.update?.();
     this.panel?.update?.();
   }
@@ -942,6 +1058,8 @@ export class CreatureLabController {
       setCreatureHeight: (height) => this.setCreatureHeight(height),
       resetCreatureHeight: () => this.resetCreatureHeight(),
       resetPlayer: () => this.resetPlayer(),
+      enableCombatBrain: () => this.enableCombatBrain(),
+      disableCombatBrain: () => this.disableCombatBrain(),
       toggleAttackGeometry: () => this.toggleAttackGeometry(),
       diagnostics: () => this.getDiagnostics(),
     });
@@ -954,6 +1072,7 @@ export class CreatureLabController {
     this.selectionSerial += 1;
     this.panel?.dispose?.();
     this.panel = null;
+    this.disposeCombatBrain('creature-lab-controller-disposed');
     this.attackHarness?.dispose?.();
     this.attackHarness = null;
     this.disposeSiteMarkers();
@@ -962,5 +1081,6 @@ export class CreatureLabController {
     this.listeners.clear();
     if (globalThis.__DSB_CREATURE_LAB__ === this.debugCommands) delete globalThis.__DSB_CREATURE_LAB__;
     this.debugCommands = null;
+    this.combatBrainRequestedEnabled = false;
   }
 }

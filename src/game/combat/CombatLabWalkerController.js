@@ -233,6 +233,7 @@ export class CombatLabWalkerController {
     this.environment = environment ?? {};
     this.query = query ?? new URLSearchParams();
     this.enabled = Boolean(enabled);
+    this.externalLocomotionAuthority = false;
     const pauseQueryKey = this.environment.queryKeys?.pause ?? 'walkerPause';
     const speedQueryKey = this.environment.queryKeys?.speed ?? 'walkerSpeed';
     this.pauseLocomotion = this.query.get?.(pauseQueryKey) === '1';
@@ -514,6 +515,15 @@ export class CombatLabWalkerController {
       this.actor.setLivingRootTransform?.(this.position, this.currentYaw, this.velocity);
       const authoredDeathComplete = this.actor.visualAdapter?.animationController?.state === 'DEAD';
       if (authoredDeathComplete || this.stateElapsed >= this.deathDurationSeconds + 0.15) this.holdGroundedPose();
+      this.assertBoundedState();
+      return;
+    }
+    if (this.externalLocomotionAuthority) {
+      this.position.copy(this.actor.visualRootPosition);
+      this.currentYaw = this.actor.visualRootYaw;
+      this.currentSpeed = this.actor.livingVelocity?.length?.() ?? 0;
+      this.desiredSpeed = this.currentSpeed;
+      this.velocity.copy(this.actor.livingVelocity ?? new THREE.Vector3());
       this.assertBoundedState();
       return;
     }

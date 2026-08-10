@@ -210,7 +210,7 @@ export function criticallyDampedMaceReturnProgress(elapsed, duration) {
 }
 
 export class MaceWorldWeaponController {
-  constructor({ app, scene, camera, viewmodelAnchor = null, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, outdoorLightingDirector = null, visualAssetLoader = loadDreadmaceAsset, bindPointerInput = true } = {}) {
+  constructor({ app, scene, camera, viewmodelAnchor = null, player, actor, physics, equipmentRuntime, controls, feedback = null, feedbackSystem = null, combatDirector = null, combatRouter = null, contactActivationProvider = null, inputAllowedProvider = null, outdoorLightingDirector = null, visualAssetLoader = loadDreadmaceAsset, bindPointerInput = true } = {}) {
     this.app = app;
     this.viewport = app?.querySelector?.('[data-game="viewport"]') ?? app;
     this.scene = scene;
@@ -227,6 +227,7 @@ export class MaceWorldWeaponController {
     this.ownsCombatDirector = combatDirector == null;
     this.weaponContactRouter = new WeaponContactRouter({ combatRouter, fallbackActor: actor, fallbackDirector: this.combatDirector, cameraFeedback: feedback });
     this.contactActivationProvider = contactActivationProvider;
+    this.inputAllowedProvider = inputAllowedProvider;
     this.outdoorLightingDirector = outdoorLightingDirector;
     this.visualAssetLoader = visualAssetLoader;
     this.config = DREADMACE_WORLD_WEAPON_CONFIG;
@@ -444,7 +445,7 @@ export class MaceWorldWeaponController {
   }
 
   pointerDown(event) {
-    if (this.gripPointerId != null || !this.isEquipped() || event.target?.closest?.(DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR) || !this.projectGrabHit(event.clientX, event.clientY, this.viewport)) return;
+    if (this.inputAllowedProvider?.() === false || this.gripPointerId != null || !this.isEquipped() || event.target?.closest?.(DEFAULT_WEAPON_POINTER_BLOCK_SELECTOR) || !this.projectGrabHit(event.clientX, event.clientY, this.viewport)) return;
     if (!this.acquireGrip(event.pointerId, event.clientX, event.clientY, event.timeStamp || performance.now())) return;
     event.preventDefault();
     event.stopImmediatePropagation?.();
@@ -471,7 +472,7 @@ export class MaceWorldWeaponController {
   }
 
   acquireGrip(pointerId, clientX, clientY, timeMs = performance.now()) {
-    if (!this.isEquipped() || !this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
+    if (this.inputAllowedProvider?.() === false || !this.isEquipped() || !this.gestureOwnership.acquire(pointerId, clientX, clientY, timeMs)) return false;
     this.gestureBaselineGrip.copy(this.localGrip);
     this.gestureBaselineQuaternion.copy(this.localQuaternion);
     this.hammerGestureBaselinePitch = this.hammerPitch;
@@ -502,7 +503,7 @@ export class MaceWorldWeaponController {
   }
 
   beginPlayerAuthoredStrike() {
-    if (this.gripPointerId == null || this.activeStrikeId || this.loadEnergy < DREADMACE_GESTURE_THRESHOLDS.minimumRecentLoadEnergy) return false;
+    if (this.inputAllowedProvider?.() === false || this.gripPointerId == null || this.activeStrikeId || this.loadEnergy < DREADMACE_GESTURE_THRESHOLDS.minimumRecentLoadEnergy) return false;
     this.strikeSerial += 1;
     this.activeStrikeId = `dreadmace-strike-${this.strikeSerial}`;
     this.strikeOwnerId = this.gripPointerId;
