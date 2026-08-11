@@ -211,9 +211,9 @@ export class CollisionWorld {
     });
   }
 
-  canStandAtFloorPosition(position) {
+  canStandAtFloorPosition(position, options = {}) {
     if (!position) return false;
-    return this.canStandAt(new THREE.Vector3(position.x, position.y + this.eyeHeight, position.z));
+    return this.canStandAt(new THREE.Vector3(position.x, position.y + this.eyeHeight, position.z), options);
   }
 
   moveWithCollision(position, movement) {

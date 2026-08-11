@@ -11,6 +11,7 @@ import {
   validateEncounterDefinition,
 } from '../src/contracts/EncounterDefinition.js';
 import { CombatActorRouter } from '../src/game/combat/CombatActorRouter.js';
+import { CollisionWorld } from '../src/game/Collision.js';
 import { PlayerCombatDamageReceiver } from '../src/game/combat/PlayerCombatDamageReceiver.js';
 import { PlayerCombatState } from '../src/game/combat/PlayerCombatState.js';
 import { PlayerCurrencyState } from '../src/game/economy/PlayerCurrencyState.js';
@@ -359,28 +360,46 @@ test('Game constructs one normal-session receiver and Creature Lab resolves that
 });
 
 test('EnemyWorldMotionHost applies authored pose, samples ground, respects blockers, and releases player collision ownership', () => {
-  const blockers = [];
+  const initialPosition = new THREE.Vector3(1, 0.5, 2);
   const actor = {
     instanceId: 'motion-actor',
     visualProfile: { targetHeight: 1.8 },
     setLivingRootTransform(position, yaw) { this.position = position.clone(); this.yaw = yaw; },
     setEnvironmentContactHints() {},
-    updatePlayerCollisionBlocker(blocker) { blocker.radius = 0.3; blocker.userData ??= {}; return blocker; },
+    updatePlayerCollisionBlocker(blocker) {
+      blocker.type = 'combatActor';
+      blocker.blockerShape = 'circle';
+      blocker.radius = 0.3;
+      blocker.center = { x: this.position?.x ?? initialPosition.x, z: this.position?.z ?? initialPosition.z };
+      blocker.userData = { actor: this, locomotionBlocker: true };
+      return blocker;
+    },
   };
-  const collision = {
-    addBlocker(value) { blockers.push(value); },
-    removeBlocker(value) { blockers.splice(blockers.indexOf(value), 1); },
-    sampleWalkableY() { return { y: 0.5 }; },
-    canStandAtFloorPosition() { return true; },
-    getIntersectingBlockers() { return []; },
-  };
-  const host = new EnemyWorldMotionHost({ actor, collision, position: new THREE.Vector3(1, 0.5, 2), yaw: 0.7 });
+  const wall = { id: 'world-wall', minX: 2.8, maxX: 3.2, minZ: 1.5, maxZ: 2.5 };
+  const collision = new CollisionWorld({
+    walkableRects: [{ minX: 0, maxX: 4, minZ: 0, maxZ: 4 }],
+    blockerRects: [wall],
+    defaultFloorY: 0.5,
+  });
+  const host = new EnemyWorldMotionHost({ actor, collision, position: initialPosition, yaw: 0.7 });
   assert.deepEqual(actor.position.toArray(), [1, 0.5, 2]);
   assert.equal(actor.yaw, 0.7);
-  assert.deepEqual(host.move(new THREE.Vector3(0.5, 0, 0)).toArray(), [0.5, 0, 0]);
-  assert.equal(blockers.length, 1);
+  const ownOverlapCandidate = new THREE.Vector3(1.4, 0.5, 2);
+  assert.equal(collision.canStandAtFloorPosition(ownOverlapCandidate), false, 'normal standability still sees combat actors');
+  assert.equal(collision.canStandAtFloorPosition(ownOverlapCandidate, { ignoreActorBlockers: true }), true, 'floor helper forwards the explicit world-only option');
+  const accepted = host.move(new THREE.Vector3(0.4, 0, 0));
+  assert.ok(Math.abs(accepted.x - 0.4) < 1e-10 && accepted.y === 0 && accepted.z === 0, 'host ignores only its own blocker and translates');
+
+  const otherActor = { id: 'other-enemy', type: 'combatActor', blockerShape: 'circle', center: { x: 1.8, z: 2 }, radius: 0.3, userData: { actor: {} } };
+  collision.addBlocker(otherActor);
+  assert.deepEqual(host.move(new THREE.Vector3(0.4, 0, 0)).toArray(), [0, 0, 0], 'another encounter actor remains blocking');
+  assert.equal(collision.canStandAtFloorPosition(new THREE.Vector3(3, 0.5, 2), { ignoreActorBlockers: true }), false, 'world walls remain blocking');
+  assert.equal(collision.canStandAtFloorPosition(new THREE.Vector3(5, 0.5, 2), { ignoreActorBlockers: true }), false, 'unsupported space remains invalid');
+  assert.equal(collision.blockerRects.length, 3);
   host.dispose();
-  assert.equal(blockers.length, 0);
+  assert.equal(collision.blockerRects.includes(wall), true);
+  assert.equal(collision.blockerRects.includes(otherActor), true);
+  assert.equal(collision.blockerRects.length, 2, 'only the owned blocker is released');
 });
 
 test('EncounterRuntimeHost activates only matching locations, remains harmless when empty, and cleans scene transitions', async () => {

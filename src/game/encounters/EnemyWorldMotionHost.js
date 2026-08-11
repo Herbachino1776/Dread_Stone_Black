@@ -78,7 +78,7 @@ export class EnemyWorldMotionHost {
     if (!ground || Math.abs(ground.y - this.position.y) > this.maximumGroundStep) return null;
     const grounded = candidate.clone();
     grounded.y = ground.y;
-    if (this.collision?.canStandAtFloorPosition?.(grounded) === false) return null;
+    if (this.collision?.canStandAtFloorPosition?.(grounded, { ignoreActorBlockers: true }) === false) return null;
     if (this.getBlockingEntries(grounded).length > 0) return null;
     return ground;
   }
