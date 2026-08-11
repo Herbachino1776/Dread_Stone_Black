@@ -303,7 +303,7 @@ export function prepareHumanoidCombatMaterial(object, material) {
 }
 
 export class HumanoidGlbVisualAdapter {
-  constructor({ actor, parent, profile = CURRENT_HUMANOID_PROFILE, isolateMaterials = false }) {
+  constructor({ actor, parent, profile = CURRENT_HUMANOID_PROFILE, isolateMaterials = false, visualOnly = false }) {
     this.actor = actor;
     this.parent = parent;
     this.profile = profile;
@@ -329,6 +329,7 @@ export class HumanoidGlbVisualAdapter {
     this.pendingHurt = null;
     this.pendingDeath = null;
     this.isolateMaterials = isolateMaterials === true;
+    this.visualOnly = visualOnly === true;
     this.ownedMaterials = new Map();
     this.fadePrepared = false;
     this.fadeMaterialBaselines = new Map();
@@ -358,7 +359,7 @@ export class HumanoidGlbVisualAdapter {
     const [asset, animationManifest, damageManifest] = await Promise.all([
       loadCachedAsset(this.profile.assetPath),
       loadCachedAnimationManifest(this.profile.animationManifestPath),
-      loadCachedDamageManifest(this.profile.damageManifestPath),
+      this.visualOnly ? Promise.resolve(null) : loadCachedDamageManifest(this.profile.damageManifestPath),
     ]);
     if (this.disposed) return;
     if (animationManifest) {
@@ -391,7 +392,7 @@ export class HumanoidGlbVisualAdapter {
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       materials.forEach((material) => prepareHumanoidCombatMaterial(object, material));
     });
-    this.skinnedMeshes.forEach((mesh) => {
+    if (!this.visualOnly) this.skinnedMeshes.forEach((mesh) => {
       const metadata = buildSkinnedTriangleInfluenceMetadata(mesh, { boneMap: this.profile.boneMap });
       if (metadata) this.surfaceBindingMetadata.set(mesh, metadata);
     });
@@ -418,6 +419,7 @@ export class HumanoidGlbVisualAdapter {
   }
 
   initializeDamageRuntime() {
+    if (this.visualOnly) return null;
     if (!this.damageManifest || this.damageSegmentRuntime) return this.damageSegmentRuntime;
     // Surface-bound progressive targets are resolved while the damage runtime is
     // constructed. The binder deliberately ignores hidden meshes.

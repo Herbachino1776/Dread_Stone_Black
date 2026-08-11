@@ -50,6 +50,8 @@ export class Game {
     this.combatLabEnabled = import.meta.env.DEV && query.get('combatLab') === '1';
     this.creatureLabEnabled = resolveCreatureLabMode(query);
     this.m9EncounterProofEnabled = import.meta.env.DEV && query.get('m9EncounterProof') === '1';
+    this.developmentToolRequested = import.meta.env.DEV && query.get('encounterAuthoring') === '1';
+    this.developmentToolRuntime = null;
     this.debugHudEnabled = import.meta.env.DEV && query.get('debugHud') === '1';
     this.perfDebugEnabled = query.get('perf') === '1';
     this.isPaused = false;
@@ -164,6 +166,7 @@ export class Game {
       playerDamageReceiverProvider: () => this.playerCombatDamageReceiver,
       playerCombatState: this.playerCombatState,
       playerCurrencyState: this.playerCurrencyState,
+      registeredActivationSuppressed: this.developmentToolRequested,
     });
     await this.encounterRuntimeHost.initializeForSession(this.sceneSessionHost);
     this.inputHost = new InputHost({ root: this.app });
@@ -194,6 +197,40 @@ export class Game {
       transitionToLocation: (...args) => this.sceneSessionHost.transitionToLocation(...args),
       survivalHost: this.survivalHost,
     });
+    if (import.meta.env.DEV) {
+      const [{ EncounterAuthoringController }, { EncounterAuthoringPanel }, { DevToolsLauncher }] = await Promise.all([
+        import(/* @vite-ignore */ './encounters/authoring/EncounterAuthoringController.js'),
+        import(/* @vite-ignore */ './encounters/authoring/EncounterAuthoringPanel.js'),
+        import(/* @vite-ignore */ './devtools/DevToolsLauncher.js'),
+      ]);
+      const prepareEncounterAuthoringLoadout = () => {
+        if (!this.equipmentRuntime.hasItem('old_work_knife')) {
+          this.devEphemeralEquipmentIds.add('old_work_knife');
+          this.equipmentRuntime.acquireItem('old_work_knife', { source: 'encounter_authoring_dev_loadout', devOnly: true });
+        }
+        if (this.equipmentRuntime.getSnapshot().equipped.weapon === 'unarmed') this.equipmentRuntime.equip('weapon', 'old_work_knife');
+      };
+      const controller = new EncounterAuthoringController({
+        sceneSessionHost: this.sceneSessionHost,
+        encounterRuntimeHost: this.encounterRuntimeHost,
+        playerDamageReceiver: this.playerCombatDamageReceiver,
+      });
+      const panel = new EncounterAuthoringPanel({ controller, root: this.app });
+      const launcher = new DevToolsLauncher({
+        root: this.app,
+        encounterAuthoringController: controller,
+        beforeOpenEncounterAuthoring: prepareEncounterAuthoringLoadout,
+      });
+      this.developmentToolRuntime = {
+        update: (deltaSeconds) => controller.update(deltaSeconds),
+        handleSessionChanged: (session) => controller.handleSessionChanged(session),
+        dispose: () => { launcher.dispose(); panel.dispose(); controller.dispose(); },
+      };
+      if (this.developmentToolRequested) {
+        prepareEncounterAuthoringLoadout();
+        await controller.open();
+      }
+    }
     if (this.m9EncounterProofEnabled) this.encounterProofPanel = new EncounterProofPanel({
       root: this.app,
       encounterRuntimeHost: this.encounterRuntimeHost,
@@ -256,6 +293,7 @@ export class Game {
     void session.warmBloodMaterials?.();
     this.survivalHost?.initializeForSession?.(session);
     this.progressionHost?.handleLocationChanged?.(session);
+    await this.developmentToolRuntime?.handleSessionChanged?.(session);
     this.wasKeyboardInteractHeld = false;
     this.hud?.showHint?.('');
   }
@@ -319,6 +357,7 @@ export class Game {
       isPlayerDead: this.isPlayerDead,
     });
     this.encounterRuntimeHost?.update?.(deltaSeconds);
+    this.developmentToolRuntime?.update?.(deltaSeconds);
     this.audioRuntime?.update(deltaSeconds, {
       camera: this.camera,
       player: this.player,
@@ -490,6 +529,8 @@ export class Game {
   dispose() {
     this.rendererHost?.setAnimationLoop?.(null);
     this.perfDebugPanel?.dispose?.();
+    this.developmentToolRuntime?.dispose?.();
+    this.developmentToolRuntime = null;
     this.clearResetConfirmation();
     this.disposers?.forEach((dispose) => dispose?.());
     this.disposers = [];

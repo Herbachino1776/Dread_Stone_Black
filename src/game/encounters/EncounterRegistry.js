@@ -9,9 +9,19 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-// Canonical encounter content is intentionally empty until M9.5 authors real
-// placement. Dev fixtures live outside this production collection.
-export const PRODUCTION_ENCOUNTER_DEFINITIONS = Object.freeze([]);
+function discoverProductionEncounterDefinitions() {
+  let modules = {};
+  // Vite expands this controlled import glob at dev/build time. Node unit tests
+  // do not execute it and supply explicit registry records instead.
+  if (import.meta.env?.DEV || import.meta.env?.PROD) {
+    modules = import.meta.glob('./data/*.json', { eager: true, import: 'default' });
+  }
+  return Object.freeze(Object.entries(modules)
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([, definition]) => definition));
+}
+
+export const PRODUCTION_ENCOUNTER_DEFINITIONS = discoverProductionEncounterDefinitions();
 
 export class EncounterRegistryError extends Error {
   constructor(code, message, options = {}) {

@@ -7,7 +7,7 @@ import { encounterRegistry } from './EncounterRegistry.js';
 import { EncounterSpawner } from './EncounterSpawner.js';
 
 export class EncounterRuntimeHost {
-  constructor({ registry = encounterRegistry, spawner = new EncounterSpawner(), audioRuntime = null, playerProvider = null, playerDamageReceiverProvider = null, playerCombatState = null, playerCurrencyState = null, lootRandom = Math.random } = {}) {
+  constructor({ registry = encounterRegistry, spawner = new EncounterSpawner(), audioRuntime = null, playerProvider = null, playerDamageReceiverProvider = null, playerCombatState = null, playerCurrencyState = null, lootRandom = Math.random, registeredActivationSuppressed = false } = {}) {
     if (!registry?.listByLocation) throw new Error('EncounterRuntimeHost requires an EncounterRegistry-compatible source.');
     this.registry = registry;
     this.spawner = spawner;
@@ -33,6 +33,7 @@ export class EncounterRuntimeHost {
     this.disposed = false;
     this.lastError = null;
     this.sessionGeneration = 0;
+    this.registeredActivationSuppressed = registeredActivationSuppressed === true;
   }
 
   get externallyDriven() { return Boolean(this.borrowedCombatRuntime); }
@@ -107,6 +108,7 @@ export class EncounterRuntimeHost {
   }
 
   async activateRegisteredLocationEncounters() {
+    if (this.registeredActivationSuppressed) return [];
     const activated = [];
     try {
       for (const definition of this.registry.listByLocation(this.locationId)) activated.push(await this.spawnDefinition(definition));
@@ -127,6 +129,18 @@ export class EncounterRuntimeHost {
     const runtime = await this.spawner.spawn(definition, this.createServices(definition.encounterId));
     this.activeRuntimes.set(runtime.encounterId, runtime);
     return runtime;
+  }
+
+  async setRegisteredActivationSuppressed(suppressed, { despawn = true } = {}) {
+    const next = suppressed === true;
+    if (this.registeredActivationSuppressed === next) return { suppressed: next, changed: false };
+    this.registeredActivationSuppressed = next;
+    if (next) {
+      const despawned = despawn ? this.despawnAll('registered-encounters-authoring-suppressed') : 0;
+      return { suppressed: true, changed: true, despawned };
+    }
+    const activated = this.scene ? await this.activateRegisteredLocationEncounters() : [];
+    return { suppressed: false, changed: true, activated: activated.length };
   }
 
   async resetEncounter(encounterId) {
@@ -222,6 +236,7 @@ export class EncounterRuntimeHost {
       combatRouting: this.combatRouter?.getDiagnostics?.() ?? { actorCount: 0, colliderCount: 0 },
       encounters,
       initializing: this.initializing,
+      registeredActivationSuppressed: this.registeredActivationSuppressed,
       lastError: this.lastError,
       disposed: this.disposed,
     };
