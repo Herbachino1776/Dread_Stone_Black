@@ -1,0 +1,22 @@
+{
+  "schema": "dreadstone.encounter_definition.v1",
+  "version": 1,
+  "encounterId": "folsomfight",
+  "displayName": "FolsomFight",
+  "locationId": "folsom",
+  "spawns": [
+    {
+      "spawnId": "folsomfight_enemy_7725bfec57ec",
+      "presetId": "dread_ram_god_great_mace",
+      "transform": {
+        "position": [
+          -1.85667731,
+          0.188,
+          12.71035722
+        ],
+        "yaw": 2.9531555
+      },
+      "homeRadius": 8
+    }
+  ]
+}
