@@ -1,6 +1,13 @@
 import { CREATURE_LAB_HEIGHT_RANGE, CREATURE_LAB_WEAPON_SCALE_RANGE } from './CreatureLabCalibration.js';
 
 export const CREATURE_LAB_TOUCH_TARGET_PX = 48;
+export const CREATURE_LAB_USES_UNIFIED_LAUNCHER = true;
+
+export function createCreatureLabExitUrl(href = globalThis.location?.href ?? 'http://localhost/') {
+  const url = new URL(href, 'http://localhost/');
+  ['creatureLab', 'enemyPreset', 'creatureDefinition', 'creaturePack'].forEach((key) => url.searchParams.delete(key));
+  return `${url.pathname}${url.search}${url.hash}`;
+}
 
 export function getCreatureLabPrimaryActions(controller) {
   return [
@@ -155,10 +162,11 @@ function formatBytesAsMb(bytes) {
 }
 
 export class CreatureLabPanel {
-  constructor({ controller, parent = document.body } = {}) {
+  constructor({ controller, parent = document.body, onExit = null } = {}) {
     this.controller = controller;
     this.parent = parent;
-    this.opened = false;
+    this.onExit = onExit ?? (() => window.location.assign(createCreatureLabExitUrl()));
+    this.opened = true;
     this.sitesExpanded = true;
     this.diagnosticsExpanded = false;
     this.lastDiagnosticsUpdate = 0;
@@ -173,9 +181,8 @@ export class CreatureLabPanel {
     this.style = element('style');
     this.style.dataset.creatureLabStyle = 'true';
     this.style.textContent = `
-      .creature-lab-toggle{position:fixed;z-index:1900;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));min-width:64px;min-height:${CREATURE_LAB_TOUCH_TARGET_PX}px;border:2px solid #b79b75;border-radius:8px;background:#17130f;color:#f4dfbd;font:700 15px/1 system-ui;letter-spacing:.12em;touch-action:manipulation}
       .creature-lab-panel{position:fixed;z-index:1901;top:max(6px,env(safe-area-inset-top));right:max(6px,env(safe-area-inset-right));bottom:max(6px,env(safe-area-inset-bottom));width:min(430px,calc(100vw - 12px));overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:0 12px 18px;box-sizing:border-box;border:1px solid #74644f;border-radius:10px;background:#0d0b09f2;color:#e9dfd0;font:14px/1.4 system-ui,-apple-system,sans-serif;box-shadow:0 8px 32px #000b}
-      .creature-lab-panel[hidden],.creature-lab-toggle[hidden]{display:none}
+      .creature-lab-panel[hidden]{display:none}
       .creature-lab-header{position:sticky;top:0;z-index:1;margin:0 -12px 10px;padding:14px 12px 10px;background:#0d0b09f8;border-bottom:1px solid #574a3b}
       .creature-lab-title{margin:0;color:#e6bd85;font-size:17px;letter-spacing:.14em}
       .creature-lab-current{margin:5px 0 0;color:#c8d9d3;font-size:13px;overflow-wrap:anywhere}
@@ -203,21 +210,16 @@ export class CreatureLabPanel {
       .creature-lab-diagnostics{max-height:42vh;overflow:auto;margin:9px 0 0;padding:9px;border:1px solid #3e514b;background:#070908;color:#b9d7ce;font:11px/1.4 ui-monospace,monospace;white-space:pre-wrap;user-select:text;overflow-wrap:anywhere}
       @media (max-width:380px){.creature-lab-panel{width:calc(100vw - 8px);right:4px;padding-left:9px;padding-right:9px}.creature-lab-header{margin-left:-9px;margin-right:-9px}.creature-lab-grid{grid-template-columns:1fr}}
     `;
-    this.toggleButton = element('button', 'LAB', 'creature-lab-toggle');
-    this.toggleButton.type = 'button';
-    this.toggleButton.dataset.creatureLabToggle = 'true';
-    this.toggleButton.setAttribute('aria-label', 'Open Creature Lab');
-    this.toggleButton.addEventListener('click', () => this.open());
     this.panel = element('aside', null, 'creature-lab-panel');
     this.panel.dataset.creatureLabPanel = 'true';
     this.panel.setAttribute('aria-label', 'Creature Lab controls');
-    this.panel.hidden = true;
+    this.panel.hidden = false;
     const stop = (event) => event.stopPropagation();
     ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchmove', 'touchend', 'wheel'].forEach((eventName) => {
       this.panel.addEventListener(eventName, stop, { passive: eventName !== 'wheel' });
       this.disposers.push(() => this.panel?.removeEventListener?.(eventName, stop));
     });
-    this.parent.append(this.style, this.toggleButton, this.panel);
+    this.parent.append(this.style, this.panel);
   }
 
   createButton(label, action, { pressed = false, disabled = false, wide = false, title = '' } = {}) {
@@ -311,7 +313,7 @@ export class CreatureLabPanel {
     header.append(element('h2', 'CREATURE LAB', 'creature-lab-title'));
     header.append(element('p', `Current ${state.selectedPresetId ? 'preset' : 'definition'}: ${state.selectedDisplayName}${state.loading ? ' — loading…' : ''}`, 'creature-lab-current'));
     const top = this.createGrid();
-    top.append(this.createButton('Close', () => this.close()));
+    top.append(this.createButton('Exit Lab', () => this.close()));
     getCreatureLabPrimaryActions(this.controller).forEach((action) => top.append(this.createButton(action.label, action.run, { disabled: state.loading })));
     header.append(top);
     this.panel.append(header);
@@ -665,7 +667,6 @@ export class CreatureLabPanel {
   open() {
     this.opened = true;
     this.panel.hidden = false;
-    this.toggleButton.hidden = true;
     this.controller.weaponControllerProvider?.()?.cancel?.('creature-lab-panel-open');
     this.render();
   }
@@ -673,7 +674,7 @@ export class CreatureLabPanel {
   close() {
     this.opened = false;
     this.panel.hidden = true;
-    this.toggleButton.hidden = false;
+    this.onExit?.();
   }
 
   updateDiagnostics(force = false) {
@@ -758,10 +759,8 @@ export class CreatureLabPanel {
     this.disposers.forEach((dispose) => dispose());
     this.disposers = [];
     this.panel?.remove();
-    this.toggleButton?.remove();
     this.style?.remove();
     this.panel = null;
-    this.toggleButton = null;
     this.style = null;
   }
 }

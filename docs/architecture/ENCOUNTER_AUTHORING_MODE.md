@@ -48,9 +48,11 @@ record.
 ## Opening the tool on phone
 
 Run the Vite development server with `npm run dev`, open the normal game from an
-iPhone on the same network, and use the touch-accessible **DEV TOOLS** button.
-Choose **ENCOUNTER AUTHORING**. Existing query-driven tools remain available,
-and `?encounterAuthoring=1` remains a direct fallback.
+iPhone on the same network, and use the small **DEV** control in the existing
+top game toolbar. This is the one persistent development-tool entry point. Its
+temporary menu contains **CREATURE LAB**, **ENCOUNTER AUTHORING**, and **COMBAT
+DEBUG**, then closes as soon as a tool is selected. `?encounterAuthoring=1`
+remains a direct fallback.
 
 The Dev Tools launcher and all Encounter Authoring DOM are created only inside
 the development branch. The production build contains neither the authoring
@@ -65,9 +67,42 @@ Opening authoring mode:
 5. lists valid location-scoped local drafts;
 6. restores the last valid local draft for that location when available.
 
-The bottom sheet can be minimized. Panel touches stop at the panel; touches in
-the visible world continue into the existing mobile movement/look ownership.
-Explicit PLACE and SELECT AT RETICLE buttons avoid taking all world touches.
+Encounter Authoring attaches its controls to the real viewport rather than the
+page edge. Its DOM layer is pointer-transparent except for visible controls and
+drawers. Touches on those controls stop at the UI; all exposed world and control
+deck space retains the existing movement/look/tool ownership. Explicit PLACE
+and SELECT AT RETICLE actions avoid taking all world touches.
+
+## Mobile interaction model
+
+The world is the primary authoring surface. Encounter Authoring is divided into
+four kinds of presentation:
+
+```text
+DEV MENU
+  -> choose one development tool
+
+ENCOUNTER AUTHORING
+  -> compact top-edge status chip + current actions
+
+TEMPORARY DRAWERS
+  -> Enemy Bank, spawn list, properties, encounter management, JSON
+
+CONTEXT CONTROLS
+  -> only the current spatial operation: place, move, radius, or test
+```
+
+Normal authoring uses a compact top-edge rail. The rail shows the current
+location, encounter, spawn count, and local/project state, plus access to Add,
+Select, Spawns, Test, Save, and More. The center view and the complete bottom
+control deck remain clear. On narrow portrait layouts the rail may wrap at the
+top; it never moves into either joystick region.
+
+Selecting an authored enemy replaces the general rail with its frequent spatial
+actions: Aim/Select, Move, Turn, Duplicate, Properties, protected Delete, and
+Done. Opening a drawer never creates a full-screen transparent input catcher.
+Entering placement, move, radius adjustment, or test automatically closes every
+drawer and replaces the prior rail instead of stacking another toolbar on it.
 
 If normal travel changes location while authoring is open, the current draft is
 flushed to local storage, placement/move/test ownership is canceled, old preview
@@ -79,6 +114,7 @@ runtime, then re-enables registered production encounter activation.
 
 ## Creating and opening encounters
 
+The temporary **ENCOUNTERS** drawer owns open, recover, and create work.
 **OPEN EXISTING ENCOUNTER** clones the registry's immutable production record.
 The registry object is never mutated in place.
 
@@ -99,8 +135,9 @@ the local draft with the immutable session baseline.
 
 ## Enemy Bank and visual-only previews
 
-Enemy Bank reads `EnemyPresetRegistry`; there is no authoring-only enemy list.
-It filters by display name or preset ID and reports:
+Enemy Bank is a compact temporary drawer backed by `EnemyPresetRegistry`; there
+is no authoring-only enemy list. It filters by display name or preset ID, keeps
+up to three session-recent choices at the top, and reports:
 
 - display name and preset ID;
 - Creature Definition;
@@ -127,7 +164,8 @@ or player blocker. Body and weapon materials are instance-owned before their
 translucent authoring style is applied; shared production materials are not
 mutated.
 
-The configurable mobile preview budget defaults to four full bodies including
+Choosing a supported preset closes Enemy Bank immediately. The configurable
+mobile preview budget defaults to four full bodies including
 the active placement ghost. The placement ghost and selected individual receive
 priority, then nearby individuals. Every spawn always retains a cheap ground
 ring, facing arrow, and authoring-only pick volume when its body falls outside
@@ -147,8 +185,9 @@ VALID PLACEMENT**, and PLACE/CONFIRM MOVE remains disabled.
 
 ## Place, select, and edit
 
-Selecting a supported preset enters placement mode. Movement and look remain
-live while the compact mode bar provides:
+Selecting a supported preset enters placement mode. The normal authoring rail
+and every drawer disappear. Movement and look remain live while a compact
+top-edge context rail provides:
 
 - ROTATE -15 degrees;
 - ROTATE +15 degrees;
@@ -156,7 +195,9 @@ live while the compact mode bar provides:
 - CANCEL.
 
 PLACE writes only `spawnId`, `presetId`, supported world position/yaw, and the
-default 8 m home radius. Placement mode remains active for rapid camp population.
+default 8 m home radius. Placement mode remains active with the same real ghost
+for rapid camp population; the user can walk elsewhere and place another without
+returning to Enemy Bank. Cancel returns directly to the compact authoring HUD.
 
 Spawn IDs use:
 
@@ -168,16 +209,22 @@ Generation checks the current draft and all other installed encounter owners,
 retries collisions, never uses an array index, and never reuses or renumbers
 identity during ordinary edits. DUPLICATE always generates a fresh ID.
 
-Existing individuals can be selected through either the spawn list or the
-center-screen **SELECT AT RETICLE** action. The selected inspector exposes:
+Existing individuals can be selected through either the temporary spawn-list
+drawer or the center-screen **SELECT AT RETICLE** action. The selected ground
+ring, facing arrow, preview treatment, and concise selected chip make the world
+selection obvious. The contextual selected rail exposes the frequent operations:
 
-- MOVE with CONFIRM MOVE / CANCEL MOVE and an unchanged original until confirm;
-- touch-step yaw rotation;
+- MOVE with CONFIRM / CANCEL and an unchanged original until confirm;
+- immediate 15-degree yaw steps;
 - DUPLICATE at a nearby non-stacked offset followed by move mode;
-- CHANGE PRESET while preserving authored identity and individual tuning;
-- two-tap DELETE without renumbering other records;
-- positive finite home radius controls and a selected-only world ring;
-- preset-default gold or one positive safe-integer fixed override.
+- two-tap DELETE without renumbering other records.
+
+Less frequent identity and tuning fields live in the temporary **PROPERTIES**
+drawer: change preset, exact transform readout, spawn ID, home radius, and gold
+override. **ADJUST RADIUS IN WORLD** closes that drawer and replaces the selected
+rail with small radius step controls, so the selected-only world ring remains
+judgable while it changes. Change Preset opens Enemy Bank and preserves authored
+identity and individual tuning.
 
 ## Autosave and canonical JSON
 
@@ -191,7 +238,11 @@ The storage envelope versions local editor metadata separately. Its embedded
 `encounter` is still the exact canonical contract. Malformed or scope-mismatched
 storage fails closed. Production baselines remain separately cloned in memory.
 
-**VIEW JSON**, **COPY JSON**, and **EXPORT JSON** all use M9's
+The dirty state is a small indicator on the always-reachable Save action and a
+short `LOCAL DRAFT` versus `MATCHES PROJECT` status label; autosave therefore
+does not need a persistent warning panel. A successful project save produces a
+brief confirmation. **VIEW JSON**, **COPY JSON**, and **EXPORT JSON** live in
+the temporary More drawer and all use M9's
 `serializeEncounterDefinition()`. The readout stays selectable on iPhone when
 Clipboard permission fails. Exported JSON is directly accepted by
 `parseEncounterDefinition()`, `EncounterRegistry`, and `EncounterSpawner`.
@@ -203,15 +254,20 @@ and calls `EncounterRuntimeHost.spawnDefinition(draft)`. The result uses the rea
 M9 spawner, Creature Factory, actors, combat routing, weapons, brain, player HP,
 death, and loot. There is no editor combat path.
 
-The compact test bar provides:
+Testing hides all normal authoring status, selection, drawer, save, and encounter
+controls. A two-button top-edge test rail provides:
 
 - **RESET TEST**, which delegates to `EncounterRuntime.reset()`;
-- **RETURN TO AUTHORING**, which despawns the test runtime, resets the dev player
+- **AUTHOR**, which despawns the test runtime, resets the dev player
   combat state if necessary, and reconstructs previews from the unchanged local
   draft.
 
 Testing never regenerates spawn IDs and never writes runtime life/loot state into
 the draft.
+
+The movement joystick, look joystick, Attack, Interact, and equipment control
+remain the ordinary gameplay controls during the test. The test rail is inside
+the viewport's upper edge, not the bottom control deck.
 
 ## Saving to the project
 
@@ -246,6 +302,13 @@ registry.
 There is no generic filesystem endpoint, browser-selected repository path,
 browser commit, or browser push. Vite preview and production hosting do not
 register the middleware.
+
+## Creature Lab entry
+
+Creature Lab retains its direct `?creatureLab=1` route and existing runtime.
+Choosing it from DEV transitions to its Folsom lab route and opens the Lab panel
+immediately. **EXIT LAB** returns to the ordinary route. There is no independent
+fixed LAB button near the look joystick.
 
 ## Fallback import
 

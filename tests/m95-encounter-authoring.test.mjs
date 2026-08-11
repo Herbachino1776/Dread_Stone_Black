@@ -32,6 +32,12 @@ import {
 import { EncounterAuthoringPlacementResolver } from '../src/game/encounters/authoring/EncounterAuthoringPlacementResolver.js';
 import { EncounterAuthoringPresetPreview } from '../src/game/encounters/authoring/EncounterAuthoringPresetPreview.js';
 import { EncounterAuthoringPreviewRuntime } from '../src/game/encounters/authoring/EncounterAuthoringPreviewRuntime.js';
+import {
+  ENCOUNTER_AUTHORING_DRAWERS,
+  ENCOUNTER_AUTHORING_PRESENTATIONS,
+  resolveEncounterAuthoringPresentation,
+} from '../src/game/encounters/authoring/EncounterAuthoringPanel.js';
+import { createDevToolUrl, DEV_TOOL_IDS, DEV_TOOL_MENU_ITEMS } from '../src/game/devtools/DevToolsLauncher.js';
 import { createEncounterAuthoringMiddleware, ENCOUNTER_AUTHORING_BRIDGE_PATH } from '../scripts/encounter-authoring-bridge.mjs';
 import {
   installEncounterDefinition,
@@ -40,6 +46,44 @@ import {
 } from '../scripts/encounter-installer-lib.mjs';
 
 const RAM_PRESET_ID = 'dread_ram_god_great_mace';
+
+test('unified DEV launcher exposes the three tools and produces exclusive tool routes', () => {
+  assert.deepEqual(DEV_TOOL_MENU_ITEMS.map((item) => item.id), [
+    DEV_TOOL_IDS.creatureLab,
+    DEV_TOOL_IDS.encounterAuthoring,
+    DEV_TOOL_IDS.combatDebug,
+  ]);
+  const source = 'https://example.test/play?area=north-road&combatLab=1#game';
+  const creatureLabUrl = new URL(createDevToolUrl(DEV_TOOL_IDS.creatureLab, source), source);
+  assert.equal(creatureLabUrl.searchParams.get('area'), 'folsom');
+  assert.equal(creatureLabUrl.searchParams.get('creatureLab'), '1');
+  assert.equal(creatureLabUrl.searchParams.has('combatLab'), false);
+  const authoringUrl = new URL(createDevToolUrl(DEV_TOOL_IDS.encounterAuthoring, source), source);
+  assert.equal(authoringUrl.searchParams.get('area'), 'north-road');
+  assert.equal(authoringUrl.searchParams.get('encounterAuthoring'), '1');
+  assert.equal(authoringUrl.searchParams.has('combatLab'), false);
+});
+
+test('authoring presentation replaces general chrome with contextual spatial and test controls', () => {
+  const draft = authoredEncounter();
+  const normal = { open: true, mode: ENCOUNTER_AUTHORING_MODES.idle, draft, selectedSpawnId: null };
+  assert.deepEqual(resolveEncounterAuthoringPresentation(normal, { drawer: ENCOUNTER_AUTHORING_DRAWERS.bank }), {
+    presentation: ENCOUNTER_AUTHORING_PRESENTATIONS.normal,
+    drawer: ENCOUNTER_AUTHORING_DRAWERS.bank,
+  });
+  assert.deepEqual(resolveEncounterAuthoringPresentation({ ...normal, mode: ENCOUNTER_AUTHORING_MODES.placing }, { drawer: ENCOUNTER_AUTHORING_DRAWERS.bank }), {
+    presentation: ENCOUNTER_AUTHORING_PRESENTATIONS.spatial,
+    drawer: null,
+  });
+  assert.deepEqual(resolveEncounterAuthoringPresentation({ ...normal, selectedSpawnId: draft.spawns[0].spawnId }, { radiusEditing: true }), {
+    presentation: ENCOUNTER_AUTHORING_PRESENTATIONS.radius,
+    drawer: null,
+  });
+  assert.deepEqual(resolveEncounterAuthoringPresentation({ ...normal, mode: ENCOUNTER_AUTHORING_MODES.testing }, { drawer: ENCOUNTER_AUTHORING_DRAWERS.more }), {
+    presentation: ENCOUNTER_AUTHORING_PRESENTATIONS.testing,
+    drawer: null,
+  });
+});
 
 function authoredEncounter(overrides = {}) {
   return {
@@ -400,6 +444,20 @@ test('Enemy Bank selection enters placement and PLACE writes through the operati
   assert.equal(state.draft.spawns.length, 1);
   assert.equal(placed.presetId, RAM_PRESET_ID);
   assert.deepEqual(placed.transform.position, [2, 0.16, -4]);
+  assert.deepEqual(state.recentPresetIds, [RAM_PRESET_ID]);
+  controller.cancelPlacement();
+  assert.equal(controller.getState().minimized, false);
+});
+
+test('selection can be cleared without mutating the authored spawn', async () => {
+  const { controller, preview } = controllerHarness({ registry: new EncounterRegistry({ encounters: [authoredEncounter()] }) });
+  await controller.open(); controller.openEncounter('m95_test_encounter');
+  const spawnId = authoredEncounter().spawns[0].spawnId;
+  controller.selectSpawn(spawnId);
+  controller.clearSelection();
+  assert.equal(controller.getState().selectedSpawnId, null);
+  assert.equal(controller.getState().draft.spawns[0].spawnId, spawnId);
+  assert.equal(preview.selection, null);
 });
 
 test('MOVE cancel preserves the exact original transform and identity', async () => {

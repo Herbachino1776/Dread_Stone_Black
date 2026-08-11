@@ -148,6 +148,10 @@ export class EncounterAuthoringPreviewRuntime {
     group.userData = { devOnly: true, encounterAuthoringPreview: true, spawnId };
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.39, 24), markerMaterial(0x78a9a2));
     ring.rotation.x = -Math.PI / 2;
+    const selectionHalo = new THREE.Mesh(new THREE.RingGeometry(0.43, 0.49, 24), markerMaterial(0xffdf82, 0.92));
+    selectionHalo.rotation.x = -Math.PI / 2;
+    selectionHalo.position.y = 0.006;
+    selectionHalo.visible = false;
     const arrowGeometry = new THREE.BufferGeometry();
     arrowGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
       0, 0, 0.68, -0.12, 0, 0.4, 0.12, 0, 0.4,
@@ -156,9 +160,9 @@ export class EncounterAuthoringPreviewRuntime {
     const pick = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 1.8, 10), markerMaterial(0xffffff, 0.001));
     pick.position.y = 0.9;
     pick.userData = { devOnly: true, encounterAuthoringPreview: true, spawnId, authoringPickTarget: true };
-    group.add(ring, arrow, pick);
+    group.add(ring, selectionHalo, arrow, pick);
     this.scene.add(group);
-    return { group, ring, arrow, pick };
+    return { group, ring, selectionHalo, arrow, pick };
   }
 
   syncMarkerStyles() {
@@ -166,7 +170,8 @@ export class EncounterAuthoringPreviewRuntime {
       const selected = spawnId === this.selectedSpawnId;
       record.ring.material.color.setHex(selected ? 0xf1cf72 : 0x78a9a2);
       record.arrow.material.color.setHex(selected ? 0xffefae : 0xc8e7df);
-      record.group.scale.setScalar(selected ? 1.24 : 1);
+      record.selectionHalo.visible = selected;
+      record.group.scale.setScalar(selected ? 1.34 : 1);
     });
   }
 

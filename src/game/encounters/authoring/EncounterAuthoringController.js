@@ -46,6 +46,7 @@ function publicState(state) {
     productionEncounters: [...state.productionEncounters],
     localDrafts: [...state.localDrafts],
     enemyBank: state.enemyBank.map((entry) => ({ ...entry })),
+    recentPresetIds: [...state.recentPresetIds],
     placementTarget: state.placementTarget ? structuredClone(state.placementTarget) : null,
   };
 }
@@ -95,6 +96,7 @@ export class EncounterAuthoringController {
       productionEncounters: [],
       localDrafts: [],
       enemyBank: [],
+      recentPresetIds: [],
       enemyBankLoading: false,
       draft: null,
       productionBaseline: null,
@@ -312,6 +314,15 @@ export class EncounterAuthoringController {
     return true;
   }
 
+  clearSelection() {
+    this.state.selectedSpawnId = null;
+    this.state.deleteConfirmationSpawnId = null;
+    this.state.deleteConfirmationExpiresAt = 0;
+    this.previewRuntime?.setSelection?.(null);
+    this.scheduleAutosave();
+    return this.emit();
+  }
+
   selectSpawnAtReticle() {
     const spawnId = this.previewRuntime?.pickCenter?.(this.sceneSessionHost?.camera);
     if (!spawnId) { this.state.status = 'No authoring marker is centered in the reticle.'; this.emit(); return null; }
@@ -324,6 +335,7 @@ export class EncounterAuthoringController {
   selectPreset(presetId) {
     const entry = this.state.enemyBank.find((candidate) => candidate.presetId === presetId);
     if (!entry || entry.supported !== true) throw new Error(entry?.failureReason ?? `Enemy Preset "${presetId}" is unavailable.`);
+    this.state.recentPresetIds = [presetId, ...this.state.recentPresetIds.filter((id) => id !== presetId)].slice(0, 3);
     if (this.state.mode === ENCOUNTER_AUTHORING_MODES.changingPreset) {
       const spawnId = this.state.selectedSpawnId;
       this.state.mode = ENCOUNTER_AUTHORING_MODES.idle;
@@ -422,6 +434,7 @@ export class EncounterAuthoringController {
 
   finishPlacementMode() {
     this.state.mode = ENCOUNTER_AUTHORING_MODES.idle;
+    this.state.minimized = false;
     this.state.placementPresetId = null;
     this.state.placementTarget = null;
     this.moveOriginalTransform = null;

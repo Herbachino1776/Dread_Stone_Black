@@ -18,6 +18,8 @@ import { installKnifeWoundManifestForHeadlessTests } from '../src/game/combat/Kn
 import { createCreatureLabReadOnlyStorage, CreatureLabController, resolveCreatureLabMode } from '../src/game/creatures/CreatureLabController.js';
 import {
   CREATURE_LAB_TOUCH_TARGET_PX,
+  CREATURE_LAB_USES_UNIFIED_LAUNCHER,
+  createCreatureLabExitUrl,
   getCreatureLabAnimationPanelActions,
   getCreatureLabBodyStateActions,
   getCreatureLabDamagePanelActions,
@@ -43,6 +45,15 @@ globalThis.ProgressEvent ??= class ProgressEvent {
   constructor(type, init = {}) { this.type = type; Object.assign(this, init); }
 };
 globalThis.createImageBitmap ??= async () => ({ width: 1, height: 1, close() {} });
+
+test('Creature Lab uses the unified DEV entry and exits without a corner launcher', () => {
+  assert.equal(CREATURE_LAB_USES_UNIFIED_LAUNCHER, true);
+  const source = 'https://example.test/play?area=folsom&creatureLab=1&enemyPreset=dread_ram_god_great_mace#game';
+  const exitUrl = new URL(createCreatureLabExitUrl(source), source);
+  assert.equal(exitUrl.searchParams.get('area'), 'folsom');
+  assert.equal(exitUrl.searchParams.has('creatureLab'), false);
+  assert.equal(exitUrl.searchParams.has('enemyPreset'), false);
+});
 
 const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
 const fixtureBaseUrl = 'https://example.test/Dread_Stone_Black/';
