@@ -1,0 +1,22 @@
+{
+  "schema": "dreadstone.encounter_definition.v1",
+  "version": 1,
+  "encounterId": "folsomtst",
+  "displayName": "FolsomTst",
+  "locationId": "folsom",
+  "spawns": [
+    {
+      "spawnId": "folsomtst_enemy_d64927889973",
+      "presetId": "dread_ram_god_great_mace",
+      "transform": {
+        "position": [
+          -2,
+          0.188,
+          5.75
+        ],
+        "yaw": 0
+      },
+      "homeRadius": 10
+    }
+  ]
+}
