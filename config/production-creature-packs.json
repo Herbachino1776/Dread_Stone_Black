@@ -18,6 +18,24 @@
       "displayName": "Dreadguard",
       "enemySlug": "dreadguard",
       "sourceDir": "public/assets/enemies/dreadguard/damage"
+    },
+    {
+      "packId": "rusted_warrior_001_damage_v001",
+      "displayName": "Rusted Knight",
+      "enemySlug": "rusted_warrior_001",
+      "sourceDir": "public/assets/enemies/rusted_warrior_001/damage"
+    },
+    {
+      "packId": "rusted_warrior_001_forest_knight_damage_v001",
+      "displayName": "Forest Knight",
+      "enemySlug": "rusted_warrior_001_forest_knight",
+      "sourceDir": "public/assets/enemies/rusted_warrior_001_forest_knight/damage"
+    },
+    {
+      "packId": "rusted_warrior_001_white_knight_damage_v001",
+      "displayName": "White Knight",
+      "enemySlug": "rusted_warrior_001_white_knight",
+      "sourceDir": "public/assets/enemies/rusted_warrior_001_white_knight/damage"
     }
   ]
 }

@@ -299,9 +299,10 @@ test('CMD drag/drop launcher preserves quoted arguments and bypasses policy only
 
 test('legacy production packs remain registered without requiring sockets or attacks', async () => {
   const catalog = await loadProductionCreaturePackCatalog();
-  assert.deepEqual(catalog.creatures.map((entry) => entry.packId), [
+  const registeredPackIds = new Set(catalog.creatures.map((entry) => entry.packId));
+  [
     'chezwick_damage_v001',
     'dread_ram_god_damage_v001',
     'dreadguard_damage_v001',
-  ]);
+  ].forEach((packId) => assert.equal(registeredPackIds.has(packId), true));
 });

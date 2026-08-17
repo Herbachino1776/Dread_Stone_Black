@@ -1,0 +1,274 @@
+{
+  "schema": "dreadstone.creature_pack.v1",
+  "version": 1,
+  "packId": "rusted_warrior_001_damage_v001",
+  "displayName": "Rusted Knight",
+  "assets": {
+    "glb": "./assets/enemies/rusted_warrior_001/damage/rusted_warrior_001.glb",
+    "damageManifest": "./assets/enemies/rusted_warrior_001/damage/rusted_warrior_001.json",
+    "damageValidationReport": "./assets/enemies/rusted_warrior_001/damage/rusted_warrior_001_validation.json",
+    "animationManifest": null,
+    "animationValidationReport": null
+  },
+  "source": {
+    "object": "SBF_CLEAN_CHARACTER",
+    "armature": "SBF_ProductionRig",
+    "readinessContractSchema": "dreadstone.source_readiness.v1",
+    "objectId": "cbf1107078944bd5a00702ec1edc9873",
+    "meshDataId": "b03fca35e1764a0d951a477d8ce247e4",
+    "armatureObjectId": "0e610bf024314b8da5feea122679786a",
+    "armatureDataId": "63e26b472ea24662930c24dbc4f8fea6",
+    "topologyFingerprint": "2ab27d26b2387746c305e3623750de26d2ed6479a8c4902137604921246c8b3b",
+    "weightFingerprint": "93d972e0eefa7c26d250fe889b24b01fb6e0d0cf1df3bf7c46f6f322238006f4",
+    "readinessAnalyzerRevision": "hierarchical_weight_partition_v3.16.3",
+    "readinessAnalyzerBuildId": "2026-07-18.source-contract.1",
+    "exportGeneratedAtUtc": "2026-08-17T01:17:41Z"
+  },
+  "authoring": {
+    "damageVersion": "3.9.1",
+    "damageBuildId": "2026-08-13.attack-studio-bypass.1",
+    "deformationVersion": "6.0.3",
+    "deformationBuildId": "2026-08-13.attack-studio-bypass.1"
+  },
+  "presentation": {
+    "rawBounds": {
+      "min": [
+        -0.320300857,
+        -0.000510205,
+        -0.195378224
+      ],
+      "max": [
+        0.255057536,
+        1.585514478,
+        0.183712869
+      ],
+      "size": [
+        0.575358393,
+        1.586024683,
+        0.379091093
+      ]
+    },
+    "rawHeight": 1.586024683,
+    "authoredForwardAxis": "+Y",
+    "upAxis": "+Z",
+    "unitScaleMeters": 1,
+    "skeletonFamilyId": "DSB_HUMANOID_V1",
+    "boneMapProfileId": "dreadstone.humanoid.current_bone_map.v1",
+    "runtimeSkeleton": {
+      "schema": "dreadstone.runtime_skeleton.v1",
+      "armature": "DSB_DAMAGE_RIG",
+      "skeletonCount": 1,
+      "skinCount": 1,
+      "requiredBoneCount": 21
+    }
+  },
+  "capabilities": {
+    "progressiveDamage": true,
+    "deformations": true,
+    "gore": true,
+    "surfaceStains": true,
+    "pairedDetachableSegments": true,
+    "embeddedAnimations": true,
+    "separatelyValidatedAnimations": false,
+    "attachmentSockets": true,
+    "offensiveActions": true
+  },
+  "attachmentSockets": {
+    "schema": "dreadstone.attachment_sockets.v1",
+    "available": true,
+    "runtimeArmature": "DSB_DAMAGE_RIG",
+    "runtimeBoneCount": 21,
+    "sockets": [
+      {
+        "socketId": "hand_left_weapon",
+        "semanticRole": "MAIN_HAND_L",
+        "parentRuntimeBone": "arm_left_hand",
+        "localPosition": [
+          0.0513594,
+          0.0823192,
+          -0.0266752
+        ],
+        "localQuaternion": [
+          -0.142359,
+          0.5679702,
+          -0.2034305,
+          0.7847037
+        ]
+      },
+      {
+        "socketId": "hand_right_weapon",
+        "semanticRole": "MAIN_HAND_R",
+        "parentRuntimeBone": "arm_right_hand",
+        "localPosition": [
+          -0.0015688,
+          0.0904929,
+          -0.0215102
+        ],
+        "localQuaternion": [
+          0.0295067,
+          -0.226233,
+          -0.0667742,
+          0.9713337
+        ]
+      }
+    ]
+  },
+  "offensiveActions": {
+    "schema": "dreadstone.offensive_action.v1",
+    "available": true,
+    "actions": [
+      {
+        "actionName": "DSB_Attack_Overhead_OneHand_v001",
+        "attackFamily": "OVERHEAD_STRIKE",
+        "attackSourceRole": "EQUIPPED_MAIN_HAND",
+        "clipDurationSeconds": 1.875,
+        "combatActionId": "humanoid_one_hand_overhead",
+        "commitment": {
+          "lockOrientationThroughActive": true,
+          "timeSeconds": 0.708333
+        },
+        "compatibleWeaponClasses": [
+          "ONE_HAND_BLUNT"
+        ],
+        "phases": {
+          "active": {
+            "endSeconds": 1.083333,
+            "startSeconds": 0.708333
+          },
+          "recovery": {
+            "endSeconds": 1.875,
+            "startSeconds": 1.083333
+          },
+          "windup": {
+            "endSeconds": 0.708333,
+            "startSeconds": 0
+          }
+        },
+        "rootMotionPolicy": "IN_PLACE",
+        "schema": "dreadstone.offensive_action.v1",
+        "socketRole": "MAIN_HAND_R"
+      },
+      {
+        "actionName": "DSB_Attack_Thrust_OneHand_v001",
+        "attackFamily": "THRUST",
+        "attackSourceRole": "EQUIPPED_MAIN_HAND",
+        "clipDurationSeconds": 1.541667,
+        "combatActionId": "humanoid_one_hand_thrust",
+        "commitment": {
+          "lockOrientationThroughActive": true,
+          "timeSeconds": 0.541667
+        },
+        "compatibleWeaponClasses": [
+          "ONE_HAND_BLADE",
+          "POLEARM"
+        ],
+        "phases": {
+          "active": {
+            "endSeconds": 0.875,
+            "startSeconds": 0.541667
+          },
+          "recovery": {
+            "endSeconds": 1.541667,
+            "startSeconds": 0.875
+          },
+          "windup": {
+            "endSeconds": 0.541667,
+            "startSeconds": 0
+          }
+        },
+        "rootMotionPolicy": "IN_PLACE",
+        "schema": "dreadstone.offensive_action.v1",
+        "socketRole": "MAIN_HAND_R"
+      }
+    ]
+  },
+  "damage": {
+    "availableSegmentIds": [
+      "head_neck",
+      "left_elbow",
+      "lower_spine",
+      "right_elbow"
+    ],
+    "activeRuntimeSegmentIds": [
+      "head_neck",
+      "left_elbow",
+      "right_elbow"
+    ],
+    "deformationRegionIds": [
+      "body_core",
+      "forearm_left",
+      "forearm_right",
+      "head"
+    ],
+    "progressiveDamageSiteIds": [
+      "damage_site",
+      "head_left"
+    ]
+  },
+  "animations": {
+    "delivery": "embedded",
+    "manifestValidated": false,
+    "approvedClips": [
+      {
+        "name": "DSB_Attack_Overhead_OneHand_v001",
+        "kind": "ATTACK_OVERHEAD_ONE_HAND",
+        "durationSeconds": 1.875
+      },
+      {
+        "name": "DSB_Attack_Thrust_OneHand_v001",
+        "kind": "ATTACK_THRUST_ONE_HAND",
+        "durationSeconds": 1.5416666269302368
+      },
+      {
+        "name": "DSB_Death_ChestHold_LEFT_v002",
+        "kind": "DEATH",
+        "durationSeconds": 2.5
+      },
+      {
+        "name": "DSB_Hurt_LEFT_Flank_v003",
+        "kind": "HURT_LEFT",
+        "durationSeconds": 1.4583333730697632
+      },
+      {
+        "name": "DSB_Hurt_RIGHT_Flank_v002",
+        "kind": "HURT_RIGHT",
+        "durationSeconds": 1.4583333730697632
+      },
+      {
+        "name": "DSB_Idle_Humanoid_v002",
+        "kind": "IDLE",
+        "durationSeconds": 3.2083332538604736
+      },
+      {
+        "name": "DSB_Walk_NORMAL_v003",
+        "kind": "WALK",
+        "durationSeconds": 1.4166666269302368
+      }
+    ],
+    "unapprovedClipCount": 0
+  },
+  "importDiagnostics": [],
+  "cost": {
+    "glbFileBytes": 30454856,
+    "glbMeshDefinitionCount": 37,
+    "meshCount": 55,
+    "visibleMeshCount": 4,
+    "skinnedMeshCount": 26,
+    "visibleSkinnedMeshCount": 4,
+    "vertexCount": 89876,
+    "triangleCount": 64617,
+    "morphTargetCount": 24,
+    "uniqueMorphTargetNameCount": 6,
+    "progressiveSiteCount": 2,
+    "deformationKeyCount": 6,
+    "generatedGoreMeshCount": 8,
+    "stainMeshCount": 12,
+    "detachableSegmentCount": 4,
+    "activeDetachableSegmentCount": 3,
+    "animationCount": 7,
+    "approvedAnimationCount": 7,
+    "imageCount": 15,
+    "textureCount": 15,
+    "materialCount": 27
+  }
+}

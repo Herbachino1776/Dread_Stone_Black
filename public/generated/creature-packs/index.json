@@ -55,6 +55,60 @@
         "attachmentSockets": false,
         "offensiveActions": false
       }
+    },
+    {
+      "packId": "rusted_warrior_001_damage_v001",
+      "displayName": "Rusted Knight",
+      "descriptorPath": "./generated/creature-packs/rusted_warrior_001_damage_v001.json",
+      "assetPath": "./assets/enemies/rusted_warrior_001/damage/rusted_warrior_001.glb",
+      "sourceTopologyFingerprint": "2ab27d26b2387746c305e3623750de26d2ed6479a8c4902137604921246c8b3b",
+      "capabilities": {
+        "progressiveDamage": true,
+        "deformations": true,
+        "gore": true,
+        "surfaceStains": true,
+        "pairedDetachableSegments": true,
+        "embeddedAnimations": true,
+        "separatelyValidatedAnimations": false,
+        "attachmentSockets": true,
+        "offensiveActions": true
+      }
+    },
+    {
+      "packId": "rusted_warrior_001_forest_knight_damage_v001",
+      "displayName": "Forest Knight",
+      "descriptorPath": "./generated/creature-packs/rusted_warrior_001_forest_knight_damage_v001.json",
+      "assetPath": "./assets/enemies/rusted_warrior_001_forest_knight/damage/rusted_warrior_001_forest_knight.glb",
+      "sourceTopologyFingerprint": "2ab27d26b2387746c305e3623750de26d2ed6479a8c4902137604921246c8b3b",
+      "capabilities": {
+        "progressiveDamage": true,
+        "deformations": true,
+        "gore": true,
+        "surfaceStains": true,
+        "pairedDetachableSegments": true,
+        "embeddedAnimations": true,
+        "separatelyValidatedAnimations": false,
+        "attachmentSockets": true,
+        "offensiveActions": true
+      }
+    },
+    {
+      "packId": "rusted_warrior_001_white_knight_damage_v001",
+      "displayName": "White Knight",
+      "descriptorPath": "./generated/creature-packs/rusted_warrior_001_white_knight_damage_v001.json",
+      "assetPath": "./assets/enemies/rusted_warrior_001_white_knight/damage/rusted_warrior_001_white_knight.glb",
+      "sourceTopologyFingerprint": "2ab27d26b2387746c305e3623750de26d2ed6479a8c4902137604921246c8b3b",
+      "capabilities": {
+        "progressiveDamage": true,
+        "deformations": true,
+        "gore": true,
+        "surfaceStains": true,
+        "pairedDetachableSegments": true,
+        "embeddedAnimations": true,
+        "separatelyValidatedAnimations": false,
+        "attachmentSockets": true,
+        "offensiveActions": true
+      }
     }
   ]
 }
