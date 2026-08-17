@@ -127,10 +127,25 @@ export const OLD_WORK_KNIFE_WEAPON = freezeWeapon({
   reachCategory: 'short',
 });
 
+function discoverImportedWorldWeapons() {
+  let modules = {};
+  // Vite owns production catalog discovery. Node tests and import tooling pass
+  // explicit records so importing this module never performs filesystem I/O.
+  if (import.meta.env?.DEV || import.meta.env?.PROD) {
+    modules = import.meta.glob('./weapons/data/*.json', { eager: true, import: 'default' });
+  }
+  return Object.entries(modules)
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([, definition]) => freezeWeapon(definition));
+}
+
+export const IMPORTED_WORLD_WEAPONS = Object.freeze(discoverImportedWorldWeapons());
+
 export const PRODUCTION_WORLD_WEAPONS = Object.freeze([
   DREADSTONE_MACE_WEAPON,
   DREADSTONE_SWORD_WEAPON,
   OLD_WORK_KNIFE_WEAPON,
+  ...IMPORTED_WORLD_WEAPONS,
 ]);
 
 export class NpcWeaponRegistry {

@@ -86,6 +86,10 @@ export class CreatureLabAttackHarness {
     return this.selectedLoadout?.mainHandWeaponId ?? null;
   }
 
+  getSelectedLoadout() {
+    return this.selectedLoadout ?? null;
+  }
+
   selectWeapon(weaponId) {
     const loadout = getCreatureLabLoadoutForWeapon(weaponId);
     if (!loadout || !this.weaponRegistry.get(weaponId)) return { accepted: false, reason: `creature-lab-weapon-unavailable:${weaponId}` };

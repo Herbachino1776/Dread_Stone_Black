@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import {
   assertValidEnemyPreset,
+  ENEMY_PRESET_V2_SCHEMA,
+  ENEMY_PRESET_V2_VERSION,
 } from '../../contracts/EnemyPreset.js';
 import {
   composeCreaturePresentationHeight,
@@ -96,31 +98,36 @@ export function labCalibrationToWeaponDefinitionPatch(definition, calibration) {
 
 export function createEnemyPresetRecordFromLabCalibration({
   preset,
+  presetId = preset?.presetId,
+  displayName = preset?.displayName,
+  creatureDefinitionId = preset?.creatureDefinitionId,
+  loadoutId = preset?.armament?.loadoutId,
+  lootProfileId = preset?.rewards?.lootProfileId ?? null,
   targetHeight,
   weaponDefinition,
   calibration,
 } = {}) {
   const patch = labCalibrationToWeaponDefinitionPatch(weaponDefinition, calibration);
   const record = {
-    schema: preset?.schema,
-    version: preset?.version,
-    presetId: preset?.presetId,
-    displayName: preset?.displayName,
-    creatureDefinitionId: preset?.creatureDefinitionId,
+    schema: preset?.schema ?? ENEMY_PRESET_V2_SCHEMA,
+    version: preset?.version ?? ENEMY_PRESET_V2_VERSION,
+    presetId,
+    displayName,
+    creatureDefinitionId,
     presentation: {
       targetHeight: round(Number(targetHeight)),
     },
     armament: {
-      loadoutId: preset?.armament?.loadoutId,
+      loadoutId,
       weaponOverride: {
         assetScale: patch.assetScale,
         gripTransform: patch.gripTransform,
         attackCapsule: patch.attackCapsule,
       },
     },
-    ...(preset?.rewards ? {
+    ...(lootProfileId ? {
       rewards: {
-        lootProfileId: preset.rewards.lootProfileId,
+        lootProfileId,
       },
     } : {}),
   };

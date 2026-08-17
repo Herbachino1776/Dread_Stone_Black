@@ -133,3 +133,22 @@ Initial damage, impact, grip, capsule, and scale values are temporary combat
 calibration values rather than final balance. Forge Action metadata remains the
 authority for class/socket compatibility; loadouts cannot force an incompatible
 clip to resolve.
+
+## Imported weapon workflow
+
+Drag one or more GLB files onto `IMPORT_WEAPON.cmd`, then choose the weapon
+class for each file. The importer validates the GLB 2.0 container, derives a
+stable weapon ID from the filename, copies the asset to
+`public/assets/weapons/imported/`, and writes its game-owned weapon record under
+`src/game/combat/weapons/data/`. Existing IDs are never overwritten.
+
+Creature Lab and the production loadout registry discover those records at
+dev/build time. Each imported weapon gets a deterministic
+`humanoid_<weaponId>_main_hand` loadout. The imported class is filtered against
+the selected creature pack's Forge-authored Action and socket capability, so a
+blade can resolve a thrust while a blunt weapon on the same body resolves its
+overhead Action. The importer never guesses an animation from an asset name.
+
+Imported scale, grip, capsule, and combat values are safe class-based starting
+calibration, not final production tuning. Tune them in Creature Lab and promote
+the result through an Enemy Preset.

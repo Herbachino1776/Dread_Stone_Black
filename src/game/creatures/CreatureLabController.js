@@ -20,9 +20,11 @@ import { EnemyPresetRegistry } from './EnemyPresetRegistry.js';
 import { EnemyPresetResolver } from './EnemyPresetResolver.js';
 import { MinimalCombatBrain } from '../combat/MinimalCombatBrain.js';
 import { EnemyLootRuntime } from '../economy/EnemyLootRuntime.js';
+import { getCreatureLabLoadoutForWeapon } from '../combat/NpcLoadout.js';
 
 const DEFAULT_DEFINITION_ID = 'chezwick';
 const CREATURE_LAB_QUERY_KEY = 'creatureLab';
+export const ENEMY_PRESET_AUTHORING_BRIDGE_PATH = '/__dreadstone/enemy-preset-authoring';
 const SEGMENT_LABELS = Object.freeze({
   head_neck: 'Head / Neck',
   left_elbow: 'Left Elbow',
@@ -80,6 +82,7 @@ export class CreatureLabController {
     playerCurrencyState = null,
     lootRandom = Math.random,
     calibrationStorage = globalThis.localStorage,
+    fetchImplementation = globalThis.fetch?.bind?.(globalThis),
     panelFactory = (options) => new CreatureLabPanel(options),
   } = {}) {
     if (!walkerController) throw new Error('Creature Lab requires one isolated walker lifecycle host.');
@@ -109,6 +112,7 @@ export class CreatureLabController {
     this.playerCurrencyState = playerCurrencyState;
     this.lootRandom = lootRandom;
     this.calibrationStore = new CreatureLabCalibrationStore({ storage: calibrationStorage });
+    this.fetchImplementation = fetchImplementation;
     this.panelFactory = panelFactory;
     this.definitionOptions = [];
     this.presetOptions = [];
@@ -119,6 +123,8 @@ export class CreatureLabController {
     this.calibrationContext = null;
     this.productionWeaponDefinition = null;
     this.selectedPreset = null;
+    this.presetDraft = null;
+    this.presetDraftContext = null;
     this.resolvedPreset = null;
     this.selectedDefinition = null;
     this.selectedPack = null;
@@ -313,6 +319,15 @@ export class CreatureLabController {
       this.productionWeaponDefinition = productionWeapon;
       this.selectedWeaponId = requestedWeaponId;
       this.weaponCalibration = draft.weaponCalibration;
+      const presetDraftContext = presetResolution?.preset.presetId ?? `${definition.definitionId}:${requestedWeaponId}`;
+      if (this.presetDraftContext !== presetDraftContext) {
+        this.presetDraftContext = presetDraftContext;
+        this.presetDraft = {
+          presetId: presetResolution?.preset.presetId ?? `${definition.definitionId}_${requestedWeaponId}`,
+          displayName: presetResolution?.preset.displayName ?? `${definition.displayName} — ${productionWeapon.displayName}`,
+          lootProfileId: presetResolution?.preset.rewards?.lootProfileId ?? '',
+        };
+      }
       this.creatureHeightOverride = Math.abs(requestedHeight - productionHeight) > 1e-8 ? requestedHeight : null;
       this.selectedSiteId = null;
       this.walkerController.actorFactory = (options) => this.creatureFactory.createActorFromResolved(resolved, options).actor;
@@ -579,9 +594,14 @@ export class CreatureLabController {
   }
 
   getEnemyPresetRecord() {
-    if (!this.selectedPreset || !this.weaponCalibration) return null;
+    if (!this.selectedDefinition || !this.weaponCalibration || !this.presetDraft) return null;
     return createEnemyPresetRecordFromLabCalibration({
       preset: this.selectedPreset,
+      presetId: this.presetDraft.presetId,
+      displayName: this.presetDraft.displayName,
+      creatureDefinitionId: this.selectedDefinition.definitionId,
+      loadoutId: this.selectedPreset?.armament?.loadoutId ?? getCreatureLabLoadoutForWeapon(this.selectedWeaponId)?.loadoutId,
+      lootProfileId: this.presetDraft.lootProfileId || null,
       targetHeight: this.effectiveProfile?.targetHeight,
       weaponDefinition: this.getSelectedWeaponDefinition(),
       calibration: this.weaponCalibration,
@@ -589,13 +609,52 @@ export class CreatureLabController {
   }
 
   getEnemyPresetJson() {
-    if (!this.selectedPreset || !this.weaponCalibration) return null;
+    if (!this.selectedDefinition || !this.weaponCalibration || !this.presetDraft) return null;
     return serializeEnemyPresetFromLabCalibration({
       preset: this.selectedPreset,
+      presetId: this.presetDraft.presetId,
+      displayName: this.presetDraft.displayName,
+      creatureDefinitionId: this.selectedDefinition.definitionId,
+      loadoutId: this.selectedPreset?.armament?.loadoutId ?? getCreatureLabLoadoutForWeapon(this.selectedWeaponId)?.loadoutId,
+      lootProfileId: this.presetDraft.lootProfileId || null,
       targetHeight: this.effectiveProfile?.targetHeight,
       weaponDefinition: this.getSelectedWeaponDefinition(),
       calibration: this.weaponCalibration,
     });
+  }
+
+  setPresetAuthoringField(field, value) {
+    if (!this.presetDraft || !['presetId', 'displayName', 'lootProfileId'].includes(field)) {
+      return this.recordOperation('presetAuthoringField', { accepted: false, reason: `Unsupported Enemy Preset field ${field}.` });
+    }
+    const normalized = String(value ?? '').trim();
+    const stableId = /^[a-z0-9]+(?:[a-z0-9_-]*[a-z0-9])?$/;
+    if (field === 'displayName' ? !normalized : (normalized && !stableId.test(normalized))) {
+      return this.recordOperation('presetAuthoringField', { accepted: false, reason: field === 'displayName' ? 'Display Name cannot be empty.' : `${field} must be a stable lowercase ID.` });
+    }
+    if (field === 'presetId' && !normalized) return this.recordOperation('presetAuthoringField', { accepted: false, reason: 'Preset ID cannot be empty.' });
+    this.presetDraft[field] = normalized;
+    this.notify();
+    return { accepted: true, field, value: this.presetDraft[field] };
+  }
+
+  async saveEnemyPresetToProject() {
+    if (!this.fetchImplementation) return this.recordOperation('saveEnemyPreset', { accepted: false, reason: 'Project save bridge is unavailable.' });
+    try {
+      const json = this.getEnemyPresetJson();
+      if (!json) throw new Error('Select a supported Creature Definition and weapon first.');
+      const origin = globalThis.location?.origin ?? 'http://localhost';
+      const response = await this.fetchImplementation(new URL(ENEMY_PRESET_AUTHORING_BRIDGE_PATH, origin), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: json,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.ok !== true) throw new Error(payload.message ?? `Dev bridge returned HTTP ${response.status}.`);
+      return this.recordOperation('saveEnemyPreset', { accepted: true, ...payload });
+    } catch (error) {
+      return this.recordOperation('saveEnemyPreset', null, error);
+    }
   }
 
   resetDamage() {
@@ -1016,6 +1075,7 @@ export class CreatureLabController {
       hasUnsavedLabDraft: this.hasUnsavedLabDraft(),
       enemyPresetRecord: this.getEnemyPresetRecord(),
       enemyPresetJson: this.getEnemyPresetJson(),
+      presetDraft: this.presetDraft ? { ...this.presetDraft } : null,
       lastOperation: this.lastOperation,
       lastPhysicalTargetingDecision: this.getSiteTargeting()?.getDiagnostics?.().lastPhysicalTargetingDecision ?? null,
       offensiveCombat: this.getOffensiveCombatDiagnostics(),
@@ -1106,6 +1166,7 @@ export class CreatureLabController {
       resetWeaponCalibration: () => this.resetWeaponCalibration(),
       resetToPresetDefaults: () => this.resetToPresetDefaults(),
       copyEnemyPresetJson: () => this.getEnemyPresetJson(),
+      saveEnemyPresetToProject: () => this.saveEnemyPresetToProject(),
       setCreatureHeight: (height) => this.setCreatureHeight(height),
       resetCreatureHeight: () => this.resetCreatureHeight(),
       resetPlayer: () => this.resetPlayer(),

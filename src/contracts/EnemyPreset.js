@@ -173,3 +173,14 @@ export function assertValidEnemyPreset(preset) {
   if (!validation.valid) throw new Error(`Invalid Enemy Preset: ${validation.errors.join('; ')}`);
   return preset;
 }
+
+export function parseEnemyPreset(serialized) {
+  let preset;
+  try { preset = JSON.parse(serialized); }
+  catch (error) { throw new Error(`Invalid Enemy Preset JSON: ${error.message}`, { cause: error }); }
+  return assertValidEnemyPreset(preset);
+}
+
+export function serializeEnemyPreset(preset) {
+  return `${JSON.stringify(assertValidEnemyPreset(structuredClone(preset)), null, 2)}\n`;
+}

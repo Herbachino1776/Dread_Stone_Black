@@ -4,11 +4,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseEncounterDefinition, serializeEncounterDefinition } from '../src/contracts/EncounterDefinition.js';
-import { EnemyPresetRegistry } from '../src/game/creatures/EnemyPresetRegistry.js';
+import { DREAD_RAM_GOD_GREAT_MACE_PRESET, EnemyPresetRegistry } from '../src/game/creatures/EnemyPresetRegistry.js';
 import { EnemyPresetResolver } from '../src/game/creatures/EnemyPresetResolver.js';
 import { CreaturePackRegistry } from '../src/game/creatures/CreaturePackRegistry.js';
 import { EncounterRegistry } from '../src/game/encounters/EncounterRegistry.js';
 import { hasLocationDefinition } from '../src/game/locations/locationRegistry.js';
+import { readInstalledEnemyPresets } from './enemy-preset-installer-lib.mjs';
 
 export const DEFAULT_ENCOUNTER_DATA_DIRECTORY = fileURLToPath(new URL('../src/game/encounters/data/', import.meta.url));
 const PROJECT_PUBLIC_DIRECTORY = fileURLToPath(new URL('../public/', import.meta.url));
@@ -53,6 +54,14 @@ export function createProjectEnemyPresetResolver({ presetRegistry = new EnemyPre
   return new EnemyPresetResolver({ presetRegistry, creaturePackRegistry });
 }
 
+export async function createProjectEnemyPresetRegistry() {
+  const authored = await readInstalledEnemyPresets();
+  return new EnemyPresetRegistry({ presets: [
+    ...(authored.some((preset) => preset.presetId === DREAD_RAM_GOD_GREAT_MACE_PRESET.presetId) ? [] : [DREAD_RAM_GOD_GREAT_MACE_PRESET]),
+    ...authored,
+  ] });
+}
+
 export async function readInstalledEncounterDefinitions(dataDirectory = DEFAULT_ENCOUNTER_DATA_DIRECTORY) {
   await mkdir(dataDirectory, { recursive: true });
   const filenames = (await readdir(dataDirectory, { withFileTypes: true }))
@@ -76,20 +85,22 @@ export async function readInstalledEncounterDefinitions(dataDirectory = DEFAULT_
 
 export async function validateEncounterInstallSemantics(definition, {
   hasLocation = hasLocationDefinition,
-  presetRegistry = new EnemyPresetRegistry(),
-  enemyPresetResolver = createProjectEnemyPresetResolver({ presetRegistry }),
+  presetRegistry = null,
+  enemyPresetResolver = null,
 } = {}) {
+  const effectivePresetRegistry = presetRegistry ?? await createProjectEnemyPresetRegistry();
+  const effectiveEnemyPresetResolver = enemyPresetResolver ?? createProjectEnemyPresetResolver({ presetRegistry: effectivePresetRegistry });
   if (!hasLocation(definition.locationId)) {
     throw new EncounterInstallerError('UNKNOWN_LOCATION', `Encounter locationId "${definition.locationId}" is not registered by the game.`);
   }
   const resolvedPresetIds = new Set();
   for (const spawn of definition.spawns) {
-    if (!presetRegistry.hasPreset(spawn.presetId)) {
+    if (!effectivePresetRegistry.hasPreset(spawn.presetId)) {
       throw new EncounterInstallerError('UNKNOWN_PRESET', `Spawn "${spawn.spawnId}" references unknown Enemy Preset "${spawn.presetId}".`);
     }
     if (resolvedPresetIds.has(spawn.presetId)) continue;
     try {
-      await enemyPresetResolver.resolve(spawn.presetId);
+      await effectiveEnemyPresetResolver.resolve(spawn.presetId);
       resolvedPresetIds.add(spawn.presetId);
     } catch (error) {
       throw new EncounterInstallerError(
@@ -104,7 +115,7 @@ export async function validateEncounterInstallSemantics(definition, {
 
 export async function validateInstalledEncounterCatalog(dataDirectory = DEFAULT_ENCOUNTER_DATA_DIRECTORY, options = {}) {
   const definitions = await readInstalledEncounterDefinitions(dataDirectory);
-  const presetRegistry = options.presetRegistry ?? new EnemyPresetRegistry();
+  const presetRegistry = options.presetRegistry ?? await createProjectEnemyPresetRegistry();
   const enemyPresetResolver = options.enemyPresetResolver ?? createProjectEnemyPresetResolver({ presetRegistry });
   for (const definition of definitions) {
     await validateEncounterInstallSemantics(definition, { ...options, presetRegistry, enemyPresetResolver });
@@ -124,8 +135,8 @@ export async function validateInstalledEncounterCatalog(dataDirectory = DEFAULT_
 export async function installEncounterDefinition(serializedOrDefinition, {
   dataDirectory = DEFAULT_ENCOUNTER_DATA_DIRECTORY,
   hasLocation = hasLocationDefinition,
-  presetRegistry = new EnemyPresetRegistry(),
-  enemyPresetResolver = createProjectEnemyPresetResolver({ presetRegistry }),
+  presetRegistry = null,
+  enemyPresetResolver = null,
   afterInstallValidation = null,
 } = {}) {
   let definition;
@@ -136,7 +147,9 @@ export async function installEncounterDefinition(serializedOrDefinition, {
   } catch (error) {
     throw new EncounterInstallerError('INVALID_CONTRACT', error.message, { cause: error });
   }
-  await validateEncounterInstallSemantics(definition, { hasLocation, presetRegistry, enemyPresetResolver });
+  const effectivePresetRegistry = presetRegistry ?? await createProjectEnemyPresetRegistry();
+  const effectiveEnemyPresetResolver = enemyPresetResolver ?? createProjectEnemyPresetResolver({ presetRegistry: effectivePresetRegistry });
+  await validateEncounterInstallSemantics(definition, { hasLocation, presetRegistry: effectivePresetRegistry, enemyPresetResolver: effectiveEnemyPresetResolver });
   const filename = assertSafeEncounterId(definition.encounterId);
   await mkdir(dataDirectory, { recursive: true });
   const destination = path.resolve(dataDirectory, filename);
@@ -146,7 +159,7 @@ export async function installEncounterDefinition(serializedOrDefinition, {
   const installedBefore = await readInstalledEncounterDefinitions(dataDirectory);
   const replacementCatalog = installedBefore.filter((entry) => entry.encounterId !== definition.encounterId).concat(definition);
   for (const entry of replacementCatalog) {
-    await validateEncounterInstallSemantics(entry, { hasLocation, presetRegistry, enemyPresetResolver });
+    await validateEncounterInstallSemantics(entry, { hasLocation, presetRegistry: effectivePresetRegistry, enemyPresetResolver: effectiveEnemyPresetResolver });
   }
   try {
     new EncounterRegistry({ encounters: replacementCatalog });
@@ -170,7 +183,7 @@ export async function installEncounterDefinition(serializedOrDefinition, {
     }
     await rename(temporary, destination);
     installed = true;
-    const catalog = await validateInstalledEncounterCatalog(dataDirectory, { hasLocation, presetRegistry, enemyPresetResolver });
+    const catalog = await validateInstalledEncounterCatalog(dataDirectory, { hasLocation, presetRegistry: effectivePresetRegistry, enemyPresetResolver: effectiveEnemyPresetResolver });
     await afterInstallValidation?.({ definition, destination, catalog });
     if (backedUp) await rm(backup, { force: true });
     return {

@@ -155,7 +155,14 @@ function createFolsomFixture() {
 test('browser registry resolves the generated index and descriptors through the configured public base with caching', async () => {
   const { registry, requests } = createRegistry();
   assert.equal(registry.resolvePublicUrl('./generated/creature-packs/index.json'), `${fixtureBaseUrl}generated/creature-packs/index.json`);
-  assert.deepEqual((await registry.listPacks()).map((entry) => entry.packId), ['chezwick_damage_v001', 'dread_ram_god_damage_v001', 'dreadguard_damage_v001']);
+  assert.deepEqual((await registry.listPacks()).map((entry) => entry.packId), [
+    'chezwick_damage_v001',
+    'dread_ram_god_damage_v001',
+    'dreadguard_damage_v001',
+    'rusted_warrior_001_damage_v001',
+    'rusted_warrior_001_forest_knight_damage_v001',
+    'rusted_warrior_001_white_knight_damage_v001',
+  ]);
   assert.equal(await registry.hasPack('chezwick_damage_v001'), true);
   assert.equal((await registry.getPackSummary('dreadguard_damage_v001')).displayName, 'Dreadguard');
   const first = await registry.loadPack('chezwick_damage_v001');

@@ -1,5 +1,5 @@
 import { FORGE_OFFENSIVE_ACTION_SCHEMA } from '../../contracts/ForgeRuntimeArmament.js';
-import { npcWeaponRegistry } from './NpcWeaponRegistry.js';
+import { npcWeaponRegistry, PRODUCTION_WORLD_WEAPONS } from './NpcWeaponRegistry.js';
 
 export const NPC_LOADOUT_SCHEMA = 'dreadstone.npc_loadout.v1';
 const STABLE_ID = /^[a-z0-9]+(?:[a-z0-9_-]*[a-z0-9])?$/;
@@ -12,6 +12,23 @@ function loadout(loadoutId, mainHandWeaponId, allowedOffensiveActionIds) {
     allowedOffensiveActionIds: Object.freeze([...allowedOffensiveActionIds]),
   });
 }
+
+// These IDs are only an allow-list. Forge pack capability, weapon class, and
+// authored socket role remain authoritative when resolveNpcLoadout filters it.
+export const HUMANOID_MAIN_HAND_OFFENSIVE_ACTION_IDS = Object.freeze([
+  'humanoid_one_hand_slash_rtl',
+  'humanoid_one_hand_slash_ltr',
+  'humanoid_one_hand_overhead',
+  'humanoid_one_hand_heavy',
+  'humanoid_one_hand_thrust',
+  'humanoid_two_hand_slash_rtl',
+  'humanoid_two_hand_slash_ltr',
+  'humanoid_two_hand_overhead',
+  'humanoid_two_hand_heavy',
+  'humanoid_two_hand_thrust',
+  'humanoid_polearm_thrust',
+  'humanoid_polearm_sweep',
+]);
 
 export const HUMANOID_DREADSTONE_MACE_MAIN_HAND_LOADOUT = loadout(
   'humanoid_dreadstone_mace_main_hand',
@@ -31,6 +48,7 @@ export const HUMANOID_DREADSTONE_SWORD_MAIN_HAND_LOADOUT = loadout(
     'humanoid_one_hand_slash_rtl',
     'humanoid_one_hand_slash_ltr',
     'humanoid_one_hand_overhead',
+    'humanoid_one_hand_thrust',
   ],
 );
 
@@ -40,13 +58,32 @@ export const HUMANOID_OLD_WORK_KNIFE_MAIN_HAND_LOADOUT = loadout(
   [
     'humanoid_one_hand_slash_rtl',
     'humanoid_one_hand_slash_ltr',
+    'humanoid_one_hand_thrust',
   ],
 );
 
-export const PRODUCTION_NPC_LOADOUTS = Object.freeze([
+export function createNpcLoadoutForWeapon(weapon) {
+  return loadout(
+    `humanoid_${weapon.weaponId}_main_hand`,
+    weapon.weaponId,
+    HUMANOID_MAIN_HAND_OFFENSIVE_ACTION_IDS,
+  );
+}
+
+const CANONICAL_LOADOUTS = Object.freeze([
   HUMANOID_DREADSTONE_MACE_MAIN_HAND_LOADOUT,
   HUMANOID_DREADSTONE_SWORD_MAIN_HAND_LOADOUT,
   HUMANOID_OLD_WORK_KNIFE_MAIN_HAND_LOADOUT,
+]);
+
+const CANONICAL_WEAPON_IDS = new Set(CANONICAL_LOADOUTS.map((entry) => entry.mainHandWeaponId));
+export const IMPORTED_NPC_LOADOUTS = Object.freeze(PRODUCTION_WORLD_WEAPONS
+  .filter((weapon) => !CANONICAL_WEAPON_IDS.has(weapon.weaponId))
+  .map(createNpcLoadoutForWeapon));
+
+export const PRODUCTION_NPC_LOADOUTS = Object.freeze([
+  ...CANONICAL_LOADOUTS,
+  ...IMPORTED_NPC_LOADOUTS,
 ]);
 
 // Stable compatibility aliases for the existing Creature Lab API. The records

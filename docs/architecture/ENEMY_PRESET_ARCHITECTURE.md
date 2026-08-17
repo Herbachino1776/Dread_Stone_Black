@@ -155,12 +155,23 @@ Use the production calibration workflow:
 4. Tune the attack capsule.
 5. Trigger the real attack.
 6. Reset or check preset defaults as needed.
-7. Use **COPY ENEMY PRESET JSON**.
-8. Promote that JSON into the checked-in preset definition.
+7. Enter a stable preset ID and display name in **Enemy Preset Authoring**.
+8. Use **SAVE PRESET TO PROJECT** (or copy the complete JSON as a fallback).
 
 The panel labels the checked-in values as **PRODUCTION PRESET DEFAULTS** and the current browser values as a **LOCAL LAB DRAFT**. Any difference displays **UNSAVED LAB DRAFT**. **Reset to Preset Defaults** resets height, scale, grip, and capsule together without changing source files.
 
-Selecting a different Lab weapon exits preset mode into the selected Creature Definition's ad-hoc workflow. This prevents a Lab-only alternate weapon from being mistaken for the preset's production loadout.
+Selecting a different Lab weapon exits preset mode into the selected Creature
+Definition's authoring workflow. The Lab creates a complete v2 preset from that
+definition, the selected production loadout, height, grip, scale, and capsule.
+The development save bridge validates the full Definition -> Pack -> Loadout ->
+weapon -> Forge Action -> socket chain before transactionally writing
+`src/game/creatures/presets/<presetId>.json`.
+
+The production preset registry discovers those files automatically. Because
+Encounter Authoring Mode reads that registry, a saved preset becomes an Enemy
+Bank option after the development server reloads. The encounter installer reads
+the same file-backed catalog, so project saves cannot reject a preset that only
+the browser knew about.
 
 ## Local draft ownership and migration
 
@@ -185,8 +196,10 @@ metadata.
 
 The formatted JSON is always visible in a selectable readout. If the Clipboard API is unavailable or permission is denied, the Lab focuses and selects that readout for touch-friendly manual copying. The browser never mutates the checked-in preset.
 
-Focused coverage is in `tests/enemy-preset.test.mjs` and runs with:
+Focused coverage is in `tests/enemy-preset.test.mjs` and
+`tests/creature-lab-authoring-workflow.test.mjs` and runs with:
 
 ```powershell
 npm run validate:m67-enemy-presets
+npm run validate:creature-authoring
 ```

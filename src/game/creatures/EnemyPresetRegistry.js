@@ -47,8 +47,22 @@ export const DREAD_RAM_GOD_GREAT_MACE_PRESET = deepFreeze({
   },
 });
 
+function discoverAuthoredEnemyPresets() {
+  let modules = {};
+  if (import.meta.env?.DEV || import.meta.env?.PROD) {
+    modules = import.meta.glob('./presets/*.json', { eager: true, import: 'default' });
+  }
+  return Object.entries(modules)
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([, preset]) => deepFreeze(cloneValue(preset)));
+}
+
+export const AUTHORED_ENEMY_PRESETS = Object.freeze(discoverAuthoredEnemyPresets());
+
 export const PRODUCTION_ENEMY_PRESETS = Object.freeze([
-  DREAD_RAM_GOD_GREAT_MACE_PRESET,
+  ...(AUTHORED_ENEMY_PRESETS.some((preset) => preset.presetId === DREAD_RAM_GOD_GREAT_MACE_PRESET.presetId)
+    ? [] : [DREAD_RAM_GOD_GREAT_MACE_PRESET]),
+  ...AUTHORED_ENEMY_PRESETS,
 ]);
 
 export class EnemyPresetRegistryError extends Error {

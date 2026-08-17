@@ -203,6 +203,7 @@ export class CreatureLabPanel {
       .creature-lab-range-title{display:flex;justify-content:space-between;gap:10px;color:#d8c8b4;font-size:13px}
       .creature-lab-range output{color:#e6bd85;font:12px/1.2 ui-monospace,monospace}
       .creature-lab-range input{width:100%;min-height:34px;margin:5px 0 0;accent-color:#c99c65;touch-action:pan-x}
+      .creature-lab-text{display:block;margin:8px 0;color:#cbbdaa;font-size:12px}.creature-lab-text input{display:block;width:100%;min-height:44px;margin-top:4px;padding:8px;box-sizing:border-box;border:1px solid #675744;border-radius:5px;background:#0c0a08;color:#f2e7d8;font:14px/1.2 ui-monospace,monospace}
       .creature-lab-note{margin:8px 0 0;color:#bdb1a3;font-size:12px;overflow-wrap:anywhere}
       .creature-lab-status{margin:9px 0 0;padding:8px;border-radius:5px;background:#090807;color:#b9d7ce;font:12px/1.35 ui-monospace,monospace;overflow-wrap:anywhere}
       .creature-lab-draft{margin:9px 0;padding:8px;border:1px solid #b47b41;border-radius:5px;background:#2a180d;color:#ffd39b;font:700 12px/1.35 ui-monospace,monospace;letter-spacing:.08em;text-align:center}
@@ -245,6 +246,17 @@ export class CreatureLabPanel {
   }
 
   createGrid() { return element('div', null, 'creature-lab-grid'); }
+
+  createTextControl(label, field, value, { placeholder = '' } = {}) {
+    const wrapper = element('label', label, 'creature-lab-text');
+    const input = element('input');
+    input.type = 'text';
+    input.value = value ?? '';
+    input.placeholder = placeholder;
+    input.addEventListener('change', () => this.controller.setPresetAuthoringField(field, input.value));
+    wrapper.append(input);
+    return wrapper;
+  }
 
   createRangeControl({ label, value, min, max, step, field, suffix = '' }) {
     const wrapper = element('label', null, 'creature-lab-range');
@@ -308,6 +320,7 @@ export class CreatureLabPanel {
     if (!this.panel) return;
     const scrollTop = this.panel.scrollTop;
     const state = this.controller.getViewState();
+    this.authoredPresetReadout = null;
     this.panel.replaceChildren();
     const header = element('header', null, 'creature-lab-header');
     header.append(element('h2', 'CREATURE LAB', 'creature-lab-title'));
@@ -348,6 +361,7 @@ export class CreatureLabPanel {
     if (state.pack) this.panel.append(this.renderPackInfo(state));
     this.panel.append(this.renderCreatureCalibration(state));
     this.panel.append(this.renderWeaponCalibration(state));
+    this.panel.append(this.renderPresetAuthoring(state));
     this.panel.append(this.renderAnimations(state));
     this.panel.append(this.renderOffensiveCombat(state));
     this.panel.append(this.renderLootEconomy(state));
@@ -560,6 +574,35 @@ export class CreatureLabPanel {
     return section;
   }
 
+  renderPresetAuthoring(state) {
+    const section = this.createSection('Enemy Preset Authoring');
+    if (!state.presetDraft || !state.enemyPresetJson) {
+      section.append(element('p', 'Select a supported Creature Definition and weapon to author a reusable preset.', 'creature-lab-note'));
+      return section;
+    }
+    section.append(
+      this.createTextControl('Preset ID', 'presetId', state.presetDraft.presetId, { placeholder: 'enemy_weapon_variant' }),
+      this.createTextControl('Display Name', 'displayName', state.presetDraft.displayName),
+      this.createTextControl('Loot Profile ID (optional)', 'lootProfileId', state.presetDraft.lootProfileId),
+    );
+    const controls = this.createGrid();
+    controls.append(
+      this.createButton('SAVE PRESET TO PROJECT', () => this.controller.saveEnemyPresetToProject(), {
+        wide: true,
+        disabled: state.offensiveCombat?.capabilityAvailable !== true,
+        title: state.offensiveCombat?.capabilityAvailable === true ? '' : 'This Creature Pack has no compatible Forge weapon Action/socket capability.',
+      }),
+      this.createButton('COPY ENEMY PRESET JSON', () => this.copyEnemyPresetJson(), { wide: true }),
+    );
+    section.append(controls);
+    section.append(element('p', 'Saving writes a checked-in production preset. It appears in this selector and Encounter Authoring after the dev server reload.', 'creature-lab-note'));
+    this.authoredPresetReadout = element('pre', state.enemyPresetJson, 'creature-lab-diagnostics');
+    this.authoredPresetReadout.setAttribute('aria-label', 'Authored Enemy Preset JSON');
+    this.authoredPresetReadout.tabIndex = 0;
+    section.append(this.authoredPresetReadout);
+    return section;
+  }
+
   renderLootEconomy(state) {
     const section = this.createSection('Loot + Economy Proof');
     const loot = state.lootEconomy ?? {};
@@ -703,12 +746,18 @@ export class CreatureLabPanel {
       await navigator.clipboard.writeText(text);
       this.transientStatus = 'Enemy Preset JSON copied.';
     } catch {
-      if (this.enemyPresetReadout) {
-        this.enemyPresetReadout.textContent = text;
-        this.enemyPresetReadout.focus?.();
+      const readout = this.authoredPresetReadout ?? this.enemyPresetReadout;
+      if (readout) {
+        readout.textContent = text;
+        readout.focus?.();
         const selection = globalThis.getSelection?.();
         const range = document.createRange?.();
-        if (selection && range) { range.selectNodeContents(this.enemyPresetReadout); selection.removeAllRanges(); selection.addRange(range); }
+        if (selection && range) {
+          if (readout === this.enemyPresetReadout) range.selectNodeContents(this.enemyPresetReadout);
+          else range.selectNodeContents(readout);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
       }
       this.transientStatus = 'Clipboard permission failed. Enemy Preset JSON is visible and selected for manual copy.';
     }
