@@ -145,6 +145,9 @@ try {
     Write-Host 'Generated:'
     Write-Host $Result.descriptorPath
     Write-Host ''
+    Write-Host 'Creature Lab definition:'
+    Write-Host ("{0} ({1})" -f $Result.labDefinitionPath, $Result.labDefinitionStatus)
+    Write-Host ''
     Write-Host ("Production catalog:      {0}" -f $Result.catalogStatus)
     Write-Host ("Forge validation:         {0}" -f $Result.forgeStatus)
     Write-Host ("Creature Pack validation: {0}" -f $Result.creaturePackValidation)
@@ -153,7 +156,8 @@ try {
     Write-Host ''
     Write-Host 'Creature Pack registered successfully.'
     Write-Host 'This makes the technical body available to Dreadstone.'
-    Write-Host 'Creature Definition / loadout / encounter placement are separate gameplay steps.'
+    Write-Host 'The body is now selectable in Creature Lab after the dev server reloads.'
+    Write-Host 'Loadout / Enemy Preset / encounter placement remain separate gameplay steps.'
     Write-Host '=================================================='
 }
 catch {

@@ -146,10 +146,23 @@ export const DREAD_RAM_GOD_CREATURE_DEFINITION = deepFreeze({
   durability: { multiplier: 1, piercingLethalityMultiplier: 1 },
 });
 
+function discoverFileCreatureDefinitions() {
+  let modules = {};
+  if (import.meta.env?.DEV || import.meta.env?.PROD) {
+    modules = import.meta.glob('./data/*.json', { eager: true, import: 'default' });
+  }
+  return Object.freeze(Object.entries(modules)
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([, definition]) => deepFreeze(cloneValue(definition))));
+}
+
+export const FILE_CREATURE_DEFINITIONS = discoverFileCreatureDefinitions();
+
 export const PRODUCTION_CREATURE_DEFINITIONS = Object.freeze([
   CHEZWICK_CREATURE_DEFINITION,
   DREADGUARD_CREATURE_DEFINITION,
   DREAD_RAM_GOD_CREATURE_DEFINITION,
+  ...FILE_CREATURE_DEFINITIONS,
 ]);
 
 export class CreatureDefinitionRegistryError extends Error {

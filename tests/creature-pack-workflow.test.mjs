@@ -23,6 +23,10 @@ import {
 } from '../scripts/lib/creature-pack-catalog.mjs';
 import { installCreaturePack, runProcess } from '../scripts/lib/creature-pack-workflow.mjs';
 import { importProductionCreaturePacks } from '../scripts/lib/production-creature-pack-import.mjs';
+import {
+  createCreatureLabDefaultDefinition,
+  ensureCreatureLabDefinition,
+} from '../scripts/lib/creature-lab-definition.mjs';
 
 const emptyCatalog = () => ({
   schema: PRODUCTION_CREATURE_PACK_CATALOG_SCHEMA,
@@ -86,6 +90,12 @@ function successfulExecutor(generatedDirectory) {
   };
 }
 
+const fakeDefinitionRegistration = async () => ({
+  status: 'CREATED',
+  created: false,
+  filePath: null,
+});
+
 test('naming sanitization, display suggestion, slug suggestion, and automatic Pack ID are deterministic', () => {
   assert.equal(suggestDisplayName('Dread_Ram_God.glb'), 'Dread Ram God');
   assert.equal(suggestDisplayName('northRoadBandit_damage_v001.glb'), 'North Road Bandit');
@@ -95,6 +105,28 @@ test('naming sanitization, display suggestion, slug suggestion, and automatic Pa
     enemySlug: 'dread_ram_god',
   });
   assert.equal(generateCreaturePackId('dread_ram_god'), 'dread_ram_god_damage_v001');
+});
+
+test('a compatible imported pack creates one conservative Creature Lab definition file', async (t) => {
+  const directory = await temporaryDirectory(t);
+  const pack = {
+    packId: 'lab_fixture_damage_v001',
+    presentation: { rawHeight: 1.62 },
+    animations: { approvedClips: [
+      { kind: 'IDLE', name: 'Idle' },
+      { kind: 'WALK', name: 'Walk' },
+      { kind: 'ATTACK_OVERHEAD_ONE_HAND', name: 'Attack' },
+    ] },
+    damage: { activeRuntimeSegmentIds: ['head_neck', 'left_elbow', 'right_elbow'] },
+  };
+  const definition = createCreatureLabDefaultDefinition(pack, { definitionId: 'lab_fixture', displayName: 'Lab Fixture' });
+  assert.equal(definition.presentation.targetHeight, 1.62);
+  assert.deepEqual(definition.animation.selectedAnimationNames, ['Idle', 'Walk', 'Attack']);
+  const first = await ensureCreatureLabDefinition(pack, { definitionId: 'lab_fixture', displayName: 'Lab Fixture', definitionDirectory: directory });
+  const second = await ensureCreatureLabDefinition(pack, { definitionId: 'lab_fixture', displayName: 'Lab Fixture', definitionDirectory: directory });
+  assert.equal(first.status, 'CREATED');
+  assert.equal(second.status, 'EXISTING');
+  assert.equal(first.filePath, second.filePath);
 });
 
 test('existing and new creature detection preserve a stable v001 identity', () => {
@@ -235,6 +267,7 @@ test('successful new install handles spaces, copies only required files, and reg
     ...repo,
     inspectSource: fakeInspection(source),
     execute: successfulExecutor(repo.generatedDirectory),
+    registerDefinition: fakeDefinitionRegistration,
   });
   assert.equal(result.mode, 'NEW');
   assert.equal(result.packId, 'north_road_bandit_damage_v001');
@@ -261,6 +294,7 @@ test('successful update replaces the technical bundle without creating v002', as
     ...repo,
     inspectSource: fakeInspection(source),
     execute: successfulExecutor(repo.generatedDirectory),
+    registerDefinition: fakeDefinitionRegistration,
   });
   assert.equal(result.mode, 'UPDATE');
   assert.equal(result.packId, 'keeper_damage_v001');

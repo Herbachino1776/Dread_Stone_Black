@@ -1,0 +1,69 @@
+{
+  "schema": "dreadstone.creature_definition.v1",
+  "version": 1,
+  "definitionId": "rusted_warrior_001_white_knight",
+  "displayName": "White Knight",
+  "creaturePackId": "rusted_warrior_001_white_knight_damage_v001",
+  "voiceProfile": "male_human",
+  "collisionProfileId": "dreadstone.humanoid.current_collision.v1",
+  "presentation": {
+    "targetHeight": 1.586024683,
+    "groundClearance": 0.02,
+    "rootYaw": 3.141592653589793,
+    "rootOffset": [
+      0,
+      0,
+      0
+    ],
+    "colliderFitNotes": "Auto-generated Creature Lab starter definition. Review presentation and gameplay tuning before encounter production."
+  },
+  "movement": {
+    "walkReferenceSpeed": 0.72
+  },
+  "animation": {
+    "animationAuthoritative": true,
+    "restPoseAuthoritative": false,
+    "authoredAnimationPack": true,
+    "authoredDeathAnimations": true,
+    "ignoreEmbeddedAnimations": false,
+    "holdingPoseMode": "exported_rest_pose",
+    "fadeSeconds": 0.12,
+    "runtimeKinds": [
+      "ATTACK_OVERHEAD_ONE_HAND",
+      "ATTACK_THRUST_ONE_HAND",
+      "DEATH",
+      "HURT_LEFT",
+      "HURT_RIGHT",
+      "IDLE",
+      "WALK"
+    ],
+    "selectedAnimationNames": [
+      "DSB_Attack_Overhead_OneHand_v001",
+      "DSB_Attack_Thrust_OneHand_v001",
+      "DSB_Death_ChestHold_LEFT_v002",
+      "DSB_Hurt_LEFT_Flank_v003",
+      "DSB_Hurt_RIGHT_Flank_v002",
+      "DSB_Idle_Humanoid_v002",
+      "DSB_Walk_NORMAL_v003"
+    ],
+    "ignoredEmbeddedAnimationNames": null,
+    "requireEmbeddedApprovalMetadata": true
+  },
+  "damage": {
+    "supportedSegmentIds": [
+      "head_neck",
+      "left_elbow",
+      "right_elbow"
+    ],
+    "compatibilityProgressiveSiteProfileId": null,
+    "progressiveHitsPerStage": 1,
+    "maceImpactBlood": false
+  },
+  "mortality": {
+    "terminalProgressiveDamageFatal": false
+  },
+  "durability": {
+    "multiplier": 1,
+    "piercingLethalityMultiplier": 1
+  }
+}

@@ -26,6 +26,9 @@ import {
   upsertCreatureRegistration,
   writeProductionCreaturePackCatalog,
 } from './creature-pack-catalog.mjs';
+import {
+  ensureCreatureLabDefinition,
+} from './creature-lab-definition.mjs';
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const importerScript = path.resolve(moduleDirectory, '..', 'import-creature-pack.mjs');
@@ -201,6 +204,8 @@ async function restoreTransaction({
   catalogPath,
   catalogSource,
   hadCatalog,
+  definitionCreated,
+  definitionFilePath,
 }) {
   const failures = [];
   const attempt = async (label, operation) => {
@@ -231,6 +236,9 @@ async function restoreTransaction({
     if (hadCatalog) await writeFile(catalogPath, catalogSource, 'utf8');
     else await rm(catalogPath, { force: true });
   });
+  if (definitionCreated) await attempt('Creature Lab definition', async () => {
+    await rm(definitionFilePath, { force: true });
+  });
   if (failures.length) throw workflowError(failures.join('; '));
 }
 
@@ -247,12 +255,14 @@ export async function installCreaturePack({
   verbose = false,
   inspectSource = inspectCreatureImportSource,
   execute = runProcess,
+  registerDefinition = ensureCreatureLabDefinition,
 } = {}) {
   const inspection = await inspectSource({ sourceDir, repositoryRoot, catalogPath });
   const catalog = await loadProductionCreaturePackCatalog(catalogPath);
   const resolution = resolveCreatureRegistration(catalog, { displayName, enemySlug, packId });
   const destinationDamage = path.resolve(repositoryRoot, resolution.entry.sourceDir);
   const destinationAnimations = path.resolve(destinationDamage, '..', 'animations');
+  const proposedDefinitionPath = path.join(repositoryRoot, 'src', 'game', 'creatures', 'data', `${resolution.entry.enemySlug}.json`);
   const plan = {
     mode: resolution.mode,
     displayName: resolution.entry.displayName,
@@ -267,6 +277,7 @@ export async function installCreaturePack({
     socketCount: inspection.socketCount,
     attacksAvailable: inspection.attacksAvailable,
     offensiveActionCount: inspection.offensiveActionCount,
+    labDefinitionPath: proposedDefinitionPath,
   };
   if (whatIf) return { ...plan, whatIf: true };
 
@@ -285,6 +296,8 @@ export async function installCreaturePack({
   let productionChanged = false;
   let replacedAnimations = false;
   let keepBackup = false;
+  let definitionCreated = false;
+  let definitionFilePath = null;
   try {
     const staged = await copyDiscoveredBundle(inspection, stagingRoot);
     const preflightOutput = path.join(stagingRoot, 'generated');
@@ -317,6 +330,15 @@ export async function installCreaturePack({
       '--source', destinationDamage,
     ], { cwd: repositoryRoot, verbose, phase: 'authoritative production import' });
 
+    const descriptor = await readJson(plan.descriptorPath, 'generated Creature Pack descriptor');
+    const definitionResult = await registerDefinition(descriptor, {
+      definitionId: resolution.entry.enemySlug,
+      displayName: resolution.entry.displayName,
+      definitionDirectory: path.join(repositoryRoot, 'src', 'game', 'creatures', 'data'),
+    });
+    definitionCreated = definitionResult.created;
+    definitionFilePath = definitionResult.filePath;
+
     const creaturePackValidation = npmProcessArguments(['run', 'validate:creature-packs']);
     await execute(creaturePackValidation.command, creaturePackValidation.args, {
       cwd: repositoryRoot,
@@ -330,7 +352,6 @@ export async function installCreaturePack({
       await execute(productionBuild.command, productionBuild.args, { cwd: repositoryRoot, verbose, phase: 'production build' });
     }
 
-    const descriptor = await readJson(plan.descriptorPath, 'generated Creature Pack descriptor');
     return {
       ...plan,
       whatIf: false,
@@ -343,6 +364,10 @@ export async function installCreaturePack({
       socketCount: descriptor.attachmentSockets?.sockets?.length ?? 0,
       attacksAvailable: descriptor.offensiveActions?.available === true,
       offensiveActionCount: descriptor.offensiveActions?.actions?.length ?? 0,
+      labDefinitionStatus: definitionResult.status,
+      labDefinitionPath: definitionResult.filePath
+        ? relativeRepositoryPath(repositoryRoot, definitionResult.filePath)
+        : 'built-in Creature Definition',
     };
   } catch (error) {
     let rollbackError = null;
@@ -362,6 +387,8 @@ export async function installCreaturePack({
           catalogPath,
           catalogSource,
           hadCatalog,
+          definitionCreated,
+          definitionFilePath,
         });
       } catch (restoreError) {
         rollbackError = restoreError;

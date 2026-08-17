@@ -157,7 +157,9 @@ Double-clicking `IMPORT_CREATURE.cmd` with no argument prompts for a damage-fold
 
 Incoming files are first copied to a temporary repository staging directory and run through the existing Node importer. Only a passing staged bundle can replace production files. The production damage directory, generated Creature Pack output, and source catalog are backed up around the real import and `npm run validate:creature-packs`; any importer or validation failure restores the known-good state. An existing animation sidecar is preserved when the incoming bundle has no replacement sidecar.
 
-The committed technical source inventory is `config/production-creature-packs.json`, using `dreadstone.production_creature_pack_sources.v1`. It records only `packId`, `displayName`, `enemySlug`, and the canonical Damage source directory. It owns no Creature Definition, loadout, AI, encounter, or other gameplay behavior. New successful imports are inserted once and sorted by `packId`; updates preserve the registered slug and Pack ID.
+The committed technical source inventory is `config/production-creature-packs.json`, using `dreadstone.production_creature_pack_sources.v1`. It records only `packId`, `displayName`, `enemySlug`, and the canonical Damage source directory. New successful imports are inserted once and sorted by `packId`; updates preserve the registered slug and Pack ID.
+
+For a new compatible humanoid pack, the same transaction also creates one conservative starter Creature Definition under `src/game/creatures/data/`. Vite discovers these JSON files automatically, so the body appears in Creature Lab after the development server reloads. Existing definition files are preserved on re-import. The starter derives only pack-backed height, approved animations, and supported segments plus neutral Lab defaults; loadout, Enemy Preset, loot, AI, and encounter placement remain explicit gameplay work.
 
 ### Terminal and advanced Windows use
 
@@ -174,7 +176,7 @@ Optional flags are:
 - `-Verbose` to show underlying importer/validator output;
 - `-FullValidation` to add `npm run validate:combat` and `npm run build` after the normal Creature Pack gate.
 
-Routine intake intentionally runs only `npm run validate:creature-packs`. Creature Definition, equipment/loadout, behavior, and encounter placement remain separate production steps.
+Routine intake intentionally runs only `npm run validate:creature-packs`. Creature Lab registration is automatic; equipment/loadout, Enemy Preset, behavior, and encounter placement remain separate production steps.
 
 ## Import command and generated registry
 
