@@ -1,0 +1,42 @@
+{
+  "schema": "dreadstone.enemy_preset.v2",
+  "version": 2,
+  "presetId": "rusted_warrior_001_dreadstone_mace",
+  "displayName": "Rusted Knight — Dreadstone Mace",
+  "creatureDefinitionId": "rusted_warrior_001",
+  "presentation": {
+    "targetHeight": 1.58602468
+  },
+  "armament": {
+    "loadoutId": "humanoid_dreadstone_mace_main_hand",
+    "weaponOverride": {
+      "assetScale": 1,
+      "gripTransform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "quaternion": [
+          0.70710678,
+          0,
+          0,
+          0.70710678
+        ]
+      },
+      "attackCapsule": {
+        "start": [
+          0,
+          0,
+          -0.48
+        ],
+        "end": [
+          0,
+          0,
+          -0.29
+        ],
+        "radius": 0.13
+      }
+    }
+  }
+}
